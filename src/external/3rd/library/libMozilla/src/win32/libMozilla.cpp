@@ -76,7 +76,11 @@
 
 #include <windows.h>
 
-static char *s_nullString = "";
+#ifndef MAX_URI_LEN
+#define MAX_URI_LEN 1024   // reasonable default for legacy systems
+#endif
+
+static const char *s_nullString = "";
 static bool  s_bEnableMemoryCache = true;
 static bool  s_bEnableDiskCache = true;
 static unsigned s_uMaxDiskCacheSizeKB = 1024 * 10;
@@ -203,7 +207,7 @@ namespace libMozilla
 
         float                        m_fProgress;
         wchar_t                      m_aStatus[200];
-        char                        *m_aURI;
+        char                         m_aURI[MAX_URI_LEN];
     };
 };
 
@@ -217,7 +221,7 @@ static struct
 namespace libMozilla
 {
     Manager *g_pManager = 0;
-    char *aCommandTable[ NUM_COMMANDS ] = {};
+    const char *aCommandTable[ NUM_COMMANDS ] = {};
 
     void initCommandTable()
     {
@@ -602,10 +606,10 @@ namespace libMozilla
         m_uHeight( 0 ),
         m_iOffsetX( 4000 ),  // Hack the position so that dropdown windows get created offscreen.  
         m_iOffsetY( -4000 ), // Y must be negative here so that dropdowns continue to drop down, large positive makes them drop up.
-        m_fProgress( 1.0f ),
-        m_aURI( s_nullString )
+        m_fProgress( 1.0f )
     {
         m_aStatus[0] = 0;
+        m_aURI[0] = '\0';
     }
 
     //------------------------------------------------------------------------------
@@ -626,9 +630,6 @@ namespace libMozilla
             m_pBaseWindow->Destroy();
             m_pBaseWindow = nsnull;
         }
-
-        if( m_aURI != s_nullString )
-            delete [] m_aURI;
     }
 
     //------------------------------------------------------------------------------
@@ -831,14 +832,12 @@ namespace libMozilla
 
             const unsigned kuLen = aStr.Length();
 
-            if( m_aURI != s_nullString )
-                delete [] m_aURI;
-
-            if( kuLen == 0 )
-                m_aURI = s_nullString;
+            if (kuLen == 0)
+            {
+                m_aURI[0] = '\0';
+            }
             else
             {
-                m_aURI = new char[ kuLen + 1 ];
                 memcpy( m_aURI, aStr.BeginReading(), kuLen );
                 m_aURI[ kuLen ] = 0;
                 aStr.EndReading();
