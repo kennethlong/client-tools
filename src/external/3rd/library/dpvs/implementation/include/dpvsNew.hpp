@@ -30,7 +30,7 @@
 #	error This file should be included directly by dpvsPrivateDefs.hpp!
 #endif
 
-//#include <new>
+#include <new>
 
 namespace DPVS
 {
@@ -188,7 +188,7 @@ template <class T> DPVS_FORCE_INLINE T*	NEW_ARRAY			(int elems)
 		*(reinterpret_cast<int*>(p)) = elems; 
 		p+=16; 
 		for (int i = 0; i < elems; i++) 
-			new(p+i*sizeof(T)) T; 
+			new (static_cast<void*>(p + i * sizeof(T))) T;
 		return reinterpret_cast<T*>(p); 
 	}
 }
