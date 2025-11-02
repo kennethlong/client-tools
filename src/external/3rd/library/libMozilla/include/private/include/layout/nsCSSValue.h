@@ -341,6 +341,11 @@ public:
       return ::operator new(aSelfSize + sizeof(nsCSSValue)*aItemCount);
     }
 
+    // matching delete for operator new(size_t, PRUint16)
+    void operator delete(void* aPtr, PRUint16) noexcept {
+        ::operator delete(aPtr);
+    }
+
     void operator delete(void* aPtr) { ::operator delete(aPtr); }
 
     nsCSSValue* First() {
