@@ -398,6 +398,18 @@ template<typename A> inline void put(ByteStream & target, const A * source, int 
 	}
 }
 
+inline void put(ByteStream& target, uint64_t const& value)
+{
+	uint64_t tmp = value;
+	target.put(&tmp, sizeof(tmp));
+}
+
+inline void put(ByteStream& target, int64_t const& value)
+{
+	int64_t tmp = value;
+	target.put(&tmp, sizeof(tmp));
+}
+
 //---------------------------------------------------------------------
 
 }//namespace Archive
