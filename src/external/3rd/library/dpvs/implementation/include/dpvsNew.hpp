@@ -32,8 +32,6 @@
 
 //#include <new>
 
-DPVS_FORCE_INLINE void* /*__cdecl*/ operator new(size_t, void *_P) { return (_P); }
-
 namespace DPVS
 {
 //------------------------------------------------------------------------
