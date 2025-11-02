@@ -21,13 +21,13 @@ void * __cdecl operator new(size_t size);
 void * __cdecl operator new[](size_t size);
 void * __cdecl operator new(size_t size, char const *file, int line);
 void * __cdecl operator new[](size_t size, char const *file, int line);
-void * __cdecl operator new(size_t size, void *placement);
+void * __cdecl operator new(size_t size, void *placement) noexcept;
 
 void operator delete(void *pointer);
 void operator delete[](void *pointer);
 void operator delete(void *pointer, char const *file, int line);
 void operator delete[](void *pointer, char const *file, int line);
-void operator delete(void *pointer, void *placement);
+void operator delete(void *pointer, void *placement) noexcept;
 
 #ifndef __PLACEMENT_NEW_INLINE
 #define __PLACEMENT_NEW_INLINE
