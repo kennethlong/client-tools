@@ -112,10 +112,10 @@ namespace DPVS
 template <class T> class IsBuiltin
 {
 public:
-	static DPVS_FORCE_INLINE bool eval (void)  { return IsPointer<T>::ret; }
+	static DPVS_FORCE_INLINE constexpr bool eval (void)  { return IsPointer<T>::ret; }
 };
 
-#define DPVS_BUILTIN(X) template <> bool IsBuiltin<X>::eval (void) { return true; }
+#define DPVS_BUILTIN(X) template <> constexpr bool IsBuiltin<X>::eval (void) { return true; }
 DPVS_BUILTIN(char)
 DPVS_BUILTIN(signed char)
 DPVS_BUILTIN(unsigned char)
