@@ -77,7 +77,9 @@ protected:
 	void _printReferenceCountingData(const ReferenceCountingData &) const;
 
 	struct ptr_hash {
-		size_t operator()(void *p) const { return std::hash<unsigned long>()((unsigned long)p); }
+		size_t operator()(void* p) const noexcept {
+			return std::hash<uintptr_t>()(reinterpret_cast<uintptr_t>(p));
+		}
 	};
 
 	struct ObjectData
