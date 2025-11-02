@@ -12,7 +12,7 @@
 // Efficiently handle memory mangagement for rapidly allocated and deleted objects.
 
 #include <unordered_map>
-#include <hash_set>
+#include <unordered_Set>
 
 class UiMemoryBlockManager
 {
@@ -54,7 +54,7 @@ private:
 	};
 
 #ifdef _DEBUG
-	typedef std::hash_set<void * /*data*/, HashPointer<void *> > MemorySet;
+	typedef std::unordered_set<void * /*data*/, HashPointer<void *> > MemorySet;
 	int m_bytesAllocated;
 	MemorySet * m_allAllocations;
 #endif

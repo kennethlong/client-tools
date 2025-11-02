@@ -93,10 +93,14 @@ template <class _Key, class _Compare = std::less<_Key>, class _Alloc = std::allo
 	typedef std::set<_Key, _Compare, _Alloc> fwd;
 };
 
-template <class _Key, class _HashFcn = std::hash<_Key>, class _Compare = std::equal_to<_Key>, class _Alloc = std::allocator<_Key> > struct stdhash_set
-{
-	typedef std::hash_set<_Key, _HashFcn, _Compare, _Alloc> fwd;
-};
+template <
+	typename Key,
+	typename Hash = std::hash<Key>,
+	typename Equal = std::equal_to<Key>,
+	typename Alloc = std::allocator<Key>
+>
+using stdhash_set = std::unordered_set<Key, Hash, Equal, Alloc>;
+
 
 template <class _Key, class _Compare = std::less<_Key>, class _Alloc = std::allocator<_Key> > struct stdmultiset
 {
