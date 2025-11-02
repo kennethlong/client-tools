@@ -9,6 +9,7 @@
 #define __UIStlFwd_H__
 
 // ======================================================================
+#include <unordered_map>
 
 namespace std
 {
