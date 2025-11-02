@@ -302,8 +302,8 @@ public:
   typedef const char* KeyType;
   typedef const char* KeyTypePointer;
 
-  nsCharPtrHashKey(const char* aKey) : mKey(strdup(aKey)) { }
-  nsCharPtrHashKey(const nsCharPtrHashKey& toCopy) : mKey(strdup(toCopy.mKey)) { }
+  nsCharPtrHashKey(const char* aKey) : mKey(_strdup(aKey)) { }
+  nsCharPtrHashKey(const nsCharPtrHashKey& toCopy) : mKey(_strdup(toCopy.mKey)) { }
   ~nsCharPtrHashKey() { if (mKey) free(NS_CONST_CAST(char *, mKey)); }
 
   const char* GetKey() const { return mKey; }
