@@ -17,7 +17,7 @@
 
 #include <vector>
 #include <list>
-#include <hash_map>
+#include <unordered_map>
 
 // ======================================================================
 
@@ -91,7 +91,7 @@ protected:
 		ReferenceCountingData *referenceData;
 	};
 
-	typedef std::hash_map<void *, ObjectData, ptr_hash> ObjectMap;
+	typedef std::unordered_map<void *, ObjectData, ptr_hash> ObjectMap;
 
 	ObjectMap liveObjects;
 };

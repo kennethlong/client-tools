@@ -4,13 +4,13 @@
 #include "UIString.h"
 #include "UISoundCanvas.h"
 
-#include <hash_map>
+#include <unordered_map>
 
 class SimpleSoundCanvas : public UISoundCanvas
 {
 public:
 
-	typedef std::hash_map<UINarrowString, char *>  SoundMap_t;
+	typedef std::unordered_map<UINarrowString, char *>  SoundMap_t;
 
 	                 SimpleSoundCanvas();
 	virtual         ~SimpleSoundCanvas( void );

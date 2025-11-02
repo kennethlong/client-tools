@@ -10,9 +10,6 @@
 
 // ======================================================================
 
-// grab stlport configuration
-#include "stl/_config.h"
-
 namespace std
 {
 	template <class _Tp>                                                                struct less;
@@ -55,10 +52,14 @@ template <class _Key, class _Tp, class _Compare = std::less<_Key>, class _Alloc 
 	typedef std::map<_Key, _Tp, _Compare, _Alloc> fwd;
 };
 
-template <class _Key, class _Tp, class _HashFcn = std::hash<_Key>, class _Compare = std::equal_to<_Key>, class _Alloc = std::allocator< std::pair <const _Key, _Tp> > > struct ui_stdhash_map
-{
-	typedef std::hash_map<_Key, _Tp, _HashFcn, _Compare, _Alloc> fwd;
-};
+template <
+	typename Key,
+	typename Value,
+	typename Hash = std::hash<Key>,
+	typename Equal = std::equal_to<Key>,
+	typename Alloc = std::allocator<std::pair<const Key, Value>>
+>
+using ui_stdhash_map = std::unordered_map<Key, Value, Hash, Equal, Alloc>;
 
 template <class _Key, class _Tp, class _Compare = std::less<_Key>, class _Alloc = std::allocator< std::pair <const _Key, _Tp> > > struct ui_stdmultimap
 {

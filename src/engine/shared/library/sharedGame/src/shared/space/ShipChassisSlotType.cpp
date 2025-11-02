@@ -12,7 +12,7 @@
 
 #include "Unicode.h"
 
-#include <hash_map>
+#include <unordered_map>
 
 //======================================================================
 

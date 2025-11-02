@@ -31,7 +31,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
-#include <hash_map>
+#include <unordered_map>
 #include <list>
 #include <map>
 #include <set>
@@ -219,7 +219,7 @@ void UIManager::ContextInfo::reset ()
 
 struct UIManager::StringTokenMapping
 {
-	typedef std::hash_map<UIString, UINarrowString>  Container;
+	typedef std::unordered_map<UIString, UINarrowString>  Container;
 	Container c;
 };
 
