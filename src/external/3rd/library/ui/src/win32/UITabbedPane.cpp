@@ -307,7 +307,7 @@ bool UITabbedPane::SetProperty(const UILowerString & Name, const UIString &Value
 	{
 		UIWidget * newWidget = static_cast<UIWidget*>(GetObjectFromPath(Value, TUIWidget));
 
-		if ((newWidget && !newWidget->IsTransient() &&(newWidget != mTabObject) && getButton(newWidget)) || Value.empty())
+		if ((newWidget && !newWidget->IsTransient() && (newWidget != mTabObject.pointer()) && getButton(newWidget)) || Value.empty())
 		{
 			mTabObject = newWidget;
 			RecreateButtons();
@@ -927,10 +927,10 @@ void UITabbedPane::SetActiveTab(long index)
 			}
 		}
 
-		UIObjectList olist;
-		mTargetPage->GetChildren(olist);
+		UIObjectList olistTargetPageChildren;
+		mTargetPage->GetChildren(olistTargetPageChildren);
 
-		for (UIObjectList::iterator it = olist.begin(); it != olist.end(); ++it)
+		for (UIObjectList::iterator it = olistTargetPageChildren.begin(); it != olistTargetPageChildren.end(); ++it)
 		{
 			if (!(*it)->IsA(TUIWidget))
 				continue;
