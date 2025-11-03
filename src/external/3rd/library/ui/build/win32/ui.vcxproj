@@ -408,6 +408,7 @@
     <ClInclude Include="..\..\src\win32\UIRadialMenu.h" />
     <ClInclude Include="..\..\src\win32\UIRadialMenuStyle.h" />
     <ClInclude Include="..\..\src\win32\UIRectangleStyle.h" />
+    <ClInclude Include="..\..\src\win32\UIRenderGlobals.h" />
     <ClInclude Include="..\..\src\win32\UISaver.h" />
     <ClInclude Include="..\..\src\win32\UIScriptEngine.h" />
     <ClInclude Include="..\..\src\win32\UIScrollbar.h" />
