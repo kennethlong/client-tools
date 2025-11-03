@@ -129,8 +129,8 @@ template <class _Tp, class _Sequence = FORWARD_TYPENAME stddeque<_Tp>::fwd > str
 
 namespace Unicode
 {
-	typedef unsigned short unicode_char_t;
-	typedef std::basic_string<unicode_char_t, std::char_traits<unicode_char_t>, std::allocator<unicode_char_t> > String;
+	using unicode_char_t = char16_t;
+	using String = std::u16string;
 }
 
 // ======================================================================
