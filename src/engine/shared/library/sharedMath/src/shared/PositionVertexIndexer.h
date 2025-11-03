@@ -42,7 +42,7 @@ private:
 
 private:
 
-	typedef std::hash_multimap<uint32 /*crc*/, int /*index*/> VertexIndexMap;
+	typedef std::unordered_multimap<uint32 /*crc*/, int /*index*/> VertexIndexMap;
 
 	VectorVector * m_vertices;
 	VertexIndexMap * m_indexMap;

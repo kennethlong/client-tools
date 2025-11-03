@@ -60,7 +60,7 @@ private:
 #endif
 
 	// convert to hash multi-map.
-	typedef std::hash_multimap<int /*elementSize*/, void * /*data*/> MemoryMap;
+	typedef std::unordered_multimap<int /*elementSize*/, void * /*data*/> MemoryMap;
 	MemoryMap * m_memoryMap;
 
 	// Memory pool.
