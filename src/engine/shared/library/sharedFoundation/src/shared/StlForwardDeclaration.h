@@ -85,7 +85,7 @@ template <
 	typename Equal = std::equal_to<Key>,
 	typename Alloc = std::allocator<std::pair<const Key, Value>>
 >
-using StdHashMap = std::unordered_map<Key, Value, Hash, Equal, Alloc>;
+using stdhash_map = std::unordered_map<Key, Value, Hash, Equal, Alloc>;
 
 template <class _Key, class _Tp, class _Compare = std::less<_Key>, class _Alloc = std::allocator< std::pair <const _Key, _Tp> > > struct stdmultimap
 {
