@@ -223,17 +223,23 @@ void FakeUtf8ToEnglish(char *englishDestination, char *fakeSource, int destinati
 	*d = 0;
 }
 
-Unicode::String UTF8ToUnicode(const char *source)
+Unicode::String UTF8ToUnicode(const char* source)
 {
-	Unicode::String s = narrowToWide("");
+	Unicode::String s;   // start empty
+
 	int length = strlen(source) + 1;
-	UTF16 *buffer = new UTF16[length];	
+	UTF16* buffer = new UTF16[length];
+
 	if (buffer != NULL)
 	{
-		UTF8_convertToUTF16(const_cast<char *>(source) , buffer, length);
-		s =buffer;
-		delete [] buffer;
+		UTF8_convertToUTF16(const_cast<char*>(source), buffer, length);
+
+		// Assign using UTF16 iterator conversion
+		s.assign(buffer, buffer + length - 1); // exclude null terminator
+
+		delete[] buffer;
 	}
+
 	return s;
 }
 
