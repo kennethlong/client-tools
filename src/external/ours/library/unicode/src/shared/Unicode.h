@@ -23,7 +23,7 @@
 
 namespace Unicode
 {
-
+	// FORCE unsigned short, do NOT use wchar_t
 	typedef unsigned short unicode_char_t;
 
 	/**
