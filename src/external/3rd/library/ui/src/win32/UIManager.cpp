@@ -1136,14 +1136,14 @@ bool UIManager::ProcessMessage (const UIMessage &Msg)
 					std::vector<Unicode::String> &candidates = UIManager::getUIIMEManager()->GetCandidateList();
 					for (unsigned int i = 0; i < candidates.size(); i++)
 					{
-						unsigned short num[2];
+						Unicode::unicode_char_t num[2];
 
-						num[0] = (unsigned short) (L'0' + ((i + 1) % 10));
+						num[0] = (Unicode::unicode_char_t) (L'0' + ((i + 1) % 10));
 						num[1] = 0;
 			
 						UIString str = candidates[i];
 						
-						unsigned short buf[512];
+						Unicode::unicode_char_t buf[512];
 						_snwprintf(buf, sizeof(buf) - 1, L"%s\\>032%s", num, str.c_str());
 						
 						listbox->AddRow(Unicode::String(buf), "Candidate");
@@ -2256,7 +2256,7 @@ UIIMEManager *UIManager::getUIIMEManager()
 
 char const * UIManager::GetLocaleString() const
 {
-	char * localName = NULL;
+	const char * localName = NULL;
 
 	switch(mLocale) 
 	{
