@@ -100,15 +100,16 @@ private:
 class UIPropertyRegister
 {
 public:
-
-
-	template <typename T> void addPropertyRegisterEntry (T * entry)
+	template <typename T> void addPropertyRegisterEntry(T* entry)
 	{
-		const char * const name = t->GetName ();
-		assert (name);
-		const std::string lowerName (Unicode::toLower (name));
+		const char* const name = entry->GetName();
+		assert(name);
 
-		m_propertyEntries->insert(std::make_pair (lowerName, new EntryContainer (entry)));
+		const std::string lowerName(Unicode::toLower(name));
+
+		m_propertyEntries.insert(
+			std::make_pair(lowerName, new EntryContainer(entry))
+		);
 	}
 
 	~UIPropertyRegister ()
@@ -120,9 +121,9 @@ public:
 		}
 	}
 
-	template <typename T> bool setProperty (const std::string & name, Unicode::String & value)
+	template <typename T> bool setProperty(const std::string& name, Unicode::String& value)
 	{
-		StaticPropertyRegister<T>::setProperty (this, name, value);
+		return StaticPropertyRegister<T>::setProperty(this, name, value);
 	}
 
 	typedef std::map<std::string, EntryContainerBase *> PropertyEntryMap;
