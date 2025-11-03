@@ -86,29 +86,18 @@ inline void get(ReadIterator & source, signed char & target)
 
 //---------------------------------------------------------------------
 
-inline void get(ReadIterator& source, std::wstring& target)
+inline void get(ReadIterator & source, std::string & target)
 {
-	unsigned short len16;
-	unsigned int count;
-	get(source, len16);
-
-	if (len16 < 65535)
-	{
-		count = len16;
-	}
+	unsigned short len;
+	unsigned int size;
+	get(source, len);
+	if (len < 65535)
+		size = len;
 	else
-	{
-		get(source, count);
-	}
-
-	// count = number of wchar_t elements, not bytes
-	const wchar_t* p = reinterpret_cast<const wchar_t*>(source.getBuffer());
-
-	// Assign characters
-	target.assign(p, p + count);
-
-	// Advance by bytes
-	source.advance(count * sizeof(wchar_t));
+		get(source, size);
+	const char * c = reinterpret_cast<const char * const>(source.getBuffer());
+	target = std::string(c, size);
+	source.advance(size);
 }
 
 //---------------------------------------------------------------------
@@ -328,27 +317,6 @@ inline void put(ByteStream & target, const std::string & source)
 		put(target, size);
 	}
 	target.put(source.data(), source.size());
-}
-
-inline void put(ByteStream& target, const std::wstring& source)
-{
-	size_t count = source.size();
-
-	if (count < 65535)
-	{
-		unsigned short len = static_cast<unsigned short>(count);
-		put(target, len);
-	}
-	else
-	{
-		unsigned short len = static_cast<unsigned short>(65535);
-		put(target, len);
-		unsigned int bigLen = static_cast<unsigned int>(count);
-		put(target, bigLen);
-	}
-
-	if (count > 0)
-		target.put(source.data(), count * sizeof(wchar_t));
 }
 
 //---------------------------------------------------------------------
