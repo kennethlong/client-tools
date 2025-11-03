@@ -93,6 +93,11 @@ UIOutputStream & UIOutputStream::operator << (const float f)
 
 //----------------------------------------------------------------------
 
+UIOutputStream& UIOutputStream::operator<<(long i)
+{
+	return (*this) << static_cast<size_t>(i);
+}
+
 UIOutputStream & UIOutputStream::operator << (const size_t i)
 {
 	if (fl)

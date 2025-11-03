@@ -15,6 +15,7 @@ public:
 	UIOutputStream & operator << (const Unicode::String &s);
 	UIOutputStream & operator << (const char c);
 	UIOutputStream & operator << (int i);
+	UIOutputStream & operator << (long i);
 	UIOutputStream & operator << (size_t i);
 	UIOutputStream & operator << (float f);
 	void flush ();
