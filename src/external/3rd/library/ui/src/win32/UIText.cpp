@@ -379,7 +379,12 @@ void UIText::RemoveLeadingLines( int LinesToRemove )
 
 	if( mLines->linePointers.size() && ((int)mLines->linePointers.size() > (LinesToRemove - 2)) )
 	{
-		UIString LinesRemaining( mLines->linePointers[LinesToRemove] );
+		auto start = mLines->linePointers[LinesToRemove];
+		auto end = (LinesToRemove + 1 < mLines->linePointers.size())
+			? mLines->linePointers[LinesToRemove + 1]
+			: mLocalText.end(); // last line goes to end of text
+
+		UIString LinesRemaining(start, end);
 
 		mLocalText = LinesRemaining;	
 		mLines->clear();
