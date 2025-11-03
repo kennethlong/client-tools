@@ -113,8 +113,7 @@ UiMemoryBlockManager::UiMemoryBlockManager(const char *name, size_t granularity)
 
 	if (name)
 	{
-		m_name = new char [strlen (name) + 1];
-		strcpy (m_name, name);
+		m_name = name;
 	}
 }
 

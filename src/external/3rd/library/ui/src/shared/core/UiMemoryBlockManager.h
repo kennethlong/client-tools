@@ -42,7 +42,7 @@ private:
 
 private:
 	// name of this UiMemoryBlockManager
-	char * m_name;
+	std::string m_name;
 
 	template<class T>
 	struct HashPointer
@@ -94,7 +94,7 @@ private:
 
 inline const char *UiMemoryBlockManager::getName() const
 {
-	return m_name;
+	return m_name.c_str();
 }
 
 // ======================================================================
