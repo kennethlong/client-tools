@@ -169,9 +169,6 @@ UiMemoryBlockManager::~UiMemoryBlockManager()
 	
 	delete m_memoryPool;
 	m_memoryPool = 0;
-
-	delete [] m_name;
-	m_name = 0;
 }
 
 // ----------------------------------------------------------------------
