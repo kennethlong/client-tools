@@ -15,7 +15,9 @@
 // ======================================================================
 
 char *      strsep(char **string, const char *delim);
-int         snprintf(char *buffer, size_t count, const char *format, ...);
+#if defined(_MSC_VER) && _MSC_VER < 1900   // VS2015+
+int snprintf(char* buffer, size_t count, const char* format, ...);
+#endif
 struct tm * gmtime_r(const time_t *timep, struct tm *result);
 int         finite(double value);
 
