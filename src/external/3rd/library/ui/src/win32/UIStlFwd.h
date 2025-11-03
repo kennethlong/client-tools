@@ -11,6 +11,7 @@
 // ======================================================================
 #include <unordered_map>
 #include <unordered_set>
+#include <string>
 
 namespace std
 {
@@ -108,8 +109,8 @@ template <class _Tp, class _Sequence = ui_stddeque<_Tp>::fwd > struct ui_stdstac
 
 namespace Unicode
 {
-	typedef unsigned short unicode_char_t;
-	typedef std::basic_string<unicode_char_t, std::char_traits<unicode_char_t>, std::allocator<unicode_char_t> > String;
+	using unicode_char_t = wchar_t;      // 2-byte UTF-16 on Windows
+	using String = std::wstring;         // std::basic_string<wchar_t>
 }
 
 // ======================================================================

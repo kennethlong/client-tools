@@ -133,10 +133,9 @@ template <class _Tp, class _Sequence = FORWARD_TYPENAME stddeque<_Tp>::fwd > str
 
 namespace Unicode
 {
-	using unicode_char_t = unsigned short;
-	using String = std::basic_string<unicode_char_t>;
+	using unicode_char_t = wchar_t;     // UTF-16 code unit on Windows
+	using String = std::wstring;
 }
-
 // ======================================================================
 
 #endif

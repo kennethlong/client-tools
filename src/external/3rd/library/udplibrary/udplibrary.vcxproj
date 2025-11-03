@@ -106,7 +106,7 @@
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <PrecompiledHeaderOutputFile>.\..\..\..\..\compile\win32\udplibrary\Debug/udplibrary.pch</PrecompiledHeaderOutputFile>
       <AssemblerListingLocation>.\..\..\..\..\compile\win32\udplibrary\Debug/</AssemblerListingLocation>
       <ObjectFileName>.\..\..\..\..\compile\win32\udplibrary\Debug/</ObjectFileName>
@@ -139,7 +139,7 @@
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <PrecompiledHeaderOutputFile>.\..\..\..\..\compile\win32\udplibrary\Release/udplibrary.pch</PrecompiledHeaderOutputFile>
       <AssemblerListingLocation>.\..\..\..\..\compile\win32\udplibrary\Release/</AssemblerListingLocation>
       <ObjectFileName>.\..\..\..\..\compile\win32\udplibrary\Release/</ObjectFileName>

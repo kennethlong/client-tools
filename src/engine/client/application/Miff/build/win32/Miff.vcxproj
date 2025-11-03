@@ -125,7 +125,7 @@
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeaderOutputFile>.\../../../../../../compile/win32/Miff/Release/Miff.pch</PrecompiledHeaderOutputFile>
       <AssemblerListingLocation>.\../../../../../../compile/win32/Miff/Release/</AssemblerListingLocation>
@@ -168,7 +168,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;DEBUG_LEVEL=2;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeaderOutputFile>.\../../../../../../compile/win32/Miff/Debug/Miff.pch</PrecompiledHeaderOutputFile>
       <AssemblerListingLocation>.\../../../../../../compile/win32/Miff/Debug/</AssemblerListingLocation>

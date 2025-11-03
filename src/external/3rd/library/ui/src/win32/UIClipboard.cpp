@@ -37,7 +37,7 @@ void UIClipboard::SetText( const UIString &NewText )
 			if (pMem != NULL)
 			{							
 				// @todo: use unicode clipboard
-				wcscpy((unsigned short *)pMem, NewText.c_str ());
+				wcscpy((wchar_t *)pMem, NewText.c_str ());
 				GlobalUnlock(hMem);								
 				
 				// Clear the clipboard
@@ -88,7 +88,7 @@ void UIClipboard::GetText( UIString &Out ) const
 		
 		if (h)
 		{
-			Out = Unicode::String (static_cast<const unsigned short *>(h));
+			Out = Unicode::String (static_cast<const wchar_t *>(h));
 
 			// @todo the string from the clipboard is corrupted by windows with \r characters.
 			// we may need to remove them at this point

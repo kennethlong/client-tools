@@ -92,7 +92,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
     </ClCompile>
     <Link>
       <AdditionalDependencies>libxml2-win32-debug.lib;VideoCapture_debug.lib;ImageCapture_debug.lib;Smart_debug.lib;SoeUtil_debug.lib;ZlibUtil_debug.lib;picn20md.lib;ws2_32.lib;winmm.lib;dinput8.lib;dsound.lib;dxguid.lib;dpvs.lib;mss32.lib;libpcre.a;qt-mt334.lib;qtmain.lib;mswsock.lib;lgLcd.lib;nspr4.lib;plc4.lib;profdirserviceprovider_s.lib;xpcom.lib;xul.lib;vivoxSharedWrapper_release.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -133,7 +133,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
     </ClCompile>
     <Link>
       <AdditionalDependencies>libxml2-win32-release.lib;VideoCapture_release.lib;ImageCapture_release.lib;Smart_release.lib;SoeUtil_release.lib;ZlibUtil_release.lib;picn20m.lib;ws2_32.lib;winmm.lib;dinput8.lib;dsound.lib;dxguid.lib;dpvs.lib;mss32.lib;libpcre.a;qt-mt334.lib;qtmain.lib;mswsock.lib;lgLcd.lib;nspr4.lib;plc4.lib;profdirserviceprovider_s.lib;xpcom.lib;xul.lib;vivoxSharedWrapper_release.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -174,7 +174,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
