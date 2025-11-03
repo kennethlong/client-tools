@@ -878,9 +878,9 @@ void UITextbox::MoveCaratVertically( long MovementDirection )
 		long PixelOffset = 0;
 		long CaratOffset = mCaratRect.left;
 
-		const UIString::value_type *s = mLinePointers[CaratLineNumber];
+		UIString::const_iterator s = mLinePointers[CaratLineNumber];
 
-		for( ; s < mLinePointers[CaratLineNumber + 1]; ++s )
+		for( ; s != mLinePointers[CaratLineNumber + 1]; ++s )
 		{
 			if( *s != '\n' )
 			{
@@ -1009,7 +1009,7 @@ long UITextbox::GetCaratOffsetFromPoint( const UIPoint & widgetPt )
 	}
 
 	long  PixelOffset              = textPadding.left;
-	const UIString::value_type * s = mRenderLinePointers[CaratRow];
+	UIString::const_iterator s = mRenderLinePointers[CaratRow];
 
 #if 0
 	//-- Debugging to look at the string we're advancing over
@@ -1516,7 +1516,14 @@ void UITextbox::CalculateCaratRect ()
 					ignoreNextEscape = false;										
 				}
 				realAmountToCopy = static_cast<long>(i - mRenderLinePointers[CaratLineNumber]);
-				s.assign( mRenderLinePointers[CaratLineNumber], realAmountToCopy );
+
+				auto cpybegin = mRenderLinePointers[CaratLineNumber];
+				auto cpyend = cpybegin + realAmountToCopy;
+
+				if (cpyend > mLocalText.end())
+					cpyend = mLocalText.end();
+
+				s.assign(cpybegin, cpyend);
 			}
 		}
 	}
