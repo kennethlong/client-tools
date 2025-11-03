@@ -479,13 +479,13 @@ void UIManager::SendHeartbeats ()
 				if (mMouseDownControl)
 					ResetTooltipCountdown ();
 				else
-					mCountdownToTooltip = std::max (0L, mCountdownToTooltip - Ticks);
+					mCountdownToTooltip = std::max(0L, mCountdownToTooltip - Ticks);
 				
 				//-- handle hoverpress
 				
 				if (!mHoverPressComplete && mDraggedControl)
 				{
-					mCountdownToHoverPress = std::max (0L, mCountdownToHoverPress - Ticks);
+					mCountdownToHoverPress = std::max(0L, mCountdownToHoverPress - Ticks);
 					
 					if (mCountdownToHoverPress == 0)
 					{
