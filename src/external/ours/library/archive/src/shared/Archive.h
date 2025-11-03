@@ -213,6 +213,16 @@ template<typename A> inline void get(ReadIterator & source, A * target, int leng
 	}
 }
 
+inline void get(ReadIterator& source, uint64_t& value)
+{
+	source.get(&value, sizeof(value));
+}
+
+inline void get(ReadIterator& source, int64_t& value)
+{
+	source.get(&value, sizeof(value));
+}
+
 //---------------------------------------------------------------------
 
 inline void put(ByteStream & target, const double & source)
