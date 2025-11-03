@@ -28,12 +28,6 @@ void* __cdecl operator new[](std::size_t size);
 void* __cdecl operator new(std::size_t size, const char* file, int line);
 void* __cdecl operator new[](std::size_t size, const char* file, int line);
 
-// Standard placement new (construct in existing memory)
-inline void* __cdecl operator new(std::size_t, void* placement) noexcept
-{
-    return placement;
-}
-
 // ----------------------------------------------------------------------
 // Delete overloads
 // ----------------------------------------------------------------------
@@ -42,12 +36,6 @@ void operator delete(void* pointer) noexcept;
 void operator delete[](void* pointer) noexcept;
 void operator delete(void* pointer, const char* file, int line) noexcept;
 void operator delete[](void* pointer, const char* file, int line) noexcept;
-
-// Placement delete (no-op — used only for exception safety)
-inline void __cdecl operator delete(void*, void*) noexcept
-{
-    // no-op
-}
 
 // ----------------------------------------------------------------------
 // C++14 sized delete overloads (optional, avoids warnings in modern compilers)
