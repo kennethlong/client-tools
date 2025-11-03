@@ -74,17 +74,17 @@ namespace UITextNamespace
 
 		static const FubarCharacterInfo FubarCharactersCourtesyMicrosoft [] =
 		{
-			FubarCharacterInfo (139,   '<'),
-			FubarCharacterInfo (155,   '>'),
+			FubarCharacterInfo (static_cast < Unicode::unicode_char_t>(139),   '<'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(155),   '>'),
 
-			FubarCharacterInfo (8216,   '\''),
-			FubarCharacterInfo (8217,   '\''),
-			FubarCharacterInfo (8221,   '"'),
-			FubarCharacterInfo (8220,   '"'),
-			FubarCharacterInfo (149,   '-'),
-			FubarCharacterInfo (150,   '-'),
-			FubarCharacterInfo (151,   '-'),
-			FubarCharacterInfo (152,   '~')
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(8216),   '\''),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(8217),   '\''),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(8221),   '"'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(8220),   '"'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(149),   '-'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(150),   '-'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(151),   '-'),
+			FubarCharacterInfo (static_cast <Unicode::unicode_char_t>(152),   '~')
 		};
 		
 		static const int FubarCharactersCourtesyMicrosoftLength = sizeof (FubarCharactersCourtesyMicrosoft) / sizeof (FubarCharactersCourtesyMicrosoft[0]);
