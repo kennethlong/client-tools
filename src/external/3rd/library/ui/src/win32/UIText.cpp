@@ -91,9 +91,9 @@ namespace UITextNamespace
 		
 		static const FubarStringInfo FubarStringsCourtesyMicrosoft [] =
 		{
-			FubarStringInfo (133,   Unicode::narrowToWide ("...")),
+			FubarStringInfo (static_cast <Unicode::unicode_char_t>(133),   Unicode::narrowToWide ("...")),
 				//-- carriage return
-			FubarStringInfo (13,    Unicode::narrowToWide (""))
+			FubarStringInfo (static_cast <Unicode::unicode_char_t>(13),    Unicode::narrowToWide (""))
 		};
 		
 		static const int FubarStringsCourtesyMicrosoftLength = sizeof (FubarStringsCourtesyMicrosoft) / sizeof (FubarStringsCourtesyMicrosoft[0]);
