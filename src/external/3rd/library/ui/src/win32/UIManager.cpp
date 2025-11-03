@@ -777,7 +777,7 @@ bool UIManager::ProcessMessage (const UIMessage &Msg)
 
 		//----------------------------------------------------------------------
 
-		if( Msg.Modifiers.and (*mDragModifier) )
+		if( Msg.Modifiers.Matches(*mDragModifier) )
 		{
 			if( mDraggedControl )
 			{
