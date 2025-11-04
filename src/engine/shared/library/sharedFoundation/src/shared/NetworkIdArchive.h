@@ -9,6 +9,8 @@
 #ifndef	INCLUDED_NetworkIdArchive_H
 #define	INCLUDED_NetworkIdArchive_H
 
+#include "sharedFoundationTypes/FoundationTypes.h"
+
 // ======================================================================
 
 class NetworkId;
