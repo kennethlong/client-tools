@@ -180,9 +180,6 @@
     <ClCompile Include="..\..\src\shared\original\filters.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\original\iterhash.cpp">
-      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
-    </ClCompile>
     <ClCompile Include="..\..\src\shared\original\md5.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -241,6 +238,9 @@
     <ClInclude Include="..\..\src\shared\wrapper\TwofishCrypt.h" />
     <ClInclude Include="..\..\src\shared\wrapper\TwofishDecryptor.h" />
     <ClInclude Include="..\..\src\shared\wrapper\TwofishEncryptor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\shared\original\iterhash.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
