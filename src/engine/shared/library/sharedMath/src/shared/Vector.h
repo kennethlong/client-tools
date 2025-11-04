@@ -10,6 +10,9 @@
 #ifndef INCLUDED_Vector_H
 #define INCLUDED_Vector_H
 
+#include <cmath>
+#include "sharedFoundation/StlForwardDeclaration.h"
+
 // ======================================================================
 
 class Vector
@@ -292,7 +295,7 @@ inline float Vector::approximateMagnitude(void) const
 		midc = temp;
 	}
 
-	return (maxc + CONST_REAL(11.0f / 32.0f) * midc + CONST_REAL(0.25f) * minc);
+	return (maxc + (11.0f / 32.0f) * midc + (0.25f) * minc);
 }
 
 // ----------------------------------------------------------------------
@@ -516,7 +519,7 @@ inline Vector &Vector::operator *=(float scalar)
 
 inline Vector &Vector::operator /=(float scalar)
 {
-	*this *= (CONST_REAL(1.0) / scalar);
+	*this *= (1.0f / scalar);
 	return *this;
 }
 
@@ -594,7 +597,7 @@ inline const Vector Vector::operator *(float scalar) const
 
 inline const Vector Vector::operator /(float scalar) const
 {
-	const float multiplier(CONST_REAL(1.0) / scalar);
+	const float multiplier(1.0f / scalar);
 	return Vector(x * multiplier, y * multiplier, z * multiplier);
 }
 
@@ -690,7 +693,7 @@ inline const Vector Vector::reflectIncoming(const Vector &incident) const
 
 inline const Vector Vector::midpoint(const Vector &vector1, const Vector &vector2)
 {
-	return Vector((vector1.x + vector2.x) * CONST_REAL(0.5), (vector1.y + vector2.y) * CONST_REAL(0.5), (vector1.z + vector2.z) * CONST_REAL(0.5));
+	return Vector((vector1.x + vector2.x) * 0.5f, (vector1.y + vector2.y) * 0.5f, (vector1.z + vector2.z) * 0.5f);
 }
 
 // ----------------------------------------------------------------------
