@@ -43,7 +43,7 @@ namespace std
 	template <class _T1>                                                                struct hash;
 	template <class _Tp>                                                                class  allocator;
 	template <class _CharT, class _Traits, class _Alloc>                                class  basic_string;
-	template <class _CharT>                                                             class  char_traits;
+	template <class _CharT>                                                             struct  char_traits;
 
 	template <size_t _Nb>                                                               class  bitset;
 	template <class _Tp, class _Alloc>                                                  class  deque;
