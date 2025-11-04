@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include "sharedFoundation/StlForwardDeclaration.h"
+#include "sharedFoundation/Misc.h"
 
 // ======================================================================
 
