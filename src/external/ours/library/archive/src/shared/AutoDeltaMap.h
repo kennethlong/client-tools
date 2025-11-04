@@ -681,9 +681,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::onSet(const KeyType &k
 {
 	if (onSetCallback && onSetCallback->first)
 	{
-		ObjectType &owner = *onSetCallback->first;
+		ObjectType & ownerRef = *onSetCallback->first;
 		void (ObjectType::*cb)(const KeyType &, const ValueType &, const ValueType &) = onSetCallback->second;
-		(owner.*cb)(key, oldValue, newValue);
+		(ownerRef.*cb)(key, oldValue, newValue);
 	}
 }
 
@@ -694,9 +694,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::onErase(const KeyType 
 {
 	if (onEraseCallback && onEraseCallback->first)
 	{
-		ObjectType &owner = *onEraseCallback->first;
+		ObjectType & ownerRef = *onEraseCallback->first;
 		void (ObjectType::*cb)(const KeyType &, const ValueType &) = onEraseCallback->second;
-		(owner.*cb)(key, value);
+		(ownerRef.*cb)(key, value);
 	}
 }
 
@@ -707,9 +707,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::onInsert(const KeyType
 {
 	if (onInsertCallback && onInsertCallback->first)
 	{
-		ObjectType &owner = *onInsertCallback->first;
+		ObjectType &ownerRef = *onInsertCallback->first;
 		void (ObjectType::*cb)(const KeyType &, const ValueType &) = onInsertCallback->second;
-		(owner.*cb)(key, value);
+		(ownerRef.*cb)(key, value);
 	}
 }
 
