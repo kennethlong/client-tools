@@ -11,15 +11,20 @@
 //-----------------------------------------------------------------------
 
 #include "sharedMath/Vector.h"
-#include "sharedNetworkMessages/GameNetworkMessage.h"
-
-//-----------------------------------------------------------------------
 
 struct Survey_DataItem
 {
 	Vector m_location;
 	float  m_efficiency;
 };
+
+namespace Archive
+{
+	void put(ByteStream& target, const Survey_DataItem& data);
+	void get(ReadIterator& source, Survey_DataItem& data);
+}
+
+#include "sharedNetworkMessages/GameNetworkMessage.h"
 
 //-----------------------------------------------------------------------
 
@@ -48,11 +53,6 @@ private:
 
 // ======================================================================
 
-namespace Archive
-{
-	void put(ByteStream &target, const Survey_DataItem &data);
-	void get(ReadIterator &source, Survey_DataItem &data);
-}
 
 // ======================================================================
 

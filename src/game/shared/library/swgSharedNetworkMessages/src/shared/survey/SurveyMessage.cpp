@@ -5,8 +5,8 @@
 //
 // ======================================================================
 
-#include "swgSharedNetworkMessages/FirstSwgSharedNetworkMessages.h"
 #include "swgSharedNetworkMessages/SurveyMessage.h"
+#include "swgSharedNetworkMessages/FirstSwgSharedNetworkMessages.h"
 
 #include "sharedMathArchive/VectorArchive.h"
 
