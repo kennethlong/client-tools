@@ -25,25 +25,27 @@
  */
 
 template <class Class>
-class VoidConstMemberFunctionNoArg: public std::unary_function<const Class*,void>
+class VoidConstMemberFunctionNoArg
 {
 private:
-
-  typedef void (Class:: *Function)(void) const;
+    using Function = void (Class::*)() const;
 
 public:
+    explicit VoidConstMemberFunctionNoArg(Function function) : m_function(function) {}
 
-  explicit VoidConstMemberFunctionNoArg(Function function) : m_function(function) {}
-  void operator ()(const Class* classArgument) const { (classArgument->*m_function)(); }
+    void operator()(const Class* classArgument) const
+    {
+        (classArgument->*m_function)();
+    }
 
 private:
-  Function m_function;
+    Function m_function;
 };
 
 // ----------------------------------------------------------------------
 
 template <class Class>
-class VoidMemberFunctionNoArg: public std::unary_function<Class*,void>
+class VoidMemberFunctionNoArg
 {
 private:
 
