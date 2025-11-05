@@ -11,6 +11,8 @@
 
 #define TRACK_FILL_CALLS 0
 
+// Disable deprecated auto_ptr support for modern C++
+#define BOOST_NO_AUTO_PTR
 #include "boost/smart_ptr.hpp"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/GraphicsOptionTags.h"
