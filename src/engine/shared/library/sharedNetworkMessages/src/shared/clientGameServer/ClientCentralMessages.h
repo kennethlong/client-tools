@@ -7,34 +7,12 @@
 
 //-----------------------------------------------------------------------
 
+#include "ClientCentralMessagesArchive.h"
+#include "ClientCentralMessagesTypes.h"
+
 #include "StringId.h"
-#include "localizationArchive/StringIdArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
-#include "unicodeArchive/UnicodeArchive.h"
 #include "Unicode.h"
-
-namespace Archive
-{
-	inline void get(ReadIterator& source, EnumerateCharacterId_Chardata& c)
-	{
-		get(source, c.m_name);
-		get(source, c.m_objectTemplateId);
-		get(source, c.m_networkId);
-		get(source, c.m_clusterId);
-		get(source, c.m_characterType);
-	}
-
-	inline void put(ByteStream& target, EnumerateCharacterId_Chardata const& c)
-	{
-		put(target, c.m_name);
-		put(target, c.m_objectTemplateId);
-		put(target, c.m_networkId);
-		put(target, c.m_clusterId);
-		put(target, c.m_characterType);
-	}
-}
-
+#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 
 //-----------------------------------------------------------------------
@@ -89,22 +67,6 @@ inline const uint16 ClientIdMsg::getTokenSize(void) const
 	const std::vector<unsigned char> & t = token.get();
 	return static_cast<uint16>(t.size());
 }
-
-//-----------------------------------------------------------------------
-
-struct EnumerateCharacterId_Chardata
-{
-	enum CharacterType {CT_normal=1,CT_jedi=2,CT_spectral=3};
-		
-	Unicode::String m_name;
-	int m_objectTemplateId;
-	NetworkId m_networkId;
-	uint32 m_clusterId;
-	int m_characterType;
-
-	EnumerateCharacterId_Chardata();
-	EnumerateCharacterId_Chardata(const Unicode::String &name, int objectTemplateId, const NetworkId &networkId, uint32 clusterId, CharacterType characterType);
-};
 
 //-----------------------------------------------------------------------
 
