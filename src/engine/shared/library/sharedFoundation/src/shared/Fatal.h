@@ -9,6 +9,8 @@
 #ifndef INCLUDED_Fatal_H
 #define INCLUDED_Fatal_H
 
+#include "sharedFoundation/FirstSharedFoundation.h"
+
 // ======================================================================
 
 void           FatalInstall();
