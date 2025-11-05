@@ -102,20 +102,6 @@ void __cdecl operator delete[](void* pointer, const char* file, int line) noexce
 }
 
 // ----------------------------------------------------------------------
-// Standard placement new/delete
-// ----------------------------------------------------------------------
-
-inline void* __cdecl operator new(size_t, void* place) noexcept
-{
-    return place;
-}
-
-inline void __cdecl operator delete(void*, void*) noexcept
-{
-    // no-op
-}
-
-// ----------------------------------------------------------------------
 // Re-enable warnings
 // ----------------------------------------------------------------------
 #pragma warning(default: 4100)
