@@ -64,37 +64,45 @@ private:
 // ----------------------------------------------------------------------
 
 template <class Class, class ArgumentType>
-class VoidConstMemberFunctionOneArg: public std::binary_function<const Class*, ArgumentType, void>
+class VoidConstMemberFunctionOneArg
 {
 private:
-
-  typedef void (Class:: *Function)(ArgumentType) const;
+    using Function = void (Class::*)(ArgumentType) const;
 
 public:
+    explicit VoidConstMemberFunctionOneArg(Function function)
+        : m_function(function) {
+    }
 
-  explicit VoidConstMemberFunctionOneArg(Function function) : m_function(function) {}
-  void operator ()(const Class* classArgument, ArgumentType argument) const { (classArgument->*m_function)(argument); }
+    void operator()(const Class* classArgument, ArgumentType argument) const
+    {
+        (classArgument->*m_function)(argument);
+    }
 
 private:
-  Function m_function;
+    Function m_function;
 };
 
 // ----------------------------------------------------------------------
 
 template <class Class, class ArgumentType>
-class VoidMemberFunctionOneArg: public std::binary_function<Class*, ArgumentType, void>
+class VoidMemberFunctionOneArg
 {
 private:
-
-  typedef void (Class:: *Function)(ArgumentType);
+    using Function = void (Class::*)(ArgumentType);
 
 public:
+    explicit VoidMemberFunctionOneArg(Function function)
+        : m_function(function) {
+    }
 
-  explicit VoidMemberFunctionOneArg(Function function) : m_function(function) {}
-  void operator ()(Class* classArgument, ArgumentType argument) const { (classArgument->*m_function)(argument); }
+    void operator()(Class* classArgument, ArgumentType argument) const
+    {
+        (classArgument->*m_function)(argument);
+    }
 
 private:
-  Function m_function;
+    Function m_function;
 };
 
 
