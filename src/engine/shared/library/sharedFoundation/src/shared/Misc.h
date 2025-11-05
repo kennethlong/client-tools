@@ -10,6 +10,8 @@
 #ifndef MISC_H
 #define MISC_H
 
+#include "Fatal.h"
+
 // ======================================================================
 /**
  * Return the square of a number.
