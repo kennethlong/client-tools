@@ -5,6 +5,7 @@
 //
 // ======================================================================
 
+#include "SurveyMessageArchive.h"
 #include "swgSharedNetworkMessages/FirstSwgSharedNetworkMessages.h"
 #include "swgSharedNetworkMessages/SurveyMessage.h"
 

@@ -12,13 +12,13 @@
 //-----------------------------------------------------------------------
 
 #include "Archive/AutoDeltaVariableCallback.h"
+#include "localizationArchive/StringIdArchive.h"
 #include "StringId.h"
+#include "unicodeArchive/UnicodeArchive.h"
 #include "Unicode.h"
 #include "clientGame/ClientWorld.h"
-#include "localizationArchive/StringIdArchive.h"
 #include "sharedObject/Object.h"
 #include "sharedTerrain/TerrainGenerator.h"
-#include "unicodeArchive/UnicodeArchive.h"
 
 //-----------------------------------------------------------------------
 
