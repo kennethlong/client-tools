@@ -8,6 +8,7 @@
 //-----------------------------------------------------------------------
 
 #include "ClientCentralMessagesArchive.h"
+#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
 #include "ClientCentralMessagesTypes.h"
 
 #include "StringId.h"

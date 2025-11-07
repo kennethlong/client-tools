@@ -12,6 +12,7 @@
 // ======================================================================
 
 #include "unicodeArchive/UnicodeArchive.h"
+#include "Unicode.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 
