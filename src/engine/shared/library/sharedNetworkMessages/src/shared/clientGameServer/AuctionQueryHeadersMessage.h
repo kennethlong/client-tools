@@ -12,11 +12,12 @@
 //-----------------------------------------------------------------------
 
 #include "Archive/AutoDeltaByteStream.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Tag.h"
-#include "sharedNetworkMessages/GameNetworkMessage.h"
+#include "sharedFoundation/NetworkIdArchive.h"
+#include "sharedFoundation/NetworkId.h"
+#include "sharedFoundation/Tag.h"
 #include "unicodeArchive/UnicodeArchive.h"
+#include "Unicode.h"
+#include "sharedNetworkMessages/GameNetworkMessage.h"
 
 //-----------------------------------------------------------------------
 

@@ -7,13 +7,14 @@
 
 //-----------------------------------------------------------------------
 
+#include "UnicodeArchive/UnicodeArchive.h"
+#include "localizationArchive/StringIdArchive.h"
+#include "sharedFoundation/NetworkIdArchive.h"
 #include "ClientCentralMessagesArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
 #include "ClientCentralMessagesTypes.h"
-
 #include "StringId.h"
 #include "Unicode.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
+#include "sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 
 //-----------------------------------------------------------------------

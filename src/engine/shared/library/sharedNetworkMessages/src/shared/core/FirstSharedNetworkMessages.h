@@ -10,15 +10,17 @@
 
 // ======================================================================
 
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/FirstSharedFoundation.h"
-#include "Archive/AutoDeltaByteStream.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
+#include "sharedFoundation/FirstSharedFoundation.h"
+#include "sharedFoundation/NetworkIdArchive.h"
+#include "sharedFoundation/NetworkId.h"
 #include "unicodeArchive/UnicodeArchive.h"
+#include "localizationArchive/StringIdArchive.h"
+#include "sharedNetworkMessages/ChatAvatarIdArchive.h"
+#include "sharedNetworkMessages/ClientCentralMessagesArchive.h"
 #include <string>
-#include "../../src/shared/clientGameServer/ClientCentralMessagesArchive.h"
 #include "sharedNetworkMessages/ClientCentralMessages.h"
 #include "sharedNetworkMessages/ClientLoginMessages.h"
+#include "Archive/AutoDeltaByteStream.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 
 // ======================================================================

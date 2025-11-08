@@ -11,12 +11,10 @@
 
 //-----------------------------------------------------------------------
 
-#include "Archive/AutoDeltaByteStream.h"
+#include "unicodeArchive/UnicodeArchive.h"
+#include "Unicode.h"
 #include "sharedNetworkMessages/AuctionData.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
-
-#include "Unicode.h"
-#include "unicodeArchive/UnicodeArchive.h"
 
 //-----------------------------------------------------------------------
 

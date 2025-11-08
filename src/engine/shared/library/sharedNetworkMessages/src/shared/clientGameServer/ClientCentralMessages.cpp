@@ -5,14 +5,14 @@
 //-----------------------------------------------------------------------
 
 #include "ClientCentralMessagesArchive.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkIdArchive.h"
+#include "sharedFoundation/NetworkIdArchive.h"
+#include "localizationArchive/StringIdArchive.h"
 #include "ClientCentralMessagesTypes.h"
-
-#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 #include "Archive/ByteStream.h"
 #include "sharedFoundation/ConfigFile.h"
 #include "unicodeArchive/UnicodeArchive.h"
 #include "sharedNetworkMessages/ClientCentralMessages.h"
+#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 
 //-----------------------------------------------------------------------
 

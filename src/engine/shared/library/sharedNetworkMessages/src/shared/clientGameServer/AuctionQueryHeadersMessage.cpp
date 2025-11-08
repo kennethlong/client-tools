@@ -6,6 +6,8 @@
 //
 // ======================================================================
 
+#include "unicodeArchive/UnicodeArchive.h"
+#include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 #include "sharedNetworkMessages/AuctionQueryHeadersMessage.h"
 

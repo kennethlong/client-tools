@@ -6,10 +6,9 @@
 //
 // ======================================================================
 
-#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
-#include "sharedNetworkMessages/AuctionQueryHeadersResponseMessage.h"
-
 #include "sharedFoundation/NetworkIdArchive.h"
+#include "sharedNetworkMessages/AuctionQueryHeadersResponseMessage.h"
+#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 
 // ======================================================================
 

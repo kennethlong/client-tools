@@ -243,6 +243,8 @@
     <ClCompile Include="..\..\src\shared\chat\ChatKickAvatarFromRoom.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\chat\ChatLogEntry.cpp" />
+    <ClCompile Include="..\..\src\shared\chat\ChatLogEntryArchive.cpp" />
     <ClCompile Include="..\..\src\shared\chat\ChatMessageFromGame.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -402,6 +404,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\AIDebuggingMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\AttributeListMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -437,6 +440,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\ClientCentralMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\ClientCentralMessagesArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\ClientEffectMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -1200,6 +1204,8 @@
     <ClInclude Include="..\..\src\shared\chat\ChatInviteGroupMembersToRoom.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatInviteGroupToRoom.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatKickAvatarFromRoom.h" />
+    <ClInclude Include="..\..\src\shared\chat\ChatLogEntry.h" />
+    <ClInclude Include="..\..\src\shared\chat\ChatLogEntryArchive.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatMessageFromGame.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatOnAddFriend.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatOnAddModeratorToRoom.h" />
@@ -1253,6 +1259,8 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\AddMapLocationMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AddMapLocationResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessages.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchive.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchiveTypes.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AttributeListMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionData.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionErrorCodes.h" />
