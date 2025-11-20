@@ -1667,8 +1667,8 @@ std::string Iff::read_stdstring()
 void  Iff::read_string(Unicode::String &str)
 {
 	const int32 count = read_int32 ();
-	unsigned short * dataArray = new unsigned short [count];
-	read_uint16 (count, dataArray);
+	wchar_t* dataArray = new wchar_t[count];
+	read_uint16 (count, reinterpret_cast<unsigned short*>(dataArray));
 	str.assign (dataArray, static_cast<size_t>(count));
 	delete [] dataArray;
 }
