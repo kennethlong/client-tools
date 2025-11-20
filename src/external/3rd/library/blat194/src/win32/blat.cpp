@@ -707,11 +707,11 @@ int transform_and_send_edit_data( socktag sock, char * editptr )
 
     if ( editptr[send_len-1] != '\n' ) {
         //lint -e605
-        if ( (retval = (*pgensock_put_data_buffered) (sock, "\r\n.\r\n", 5)) )
+        if ( (retval = (*pgensock_put_data_buffered) (sock, const_cast<char*>("\r\n.\r\n"), 5)) )
             return(retval);
     } else
         //lint -e605
-        if ( (retval = (*pgensock_put_data_buffered) (sock, ".\r\n", 3)) )
+        if ( (retval = (*pgensock_put_data_buffered) (sock, const_cast<char*>(".\r\n"), 3)) )
         return(retval);
 
     /* now make sure it's all sent... */
