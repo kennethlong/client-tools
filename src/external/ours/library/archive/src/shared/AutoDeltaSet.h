@@ -166,7 +166,7 @@ inline typename AutoDeltaSet<ValueType, ObjectType>::const_iterator AutoDeltaSet
 template<typename ValueType, typename ObjectType>
 inline typename AutoDeltaSet<ValueType, ObjectType>::const_iterator AutoDeltaSet<ValueType, ObjectType>::erase(ValueType const &value)
 {
-	SetType::const_iterator i(find(value));
+	typename SetType::const_iterator i(find(value));
 
 	return erase(i);
 }
