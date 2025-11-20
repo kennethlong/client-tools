@@ -1255,7 +1255,7 @@ void SetFileType (char *sDestBuffer, char *sFileName)
     sprintf( sDestBuffer, "Content-Type: %s; name=%s\r\n", sType, sFileName );
 }
 
-int ReadNamesFromFile(char * type, char * namesfilename, char * * listofnames) {
+int ReadNamesFromFile(const char * type, char * namesfilename, char * * listofnames) {
     HANDLE fileh;
     int found;
 
