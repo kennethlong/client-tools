@@ -2016,8 +2016,8 @@ int callBlat(int argc, char **argv, char **envp)
     int  headerlen;
     SYSTEMTIME curtime;
     TIME_ZONE_INFORMATION tzinfo;
-    char * days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-    char * months[] = { "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+    const char * days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    const char * months[] = { "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
     DWORD retval;
 
     GetLocalTime( &curtime );
