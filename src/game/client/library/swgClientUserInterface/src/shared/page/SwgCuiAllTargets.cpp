@@ -112,13 +112,14 @@ namespace SwgCuiAllTargetsNamespace
 		std::vector<UIPage *> *        m_waypointArrowPages;
 	};
 
-	struct TextOpacityZero: public std::unary_function<UISmartPointer<UIText>, bool>
+	struct TextOpacityZero
 	{
-		bool operator() (UISmartPointer<UIText> const & t) const 
+		bool operator()(UISmartPointer<UIText> const& t) const
 		{
 			return t.pointer() && (t->GetOpacity() <= 0.0f);
 		}
 	};
+
 
 
 	//--------------------------------------------------------------------
