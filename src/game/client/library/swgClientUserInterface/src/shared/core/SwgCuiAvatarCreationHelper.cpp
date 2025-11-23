@@ -529,8 +529,7 @@ CreatureObject * SwgCuiAvatarCreationHelper::duplicateCreatureWithClothesAndCust
 	if(newCreature)
 	{
 		newCreature->setNetworkId(ClientImageDesignerManager::getNextClientNetworkId());
-		CustomizationData const * const sourceCustomizationData = basea.fetchCustomizationData();
-		if(sourceCustomizationData)
+		if(CustomizationData const* const sourceCustomizationData = basea.fetchCustomizationData())
 		{
 			std::string const & customizationDataStr = sourceCustomizationData->writeLocalDataToString();
 			sourceCustomizationData->release();
@@ -662,8 +661,7 @@ CreatureObject * SwgCuiAvatarCreationHelper::duplicateCreatureWithClothesAndCust
 		TangibleObject * const tangibleDestHair = destHair ? destHair->asTangibleObject() : NULL;
 		if(tangibleSourceHair && tangibleDestHair)
 		{
-			CustomizationData const * const sourceCustomizationData = tangibleSourceHair->fetchCustomizationData();
-			if(sourceCustomizationData)
+			if(CustomizationData const* const sourceCustomizationData = tangibleSourceHair->fetchCustomizationData())
 			{
 				std::string const & customizationDataStr = sourceCustomizationData->writeLocalDataToString();
 				sourceCustomizationData->release();
