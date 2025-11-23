@@ -23,7 +23,7 @@ int         finite(double value);
 
 //Format specifier for non-portable printf
 #define UINT64_FORMAT_SPECIFIER "%I64u"
-#define INT64_FORMAT_SPECIFIER "%I64i"
+#define INT64_FORMAT_SPECIFIER "%lld"
 
 //Constant definition macro for 64 bit values
 #define UINT64_LITERAL(a) a ## ui64
