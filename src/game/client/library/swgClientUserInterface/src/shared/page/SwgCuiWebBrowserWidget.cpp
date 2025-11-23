@@ -25,7 +25,7 @@
 #include "swgClientUserInterface/SwgCuiHudFactory.h"
 #include "swgClientUserInterface/SwgCuiWebBrowserWindow.h"
 
-#if DEBUG=0
+#if DEBUG==0
 #include "libMozilla/libMozilla.h"
 #endif
 
@@ -38,7 +38,7 @@
 
 // ======================================================================
 
-#if DEBUG=0
+#if DEBUG==0
 namespace browserNamespace
 {
 	std::string s_homePage = "beta.stellabellum.net";
