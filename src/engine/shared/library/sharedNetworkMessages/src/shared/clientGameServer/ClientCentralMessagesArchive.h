@@ -7,12 +7,13 @@
 
 //-----------------------------------------------------------------------
 
-#include "Archive/ByteStream.h"
-
 struct EnumerateCharacterId_Chardata;
 
 namespace Archive
 {
+	class ReadIterator;
+	class ByteStream;
+
 	void get(ReadIterator& source, EnumerateCharacterId_Chardata& c);
 	void put(ByteStream& target, EnumerateCharacterId_Chardata const& c);
 }

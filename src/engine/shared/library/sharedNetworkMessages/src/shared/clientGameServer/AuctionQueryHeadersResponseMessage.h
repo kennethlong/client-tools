@@ -13,9 +13,10 @@
 
 #include "unicodeArchive/UnicodeArchive.h"
 #include "Unicode.h"
+#include "AuctionDataArchive.h"
 #include "sharedNetworkMessages/AuctionData.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
-#include "StlForwardDeclerations"
+#include "sharedFoundation/StlForwardDeclaration.h"
 
 //-----------------------------------------------------------------------
 
@@ -92,15 +93,6 @@ inline uint16 AuctionQueryHeadersResponseMessage::getQueryOffset() const
 inline bool AuctionQueryHeadersResponseMessage::getHasMorePages() const
 {
 	return m_hasMorePages.get();
-}
-
-// ----------------------------------------------------------------------
-
-namespace Archive
-{
-
-	void get(ReadIterator &source, Auction::PalettizedItemDataHeader &target);
-	void put(ByteStream &target, Auction::PalettizedItemDataHeader const &source);
 }
 
 // ----------------------------------------------------------------------

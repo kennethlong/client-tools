@@ -4,10 +4,9 @@
 
 //-----------------------------------------------------------------------
 
-#include "sharedFoundation/NetworkIdArchive.h"
-#include "unicodeArchive/UnicodeArchive.h"
-#include "Archive/Archive.h"
 #include "ClientCentralMessagesTypes.h"
+
+#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 
 namespace Archive
 {
