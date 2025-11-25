@@ -390,15 +390,15 @@ void SwgCuiAvatarSelection::refreshList (bool updateSelection)
 	AvatarInfoVector::const_iterator it;
 
 	bool hasAvatarOnClosedServers = false;
-	for (it = aiv.begin (); it != aiv.end (); ++it)
-	{
-		const CuiLoginManagerAvatarInfo & avatarInfo = *it;
+	//for (it = aiv.begin (); it != aiv.end (); ++it)
+	//{
+		//const CuiLoginManagerAvatarInfo & avatarInfo = *it;
 		//if (isClosedServer(avatarInfo.clusterId))
 		//{
 		//	hasAvatarOnClosedServers = true;
 		//	break;
 		//}
-	}
+	//}
 
 	m_hideClosed->SetVisible(hasAvatarOnClosedServers);
 	
