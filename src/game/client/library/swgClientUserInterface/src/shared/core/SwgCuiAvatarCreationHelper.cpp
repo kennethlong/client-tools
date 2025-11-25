@@ -46,7 +46,6 @@
 #include "sharedNetworkMessages/NameErrors.h"
 #include "sharedObject/Container.h"
 #include "sharedObject/CustomizationData.h"
-#include "sharedObject/CustomizationData.h"
 #include "sharedObject/CustomizationDataProperty.h"
 #include "sharedObject/ObjectTemplate.h"
 #include "sharedObject/ObjectTemplateList.h"
@@ -56,6 +55,7 @@
 #include "swgClientUserInterface/SwgCuiMediatorTypes.h"
 #include "swgClientUserInterface/SwgCuiSceneSelection.h"
 
+#include "SharedFoundation/DynamicVariableListNestedList.h"
 
 #include <algorithm>
 

@@ -10,6 +10,7 @@
 
 #include "clientUserInterface/CuiMediatorFactory_ConstructorBase.h"
 #include "UIPage.h"
+#include "UIManager.h"
 
 // ======================================================================
 

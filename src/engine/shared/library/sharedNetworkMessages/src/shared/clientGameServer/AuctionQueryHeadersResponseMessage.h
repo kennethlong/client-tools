@@ -15,6 +15,7 @@
 #include "Unicode.h"
 #include "sharedNetworkMessages/AuctionData.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
+#include "StlForwardDeclerations"
 
 //-----------------------------------------------------------------------
 
