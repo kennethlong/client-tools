@@ -1281,7 +1281,7 @@ uint8 AuctionManagerClient::getMinTextFilterTokenLength()
 
 //----------------------------------------------------------------------
 
-uint8 AuctionManagerClient::requestAuctions(int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<AuctionQueryHeadersMessage::SearchCondition> & advancedSearch, AuctionQueryHeadersMessage::AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
+uint8 AuctionManagerClient::requestAuctions(int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<SearchCondition> & advancedSearch, AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
 {
 	if (startingIndex < 0)
 		startingIndex = s_currentIndices [T_all];
@@ -1331,7 +1331,7 @@ uint8 AuctionManagerClient::requestSales (int startingIndex)
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerSales, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<AuctionQueryHeadersMessage::SearchCondition>(), AuctionQueryHeadersMessage::ASMAA_match_all, false, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerSales, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_mySales] = true;
@@ -1361,7 +1361,7 @@ uint8 AuctionManagerClient::requestBids (int startingIndex)
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerBids, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<AuctionQueryHeadersMessage::SearchCondition>(), AuctionQueryHeadersMessage::ASMAA_match_all, false, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerBids, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_myBids] = true;
@@ -1393,7 +1393,7 @@ uint8 AuctionManagerClient::requestAvailable (int startingIndex)
 		++s_sequence;
 
 	const AuctionQueryHeadersMessage::AuctionLocationSearch loc = AuctionManagerClient::isAtCommodityMarket () ? AuctionQueryHeadersMessage::ALS_Galaxy : AuctionQueryHeadersMessage::ALS_Market;
-	const AuctionQueryHeadersMessage msg (loc, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerStockroom, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<AuctionQueryHeadersMessage::SearchCondition>(), AuctionQueryHeadersMessage::ASMAA_match_all, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (loc, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerStockroom, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_available] = true;
@@ -1403,7 +1403,7 @@ uint8 AuctionManagerClient::requestAvailable (int startingIndex)
 
 //----------------------------------------------------------------------
 
-uint8 AuctionManagerClient::requestVendorSelling     (bool sellerView, int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<AuctionQueryHeadersMessage::SearchCondition> & advancedSearch, AuctionQueryHeadersMessage::AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
+uint8 AuctionManagerClient::requestVendorSelling     (bool sellerView, int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<SearchCondition> & advancedSearch, AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
 {
 	if (startingIndex < 0)
 		startingIndex = s_currentIndices [T_vendorSelling];
@@ -1433,7 +1433,7 @@ uint8 AuctionManagerClient::requestVendorSelling     (bool sellerView, int locat
 
 //----------------------------------------------------------------------
 
-uint8 AuctionManagerClient::requestVendorOffers      (bool playerOffers, int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<AuctionQueryHeadersMessage::SearchCondition> & advancedSearch, AuctionQueryHeadersMessage::AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
+uint8 AuctionManagerClient::requestVendorOffers      (bool playerOffers, int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<SearchCondition> & advancedSearch, AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
 {
 	if (startingIndex < 0)
 		startingIndex = s_currentIndices [T_vendorOffers];
@@ -1471,7 +1471,7 @@ uint8 AuctionManagerClient::requestVendorOffers      (bool playerOffers, int loc
 
 //----------------------------------------------------------------------
 
-uint8 AuctionManagerClient::requestVendorStockroom   (int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<AuctionQueryHeadersMessage::SearchCondition> & advancedSearch, AuctionQueryHeadersMessage::AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
+uint8 AuctionManagerClient::requestVendorStockroom   (int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<SearchCondition> & advancedSearch, AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
 {
 	if (startingIndex < 0)
 		startingIndex = s_currentIndices [T_vendorStockroom];
@@ -1501,7 +1501,7 @@ uint8 AuctionManagerClient::requestVendorStockroom   (int locationSearchType, in
 
 //----------------------------------------------------------------------
 
-uint8 AuctionManagerClient::requestLocations(int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<AuctionQueryHeadersMessage::SearchCondition> & advancedSearch, AuctionQueryHeadersMessage::AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
+uint8 AuctionManagerClient::requestLocations(int locationSearchType, int objectType, bool objectTypeExactMatch, int objectTemplateId, const Unicode::String & textFilterAll, const Unicode::String & textFilterAny, int priceFilterMin, int priceFilterMax, bool priceFilterIncludesFee, const std::list<SearchCondition> & advancedSearch, AdvancedSearchMatchAllAny advancedSearchMatchAllAny, int startingIndex)
 {
 	if (startingIndex < 0)
 		startingIndex = s_currentIndices [T_location];
