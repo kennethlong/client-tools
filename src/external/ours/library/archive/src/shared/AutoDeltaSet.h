@@ -251,9 +251,9 @@ inline void AutoDeltaSet<ValueType, ObjectType>::onChanged()
 	{
 		if (m_onChangedCallback->first)
 		{
-			ObjectType &owner = *m_onChangedCallback->first;
+			ObjectType &callbackOwner = *m_onChangedCallback->first;
 			void (ObjectType::*cb)() = m_onChangedCallback->second;
-			(owner.*cb)();
+			(callbackOwner.*cb)();
 		}
 	}
 }
@@ -267,9 +267,9 @@ inline void AutoDeltaSet<ValueType, ObjectType>::onErase(ValueType const &value)
 	{
 		if (m_onEraseCallback->first)
 		{
-			ObjectType &owner = *m_onEraseCallback->first;
+			ObjectType & callbackOwner = *m_onEraseCallback->first;
 			void (ObjectType::*cb)(ValueType const &) = m_onEraseCallback->second;
-			(owner.*cb)(value);
+			(callbackOwner.*cb)(value);
 		}
 	}
 }
@@ -283,9 +283,9 @@ inline void AutoDeltaSet<ValueType, ObjectType>::onInsert(ValueType const &value
 	{
 		if (m_onInsertCallback->first)
 		{
-			ObjectType &owner = *m_onInsertCallback->first;
+			ObjectType & callbackOwner = *m_onInsertCallback->first;
 			void (ObjectType::*cb)(ValueType const &) = m_onInsertCallback->second;
-			(owner.*cb)(value);
+			(callbackOwner.*cb)(value);
 		}
 	}
 }

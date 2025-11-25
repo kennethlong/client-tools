@@ -307,9 +307,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onChanged()
 	{
 		if(onChangedCallback->first)
 		{
-			ObjectType & owner = *onChangedCallback->first;
+			ObjectType & callbackOwner = *onChangedCallback->first;
 			void (ObjectType::*cb)() = onChangedCallback->second;
-			(owner.*cb)();
+			(callbackOwner.*cb)();
 		}
 	}
 }
@@ -323,9 +323,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onErase(const unsigned int e
 	{
 		if(onEraseCallback->first)
 		{
-			ObjectType & owner = *onEraseCallback->first;
+			ObjectType & callbackOwner = *onEraseCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &) = onEraseCallback->second;
-			(owner.*cb)(element, oldValue);
+			(callbackOwner.*cb)(element, oldValue);
 		}
 	}
 }
@@ -339,9 +339,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onInsert(const unsigned int 
 	{
 		if(onInsertCallback->first)
 		{
-			ObjectType & owner = *onInsertCallback->first;
+			ObjectType & callbackOwner = *onInsertCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &) = onInsertCallback->second;
-			(owner.*cb)(element, newValue);
+			(callbackOwner.*cb)(element, newValue);
 		}
 	}
 }
@@ -355,9 +355,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onSet(const unsigned int ele
 	{
 		if(onSetCallback->first)
 		{
-			ObjectType & owner = *onSetCallback->first;
+			ObjectType & callbackOwner = *onSetCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &, const ValueType &) = onSetCallback->second;
-			(owner.*cb)(element, oldValue, newValue);
+			(callbackOwner.*cb)(element, oldValue, newValue);
 		}
 	}
 }
