@@ -981,8 +981,8 @@ void SwgCuiAvatarSimple::onVerifyAndLockNameFinished(const SwgCuiAvatarCreationH
 
 			if (playerAvatar->getObjectName() == playerName)
 			{
-				CreatureObject * const playerAvatar = SwgCuiAvatarCreationHelper::getCreature();
-				NOT_NULL(playerAvatar);
+				/*CreatureObject * const playerAvatar = SwgCuiAvatarCreationHelper::getCreature();
+				NOT_NULL(playerAvatar);*/
 
 				if (hasLastName)
 				{
