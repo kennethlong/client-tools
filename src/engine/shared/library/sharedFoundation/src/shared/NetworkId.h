@@ -16,6 +16,7 @@ namespace DB
 }
 
 #include "sharedFoundationTypes/FoundationTypes.h"
+#include <string>
 
 // ======================================================================
 
