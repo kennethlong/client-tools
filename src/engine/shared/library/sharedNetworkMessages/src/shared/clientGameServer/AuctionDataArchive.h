@@ -12,6 +12,7 @@
 namespace Auction
 {
 	struct PalettizedItemDataHeader;
+	struct ItemDataDetails;
 }
 
 namespace Archive
@@ -21,6 +22,9 @@ namespace Archive
 
 	void get(ReadIterator& source, Auction::PalettizedItemDataHeader& target);
 	void put(ByteStream& target, Auction::PalettizedItemDataHeader const& source);
+
+	void get(ReadIterator& source, Auction::ItemDataDetails& target);
+	void put(ByteStream& target, Auction::ItemDataDetails const& source);
 }
 
 #endif // _AuctionDataArchive_H

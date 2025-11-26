@@ -1,23 +1,25 @@
 //======================================================================
 //
-// NebulaLightningData.cpp
+// NebulaLightningArchive.h
 // copyright (c) 2004 Sony Online Entertainment
 //
 //======================================================================
 
-#include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
-#include "sharedNetworkMessages/NebulaLightningData.h"
+#ifndef INCLUDED_NebulaLightningArchive_H
+#define INCLUDED_NebulaLightningArchive_H
 
 //======================================================================
+class NebulaLightningData;
 
-NebulaLightningData::NebulaLightningData() :
-lightningId(0),
-nebulaId(0),
-syncStampStart(0),
-syncStampEnd(0),
-endpoint0(),
-endpoint1()
+namespace Archive
 {
+	class ReadIterator;
+	class ByteStream;
+
+	void get(ReadIterator& source, NebulaLightningData& target);
+	void put(ByteStream& target, NebulaLightningData const& source);
 }
 
 //======================================================================
+
+#endif

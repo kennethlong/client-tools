@@ -842,6 +842,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\MessageRegionListResponse.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\NebulaLightningArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\NebulaLightningData.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -1418,6 +1419,7 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListRectResponse.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListRequest.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListResponse.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningData.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningHitData.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NewbieTutorialEnableHudElement.h" />
