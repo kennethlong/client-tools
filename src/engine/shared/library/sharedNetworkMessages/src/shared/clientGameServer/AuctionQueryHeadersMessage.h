@@ -16,7 +16,7 @@
 #include "sharedFoundation/Tag.h"
 #include "unicodeArchive/UnicodeArchive.h"
 #include "Unicode.h"
-#include "AuctionQuerySearchConditionArchive.h"
+#include "AuctionQueryArchive.h"
 #include "Archive/AutoDeltaByteStream.h"
 #include "AuctionQueryTypes.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"

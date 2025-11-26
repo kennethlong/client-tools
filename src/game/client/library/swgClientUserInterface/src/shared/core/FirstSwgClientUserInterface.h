@@ -20,7 +20,7 @@
 #include "sharedFoundation/NetworkIdArchive.h"
 
 #include "sharedNetworkMessages/ClientCentralMessagesArchive.h"
-#include "sharedNetworkMessages/AuctionQuerySearchConditionArchive.h"
+#include "sharedNetworkMessages/AuctionQueryArchive.h"
 
 #include "sharedGame/CraftingDataArchive.h"
 #include "sharedGame/MatchMakingId.h"

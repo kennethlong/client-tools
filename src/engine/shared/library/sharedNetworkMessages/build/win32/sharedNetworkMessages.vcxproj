@@ -421,7 +421,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQueryResponseMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQuerySearchConditionArchive.cpp" />
+    <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQueryArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\BidAuctionMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -1272,7 +1272,7 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryTypes.h" />
-    <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQuerySearchConditionArchive.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BidAuctionMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BidAuctionResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BuffBuilderChangeMessage.h" />

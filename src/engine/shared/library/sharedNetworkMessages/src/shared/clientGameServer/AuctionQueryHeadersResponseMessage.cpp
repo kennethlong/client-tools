@@ -7,7 +7,7 @@
 // ======================================================================
 
 #include "sharedFoundation/NetworkIdArchive.h"
-#include "AuctionQuerySearchConditionArchive.h"
+#include "AuctionQueryArchive.h"
 #include "sharedNetworkMessages/ClientCentralMessagesArchive.h"
 #include "localizationArchive/StringIdArchive.h"
 #include "sharedNetworkMessages/AuctionQueryHeadersResponseMessage.h"

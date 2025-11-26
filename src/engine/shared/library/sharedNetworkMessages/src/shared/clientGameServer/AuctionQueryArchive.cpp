@@ -1,6 +1,6 @@
 // ======================================================================
 //
-// AuctionQuerySearchConditionArchive.cpp
+// AuctionQueryArchive.cpp
 //
 // Copyright 2002 Sony Online Entertainment
 //
@@ -10,7 +10,7 @@
 #include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 #include "AuctionQueryTypes.h"
-#include "sharedNetworkMessages/AuctionQuerySearchConditionArchive.h"
+#include "sharedNetworkMessages/AuctionQueryArchive.h"
 
 // ======================================================================
 
@@ -71,5 +71,41 @@ namespace Archive
 		{
 			put(target, source.stringValue);
 		}
+	}
+
+	void get(ReadIterator& source, AuctionQueryResponse_AuctionData& target)
+	{
+		get(source, target.auctionId);
+		get(source, target.location);
+		get(source, target.ownerId);
+		get(source, target.minBid);
+		get(source, target.timer);
+		get(source, target.itemId);
+		get(source, target.soldFlag);
+		get(source, target.highBidderId);
+		get(source, target.itemType);
+		get(source, target.resourceContainerClassCrc);
+		get(source, target.itemQuantity);
+		get(source, target.itemTimer);
+		get(source, target.highBid);
+		get(source, target.highBidMaxProxy);
+	}
+
+	void put(ByteStream& target, AuctionQueryResponse_AuctionData const& source)
+	{
+		put(target, source.auctionId);
+		put(target, source.location);
+		put(target, source.ownerId);
+		put(target, source.minBid);
+		put(target, source.timer);
+		put(target, source.itemId);
+		put(target, source.soldFlag);
+		put(target, source.highBidderId);
+		put(target, source.itemType);
+		put(target, source.resourceContainerClassCrc);
+		put(target, source.itemQuantity);
+		put(target, source.itemTimer);
+		put(target, source.highBid);
+		put(target, source.highBidMaxProxy);
 	}
 }

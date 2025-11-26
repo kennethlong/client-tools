@@ -8,7 +8,7 @@
 
 #include "unicodeArchive/UnicodeArchive.h"
 #include "sharedFoundation/NetworkIdArchive.h"
-#include "AuctionQuerySearchConditionArchive.h"
+#include "AuctionQueryArchive.h"
 #include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 #include "sharedNetworkMessages/AuctionQueryHeadersMessage.h"
 

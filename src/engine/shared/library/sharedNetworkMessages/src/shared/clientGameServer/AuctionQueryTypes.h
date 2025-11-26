@@ -15,6 +15,24 @@
 #include "Unicode.h"
 
 //-----------------------------------------------------------------------
+struct AuctionQueryResponse_AuctionData
+{
+	int64 auctionId;
+	std::string location;
+	int64 ownerId;
+	int32 minBid;
+	int32 timer;
+	int64 itemId;
+	int32 soldFlag;
+	int64 highBidderId;
+	int32 itemType;
+	int32 resourceContainerClassCrc;
+	int16 itemQuantity;
+	int32 itemTimer;
+	int32 highBid;
+	int32 highBidMaxProxy;
+};
+
 enum AuctionSearchType
 {
 	AST_ByCategory,
