@@ -265,11 +265,12 @@ void TextManager::install()
 			std::string const &word = dataTable.getStringValue(0, index);
 			bool const allowSubStringMatch = (dataTable.getIntValue(1, index) != 0);
 
-			Unicode::UTF16 wordBuf[50];
+			static_assert(sizeof(wchar_t) == sizeof(Unicode::UTF16), "Expected 16-bit wchar_t");
 
-			Unicode::UTF8_convertToUTF16(const_cast<char *>(word.c_str()), wordBuf, sizeof(wordBuf)/sizeof(wordBuf[0]));
+			Unicode::UTF16 wordBuf[50]{};
+			Unicode::UTF8_convertToUTF16(const_cast<char *>(word.c_str()), wordBuf, std::size(wordBuf));
 
-			Unicode::String const &unicodeWord = Unicode::String(wordBuf);
+			Unicode::String unicodeWord(reinterpret_cast<const wchar_t*>(wordBuf));
 
 			s_cussWords.insert(std::make_pair(Unicode::toLower(unicodeWord), allowSubStringMatch));
 		}
