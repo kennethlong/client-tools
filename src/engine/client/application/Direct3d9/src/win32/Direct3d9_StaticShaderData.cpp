@@ -586,7 +586,7 @@ void Direct3d9_StaticShaderData::Pass::construct(const StaticShader &shader, con
 #if defined(FFP) && defined(VSPS)
 	else
 	{
-		m_vertexShader = false;
+		m_vertexShader = nullptr;
 	}
 #endif
 

@@ -2673,9 +2673,10 @@ void SkeletalAppearance2::wear(Object *object)
 		m_wornAppearanceObjects = new WatcherObjectVectorVector;
 
 	// Add appearance to list of worn appearances.
-	m_wornAppearanceObjects->push_back();
-	ObjectWatcherVectorPair & back = m_wornAppearanceObjects->back();
+	m_wornAppearanceObjects->emplace_back();
+	ObjectWatcherVectorPair& back = m_wornAppearanceObjects->back();
 	back.first = object;
+
 
 	{
 		int const numWornChildObjects = object->getNumberOfChildObjects();
