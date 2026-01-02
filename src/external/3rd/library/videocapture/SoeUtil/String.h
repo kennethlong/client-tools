@@ -1125,19 +1125,19 @@ template<int T_SIZE> class StringFixed : public IStringFixed<char, T_SIZE>
 
         StringFixed<T_SIZE> &operator=(const StringFixed<T_SIZE> &other)
         { 
-            IString<T>::Copy(other);
+            IString<char>::Copy(other);
             return(*this); 
         }
 
         StringFixed<T_SIZE> &operator=(const IString<char> &other)
         { 
-            IString<T>::Copy(other);
+            IString<char>::Copy(other);
             return(*this); 
         }
 
         StringFixed<T_SIZE> &operator=(const char *other)
         { 
-            IString<T>::Copy(other);
+            IString<char>::Copy(other);
             return(*this); 
         }
 };
