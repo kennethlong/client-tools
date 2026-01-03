@@ -718,7 +718,7 @@ void SwgCuiGalacticCivilWar::updateGalaxyWideScore()
 
 	std::map<std::pair<std::string, std::string>, int> const & otherGalaxiesMap = GuildObject::getGuildObject()->getGcwGroupImperialScorePercentileOtherGalaxies();
 
-	std::map<std::pair<std::string, std::string>, int>::const_iterator SWGGalaxy = otherGalaxiesMap.find(std::make_pair<std::string, std::string>("SWG","galaxy"));
+	std::map<std::pair<std::string, std::string>, int>::const_iterator SWGGalaxy = otherGalaxiesMap.find(std::make_pair("SWG","galaxy"));
 	if(SWGGalaxy == otherGalaxiesMap.end())
 	{
 		DEBUG_WARNING(true, ("SwgCuiGalacticCivilWar - Failed to find 'SWG' Galaxy"));
