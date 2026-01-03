@@ -127,13 +127,13 @@ T VivoxClamp( T Min, T Cur, T Max )
 #define FIRE_EVENT( __fn, __args ) \
     do { \
         ++m_iFiringEvents; \
-        for ( EventHandlers::const_iterator __iter = m_aHandlers.begin(); __iter != m_aHandlers.end(); ++__iter ) \
+        for ( auto __iter = m_aHandlers.begin(); __iter != m_aHandlers.end(); ++__iter ) \
             (*__iter)-> __fn __args; \
         if ( --m_iFiringEvents == 0 && m_pNewHandlers ) \
         { \
             m_aHandlers.swap( *m_pNewHandlers ); \
             delete m_pNewHandlers; \
-            m_pNewHandlers = 0; \
+            m_pNewHandlers = nullptr; \
         } \
     } while( 0 )
 
@@ -533,7 +533,7 @@ Vivox<StrClass, Glue>::ProcessEvents()
 
                     if ( m_bNeedConnect )
                     {
-                        FIRE_EVENT(VivoxOnDisconnect,(true));
+                        FIRE_EVENT(VivoxOnDisconnect, (true));
 
                         m_bNeedConnect = false;
                         BeginConnect( m_sNextServer, m_iNextMinPort, m_iNextMaxPort, m_sNextServiceExe, m_sNextServiceIP );
