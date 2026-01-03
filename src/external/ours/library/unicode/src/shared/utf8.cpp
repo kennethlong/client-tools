@@ -93,6 +93,7 @@ int UTF8_convertCharToUTF16( char * ptr , UTF16 * ret )
 // takes a pointer to a UTF8 String and fills the 2nd array with the corresponding UTF16 string, up to
 // the limit number of characters.
 // return value is the length of the UTF16 string converted.
+// TODO: Source Ptr should be const char*
 int UTF8_convertToUTF16( char * ptr , UTF16 * ret, int limit )
 {
 	int len = 0;
