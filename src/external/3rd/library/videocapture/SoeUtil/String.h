@@ -1152,19 +1152,19 @@ template<int T_SIZE> class WideStringFixed : public IStringFixed<wchar_t, T_SIZE
 
         WideStringFixed<T_SIZE> &operator=(const WideStringFixed<T_SIZE> &other)
         { 
-            IString<T>::Copy(other);
+            IString<wchar_t>::Copy(other);
             return(*this); 
         }
 
         WideStringFixed<T_SIZE> &operator=(const IString<wchar_t> &other)
         { 
-            IString<T>::Copy(other);
+            IString<wchar_t>::Copy(other);
             return(*this); 
         }
 
         WideStringFixed<T_SIZE> &operator=(const wchar_t *other)
         { 
-            IString<T>::Copy(other);
+            IString<wchar_t>::Copy(other);
             return(*this); 
         }
 };
