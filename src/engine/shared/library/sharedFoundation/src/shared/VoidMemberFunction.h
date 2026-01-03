@@ -70,6 +70,10 @@ private:
     using Function = void (Class::*)(ArgumentType) const;
 
 public:
+    using first_argument_type = Class*;
+    using second_argument_type = ArgumentType;
+    using result_type = void;
+
     explicit VoidConstMemberFunctionOneArg(Function function)
         : m_function(function) {
     }
