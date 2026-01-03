@@ -1301,7 +1301,7 @@ uint8 AuctionManagerClient::requestAuctions(int locationSearchType, int objectTy
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByAll, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, false, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByAll, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_all] = true;
@@ -1331,7 +1331,7 @@ uint8 AuctionManagerClient::requestSales (int startingIndex)
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerSales, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (ALS_Galaxy, ms_marketObjectId, s_sequence, AST_ByPlayerSales, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_mySales] = true;
@@ -1361,7 +1361,7 @@ uint8 AuctionManagerClient::requestBids (int startingIndex)
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (AuctionQueryHeadersMessage::ALS_Galaxy, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerBids, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (ALS_Galaxy, ms_marketObjectId, s_sequence, AST_ByPlayerBids, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_myBids] = true;
@@ -1392,8 +1392,8 @@ uint8 AuctionManagerClient::requestAvailable (int startingIndex)
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage::AuctionLocationSearch loc = AuctionManagerClient::isAtCommodityMarket () ? AuctionQueryHeadersMessage::ALS_Galaxy : AuctionQueryHeadersMessage::ALS_Market;
-	const AuctionQueryHeadersMessage msg (loc, ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerStockroom, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+	const AuctionLocationSearch loc = AuctionManagerClient::isAtCommodityMarket () ? ALS_Galaxy : ALS_Market;
+	const AuctionQueryHeadersMessage msg (loc, ms_marketObjectId, s_sequence, AST_ByPlayerStockroom, 0, false, 0, Unicode::emptyString, Unicode::emptyString, 0, 0, false, std::list<SearchCondition>(), ASMAA_match_all, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_available] = true;
@@ -1423,7 +1423,7 @@ uint8 AuctionManagerClient::requestVendorSelling     (bool sellerView, int locat
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByVendorSelling, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByVendorSelling, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_vendorSelling] = true;
@@ -1455,12 +1455,12 @@ uint8 AuctionManagerClient::requestVendorOffers      (bool playerOffers, int loc
 
 	if (playerOffers)
 	{
-		const AuctionQueryHeadersMessage msg (static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByPlayerOffersToVendor, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+		const AuctionQueryHeadersMessage msg (static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByPlayerOffersToVendor, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 		GameNetwork::send (msg, true);
 	}
 	else
 	{
-		const AuctionQueryHeadersMessage msg (static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByVendorOffers, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+		const AuctionQueryHeadersMessage msg (static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByVendorOffers, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 		GameNetwork::send (msg, true);
 	}
 
@@ -1491,7 +1491,7 @@ uint8 AuctionManagerClient::requestVendorStockroom   (int locationSearchType, in
 	if (!s_sequence)
 		++s_sequence;
 
-	const AuctionQueryHeadersMessage msg (static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByVendorStockroom, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
+	const AuctionQueryHeadersMessage msg (static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByVendorStockroom, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, ms_playerOwnsVendor, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_vendorStockroom] = true;
@@ -1521,7 +1521,7 @@ uint8 AuctionManagerClient::requestLocations(int locationSearchType, int objectT
 	if (!s_sequence)
 		++s_sequence;
 
-	AuctionQueryHeadersMessage const msg(static_cast<AuctionQueryHeadersMessage::AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AuctionQueryHeadersMessage::AST_ByVendorSelling, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, false, static_cast<uint16>(startingIndex));
+	AuctionQueryHeadersMessage const msg(static_cast<AuctionLocationSearch>(locationSearchType), ms_marketObjectId, s_sequence, AST_ByVendorSelling, objectType, objectTypeExactMatch, objectTemplateId, textFilterAll, textFilterAny, priceFilterMin, priceFilterMax, priceFilterIncludesFee, advancedSearch, advancedSearchMatchAllAny, false, static_cast<uint16>(startingIndex));
 	GameNetwork::send (msg, true);
 
 	s_listRequestOutstanding [T_location] = true;
