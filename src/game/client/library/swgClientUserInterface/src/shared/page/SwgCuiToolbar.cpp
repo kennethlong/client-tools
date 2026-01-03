@@ -1531,7 +1531,7 @@ bool SwgCuiToolbar::OnMessage(UIWidget *context, const UIMessage & msg)
 
 		if (m_dragCounter == UIManager::gUIManager().GetDragCounter ())
 		{
-			CuiDragInfo * const oldItem = getToolbarItem (m_draggingPane, m_draggingSlot);
+			CuiDragInfo * const oldItem = getToolbarItem (m_draggingPane, m_draggingSlot, false);
 			if (!oldItem)
 				return false;
 
