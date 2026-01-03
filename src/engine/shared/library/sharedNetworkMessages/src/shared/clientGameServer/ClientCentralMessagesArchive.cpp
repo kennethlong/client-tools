@@ -11,7 +11,7 @@
 
 namespace Archive
 {
-	inline void get(ReadIterator& source, EnumerateCharacterId_Chardata& c)
+	void get(ReadIterator& source, EnumerateCharacterId_Chardata& c)
 	{
 		get(source, c.m_name);
 		get(source, c.m_objectTemplateId);
@@ -20,7 +20,7 @@ namespace Archive
 		get(source, c.m_characterType);
 	}
 
-	inline void put(ByteStream& target, EnumerateCharacterId_Chardata const& c)
+	void put(ByteStream& target, EnumerateCharacterId_Chardata const& c)
 	{
 		put(target, c.m_name);
 		put(target, c.m_objectTemplateId);
