@@ -780,7 +780,7 @@ void SwgCuiGalacticCivilWar::updateServerSpecificScore()
 	{
 		std::map<std::pair<std::string, std::string>, int> const & otherGalaxiesMap = GuildObject::getGuildObject()->getGcwGroupImperialScorePercentileOtherGalaxies();
 
-		std::map<std::pair<std::string, std::string>, int>::const_iterator OtherGalaxy = otherGalaxiesMap.find(std::make_pair<std::string, std::string>(selectedServer, "galaxy"));
+		std::map<std::pair<std::string, std::string>, int>::const_iterator OtherGalaxy = otherGalaxiesMap.find(std::make_pair(selectedServer, "galaxy"));
 		if(OtherGalaxy == otherGalaxiesMap.end())
 		{
 			DEBUG_WARNING(true, ("SwgCuiGalacticCivilWar - Failed to find [%s] Galaxy score with key [galaxy]", selectedServer.c_str()));
