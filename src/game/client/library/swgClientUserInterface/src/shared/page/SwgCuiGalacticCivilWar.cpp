@@ -221,7 +221,7 @@ m_regionImperialIconStyle(NULL)
 				rebelBar->SetVisible(false);
 				imperialBar->SetVisible(false);
 
-				m_historyBars.push_back(std::make_pair<UIPage *, UIPage *>(rebelBar, imperialBar));
+				m_historyBars.emplace_back(rebelBar, imperialBar);
 			}
 		}
 	}
@@ -312,7 +312,7 @@ m_regionImperialIconStyle(NULL)
 
 			registerMediatorObject(*planetBtn, true);
 
-			m_galaxyButtons.insert(std::make_pair<std::string, std::pair<UIButton *, UIButton*> >(planet, std::make_pair<UIButton *, UIButton*>(planetBtn, gcwBtn)));
+			m_galaxyButtons.insert(std::make_pair(planet, std::make_pair(planetBtn, gcwBtn)));
 
 		}
 
