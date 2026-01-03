@@ -104,7 +104,7 @@
     <Link>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\DllExport\Optimized/DllExport.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\stlport453\lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libc; libcp;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>.\..\..\..\..\..\..\compile\win32\DllExport\Optimized/DllExport.pdb</ProgramDatabaseFile>
@@ -153,7 +153,7 @@
     <Link>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\DllExport\Release/DllExport.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\stlport453\lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ProgramDatabaseFile>.\..\..\..\..\..\..\compile\win32\DllExport\Release/DllExport.pdb</ProgramDatabaseFile>
       <ImportLibrary>.\..\..\..\..\..\..\compile\win32\DllExport\Release/DllExport.lib</ImportLibrary>
       <TargetMachine>MachineX86</TargetMachine>
@@ -199,7 +199,7 @@
     <Link>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\DllExport\Debug/DllExport.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\stlport453\lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libc; libcp;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>.\..\..\..\..\..\..\compile\win32\DllExport\Debug/DllExport.pdb</ProgramDatabaseFile>

@@ -64,7 +64,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../../../external/ours/library/unicode/include;../../../../external/3rd/library/directx9/include;../../../../external/3rd/library/stlport453/stlport;../../../../external/3rd/library/ui/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../external/ours/library/unicode/include;../../../../external/3rd/library/directx9/include;../../../../external/3rd/library/ui/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;WIN32;_WINDOWS;SWG_HACK;_CRT_SECURE_NO_DEPRECATE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -90,7 +90,7 @@
       <AdditionalDependencies>dxguid.lib;d3dx.lib;shlwapi.lib;comctl32.lib;winmm.lib;ddraw.lib;wsock32.lib;dsound.lib;d3d9.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>.\../../../../compile/win32/UIBuilder/Debug/UIBuilder.exe</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>../../library/directx9/lib;../../library/stlport453/lib/win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>../../library/directx9/lib;;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libcmt;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>.\../../../../compile/win32/UIBuilder/Debug/UIBuilder.pdb</ProgramDatabaseFile>
@@ -110,7 +110,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>../../../../external/ours/library/unicode/include;../../../../external/3rd/library/directx9/include;../../../../external/3rd/library/stlport453/stlport;../../../../external/3rd/library/ui/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../../external/ours/library/unicode/include;../../../../external/3rd/library/directx9/include;../../../../external/3rd/library/ui/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;WIN32;_WINDOWS;SWG_HACK;_CRT_SECURE_NO_DEPRECATE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -138,7 +138,7 @@
       <ShowProgress>NotSet</ShowProgress>
       <OutputFile>.\../../../../compile/win32/UIBuilder/Release/UIBuilder.exe</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalLibraryDirectories>../../library/directx9/lib;../../library/stlport453/lib/win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>../../library/directx9/lib;;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libcmtd;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>.\../../../../compile/win32/UIBuilder/Release/UIBuilder.pdb</ProgramDatabaseFile>
