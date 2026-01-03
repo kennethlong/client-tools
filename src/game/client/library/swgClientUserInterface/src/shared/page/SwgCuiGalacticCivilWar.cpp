@@ -1137,7 +1137,7 @@ void SwgCuiGalacticCivilWar::updatePlanetRegions(std::string & planetName)
 	
 	if(buttonCounter < m_regionButtons.size())
 	{
-		ButtonVector::iterator hideIter = &m_regionButtons[buttonCounter];
+		ButtonVector::iterator hideIter = m_regionButtons.begin() + buttonCounter;
 		for(; hideIter != m_regionButtons.end(); ++hideIter)
 		{
 			(*hideIter)->SetVisible(false);
@@ -1146,7 +1146,7 @@ void SwgCuiGalacticCivilWar::updatePlanetRegions(std::string & planetName)
 
 	if(textCounter < m_regionTextLabels.size())
 	{
-		TextVector::iterator hideIter = &m_regionTextLabels[textCounter];
+		TextVector::iterator hideIter = m_regionTextLabels.begin() + textCounter;
 		for(; hideIter != m_regionTextLabels.end(); ++hideIter)
 			(*hideIter)->SetVisible(false);
 	}
