@@ -3748,7 +3748,7 @@ void SkeletalMeshGeneratorTemplate::fillMeshConstructionHelper(
 		for (IntVectorVector::const_iterator vectorIt = m_occlusionZoneCombinations.begin(); vectorIt != vectorItEnd; ++vectorIt, ++combinationIndex)
 		{
 			//-- test if this set of occlusion zones currently is occluded
-			(*ms_combinationsOccluded)[combinationIndex] = zonesCurrentlyOccluded.allZonesPresent(*vectorIt); //lint !e1058 // (Error -- Initializing a non-const reference '_STL::_Bit_reference &' with a non-lvalue) // I think lint is confused
+			(*ms_combinationsOccluded)[combinationIndex] = zonesCurrentlyOccluded.allZonesPresent(*vectorIt); //lint !e1058 // (Error -- Initializing a non-const reference 'std::_Bit_reference &' with a non-lvalue) // I think lint is confused
 		}
 	}
 

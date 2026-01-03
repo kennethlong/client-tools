@@ -44,7 +44,7 @@ const char * const KeyName = "ChatBubbles";
 //lint -e655 //(Warning -- bit-wise operation uses (compatible) enum's)
 //lint -esym(641, CollisionFlags) // convert enum to int
 //lint -esym(534, UIBaseObject::Detach) // ignore return
-//lint -esym(534, multimap<float,_STL::pair<const BubbleStack *,Vector>,_STL::less<float>,_STL::allocator<_STL::pair<const float,_STL::pair<const BubbleStack *,Vector>>>>::insert) // ignore return
+//lint -esym(534, multimap<float,std::pair<const BubbleStack *,Vector>,std::less<float>,std::allocator<std::pair<const float,std::pair<const BubbleStack *,Vector>>>>::insert) // ignore return
 
 
 //======================================================================
