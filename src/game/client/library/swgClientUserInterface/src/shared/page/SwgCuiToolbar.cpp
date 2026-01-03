@@ -2400,25 +2400,23 @@ void SwgCuiToolbar::onCommandRemoved (const CreatureObject::Messages::CommandRem
 		
 		for (ToolbarItemPane::iterator it = items.begin (); it != items.end (); ++it)
 		{
-			CuiDragInfo * item = it;
-			if(!item)
-				continue;
+			CuiDragInfo& item = *it;
 			
 			std::string compareString;
-			if (!item->str.empty ())
+			if (!item.str.empty ())
 			{
-				compareString = item->str;
+				compareString = item.str;
 			}
-			else if (!item->cmd.empty ())
+			else if (item.cmd.empty ())
 			{						
 				std::string str;
-				if (CuiMessageQueueManager::findCommandString (item->cmd, str, false))
+				if (CuiMessageQueueManager::findCommandString (item.cmd, str, false))
 					compareString = str;
 			}
 
 			if (compareString == slashCommand)
 			{
-				item->clear ();
+				item.clear ();
 				found = true;
 			}
 		}
