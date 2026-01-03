@@ -508,7 +508,10 @@ m_textStyleManager(UITextStyleManager::GetInstance()) // hook singleton of this 
 
 	m_effectorUseChild->SetPropertyNarrow (UILowerString ("PalTarget"), "icon");
 
-	m_toolbarItemPanes = new ToolbarItemPaneVector (DEFAULT_PANE_COUNT, DEFAULT_ITEM_COUNT_PER_PANE);
+	m_toolbarItemPanes = new ToolbarItemPaneVector(
+		DEFAULT_PANE_COUNT,
+		ToolbarItemPane(DEFAULT_ITEM_COUNT_PER_PANE)
+	);
 	m_petToolbarItemPane = new ToolbarItemPane(DEFAULT_ITEM_COUNT_PER_PANE);
 
 	getCodeDataObject (TUIPage, m_toolbarPage,      "ToolBar", true);
