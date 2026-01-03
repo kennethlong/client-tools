@@ -1399,7 +1399,7 @@ void SwgCuiGalacticCivilWar::populateServerComboBox()
 			m_serverComboBox->AddItem(Unicode::narrowToWide(serverName), serverName);
 		}
 
-		iter = otherGalaxies.lower_bound(std::make_pair<std::string, std::string>(serverName, maxGroupName));
+		iter = otherGalaxies.lower_bound(std::make_pair(serverName, maxGroupName));
 	}
 }
 
@@ -1532,7 +1532,7 @@ void SwgCuiGalacticCivilWar::updateGalaxyMapIcons()
 		{
 			std::map<std::pair<std::string, std::string>, int> const & otherGalaxiesMap = GuildObject::getGuildObject()->getGcwGroupImperialScorePercentileOtherGalaxies();
 
-			std::map<std::pair<std::string, std::string>, int>::const_iterator OtherGalaxy = otherGalaxiesMap.find(std::make_pair<std::string, std::string>(selectedServer, planet));
+			std::map<std::pair<std::string, std::string>, int>::const_iterator OtherGalaxy = otherGalaxiesMap.find(std::make_pair(selectedServer, planet));
 			if(OtherGalaxy == otherGalaxiesMap.end())
 			{
 				gcwIcon->SetVisible(false);
