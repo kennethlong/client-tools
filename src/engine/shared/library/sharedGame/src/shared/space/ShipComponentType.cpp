@@ -48,7 +48,7 @@ namespace ShipComponentTypeNamespace
 		"mod_"
 	};
 
-	typedef stdhash_map<std::string, ShipComponentType::Type>::fwd ComponentNameTypeMap;
+	typedef stdhash_map<std::string, ShipComponentType::Type> ComponentNameTypeMap;
 	ComponentNameTypeMap s_componentNameTypeMap;
 
 	bool s_installed = false;
