@@ -648,7 +648,7 @@ void SwgCuiQuestBuilder::populateTasksTable(const char * stringNameFilter, const
 		UIBaseObject::UIObjectList::iterator iter = taskList.begin();
 		for(; iter != taskList.end(); ++iter)
 		{
-			TaskPageMap::iterator pageIter = NULL;
+			TaskPageMap::iterator pageIter = ms_taskButtonsToTaskPages.end();
 
 			if((*iter)->IsA(TUIPage))
 			{
