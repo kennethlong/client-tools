@@ -697,7 +697,7 @@ DWORD GetImeId( UINT uIndex )
         {
             if( _GetFileVersionInfoA( szTmp, dwVerHandle, dwVerSize, lpVerBuffer ) )
             {
-                if( _VerQueryValueA( lpVerBuffer, "\\", &lpVerData, &cbVerData ) )
+                if( _VerQueryValueA( lpVerBuffer, const_cast<char*>("\\"), &lpVerData, &cbVerData ) )
                 {
                     DWORD dwVer = ( (VS_FIXEDFILEINFO*)lpVerData )->dwFileVersionMS;
                     dwVer = ( dwVer & 0x00ff0000 ) << 8 | ( dwVer & 0x000000ff ) << 16;
