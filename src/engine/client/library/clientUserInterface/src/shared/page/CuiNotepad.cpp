@@ -144,7 +144,7 @@ void CuiNotepad::loadFromFile()
 		{
 			//This reinterpret_cast is neccessary to interpret the char* data read from the file
 			unsigned short *unicodeBuffer = reinterpret_cast<unsigned short *>(buffer + 1);
-			str = Unicode::String(unicodeBuffer);
+			str = Unicode::String(reinterpret_cast<wchar_t*>(unicodeBuffer));
 		}
 		else
 		{				
