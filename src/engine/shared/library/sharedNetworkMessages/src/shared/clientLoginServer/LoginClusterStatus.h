@@ -8,9 +8,10 @@
 #ifndef INCLUDED_LoginClusterStatus_H
 #define INCLUDED_LoginClusterStatus_H
 
-// ======================================================================
+#include "Archive/Archive.h"
+#include "Archive/ByteStream.h"
 
-#include "sharedNetworkMessages/GameNetworkMessage.h"
+// ======================================================================
 
 struct LoginClusterStatus_ClusterData
 {
@@ -43,6 +44,50 @@ struct LoginClusterStatus_ClusterData
 	bool        m_isSecret;
 	
 };
+
+namespace Archive
+{
+	inline void get(ReadIterator& source, LoginClusterStatus_ClusterData& c)
+	{
+		get(source, c.m_clusterId);
+		get(source, c.m_connectionServerAddress);
+		get(source, c.m_connectionServerPort);
+		get(source, c.m_connectionServerPingPort);
+		get(source, c.m_populationOnline);
+		int tempStatus;
+		get(source, tempStatus);
+		c.m_populationOnlineStatus = static_cast<LoginClusterStatus_ClusterData::PopulationStatus>(tempStatus);
+		get(source, c.m_maxCharactersPerAccount);
+		get(source, c.m_timeZone);
+		get(source, tempStatus);
+		c.m_status = static_cast<LoginClusterStatus_ClusterData::Status>(tempStatus);
+		get(source, c.m_dontRecommend);
+		get(source, c.m_onlinePlayerLimit);
+		get(source, c.m_onlineFreeTrialLimit);
+		get(source, c.m_isAdmin);
+		get(source, c.m_isSecret);
+	}
+
+	inline void put(ByteStream& target, const LoginClusterStatus_ClusterData& c)
+	{
+		put(target, c.m_clusterId);
+		put(target, c.m_connectionServerAddress);
+		put(target, c.m_connectionServerPort);
+		put(target, c.m_connectionServerPingPort);
+		put(target, c.m_populationOnline);
+		put(target, static_cast<int>(c.m_populationOnlineStatus));
+		put(target, c.m_maxCharactersPerAccount);
+		put(target, c.m_timeZone);
+		put(target, static_cast<int>(c.m_status));
+		put(target, c.m_dontRecommend);
+		put(target, c.m_onlinePlayerLimit);
+		put(target, c.m_onlineFreeTrialLimit);
+		put(target, c.m_isAdmin);
+		put(target, c.m_isSecret);
+	}
+}
+
+#include "sharedNetworkMessages/GameNetworkMessage.h"
 
 /**
  * Sent From:  LoginServer
@@ -77,47 +122,7 @@ private: //disable
 
 // ======================================================================
 
-namespace Archive
-{
-	inline void get(ReadIterator & source, LoginClusterStatus_ClusterData &c)
-	{
-		get(source,c.m_clusterId);
-		get(source,c.m_connectionServerAddress);
-		get(source,c.m_connectionServerPort);
-		get(source,c.m_connectionServerPingPort);
-		get(source,c.m_populationOnline);
-		int tempStatus;
-		get(source,tempStatus);
-		c.m_populationOnlineStatus=static_cast<LoginClusterStatus_ClusterData::PopulationStatus>(tempStatus);
-		get(source,c.m_maxCharactersPerAccount);
-		get(source,c.m_timeZone);
-		get(source,tempStatus);
-		c.m_status=static_cast<LoginClusterStatus_ClusterData::Status>(tempStatus);
-		get(source,c.m_dontRecommend);
-		get(source,c.m_onlinePlayerLimit);
-		get(source,c.m_onlineFreeTrialLimit);
-		get(source,c.m_isAdmin);
-		get(source,c.m_isSecret);
-	}
 
-	inline void put(ByteStream & target, const LoginClusterStatus_ClusterData &c)
-	{
-		put(target,c.m_clusterId);
-		put(target,c.m_connectionServerAddress);
-		put(target,c.m_connectionServerPort);
-		put(target,c.m_connectionServerPingPort);
-		put(target,c.m_populationOnline);
-		put(target,static_cast<int>(c.m_populationOnlineStatus));
-		put(target,c.m_maxCharactersPerAccount);
-		put(target,c.m_timeZone);
-		put(target,static_cast<int>(c.m_status));
-		put(target,c.m_dontRecommend);
-		put(target,c.m_onlinePlayerLimit);
-		put(target,c.m_onlineFreeTrialLimit);
-		put(target,c.m_isAdmin);
-		put(target,c.m_isSecret);
-	}
-}
 
 // ======================================================================
 

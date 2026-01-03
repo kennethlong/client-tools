@@ -11,6 +11,7 @@
 #include "localizationArchive/StringIdArchive.h"
 #include "sharedFoundation/NetworkIdArchive.h"
 #include "ClientCentralMessagesArchive.h"
+#include "Archive/Archive.h"
 #include "ClientCentralMessagesTypes.h"
 #include "StringId.h"
 #include "Unicode.h"
