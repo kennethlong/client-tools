@@ -458,7 +458,7 @@ void UIText::AppendLocalText( const UIString &StringToAppend )
 				UIString::const_iterator		TextToRewrap;
 
 				TextToRewrap = mLines->linePointers[mLines->linePointers.size() - 2];
-				TextToLineWrap.append( TextToRewrap, mLocalText.cend());
+				TextToLineWrap.append( TextToRewrap, mRenderData.cend());
 
 				mStyle->GetWrappedTextInfo( TextToLineWrap, mMaxLines, GetWidth(), ScrollExtentOfNewText, &NewLineBreaks, &NewLineWidths );
 
