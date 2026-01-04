@@ -1520,8 +1520,8 @@ void UITextbox::CalculateCaratRect ()
 				auto cpybegin = mRenderLinePointers[CaratLineNumber];
 				auto cpyend = cpybegin + realAmountToCopy;
 
-				if (cpyend > mLocalText.end())
-					cpyend = mLocalText.end();
+				if (cpyend > mRenderData.end())
+					cpyend = mRenderData.end();
 
 				s.assign(cpybegin, cpyend);
 			}
