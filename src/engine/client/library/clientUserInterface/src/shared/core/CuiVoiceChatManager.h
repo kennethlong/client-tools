@@ -171,6 +171,11 @@ public:
 	CuiVoiceChatManager();
 	~CuiVoiceChatManager();
 
+protected:
+	virtual void PostInstall() override;
+
+public:
+
 	// Receiver interface
 	virtual void receiveMessage(MessageDispatch::Emitter const & source, MessageDispatch::MessageBase const & message);
 
