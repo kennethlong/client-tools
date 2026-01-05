@@ -72,7 +72,7 @@
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;ENABLE_MOZILLA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -111,7 +111,7 @@
       <OmitFramePointers>false</OmitFramePointers>
       <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;ENABLE_MOZILLA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>

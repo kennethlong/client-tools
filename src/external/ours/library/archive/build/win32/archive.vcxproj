@@ -70,9 +70,9 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\src\shared;..\..\src\win32;..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\src\shared;..\..\src\win32;..\..\include;..\..\..\..\..\..\external\3rd\library\boost;$(SolutionDir)..\..\engine\shared\library\sharedFoundation\include\public;$(SolutionDir)..\..\engine\shared\library\sharedFoundationTypes\include\public;$(SolutionDir)..\..\engine\shared\library\sharedGame\include\public;$(SolutionDir)..\..\engine\shared\library\sharedMathArchive\include\public;$(SolutionDir)..\..\engine\shared\library\sharedNetworkMessages\include\public;$(SolutionDir)..\..\engine\shared\library\sharedObject\include\public;$(SolutionDir)..\..\engine\shared\library\sharedSkillSystem\include\public;$(SolutionDir)..\..\engine\shared\library\sharedUtility\include\public;$(SolutionDir)..\..\external\ours\library\localizationArchive\include\public;$(SolutionDir)..\..\external\ours\library\unicodeArchive\include\public;$(SolutionDir)..\..\game\shared\library\swgSharedNetworkMessages\include\public;$(SolutionDir)..\..\engine\shared\library\sharedMath\include\public;$(SolutionDir)..\..\engine\shared\library\sharedFoundation\src\shared;$(SolutionDir)..\..\external\ours\library\localization\include;$(SolutionDir)..\..\external\ours\library\unicode\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -121,7 +121,7 @@ $(SolutionDir)..\..\game\shared\library\swgSharedNetworkMessages\include\public;
 $(SolutionDir)..\..\engine\shared\library\sharedFoundation\src\shared
 )</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
