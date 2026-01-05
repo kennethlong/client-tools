@@ -71,6 +71,9 @@
       <TypeLibraryName>./_all_client.tlb</TypeLibraryName>
       <HeaderFileName />
     </Midl>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
     <Midl>

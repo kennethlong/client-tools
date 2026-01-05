@@ -93,6 +93,7 @@
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>qt-mt334.lib;qtmain.lib;oldnames.lib;libclient.lib;libsupp.lib;librpc.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>

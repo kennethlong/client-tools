@@ -86,6 +86,9 @@
       <TypeLibraryName>./_all_client_libraries.tlb</TypeLibraryName>
       <HeaderFileName />
     </Midl>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
   </ItemGroup>
