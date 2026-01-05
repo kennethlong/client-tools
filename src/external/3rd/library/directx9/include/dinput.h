@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 
-
+#include <cstddef>
 
 
 /*
@@ -2000,18 +2000,18 @@ typedef struct _DIMOUSESTATE2 {
 #endif
 
 
-#define DIMOFS_X        FIELD_OFFSET(DIMOUSESTATE, lX)
-#define DIMOFS_Y        FIELD_OFFSET(DIMOUSESTATE, lY)
-#define DIMOFS_Z        FIELD_OFFSET(DIMOUSESTATE, lZ)
-#define DIMOFS_BUTTON0 (FIELD_OFFSET(DIMOUSESTATE, rgbButtons) + 0)
-#define DIMOFS_BUTTON1 (FIELD_OFFSET(DIMOUSESTATE, rgbButtons) + 1)
-#define DIMOFS_BUTTON2 (FIELD_OFFSET(DIMOUSESTATE, rgbButtons) + 2)
-#define DIMOFS_BUTTON3 (FIELD_OFFSET(DIMOUSESTATE, rgbButtons) + 3)
+#define DIMOFS_X        static_cast<LONG>(offsetof(DIMOUSESTATE, lX))
+#define DIMOFS_Y        static_cast<LONG>(offsetof(DIMOUSESTATE, lY))
+#define DIMOFS_Z        static_cast<LONG>(offsetof(DIMOUSESTATE, lZ))
+#define DIMOFS_BUTTON0 (static_cast<LONG>(offsetof(DIMOUSESTATE, rgbButtons) + 0))
+#define DIMOFS_BUTTON1 (static_cast<LONG>(offsetof(DIMOUSESTATE, rgbButtons) + 1))
+#define DIMOFS_BUTTON2 (static_cast<LONG>(offsetof(DIMOUSESTATE, rgbButtons) + 2))
+#define DIMOFS_BUTTON3 (static_cast<LONG>(offsetof(DIMOUSESTATE, rgbButtons) + 3))
 #if (DIRECTINPUT_VERSION >= 0x0700)
-#define DIMOFS_BUTTON4 (FIELD_OFFSET(DIMOUSESTATE2, rgbButtons) + 4)
-#define DIMOFS_BUTTON5 (FIELD_OFFSET(DIMOUSESTATE2, rgbButtons) + 5)
-#define DIMOFS_BUTTON6 (FIELD_OFFSET(DIMOUSESTATE2, rgbButtons) + 6)
-#define DIMOFS_BUTTON7 (FIELD_OFFSET(DIMOUSESTATE2, rgbButtons) + 7)
+#define DIMOFS_BUTTON4 (static_cast<LONG>(offsetof(DIMOUSESTATE2, rgbButtons) + 4))
+#define DIMOFS_BUTTON5 (static_cast<LONG>(offsetof(DIMOUSESTATE2, rgbButtons) + 5))
+#define DIMOFS_BUTTON6 (static_cast<LONG>(offsetof(DIMOUSESTATE2, rgbButtons) + 6))
+#define DIMOFS_BUTTON7 (static_cast<LONG>(offsetof(DIMOUSESTATE2, rgbButtons) + 7))
 #endif
 #endif /* DIJ_RINGZERO */
 
@@ -2252,17 +2252,17 @@ typedef struct DIJOYSTATE2 {
     LONG    rglFSlider[2];          /* extra axes forces            */
 } DIJOYSTATE2, *LPDIJOYSTATE2;
 
-#define DIJOFS_X            FIELD_OFFSET(DIJOYSTATE, lX)
-#define DIJOFS_Y            FIELD_OFFSET(DIJOYSTATE, lY)
-#define DIJOFS_Z            FIELD_OFFSET(DIJOYSTATE, lZ)
-#define DIJOFS_RX           FIELD_OFFSET(DIJOYSTATE, lRx)
-#define DIJOFS_RY           FIELD_OFFSET(DIJOYSTATE, lRy)
-#define DIJOFS_RZ           FIELD_OFFSET(DIJOYSTATE, lRz)
-#define DIJOFS_SLIDER(n)   (FIELD_OFFSET(DIJOYSTATE, rglSlider) + \
+#define DIJOFS_X            static_cast<LONG>(offsetof(DIJOYSTATE, lX))
+#define DIJOFS_Y            static_cast<LONG>(offsetof(DIJOYSTATE, lY))
+#define DIJOFS_Z            static_cast<LONG>(offsetof(DIJOYSTATE, lZ))
+#define DIJOFS_RX           static_cast<LONG>(offsetof(DIJOYSTATE, lRx))
+#define DIJOFS_RY           static_cast<LONG>(offsetof(DIJOYSTATE, lRy))
+#define DIJOFS_RZ           static_cast<LONG>(offsetof(DIJOYSTATE, lRz))
+#define DIJOFS_SLIDER(n)   (static_cast<LONG>(offsetof(DIJOYSTATE, rglSlider)) + \
                                                         (n) * sizeof(LONG))
-#define DIJOFS_POV(n)      (FIELD_OFFSET(DIJOYSTATE, rgdwPOV) + \
+#define DIJOFS_POV(n)      (static_cast<LONG>(offsetof(DIJOYSTATE, rgdwPOV)) + \
                                                         (n) * sizeof(DWORD))
-#define DIJOFS_BUTTON(n)   (FIELD_OFFSET(DIJOYSTATE, rgbButtons) + (n))
+#define DIJOFS_BUTTON(n)   (static_cast<LONG>(offsetof(DIJOYSTATE, rgbButtons)) + (n))
 #define DIJOFS_BUTTON0      DIJOFS_BUTTON(0)
 #define DIJOFS_BUTTON1      DIJOFS_BUTTON(1)
 #define DIJOFS_BUTTON2      DIJOFS_BUTTON(2)
