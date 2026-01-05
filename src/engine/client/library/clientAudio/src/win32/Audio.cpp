@@ -1987,8 +1987,6 @@ void Audio::alter(float const deltaTime, Object const *listener)
 					|| !queueSample(*sound, soundIsAlreadyPlaying))
 				{
 					// The sample is not a good choice to play so stop it
-
-					Sound2 * sound = (*iterUtilitySoundList);
 					float const fadeOutTime = 0.0f;
 					bool const keepAlive = sound->isInfiniteLooping();
 
