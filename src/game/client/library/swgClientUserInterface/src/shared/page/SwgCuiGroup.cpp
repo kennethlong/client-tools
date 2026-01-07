@@ -503,7 +503,7 @@ void SwgCuiGroup::OnPopupMenuSelection(UIWidget * context)
 							sprintf(tellMember, "/tell %s ",firstName);
 						}
 						else
-							sprintf(tellMember, "/tell %s ", member.second);
+							sprintf(tellMember, "/tell %s ", member.second.c_str());
 
 						Game::startChatInput(Unicode::narrowToWide(tellMember));
 					}
