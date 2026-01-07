@@ -477,7 +477,7 @@ namespace libEverQuestTCG
             m_hDLL = 0;
 			char buffer[256];
 			memset(buffer, 0, 256);
-			sprintf(buffer, "Could not map to SWGTCG.dll processes. Please check your install and make sure you have the latest version.\n", fullpath);
+			sprintf(buffer, "Could not map to SWGTCG.dll processes. Please check your install and make sure you have the latest version.\n");
 			MessageBox(NULL, buffer, "Failed to load DLL", MB_OK);
             return false;
         }
