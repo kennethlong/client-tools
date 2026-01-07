@@ -117,36 +117,36 @@ void doubleToFloat( float& f, const double& d )
 
 void invertMatrix4x4 (Matrix4x4& m, const Matrix4x4& src)
 {
-	register const float a4 = src[3][0];
-	register const float b4 = src[3][1];
-	register const float c4 = src[3][2];
-	register const float d4 = src[3][3];
-	register const float a1 = src[0][0];
-	register const float b1 = src[0][1];
-	register const float c1 = src[0][2];
-	register const float d1 = src[0][3];
-	register const float a2 = src[1][0];
-	register const float b2 = src[1][1];
-	register const float c2 = src[1][2];
-	register const float d2 = src[1][3];
-	register const float a3 = src[2][0];
-	register const float b3 = src[2][1];
-	register const float c3 = src[2][2];
-	register const float d3 = src[2][3];
+	const float a4 = src[3][0];
+	const float b4 = src[3][1];
+	const float c4 = src[3][2];
+	const float d4 = src[3][3];
+	const float a1 = src[0][0];
+	const float b1 = src[0][1];
+	const float c1 = src[0][2];
+	const float d1 = src[0][3];
+	const float a2 = src[1][0];
+	const float b2 = src[1][1];
+	const float c2 = src[1][2];
+	const float d2 = src[1][3];
+	const float a3 = src[2][0];
+	const float b3 = src[2][1];
+	const float c3 = src[2][2];
+	const float d3 = src[2][3];
 
-	register float a3b4_a4b3 = a3 * b4 - a4 * b3;
-	register float a3c4_a4c3 = a3 * c4 - a4 * c3;
-	register float a3d4_a4d3 = a3 * d4 - a4 * d3;
-	register float b3c4_b4c3 = b3 * c4 - b4 * c3;
-	register float b3d4_b4d3 = b3 * d4 - b4 * d3;
-	register float c3d4_c4d3 = c3 * d4 - c4 * d3;
+	float a3b4_a4b3 = a3 * b4 - a4 * b3;
+	float a3c4_a4c3 = a3 * c4 - a4 * c3;
+	float a3d4_a4d3 = a3 * d4 - a4 * d3;
+	float b3c4_b4c3 = b3 * c4 - b4 * c3;
+	float b3d4_b4d3 = b3 * d4 - b4 * d3;
+	float c3d4_c4d3 = c3 * d4 - c4 * d3;
 
-	register float m00	= (b2 * c3d4_c4d3 - c2 * b3d4_b4d3 + d2 * b3c4_b4c3);
-	register float m10	=-(a2 * c3d4_c4d3 - c2 * a3d4_a4d3 + d2 * a3c4_a4c3);
-	register float m20	= (a2 * b3d4_b4d3 - b2 * a3d4_a4d3 + d2 * a3b4_a4b3);
-	register float m30	=-(a2 * b3c4_b4c3 - b2 * a3c4_a4c3 + c2 * a3b4_a4b3);
+	float m00	= (b2 * c3d4_c4d3 - c2 * b3d4_b4d3 + d2 * b3c4_b4c3);
+	float m10	=-(a2 * c3d4_c4d3 - c2 * a3d4_a4d3 + d2 * a3c4_a4c3);
+	float m20	= (a2 * b3d4_b4d3 - b2 * a3d4_a4d3 + d2 * a3b4_a4b3);
+	float m30	=-(a2 * b3c4_b4c3 - b2 * a3c4_a4c3 + c2 * a3b4_a4b3);
 
-	register float det	= Math::reciprocal(a1 * m00 + b1 * m10 + c1 * m20 + d1 * m30);
+	float det	= Math::reciprocal(a1 * m00 + b1 * m10 + c1 * m20 + d1 * m30);
 
 	m[0][0] = m00 * det;
 	m[1][0] = m10 * det;
@@ -158,24 +158,24 @@ void invertMatrix4x4 (Matrix4x4& m, const Matrix4x4& src)
 	m[2][1]	=-(a1 * b3d4_b4d3 - b1 * a3d4_a4d3 + d1 * a3b4_a4b3)*det;
 	m[3][1]	= (a1 * b3c4_b4c3 - b1 * a3c4_a4c3 + c1 * a3b4_a4b3)*det;
 
-	register float a2d4_a4d2 = a2 * d4 - a4 * d2;
-	register float a2b4_a4b2 = a2 * b4 - a4 * b2;
-	register float a2c4_a4c2 = a2 * c4 - a4 * c2;
-	register float b2c4_b4c2 = b2 * c4 - b4 * c2;
-	register float b2d4_b4d2 = b2 * d4 - b4 * d2;
-	register float c2d4_c4d2 = c2 * d4 - c4 * d2;
+	float a2d4_a4d2 = a2 * d4 - a4 * d2;
+	float a2b4_a4b2 = a2 * b4 - a4 * b2;
+	float a2c4_a4c2 = a2 * c4 - a4 * c2;
+	float b2c4_b4c2 = b2 * c4 - b4 * c2;
+	float b2d4_b4d2 = b2 * d4 - b4 * d2;
+	float c2d4_c4d2 = c2 * d4 - c4 * d2;
 
 	m[0][2]	= (b1 * c2d4_c4d2 - c1 * b2d4_b4d2 + d1 * b2c4_b4c2)*det;
 	m[1][2]	=-(a1 * c2d4_c4d2 - c1 * a2d4_a4d2 + d1 * a2c4_a4c2)*det;
 	m[2][2]	= (a1 * b2d4_b4d2 - b1 * a2d4_a4d2 + d1 * a2b4_a4b2)*det;
 	m[3][2]	=-(a1 * b2c4_b4c2 - b1 * a2c4_a4c2 + c1 * a2b4_a4b2)*det;
 
-	register float a2b3_a3b2 = a2 * b3 - a3 * b2;
-	register float a2c3_a3c2 = a2 * c3 - a3 * c2;
-	register float a2d3_a3d2 = a2 * d3 - a3 * d2;
-	register float b2c3_b3c2 = b2 * c3 - b3 * c2;
-	register float b2d3_b3d2 = b2 * d3 - b3 * d2;
-	register float c2d3_c3d2 = c2 * d3 - c3 * d2;
+	float a2b3_a3b2 = a2 * b3 - a3 * b2;
+	float a2c3_a3c2 = a2 * c3 - a3 * c2;
+	float a2d3_a3d2 = a2 * d3 - a3 * d2;
+	float b2c3_b3c2 = b2 * c3 - b3 * c2;
+	float b2d3_b3d2 = b2 * d3 - b3 * d2;
+	float c2d3_c3d2 = c2 * d3 - c3 * d2;
 
 	m[0][3]	=-(b1 * c2d3_c3d2 - c1 * b2d3_b3d2 + d1 * b2c3_b3c2)*det;
 	m[1][3]	= (a1 * c2d3_c3d2 - c1 * a2d3_a3d2 + d1 * a2c3_a3c2)*det;
@@ -347,19 +347,19 @@ bool isInvertible (const Matrix4x3& src)
 		return false;
 #endif
 
-	register float a1 = src[0][0];
-	register float b1 = src[0][1];
-	register float c1 = src[0][2];
-	register float a2 = src[1][0];
-	register float b2 = src[1][1];
-	register float c2 = src[1][2];
-	register float a3 = src[2][0];
-	register float b3 = src[2][1];
-	register float c3 = src[2][2];
+	float a1 = src[0][0];
+	float b1 = src[0][1];
+	float c1 = src[0][2];
+	float a2 = src[1][0];
+	float b2 = src[1][1];
+	float c2 = src[1][2];
+	float a3 = src[2][0];
+	float b3 = src[2][1];
+	float c3 = src[2][2];
 
-	register float b2c3_b3c2 = b2 * c3 - b3 * c2;
-	register float a3c2_a2c3 = a3 * c2 - a2 * c3;
-	register float a2b3_a3b2 = a2 * b3 - a3 * b2;
+	float b2c3_b3c2 = b2 * c3 - b3 * c2;
+	float a3c2_a2c3 = a3 * c2 - a2 * c3;
+	float a2b3_a3b2 = a2 * b3 - a3 * b2;
 
 	return (a1 * (b2c3_b3c2) + b1 * (a3c2_a2c3) + c1 * (a2b3_a3b2)) != 0.0f;
 }
@@ -849,7 +849,7 @@ void dot (float* dst, const Vector4* src, const Vector4& p, int N)
 
 	// validate results
 	#if defined (DPVS_DEBUG)
-		register float px = p.x, py = p.y, pz = p.z, pw = p.w;
+		float px = p.x, py = p.y, pz = p.z, pw = p.w;
 		for (int i = 0; i < N; i++)
 			DPVS_ASSERT(isApproximatelyEqual(dst[i], src[i].x * px + src[i].y * py + src[i].z * pz + src[i].w * pw));
 	#endif
@@ -959,7 +959,7 @@ skip:
 		fcompp
 	}
 #else // DPVS_X86_ASSEMBLY
-	register float px = p.x, py = p.y, pz = p.z, pw = p.w;
+	float px = p.x, py = p.y, pz = p.z, pw = p.w;
 	for (int i = 0; i < N; i++)
 		dst[i] = src[i].x * px + src[i].y * py + src[i].z * pz + src[i].w * pw;
 #endif
@@ -1677,17 +1677,17 @@ void objectToRaster (Vector3* dest, const Vector3* src, int N, const Matrix4x4& 
 /*
 		#if defined (DPVS_DEBUG)
 		{
-			register float	xscale	=  0.5f * viewPort.width();
-			register float	xofs	=  0.5f * viewPort.width()  + viewPort.x0;
-			register float	yscale	= -0.5f * viewPort.height();
-			register float	yofs	=  0.5f * viewPort.height() + viewPort.y0;
+			float	xscale	=  0.5f * viewPort.width();
+			float	xofs	=  0.5f * viewPort.width()  + viewPort.x0;
+			float	yscale	= -0.5f * viewPort.height();
+			float	yofs	=  0.5f * viewPort.height() + viewPort.y0;
 
 			for (int i = 0; i < N; i++, dest++, src++)
 			{
-				register float sx	= src->x;
-				register float sy	= src->y;
-				register float sz	= src->z;
-				register float oow   = Math::reciprocal(mtx[3].x * sx + mtx[3].y * sy + mtx[3].z * sz + mtx[3].w);
+				float sx	= src->x;
+				float sy	= src->y;
+				float sz	= src->z;
+				float oow   = Math::reciprocal(mtx[3].x * sx + mtx[3].y * sy + mtx[3].z * sz + mtx[3].w);
 
 				DPVS_ASSERT(isApproximatelyEqual(dest->x,(mtx[0].x * sx + mtx[0].y * sy + mtx[0].z * sz + mtx[0].w) * oow * xscale + xofs));
 				DPVS_ASSERT(isApproximatelyEqual(dest->y,(mtx[1].x * sx + mtx[1].y * sy + mtx[1].z * sz + mtx[1].w) * oow * yscale + yofs));
@@ -1848,17 +1848,17 @@ void objectToRaster (Vector2* dest, const Vector3* src, int N, const Matrix4x4& 
 
 	#if defined (DPVS_DEBUG)
 	{
-		register float	xscale	=  0.5f * viewPort.width();
-		register float	xofs	=  0.5f * viewPort.width()  + viewPort.x0;
-		register float	yscale	= -0.5f * viewPort.height();
-		register float	yofs	=  0.5f * viewPort.height() + viewPort.y0;
+		float	xscale	=  0.5f * viewPort.width();
+		float	xofs	=  0.5f * viewPort.width()  + viewPort.x0;
+		float	yscale	= -0.5f * viewPort.height();
+		float	yofs	=  0.5f * viewPort.height() + viewPort.y0;
 
 		for (int i = 0; i < N; i++, dest++, src++)
 		{
-			register float sx	= src->x;
-			register float sy	= src->y;
-			register float sz	= src->z;
-			register float oow  = Math::reciprocal(mtx[3].x * sx + mtx[3].y * sy + mtx[3].z * sz + mtx[3].w);
+			float sx	= src->x;
+			float sy	= src->y;
+			float sz	= src->z;
+			float oow  = Math::reciprocal(mtx[3].x * sx + mtx[3].y * sy + mtx[3].z * sz + mtx[3].w);
 
 			DPVS_ASSERT(isApproximatelyEqual(dest->x,(mtx[0].x * sx + mtx[0].y * sy + mtx[0].z * sz + mtx[0].w) * oow * xscale + xofs));
 			DPVS_ASSERT(isApproximatelyEqual(dest->y,(mtx[1].x * sx + mtx[1].y * sy + mtx[1].z * sz + mtx[1].w) * oow * yscale + yofs));
@@ -2002,9 +2002,9 @@ void transform (Vector4* dest, const Vector3* src, int N, const Matrix4x4& mtx)
 	#if defined (DPVS_DEBUG)
 	for (int i = 0; i < N; i++, dest++, src++)
 	{
-		register float sx = src->x;
-		register float sy = src->y;
-		register float sz = src->z;
+		float sx = src->x;
+		float sy = src->y;
+		float sz = src->z;
 
 		DPVS_ASSERT(isApproximatelyEqual(dest->x,mtx[0].x * sx + mtx[0].y * sy + mtx[0].z * sz + mtx[0].w));
 		DPVS_ASSERT(isApproximatelyEqual(dest->y,mtx[1].x * sx + mtx[1].y * sy + mtx[1].z * sz + mtx[1].w));
@@ -2226,10 +2226,10 @@ void minMax	(Vector2& mn, Vector2& mx, const Vector2* src, int N)
 	// C version used by other platforms and non-CMOV x86 platforms..
 	//--------------------------------------------------------------------
 
-	register float mnx = src[0].x;
-	register float mny = src[0].y;
-	register float mxx = mnx;
-	register float mxy = mny;
+	float mnx = src[0].x;
+	float mny = src[0].y;
+	float mxx = mnx;
+	float mxy = mny;
 
 	for (int i = 1; i < N; i++)
 	{
@@ -3314,21 +3314,21 @@ int divFixed32_16 (int a, int b)
 /*
 void transformAABB (Vector4 dst[8], const Vector3& mn, const Vector3& mx, const Matrix4x4& m)
 {
-	register float a0,a1,a2,a3;
+	float a0,a1,a2,a3;
 
 	dst[0].x = mn.x * m[0].x + mn.y * m[0].y + mn.z * m[0].z + m[0].w;
 	dst[0].y = mn.x * m[1].x + mn.y * m[1].y + mn.z * m[1].z + m[1].w;
 	dst[0].z = mn.x * m[2].x + mn.y * m[2].y + mn.z * m[2].z + m[2].w;
 	dst[0].w = mn.x * m[3].x + mn.y * m[3].y + mn.z * m[3].z + m[3].w;
 
-	register float y = (mx.y-mn.y);
+	float y = (mx.y-mn.y);
 
 	dst[2].x = dst[0].x + y * m[0].y;
 	dst[2].y = dst[0].y + y * m[1].y;
 	dst[2].z = dst[0].z + y * m[2].y;
 	dst[2].w = dst[0].w + y * m[3].y;
 
-	register float x = (mx.x-mn.x);
+	float x = (mx.x-mn.x);
 	a0 = x * m[0].x;
 	a1 = x * m[1].x;
 	a2 = x * m[2].x;
@@ -3344,7 +3344,7 @@ void transformAABB (Vector4 dst[8], const Vector3& mn, const Vector3& mx, const 
 	dst[3].z = dst[2].z + a2;
 	dst[3].w = dst[2].w + a3;
 
-	register float z = (mx.z-mn.z);
+	float z = (mx.z-mn.z);
 	a0 = z * m[0].z;
 	a1 = z * m[1].z;
 	a2 = z * m[2].z;
@@ -3840,13 +3840,13 @@ bool transformUnitBoxXYZDivByW (Vector3 dst[8], const Matrix4x4& m)
 	// calculate xyz
 	//--------------------------------------------------------------------
 
-	register float dst0x	= m[0].w - m[0].x - m[0].y - m[0].z;
-	register float dst0y	= m[1].w - m[1].x - m[1].y - m[1].z;
-	register float dst0z	= m[2].w - m[2].x - m[2].y - m[2].z;
+	float dst0x	= m[0].w - m[0].x - m[0].y - m[0].z;
+	float dst0y	= m[1].w - m[1].x - m[1].y - m[1].z;
+	float dst0z	= m[2].w - m[2].x - m[2].y - m[2].z;
 
-	register float b0	= 2.0f * m[0].z;
-	register float b1	= 2.0f * m[1].z;
-	register float b2	= 2.0f * m[2].z;
+	float b0	= 2.0f * m[0].z;
+	float b1	= 2.0f * m[1].z;
+	float b2	= 2.0f * m[2].z;
 
 	dst[0].x	= dst0x*w0;
 	dst[0].y	= dst0y*w0;
@@ -3855,13 +3855,13 @@ bool transformUnitBoxXYZDivByW (Vector3 dst[8], const Matrix4x4& m)
 	dst[4].y	= (dst0y + b1)*w4;
 	dst[4].z	= (dst0z + b2)*w4;
 
-	register float a0	= 2.0f * m[0].x;
-	register float a1	= 2.0f * m[1].x;
-	register float a2	= 2.0f * m[2].x;
+	float a0	= 2.0f * m[0].x;
+	float a1	= 2.0f * m[1].x;
+	float a2	= 2.0f * m[2].x;
 
-	register float dst1x	= dst0x + a0;
-	register float dst1y	= dst0y + a1;
-	register float dst1z	= dst0z + a2;
+	float dst1x	= dst0x + a0;
+	float dst1y	= dst0y + a1;
+	float dst1z	= dst0z + a2;
 
 	dst[1].x	= dst1x*w1;
 	dst[1].y	= dst1y*w1;
@@ -3870,9 +3870,9 @@ bool transformUnitBoxXYZDivByW (Vector3 dst[8], const Matrix4x4& m)
 	dst[5].y	= (dst1y + b1)*w5;
 	dst[5].z	= (dst1z + b2)*w5;
 
-	register float dst2x	= dst0x + (2.0f * m[0].y);
-	register float dst2y	= dst0y + (2.0f * m[1].y);
-	register float dst2z	= dst0z + (2.0f * m[2].y);
+	float dst2x	= dst0x + (2.0f * m[0].y);
+	float dst2y	= dst0y + (2.0f * m[1].y);
+	float dst2z	= dst0z + (2.0f * m[2].y);
 
 	dst[2].x	= dst2x*w2;
 	dst[2].y	= dst2y*w2;
@@ -3881,9 +3881,9 @@ bool transformUnitBoxXYZDivByW (Vector3 dst[8], const Matrix4x4& m)
 	dst[6].y	= (dst2y + b1)*w6;
 	dst[6].z	= (dst2z + b2)*w6;
 
-	register float dst3x	= dst2x + a0;
-	register float dst3y	= dst2y + a1;
-	register float dst3z	= dst2z + a2;
+	float dst3x	= dst2x + a0;
+	float dst3y	= dst2y + a1;
+	float dst3z	= dst2z + a2;
 
 	dst[3].x	= dst3x*w3;
 	dst[3].y	= dst3y*w3;

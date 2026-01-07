@@ -126,7 +126,7 @@ bool DPVS::intersectOBBFrustum (const OBB& obb, const Matrix4x3& objectToCell, c
 	{
 		if (mask&1)
 		{
-			register float px = p->x, py = p->y, pz = p->z, pw = p->w;
+			float px = p->x, py = p->y, pz = p->z, pw = p->w;
 			
 			if ((v[0].x*px + v[0].y*py + v[0].z*pz + pw) <= 0.0f &&	// unrolled eight tests (w/ early exit)
 				(v[1].x*px + v[1].y*py + v[1].z*pz + pw) <= 0.0f &&
