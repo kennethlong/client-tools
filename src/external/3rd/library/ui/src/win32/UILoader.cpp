@@ -166,7 +166,7 @@ bool UILoader::LoadFromResource( const UINarrowString &ResourceName, UIObjectLis
 	UI_UNREF (tickStart);
 
 #if UI_LOADER_PROFILE
-	*GetUIOutputStream() << " :: UI_LOAD_TIME " << ResourceName << " " << (tickEnd - tickStart) << "\n";
+	*GetUIOutputStream() << " :: UI_LOAD_TIME " << ResourceName << " " << int(tickEnd - tickStart) << "\n";
 #endif
 
 	return rc;
