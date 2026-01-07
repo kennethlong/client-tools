@@ -10,6 +10,7 @@
 
 // ======================================================================
 
+#include "sharedFoundation/Fatal.h"
 #include "sharedFoundation/NetworkIdArchive.h"
 #include "unicodeArchive/UnicodeArchive.h"
 #include "sharedMathArchive/VectorArchive.h"

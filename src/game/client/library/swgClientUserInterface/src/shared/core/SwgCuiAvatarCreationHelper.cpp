@@ -36,6 +36,7 @@
 #include "sharedDebug/PerformanceTimer.h"
 #include "sharedFile/AsynchronousLoader.h"
 #include "sharedFile/Iff.h"
+#include "sharedFoundation/Fatal.h"
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/PointerDeleter.h"
 #include "sharedFoundation/Watcher.h"

@@ -16,8 +16,11 @@
 
 #include "sharedObject/CachedNetworkIdArchive.h"
 
+#include "sharedFoundation/Fatal.h"
+#include "sharedFoundation/SafeCast.h"
 #include "sharedFoundation/BitArray.h"
 #include "sharedFoundation/NetworkIdArchive.h"
+
 
 #include "sharedNetworkMessages/ClientCentralMessagesArchive.h"
 #include "sharedNetworkMessages/AuctionQueryArchive.h"
