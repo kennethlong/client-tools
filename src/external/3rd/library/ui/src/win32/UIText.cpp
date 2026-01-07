@@ -428,20 +428,30 @@ void UIText::AppendLocalText( const UIString &StringToAppend )
 	}
 	else
 	{
-		UIStringConstIteratorVector::iterator i;
+		// Capture offsets while iterators are still valid
+		std::vector<size_t> lineOffsets;
+		lineOffsets.reserve(mLines->linePointers.size());
 
-		//@TODO this is crap.  this now assumes that all mLines->linePointers pointers are pointers into mRenderData,
-		// which happens to be true right now.
-		UIString::iterator OldBase = mRenderData.begin();
+		const auto oldBegin = mRenderData.begin();
+		for (auto it : mLines->linePointers)
+		{
+			lineOffsets.push_back(static_cast<size_t>(it - oldBegin));
+		}
+
+		// Mutate text + rebuild render data (this invalidates old iterators)
 		mLocalText.append(StringToAppend);
 		SyncRenderDataToLocalText();
-		UIString::iterator NewBase = mRenderData.begin();
 
-		// Rebase iterators
-		if( OldBase != NewBase )
+		// Rebase using offsets (no invalid iterator usage)
+		auto newBegin = mRenderData.begin();
+		for (size_t idx = 0; idx < mLines->linePointers.size(); ++idx)
 		{
-			for( i = mLines->linePointers.begin(); i != mLines->linePointers.end(); ++i )
-				*i = NewBase + (*i - OldBase);
+			const size_t off = lineOffsets[idx];
+			// Optional defensive clamp if data sizes can change unexpectedly
+			if (off > mRenderData.size())
+				mLines->linePointers[idx] = mRenderData.end();
+			else
+				mLines->linePointers[idx] = newBegin + static_cast<UIString::difference_type>(off);
 		}
 
 		const UISize marginSize (UISize (mMargin.left + mMargin.right, mMargin.top + mMargin.bottom ));
@@ -463,7 +473,7 @@ void UIText::AppendLocalText( const UIString &StringToAppend )
 				mStyle->GetWrappedTextInfo( TextToLineWrap, mMaxLines, GetWidth(), ScrollExtentOfNewText, &NewLineBreaks, &NewLineWidths );
 
 				// Rebase iterators
-				for( i = NewLineBreaks.begin(); i != NewLineBreaks.end(); ++i )
+				for(UIStringConstIteratorVector::iterator i = NewLineBreaks.begin(); i != NewLineBreaks.end(); ++i )
 					*i = TextToRewrap + (*i - TextToLineWrap.begin());
 
 				if( NewLineBreaks.size() )
