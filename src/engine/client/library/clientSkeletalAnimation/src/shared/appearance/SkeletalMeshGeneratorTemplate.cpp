@@ -2273,7 +2273,7 @@ void SkeletalMeshGeneratorTemplate::load_0002(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -2566,7 +2566,7 @@ void SkeletalMeshGeneratorTemplate::load_0003(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -2902,7 +2902,7 @@ void SkeletalMeshGeneratorTemplate::load_0004(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -3874,7 +3874,10 @@ void SkeletalMeshGeneratorTemplate::fillMeshConstructionHelper(
 
 		const PerShaderDataVector::const_iterator itEnd = m_perShaderData.end();
 		for (PerShaderDataVector::const_iterator it = m_perShaderData.begin(); it != itEnd; ++it, ++i)
+		{
+			ms_perShaderDataScratchpad->resize(i+1, nullptr);
 			(*it)->addPerShaderData(meshConstructionHelper, firstPositionIndex, firstNormalIndex, preparedDot3Vectors, *ms_combinationsOccluded, (*ms_perShaderDataScratchpad)[static_cast<size_t>(i)]);
+		}
 	}
 
 	//-- add texture renderer info
