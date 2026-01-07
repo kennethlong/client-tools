@@ -135,6 +135,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>d3d9.lib;d3dx9.lib;dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>

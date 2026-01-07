@@ -135,6 +135,7 @@
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>dinput8.lib;dpvs.lib;dsound.lib;dxguid.lib;libpcre.a;libxml2-win32-release.lib;mss32.lib;mswsock.lib;qt-mt334.lib;qtmain.lib;winmm.lib;ws2_32.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>

@@ -127,6 +127,7 @@
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
       <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Lib>
       <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>

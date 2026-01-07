@@ -135,6 +135,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>libxml2-win32-release.lib;dxguid.lib;dpvs.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
