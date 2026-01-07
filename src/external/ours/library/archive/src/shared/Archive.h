@@ -213,16 +213,6 @@ template<typename A> inline void get(ReadIterator & source, A * target, int leng
 	}
 }
 
-inline void get(ReadIterator& source, uint64_t& value)
-{
-	source.get(&value, sizeof(value));
-}
-
-inline void get(ReadIterator& source, int64_t& value)
-{
-	source.get(&value, sizeof(value));
-}
-
 //---------------------------------------------------------------------
 
 inline void put(ByteStream & target, const double & source)
@@ -406,18 +396,6 @@ template<typename A> inline void put(ByteStream & target, const A * source, int 
 	{
 		put(target, source[i]);
 	}
-}
-
-inline void put(ByteStream& target, uint64_t const& value)
-{
-	uint64_t tmp = value;
-	target.put(&tmp, sizeof(tmp));
-}
-
-inline void put(ByteStream& target, int64_t const& value)
-{
-	int64_t tmp = value;
-	target.put(&tmp, sizeof(tmp));
 }
 
 //---------------------------------------------------------------------
