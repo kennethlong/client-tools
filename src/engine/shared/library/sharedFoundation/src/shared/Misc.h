@@ -10,7 +10,8 @@
 #ifndef MISC_H
 #define MISC_H
 
-#include "Fatal.h"
+#include "sharedFoundation/FirstSharedFoundation.h"
+#include "sharedFoundation/Fatal.h"
 
 // ======================================================================
 /**
@@ -174,7 +175,7 @@ inline char *DuplicateStringWithToLower(const char *source)
 		return NULL;
 
 	const size_t length = strlen(source)+1;
-	char *result = NON_NULL (new char[length]);
+	char *result = NON_NULL(new char[length]);
 
 	for (size_t i = 0; i < length; ++i)
 		result[i] = static_cast<char>(tolower(source[i]));

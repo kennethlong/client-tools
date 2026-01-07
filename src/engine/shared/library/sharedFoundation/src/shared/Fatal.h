@@ -9,7 +9,9 @@
 #ifndef INCLUDED_Fatal_H
 #define INCLUDED_Fatal_H
 
-#include "sharedFoundation/FirstSharedFoundation.h"
+#include "sharedFoundationTypes/FoundationTypes.h"
+#include "sharedFoundation/MacroFoundation.h"
+#include "sharedFoundation/FirstPlatform.h"
 
 // ======================================================================
 
@@ -161,4 +163,4 @@ struct _EXCEPTION_POINTERS;
 
 // ======================================================================
 
-#endif
+#endif // INCLUDED_Fatal_H
