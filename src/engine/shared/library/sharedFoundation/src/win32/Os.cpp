@@ -802,7 +802,7 @@ bool Os::handleDebugMenu()
 		b = ClientToScreen(ms_window, &p);
 		DEBUG_FATAL(!b, ("ClientToScreen failed"));
 
-		typedef std::map<char *, HMENU, StringCompare> Map;
+		typedef std::map<const char*, HMENU, StringCompare> Map;
 		Map map;
 
 		// create the menu
@@ -887,7 +887,7 @@ bool Os::handleDebugMenu()
 		while (!map.empty())
 		{
 			Map::iterator i = map.begin();
-			char *value = i->first;
+			const char *value = i->first;
 			map.erase(i);
 			delete [] value;
 		}
