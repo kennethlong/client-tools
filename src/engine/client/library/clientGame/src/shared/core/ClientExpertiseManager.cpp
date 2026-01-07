@@ -978,7 +978,7 @@ std::string ClientExpertiseManager::getExpertiseCommand(std::string const & expe
 {
 	SkillObject const * skill = SkillManager::getInstance().getSkill(expertiseName);
 	if(!skill)
-		return false;
+		return s_emptyString;
 	const std::vector<std::string> & commands = skill->getCommandsProvided();
 	if(!commands.empty())
 	{
