@@ -23,8 +23,8 @@
 
 namespace Unicode
 {
-	using unicode_char_t = wchar_t; // UTF-16 on Windows, 2-bytes
-	using String = std::wstring;
+	using unicode_char_t = char16_t;   // fixed 16-bit
+	using String = std::u16string;
 
 	/**
 	* NarrowString is a ascii string.
@@ -34,10 +34,10 @@ namespace Unicode
 
 	// Unicode whitespace/endline tables must also use wchar_t
 	inline constexpr unicode_char_t whitespace[] = {
-		L' ', L'\n', L'\r', L'\t', 0x3000, 0
+		u' ', u'\n', u'\r', u'\t', 0x3000, 0
 	};
 
-	inline constexpr unicode_char_t endlines[] = { L'\r', L'\n', 0 };
+	inline constexpr unicode_char_t endlines[] = { u'\r', u'\n', 0 };
 
 	inline constexpr char ascii_whitespace[] = { ' ', '\n', '\r', '\t', 0 };
 	inline constexpr char ascii_endlines[] = { '\r', '\n', 0 };

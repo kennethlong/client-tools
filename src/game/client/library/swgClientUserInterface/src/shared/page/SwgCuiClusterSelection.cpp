@@ -204,14 +204,14 @@ namespace
 			return clusterTimeZone;
 	}
 
-	static const Unicode::String::value_type *s_colorRed     = L"\\#ff0000";
-	static const Unicode::String::value_type *s_colorGreen   = L"\\#00ff00";
-	static const Unicode::String::value_type *s_colorBlue    = L"\\#0000ff";
-	static const Unicode::String::value_type *s_colorMagenta = L"\\#ff00ff";
-	static const Unicode::String::value_type *s_colorYellow  = L"\\#ffff00";
-	static const Unicode::String::value_type *s_colorCyan    = L"\\#00ffff";
-	static const Unicode::String::value_type *s_colorWhite   = L"\\#ffffff";
-	static const Unicode::String::value_type *s_colorBlack   = L"\\#000000";
+	static const Unicode::String::value_type *s_colorRed     = u"\\#ff0000";
+	static const Unicode::String::value_type *s_colorGreen   = u"\\#00ff00";
+	static const Unicode::String::value_type *s_colorBlue    = u"\\#0000ff";
+	static const Unicode::String::value_type *s_colorMagenta = u"\\#ff00ff";
+	static const Unicode::String::value_type *s_colorYellow  = u"\\#ffff00";
+	static const Unicode::String::value_type *s_colorCyan    = u"\\#00ffff";
+	static const Unicode::String::value_type *s_colorWhite   = u"\\#ffffff";
+	static const Unicode::String::value_type *s_colorBlack   = u"\\#000000";
 }
 
 //----------------------------------------------------------------------
@@ -414,7 +414,7 @@ void SwgCuiClusterSelection::refreshList ()
 			}
 
 			char buffer[64];
-			name = color + name + L" [" + Unicode::narrowToWide(clusterInfo.branch) + L"." + Unicode::narrowToWide(_itoa(clusterInfo.version, buffer, 10)) + L"]";
+			name = color + name + u" [" + Unicode::narrowToWide(clusterInfo.branch) + u"." + Unicode::narrowToWide(_itoa(clusterInfo.version, buffer, 10)) + u"]";
 		}
 	}
 
@@ -503,7 +503,7 @@ void SwgCuiClusterSelection::updateServerStatus ()
 					{
 						if (clusterInfo.isAdmin)
 						{
-							Unicode::String lockedFlag = L"\\#00ff00 (God Mode)";
+							Unicode::String lockedFlag = u"\\#00ff00 (God Mode)";
 							statusStr = CuiStringIdsServer::server_locked.localize() + lockedFlag;
 						}
 						else
@@ -538,7 +538,7 @@ void SwgCuiClusterSelection::updateServerStatus ()
 				}
 				if(clusterInfo.isAdmin && clusterInfo.isSecret)
 				{
-					Unicode::String secretFlag = L"\\#ff00ff (Secret)";
+					Unicode::String secretFlag = u"\\#ff00ff (Secret)";
 					statusStr += secretFlag;
 				}
 
