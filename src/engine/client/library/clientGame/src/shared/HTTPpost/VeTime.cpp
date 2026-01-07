@@ -105,7 +105,7 @@ static int32 Get_Day( int month, int day, int year )
 //
 static bool Get_Date_From_Day( int32 days,  int& year,  int& yday )
 {
-    register long int y;
+    long int y;
 
     if ( days <= 365 )
     {
