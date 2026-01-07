@@ -1133,21 +1133,22 @@ bool UIManager::ProcessMessage (const UIMessage &Msg)
 
 					listbox->Clear();
 
-					std::vector<Unicode::String> &candidates = UIManager::getUIIMEManager()->GetCandidateList();
-					for (unsigned int i = 0; i < candidates.size(); i++)
+					std::vector<Unicode::String>& candidates =
+						UIManager::getUIIMEManager()->GetCandidateList();
+
+					for (size_t i = 0; i < candidates.size(); ++i)
 					{
-						Unicode::unicode_char_t num[2];
+						// Build number prefix: "1", "2", ..., "9", "0"
+						char16_t numChar = static_cast<char16_t>(u'0' + ((i + 1) % 10));
 
-						num[0] = (Unicode::unicode_char_t) (L'0' + ((i + 1) % 10));
-						num[1] = 0;
-			
-						UIString str = candidates[i];
-						
-						Unicode::unicode_char_t buf[512];
-						_snwprintf(buf, sizeof(buf) - 1, L"%s\\>032%s", num, str.c_str());
-						
-						listbox->AddRow(Unicode::String(buf), "Candidate");
+						Unicode::String row;
+						row.reserve(1 + 4 + candidates[i].size());
 
+						row.push_back(numChar);
+						row.append(u"\\>032");
+						row.append(candidates[i]);
+
+						listbox->AddRow(row, "Candidate");
 					}
 
 					if (listbox)

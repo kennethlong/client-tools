@@ -21,7 +21,7 @@
 
 namespace Unicode
 {
-	using unicode_char_t = wchar_t;     // UTF-16 code unit on Windows
+	using unicode_char_t = char16_t;     // UTF-16 code unit on Windows
 
 	struct CharData;
 	

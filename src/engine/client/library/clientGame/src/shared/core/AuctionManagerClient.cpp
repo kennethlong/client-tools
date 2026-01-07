@@ -1685,7 +1685,7 @@ void AuctionManagerClient::relistItemsFromStock(const std::vector<NetworkId> & i
 				for (std::vector<Unicode::String>::const_iterator iter = decodedComponents.begin(); iter != decodedComponents.end(); ++iter)
 				{
 					if (itemLocalizedName.size() > 0)
-						itemLocalizedName += wchar_t(0);
+						itemLocalizedName += char16_t(0);
 
 					itemLocalizedName += *iter;
 				}

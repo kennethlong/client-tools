@@ -2324,7 +2324,7 @@ void UIText::SyncRenderDataToLocalText()
 				mRenderData.append( 1, ch2);
 			}					
 			if(!mComposition.empty())
-				mRenderData.append(L"\\#.");
+				mRenderData.append(u"\\#.");
 		}
 		mRenderData.append( 1, ch );
 		offset++;
@@ -2346,7 +2346,7 @@ void UIText::SyncRenderDataToLocalText()
 			mRenderData.append( 1, ch2);
 		}
 		if(!mComposition.empty())
-			mRenderData.append(L"\\#.");
+			mRenderData.append(u"\\#.");
 	}
 }
 

@@ -109,8 +109,8 @@ template <class _Tp, class _Sequence = ui_stddeque<_Tp>::fwd > struct ui_stdstac
 
 namespace Unicode
 {
-	using unicode_char_t = wchar_t;      // 2-byte UTF-16 on Windows
-	using String = std::wstring;         // std::basic_string<wchar_t>
+	using unicode_char_t = char16_t; 
+	using String = std::u16string;
 }
 
 // ======================================================================

@@ -256,7 +256,14 @@ libMozilla::Window* SwgCuiWebBrowserWidget::getMozillaWindow()
 
 			m_MozillaWindow->setCallback(m_Callbacks);
 
-			m_MozillaWindow->navigateTo(Unicode::narrowToWide(s_homePage).c_str());
+
+			Unicode::String uri16 = Unicode::narrowToWide(s_homePage);
+
+			m_MozillaWindow->navigateTo(
+				reinterpret_cast<const wchar_t*>(uri16.c_str()),
+				nullptr,
+				0
+			);
 		}
 
 	}
@@ -311,7 +318,14 @@ void SwgCuiWebBrowserWidget::setURL( std::string url, const char * postData, int
 	if(!m_MozillaWindow)
 		return;
 
-	m_MozillaWindow->navigateTo(Unicode::narrowToWide(url).c_str(), postData, postDataLength);
+
+	Unicode::String uri16 = Unicode::narrowToWide(url);
+
+	m_MozillaWindow->navigateTo(
+		reinterpret_cast<const wchar_t*>(uri16.c_str()),
+		postData,
+		postDataLength
+	);
 
 }
 
