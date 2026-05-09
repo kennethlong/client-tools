@@ -9,7 +9,9 @@
 #define INCLUDED_CuiMediatorFactory_Constructor_H
 
 #include "clientUserInterface/CuiMediatorFactory_ConstructorBase.h"
+#include "clientUserInterface/CuiMediator.h"
 #include "UIPage.h"
+#include "UIManager.h"
 
 // ======================================================================
 

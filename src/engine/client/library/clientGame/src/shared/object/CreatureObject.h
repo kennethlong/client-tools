@@ -12,17 +12,18 @@
 
 // ======================================================================
 
+#include "sharedSkillSystem/SkillObjectArchive.h"
+#include "sharedMathArchive/VectorArchive.h"
+#include "sharedGame/CraftingDataArchive.h"
+#include "sharedGame/WearableEntry.h"
+#include "sharedGame/Buff.h"
+
 #include "Archive/AutoDeltaMap.h"
 #include "Archive/AutoDeltaSet.h"
 #include "clientGame/TangibleObject.h"
 #include "clientObject/ShadowBlobObject.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Timer.h"
-#include "sharedGame/Buff.h"
-#include "sharedGame/CraftingDataArchive.h"
+#include "sharedFoundation/Timer.h"
 #include "sharedGame/ShipChassisSlotType.h"
-#include "sharedGame/WearableEntry.h"
-#include "sharedMathArchive/VectorArchive.h"
-#include "sharedSkillSystem/SkillObjectArchive.h"
 #include "swgSharedUtility/Attributes.def"
 #include "swgSharedUtility/Locomotions.def"
 

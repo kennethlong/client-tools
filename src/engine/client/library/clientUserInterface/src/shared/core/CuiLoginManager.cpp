@@ -30,6 +30,7 @@
 #include "sharedMessageDispatch/Receiver.h"
 #include "sharedMessageDispatch/Transceiver.h"
 #include "sharedNetwork/UdpSock.h"
+#include "sharedNetworkMessages/ClientCentralMessagesArchive.h"
 #include "sharedNetworkMessages/ClientCentralMessages.h"
 #include "sharedNetworkMessages/ClientPermissionsMessage.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"

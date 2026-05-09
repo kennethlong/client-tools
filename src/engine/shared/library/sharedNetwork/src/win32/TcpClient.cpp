@@ -189,7 +189,7 @@ void TcpClient::commit(const unsigned char * const buffer, const int bufferLen)
 		if(sent == SOCKET_ERROR)
 		{
 			int errCode = WSAGetLastError();
-			char * err;
+			const char* err;
 			if(errCode != WSA_IO_PENDING)
 			{
 				switch(errCode)
@@ -421,7 +421,7 @@ void TcpClient::queueReceive()
 	if(result == SOCKET_ERROR)
 	{
 		int errCode = WSAGetLastError();
-		char * err;
+		const char * err;
 		if(errCode != WSA_IO_PENDING)
 		{
 			switch(errCode)

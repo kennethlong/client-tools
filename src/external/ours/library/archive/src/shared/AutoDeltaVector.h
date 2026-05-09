@@ -307,9 +307,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onChanged()
 	{
 		if(onChangedCallback->first)
 		{
-			ObjectType & owner = *onChangedCallback->first;
+			ObjectType & callbackOwner = *onChangedCallback->first;
 			void (ObjectType::*cb)() = onChangedCallback->second;
-			(owner.*cb)();
+			(callbackOwner.*cb)();
 		}
 	}
 }
@@ -323,9 +323,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onErase(const unsigned int e
 	{
 		if(onEraseCallback->first)
 		{
-			ObjectType & owner = *onEraseCallback->first;
+			ObjectType & callbackOwner = *onEraseCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &) = onEraseCallback->second;
-			(owner.*cb)(element, oldValue);
+			(callbackOwner.*cb)(element, oldValue);
 		}
 	}
 }
@@ -339,9 +339,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onInsert(const unsigned int 
 	{
 		if(onInsertCallback->first)
 		{
-			ObjectType & owner = *onInsertCallback->first;
+			ObjectType & callbackOwner = *onInsertCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &) = onInsertCallback->second;
-			(owner.*cb)(element, newValue);
+			(callbackOwner.*cb)(element, newValue);
 		}
 	}
 }
@@ -355,9 +355,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onSet(const unsigned int ele
 	{
 		if(onSetCallback->first)
 		{
-			ObjectType & owner = *onSetCallback->first;
+			ObjectType & callbackOwner = *onSetCallback->first;
 			void (ObjectType::*cb)(const unsigned int, const ValueType &, const ValueType &) = onSetCallback->second;
-			(owner.*cb)(element, oldValue, newValue);
+			(callbackOwner.*cb)(element, oldValue, newValue);
 		}
 	}
 }
@@ -367,12 +367,14 @@ inline void AutoDeltaVector<ValueType, ObjectType>::onSet(const unsigned int ele
 template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target) const
 {
-	Archive::put(target, v.size());
-	Archive::put(target, baselineCommandCount);
+	using Archive::put;
+
+	put(target, v.size());
+	put(target, baselineCommandCount);
 	typename std::vector<ValueType>::const_iterator i;
 	for (i = v.begin(); i != v.end(); ++i)
 	{
-		Archive::put(target, (*i));
+		put(target, (*i));
 	}
 }
 
@@ -381,12 +383,14 @@ inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target) co
 template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target, const std::vector<ValueType> & data)
 {
-	Archive::put(target, data.size());
-	Archive::put(target, static_cast<size_t>(0)); // baselineCommandCount
+	using Archive::put;
+
+	put(target, data.size());
+	put(target, static_cast<size_t>(0)); // baselineCommandCount
 	typename std::vector<ValueType>::const_iterator i;
 	for (i = data.begin(); i != data.end(); ++i)
 	{
-		Archive::put(target, *i);
+		put(target, *i);
 	}	
 }
 
@@ -395,34 +399,36 @@ inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target, co
 template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::packDelta(ByteStream & target) const
 {
-	Archive::put(target, commands.size());
-	Archive::put(target, baselineCommandCount);
+	using Archive::put;
+
+	put(target, commands.size());
+	put(target, baselineCommandCount);
 	typename std::vector<Command>::iterator i;
 
 	for (i = commands.begin(); i != commands.end(); ++i)
 	{
 		const Command & c = (*i);
-		Archive::put(target, c.cmd);
+		put(target, c.cmd);
 		switch(c.cmd)
 		{
 		case Command::ERASE:
-			Archive::put(target, c.index);
+			put(target, c.index);
 			break;
 		case Command::INSERT:
-			Archive::put(target, c.index);
-			Archive::put(target, c.value);
+			put(target, c.index);
+			put(target, c.value);
 			break;
 		case Command::SET:
-			Archive::put(target, c.index);
-			Archive::put(target, c.value);
+			put(target, c.index);
+			put(target, c.value);
 			break;
 		case Command::SETALL:
 			{
-				Archive::put(target, c.index); // size
+				put(target, c.index); // size
 				for (unsigned int j = 0; j < c.index; ++j)
 				{
 					++i;
-					Archive::put(target, (*i).value);
+					put(target, (*i).value);
 				}
 			}
 			break;
@@ -625,12 +631,14 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpack(ReadIterator & source
 	size_t commandCount;
 	ValueType value;
 
-	Archive::get(source, commandCount);
-	Archive::get(source, baselineCommandCount);
+	using Archive::get;
+
+	get(source, commandCount);
+	get(source, baselineCommandCount);
 
 	for (size_t i = 0; i < commandCount; ++i)
 	{
-		Archive::get(source, value);
+		get(source, value);
 		v.push_back(value);
 	}
 
@@ -647,12 +655,14 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpack(ReadIterator & source
 	size_t bcc;
 	Command c;
 
-	Archive::get(source, commandCount);
-	Archive::get(source, bcc);
+	using Archive::get;
+
+	get(source, commandCount);
+	get(source, bcc);
 
 	for (size_t i = 0; i < commandCount; ++i)
 	{
-		Archive::get(source,c.value);
+		get(source,c.value);
 		c.index = static_cast<unsigned short int>(i);
 		c.cmd = Command::INSERT;
 		
@@ -668,24 +678,26 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & s
 	Command c;
 	size_t commandCount, targetBaselineCommandCount;
 
-	Archive::get(source, commandCount);
-	Archive::get(source, targetBaselineCommandCount);
+	using Archive::get;
+
+	get(source, commandCount);
+	get(source, targetBaselineCommandCount);
 
 	for (size_t i=0 ; i < commandCount; ++i)
 	{
-		Archive::get(source, c.cmd);
+		get(source, c.cmd);
 		switch (c.cmd)
 		{
 			case Command::ERASE:
-				Archive::get(source, c.index);
+				get(source, c.index);
 				break;
 			case Command::INSERT:
-				Archive::get(source, c.index);
-				Archive::get(source, c.value);
+				get(source, c.index);
+				get(source, c.value);
 				break;
 			case Command::SET:
-				Archive::get(source, c.index);
-				Archive::get(source, c.value);
+				get(source, c.index);
+				get(source, c.value);
 				break;
 			case Command::SETALL: // SETALL is not supported by the static AutoDeltaVector unpack function, because there's no place to put the value
 				assert(false);
@@ -707,8 +719,10 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & s
 	Command c;
 	size_t skipCount, commandCount, targetBaselineCommandCount;
 
-	Archive::get(source, commandCount);
-	Archive::get(source, targetBaselineCommandCount);
+	using Archive::get;
+
+	get(source, commandCount);
+	get(source, targetBaselineCommandCount);
 
 	skipCount = commandCount+baselineCommandCount-targetBaselineCommandCount;
 
@@ -719,55 +733,55 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & s
 	size_t i;
 	for (i = 0; i < skipCount; ++i)
 	{
-		Archive::get(source, c.cmd);
+		get(source, c.cmd);
 		if (c.cmd != Command::CLEAR)
-			Archive::get(source, c.index);
+			get(source, c.index);
 		if (c.cmd == Command::SETALL)
 		{
 			for (unsigned int j = 0; j < c.index; ++j)
 			{
 				++i;
-				Archive::get(source, c.value);
+				get(source, c.value);
 			}
 		}
 		else if (c.cmd != Command::ERASE && c.cmd != Command::CLEAR)
-			Archive::get(source, c.value);
+			get(source, c.value);
 	}
 	for ( ; i < commandCount; ++i)
 	{
-		Archive::get(source, c.cmd);
+		get(source, c.cmd);
 		switch (c.cmd)
 		{
 		case Command::ERASE:
 			{
-				Archive::get(source, c.index);
+				get(source, c.index);
 				AutoDeltaVector::erase(c.index);
 			}
 			break;
 		case Command::INSERT:
 			{
-				Archive::get(source, c.index);
-				Archive::get(source, c.value);
+				get(source, c.index);
+				get(source, c.value);
 				AutoDeltaVector::insert(c.index, c.value);
 			}
 			break;
 		case Command::SET:
 			{
-				Archive::get(source, c.index);
-				Archive::get(source, c.value);
+				get(source, c.index);
+				get(source, c.value);
 				AutoDeltaVector::set(c.index, c.value);
 			}
 			break;
 		case Command::SETALL:
 			{
-				Archive::get(source, c.index); // size
+				get(source, c.index); // size
 				VectorType tempVec;
 				tempVec.reserve(c.index);
 				ValueType value;
 				for (unsigned int j = 0; j < c.index; ++j)
 				{
 					++i;
-					Archive::get(source, value);
+					get(source, value);
 					tempVec.push_back(value);
 				}
 				AutoDeltaVector::set(tempVec);

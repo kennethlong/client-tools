@@ -17,23 +17,24 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{C6C1E14A-DEDB-48C6-B028-0C9E4EFF5DC4}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -69,13 +70,13 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;ENABLE_MOZILLA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeader />
@@ -90,6 +91,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -107,12 +109,12 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;ENABLE_MOZILLA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeader />
@@ -127,6 +129,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -144,12 +147,12 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\include\private;..\..\include\public;..\..\include\private\include;..\..\include\private\sdk\include;..\..\include\private\include\commandhandler;..\..\include\private\include\content;..\..\include\private\include\docshell;..\..\include\private\include\dom;..\..\include\private\include\embed_base;..\..\include\private\include\gfx;..\..\include\private\include\layout;..\..\include\private\include\locale;..\..\include\private\include\necko;..\..\include\private\include\nkcache;..\..\include\private\include\pref;..\..\include\private\include\profdirserviceprovider;..\..\include\private\include\string;..\..\include\private\include\uriloader;..\..\include\private\include\view;..\..\include\private\include\widget;..\..\include\private\include\xpcom;..\..\include\private\include\xulapp;..\..\include\private\include\xuldoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_MBCS;DEBUG_LEVEL=0;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;ENABLE_MOZILLA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeader />
@@ -164,6 +167,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>

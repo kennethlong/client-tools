@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.40629.0
+# Visual Studio Version 18
+VisualStudioVersion = 18.1.11312.151 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AnimationEditor", "..\..\engine\client\application\AnimationEditor\build\win32\AnimationEditor.vcxproj", "{AB9A58E2-734B-45E4-B4BB-C7E9FF6ACA3F}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -2289,8 +2289,8 @@ Global
 		{7927E450-9A0C-46B3-ABF3-34384D6F54CD}.Release|Win32.Build.0 = Release|Win32
 		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Debug|Win32.ActiveCfg = Debug|Win32
 		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Debug|Win32.Build.0 = Debug|Win32
-		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Optimized|Win32.ActiveCfg = IntelCPP|Win32
-		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Optimized|Win32.Build.0 = IntelCPP|Win32
+		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Optimized|Win32.ActiveCfg = Release|Win32
+		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Optimized|Win32.Build.0 = Release|Win32
 		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Release|Win32.ActiveCfg = Release|Win32
 		{17C00DDF-0E33-40DD-94E8-9A300C9BC15D}.Release|Win32.Build.0 = Release|Win32
 		{F84C0A87-E06D-4568-B188-D820FBA2BB25}.Debug|Win32.ActiveCfg = Debug|Win32

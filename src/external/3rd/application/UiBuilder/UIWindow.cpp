@@ -11,6 +11,7 @@
 #include "UIUndo.h"
 #include "UIWidget.h"
 #include "UIUtils.h"
+#include "UIRenderGlobals.h"
 
 #include <cmath>
 #include <commctrl.h>
@@ -80,7 +81,6 @@ extern HWND                      gObjectTree;
 extern HWND                      gMainWindow;
 extern HWND                      gTooltip;
 extern ObjectInspector          *gObjectInspector;
-extern UIDirect3DPrimaryCanvas  *gPrimaryDisplay;
 
 const char *gVisualEditLockPropertyName = "VisualEditLock";
 

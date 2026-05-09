@@ -132,7 +132,10 @@ void Clock::install(bool newUseSleep, bool useRecalibrationThread)
 
 	time_t t = 0;
 	localtime(&t);
-	ms_timeZone = timezone;
+
+	long timeZone = 0;
+	_get_timezone(&timeZone);
+	ms_timeZone = timeZone;
 	if(ms_timeZone < (12 * 60 * 60))
 	{
 		ms_timeZone = -ms_timeZone;

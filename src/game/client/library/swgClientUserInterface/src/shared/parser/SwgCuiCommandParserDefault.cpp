@@ -368,7 +368,7 @@ struct StrEqualsNoCase
 
 	bool                    operator() (const SwgCuiCommandParserDefault::AliasMap_t::value_type & t) const
 	{
-		return !_wcsicmp (str.c_str (), t.first.c_str ());
+		return !UIUnicode::icmp(str.c_str (), t.first.c_str ());
 	}
 
 	                        StrEqualsNoCase (const StrEqualsNoCase & rhs) : str (rhs.str) {}
@@ -392,7 +392,7 @@ struct StrEqualsNoCaseSet
 
 	bool                    operator() (const SwgCuiCommandParserDefault::AliasGuardSet_t::value_type & t) const
 	{
-		return !_wcsicmp (str.c_str (), t.c_str ());
+		return !UIUnicode::icmp(str.c_str (), t.c_str ());
 	}
 
 	                        StrEqualsNoCaseSet (const StrEqualsNoCaseSet & rhs) : str (rhs.str) {}
@@ -710,7 +710,9 @@ bool SwgCuiCommandParserDefault::performParsing (const NetworkId & userId, const
 
 		for  (size_t i = 0; i < argv.size (); ++i)
 		{
-			IGNORE_RETURN (s.append (argv [i].begin (), argv[i].end ()).append (1, ' '));
+			const Unicode::NarrowString argN = Unicode::wideToNarrow(argv[i]);
+			s.append(argN);
+			s.push_back(' ');
 		}
 
 		ConGenericMessage m (s);

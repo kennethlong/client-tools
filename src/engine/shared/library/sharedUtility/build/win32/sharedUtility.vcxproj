@@ -18,23 +18,24 @@
     <ProjectGuid>{52DF0D16-D070-47FC-B987-8D80B027D114}</ProjectGuid>
     <RootNamespace>sharedUtility</RootNamespace>
     <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -70,13 +71,13 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeaderFile>sharedUtility\FirstSharedUtility.h</PrecompiledHeaderFile>
@@ -90,6 +91,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -107,12 +109,12 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeaderFile>sharedUtility\FirstSharedUtility.h</PrecompiledHeaderFile>
@@ -126,6 +128,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -143,12 +146,12 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedXml\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_MBCS;DEBUG_LEVEL=0;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeaderFile>sharedUtility\FirstSharedUtility.h</PrecompiledHeaderFile>
@@ -162,6 +165,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -237,6 +241,7 @@
     <ClCompile Include="..\..\src\shared\OptionManager.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\PackedArchive.cpp" />
     <ClCompile Include="..\..\src\shared\PackedFixedPointMap.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -331,6 +336,7 @@
     <ClInclude Include="..\..\src\shared\NameGenerator.h" />
     <ClInclude Include="..\..\src\shared\NetworkIdAutoDeltaPackedMap.h" />
     <ClInclude Include="..\..\src\shared\OptionManager.h" />
+    <ClInclude Include="..\..\src\shared\PackedArchive.h" />
     <ClInclude Include="..\..\src\shared\PackedFixedPointMap.h" />
     <ClInclude Include="..\..\src\shared\PackedIntegerMap.h" />
     <ClInclude Include="..\..\src\shared\PackedPosition.h" />

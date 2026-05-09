@@ -470,7 +470,7 @@ DPVS_FORCE_INLINE float Matrix4x4::getMaxScale (void) const
 #if defined (DPVS_PS2_VU_ASSEMBLY)
 //PS2-BEGIN
 	DPVS_ASSERT( is128Aligned(this) );
-	register float ret;
+	float ret;
 	asm __volatile__ ("lqc2		vf11, 0(%1);lqc2 vf12, 0x10(%1);lqc2 vf13, 0x20(%1); vmula.xyz	ACC, vf11, vf11; vmadda.xyz	ACC, vf12, vf12; vmadd.xyz vf1, vf13, vf13; vmaxy.x	vf2, vf1, vf1; vmaxz.x vf2, vf2, vf1;qmfc2	%1, vf2;mtc1 %1, %0; sqrt.s	%0, %0" : "=f"(ret) : "r"(&m[0][0]) );
 	return ret;
 //PS2-END
@@ -541,7 +541,7 @@ DPVS_FORCE_INLINE void Matrix4x3::productFromLeft (const Matrix4x3& n)
 
 	for (int i =0; i < 4; i++)
 	{
-		register float a = m[0][i], b = m[1][i], c = m[2][i];
+		float a = m[0][i], b = m[1][i], c = m[2][i];
 		m[0][i] = n.m[0][0]*a + n.m[0][1]*b + n.m[0][2]*c;
 		m[1][i] = n.m[1][0]*a + n.m[1][1]*b + n.m[1][2]*c;
 		m[2][i] = n.m[2][0]*a + n.m[2][1]*b + n.m[2][2]*c;
@@ -560,9 +560,9 @@ DPVS_FORCE_INLINE bool Matrix4x3::operator== (const Matrix4x3& n) const
 
 DPVS_FORCE_INLINE float Matrix4x3::getMaxScale (void) const
 {
-	register float xs = (m[0][0]*m[0][0] + m[1][0]*m[1][0] + m[2][0]*m[2][0]); 
-	register float ys = (m[0][1]*m[0][1] + m[1][1]*m[1][1] + m[2][1]*m[2][1]); 
-	register float zs = (m[0][2]*m[0][2] + m[1][2]*m[1][2] + m[2][2]*m[2][2]); 
+	float xs = (m[0][0]*m[0][0] + m[1][0]*m[1][0] + m[2][0]*m[2][0]); 
+	float ys = (m[0][1]*m[0][1] + m[1][1]*m[1][1] + m[2][1]*m[2][1]); 
+	float zs = (m[0][2]*m[0][2] + m[1][2]*m[1][2] + m[2][2]*m[2][2]); 
 	return Math::sqrt(Math::max(Math::max(xs,ys),zs)); 
 }
 
@@ -699,7 +699,7 @@ DPVS_FORCE_INLINE void Matrix4x4::productFromLeft (const Matrix4x4& n)
 
 	for (int i = 0; i < 4; i++)
 	{
-		register float a = m[0][i], b = m[1][i], c = m[2][i], d = m[3][i];
+		float a = m[0][i], b = m[1][i], c = m[2][i], d = m[3][i];
 		m[0][i] = n.m[0][0]*a + n.m[0][1]*b + n.m[0][2]*c + n.m[0][3]*d;
 		m[1][i] = n.m[1][0]*a + n.m[1][1]*b + n.m[1][2]*c + n.m[1][3]*d;
 		m[2][i] = n.m[2][0]*a + n.m[2][1]*b + n.m[2][2]*c + n.m[2][3]*d;
@@ -714,7 +714,7 @@ DPVS_FORCE_INLINE bool Matrix4x4::isUniform (void) const
 #if defined (DPVS_PS2_VU_ASSEMBLY)
 //PS2-BEGIN
 
-	register float err = 0.0001f;
+	float err = 0.0001f;
 	register int ret = 0;
 	asm __volatile__ (
 	"	addi		%0, $0, 1"

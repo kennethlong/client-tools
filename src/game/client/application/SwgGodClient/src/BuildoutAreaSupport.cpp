@@ -34,7 +34,7 @@
 #include "ConfigGodClient.h"
 #include "MainFrame.h"
 #include "ServerObjectData.h"
-#include <hash_set>
+#include <unordered_Set>
 #include <string>
 
 // ======================================================================
@@ -54,7 +54,7 @@ namespace BuildoutAreaSupportNamespace
 	bool s_unlockAll = false;
 	bool s_unlockNonStructures = false;
 	bool s_unlockServerOnly = false;
-	std::hash_set<int> s_unlockedIds;
+	std::unordered_set<int> s_unlockedIds;
 
 	typedef std::map< NetworkId, const BuildoutArea * > AreaIdMap;
 	AreaIdMap          s_areaIdMap;

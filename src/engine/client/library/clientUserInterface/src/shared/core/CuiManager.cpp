@@ -127,7 +127,7 @@ namespace CuiManagerNamespace
 		Unicode::UnicodeStringVector::const_iterator itToken;
 		for (itToken = effectTokens.begin(); itToken != effectTokens.end(); ++itToken)
 		{
-			if (_wcsnicmp((*itToken).c_str(), token.c_str(), token.size()) == 0)
+			if (UIUnicode::nicmp((*itToken).c_str(), token.c_str(), token.size()) == 0)
 			{
 				break;
 			}
@@ -141,7 +141,7 @@ namespace CuiManagerNamespace
 		// Ensure we have a properly formatted string.
 		Unicode::String const & assignementString = *(itToken + 1);
 		UIString const & assignmentToken = UIManager::gUIManager().getEffectToken(UIManager::EFTKN_Assignment);
-		if (_wcsnicmp(assignementString.c_str(), assignmentToken.c_str(), assignmentToken.size()) != 0)
+		if (UIUnicode::nicmp(assignementString.c_str(), assignmentToken.c_str(), assignmentToken.size()) != 0)
 		{
 			return false;
 		}
@@ -1483,7 +1483,7 @@ void CuiManager::playUiEffect(std::string const & effect, Object * /*target*/)
 		bool resetEffectors = false;
 		if(getTokenValue(effectTokens, UIManager::gUIManager().getEffectToken(UIManager::EFTKN_Reset), resetToken))
 		{
-			resetEffectors = _wcsnicmp(resetToken.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
+			resetEffectors = UIUnicode::nicmp(resetToken.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
 		}
 
 		//-- Cancel.
@@ -1491,7 +1491,7 @@ void CuiManager::playUiEffect(std::string const & effect, Object * /*target*/)
 		bool cancelEffector = false;
 		if(getTokenValue(effectTokens, UIManager::gUIManager().getEffectToken(UIManager::EFTKN_Cancel), cancelToken))
 		{
-			cancelEffector = _wcsnicmp(cancelToken.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
+			cancelEffector = UIUnicode::nicmp(cancelToken.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
 		}
 
 		//-- Set active.
@@ -1499,7 +1499,7 @@ void CuiManager::playUiEffect(std::string const & effect, Object * /*target*/)
 		bool setVisible = true;
 		if(getTokenValue(effectTokens, UIManager::gUIManager().getEffectToken(UIManager::EFTKN_Active), activatePage))
 		{
-			setVisible = _wcsnicmp(activatePage.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
+			setVisible = UIUnicode::nicmp(activatePage.c_str(), s_booleanTrue.c_str(), s_booleanTrue.size()) == 0;
 			targetPage->SetVisible(setVisible);
 		}
 

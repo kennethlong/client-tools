@@ -6634,7 +6634,7 @@ void CreatureObject::verifyWornAppearanceItems()
 			for(int i = 0; i < skeleAppearance->getWearableCount(); ++i)
 			{
 				TangibleObject const * currentItem = dynamic_cast<TangibleObject const *>(skeleAppearance->getWearableObject(i));
-				wornAppearanceMap.insert(std::make_pair<NetworkId, TangibleObject const *>(currentItem->getNetworkId(), currentItem));
+				wornAppearanceMap.insert(std::make_pair(currentItem->getNetworkId(), currentItem));
 			}
 
 			for (unsigned int k = 0; k < m_wearableAppearanceData.size(); ++k) // go through our streamed wearables

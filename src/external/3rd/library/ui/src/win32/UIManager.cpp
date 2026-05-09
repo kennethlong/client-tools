@@ -31,7 +31,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
-#include <hash_map>
+#include <unordered_map>
 #include <list>
 #include <map>
 #include <set>
@@ -219,7 +219,7 @@ void UIManager::ContextInfo::reset ()
 
 struct UIManager::StringTokenMapping
 {
-	typedef std::hash_map<UIString, UINarrowString>  Container;
+	typedef std::unordered_map<UIString, UINarrowString>  Container;
 	Container c;
 };
 
@@ -479,13 +479,13 @@ void UIManager::SendHeartbeats ()
 				if (mMouseDownControl)
 					ResetTooltipCountdown ();
 				else
-					mCountdownToTooltip = std::max (0L, mCountdownToTooltip - Ticks);
+					mCountdownToTooltip = std::max(0L, mCountdownToTooltip - Ticks);
 				
 				//-- handle hoverpress
 				
 				if (!mHoverPressComplete && mDraggedControl)
 				{
-					mCountdownToHoverPress = std::max (0L, mCountdownToHoverPress - Ticks);
+					mCountdownToHoverPress = std::max(0L, mCountdownToHoverPress - Ticks);
 					
 					if (mCountdownToHoverPress == 0)
 					{
@@ -777,7 +777,7 @@ bool UIManager::ProcessMessage (const UIMessage &Msg)
 
 		//----------------------------------------------------------------------
 
-		if( Msg.Modifiers.and (*mDragModifier) )
+		if( Msg.Modifiers.Matches(*mDragModifier) )
 		{
 			if( mDraggedControl )
 			{
@@ -1133,21 +1133,22 @@ bool UIManager::ProcessMessage (const UIMessage &Msg)
 
 					listbox->Clear();
 
-					std::vector<Unicode::String> &candidates = UIManager::getUIIMEManager()->GetCandidateList();
-					for (unsigned int i = 0; i < candidates.size(); i++)
+					std::vector<Unicode::String>& candidates =
+						UIManager::getUIIMEManager()->GetCandidateList();
+
+					for (size_t i = 0; i < candidates.size(); ++i)
 					{
-						unsigned short num[2];
+						// Build number prefix: "1", "2", ..., "9", "0"
+						char16_t numChar = static_cast<char16_t>(u'0' + ((i + 1) % 10));
 
-						num[0] = (unsigned short) (L'0' + ((i + 1) % 10));
-						num[1] = 0;
-			
-						UIString str = candidates[i];
-						
-						unsigned short buf[512];
-						_snwprintf(buf, sizeof(buf) - 1, L"%s\\>032%s", num, str.c_str());
-						
-						listbox->AddRow(Unicode::String(buf), "Candidate");
+						Unicode::String row;
+						row.reserve(1 + 4 + candidates[i].size());
 
+						row.push_back(numChar);
+						row.append(u"\\>032");
+						row.append(candidates[i]);
+
+						listbox->AddRow(row, "Candidate");
 					}
 
 					if (listbox)
@@ -2256,7 +2257,7 @@ UIIMEManager *UIManager::getUIIMEManager()
 
 char const * UIManager::GetLocaleString() const
 {
-	char * localName = NULL;
+	const char * localName = NULL;
 
 	switch(mLocale) 
 	{

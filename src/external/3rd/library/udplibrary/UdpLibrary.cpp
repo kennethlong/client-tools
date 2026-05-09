@@ -263,8 +263,7 @@ UdpManager::UdpManager(const UdpManager::Params *params)
 	typedef PacketHistoryEntry *PacketHistoryEntryPtr;
 	mPacketHistory = new PacketHistoryEntryPtr[mParams.packetHistoryMax];
 
-	int i;
-	for (i = 0; i < mParams.packetHistoryMax; i++)
+	for (int i = 0; i < mParams.packetHistoryMax; i++)
 	{
 		mPacketHistory[i] = new PacketHistoryEntry(mParams.maxRawPacketSize);
 	}
@@ -291,7 +290,7 @@ UdpManager::UdpManager(const UdpManager::Params *params)
 	mWrappedAvailableRoot = NULL;
 	mWrappedCreatedRoot = NULL;
 
-	for (i = 0; i < mParams.pooledPacketInitial && i < mParams.pooledPacketMax; i++)
+	for (int i = 0; i < mParams.pooledPacketInitial && i < mParams.pooledPacketMax; i++)
 	{
 		mPoolCreated++;
 		PooledLogicalPacket *lp = new PooledLogicalPacket(this, mParams.pooledPacketSize);
@@ -2878,7 +2877,7 @@ void UdpConnection::GetChannelStatus(UdpChannel channel, ChannelStatus *channelS
 const char *UdpConnection::DisconnectReasonText(DisconnectReason reason)
 {
 	static bool sInitialized = false;
-	static char *sDisconnectReason[cDisconnectReasonCount];
+	static const char *sDisconnectReason[cDisconnectReasonCount];
 	
 	if (!sInitialized)
 	{

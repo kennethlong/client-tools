@@ -17,23 +17,24 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{DECF2964-3A66-4FA6-AB27-D4507C5480EA}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -69,9 +70,9 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -88,7 +89,8 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Lib>
       <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
@@ -106,9 +108,9 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
@@ -124,7 +126,8 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Lib>
       <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
@@ -142,7 +145,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\stlport453\stlport;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\engine\server\library\serverGame\include\public;..\..\..\..\..\..\engine\shared\library\sharedNetwork\include\public;..\..\..\..\..\..\external\3rd\library\boost;..\..\..\..\..\..\external\ours\library\archive\include;..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\ours\library\localization\include;..\..\..\..\..\..\external\ours\library\localizationArchive\include\public;..\..\..\..\..\..\external\ours\library\singleton\include;..\..\..\..\..\..\external\ours\library\unicode\include;..\..\..\..\..\..\external\ours\library\unicodeArchive\include\public;..\..\..\..\..\..\game\server\library\swgServerNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedNetworkMessages\include\public;..\..\..\..\..\..\game\shared\library\swgSharedUtility\include\public;..\..\..\sharedDebug\include\public;..\..\..\sharedFile\include\public;..\..\..\sharedFoundation\include\public;..\..\..\sharedFoundationTypes\include\public;..\..\..\sharedGame\include\public;..\..\..\sharedMath\include\public;..\..\..\sharedMathArchive\include\public;..\..\..\sharedMemoryManager\include\public;..\..\..\sharedMessageDispatch\include\public;..\..\..\sharedObject\include\public;..\..\..\sharedRandom\include\public;..\..\..\sharedSynchronization\include\public;..\..\..\sharedUtility\include\public;..\..\include\private;..\..\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_MBCS;DEBUG_LEVEL=0;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -160,7 +163,8 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>true</UseFullPaths>
-      <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Lib>
       <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
@@ -241,6 +245,8 @@
     <ClCompile Include="..\..\src\shared\chat\ChatKickAvatarFromRoom.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\chat\ChatLogEntry.cpp" />
+    <ClCompile Include="..\..\src\shared\chat\ChatLogEntryArchive.cpp" />
     <ClCompile Include="..\..\src\shared\chat\ChatMessageFromGame.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -400,9 +406,11 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\AIDebuggingMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\AttributeListMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\AuctionDataArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQueryHeadersMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -415,6 +423,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQueryResponseMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\AuctionQueryArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\BidAuctionMessage.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -435,6 +444,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\ClientCentralMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\ClientCentralMessagesArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\ClientEffectMessages.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -834,6 +844,7 @@
     <ClCompile Include="..\..\src\shared\clientGameServer\MessageRegionListResponse.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="..\..\src\shared\clientGameServer\NebulaLightningArchive.cpp" />
     <ClCompile Include="..\..\src\shared\clientGameServer\NebulaLightningData.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -1198,6 +1209,8 @@
     <ClInclude Include="..\..\src\shared\chat\ChatInviteGroupMembersToRoom.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatInviteGroupToRoom.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatKickAvatarFromRoom.h" />
+    <ClInclude Include="..\..\src\shared\chat\ChatLogEntry.h" />
+    <ClInclude Include="..\..\src\shared\chat\ChatLogEntryArchive.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatMessageFromGame.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatOnAddFriend.h" />
     <ClInclude Include="..\..\src\shared\chat\ChatOnAddModeratorToRoom.h" />
@@ -1251,13 +1264,18 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\AddMapLocationMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AddMapLocationResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessages.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchive.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AIDebuggingMessagesArchiveTypes.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AttributeListMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionData.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AuctionDataArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionErrorCodes.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryHeadersMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryHeadersResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryResponseMessage.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryTypes.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\AuctionQueryArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BidAuctionMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BidAuctionResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\BuffBuilderChangeMessage.h" />
@@ -1266,6 +1284,8 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\CancelLiveAuctionResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\CharacterSheetResponseMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\ClientCentralMessages.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\ClientCentralMessagesArchive.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\ClientCentralMessagesTypes.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\ClientEffectMessages.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\ClientMfdStatusUpdateMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\ClientOpenContainerMessage.h" />
@@ -1401,6 +1421,7 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListRectResponse.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListRequest.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\MessageRegionListResponse.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningData.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NebulaLightningHitData.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\NewbieTutorialEnableHudElement.h" />
@@ -1438,6 +1459,8 @@
     <ClInclude Include="..\..\src\shared\clientGameServer\SlowDownEffectMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\StatMigrationTargetsMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\StomachRequestMessage.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\SuiCreatePageCommand.h" />
+    <ClInclude Include="..\..\src\shared\clientGameServer\SuiCreatePageCommandArchive.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\SuiCreatePageMessage.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\SuiEventNotification.h" />
     <ClInclude Include="..\..\src\shared\clientGameServer\SuiUpdatePageMessage.h" />

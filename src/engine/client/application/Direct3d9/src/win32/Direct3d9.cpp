@@ -3922,7 +3922,7 @@ inline bool Direct3d9::drawPrimitive()
 		if (ms_alphaBlendEnable)
 			Direct3d9_StateCache::setRenderState(D3DRS_COLORWRITEENABLE, ms_colorWriteEnable);
 		else
-			Direct3d9_StateCache::setRenderState(D3DRS_COLORWRITEENABLE, ms_colorWriteEnable & ~D3DCOLORWRITEENABLE_ALPHA);
+			Direct3d9_StateCache::setRenderState(D3DRS_COLORWRITEENABLE, static_cast<DWORD>(ms_colorWriteEnable) & ~static_cast<DWORD>(D3DCOLORWRITEENABLE_ALPHA));
 		Direct3d9_StateCache::setRenderState(D3DRS_ALPHABLENDENABLE, true);
 		Direct3d9_StateCache::setRenderState(D3DRS_ALPHAREF, static_cast<DWORD>(static_cast<float>(ms_alphaTestReferenceValue) * ms_alphaFadeOpacity.a));
 	}

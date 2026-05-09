@@ -11,6 +11,8 @@
 
 #define TRACK_FILL_CALLS 0
 
+// Disable deprecated auto_ptr support for modern C++
+#define BOOST_NO_AUTO_PTR
 #include "boost/smart_ptr.hpp"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/GraphicsOptionTags.h"
@@ -2271,7 +2273,7 @@ void SkeletalMeshGeneratorTemplate::load_0002(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -2564,7 +2566,7 @@ void SkeletalMeshGeneratorTemplate::load_0003(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -2900,7 +2902,7 @@ void SkeletalMeshGeneratorTemplate::load_0004(Iff &iff)
 
 		//-- make sure our PerShaderData scratchpad array has enough space
 		NOT_NULL(ms_perShaderDataScratchpad);
-		ms_perShaderDataScratchpad->reserve(static_cast<size_t>(perShaderDataCount));
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
 
 		//-- load skeleton template names required on the skeleton to which this mesh is bound
 		iff.enterChunk(TAG_SKTM);
@@ -3746,7 +3748,7 @@ void SkeletalMeshGeneratorTemplate::fillMeshConstructionHelper(
 		for (IntVectorVector::const_iterator vectorIt = m_occlusionZoneCombinations.begin(); vectorIt != vectorItEnd; ++vectorIt, ++combinationIndex)
 		{
 			//-- test if this set of occlusion zones currently is occluded
-			(*ms_combinationsOccluded)[combinationIndex] = zonesCurrentlyOccluded.allZonesPresent(*vectorIt); //lint !e1058 // (Error -- Initializing a non-const reference '_STL::_Bit_reference &' with a non-lvalue) // I think lint is confused
+			(*ms_combinationsOccluded)[combinationIndex] = zonesCurrentlyOccluded.allZonesPresent(*vectorIt); //lint !e1058 // (Error -- Initializing a non-const reference 'std::_Bit_reference &' with a non-lvalue) // I think lint is confused
 		}
 	}
 
@@ -3872,7 +3874,10 @@ void SkeletalMeshGeneratorTemplate::fillMeshConstructionHelper(
 
 		const PerShaderDataVector::const_iterator itEnd = m_perShaderData.end();
 		for (PerShaderDataVector::const_iterator it = m_perShaderData.begin(); it != itEnd; ++it, ++i)
+		{
+			ms_perShaderDataScratchpad->resize(i+1, nullptr);
 			(*it)->addPerShaderData(meshConstructionHelper, firstPositionIndex, firstNormalIndex, preparedDot3Vectors, *ms_combinationsOccluded, (*ms_perShaderDataScratchpad)[static_cast<size_t>(i)]);
+		}
 	}
 
 	//-- add texture renderer info
