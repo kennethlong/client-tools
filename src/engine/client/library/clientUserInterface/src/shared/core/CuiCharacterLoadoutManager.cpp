@@ -159,7 +159,7 @@ bool CuiCharacterLoadoutManager::initializeLoadoutMap (const std::string & filen
 		while (iff.enterChunk (Tags::ITEM, true))
 		{
 			v.push_back (ArrangementTemplatePair (iff.read_int32 (), iff.read_stdstring ()));
-			iff.exitChunk ();
+			iff.exitChunk (true); // tolerate extra fields added by SWGSource after this client was frozen
 		}
 
 		IGNORE_RETURN (ms_loadoutMap->insert (std::make_pair (playerTemplateStr, v)));
