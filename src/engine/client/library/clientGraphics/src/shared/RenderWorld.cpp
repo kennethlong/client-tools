@@ -11,6 +11,8 @@
 
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/DebugPrimitive.h"
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/RenderWorldCamera.h"
 #include "clientGraphics/RenderWorldCommander.h"
@@ -19,6 +21,9 @@
 #include "clientGraphics/RenderWorld_OcclusionNotification.h"
 #include "clientGraphics/ShaderPrimitiveSorter.h"
 #include "clientGraphics/Light.h"
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+#include "sharedDebug/PerformanceTimer.h"
 
 #include "sharedMath/AxialBox.h"
 #include "sharedMath/Sphere.h"
@@ -1038,12 +1043,31 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 #endif
 	{
 		clearVisibleCells();
-		NP_PROFILER_AUTO_BLOCK_DEFINE("resolveVisibility");
+		// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+		// Bracket the resolveVisibility() call with GPU + CPU timers. GPU begin/end
+		// must enclose the CPU timer so the GPU window >= the CPU window for any
+		// visibility query that touches the GPU. Pitfall 3 (per RESEARCH.md): the
+		// ProfilerBlock sample is hard to read mid-frame because its tail closes
+		// inside RenderWorldCommander::command() QUERY_BEGIN -- push 0 for the
+		// profiler column; the QPC value is the authoritative CPU number per D-09.
+		Graphics::dpvsGpuTimingBegin();
+		PerformanceTimer dpvsCpuTimer;
+		dpvsCpuTimer.start();
+		{
+			NP_PROFILER_AUTO_BLOCK_DEFINE("resolveVisibility");
 
-		// the end of this profiler block is in RenderWorldCommander::command() case QUERY_BEGIN
-		NP_PROFILER_BLOCK_ENTER(ms_dpvsQueryProfilerBlock);
+			// the end of this profiler block is in RenderWorldCommander::command() case QUERY_BEGIN
+			NP_PROFILER_BLOCK_ENTER(ms_dpvsQueryProfilerBlock);
 
-		ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
+			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
+		}
+		dpvsCpuTimer.stop();
+		Graphics::dpvsGpuTimingEnd();
+		// Phase 10 -- push CPU + visible-object metrics into the instrumentation
+		// module so onFrameEnd() reads them when it writes the CSV row.
+		DpvsProfileInstrumentation::recordCpuQpcUs(static_cast<uint32>(dpvsCpuTimer.getElapsedTime() * 1e6f));
+		DpvsProfileInstrumentation::recordVisibleObjectCount(RenderWorldCommander::getNumberOfVisibleObjects());
+		DpvsProfileInstrumentation::recordProfilerUs(0u);
 	}
 
 	{
