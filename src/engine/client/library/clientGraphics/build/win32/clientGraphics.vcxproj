@@ -206,6 +206,10 @@
     <ClCompile Include="..\..\src\shared\DebugPrimitive.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <!-- Phase 10 DPVS profiling instrumentation (THROWAWAY ; D15 cleanup) -->
+    <ClCompile Include="..\..\src\shared\DpvsProfileInstrumentation.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+    </ClCompile>
     <ClCompile Include="..\..\src\shared\DynamicColorPolyPrimitive.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -393,6 +397,8 @@
     <ClInclude Include="..\..\src\shared\DataCombiner.h" />
     <ClInclude Include="..\..\src\shared\Dds.h" />
     <ClInclude Include="..\..\src\shared\DebugPrimitive.h" />
+    <!-- Phase 10 DPVS profiling instrumentation (THROWAWAY ; D15 cleanup) -->
+    <ClInclude Include="..\..\include\public\clientGraphics\DpvsProfileInstrumentation.h" />
     <ClInclude Include="..\..\src\shared\DynamicColorPolyPrimitive.h" />
     <ClInclude Include="..\..\src\shared\DynamicIndexBuffer.h" />
     <ClInclude Include="..\..\src\shared\DynamicVertexBuffer.h" />

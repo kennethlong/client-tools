@@ -102,6 +102,8 @@ public:
 	static ProfilerBlock           &getDpvsQueryProfilerBlock();
 
 	static void setDisableOcclusionCulling(bool disableOcclusionCulling);
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+	static bool getDisableOcclusionCulling();
 
 	static bool wasObjectRenderedThisFrame(NetworkId const & id);
 

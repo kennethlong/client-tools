@@ -1154,6 +1154,15 @@ void RenderWorld::setDisableOcclusionCulling(bool const disableOcclusionCulling)
 }
 
 // ----------------------------------------------------------------------
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+// Consumed by DpvsProfileInstrumentation::onFrameEnd to populate the
+// dpvs_occlusion_flag CSV column and by the overlay print routine.
+bool RenderWorld::getDisableOcclusionCulling()
+{
+	return ms_disableOcclusionCulling;
+}
+
+// ----------------------------------------------------------------------
 
 bool RenderWorld::wasObjectRenderedThisFrame(NetworkId const & id)
 {
