@@ -1,0 +1,110 @@
+# Roadmap: whitengold — SwgClient Modernisation Port (v2)
+
+## Overview
+
+v2 is a **modernisation milestone** targeting the four biggest technical debts exposed by v1 gameplay research. Phase 0 (dead code removal) goes first to shrink the file count before touching everything else. Removing XPCOM specifically cleans the `/Zc:wchar_t-` constraint so the STL swap in Phase 9 has no external ABI boundary to worry about. Phase 10 (DPVS) is a near-free profiling experiment. Phase 11 (D3D11) is the long-tail renderer work.
+
+Phase numbering continues from v1 (ended at Phase 6).
+
+## Phases
+
+- [x] **Phase 7: Dead Code Removal — Track A** - Remove orphaned directories, CMake-unlink config-disabled features, and source-delete voice chat (Vivox) + in-game browser (XPCOM/Mozilla); verify boot after each step
+- [ ] **Phase 8: Dead Code Removal — Track B** - Wire ~40 orphaned editor/tool projects into CMake (no pre-built binaries required; authoring CMakeLists.txt for each tool)
+- [x] **Phase 9: STLPort → MSVC STL** - Closed 2026-05-10 via Option D: Koogie merge anchor `479d35df3` (mechanically satisfies STL-01..STL-04) + IFF compat-guard port to `koogie-msvc-cpp20-base` (commit `460f4540d`, port-forward of whitengold `dd78832c4`) delivers Tatooine zone-in PASS against SWGSource VM, satisfying STL-05. Active tree: `D:/Code/swg-client-v2/`. Replan-2 wave structure (Waves 1-6) is research history -- superseded by replan-3 two-plan structure (09-01 merge-anchor + char-select gate; 09-02 compat-guard port + Tatooine gate + closeout).
+- [ ] **Phase 10: DPVS Culling Experiment** - Profile resolveVisibility() cost on modern GPU; decide remove vs keep; document result
+- [ ] **Phase 11: D3D11 Renderer Plugin** - New Direct3d11.dll satisfying existing Gl_api table; both D3D9 and D3D11 plugins selectable at startup
+
+## Phase Details
+
+### Phase 7: Dead Code Removal — Track A
+**Goal**: By the end of this phase, all dead/disabled features are removed from the repo and CMake graph in three ordered steps — (1) directory deletes, (2) CMake unlinks, (3) source removals — and the client compiles clean and boots to character select against the SWGSource VM after each step. The XPCOM removal in step 3 is the critical enabling step for Phase 9's wchar_t migration.
+**Depends on**: Phase 6 (v1 complete)
+**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05
+**Success Criteria** (what must be TRUE):
+  1. `src/external/3rd/library/trackIR/`, `src/external/3rd/library/stationapi/`, `src/game/client/application/SwgClientSetup/` no longer exist in the repo
+  2. `lcdui_src`, `binkw32`, Bink source files, VideoCapture libs, and `FindVideoCapture.cmake` are absent from all CMakeLists.txt and Find modules; `cmake --build build --config Debug` succeeds with no references to these targets
+  3. `CuiVoiceChatManager.cpp/.h`, `SwgCuiVoiceFlyBar.cpp/.h`, `CuiVoiceChatEventHandler`, and `vivoxSharedWrapper` are deleted from source; `vivoxSharedWrapper` does not appear in any `target_link_libraries` call; voice preference keys removed from `CuiPreferences`
+  4. `libMozilla` unlinked from CMake; `CuiWebBrowser*`, `UIWebBrowserWidget`, XPCOM bridge source deleted; Mozilla DLLs removed from POST_BUILD staging; `dumpbin /imports SwgClient_d.exe` shows zero references to `xpcom.dll`/`xul.dll`; `/Zc:wchar_t-` flag removed from root CMakeLists.txt
+  5. `cmake --build build --config Debug` produces `SwgClient_d.exe` from a clean build after all removals; client boots past login UI and reaches character select against the SWGSource VM
+**Plans**: 3 plans (sequential waves, boot verify after each)
+  - [x] 07-01-PLAN.md — Directory deletes (trackIR, stationapi, SwgClientSetup, 3 pre-CU header stubs) — Wave 1, requirements CLEAN-01, CLEAN-05
+  - [x] 07-02-PLAN.md — CMake unlinks (lcdui_src/G15 LCD, Bink, VideoCapture) — Wave 2, requirements CLEAN-02, CLEAN-05
+  - [x] 07-03-PLAN.md — Vivox + XPCOM source removal (Phase 9 gate) — Wave 3, requirements CLEAN-03, CLEAN-04, CLEAN-05. `/Zc:wchar_t-` deferred to Phase 9 STL-03.
+
+### Phase 8: Dead Code Removal — Track B
+**Goal**: By the end of this phase, all ~40 orphaned editor and tool projects have `CMakeLists.txt` files and build as executables under the existing CMake graph. Pre-built binaries in `exe/win32/` serve as reference; this phase authors the build system, not new functionality. Tools that link against client engine libs benefit from the dead code already removed in Phase 7.
+**Depends on**: Phase 7
+**Requirements**: CLEAN-06
+**Success Criteria** (what must be TRUE):
+  1. `CMakeLists.txt` exists for every tool in: `engine/client/application/` (18 tools), `engine/shared/application/` (7 tools), `game/client/application/` (SwgGodClient, SwgCsTool, SwgHeadlessClient), `game/server/application/` (5 tools), `external/ours/application/` (LocalizationTool, LocalizationToolCon)
+  2. `cmake --build build --config Debug` builds all tool targets without error (link failures on missing assets/Oracle/JVM are acceptable; compile + link of the tool binary itself must succeed)
+  3. SwgClient_d.exe continues to compile and boot to character select (no regressions from tool CMake wiring)
+**Plans**: 4 plans (wave-grouped by tool tier and dependency)
+  - [x] 08-01-PLAN.md — engine/shared/application/ CLI tools (13 tools) + FindQt3.cmake + FindMaya.cmake + 3 new library CMakeLists.txt (sharedStatusWindow, sharedTemplate, sharedTemplateDefinition) — Wave 1, requirements CLEAN-06. **8 of 13 tools building; 5 MFC tools deferred to Phase 9 (STLPort ↔ <afxwin.h> conflict).**
+  - [~] 08-02-PLAN.md — engine/client/application/ Qt GUI tools + non-Qt tools + DLL targets + MayaExporter (31 tools) — Wave 2, requirements CLEAN-06. **1 building (DebugWindow), 30 deferred with classified blockers (10 MFC ↔ Phase 9, 4 NGE source/API mismatch, 1 SDK gap, 2 build-system gap, 1 link wiring, 12 Qt batch).**
+  - [~] 08-03-PLAN.md — game/client/application/ + game/server/application/ — Wave 3, requirements CLEAN-06. **2 building (SwgBattlefieldTool, SwgSchematicXmlParser); 12 deferred (5 MFC, 1 Qt — SwgGodClient, 2 NGE, 4 server-blockers).**
+  - [x] 08-04-PLAN.md — external/ours/application/ + boot regression — Wave 4, requirements CLEAN-06. **LocalizationToolCon building; LocalizationTool deferred to Qt batch. SwgClient_d.exe boot regression PASS.**
+
+### Phase 9: STLPort → MSVC STL
+**Goal**: By the end of this phase, STLPort 4.5.3 is completely removed from the CMake graph and build output — no prebuilt `.lib` files referenced, no `_STLP_*` defines, no `stlport_vc143_compat.cpp` compat shim, no `/FORCE:MULTIPLE` linker flag. `hash_map`/`hash_set` usage is updated to `unordered_map`/`unordered_set` across ~40 files. `Unicode::unicode_char_t` is `wchar_t`, `/Zc:wchar_t` is enabled. The client compiles and **zones into Tatooine** (not just character-select per replan-2 D-11) against the SWGSource VM at 192.168.1.200:44453 from `build-v145/bin/Debug/SwgClient_d.exe` (v145 toolchain per CLAUDE.md "Build toolchain paths") with the 2016 SWGSource v3.0 community-rebuilt proprietary plugin DLLs staged.
+**Depends on**: Phase 7 (XPCOM removal enables clean wchar_t; compat shim removal is safe once STLPort gone)
+**Requirements**: STL-01, STL-02, STL-03, STL-04, STL-05
+**Success Criteria** (what must be TRUE):
+  1. `FindSTLPort.cmake` deleted; no `STLPORT_*` variables in any CMakeLists.txt; `stlport/` include path absent from all `target_include_directories` calls
+  2. `stlport_vc143_compat.cpp` deleted; `/FORCE:MULTIPLE` and `/NODEFAULTLIB:stlport_vc71_static.lib` absent from link flags; `cmake --build build-v145 --config Debug` links with no duplicate-symbol errors
+  3. `Get-ChildItem ... | Select-String 'std::hash_(map|set|multimap)<'` returns zero results in client tier (server tier excluded per CLAUDE.md "server is read-only contract"); all affected files include `<unordered_map>` / `<unordered_set>` instead
+  4. `Unicode::unicode_char_t` is `typedef wchar_t unicode_char_t` (not `unsigned short`); `/Zc:wchar_t-` absent from root CMakeLists.txt; built-in `__wchar_t` default restored
+  5. `dumpbin /imports build-v145/bin/Debug/SwgClient_d.exe` shows zero stlport symbols; client zones into Tatooine cleanly against SWGSource VM with the 2016 DLL set staged
+
+**Plans**: 3 plans (Wave 0 baseline DONE; replan-3 two-plan structure adopted 2026-05-10)
+
+  - [x] 09-00-PLAN.md — Wave 0 pre-migration baseline capture (BEFORE-STL grep, runtime FPS + leak count, CRC + std::hash dump, DataTable round-trip, sort stability) — DONE 2026-05-08, requirements STL-05
+  - [x] 09-01-PLAN.md (replan-3) — Merge anchor + char-select boot gate: Koogie merge `479d35df3` empirically validated end-to-end via VS 2026/v145 MSBuild on `D:/Code/swg-client-v2/src/build/win32/swg.sln`, staged to `D:/Code/swg-client-v2/stage/`, char-select PASS against SWGSource VM, before-imports-replan3.txt baseline shows zero stlport_*. DONE 2026-05-10, satisfies STL-01..STL-04 mechanically per CONTEXT.md D-14.
+  - [x] 09-02-PLAN.md (replan-3) — IFF compat-guard port + Tatooine zone-in gate + closeout: ported whitengold `dd78832c4` IFF chunk-size graceful guard into v2 as commit `460f4540d` on `koogie-msvc-cpp20-base`; Tatooine zone-in PASS against SWGSource VM; after-imports-replan3.txt baseline still shows zero stlport_*; .planning/ top-level files adopted into v2. DONE 2026-05-10, satisfies STL-05.
+
+  **Replan-2 wave structure (research history — superseded by replan-3):**
+  The previous wave-based per-file STL sweep (Waves 1-6, archived plans 09-01..09-06 under replan-2 numbering) is preserved in `.planning/phases/09-stlport-msvc-stl/archive/` as research documentation of the per-file approach. Option D (replan-3) supersedes it by adopting Koogie's already-migrated tree wholesale + porting only the SWGSource-VM compat guards, reducing Phase 9 scope from ~30+ commits to ~3 commits across 2 days.
+
+  **Cross-cutting constraints (replan-3):**
+  - **Source/build/runtime tree:** `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base` -- whitengold `src/` is read-only research history.
+  - **Build entry point:** MSBuild on `D:/Code/swg-client-v2/src/build/win32/swg.sln` with `/p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v145` (NOT CMake -- Koogie did not port to CMake).
+  - **Per CLAUDE.md "static CRT" + Option D mechanical satisfaction:** the EXE links MSVC STL statically (/MTd) so NO MSVCP/VCRUNTIME/UCRTBASE imports appear -- strictly stronger proof of MSVC-STL adoption than dynamic-CRT linkage would be.
+  - Per CONTEXT.md D-18 (bisect-first): compat-guard ports beyond the IFF guard are conditional on Task 2's Tatooine boot test surfacing the matching FATAL signature. ContrailData/Nebula/POB candidates remained unported in 09-02 (NO-OP outcome).
+  - Per CONTEXT.md D-19 (post-Phase-9 PR cadence): each guard commit on `koogie-msvc-cpp20-base` is a future PR candidate against SWG-Source/master, deferred to post-Phase-9 followthrough per the 30-day outreach protocol.
+  - Threats T-9-01/02/03 (persisted CRC determinism, sort stability, allocator/leak drift) from Wave 0 baselines were SUPERSEDED -- the Koogie merge anchor's mechanical satisfaction of STL-01..STL-04 + the Tatooine zone-in PASS together close the threat surface; no per-file diff gates were required.
+
+### Phase 10: DPVS Culling Experiment
+**Goal**: Measure the cost of `resolveVisibility()` (DPVS occlusion query) on a modern discrete GPU in at least one busy outdoor zone. If disabling occlusion culling produces no fps regression (or a positive gain), remove it permanently from outdoor scenes and document the result. Portal traversal for indoor cells is retained regardless of outcome.
+**Depends on**: Phase 7 (clean build; Phase 9 optional — experiment can run before or after STL swap)
+**Requirements**: DPVS-01, DPVS-02
+**Success Criteria** (what must be TRUE):
+  1. `disableOcclusionCulling` config key is read from `client.cfg` and wired to `RenderWorld.cpp` line 78 (or the equivalent existing flag); toggling it at runtime does not crash the client
+  2. Frame time measurements (GPU + CPU) taken with and without `resolveVisibility()` in at least one busy outdoor zone; results recorded in `docs/recon/10-dpvs-profiling.md`
+  3. If result is "remove": DPVS `resolveVisibility()` call removed from `RenderWorldCamera.cpp` (or equivalent); `#include dpvs` headers removed from outdoor rendering path; DPVS library still present in CMake (needed for indoor portal cells); client boots and renders without crash
+**Plans**: TBD (1-2 plans: config wire + profile run, then conditional removal)
+
+### Phase 11: D3D11 Renderer Plugin
+**Goal**: A new `Direct3d11.dll` plugin satisfies the existing 119-function `Gl_api` function-pointer table loaded by `clientGraphics`. Both `Direct3d9.dll` and `Direct3d11.dll` are functional and selectable via config at startup. At minimum, the client renders a ground scene using the D3D11 plugin with visual parity to the D3D9 baseline.
+**Depends on**: Phase 7 (clean build baseline), Phase 9 (optional — cleaner codebase helps)
+**Requirements**: D3D11-01, D3D11-02, D3D11-03, D3D11-04, D3D11-05
+**Success Criteria** (what must be TRUE):
+  1. `src/engine/client/library/clientGraphics/Direct3d11/CMakeLists.txt` produces `Direct3d11.dll` that exports the same 119-function table as `Direct3d9.dll`; both DLLs staged to `build/bin/Debug/` by POST_BUILD
+  2. Switching `renderer=Direct3d11` in `client.cfg` loads `Direct3d11.dll` instead of `Direct3d9.dll`; client does not crash at startup
+  3. All vertex and pixel shaders compile under HLSL 4.0 (`vs_4_0` / `ps_4_0`) with `SV_POSITION` semantics; shader compilation errors resolve before runtime
+  4. A pixel shader generator covers the `D3DTSS_*` texture combiner operations used by SWG's material system; at least the common cases (MODULATE, ADD, SELECTARG1) produce visually correct output
+  5. Client renders at least one ground scene (character select planet scene or zone entry) using the D3D11 plugin; basic geometry, terrain, and character models are visible (no requirement for pixel-perfect parity with D3D9)
+**Plans**: TBD (multi-plan: plugin scaffold, resource management, shader recompile, FFP generator, boot verify)
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
+(Phase 9 depends on Phase 7 XPCOM removal; Phase 10 can run before or after Phase 9; Phase 11 runs last)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 7. Dead Code Removal — Track A | 3/3 | Complete | 2026-05-07 |
+| 8. Dead Code Removal — Track B | 4/4 | Closed-as-scoped (12 tools wired, ~30 deferred to Phase 9 + 12.x) | 2026-05-08 |
+| 9. STLPort → MSVC STL | 3/3 | Complete (Option D adopted: Koogie tree as v2 base + whitengold IFF compat-guard port; Tatooine zone-in PASS) | 2026-05-10 |
+| 10. DPVS Culling Experiment | 0/TBD | Not started | — |
+| 11. D3D11 Renderer Plugin | 0/TBD | Not started | — |
