@@ -271,6 +271,14 @@ namespace Direct3d9Namespace
 	void                               pixSetMarker(WCHAR const * markerName);
 	void                               pixBeginEvent(WCHAR const * eventName);
 	void                               pixEndEvent(WCHAR const * eventName);
+
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+	void                               dpvsGpuTimingEnsurePool();
+	void                               dpvsGpuTimingShutdownPool();
+	void                               dpvsGpuTimingBegin();
+	void                               dpvsGpuTimingEnd();
+	bool                               dpvsGpuTimingPollResult(uint32 * out_microseconds, bool * out_disjointInvalid);
+
 	bool                               writeImage(char const * file, int const width, int const height, int const pitch, int const * pixelsARGB, bool const alphaExtend, Gl_imageFormat const imageFormat, Rectangle2d const * subRect);
 
 	void                               _queryVideoMemory();
@@ -492,6 +500,16 @@ namespace Direct3d9Namespace
 	// video capture variables
 	IDirect3DSurface9 *ms_videoSurface;             // Surface to StretchRect the backbuffer to
 	IDirect3DSurface9 *ms_videoOffScreenSurface;    // Surface to GetRenderData to
+
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+	// Double-buffered timestamp query pool. N=3 covers up to 2-frame CPU-ahead-of-GPU lag per RESEARCH.md Pitfall 1.
+	// Issue into slot frame%N; read from slot (frame-2)%N (i.e. N-2 frames old).
+	static const int  kDpvsGpuTimingPoolSize = 3;
+	IDirect3DQuery9 * ms_dpvsTsDisjoint[kDpvsGpuTimingPoolSize] = { NULL, NULL, NULL };
+	IDirect3DQuery9 * ms_dpvsTsStart   [kDpvsGpuTimingPoolSize] = { NULL, NULL, NULL };
+	IDirect3DQuery9 * ms_dpvsTsEnd     [kDpvsGpuTimingPoolSize] = { NULL, NULL, NULL };
+	int               ms_dpvsTimingIssueFrame = 0;    // frame counter for slot rotation
+	bool              ms_dpvsTimingPoolReady  = false;
 }
 using namespace Direct3d9Namespace;
 
@@ -1123,6 +1141,11 @@ bool Direct3d9::install(Gl_install *gl_install)
 	ms_glApi.pixBeginEvent = pixBeginEvent;
 	ms_glApi.pixEndEvent = pixEndEvent;
 
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+	ms_glApi.dpvsGpuTimingBegin      = dpvsGpuTimingBegin;
+	ms_glApi.dpvsGpuTimingEnd        = dpvsGpuTimingEnd;
+	ms_glApi.dpvsGpuTimingPollResult = dpvsGpuTimingPollResult;
+
 	ms_glApi.writeImage = writeImage;
 
 	ms_glApi.supportsAntialias = supportsAntialias;
@@ -1606,6 +1629,9 @@ void Direct3d9Namespace::remove()
 #endif
 
 	releaseBackBuffer();
+
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+	dpvsGpuTimingShutdownPool();
 
 	if (ms_device)
 	{
@@ -4584,6 +4610,102 @@ void Direct3d9Namespace::pixEndEvent(WCHAR const *)
 #if (D3D_SDK_VERSION & 0x7fffffff) >= 32
 	D3DPERF_EndEvent();
 #endif
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+// Lazy-creates the timestamp-query pool on first use. Tolerant of being called
+// before ms_device exists (silently no-op); the pool is small (9 IDirect3DQuery9
+// handles total per RESEARCH.md Pitfall 1) and lives until device teardown.
+void Direct3d9Namespace::dpvsGpuTimingEnsurePool()
+{
+	if (ms_dpvsTimingPoolReady)
+		return;
+	if (!ms_device)
+		return;
+	for (int i = 0; i < kDpvsGpuTimingPoolSize; ++i)
+	{
+		if (FAILED(ms_device->CreateQuery(D3DQUERYTYPE_TIMESTAMPDISJOINT, &ms_dpvsTsDisjoint[i]))) return;
+		if (FAILED(ms_device->CreateQuery(D3DQUERYTYPE_TIMESTAMP,         &ms_dpvsTsStart   [i]))) return;
+		if (FAILED(ms_device->CreateQuery(D3DQUERYTYPE_TIMESTAMP,         &ms_dpvsTsEnd     [i]))) return;
+	}
+	ms_dpvsTimingIssueFrame = 0;
+	ms_dpvsTimingPoolReady  = true;
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+// Releases the query pool. Called from Direct3d9Namespace::remove() before ms_device.
+void Direct3d9Namespace::dpvsGpuTimingShutdownPool()
+{
+	if (!ms_dpvsTimingPoolReady)
+		return;
+	for (int i = 0; i < kDpvsGpuTimingPoolSize; ++i)
+	{
+		if (ms_dpvsTsDisjoint[i]) { IGNORE_RETURN(ms_dpvsTsDisjoint[i]->Release()); ms_dpvsTsDisjoint[i] = NULL; }
+		if (ms_dpvsTsStart   [i]) { IGNORE_RETURN(ms_dpvsTsStart   [i]->Release()); ms_dpvsTsStart   [i] = NULL; }
+		if (ms_dpvsTsEnd     [i]) { IGNORE_RETURN(ms_dpvsTsEnd     [i]->Release()); ms_dpvsTsEnd     [i] = NULL; }
+	}
+	ms_dpvsTimingPoolReady  = false;
+	ms_dpvsTimingIssueFrame = 0;
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+void Direct3d9Namespace::dpvsGpuTimingBegin()
+{
+	dpvsGpuTimingEnsurePool();
+	if (!ms_dpvsTimingPoolReady) return;
+	const int slot = ms_dpvsTimingIssueFrame % kDpvsGpuTimingPoolSize;
+	ms_dpvsTsDisjoint[slot]->Issue(D3DISSUE_BEGIN);
+	ms_dpvsTsStart   [slot]->Issue(D3DISSUE_END);   // NB: timestamp queries use D3DISSUE_END at both ends
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+void Direct3d9Namespace::dpvsGpuTimingEnd()
+{
+	if (!ms_dpvsTimingPoolReady) return;
+	const int slot = ms_dpvsTimingIssueFrame % kDpvsGpuTimingPoolSize;
+	ms_dpvsTsEnd     [slot]->Issue(D3DISSUE_END);
+	ms_dpvsTsDisjoint[slot]->Issue(D3DISSUE_END);
+	++ms_dpvsTimingIssueFrame;
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+// Reads slot (issueFrame - 2) % N (the oldest slot known to be GPU-completed) per
+// RESEARCH.md Pitfall 1. Returns true when out params populated OR when disjoint
+// was true (caller knows to write an empty cell). Returns false on S_FALSE / not-ready.
+bool Direct3d9Namespace::dpvsGpuTimingPollResult(uint32 * out_microseconds, bool * out_disjointInvalid)
+{
+	if (!ms_dpvsTimingPoolReady) return false;
+	if (ms_dpvsTimingIssueFrame < 2) return false;     // not enough history yet
+	const int readSlot = (ms_dpvsTimingIssueFrame - 2) % kDpvsGpuTimingPoolSize;
+	struct DisjointData { UINT64 frequency; BOOL disjoint; } d;
+	UINT64 startTick = 0, endTick = 0;
+	HRESULT hd = ms_dpvsTsDisjoint[readSlot]->GetData(&d,         sizeof(d),         D3DGETDATA_FLUSH);
+	HRESULT hs = ms_dpvsTsStart   [readSlot]->GetData(&startTick, sizeof(startTick), D3DGETDATA_FLUSH);
+	HRESULT he = ms_dpvsTsEnd     [readSlot]->GetData(&endTick,   sizeof(endTick),   D3DGETDATA_FLUSH);
+	if (hd != S_OK || hs != S_OK || he != S_OK)
+		return false;   // S_FALSE = not ready; analysis.py tolerates blank gpu_us cells
+	if (d.disjoint)
+	{
+		if (out_disjointInvalid) *out_disjointInvalid = true;
+		DEBUG_WARNING(true, ("DpvsGpuTiming: disjoint flag TRUE on frame %d (GPU clock change); skipping", ms_dpvsTimingIssueFrame));
+		return true;    // signal valid-poll-but-invalid-data so caller writes empty cell
+	}
+	if (out_disjointInvalid) *out_disjointInvalid = false;
+	if (d.frequency == 0)
+		return false;   // defensive: avoid div-by-zero if driver returns malformed disjoint data
+	const double us = double(endTick - startTick) * 1e6 / double(d.frequency);
+	if (out_microseconds) *out_microseconds = static_cast<uint32>(us);
+	return true;
 }
 
 // ----------------------------------------------------------------------
