@@ -3428,6 +3428,30 @@ void Graphics::pixEndEvent(WCHAR const * eventName)
 
 // ----------------------------------------------------------------------
 
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+void Graphics::dpvsGpuTimingBegin()
+{
+	ms_api->dpvsGpuTimingBegin();
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+void Graphics::dpvsGpuTimingEnd()
+{
+	ms_api->dpvsGpuTimingEnd();
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+bool Graphics::dpvsGpuTimingPollResult(uint32 * out_microseconds, bool * out_disjointInvalid)
+{
+	return ms_api->dpvsGpuTimingPollResult(out_microseconds, out_disjointInvalid);
+}
+
+// ----------------------------------------------------------------------
+
 bool Graphics::writeImage(char const * file, int const width, int const height, int const pitch, int const * pixelsARGB, bool const alphaExtend, Gl_imageFormat const imageFormat, Rectangle2d const * subRect)
 {
 #if PRODUCTION == 0

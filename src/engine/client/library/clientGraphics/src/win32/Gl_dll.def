@@ -226,7 +226,12 @@ struct Gl_api
 	void (*pixSetMarker)(WCHAR const * markerName);
 	void (*pixBeginEvent)(WCHAR const * eventName);
 	void (*pixEndEvent)(WCHAR const * eventName);
-	
+
+	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
+	void (*dpvsGpuTimingBegin)();
+	void (*dpvsGpuTimingEnd)();
+	bool (*dpvsGpuTimingPollResult)(uint32 * out_microseconds, bool * out_disjointInvalid);
+
 	bool (*writeImage)(char const * file, int const width, int const height, int const pitch, int const * pixelsARGB, bool const alphaExtend, Gl_imageFormat const imageFormat, Rectangle2d const * subRect);
 	
 	bool (*supportsAntialias)();
