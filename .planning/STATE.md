@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 10 (DPVS Culling Experiment) CONTEXT.md captured in v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md` (commit `b62f3ff92`). Four gray areas resolved across 16 single-question turns: profiling methodology (D-01..D-04), test scenes + sample protocol (D-05..D-08), decision threshold (D-09..D-12), removal mechanism (D-13..D-16). User clarified mid-session that they will drive capture (Claude can't run the client) — the A/B protocol question reformulated into an automation-level question; chosen pattern is keybind-toggle (F10 capture, F11 OCC toggle) with manual everything-else. Notable existing-code finding: `disableOcclusionCulling` config key is already fully wired in v2 (Koogie inheritance) — DPVS-01's config-wiring half is already satisfied; Phase 10's DPVS-01 work is the measurement half only."
-last_updated: "2026-05-11T04:26:40.126Z"
+stopped_at: "Phase 10 Wave 1 (plan 10-02) COMPLETE -- GPU-timing plumbing across renderer-plugin DLL boundary landed in 2 atomic commits (0e1e25a6d engine surface; 9bd97c459 Direct3d9 plugin impl). Three new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) + double-buffered IDirect3DQuery9 timestamp pool (N=3) in Direct3d9 plugin + thin Graphics::* forwarders. Build green at -t:Direct3d9 / -t:clientGraphics / -t:SwgClient (relink confirms engine forwarders resolve). Engine still sees zero IDirect3DQuery9 references -- only POD types cross the DLL boundary per RESEARCH.md Pattern 4. 3 auto-fix deviations applied (Rule 1 ms_api-> idiom correction; Rule 2 d.frequency==0 div-by-zero guard; Rule 2 explicit ShutdownPool function + remove() call-site for COM ordering)."
+last_updated: "2026-05-11T04:40:18Z"
 last_activity: 2026-05-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
-  percent: 14
+  completed_plans: 2
+  percent: 28
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 10 (dpvs-culling-experiment) — EXECUTING
-Plan: 2 of 7
-Status: Ready to execute
+Plan: 3 of 7
+Status: Ready to execute (Wave 1 complete; Wave 2 DpvsProfileInstrumentation module next)
 Last activity: 2026-05-11
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [██░░░░░░░░] 28%
 
 ## Accumulated Context
 
@@ -60,6 +60,7 @@ Decisions carried forward from v1:
 - [Phase 9 — 2026-05-09 boot gate REGRESSION]: CONTEXT D-08 ("v145 + 2016 DLL runtime contract") invalidated by Probe E + Probe G. v145 EXE + 2016 SWGSource v3.0 DLLs FATALs during graphics setup with "format arg out of range: value/max 1793887061/16" (callstack alternating EXE / DLL-at-`~0x6BE90000`); v145 EXE + 2010 leak DLLs runs cleanly. The user's working `build/bin/Debug/` (v143 + 2010 leak DLLs per Probe B MD5 verification) is the actually-empirically-validated runtime, NOT v145 + 2016. Replan-3 needed. See `.planning/phases/09-stlport-msvc-stl/.continue-here-replan3.md`. Three architectural options surfaced (Option A: switch to v143 + 2010 leak — recommended; Option B: forensics; Option C: pull Phase 11 forward).
 - [Phase 9 — 2026-05-09 Option D empirically validated]: Koogie tree builds clean via VS 2026/v145 (`swg.sln`), boots to char-select against SWGSource VM, FATALs at world-load on `creation/default_pc_equipment.iff/LOEQ/0000/PTMP/ITEM: exiting chunk but not at the end of it` (same gap whitengold v1 guards with `exitChunk(true)` at `CuiCharacterLoadoutManager.cpp:162`). v2 working tree at `D:/Code/swg-client-v2/` on `koogie-msvc-cpp20-base` with merge anchor `479d35df3` (`--no-ff` merge of `koogie/MSVC-CPP20-Upgrade`). Option D adopted: Koogie supplies modernization; whitengold supplies SWGSource compat guards.
 - [Phase 9 — 2026-05-10 replan-3 CONTEXT captured]: D-08..D-12 REVOKED. D-13..D-19 binding (Option D phase scope, working tree topology at `D:/Code/swg-client-v2/`, `.planning/` migration plan, two-plan structure 09-01 merge-anchor / 09-02 compat-guard-port, bisect-first compat-guard scope, batched upstream PR cadence post-Tatooine-PASS). STL-01..04 mechanically satisfied by Koogie merge `479d35df3`; STL-05 (Tatooine zone-in clean) is the only remaining requirement and is the 09-02 boot gate. `.planning/` stays in whitengold through Phase 9 closeout; top-level files copy to v2 as final 09-02 step.
+- [Phase 10 — 2026-05-11 Wave 1 complete (plan 10-02)]: GPU-timing plumbing across renderer-plugin DLL boundary. Three new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) appended after pix* entries; engine-side Graphics::* forwarders dispatch through `ms_api->` (matching verified pix* idiom -- NOT `ms_glApi.` as plan template suggested; Rule 1 deviation); plugin-side double-buffered IDirect3DQuery9 pool (N=3) lazy-creates on first Begin, reads slot (issueFrame-2)%N per RESEARCH.md Pitfall 1, handles disjoint flag per Pitfall 2; explicit dpvsGpuTimingShutdownPool() called from Direct3d9Namespace::remove() before ms_device->Release() (Rule 2 COM-ordering safety); div-by-zero guard on d.frequency==0 (Rule 2 driver-bug defense). All new code carries THROWAWAY/D-15 comment markers (9 occurrences across 4 files) for Wave 5 cleanup grep target. Build verified -t:Direct3d9 + -t:clientGraphics + -t:SwgClient; gl05_d.dll (4.5MB) + clientGraphics.lib (12.1MB) + SwgClient_d.exe (72.5MB) all relink cleanly. Pre-existing Koogie post-build MSB3073 + Direct3d9.vcxproj MSB8012 warnings remain out-of-scope (Wave 0 deferred-items precedent). Commits: 0e1e25a6d (Task 1 engine surface), 9bd97c459 (Task 2 plugin impl + build log force-added).
 - [Phase 9 — 2026-05-10 CLOSED via Option D]: STL-01..STL-05 all satisfied. STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3` (CONTEXT.md D-14); STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540dfb09acf50b41e37e49038229b18d3bc` on `koogie-msvc-cpp20-base`, port-forwarding whitengold `dd78832c4d5ad116ee049619e8c39a844597bd34`) plus Tatooine zone-in PASS against SWGSource VM 192.168.1.200 (evidence: `evidence/09-02-tatooine.png` 1,089,854 bytes; runtime log `D:/Code/swg-client-v2/stage/log-replan3-02.txt` 7.2 MB, zero FATAL). Task 3 bisect-first NO-OP (D-18): ContrailData / NebulaManager / POB candidates remained unported because the IFF guard alone delivered Tatooine clean. Active working tree: `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base`. Post-Phase-9 followthrough: upstream PR series to SWG-Source/master per D-19 + memory `project_swg_source_upstreaming.md`; runtime stability long-tail (ExceptionHandler crash after ~11 min in-world) deferred to future `/gsd-debug` session; first-launch login flakiness observed (back-out + retry login twice before repeatable) — not an STL-05 blocker.
 
 ### v2 Phase Plan
@@ -69,7 +70,7 @@ Decisions carried forward from v1:
 | 7 | Dead code Track A: deletes + CMake unlinks + Vivox + XPCOM | CLEAN-01..05 | Complete (2026-05-07) |
 | 8 | Dead code Track B: ~40 tools wired to CMake | CLEAN-06 | Closed-as-scoped (12 wired, ~30 deferred to Phase 9 + 12.x) |
 | 9 | STLPort → MSVC STL | STL-01..05 | Complete (2026-05-10 via Option D: Koogie merge 479d35df3 + IFF guard port 460f4540d) |
-| 10 | DPVS culling experiment | DPVS-01..02 | Not started |
+| 10 | DPVS culling experiment | DPVS-01..02 | In Progress (2/7 plans complete: 10-01 Wave 0 scaffolding + 10-02 Wave 1 GPU-timing plumbing) |
 | 11 | D3D11 renderer plugin | D3D11-01..05 | Not started |
 
 ### Pending Todos
@@ -97,6 +98,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-10T23:45:00.000Z
-Stopped at: Phase 10 (DPVS Culling Experiment) CONTEXT.md captured in v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md` (commit `b62f3ff92`). Four gray areas resolved across 16 single-question turns: profiling methodology (D-01..D-04), test scenes + sample protocol (D-05..D-08), decision threshold (D-09..D-12), removal mechanism (D-13..D-16). User clarified mid-session that they will drive capture (Claude can't run the client) — the A/B protocol question reformulated into an automation-level question; chosen pattern is keybind-toggle (F10 capture, F11 OCC toggle) with manual everything-else. Notable existing-code finding: `disableOcclusionCulling` config key is already fully wired in v2 (Koogie inheritance) — DPVS-01's config-wiring half is already satisfied; Phase 10's DPVS-01 work is the measurement half only.
-Resume: /clear then `/gsd-plan-phase 10` against v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md`. Deferred long-tails (unchanged): post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness.
+Last session: 2026-05-11T04:40:18Z
+Stopped at: Phase 10 Wave 1 (plan 10-02) COMPLETE. GPU-timing plumbing across renderer-plugin DLL boundary landed in 2 atomic commits (0e1e25a6d engine surface; 9bd97c459 Direct3d9 plugin impl). Build green at -t:Direct3d9 / -t:clientGraphics / -t:SwgClient. Wave 2 (plan 10-03) `DpvsProfileInstrumentation.{h,cpp}` engine module is unblocked — Graphics::dpvsGpuTimingBegin/End/PollResult are public static methods ready to be consumed by the singleton CSV writer + overlay + ExitChain teardown that lands next.
+Resume: /clear then `/gsd-execute-phase 10` (Wave 2: plan 10-03 -- DpvsProfileInstrumentation engine module). Deferred long-tails (unchanged): post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073 (logged in Wave 0 + Wave 1 SUMMARIES); pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate to revisit if Direct3d11.dll lives alongside).

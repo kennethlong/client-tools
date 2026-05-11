@@ -83,7 +83,7 @@ Phase numbering continues from v1 (ended at Phase 6).
   3. If result is "remove": DPVS `resolveVisibility()` call removed from `RenderWorldCamera.cpp` (or equivalent); `#include dpvs` headers removed from outdoor rendering path; DPVS library still present in CMake (needed for indoor portal cells); client boots and renders without crash
 **Plans**: 7 plans (planned 2026-05-10; wave-grouped instrumentation → capture → verdict → cleanup)
   - [x] 10-01-PLAN.md — Wave 0 scaffolding: `tools/dpvs-profile/analysis.py` + `tools/dpvs-profile/test-protocol.md` + `docs/recon/10-dpvs-profiling.md` skeleton + baseline build/boot smoke — requirements DPVS-01
-  - [ ] 10-02-PLAN.md — Wave 1 GPU-timing plumbing across plugin DLL boundary: 3 new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) + Direct3d9.cpp double-buffered query pool + Graphics::* forwarders — requirements DPVS-01
+  - [x] 10-02-PLAN.md — Wave 1 GPU-timing plumbing across plugin DLL boundary: 3 new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) + Direct3d9.cpp double-buffered query pool + Graphics::* forwarders — requirements DPVS-01
   - [ ] 10-03-PLAN.md — Wave 2 engine module: `DpvsProfileInstrumentation.{h,cpp}` (CSV writer + run-label sanitizer + overlay + ExitChain teardown) + SetupClientGraphics install hook + vcxproj wire — requirements DPVS-01
   - [ ] 10-04-PLAN.md — Wave 3 integration (autonomous: false): RenderWorld brackets resolveVisibility with GPU/CPU timer + `getDisableOcclusionCulling` getter + Game::run onFrameEnd hook + CuiIoWin `_DEBUG` F10/F11 intercept + `/setrunlabel` console command + smoke checkpoint — requirements DPVS-01
   - [ ] 10-05-PLAN.md — Wave 4 capture session (autonomous: false): 6 captures × ~10s in Mos Eisley plaza per D-08, alternating ON-OFF; run `analysis.py`; record `verdict = remove|keep` line — requirements DPVS-01
@@ -113,5 +113,5 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 7. Dead Code Removal — Track A | 3/3 | Complete | 2026-05-07 |
 | 8. Dead Code Removal — Track B | 4/4 | Closed-as-scoped (12 tools wired, ~30 deferred to Phase 9 + 12.x) | 2026-05-08 |
 | 9. STLPort → MSVC STL | 3/3 | Complete (Option D adopted: Koogie tree as v2 base + whitengold IFF compat-guard port; Tatooine zone-in PASS) | 2026-05-10 |
-| 10. DPVS Culling Experiment | 1/7 | In Progress|  |
+| 10. DPVS Culling Experiment | 2/7 | In Progress|  |
 | 11. D3D11 Renderer Plugin | 0/TBD | Not started | — |
