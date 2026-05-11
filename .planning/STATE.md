@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 10 Wave 2 (plan 10-03) COMPLETE. DpvsProfileInstrumentation engine module landed in 3 atomic commits (3fb4c9804 public header; f55da0cef CSV writer + run-label sanitizer + DebugFlag overlay + ExitChain teardown; 1f5cd24f1 vcxproj wire + SetupClientGraphics install hook + Rule 3 RenderWorld::getDisableOcclusionCulling getter). Static-only class with anonymous-namespace state; AbstractFile* via StdioFile in 'ab' mode; run-label sanitizer covers CSV-cell + filename + path-traversal + formula-injection in one pass; two-gate per-frame onFrameEnd (ms_installed first, drain GPU pool, then ms_captureActive for row write) per RESEARCH.md Pitfall 4 intent. CSV header byte-for-byte matches tools/dpvs-profile/analysis.py EXPECTED_HEADER. DebugFlag-driven overlay via DEBUG_REPORT_PRINT gated by [ClientGraphics/Dpvs] reportInstrumentation. Build verified -t:clientGraphics EXIT=0 (clientGraphics.lib 12.3 MB, +195 KB vs Wave 1) and -t:SwgClient SwgClient_d.exe 72.5 MB (+10 KB vs Wave 1; pre-existing Koogie post-build MSB3073 the only failure). Rule 3 auto-fix: RenderWorld::getDisableOcclusionCulling getter added here (compile vs link surface mismatch in MSVC); plan 10-04 Task 1 reduced to no-op for that edit. 19 THROWAWAY/D-15 markers across 5 affected files."
-last_updated: "2026-05-11T05:01:53.600Z"
+stopped_at: "Phase 10 Wave 3 (plan 10-04) COMPLETE. DpvsProfileInstrumentation hook wiring landed in 4 atomic commits. Pre-landed Rule 3 getter detected and skipped. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per autonomous=false plan + prompt key_context. Wave 5 (plan 10-05) unblocked: Kenny launches client, drives F10/F11/setrunlabel protocol against SWGSource VM, produces 6 CSV files for verdict aggregation per tools/dpvs-profile/test-protocol.md."
+last_updated: "2026-05-11T05:15:23.459Z"
 last_activity: 2026-05-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 10 (dpvs-culling-experiment) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-05-11
 
-Progress: [████░░░░░░] 43%
+Progress: [██████░░░░] 57%
 
 ## Accumulated Context
 
@@ -63,6 +63,7 @@ Decisions carried forward from v1:
 - [Phase 10 — 2026-05-11 Wave 1 complete (plan 10-02)]: GPU-timing plumbing across renderer-plugin DLL boundary. Three new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) appended after pix* entries; engine-side Graphics::* forwarders dispatch through `ms_api->` (matching verified pix* idiom -- NOT `ms_glApi.` as plan template suggested; Rule 1 deviation); plugin-side double-buffered IDirect3DQuery9 pool (N=3) lazy-creates on first Begin, reads slot (issueFrame-2)%N per RESEARCH.md Pitfall 1, handles disjoint flag per Pitfall 2; explicit dpvsGpuTimingShutdownPool() called from Direct3d9Namespace::remove() before ms_device->Release() (Rule 2 COM-ordering safety); div-by-zero guard on d.frequency==0 (Rule 2 driver-bug defense). All new code carries THROWAWAY/D-15 comment markers (9 occurrences across 4 files) for Wave 5 cleanup grep target. Build verified -t:Direct3d9 + -t:clientGraphics + -t:SwgClient; gl05_d.dll (4.5MB) + clientGraphics.lib (12.1MB) + SwgClient_d.exe (72.5MB) all relink cleanly. Pre-existing Koogie post-build MSB3073 + Direct3d9.vcxproj MSB8012 warnings remain out-of-scope (Wave 0 deferred-items precedent). Commits: 0e1e25a6d (Task 1 engine surface), 9bd97c459 (Task 2 plugin impl + build log force-added).
 - [Phase 9 — 2026-05-10 CLOSED via Option D]: STL-01..STL-05 all satisfied. STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3` (CONTEXT.md D-14); STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540dfb09acf50b41e37e49038229b18d3bc` on `koogie-msvc-cpp20-base`, port-forwarding whitengold `dd78832c4d5ad116ee049619e8c39a844597bd34`) plus Tatooine zone-in PASS against SWGSource VM 192.168.1.200 (evidence: `evidence/09-02-tatooine.png` 1,089,854 bytes; runtime log `D:/Code/swg-client-v2/stage/log-replan3-02.txt` 7.2 MB, zero FATAL). Task 3 bisect-first NO-OP (D-18): ContrailData / NebulaManager / POB candidates remained unported because the IFF guard alone delivered Tatooine clean. Active working tree: `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base`. Post-Phase-9 followthrough: upstream PR series to SWG-Source/master per D-19 + memory `project_swg_source_upstreaming.md`; runtime stability long-tail (ExceptionHandler crash after ~11 min in-world) deferred to future `/gsd-debug` session; first-launch login flakiness observed (back-out + retry login twice before repeatable) — not an STL-05 blocker.
 - [Phase 10 — 2026-05-11 Wave 2 complete (plan 10-03)]: DpvsProfileInstrumentation engine module landed in 3 atomic commits (3fb4c9804 public header; f55da0cef CSV writer + run-label sanitizer + DebugFlag overlay + ExitChain teardown; 1f5cd24f1 vcxproj wire + SetupClientGraphics install hook + Rule 3 RenderWorld::getDisableOcclusionCulling getter). Static-only class with anonymous-namespace state; AbstractFile* via StdioFile in append-binary; run-label sanitizer covers CSV-cell + filename + path-traversal + formula-injection in one pass; two-gate per-frame onFrameEnd (ms_installed first, drain GPU pool, then ms_captureActive for row write) per RESEARCH.md Pitfall 4 intent. CSV header byte-for-byte matches tools/dpvs-profile/analysis.py EXPECTED_HEADER. DebugFlag-driven overlay via DEBUG_REPORT_PRINT gated by [ClientGraphics/Dpvs] reportInstrumentation. Build verified -t:clientGraphics EXIT=0 (clientGraphics.lib 12.3 MB, +195 KB vs Wave 1) and -t:SwgClient SwgClient_d.exe 72.5 MB (+10 KB vs Wave 1; pre-existing Koogie post-build MSB3073 the only failure). Rule 3 auto-fix: RenderWorld::getDisableOcclusionCulling getter added here (MSVC compile vs link surface mismatch -- plan author expected link error); plan 10-04 Task 1 no-op for that specific edit. 19 THROWAWAY/D-15 markers across 5 affected files.
+- [Phase Phase 10]: Phase 10 Wave 3 complete (plan 10-04): DpvsProfileInstrumentation hook wiring landed in 4 atomic commits (cca3dcebc RenderWorld GPU/CPU bracket; 2688a0bdd Game::run onFrameEnd hook + CuiIoWin _DEBUG F10/F11 intercept; bf464e3ee /setrunlabel console command; d8dbd4076 SwgClient build log force-add). Pre-landed Rule 3 detection: RenderWorld::getDisableOcclusionCulling getter was already committed in Wave 3 (1f5cd24f1) -- Task 1 Part A skipped as no-op per Wave 3 SUMMARY documentation. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Pre-existing Koogie post-build MSB3073 the only failure (out-of-scope per Wave 0/1/2/3 precedent). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per prompt key_context. Wave 5 (plan 10-05) unblocked: capture protocol drives F10/F11/setrunlabel + 6 CSV files for verdict aggregation.
 
 ### v2 Phase Plan
 
@@ -99,6 +100,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-11T05:01:42.402Z
-Stopped at: Phase 10 Wave 2 (plan 10-03) COMPLETE. DpvsProfileInstrumentation engine module landed in 3 atomic commits (3fb4c9804 public header; f55da0cef CSV writer + run-label sanitizer + DebugFlag overlay + ExitChain teardown; 1f5cd24f1 vcxproj wire + SetupClientGraphics install hook + Rule 3 RenderWorld::getDisableOcclusionCulling getter). Build verified -t:clientGraphics EXIT=0 (clientGraphics.lib 12.3 MB) and -t:SwgClient SwgClient_d.exe 72.5 MB. Wave 3 (plan 10-04) unblocked: module's public surface is ready for RenderWorld.cpp brackets + Game::run::onFrameEnd hook + CuiIoWin F10/F11 _DEBUG intercept + /setrunlabel SwgCuiCommandParserDefault command. Rule 3 auto-fix pre-landed RenderWorld::getDisableOcclusionCulling getter (plan 10-04 Task 1 no-op for that edit).
+Last session: 2026-05-11T05:15:23.443Z
+Stopped at: Phase 10 Wave 3 (plan 10-04) COMPLETE. DpvsProfileInstrumentation hook wiring landed in 4 atomic commits. Pre-landed Rule 3 getter detected and skipped. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per autonomous=false plan + prompt key_context. Wave 5 (plan 10-05) unblocked: Kenny launches client, drives F10/F11/setrunlabel protocol against SWGSource VM, produces 6 CSV files for verdict aggregation per tools/dpvs-profile/test-protocol.md.
 Resume: /clear then `/gsd-execute-phase 10` (Wave 3: plan 10-04 -- RenderWorld brackets + Game::run + CuiIoWin keybinds + /setrunlabel). Deferred long-tails (unchanged): post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073 (logged in Wave 0 + Wave 1 + Wave 2 SUMMARIES); pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate to revisit if Direct3d11.dll lives alongside).
