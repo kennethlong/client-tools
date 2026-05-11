@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: phase-complete
-stopped_at: "Phase 9 CLOSED via Option D: STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3`; STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540d` port-forwarding whitengold `dd78832c4`) + Tatooine zone-in PASS against SWGSource VM. Evidence: `.planning/phases/09-stlport-msvc-stl/evidence/09-02-tatooine.png` (1,089,854 bytes). Next: `/gsd-discuss-phase 10` against the new v2 .planning/ location at `D:/Code/swg-client-v2/.planning/` (per D-16 Task 6 adoption)."
-last_updated: "2026-05-10T23:30:00.000Z"
-last_activity: 2026-05-10 -- Phase 9 replan-3 (Option D) closed: IFF compat-guard ported forward, Tatooine zone-in PASS, STL-01..STL-05 all satisfied
+status: phase-discussed
+stopped_at: "Phase 10 (DPVS Culling Experiment) context gathered. Four gray areas resolved: profiling methodology (D3D9 timestamp queries in-engine + QPC pair + ProfilerBlock + CSV + on-screen overlay; per-frame raw + distributional stats), test scenes + protocol (single scene Mos Eisley plaza, keybind-toggle capture with user driving, F11 runtime A/B toggle, 3 passes × ~10s per condition), decision threshold (total frame time median+p95; DPVS-off ≤ DPVS-on on both → remove, any regression → keep; D3D9-only verdict, Phase 11 re-measures), removal mechanism (source-edit drop OCCLUSION_CULLING bit at RenderWorld.cpp:906; delete disableOcclusionCulling config key; remove instrumentation post-verdict in single commit; verdict doc lives at docs/recon/10-dpvs-profiling.md). Next: `/gsd-plan-phase 10` in v2."
+last_updated: "2026-05-10T23:45:00.000Z"
+last_activity: 2026-05-10 -- Phase 10 CONTEXT.md captured in v2 .planning/phases/10-dpvs-culling-experiment/
 progress:
   total_phases: 5
   completed_phases: 3
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 9 — stlport-msvc-stl
+**Current focus:** Phase 10 — dpvs-culling-experiment
 
 ## Current Position
 
-Phase: 9 (stlport-msvc-stl) — **CLOSED 2026-05-10 via Option D**
-Plan: 2 of 2 complete (09-01 merge-anchor + char-select gate DONE; 09-02 IFF compat-guard port + Tatooine gate + closeout DONE)
-Status: Phase complete; ready for Phase 10 in v2 .planning/ location
-Last activity: 2026-05-10 -- Phase 9 (replan-3, Option D) closed: STL-01..STL-05 all satisfied; .planning/ top-level adopted into v2
+Phase: 10 (dpvs-culling-experiment) — context captured 2026-05-10
+Plan: Not started — CONTEXT.md committed (`b62f3ff92`); planner not yet invoked
+Status: Ready for `/gsd-plan-phase 10` in v2
+Last activity: 2026-05-10 -- Phase 10 CONTEXT.md captured (4 gray areas: profiling methodology, test scenes + protocol, decision threshold, removal mechanism)
 
-Progress: [######____] 60% (3 of 5 phases complete: Phase 7, Phase 8 closed-as-scoped, Phase 9 closed via Option D)
+Progress: [######____] 60% (3 of 5 phases complete: Phase 7, Phase 8 closed-as-scoped, Phase 9 closed via Option D; Phase 10 discussed)
 
 ## Accumulated Context
 
@@ -97,6 +97,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-10T23:30:00.000Z
-Stopped at: Phase 9 CLOSED via Option D. STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3` (validated end-to-end in 09-01); STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540d`, port-forward of whitengold `dd78832c4`) plus Tatooine zone-in PASS against SWGSource VM (09-02). All five STL-* requirements satisfied. Top-level `.planning/` files copied to v2 at `D:/Code/swg-client-v2/.planning/` per D-16 (per-phase dirs remain in whitengold as research history).
-Resume: /clear then `/gsd-discuss-phase 10` against the NEW v2 .planning/ location at `D:/Code/swg-client-v2/.planning/`. Phase 10 (DPVS culling experiment) originates cold in `swg-client-v2/.planning/phases/10-*/`. Alternatively, the post-Phase-9 upstream PR series against SWG-Source/master (single PR: the IFF guard at v2 `460f4540d`) is the optional immediate followthrough per D-19 + memory `project_swg_source_upstreaming.md`. Deferred long-tails: ExceptionHandler crash after ~11 min of in-world play (future `/gsd-debug`); first-launch login flakiness (back-out + retry twice before repeatable).
+Last session: 2026-05-10T23:45:00.000Z
+Stopped at: Phase 10 (DPVS Culling Experiment) CONTEXT.md captured in v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md` (commit `b62f3ff92`). Four gray areas resolved across 16 single-question turns: profiling methodology (D-01..D-04), test scenes + sample protocol (D-05..D-08), decision threshold (D-09..D-12), removal mechanism (D-13..D-16). User clarified mid-session that they will drive capture (Claude can't run the client) — the A/B protocol question reformulated into an automation-level question; chosen pattern is keybind-toggle (F10 capture, F11 OCC toggle) with manual everything-else. Notable existing-code finding: `disableOcclusionCulling` config key is already fully wired in v2 (Koogie inheritance) — DPVS-01's config-wiring half is already satisfied; Phase 10's DPVS-01 work is the measurement half only.
+Resume: /clear then `/gsd-plan-phase 10` against v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md`. Deferred long-tails (unchanged): post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness.
