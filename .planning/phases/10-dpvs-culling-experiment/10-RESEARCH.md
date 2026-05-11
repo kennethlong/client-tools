@@ -665,7 +665,12 @@ void DpvsProfileInstrumentation::setRunLabel(std::string const & label)
 | A8 | `Game::run()` is the right place for the per-frame `onFrameEnd()` hook (vs. inside the renderer plugin) | Recommended Project Structure | LOW — `Game::run()` has clear before-present and after-present positions; the natural slot is after `Graphics::present()` returns and before the next iteration. Alternative would be inside `Graphics::present()` itself, but that's renderer-plugin-private and crosses the boundary. |
 | A9 | The DebugMonitor child window is visible by default in debug builds against the SWGSource VM | On-screen overlay rendering | MEDIUM — DebugMonitor visibility is config-controlled. If Kenny's client config has it off, overlay is invisible. Need to verify in `client_d.cfg` and document the required setting. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three questions have inline recommendations adopted into the plans:
+> - Q1 → adopted by 10-04 Task 2 (insertion just after `Graphics::present()` in `Game::run`).
+> - Q2 → adopted by 10-04 Task 5 (smoke verifies DebugMonitor visibility in current build) + 10-01 Task 2 (config key documented).
+> - Q3 → confirmed by source-read; F11 toggle is instantaneous, adopted by 10-04 Task 2.
 
 1. **Where exactly does `onFrameEnd()` slot into `Game::run()`?**
    - What we know: `Game.cpp:1097` reads `Clock::frameTime()` (the previous frame's duration); `Game.cpp:1232` calls `Graphics::present()`.

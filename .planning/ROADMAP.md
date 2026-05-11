@@ -81,7 +81,14 @@ Phase numbering continues from v1 (ended at Phase 6).
   1. `disableOcclusionCulling` config key is read from `client.cfg` and wired to `RenderWorld.cpp` line 78 (or the equivalent existing flag); toggling it at runtime does not crash the client
   2. Frame time measurements (GPU + CPU) taken with and without `resolveVisibility()` in at least one busy outdoor zone; results recorded in `docs/recon/10-dpvs-profiling.md`
   3. If result is "remove": DPVS `resolveVisibility()` call removed from `RenderWorldCamera.cpp` (or equivalent); `#include dpvs` headers removed from outdoor rendering path; DPVS library still present in CMake (needed for indoor portal cells); client boots and renders without crash
-**Plans**: TBD (1-2 plans: config wire + profile run, then conditional removal)
+**Plans**: 7 plans (planned 2026-05-10; wave-grouped instrumentation → capture → verdict → cleanup)
+  - [ ] 10-01-PLAN.md — Wave 0 scaffolding: `tools/dpvs-profile/analysis.py` + `tools/dpvs-profile/test-protocol.md` + `docs/recon/10-dpvs-profiling.md` skeleton + baseline build/boot smoke — requirements DPVS-01
+  - [ ] 10-02-PLAN.md — Wave 1 GPU-timing plumbing across plugin DLL boundary: 3 new Gl_api function pointers (dpvsGpuTimingBegin/End/PollResult) + Direct3d9.cpp double-buffered query pool + Graphics::* forwarders — requirements DPVS-01
+  - [ ] 10-03-PLAN.md — Wave 2 engine module: `DpvsProfileInstrumentation.{h,cpp}` (CSV writer + run-label sanitizer + overlay + ExitChain teardown) + SetupClientGraphics install hook + vcxproj wire — requirements DPVS-01
+  - [ ] 10-04-PLAN.md — Wave 3 integration (autonomous: false): RenderWorld brackets resolveVisibility with GPU/CPU timer + `getDisableOcclusionCulling` getter + Game::run onFrameEnd hook + CuiIoWin `_DEBUG` F10/F11 intercept + `/setrunlabel` console command + smoke checkpoint — requirements DPVS-01
+  - [ ] 10-05-PLAN.md — Wave 4 capture session (autonomous: false): 6 captures × ~10s in Mos Eisley plaza per D-08, alternating ON-OFF; run `analysis.py`; record `verdict = remove|keep` line — requirements DPVS-01
+  - [ ] 10-06-PLAN.md — Wave 5 verdict writeup + conditional D-13/D-14 source edits + boot smoke (autonomous: false): populate `docs/recon/10-dpvs-profiling.md`; if verdict=remove apply OCCLUSION_CULLING bit strip at RenderWorld.cpp:903/906 and delete `disableOcclusionCulling` config-key plumbing — requirements DPVS-01, DPVS-02
+  - [ ] 10-07-PLAN.md — Wave 6 unconditional D-15 cleanup commit (autonomous: false): delete `DpvsProfileInstrumentation.{cpp,h}` + revert all instrumentation edits across 8 files in one revert-shaped commit; author `10-SUMMARY.md`; final boot smoke — requirements DPVS-01, DPVS-02
 
 ### Phase 11: D3D11 Renderer Plugin
 **Goal**: A new `Direct3d11.dll` plugin satisfies the existing 119-function `Gl_api` function-pointer table loaded by `clientGraphics`. Both `Direct3d9.dll` and `Direct3d11.dll` are functional and selectable via config at startup. At minimum, the client renders a ground scene using the D3D11 plugin with visual parity to the D3D9 baseline.
@@ -106,5 +113,5 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 7. Dead Code Removal — Track A | 3/3 | Complete | 2026-05-07 |
 | 8. Dead Code Removal — Track B | 4/4 | Closed-as-scoped (12 tools wired, ~30 deferred to Phase 9 + 12.x) | 2026-05-08 |
 | 9. STLPort → MSVC STL | 3/3 | Complete (Option D adopted: Koogie tree as v2 base + whitengold IFF compat-guard port; Tatooine zone-in PASS) | 2026-05-10 |
-| 10. DPVS Culling Experiment | 0/TBD | Not started | — |
+| 10. DPVS Culling Experiment | 0/7 | Planned (7 plans, waves 1-7); ready for /gsd-execute-phase 10 | — |
 | 11. D3D11 Renderer Plugin | 0/TBD | Not started | — |

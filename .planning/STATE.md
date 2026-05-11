@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: phase-discussed
-stopped_at: "Phase 10 (DPVS Culling Experiment) context gathered. Four gray areas resolved: profiling methodology (D3D9 timestamp queries in-engine + QPC pair + ProfilerBlock + CSV + on-screen overlay; per-frame raw + distributional stats), test scenes + protocol (single scene Mos Eisley plaza, keybind-toggle capture with user driving, F11 runtime A/B toggle, 3 passes × ~10s per condition), decision threshold (total frame time median+p95; DPVS-off ≤ DPVS-on on both → remove, any regression → keep; D3D9-only verdict, Phase 11 re-measures), removal mechanism (source-edit drop OCCLUSION_CULLING bit at RenderWorld.cpp:906; delete disableOcclusionCulling config key; remove instrumentation post-verdict in single commit; verdict doc lives at docs/recon/10-dpvs-profiling.md). Next: `/gsd-plan-phase 10` in v2."
-last_updated: "2026-05-10T23:45:00.000Z"
-last_activity: 2026-05-10 -- Phase 10 CONTEXT.md captured in v2 .planning/phases/10-dpvs-culling-experiment/
+status: executing
+stopped_at: "Phase 10 (DPVS Culling Experiment) CONTEXT.md captured in v2 `.planning/phases/10-dpvs-culling-experiment/10-CONTEXT.md` (commit `b62f3ff92`). Four gray areas resolved across 16 single-question turns: profiling methodology (D-01..D-04), test scenes + sample protocol (D-05..D-08), decision threshold (D-09..D-12), removal mechanism (D-13..D-16). User clarified mid-session that they will drive capture (Claude can't run the client) — the A/B protocol question reformulated into an automation-level question; chosen pattern is keybind-toggle (F10 capture, F11 OCC toggle) with manual everything-else. Notable existing-code finding: `disableOcclusionCulling` config key is already fully wired in v2 (Koogie inheritance) — DPVS-01's config-wiring half is already satisfied; Phase 10's DPVS-01 work is the measurement half only."
+last_updated: "2026-05-11T03:40:01.580Z"
+last_activity: 2026-05-11 -- Phase 10 planning complete
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  completed_phases: 0
+  total_plans: 7
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 Phase: 10 (dpvs-culling-experiment) — context captured 2026-05-10
 Plan: Not started — CONTEXT.md committed (`b62f3ff92`); planner not yet invoked
-Status: Ready for `/gsd-plan-phase 10` in v2
-Last activity: 2026-05-10 -- Phase 10 CONTEXT.md captured (4 gray areas: profiling methodology, test scenes + protocol, decision threshold, removal mechanism)
+Status: Ready to execute
+Last activity: 2026-05-11 -- Phase 10 planning complete
 
 Progress: [######____] 60% (3 of 5 phases complete: Phase 7, Phase 8 closed-as-scoped, Phase 9 closed via Option D; Phase 10 discussed)
 
