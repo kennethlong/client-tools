@@ -59,23 +59,30 @@ up-to-date; that is the correct outcome for a baseline-green check.
 
 ## Boot Smoke
 
+- Date: 2026-05-10
+- Operator: Kenny
 - Client: `D:/Code/swg-client-v2/stage/SwgClient_d.exe`
 - Server: SWGSource VM 192.168.1.200:44453
-- Result: **TBD — awaiting human-verify checkpoint (Task 5 of 10-01-PLAN.md).**
-- Notes: TBD
+- GPU: NVIDIA GeForce RTX 3060
+- Driver: 94.6.2f.0.7e (Windows registry format; recorded verbatim per operator report)
+- Result: **PASS — char-select reached cleanly; Tatooine zone-in also confirmed PASS.**
+- Notes: First-launch clean — no login retries needed (the "back-out + retry login
+  twice" first-launch flakiness noted in Phase 9 closeout did NOT recur this
+  session). Operator reported reaching Tatooine directly, with no relogins.
+  The Phase 9 closeout regression check (Tatooine still loads against the
+  SWGSource VM at 192.168.1.200) holds — no regression introduced by the
+  Wave 0 scaffolding commits (no source-edits land in Wave 0).
 
 Procedure (executed by Kenny per Task 5):
 
 1. Confirm SWGSource VM at 192.168.1.200 is up (Oracle started, stationchat
-   running, ant build current; per memory `project_vm_server_setup.md`).
-2. Launch `D:/Code/swg-client-v2/stage/SwgClient_d.exe`.
-3. Log in with the test account; reach character-select screen.
-4. Optionally: select a Tatooine character and zone in (sanity-check
-   Tatooine still loads — that was the Phase 9 closeout PASS gate).
-5. Quit cleanly.
-6. Fill in the `Result:` and `Notes:` lines above with the actual outcome,
-   then signal `approved` (or describe the failure mode) so the continuation
-   agent can resume from Task 5 and create the SUMMARY.
+   running, ant build current; per memory `project_vm_server_setup.md`). ✓
+2. Launch `D:/Code/swg-client-v2/stage/SwgClient_d.exe`. ✓
+3. Log in with the test account; reach character-select screen. ✓ (clean, no
+   relogins required)
+4. Select a Tatooine character and zone in (Phase 9 closeout regression check). ✓
+5. Quit cleanly. ✓
+6. Result/Notes lines populated above with the verified outcome. ✓
 
 ## Phase 9 Closeout Reference
 

@@ -1,10 +1,10 @@
 # DPVS Occlusion Culling — Profiling Verdict (Phase 10)
 
-**Date measured:** TBD (filled in after capture session)
+**Date measured:** TBD (filled in after capture session — Wave 5)
 **Tree:** `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base`
 **Renderer:** D3D9 (per D-12; Phase 11 D3D11 re-measure separate)
 **Scene:** Mos Eisley cantina plaza (per D-05)
-**Hardware:** TBD (filled in — Kenny's machine GPU model + driver version)
+**Hardware:** NVIDIA GeForce RTX 3060 — driver 94.6.2f.0.7e (Kenny's machine; recorded 2026-05-10 at Phase 10 Wave 0 baseline boot smoke)
 
 ## Methodology
 
