@@ -80,7 +80,6 @@ namespace RenderWorldNamespace
 	bool                                         ms_installed;
 	bool                                         ms_disableObjectMinimumCoverage = true;
 	bool                                         ms_clearDepthAndStencilBufferAfterRenderingEnvironment;
-	bool                                         ms_disableOcclusionCulling;
 #ifdef _DEBUG
 	bool                                         ms_disableEnvironment;
 	bool                                         ms_disableResolveVisibility;
@@ -905,10 +904,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 		dpvsFrustum.zFar   = ms_cameraFrustum[Camera::FV_FarUpperLeft].z;
 		ms_dpvsCamera->setFrustum(dpvsFrustum);
 	#ifdef _DEBUG
-		uint const cullingParameters = ((ms_forceDisableOcclusionCulling || ms_disableOcclusionCulling) ? 0 : DPVS::Camera::OCCLUSION_CULLING) | (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
+		// Phase 10 D-13: OCCLUSION_CULLING bit dropped per docs/recon/10-dpvs-profiling.md
+		// (Option α: apply remove globally; aggregate user experience favors outdoor wins).
+		uint const cullingParameters = (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
 		portalRecusionDepth = ms_disablePortalTraversal ? 0 : 8;
 	#else
-		uint const cullingParameters = (ms_disableOcclusionCulling ? 0 : DPVS::Camera::OCCLUSION_CULLING) | DPVS::Camera::VIEWFRUSTUM_CULLING;
+		// Phase 10 D-13: OCCLUSION_CULLING bit dropped (Option α).
+		uint const cullingParameters = DPVS::Camera::VIEWFRUSTUM_CULLING;
 		portalRecusionDepth = 8;
 	#endif
 
@@ -1168,22 +1170,6 @@ const RenderWorld::CellPropertyList & RenderWorld::getVisibleCells()
 ProfilerBlock &RenderWorld::getDpvsQueryProfilerBlock()
 {
 	return ms_dpvsQueryProfilerBlock;
-}
-
-// ----------------------------------------------------------------------
-
-void RenderWorld::setDisableOcclusionCulling(bool const disableOcclusionCulling)
-{
-	ms_disableOcclusionCulling = disableOcclusionCulling;
-}
-
-// ----------------------------------------------------------------------
-// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-// Consumed by DpvsProfileInstrumentation::onFrameEnd to populate the
-// dpvs_occlusion_flag CSV column and by the overlay print routine.
-bool RenderWorld::getDisableOcclusionCulling()
-{
-	return ms_disableOcclusionCulling;
 }
 
 // ----------------------------------------------------------------------

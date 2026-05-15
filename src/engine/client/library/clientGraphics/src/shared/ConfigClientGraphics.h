@@ -49,7 +49,6 @@ public:
 
 	static bool           getValidateShaderImplementations();
 	static bool           getDisableMultiStreamVertexBuffers();
-	static bool           getDisableOcclusionCulling();
 
 	static bool           getLogBadCustomizationData();
 

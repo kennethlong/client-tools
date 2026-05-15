@@ -975,12 +975,14 @@ IoResult CuiIoWin::processEvent (IoEvent * event)
 			retval = true;
 			break;
 		}
-		if (event->arg2 == DIK_F11)
-		{
-			RenderWorld::setDisableOcclusionCulling(!RenderWorld::getDisableOcclusionCulling());
-			retval = true;
-			break;
-		}
+		// Phase 10 D-14: getter/setter deleted -- F11 hook neutralized.
+		//   Wave 7 (D-15) removes this entire block as part of THROWAWAY teardown.
+		// if (event->arg2 == DIK_F11)
+		// {
+		//     RenderWorld::setDisableOcclusionCulling(!RenderWorld::getDisableOcclusionCulling());
+		//     retval = true;
+		//     break;
+		// }
 #endif
 
 		if (m_keyboardInputActive)

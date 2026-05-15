@@ -688,7 +688,10 @@ void GroundScene::init (const char* const terrainFilename, CreatureObject* const
 
 	//-- install all systems
 	ClientWorld::install ();
-	RenderWorld::setDisableOcclusionCulling(strstr(terrainFilename, "space_") != 0);
+	// Phase 10 D-13/D-14: setDisableOcclusionCulling deleted; OCCLUSION_CULLING bit
+	// stripped globally per docs/recon/10-dpvs-profiling.md (Option alpha). The
+	// pre-Phase-10 scene-conditional toggle (off for space, on for ground) is now
+	// redundant -- DPVS occlusion is off for all scenes.
 	AlterScheduler::setPostAlterHookFunction (CollisionWorld::update);
 	WeatherManager::addWeatherChangedFunction (ParticleEffectAppearance::setGlobalWind);
 

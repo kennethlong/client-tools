@@ -327,7 +327,9 @@ void writeRow(uint32 gpuUs, bool disjointInvalid, float totalFrameMs)
 	if (ms_csv == NULL)
 		return;
 
-	int const dpvsOff = RenderWorld::getDisableOcclusionCulling() ? 1 : 0;
+	// Phase 10 D-14: getter deleted; DPVS occlusion is permanently off per Option alpha.
+	// Wave 7 deletes this file entirely.
+	int const dpvsOff = 1;
 
 	int drawCalls = 0;
 #ifdef _DEBUG
@@ -391,8 +393,9 @@ std::string currentIsoTimestamp()
 // (Overlay print routine, lines 521-541).
 void reportOverlay()
 {
+	// Phase 10 D-14: DPVS toggle removed; overlay shows "removed". Wave 7 deletes this file.
 	DEBUG_REPORT_PRINT(true, ("DPVS:%s run=%s %s frame=%d capturedRows=%d\n",
-		RenderWorld::getDisableOcclusionCulling() ? "OFF" : "ON",
+		"removed",
 		ms_runLabel.empty() ? "(unlabeled)" : ms_runLabel.c_str(),
 		ms_captureActive ? "REC" : "...",
 		Graphics::getFrameNumber(),

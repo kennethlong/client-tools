@@ -35,7 +35,6 @@ namespace ConfigClientGraphicsNamespace
 	bool  ms_disableMultiStreamVertexBuffers;
 	bool  ms_screenShotBackBuffer;
 	bool  ms_nPatchTest;
-	bool  ms_disableOcclusionCulling;
 
 	bool  ms_logBadCustomizationData;
 
@@ -98,7 +97,6 @@ void ConfigClientGraphics::install (const Defaults &defaults)
 	KEY_BOOL(screenShotBackBuffer,                false);
 	KEY_BOOL(disableMultiStreamVertexBuffers,     true);
 	KEY_BOOL(nPatchTest,                          false);
-	KEY_BOOL(disableOcclusionCulling,             false);
 
 	KEY_BOOL(logBadCustomizationData,             false);
 
@@ -236,13 +234,6 @@ bool ConfigClientGraphics::getValidateShaderImplementations()
 bool ConfigClientGraphics::getDisableMultiStreamVertexBuffers()
 {
 	return ms_disableMultiStreamVertexBuffers;
-}
-
-//----------------------------------------------------------------------
-
-bool ConfigClientGraphics::getDisableOcclusionCulling()
-{
-	return ms_disableOcclusionCulling;
 }
 
 // ----------------------------------------------------------------------
