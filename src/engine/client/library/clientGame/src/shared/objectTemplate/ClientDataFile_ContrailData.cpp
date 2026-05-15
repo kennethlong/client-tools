@@ -75,7 +75,13 @@ void ContrailData::load_0000(Iff & iff)
 			
 			if (!m_swooshAppearanceName.empty ())
 			{
-				m_swooshAppearanceTemplate = safe_cast<SwooshAppearanceTemplate const *>(AppearanceTemplateList::fetch (m_swooshAppearanceName.c_str ()));
+				AppearanceTemplate const * const at = AppearanceTemplateList::fetch (m_swooshAppearanceName.c_str ());
+				m_swooshAppearanceTemplate = dynamic_cast<SwooshAppearanceTemplate const *>(at);
+				if (at && !m_swooshAppearanceTemplate)
+				{
+					DEBUG_WARNING(true, ("ContrailData: '%s' is not SwooshAppearanceTemplate, ignoring", m_swooshAppearanceName.c_str ()));
+					AppearanceTemplateList::release (at);
+				}
 			}
 			
 		}
