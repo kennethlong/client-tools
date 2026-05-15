@@ -1,0 +1,28 @@
+# Phase 10 DPVS Analysis — verdict line for plan 10-06 gate
+
+This file is the authoritative gate for plan 10-06 Task 3 (per `10-06-PLAN.md` line 217:
+`findstr /R /C:"^verdict = " 10-05-analysis.txt`).
+
+## Per-scene analysis (full data in 10-05-capture-evidence.md)
+
+| Scene                          | n (ON / OFF) | ON median | OFF median | Verdict |
+|--------------------------------|--------------|-----------|------------|---------|
+| Mos Eisley plaza (sparse)      | 2,483 / 1,158 | 28.88 ms  | 27.94 ms   | remove  |
+| Mos Eisley starport (dense)    | 501 / 535     | 23.50 ms  | 21.37 ms   | remove  |
+| Walking (moving camera)        | 747 / 592     | 23.32 ms  | 22.33 ms   | remove  |
+| Cantina interior V1+V2         | 1,450 / 2,274 | 28.68 ms  | 29.34 ms   | keep    |
+
+## Architectural reality (discovered during plan 10-06 execution)
+
+The `cullingParameters` bitmask in `RenderWorld.cpp:908` (`#ifdef _DEBUG`) and `:911` (release)
+is a single value applied to the single `ms_dpvsCamera` for ALL rendering. There is no
+per-path code-level split between indoor and outdoor at this site. Option α (apply `remove`
+globally) was chosen because:
+- Outdoor magnitude × frequency dominates: 0.94–2.13 ms gained, most playtime is outdoor
+- Indoor regression × frequency: 0.66 ms lost (below human perception), POB playtime is minor
+
+Phase 11 D3D11 work will reconsider per ROADMAP success criterion #6.
+
+# Plan 10-06 Task 3 verdict gate
+
+verdict = remove

@@ -11,12 +11,24 @@
 
 ## Verdict
 
-**Scene-conditional `remove for outdoor, keep for indoor`** — DPVS occlusion culling flips sign between rendering paths:
+**Underlying data is scene-conditional `remove for outdoor, keep for indoor`** — DPVS occlusion culling flips sign between rendering topologies:
 
 - **Outdoor scenes:** `remove` (3/3 scenes voted independently). DPVS is net-negative. Cost grows with scene complexity (~940 µs/frame sparse → ~1,592 µs/frame dense); OFF wins median frame time by 3.3% to 9.1%.
 - **Indoor cells:** `keep` (cantina, validated across two scene densities + two camera anchors, n=3,724 frames). DPVS is net-positive. Tight geometry-dense spaces; DPVS saves ~742 µs CPU per frame; ON wins median frame time by 2.2%.
 
-Matches ROADMAP Phase 10 success criteria #3 framing exactly. Source-edit implication: strip `OCCLUSION_CULLING` bit from the outdoor camera-setup path in `RenderWorld.cpp` (~line 908 in current HEAD), retain on the indoor cell camera-setup path (~line 911). The single `resolveVisibility()` call site at `:1062` is shared by both paths; the verdict differs only in the per-path `cullingParameters` bitmask passed into `DPVS::Camera`.
+**Applied decision: `remove` globally (Option α).** Architectural constraint identified during plan 10-06 execution: the `cullingParameters` bitmask in `RenderWorld.cpp` (lines 908 in `#ifdef _DEBUG` / 911 in release branch — same value via conditional compilation) feeds the single `ms_dpvsCamera->setParameters()` call at line 926. That camera is used for ALL rendering — indoor cells and outdoor scenes alike. There is no per-path code-level split available without a larger refactor to pass different culling parameters per cell context.
+
+The decision balances aggregate experience:
+- Outdoor magnitude × frequency: 0.94–2.13 ms gained × dominant playtime
+- Indoor regression × frequency: 0.66 ms lost × cantina/POB playtime (below human perception threshold)
+- Net: aggregate user experience improves; outdoor wins dominate.
+
+**Phase 11 reconsideration required.** When the D3D11 renderer lands, this trade may re-balance (cheaper draws may eliminate outdoor DPVS overhead OR eliminate indoor DPVS savings). Three options at that point:
+1. Keep Option α (remove globally) — if D3D11 numbers still favor outdoor
+2. Revert globally to `keep` — if D3D11 numbers flip outdoor to net-positive
+3. Implement runtime scene-aware split — pass different `cullingParameters` per-cell at line 908/911; non-trivial refactor justified only if D3D11 numbers show a large gap in both directions
+
+Captured in ROADMAP Phase 11 success criterion #6.
 
 ---
 
@@ -151,25 +163,31 @@ The crossover happens because outdoor scenes simply lack the occluder density th
 
 ## Source-edit implication for plan 10-06
 
-Strip `OCCLUSION_CULLING` bit from outdoor camera-setup, retain on indoor cell camera-setup. Single `resolveVisibility()` call is shared.
+Strip `OCCLUSION_CULLING` bit from the single global `cullingParameters` setup. Both lines 908 (`#ifdef _DEBUG` variant with extra debug flags) and 911 (release variant) are the SAME value applied to the SAME `ms_dpvsCamera` via conditional compilation — both must be edited consistently. The single `resolveVisibility()` call at `:1062` stays. DPVS library stays linked (still needed for portal cell traversal regardless of the occlusion-query decision).
 
 ```cpp
-// RenderWorld.cpp current HEAD (lines approximate per Phase 10 Wave 3 commits;
-// CONTEXT.md said 903/906 but file has drifted to 908/911 — verify before edit):
+// RenderWorld.cpp current HEAD lines 907-913:
 
-// Outdoor camera-setup path (line ~908):
-uint const cullingParameters = ((ms_forceDisableOcclusionCulling || ms_disableOcclusionCulling)
-    ? 0 : DPVS::Camera::OCCLUSION_CULLING) | (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
-
-// Indoor cell camera-setup path (line ~911):
-uint const cullingParameters = (ms_disableOcclusionCulling ? 0 : DPVS::Camera::OCCLUSION_CULLING) | DPVS::Camera::VIEWFRUSTUM_CULLING;
+#ifdef _DEBUG
+    uint const cullingParameters = ((ms_forceDisableOcclusionCulling || ms_disableOcclusionCulling)
+        ? 0 : DPVS::Camera::OCCLUSION_CULLING) | (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
+#else
+    uint const cullingParameters = (ms_disableOcclusionCulling ? 0 : DPVS::Camera::OCCLUSION_CULLING)
+        | DPVS::Camera::VIEWFRUSTUM_CULLING;
+#endif
 ```
 
-After plan 10-06:
-- Outdoor path: drop the `OCCLUSION_CULLING` term entirely (always 0 for that bit).
-- Indoor path: leave as-is. Could simplify by removing the `ms_disableOcclusionCulling` runtime gate since it's no longer needed (always pass `OCCLUSION_CULLING`), then delete the `ms_disableOcclusionCulling` / `ms_forceDisableOcclusionCulling` member variables + setter/getter + config-key plumbing per D-14.
+After plan 10-06 (both branches stripped of `OCCLUSION_CULLING` term):
 
-The single `resolveVisibility()` call at `:1062` stays. DPVS library stays linked (still needed for portal cell traversal regardless).
+```cpp
+#ifdef _DEBUG
+    uint const cullingParameters = (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
+#else
+    uint const cullingParameters = DPVS::Camera::VIEWFRUSTUM_CULLING;
+#endif
+```
+
+Plus D-14 deletes the now-unused config-key + setter/getter machinery (`ms_disableOcclusionCulling` static in both `RenderWorld.cpp` and `ConfigClientGraphics.cpp`, the `KEY_BOOL(disableOcclusionCulling, ...)` registration, `RenderWorld::setDisableOcclusionCulling` / `getDisableOcclusionCulling`, declarations in headers, and the F11 keybind hook installed in plan 10-04).
 
 ---
 
