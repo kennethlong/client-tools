@@ -13,11 +13,6 @@
 #include "clientGame/Bloom.h"
 #include "clientGame/Game.h"
 #include "clientGame/GroundScene.h"
-#ifdef _DEBUG
-// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-#include "clientGraphics/DpvsProfileInstrumentation.h"
-#include "clientGraphics/RenderWorld.h"
-#endif
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/PostProcessingEffectsManager.h"
 #include "clientGraphics/ShaderTemplateList.h"
@@ -961,29 +956,6 @@ IoResult CuiIoWin::processEvent (IoEvent * event)
 
 	case IOET_KeyDown:
 		AwayFromKeyBoardManager::touch();
-
-#ifdef _DEBUG
-		// Phase 10 -- DPVS profiling instrumentation hooks (THROWAWAY; D-15 cleanup target).
-		// F10 toggles capture; F11 toggles the DPVS occlusion-culling bit.
-		// Hook runs BEFORE InputMap so it preempts any TRE-archived input-map
-		// binding for these keys (acceptable per RESEARCH.md A2 -- F10/F11 are
-		// not in source today; the debug-only intercept consumes the event with
-		// retval=true; break;).
-		if (event->arg2 == DIK_F10)
-		{
-			DpvsProfileInstrumentation::toggleCapture();
-			retval = true;
-			break;
-		}
-		// Phase 10 D-14: getter/setter deleted -- F11 hook neutralized.
-		//   Wave 7 (D-15) removes this entire block as part of THROWAWAY teardown.
-		// if (event->arg2 == DIK_F11)
-		// {
-		//     RenderWorld::setDisableOcclusionCulling(!RenderWorld::getDisableOcclusionCulling());
-		//     retval = true;
-		//     break;
-		// }
-#endif
 
 		if (m_keyboardInputActive)
 		{

@@ -14,8 +14,6 @@
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/CustomizableShaderTemplate.h"
 #include "clientGraphics/DebugPrimitive.h"
-// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15)
-#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/GraphicsDebugFlags.h"
 #include "clientGraphics/DynamicVertexBuffer.h"
 #include "clientGraphics/Graphics.h"
@@ -237,13 +235,6 @@ bool SetupClientGraphics::install(const Data &data)
 		TextureList::addCleanupCallbackFunction(CellProperty::releaseWorldCellPropertyEnvironmentTexture);
 
 		RenderWorld::install();
-
-		// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15)
-		// Installs CSV writer + overlay DebugFlag + ExitChain teardown.
-		// Downstream of RenderWorld (reads RenderWorld::getDisableOcclusionCulling()).
-		// No matching ::remove() call here -- ExitChain::add() in install()
-		// registers teardown automatically.
-		DpvsProfileInstrumentation::install();
 	}
 
 	StaticVertexBuffer::install();

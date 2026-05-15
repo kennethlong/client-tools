@@ -284,11 +284,6 @@ public:
 	static void                          pixBeginEvent(WCHAR const * eventName);
 	static void                          pixEndEvent(WCHAR const * eventName);
 
-	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; removed per CONTEXT D-15)
-	static void                          dpvsGpuTimingBegin();
-	static void                          dpvsGpuTimingEnd();
-	static bool                          dpvsGpuTimingPollResult(uint32 * out_microseconds, bool * out_disjointInvalid);
-
 	static bool DLLEXPORT                writeImage(char const * file, int const width, int const height, int const pitch, int const * pixelsARGB, bool const alphaExtend, Gl_imageFormat const imageFormat, Rectangle2d const * subRect);
 
 	static bool                          supportsAntialias();
