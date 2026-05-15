@@ -90,6 +90,124 @@ Possible introduction mechanisms:
   bit we just modified — `portalRecusionDepth` is unchanged in this Phase 10
   work. So the corner-snap is genuinely orthogonal to Phase 10.
 
+## Kenny's theory (2026-05-15) — synchronous logging bursts on cell transitions
+
+Likely root cause: each cell transition triggers a burst of `DEBUG_WARNING`
+firings (probably from SWGSource VM data mismatches — missing templates,
+malformed IFF chunks, asset references that don't resolve). Synchronous
+logging stalls the frame, producing the visible "snap."
+
+Evidence supporting:
+- 35,194 warnings on world load observed during Phase 10 capture sessions
+  (2026-05-14) — confirms high warning volume under SWGSource configuration
+- Snap only happens on `build-v145+` lineage, not the earlier `build/bin/Debug`
+  lineage — different toolchain may produce different `#ifdef _DEBUG`
+  behavior or different inlining decisions that expose more warning sites
+- Snap correlates with cell transitions (interior corners between cantina
+  sub-cells) — each first-time cell load fires its own warning batch
+- Pre-built `exe/win32/SwgClient_r.exe` does NOT do the snap (Release config
+  compiles out `DEBUG_WARNING` entirely)
+- `lookUpCallStackNames=false` already in client_d.cfg (line 79) so DbgHelp
+  is not the bottleneck — but synchronous file I/O + sprintf still costs
+
+Quick confirmation test for /gsd-debug session:
+1. Note log file size BEFORE entering cantina
+2. Walk through main door (snap)
+3. Note log file size AFTER — quantify warning-burst per transition
+4. Walk through interior corner (snap)
+5. Note log file size AFTER
+6. If size jumps by hundreds of KB per snap frame → theory confirmed
+
+Mitigation options if confirmed (ordered cheapest-first):
+1. **Rate-limit DEBUG_WARNING per source line** — "if same warning fired
+   in last N frames, skip." Touches one macro definition; minimal-blast-radius
+   fix that addresses the lag without changing what gets logged on first
+   occurrence.
+2. **Async logging** — queue + background flush thread. Bigger change but
+   structurally correct.
+3. **Bulk-suppress specific warning sites** — grep the dominant warnings,
+   convert to `DEBUG_REPORT_LOG` or comment out. Brittle (each fix is
+   per-site) but quick.
+4. **Toggle a runtime log-level config key** — if SharedDebug already has
+   one. Quickest if it exists.
+
+## Smoking-gun finding (2026-05-15, during Phase 10 boot smoke)
+
+**`DEBUG_WARNING` routes to `OutputDebugString` via `Report.cpp:145`.**
+NOT to a file. This explains:
+- `ui.log` does NOT grow during warning bursts (it's UI-subsystem-only)
+- 12,133 warnings in a smoke test produced no on-disk log file
+- Warning count is visible only via DebugView.exe (Sysinternals) or attached
+  debugger
+
+**Why `OutputDebugString` is the snap mechanism:**
+- Per-call overhead ~50-200 µs even when no debugger is attached (Windows
+  does an IPC dance to check if anyone is listening)
+- If `DebugView.exe` is running anywhere on the system (or VS Output is
+  capturing), there's a **process-global serialization mutex** — every
+  `OutputDebugString` call from this client contends with every other
+  process calling it. Even without DebugView, the global event check
+  has measurable cost.
+- 50 warnings concentrated in a single cell-transition frame = 2.5-10 ms
+  of pure `OutputDebugString` overhead = exactly what the visible snap
+  looks like
+- First-time cell traversal triggers a warning burst (asset mismatches
+  resolve on first load, cache hits silently after) — matches the
+  intermittent-snap observation
+
+**One-line fix candidate** for /gsd-debug session:
+```cpp
+// Report.cpp:145
+if (IsDebuggerPresent())
+    OutputDebugString(buffer);
+```
+
+This alone likely eliminates the snap entirely during normal play (no
+debugger attached) while preserving diagnostic value when debugging. Test
+plan: apply the wrap → rebuild → restage → repeat the same cantina
+corner-snap reproduction protocol → confirm snap gone.
+
+**Pre-fix binary-search test (Kenny's idea, 2026-05-15):** Build a v2
+Release config of SwgClient and run it against the SWGSource VM. Release
+builds compile out `DEBUG_WARNING` entirely via `PRODUCTION==1` (no calls
+to OutputDebugString from the warning macros). Expected outcome under the
+theory:
+- Release build does NOT snap → theory confirmed, OutputDebugString is
+  the mechanism. Apply the one-line `IsDebuggerPresent()` wrap to fix
+  Debug builds too.
+- Release build STILL snaps → theory only partially correct (or wrong).
+  Look elsewhere: possibly portal-traversal logic, IFF cache misses on
+  first cell load, or some other source of first-traversal stutter.
+
+This is the cleanest possible isolation test: no source edits required,
+just a config switch on the existing build solution. Output goes to
+`D:/Code/swg-client-v2/src/compile/win32/SwgClient/Release/SwgClient_r.exe`
+(or similar); restage to `D:/Code/swg-client-v2/stage/` and launch.
+
+Procedure:
+1. VS → Configuration: Release / Platform: Win32 → Build SwgClient
+2. Copy `SwgClient_r.exe` to `stage/`
+3. Copy fresh Release renderer DLLs (gl05_r.dll etc.) to `stage/`
+4. Update `stage/client_d.cfg` paths if Release uses `client.cfg` (it
+   likely will -- check existence in `D:/Code/swg-client/build/bin/Release/`)
+5. Launch SwgClient_r.exe, login, walk to cantina, attempt to reproduce
+   corner-snap
+6. Record observation in this todo before any source-edit fixes
+
+**Why this only manifested in v2 / build-v145 lineage and not v1
+milestone:** Possible Phase 7 / Phase 8 / Phase 9 work introduced new
+warning sites that fire during cell transitions, OR the v145 toolchain
+changed `OutputDebugString` overhead characteristics, OR a Koogie merge
+brought in new warnings. Bisection still required to identify the exact
+introduction commit, but the FIX is independent of the introduction.
+
+**Intermittent-snap evidence (2026-05-15 boot smoke):** Same path through
+cantina sometimes snaps, sometimes doesn't. Consistent with first-time-
+cell-load warning bursts (snap on first traversal, cached on subsequent
+traversals → silent). Strengthens both the warning-burst hypothesis AND
+the OutputDebugString-overhead mechanism (the warnings are real, just
+intermittent based on cache state).
+
 ## Not blocking
 
 - Phase 10 closure: boot smoke acceptance was "client renders Mos Eisley
