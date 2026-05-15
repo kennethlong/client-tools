@@ -92,7 +92,7 @@ Phase numbering continues from v1 (ended at Phase 6).
 
 ### Phase 11: D3D11 Renderer Plugin
 **Goal**: A new `Direct3d11.dll` plugin satisfies the existing 119-function `Gl_api` function-pointer table loaded by `clientGraphics`. Both `Direct3d9.dll` and `Direct3d11.dll` are functional and selectable via config at startup. At minimum, the client renders a ground scene using the D3D11 plugin with visual parity to the D3D9 baseline.
-**Depends on**: Phase 7 (clean build baseline), Phase 9 (optional — cleaner codebase helps)
+**Depends on**: Phase 7 (clean build baseline), Phase 9 (optional — cleaner codebase helps), Phase 10 (DPVS verdict baseline established under D3D9; Phase 11 success criterion #6 re-measures it)
 **Requirements**: D3D11-01, D3D11-02, D3D11-03, D3D11-04, D3D11-05
 **Success Criteria** (what must be TRUE):
   1. `src/engine/client/library/clientGraphics/Direct3d11/CMakeLists.txt` produces `Direct3d11.dll` that exports the same 119-function table as `Direct3d9.dll`; both DLLs staged to `build/bin/Debug/` by POST_BUILD
@@ -100,7 +100,8 @@ Phase numbering continues from v1 (ended at Phase 6).
   3. All vertex and pixel shaders compile under HLSL 4.0 (`vs_4_0` / `ps_4_0`) with `SV_POSITION` semantics; shader compilation errors resolve before runtime
   4. A pixel shader generator covers the `D3DTSS_*` texture combiner operations used by SWG's material system; at least the common cases (MODULATE, ADD, SELECTARG1) produce visually correct output
   5. Client renders at least one ground scene (character select planet scene or zone entry) using the D3D11 plugin; basic geometry, terrain, and character models are visible (no requirement for pixel-perfect parity with D3D9)
-**Plans**: TBD (multi-plan: plugin scaffold, resource management, shader recompile, FFP generator, boot verify)
+  6. **DPVS remeasurement under D3D11 per CONTEXT D-12 + `docs/recon/10-dpvs-profiling.md` "Phase 11 Revisit Note":** re-run the Phase 10 capture protocol (`tools/dpvs-profile/test-protocol.md`) against the D3D11 renderer to confirm or reverse the Phase 10 D3D9 scene-conditional verdict (`remove for outdoor, keep for indoor`). The Phase 10 instrumentation is removed by plan 10-07 (THROWAWAY per D-15) — Phase 11 must either restore equivalent instrumentation OR adopt a different measurement approach. Specifically: if the outdoor `remove` verdict no longer holds under D3D11, the source edits from plan 10-06 must be reverted. If the indoor `keep` verdict flips to `remove` under D3D11 (plausible: D3D11's cheaper per-draw-call cost may make DPVS's intra-cell occlusion savings insufficient to justify the per-frame query overhead), additional source edits apply the same stripping to `RenderWorld.cpp:911` (or its line equivalent at that point). Verdict and any conditional source edits documented in a new `docs/recon/11-dpvs-d3d11-remeasure.md`.
+**Plans**: TBD (multi-plan: plugin scaffold, resource management, shader recompile, FFP generator, boot verify, **DPVS remeasure**)
 
 ## Progress
 
