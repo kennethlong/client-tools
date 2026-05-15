@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 10 Wave 3 (plan 10-04) COMPLETE. DpvsProfileInstrumentation hook wiring landed in 4 atomic commits. Pre-landed Rule 3 getter detected and skipped. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per autonomous=false plan + prompt key_context. Wave 5 (plan 10-05) unblocked: Kenny launches client, drives F10/F11/setrunlabel protocol against SWGSource VM, produces 6 CSV files for verdict aggregation per tools/dpvs-profile/test-protocol.md."
-last_updated: "2026-05-11T05:15:23.459Z"
-last_activity: 2026-05-11
+stopped_at: "Phase 10 Wave 4 (plan 10-05) COMPLETE. Manual capture session across 4 client launches produced 22 CSV files / 12,016 total frame samples across 5 distinct capture conditions. SCENE-CONDITIONAL verdict, HIGH CONFIDENCE on both sides: `remove` for outdoor (3/3 outdoor scenes; CPU cost ~940-1,592 µs/frame, OFF wins by 3.3-9.1% median), `keep` for indoor cell (verdict reproduced across V1 sparse ~8 NPCs AND V2 dense ~30+ moving NPCs cantina captures with different camera anchors; combined n=1,450 ON + 2,274 OFF = 3,724 frames; DPVS saves ~742 µs CPU/frame, ON wins by 0.66 ms median = 2.2%). Indoor result was robustness-checked after the initial 2.2% single-capture finding raised noise-floor concerns — V2 follow-up confirmed verdict reproduces across scene density (sparse and dense) and across camera anchor (different cantina viewpoints). Indoor DPVS savings shrink with density (940 µs sparse → 654 µs dense) but stay positive; outdoor DPVS cost grows with density (940 µs sparse → 1,592 µs dense) — clean unified gradient explains scene-conditional verdict. Result exactly matches ROADMAP Phase 10 success criteria #3 framing. gpu_us=0 across all frames RESOLVED as structural finding (DPVS is CPU-side software occlusion; bracket wraps CPU-only resolveVisibility() with no GPU work between Begin/End; 100% uniform zero across 12K+ frames matches 'no work to measure' not polling-failure pattern). Evidence in 10-05-capture-evidence.md + 10-05-SUMMARY.md. Plan 10-06 (Wave 5) unblocked: write docs/recon/10-dpvs-profiling.md + apply SCENE-CONDITIONAL source edits — strip OCCLUSION_CULLING bit ONLY from outdoor camera-setup path at RenderWorld.cpp:908, RETAIN on indoor path at RenderWorld.cpp:911."
+last_updated: "2026-05-14T21:30:00.000Z"
+last_activity: 2026-05-14
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
-  percent: 57
+  completed_plans: 5
+  percent: 71
 ---
 
 # Project State
@@ -26,11 +26,12 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 ## Current Position
 
 Phase: 10 (dpvs-culling-experiment) — EXECUTING
-Plan: 5 of 7
-Status: Ready to execute
-Last activity: 2026-05-11
+Plan: 6 of 7
+Status: Ready for plan 10-06 (verdict writeup + conditional source edits)
+Last activity: 2026-05-14
+Verdict: SCENE-CONDITIONAL (HIGH CONFIDENCE both sides) — `remove` for outdoor (3/3 scenes, OFF wins 3.3-9.1%), `keep` for indoor (V1 sparse + V2 dense + combined all vote `keep` at 2.1-2.2%, n=3,724 indoor frames). See 10-05-capture-evidence.md §4.
 
-Progress: [██████░░░░] 57%
+Progress: [███████░░░] 71%
 
 ## Accumulated Context
 
@@ -64,6 +65,7 @@ Decisions carried forward from v1:
 - [Phase 9 — 2026-05-10 CLOSED via Option D]: STL-01..STL-05 all satisfied. STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3` (CONTEXT.md D-14); STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540dfb09acf50b41e37e49038229b18d3bc` on `koogie-msvc-cpp20-base`, port-forwarding whitengold `dd78832c4d5ad116ee049619e8c39a844597bd34`) plus Tatooine zone-in PASS against SWGSource VM 192.168.1.200 (evidence: `evidence/09-02-tatooine.png` 1,089,854 bytes; runtime log `D:/Code/swg-client-v2/stage/log-replan3-02.txt` 7.2 MB, zero FATAL). Task 3 bisect-first NO-OP (D-18): ContrailData / NebulaManager / POB candidates remained unported because the IFF guard alone delivered Tatooine clean. Active working tree: `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base`. Post-Phase-9 followthrough: upstream PR series to SWG-Source/master per D-19 + memory `project_swg_source_upstreaming.md`; runtime stability long-tail (ExceptionHandler crash after ~11 min in-world) deferred to future `/gsd-debug` session; first-launch login flakiness observed (back-out + retry login twice before repeatable) — not an STL-05 blocker.
 - [Phase 10 — 2026-05-11 Wave 2 complete (plan 10-03)]: DpvsProfileInstrumentation engine module landed in 3 atomic commits (3fb4c9804 public header; f55da0cef CSV writer + run-label sanitizer + DebugFlag overlay + ExitChain teardown; 1f5cd24f1 vcxproj wire + SetupClientGraphics install hook + Rule 3 RenderWorld::getDisableOcclusionCulling getter). Static-only class with anonymous-namespace state; AbstractFile* via StdioFile in append-binary; run-label sanitizer covers CSV-cell + filename + path-traversal + formula-injection in one pass; two-gate per-frame onFrameEnd (ms_installed first, drain GPU pool, then ms_captureActive for row write) per RESEARCH.md Pitfall 4 intent. CSV header byte-for-byte matches tools/dpvs-profile/analysis.py EXPECTED_HEADER. DebugFlag-driven overlay via DEBUG_REPORT_PRINT gated by [ClientGraphics/Dpvs] reportInstrumentation. Build verified -t:clientGraphics EXIT=0 (clientGraphics.lib 12.3 MB, +195 KB vs Wave 1) and -t:SwgClient SwgClient_d.exe 72.5 MB (+10 KB vs Wave 1; pre-existing Koogie post-build MSB3073 the only failure). Rule 3 auto-fix: RenderWorld::getDisableOcclusionCulling getter added here (MSVC compile vs link surface mismatch -- plan author expected link error); plan 10-04 Task 1 no-op for that specific edit. 19 THROWAWAY/D-15 markers across 5 affected files.
 - [Phase Phase 10]: Phase 10 Wave 3 complete (plan 10-04): DpvsProfileInstrumentation hook wiring landed in 4 atomic commits (cca3dcebc RenderWorld GPU/CPU bracket; 2688a0bdd Game::run onFrameEnd hook + CuiIoWin _DEBUG F10/F11 intercept; bf464e3ee /setrunlabel console command; d8dbd4076 SwgClient build log force-add). Pre-landed Rule 3 detection: RenderWorld::getDisableOcclusionCulling getter was already committed in Wave 3 (1f5cd24f1) -- Task 1 Part A skipped as no-op per Wave 3 SUMMARY documentation. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Pre-existing Koogie post-build MSB3073 the only failure (out-of-scope per Wave 0/1/2/3 precedent). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per prompt key_context. Wave 5 (plan 10-05) unblocked: capture protocol drives F10/F11/setrunlabel + 6 CSV files for verdict aggregation.
+- [Phase 10 — 2026-05-14 Wave 4 complete (plan 10-05)]: Manual capture session across 3 client launches against SWGSource VM at 192.168.1.200. SCENE-CONDITIONAL verdict: `remove for outdoor, keep for indoor`. Delivered 17 CSVs / 6,072 frames across 4 scenarios — mosEisley plaza (sparse: 6 ON / 3 OFF), starport (dense: 1 ON / 1 OFF), walking (moving camera: 2 ON / 1 OFF), cantinaInterior (indoor: 1 ON / 2 OFF). All 3 outdoor scenes independently voted `remove`: DPVS CPU cost ~940 µs/frame at plaza → ~1,592 µs/frame at starport (scale with scene complexity); OFF wins by 0.94-2.13 ms median (3.3-9.1%). Cantina interior voted `keep`: DPVS SAVES ~940 µs CPU/frame in tight geometry-dense cells; ON wins by 0.62 ms median (2.2%). Indoor result emerged from session-3 follow-up after session-2 only captured indoor OFF; the missing ON pass reversed a mid-session hypothesis that DPVS could be removed everywhere. Confirmed: ROADMAP Phase 10 success criteria #3 framing was right — outdoor and indoor paths diverge cleanly at RenderWorld.cpp:908 and :911 (cullingParameters bitmask); single resolveVisibility() call at :1062 is shared. Caveats: (1) gpu_us=0 across all frames — Wave 1 timestamp-query pool silently failing, CPU side drove clean verdict, GPU side cost unmeasured (deferred follow-up); (2) v2 launches with DPVS:OFF as default state confirmed across both session-2 and session-3 relaunches (probably persisted via local_machine_options.iff), opposite of session 1; recovered via rename + run_label-column patch using dpvs_occlusion_flag as authoritative truth; (3) Shuttle takeoff caused 147 ms max in starport-OFF transient, walking-OFF and cantina-ON have similar single-frame outliers, p95/p99 unaffected. New stage file: `[ClientGraphics/Dpvs] reportInstrumentation=true` block added to client_d.cfg. Plan 10-06 (Wave 5) unblocked: scene-conditional source edits — strip OCCLUSION_CULLING from outdoor path at RenderWorld.cpp:908, RETAIN on indoor path at :911. SafeCast.h:29 dialog-twice issue tracked separately in `.planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md` — not a Phase 10 blocker.
 
 ### v2 Phase Plan
 
@@ -72,7 +74,7 @@ Decisions carried forward from v1:
 | 7 | Dead code Track A: deletes + CMake unlinks + Vivox + XPCOM | CLEAN-01..05 | Complete (2026-05-07) |
 | 8 | Dead code Track B: ~40 tools wired to CMake | CLEAN-06 | Closed-as-scoped (12 wired, ~30 deferred to Phase 9 + 12.x) |
 | 9 | STLPort → MSVC STL | STL-01..05 | Complete (2026-05-10 via Option D: Koogie merge 479d35df3 + IFF guard port 460f4540d) |
-| 10 | DPVS culling experiment | DPVS-01..02 | In Progress (2/7 plans complete: 10-01 Wave 0 scaffolding + 10-02 Wave 1 GPU-timing plumbing) |
+| 10 | DPVS culling experiment | DPVS-01..02 | In Progress (5/7 plans complete: Waves 0-4. Scene-conditional verdict: `remove` outdoor, `keep` indoor. Plans 10-06 + 10-07 remain for source edits + cleanup) |
 | 11 | D3D11 renderer plugin | D3D11-01..05 | Not started |
 
 ### Pending Todos
@@ -100,6 +102,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-11T05:15:23.443Z
-Stopped at: Phase 10 Wave 3 (plan 10-04) COMPLETE. DpvsProfileInstrumentation hook wiring landed in 4 atomic commits. Pre-landed Rule 3 getter detected and skipped. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per autonomous=false plan + prompt key_context. Wave 5 (plan 10-05) unblocked: Kenny launches client, drives F10/F11/setrunlabel protocol against SWGSource VM, produces 6 CSV files for verdict aggregation per tools/dpvs-profile/test-protocol.md.
-Resume: /clear then `/gsd-execute-phase 10` (Wave 3: plan 10-04 -- RenderWorld brackets + Game::run + CuiIoWin keybinds + /setrunlabel). Deferred long-tails (unchanged): post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073 (logged in Wave 0 + Wave 1 + Wave 2 SUMMARIES); pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate to revisit if Direct3d11.dll lives alongside).
+Last session: 2026-05-14T21:30:00.000Z
+Stopped at: Phase 10 Wave 4 (plan 10-05) COMPLETE. SCENE-CONDITIONAL verdict — `remove` outdoor (3/3 scenes: mosEisley plaza + starport + walking) / `keep` indoor (1/1 scene: cantina). 17 CSVs / 6,072 frames captured across 3 launches. Evidence in 10-05-capture-evidence.md; closeout in 10-05-SUMMARY.md. Phase 10 at 5/7 plans (71%). Plans 10-06 (verdict writeup + scene-conditional source edits) and 10-07 (THROWAWAY cleanup) remain.
+Resume: /clear then `/gsd-execute-phase 10` (plan 10-06 -- populate docs/recon/10-dpvs-profiling.md from 10-05-capture-evidence.md + apply SCENE-CONDITIONAL source edits: strip OCCLUSION_CULLING bit ONLY from outdoor camera-setup path at RenderWorld.cpp:908, RETAIN on indoor cell camera-setup path at RenderWorld.cpp:911 [CONTEXT.md said 903/906 but file has drifted], delete disableOcclusionCulling config-key plumbing per D-14, boot smoke verify both indoor AND outdoor render correctly). Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (`.planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md`, next session via /gsd-debug); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate).
