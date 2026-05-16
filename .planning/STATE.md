@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 11 Plan 01 complete -- D-04a verdict DESCOPE
-last_updated: "2026-05-16T19:55:00.000Z"
-last_activity: 2026-05-16 -- Phase 11 Plan 01 closed (D-04 FFP spike resolved as DESCOPE)
+stopped_at: Phase 11 Plan 02 complete -- D3D11 plugin scaffold + plumbing FATAL verified + D3D9 baseline screenshots
+last_updated: "2026-05-16T23:00:00.000Z"
+last_activity: 2026-05-16 -- Phase 11 Plan 02 closed (D3D11 plugin scaffold + FATAL plumbing verified + D3D9 baseline screenshots committed)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 16
-  completed_plans: 9
-  percent: 56
+  completed_plans: 10
+  percent: 62
 ---
 
 # Project State
@@ -21,18 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 11 — d3d11-renderer-plugin
+**Current focus:** Phase 11 — d3d11-renderer-plugin (Plan 11-03 next)
 
 ## Current Position
 
 Phase: 11 (d3d11-renderer-plugin) — EXECUTING
-Plan: 2 of 9 (Plan 11-01 closed 2026-05-16; Plan 11-02 next)
-Status: Plan 11-01 complete (D-04a verdict DESCOPE Direct3d11_FfpGenerator); Plan 11-02 (Wave 2 plugin scaffold) unblocked
-Last activity: 2026-05-16 -- Phase 11 Plan 01 closed
+Plan: 3 of 9 (Plan 11-02 closed 2026-05-16; Plan 11-03 next)
+Status: Plan 11-02 complete (D3D11 plugin scaffold + Gl_api FATAL table + Graphics.cpp surgical edit + swg.sln integration + D3D9 baseline screenshots; sub-step 3a smoke PASSED with FATAL at scaffold_fatal_stub from Graphics::install; sub-step 3b D-05 protection PASSED; sub-step 3c 2 baseline PNGs committed); Plan 11-03 (Wave 3 D3D11 device + DXGI swap chain + clear-to-color MVP) unblocked
+Last activity: 2026-05-16 -- Phase 11 Plan 02 closed
 Phase 10 verdict (carried forward): `remove` globally per Option α. Long-form record: docs/recon/10-dpvs-profiling.md. Phase 11 reconsideration: ROADMAP criterion #6.
-Phase 11 Plan 01 verdict: DESCOPE Direct3d11_FfpGenerator. Plan 05 (Wave 5) MUST OMIT Direct3d11_FfpGenerator.{h,cpp} from Direct3d11.vcxproj source list. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-01-ffp-spike-finding.md.
+Phase 11 Plan 01 verdict (carried forward): DESCOPE Direct3d11_FfpGenerator. Plan 05 (Wave 5) MUST OMIT Direct3d11_FfpGenerator.{h,cpp} from Direct3d11.vcxproj source list. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-01-ffp-spike-finding.md.
+Phase 11 Plan 02 verdict: end-to-end plumbing PROVED. gl11_d.dll loads, GetApi resolves, Direct3d11::install runs, FATALs on first stubbed slot at Direct3d11.cpp:62 reached from Graphics::install via Graphics.cpp:320 (first slot call) + Graphics.cpp:554 (further into install). Crash dump at stage/SwgClient_d.exe-unknown.0-20260516220506.{txt,mdmp}. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-02-SUMMARY.md.
 
-Progress: [█████░░░░░] 1/9 (Phase 11)
+Progress: [██████░░░░] 2/9 (Phase 11)
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Decisions carried forward from v1:
 
 **Phase 11:**
 
+- [Phase 11 — 2026-05-16 Plan 11-02 complete (plugin scaffold + plumbing FATAL verified + D3D9 baseline screenshots)]: End-to-end D3D11 plumbing PROVED. Three task commits on Plan 11-02: `2c518e832` (Task 1 — Direct3d11/ source tree + Direct3d11.vcxproj + Direct3d11.vcxproj.filters + 6 PCH/scaffold infrastructure files + swg.sln integration + .gitignore + docs/recon/11-d3d11-screenshots/.gitkeep), `db2116594` (Task 2 — Graphics.cpp surgical edits at ~line 65-66 TAG_DX11 = TAG3(D,1,1) + ~line 209-215 extended range-check accepting rasterMajor=11; the ONLY engine-side edit in this plan per CONTEXT D-02), `dbd7c62dc` (Rule-3 deviation → bonus deliverable: vendored atlmfc include in SwgClient.vcxproj for CLI MSBuild .rc compile; closes second half of the build-system trap that started with Plan 11-01's `266e173b3` post-build cp fix). Plan-close commit (this one) adds 11-02-SUMMARY.md + 2 D3D9 baseline PNGs (`d3d9-tatooine-outdoor.png` 949,442B at world coords (3467,5,-4850); `d3d9-cantina-interior.png` 749,857B at world coords (3455,5,-4834)) + `docs/recon/11-d3d11-screenshots/comparison-notes.md` carrying coords + Plan 11-09 reproduction protocol. **Sub-step 3a (D3D11 plumbing smoke) PASSED**: with `client_d.cfg [ClientGraphics] rasterMajor=11`, FATAL fired at `Direct3d11.cpp:62 scaffold_fatal_stub` reached from `Graphics::install` (call chain: `ClientMain.cpp:312` → `SetupClientGraphics.cpp:92` → `Graphics.cpp:320` first slot call inside install → `Graphics.cpp:554` further into install → `Direct3d11.cpp:62`). Crash dump persisted at `stage/SwgClient_d.exe-unknown.0-20260516220506.{txt,mdmp}` with expected message `Direct3d11 plugin: scaffold-only -- unimplemented Gl_api slot called (Plan 11-02 expected; Wave 3+ replaces this)`. Proves: gl11_d.dll loaded, GetApi resolved, Direct3d11::install ran, FATAL stub hit as designed. **Sub-step 3b (D-05 protection) PASSED**: with rasterMajor reverted, client reaches char-select + world load cleanly on D3D9; no SafeCast dialogs (current SwgClient_d.exe relink picked up ContrailData D-18 guard at `73e29eee7` per [project_safecast_null_dynamic_cast] memory). **Sub-step 3c (D3D9 baseline screenshots) CAPTURED**: 2 anchors ~17m apart on the Mos Eisley ground plane; PNGs are the framing reference for Plan 11-09 reproduction under D3D11. **Lessons learned (documented in SUMMARY)**: (1) Debug exe reads `client_d.cfg` NOT `client.cfg` — first smoke attempt edited the wrong cfg and loaded D3D9; future smoke-mode cfg edits MUST target client_d.cfg; (2) Modal FATAL dialog can be occluded by the windowed game window — reading the crash dump path is the reliable verification mechanism; (3) `rasterMajor` is NOT persisted in local_machine_options.iff — only brightness/contrast/gamma/screenShotFormat are. **Requirements**: D3D11-01 PARTIAL (scaffold + plumbing-to-FATAL proven; real device pending Plan 11-03); D3D11-02 traced (no D3DPOOL_MANAGED|OnLostDevice|OnResetDevice in src/engine/client/application/Direct3d11/ — D-13 invariant intact). **Bonus deliverables retired the build trap**: combined `266e173b3` (Plan 11-01 auto-stage cp) + `dbd7c62dc` (Plan 11-02 vendored atlmfc include) eliminate manual cp workflow and VS Developer Command Prompt env bridging requirement for all future CLI rebuilds.
+
 - [Phase 11 — 2026-05-16 Plan 11-01 complete (FFP spike resolved)]: D-04 two-phase spike + D-04a verdict → **DESCOPE Direct3d11_FfpGenerator**. Phase A non-empty (49 D3D9 #ifdef FFP regions across 8 plugin files + 11 IFF instantiation sites in clientGraphics ShaderImplementation.cpp + 4 IFF loader entry points; engine + plugin are infrastructure-hot). Phase B EMPTY across ≥10 min of Tatooine outdoor + Mos Eisley cantina interior gameplay on D3D9 baseline (`rasterMajor=5`, `gl05_d.dll`): 17-row CSV at `stage/dpvs-profile/ffp-spike.csv` carries 16 `StateCache_init` device-default rows at frame=0 + ZERO post-init activations across `StateCache_restore`/`ImplStage_build`/`ImplStage_cascade`. Plan 05 (Wave 5 — Shader layer) MUST OMIT `Direct3d11_FfpGenerator.{h,cpp}` from `Direct3d11.vcxproj` source list. THROWAWAY pattern reaffirmed: single revert-shaped commit `82f068a4a` removed all 35 `// THROWAWAY D-04` markers across 3 D3D9 files in -42 lines (second clean precedent after Phase 10 plan 10-07's 726-line revert). D-05 verified clean: all three D3D9 variants (`gl05_d.dll`, `gl06_d.dll`, `gl07_d.dll`) build EXIT=0 post-revert. **Bonus deliverable**: build-system fix `266e173b3` makes the Koogie post-build copy steps in `SwgClient.vcxproj` + `Direct3d9*.vcxproj` auto-stage debug binaries to `stage/` — eliminates the manual `cp` workflow that contributed to the mid-session stale-exe trap, benefits the whole project going forward. Commit chain: `69af9adb6` (Phase A finding) → `0293ef310` (Task 3 ADD) → `6c11640bc` (path fix) → `266e173b3` (bonus build-system fix) → `200cc7694` (Phase B Findings + DESCOPE verdict) → `82f068a4a` (Task 4 REVERT). Plan 02 (Wave 2 plugin scaffold) and Plan 05 (Wave 5 shader layer) UNBLOCKED. Lessons learned: stale-exe trap surfaced in Plan 11-01's first Kenny play session; documented in finding doc as a Phase 11 reminder.
 
 ### v2 Phase Plan
@@ -80,7 +83,7 @@ Decisions carried forward from v1:
 | 8 | Dead code Track B: ~40 tools wired to CMake | CLEAN-06 | Closed-as-scoped (12 wired, ~30 deferred to Phase 9 + 12.x) |
 | 9 | STLPort → MSVC STL | STL-01..05 | Complete (2026-05-10 via Option D: Koogie merge 479d35df3 + IFF guard port 460f4540d) |
 | 10 | DPVS culling experiment | DPVS-01..02 | ✓ Complete 2026-05-15. Verdict = `remove` (Option α). DPVS occlusion culling permanently disabled at RenderWorld.cpp:909/913; runtime toggle + config key deleted; measurement instrumentation removed (-726 lines across 12 files). Phase 11 reconsideration in ROADMAP criterion #6. Verdict doc: docs/recon/10-dpvs-profiling.md |
-| 11 | D3D11 renderer plugin | D3D11-01..05 | In progress (1/9 plans complete: 11-01 FFP spike → DESCOPE verdict 2026-05-16; D3D11-04 satisfied) |
+| 11 | D3D11 renderer plugin | D3D11-01..05 | In progress (2/9 plans complete: 11-01 FFP spike DESCOPE 2026-05-16; 11-02 plugin scaffold + FATAL plumbing verified 2026-05-16; D3D11-04 satisfied; D3D11-01 partial; D3D11-02 traced) |
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-16T19:55:00.000Z
-Stopped at: Phase 11 Plan 01 closed (D-04a DESCOPE verdict; Plan 11-02 unblocked)
-Resume: /clear then `/gsd-execute-phase 11` to advance to Plan 11-02 (Wave 2 plugin scaffold + engine-side range-check at Graphics.cpp:209-215 + sln integration + .gitignore + D3D9 baseline reference screenshots for SPEC R6). Note: Plan 11-02's scope is now slightly simplified — the conditional FFP-generator decision from D-04a is fully resolved as DESCOPE so the scaffold authors `Direct3d11.vcxproj` knowing the source list excludes `Direct3d11_FfpGenerator.{h,cpp}`. Phase 11 bonus deliverable in place: Koogie post-build copy auto-stages binaries to `stage/` (commit `266e173b3`). Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (resolved 2026-05-15 via ContrailData D-18 guard port — memory note); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate, still present); pre-existing C4456 declaration-shadowing warnings in Direct3d9.cpp/Direct3d9_VertexBufferDescriptorMap.cpp (out of scope).
+Last session: 2026-05-16T23:00:00.000Z
+Stopped at: Phase 11 Plan 02 closed (D3D11 plugin scaffold + plumbing FATAL verified + D3D9 baseline screenshots; Plan 11-03 unblocked)
+Resume: /clear then `/gsd-execute-phase 11` to advance to Plan 11-03 (Wave 3 — D3D11 device + DXGI flip-model swap chain + clear-to-color MVP; first slot to replace is whichever `Gl_api` member is called at `Graphics.cpp:320` during `Graphics::install` — the first slot reached, observed at `Direct3d11.cpp:62 scaffold_fatal_stub` in Plan 11-02 sub-step 3a). Phase 11 bonus deliverables now in place: (a) Koogie post-build copy auto-stages binaries to `stage/` (commit `266e173b3` from Plan 11-01); (b) vendored atlmfc include in SwgClient.vcxproj allows CLI MSBuild .rc compile without VS Developer Command Prompt env bridging (commit `dbd7c62dc` from Plan 11-02). Combined, these retire the manual-cp + Dev-Cmd-Prompt-required rebuild trap. Phase 11 lessons-learned: Debug exe reads `client_d.cfg` NOT `client.cfg`; modal FATAL dialog can be occluded by windowed game window (read crash dump path for verification); rasterMajor is NOT persisted in local_machine_options.iff. Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (resolved 2026-05-15 via ContrailData D-18 guard port — memory note); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate, still present); pre-existing C4456 declaration-shadowing warnings in Direct3d9.cpp/Direct3d9_VertexBufferDescriptorMap.cpp (out of scope).
