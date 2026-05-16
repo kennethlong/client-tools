@@ -15,6 +15,11 @@
 #include "sharedDebug/DebugFlags.h"
 #include "Direct3d9.h"
 
+// THROWAWAY D-04 — FFP spike Phase B; helper defined in Direct3d9.cpp; revert per CONTEXT D-04 closeout
+extern int D04Spike_frame; // THROWAWAY D-04
+extern void D04Spike_log(char const * site, char const * op, int value, int stage); // THROWAWAY D-04
+// THROWAWAY D-04 — END helper
+
 // ======================================================================
 
 IDirect3DDevice9                          *Direct3d9_StateCache::ms_device;
@@ -157,9 +162,11 @@ void Direct3d9_StateCache::install(int maxStreamCount)
 		for (int i = 0; i < cms_stages; ++i)
 		{
 			TSS(D3DTSS_COLOROP,               D3DTOP_DISABLE);
+			D04Spike_log("StateCache_init", "COLOROP", D3DTOP_DISABLE, i); // THROWAWAY D-04
 			TSS(D3DTSS_COLORARG1,             D3DTA_TEXTURE);
 			TSS(D3DTSS_COLORARG2,             D3DTA_TEXTURE);
 			TSS(D3DTSS_ALPHAOP,               D3DTOP_DISABLE);
+			D04Spike_log("StateCache_init", "ALPHAOP", D3DTOP_DISABLE, i); // THROWAWAY D-04
 			TSS(D3DTSS_ALPHAARG1,             D3DTA_TEXTURE);
 			TSS(D3DTSS_ALPHAARG2,             D3DTA_TEXTURE);
 			TSS(D3DTSS_BUMPENVMAT00,          0.0f);
@@ -388,9 +395,11 @@ void Direct3d9_StateCache::restoreDevice()
 		for (int i = 0; i < cms_stages; ++i)
 		{
 			TSS(D3DTSS_COLOROP);
+			D04Spike_log("StateCache_restore", "COLOROP", static_cast<int>(ms_textureStagesStateCache[i][D3DTSS_COLOROP]), i); // THROWAWAY D-04
 			TSS(D3DTSS_COLORARG1);
 			TSS(D3DTSS_COLORARG2);
 			TSS(D3DTSS_ALPHAOP);
+			D04Spike_log("StateCache_restore", "ALPHAOP", static_cast<int>(ms_textureStagesStateCache[i][D3DTSS_ALPHAOP]), i); // THROWAWAY D-04
 			TSS(D3DTSS_ALPHAARG1);
 			TSS(D3DTSS_ALPHAARG2);
 			TSS(D3DTSS_BUMPENVMAT00);
