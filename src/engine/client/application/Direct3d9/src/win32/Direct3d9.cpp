@@ -61,7 +61,8 @@
 // THROWAWAY D-04 — FFP spike Phase B; revert per CONTEXT D-04 closeout (Phase 10 plan 10-07 pattern)
 // Provides a tiny CSV emitter for D3DTSS_COLOROP/ALPHAOP activations in the D3D9 FFP path.
 // Frame counter increments once per Direct3d9Namespace::endScene call. Output:
-//   stage/dpvs-profile/ffp-spike.csv (append mode, flushed every row).
+//   dpvs-profile/ffp-spike.csv (path is exe-relative; resolves under stage/ when the
+//   client launches from stage/ — matches Phase 10 DpvsProfileInstrumentation convention).
 // Revert: every line carrying the marker `// THROWAWAY D-04` is deletable mechanically.
 int D04Spike_frame = 0; // THROWAWAY D-04
 static FILE * D04Spike_csv = nullptr; // THROWAWAY D-04
@@ -69,7 +70,7 @@ void D04Spike_log(char const * site, char const * op, int value, int stage) // T
 { // THROWAWAY D-04
 	if (!D04Spike_csv) // THROWAWAY D-04
 	{ // THROWAWAY D-04
-		D04Spike_csv = fopen("stage/dpvs-profile/ffp-spike.csv", "a"); // THROWAWAY D-04
+		D04Spike_csv = fopen("dpvs-profile/ffp-spike.csv", "a"); // THROWAWAY D-04
 		if (D04Spike_csv) fprintf(D04Spike_csv, "frame,site,op,value,stage\n"); // THROWAWAY D-04
 	} // THROWAWAY D-04
 	if (D04Spike_csv) // THROWAWAY D-04
