@@ -61,19 +61,19 @@
     <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Debug\</IntDir>
     <LinkIncremental>true</LinkIncremental>
     <PreBuildEventUseInBuild>false</PreBuildEventUseInBuild>
-    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
+    <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
     <OutDir>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Optimized\</OutDir>
     <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Optimized\</IntDir>
     <LinkIncremental>true</LinkIncremental>
-    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
+    <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Release\</OutDir>
     <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Release\</IntDir>
     <LinkIncremental>false</LinkIncremental>
-    <PostBuildEventUseInBuild>false</PostBuildEventUseInBuild>
+    <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Midl>
@@ -130,8 +130,9 @@
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Debug/Direct3d9_ffp.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Copy debug dll</Message>
-      <Command>copy $(TargetPath) ..\..\..\..\..\..\..\dev\win32\gl06_d.dll</Command>
+      <Message>Stage Debug gl06_d.dll + pdb</Message>
+      <Command>copy /Y "$(OutDir)gl06_d.dll" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)gl06_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
@@ -186,8 +187,9 @@
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Optimized/Direct3d9_ffp.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Copy optimized dll</Message>
-      <Command>copy $(TargetPath) ..\..\..\..\..\..\..\dev\win32\gl06_o.dll</Command>
+      <Message>Stage Optimized gl06_o.dll + pdb</Message>
+      <Command>copy /Y "$(OutDir)gl06_o.dll" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)gl06_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -245,8 +247,9 @@
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_ffp\Release/Direct3d9_ffp.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Copy production dll</Message>
-      <Command>copy $(TargetPath) ..\..\..\..\..\..\..\dev\win32\gl06_r.dll</Command>
+      <Message>Stage Release gl06_r.dll + pdb</Message>
+      <Command>copy /Y "$(OutDir)gl06_r.dll" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)gl06_r.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

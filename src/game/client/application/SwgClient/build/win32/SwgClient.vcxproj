@@ -120,7 +120,9 @@
       <EnableDpiAwareness>true</EnableDpiAwareness>
     </Manifest>
     <PostBuildEvent>
-      <Command>copy "D:\SWG\client-tools\src\compile\win32\$(ProjectName)\$(Configuration)\$(projectname)_d.exe" "D:\SWG\SWGSource Client v3.0\"</Command>
+      <Message>Stage Debug exe + pdb</Message>
+      <Command>copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
@@ -215,7 +217,9 @@
       <EnableDpiAwareness>true</EnableDpiAwareness>
     </Manifest>
     <PostBuildEvent>
-      <Command>copy "D:\SWG\client-tools\src\compile\win32\$(ProjectName)\$(Configuration)\$(projectname)_r.exe" "D:\SWG\SWGSource Client v3.0\"</Command>
+      <Message>Stage Release exe + pdb</Message>
+      <Command>copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
