@@ -24,6 +24,9 @@
     <ClCompile Include="..\..\src\win32\Direct3d11.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_Device.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\FirstDirect3d11.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
@@ -42,6 +45,9 @@
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_Device.h">
       <Filter>src\win32</Filter>
     </ClInclude>
   </ItemGroup>

@@ -261,6 +261,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClCompile Include="..\..\src\shared\WriteTga.cpp" />
     <ClCompile Include="..\..\src\win32\ConfigDirect3d11.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_Device.cpp" />
     <ClCompile Include="..\..\src\win32\FirstDirect3d11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
@@ -273,6 +274,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClInclude Include="..\..\src\shared\WriteTga.h" />
     <ClInclude Include="..\..\src\win32\ConfigDirect3d11.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_Device.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\DllExport\build\win32\DllExport.vcxproj">
