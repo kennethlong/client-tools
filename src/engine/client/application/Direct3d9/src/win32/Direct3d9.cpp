@@ -58,29 +58,6 @@
 #include <d3dx9.h>
 #include <stdio.h>
 
-// THROWAWAY D-04 — FFP spike Phase B; revert per CONTEXT D-04 closeout (Phase 10 plan 10-07 pattern)
-// Provides a tiny CSV emitter for D3DTSS_COLOROP/ALPHAOP activations in the D3D9 FFP path.
-// Frame counter increments once per Direct3d9Namespace::endScene call. Output:
-//   dpvs-profile/ffp-spike.csv (path is exe-relative; resolves under stage/ when the
-//   client launches from stage/ — matches Phase 10 DpvsProfileInstrumentation convention).
-// Revert: every line carrying the marker `// THROWAWAY D-04` is deletable mechanically.
-int D04Spike_frame = 0; // THROWAWAY D-04
-static FILE * D04Spike_csv = nullptr; // THROWAWAY D-04
-void D04Spike_log(char const * site, char const * op, int value, int stage) // THROWAWAY D-04
-{ // THROWAWAY D-04
-	if (!D04Spike_csv) // THROWAWAY D-04
-	{ // THROWAWAY D-04
-		D04Spike_csv = fopen("dpvs-profile/ffp-spike.csv", "a"); // THROWAWAY D-04
-		if (D04Spike_csv) fprintf(D04Spike_csv, "frame,site,op,value,stage\n"); // THROWAWAY D-04
-	} // THROWAWAY D-04
-	if (D04Spike_csv) // THROWAWAY D-04
-	{ // THROWAWAY D-04
-		fprintf(D04Spike_csv, "%d,%s,%s,%d,%d\n", D04Spike_frame, site, op, value, stage); // THROWAWAY D-04
-		fflush(D04Spike_csv); // THROWAWAY D-04
-	} // THROWAWAY D-04
-} // THROWAWAY D-04
-// THROWAWAY D-04 — END helper
-
 #pragma warning (disable: 4201)
 #include <mmsystem.h>
 #pragma warning (default: 4201)
@@ -2383,7 +2360,6 @@ void Direct3d9Namespace::endScene()
 	// end the 3d scene
 	HRESULT hresult = ms_device->EndScene();
 	FATAL_DX_HR("EndScene failed %s", hresult);
-	++D04Spike_frame; // THROWAWAY D-04
 }
 
 // ----------------------------------------------------------------------

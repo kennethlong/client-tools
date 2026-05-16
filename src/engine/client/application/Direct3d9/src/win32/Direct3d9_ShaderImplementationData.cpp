@@ -18,11 +18,6 @@
 
 #include <algorithm>
 
-// THROWAWAY D-04 — FFP spike Phase B; helper defined in Direct3d9.cpp; revert per CONTEXT D-04 closeout
-extern int D04Spike_frame; // THROWAWAY D-04
-extern void D04Spike_log(char const * site, char const * op, int value, int stage); // THROWAWAY D-04
-// THROWAWAY D-04 — END helper
-
 // ======================================================================
 
 namespace Direct3d9_ShaderImplementationDataNamespace
@@ -150,13 +145,11 @@ void Direct3d9_ShaderImplementationData::Stage::construct(const ShaderImplementa
 #define TSSC(tss, v, m) m_textureStageState.push_back(TextureStageState(tss, m[stage.v] | (stage.v##Complement ? D3DTA_COMPLEMENT : 0) | (stage.v##AlphaReplicate ? D3DTA_ALPHAREPLICATE : 0)))
 
 	TSSM(D3DTSS_COLOROP,             m_colorOperation,                TextureOperation);
-	D04Spike_log("ImplStage_build", "COLOROP", static_cast<int>(stage.m_colorOperation), -1); // THROWAWAY D-04
 	TSSC(D3DTSS_COLORARG0,           m_colorArgument0,                TextureArgument);
 	TSSC(D3DTSS_COLORARG1,           m_colorArgument1,                TextureArgument);
 	TSSC(D3DTSS_COLORARG2,           m_colorArgument2,                TextureArgument);
 
 	TSSM(D3DTSS_ALPHAOP,             m_alphaOperation,                TextureOperation);
-	D04Spike_log("ImplStage_build", "ALPHAOP", static_cast<int>(stage.m_alphaOperation), -1); // THROWAWAY D-04
 	TSSA(D3DTSS_ALPHAARG0,           m_alphaArgument0,                TextureArgument);
 	TSSA(D3DTSS_ALPHAARG1,           m_alphaArgument1,                TextureArgument);
 	TSSA(D3DTSS_ALPHAARG2,           m_alphaArgument2,                TextureArgument);
@@ -387,9 +380,7 @@ void Direct3d9_ShaderImplementationData::Pass::apply() const
 			if (stage < 7)
 			{
 				Direct3d9_StateCache::setTextureStageState(stage, D3DTSS_COLOROP, D3DTOP_DISABLE);
-				D04Spike_log("ImplStage_cascade", "COLOROP", D3DTOP_DISABLE, stage); // THROWAWAY D-04
 				Direct3d9_StateCache::setTextureStageState(stage, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-				D04Spike_log("ImplStage_cascade", "ALPHAOP", D3DTOP_DISABLE, stage); // THROWAWAY D-04
 			}
 #endif
 	}
