@@ -101,7 +101,16 @@ Phase numbering continues from v1 (ended at Phase 6).
   4. A pixel shader generator covers the `D3DTSS_*` texture combiner operations used by SWG's material system; at least the common cases (MODULATE, ADD, SELECTARG1) produce visually correct output
   5. Client renders at least one ground scene (character select planet scene or zone entry) using the D3D11 plugin; basic geometry, terrain, and character models are visible (no requirement for pixel-perfect parity with D3D9)
   6. **DPVS remeasurement + architectural decision under D3D11 per CONTEXT D-12 + `docs/recon/10-dpvs-profiling.md` "Phase 11 reconsideration":** re-run the Phase 10 capture protocol (`tools/dpvs-profile/test-protocol.md`) against the D3D11 renderer. Phase 10's underlying data was scene-conditional (`remove` outdoor 3/3 scenes, `keep` indoor 1/1 scene) but the implementation choice was Option α — apply `remove` globally — because the `cullingParameters` bitmask in `RenderWorld.cpp` (lines 908 `#ifdef _DEBUG` / 911 release) is a single value applied to the single `ms_dpvsCamera` for all rendering. The indoor regression was accepted as below human perception (0.66 ms / 2.2%) in exchange for the larger outdoor wins (0.94–2.13 ms / 3.3–9.1%) that dominate gameplay time. Phase 11 must decide between three options once D3D11 numbers are in: (a) keep Option α — if D3D11 numbers still favor outdoor; (b) revert globally to `keep` — if D3D11 makes outdoor net-positive again, restore the bit at both 908 and 911; (c) implement runtime scene-aware split — pass different `cullingParameters` per cell context at the camera-setup site (non-trivial refactor; justify only if D3D11 numbers show a large gap in both directions). Phase 10 instrumentation is removed by plan 10-07 (THROWAWAY per D-15) — Phase 11 must restore equivalent instrumentation or adopt a different measurement approach. Verdict + decision documented in a new `docs/recon/11-dpvs-d3d11-remeasure.md`.
-**Plans**: TBD (multi-plan: plugin scaffold, resource management, shader recompile, FFP generator, boot verify, **DPVS remeasure**)
+**Plans**: 9 plans (planned 2026-05-15; wave-grouped spike → scaffold → device → resources → shaders → state/draw → smoke → DPVS remeasure → visual-parity + closeout)
+  - [ ] 11-01-PLAN.md — Wave 1 FFP spike (two-phase: static analysis + optional runtime instrumentation; D-04a verdict drives Plan 05 generator inclusion) — requirements D3D11-04
+  - [ ] 11-02-PLAN.md — Wave 2 plugin scaffold + engine-side range-check (Graphics.cpp:65-66 TAG_DX11 + :209-215 range extension) + sln integration + .gitignore + D3D9 baseline reference screenshots for SPEC R6 — requirements D3D11-01
+  - [ ] 11-03-PLAN.md — Wave 3 D3D11 device + DXGI flip-model swap chain + clear-to-color MVP (beginScene/endScene/clearViewport/present slots) — requirements D3D11-01, D3D11-02
+  - [ ] 11-04-PLAN.md — Wave 4 resource layer (texture, render target, static/dynamic VB/IB; 6 resource types; ComPtr ownership; D-13 invariant enforced) — requirements D3D11-02
+  - [ ] 11-05-PLAN.md — Wave 5 shader layer (D3DCompile vs_5_0/ps_5_0 + .cso disk cache + cbuffer wrapper + conditional Direct3d11_FfpGenerator per D-04a; Pitfalls 1+2+6 enforced) — requirements D3D11-03, D3D11-04
+  - [ ] 11-06-PLAN.md — Wave 6 state cache + draw dispatch + input-layout cache + light manager + metrics; cbuffer migration complete (zero SetVertexShaderConstantF/SetPixelShaderConstantF) — requirements D3D11-01, D3D11-02, D3D11-03
+  - [ ] 11-07-PLAN.md — Wave 7 subsystem coverage smoke (iterative fix-by-fix loop; Pitfall taxonomy reference; ≥5 min Tatooine outdoor + cantina interior; iteration log) — requirements D3D11-01..D3D11-05
+  - [ ] 11-08-PLAN.md — Wave 8 DPVS remeasurement (SPEC R7): external-tool spike (PIX/Nsight) or fallback to restored Phase 10 instrumentation; verdict in docs/recon/11-dpvs-d3d11-remeasure.md; conditional RenderWorld.cpp:902-908 source edit — requirements D3D11-05
+  - [ ] 11-09-PLAN.md — Wave 9 visual-parity D3D11 reference screenshots + comparison-notes.md PASS verdict (SPEC R6) + Phase 11 SUMMARY + ROADMAP/REQUIREMENTS/STATE closeout updates — requirements D3D11-05
 
 ## Progress
 
@@ -115,4 +124,4 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 8. Dead Code Removal — Track B | 4/4 | Closed-as-scoped (12 tools wired, ~30 deferred to Phase 9 + 12.x) | 2026-05-08 |
 | 9. STLPort → MSVC STL | 3/3 | Complete (Option D adopted: Koogie tree as v2 base + whitengold IFF compat-guard port; Tatooine zone-in PASS) | 2026-05-10 |
 | 10. DPVS Culling Experiment | 4/7 | In Progress|  |
-| 11. D3D11 Renderer Plugin | 0/TBD | Not started | — |
+| 11. D3D11 Renderer Plugin | 0/9 | Planned 2026-05-15 (9 plans wave-grouped) | — |
