@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-05-16T04:07:30.331Z"
-last_activity: 2026-05-16 -- Phase 11 planning complete
+stopped_at: Phase 11 Plan 01 complete -- D-04a verdict DESCOPE
+last_updated: "2026-05-16T19:55:00.000Z"
+last_activity: 2026-05-16 -- Phase 11 Plan 01 closed (D-04 FFP spike resolved as DESCOPE)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 16
-  completed_plans: 8
-  percent: 50
+  completed_plans: 9
+  percent: 56
 ---
 
 # Project State
@@ -21,17 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 10 — dpvs-culling-experiment
+**Current focus:** Phase 11 — d3d11-renderer-plugin
 
 ## Current Position
 
-Phase: 10 (dpvs-culling-experiment) — ✓ COMPLETE
-Plan: 7 of 7 ✓
-Status: Ready to execute
-Last activity: 2026-05-16 -- Phase 11 planning complete
-Verdict: `remove` globally per Option α. Long-form record: docs/recon/10-dpvs-profiling.md. Phase 11 reconsideration: ROADMAP criterion #6.
+Phase: 11 (d3d11-renderer-plugin) — EXECUTING
+Plan: 2 of 9 (Plan 11-01 closed 2026-05-16; Plan 11-02 next)
+Status: Plan 11-01 complete (D-04a verdict DESCOPE Direct3d11_FfpGenerator); Plan 11-02 (Wave 2 plugin scaffold) unblocked
+Last activity: 2026-05-16 -- Phase 11 Plan 01 closed
+Phase 10 verdict (carried forward): `remove` globally per Option α. Long-form record: docs/recon/10-dpvs-profiling.md. Phase 11 reconsideration: ROADMAP criterion #6.
+Phase 11 Plan 01 verdict: DESCOPE Direct3d11_FfpGenerator. Plan 05 (Wave 5) MUST OMIT Direct3d11_FfpGenerator.{h,cpp} from Direct3d11.vcxproj source list. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-01-ffp-spike-finding.md.
 
-Progress: [██████████] 100% (Phase 10)
+Progress: [█████░░░░░] 1/9 (Phase 11)
 
 ## Accumulated Context
 
@@ -67,6 +68,10 @@ Decisions carried forward from v1:
 - [Phase Phase 10]: Phase 10 Wave 3 complete (plan 10-04): DpvsProfileInstrumentation hook wiring landed in 4 atomic commits (cca3dcebc RenderWorld GPU/CPU bracket; 2688a0bdd Game::run onFrameEnd hook + CuiIoWin _DEBUG F10/F11 intercept; bf464e3ee /setrunlabel console command; d8dbd4076 SwgClient build log force-add). Pre-landed Rule 3 detection: RenderWorld::getDisableOcclusionCulling getter was already committed in Wave 3 (1f5cd24f1) -- Task 1 Part A skipped as no-op per Wave 3 SUMMARY documentation. SwgClient_d.exe rebuilt at 72,552,448 bytes (+512 bytes vs Wave 3 baseline). Pre-existing Koogie post-build MSB3073 the only failure (out-of-scope per Wave 0/1/2/3 precedent). Task 5 (checkpoint:human-verify smoke session) DEFERRED to Wave 5's capture session per prompt key_context. Wave 5 (plan 10-05) unblocked: capture protocol drives F10/F11/setrunlabel + 6 CSV files for verdict aggregation.
 - [Phase 10 — 2026-05-14 Wave 4 complete (plan 10-05)]: Manual capture session across 3 client launches against SWGSource VM at 192.168.1.200. SCENE-CONDITIONAL verdict: `remove for outdoor, keep for indoor`. Delivered 17 CSVs / 6,072 frames across 4 scenarios — mosEisley plaza (sparse: 6 ON / 3 OFF), starport (dense: 1 ON / 1 OFF), walking (moving camera: 2 ON / 1 OFF), cantinaInterior (indoor: 1 ON / 2 OFF). All 3 outdoor scenes independently voted `remove`: DPVS CPU cost ~940 µs/frame at plaza → ~1,592 µs/frame at starport (scale with scene complexity); OFF wins by 0.94-2.13 ms median (3.3-9.1%). Cantina interior voted `keep`: DPVS SAVES ~940 µs CPU/frame in tight geometry-dense cells; ON wins by 0.62 ms median (2.2%). Indoor result emerged from session-3 follow-up after session-2 only captured indoor OFF; the missing ON pass reversed a mid-session hypothesis that DPVS could be removed everywhere. Confirmed: ROADMAP Phase 10 success criteria #3 framing was right — outdoor and indoor paths diverge cleanly at RenderWorld.cpp:908 and :911 (cullingParameters bitmask); single resolveVisibility() call at :1062 is shared. Caveats: (1) gpu_us=0 across all frames — Wave 1 timestamp-query pool silently failing, CPU side drove clean verdict, GPU side cost unmeasured (deferred follow-up); (2) v2 launches with DPVS:OFF as default state confirmed across both session-2 and session-3 relaunches (probably persisted via local_machine_options.iff), opposite of session 1; recovered via rename + run_label-column patch using dpvs_occlusion_flag as authoritative truth; (3) Shuttle takeoff caused 147 ms max in starport-OFF transient, walking-OFF and cantina-ON have similar single-frame outliers, p95/p99 unaffected. New stage file: `[ClientGraphics/Dpvs] reportInstrumentation=true` block added to client_d.cfg. Plan 10-06 (Wave 5) unblocked: scene-conditional source edits — strip OCCLUSION_CULLING from outdoor path at RenderWorld.cpp:908, RETAIN on indoor path at :911. SafeCast.h:29 dialog-twice issue tracked separately in `.planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md` — not a Phase 10 blocker.
 
+**Phase 11:**
+
+- [Phase 11 — 2026-05-16 Plan 11-01 complete (FFP spike resolved)]: D-04 two-phase spike + D-04a verdict → **DESCOPE Direct3d11_FfpGenerator**. Phase A non-empty (49 D3D9 #ifdef FFP regions across 8 plugin files + 11 IFF instantiation sites in clientGraphics ShaderImplementation.cpp + 4 IFF loader entry points; engine + plugin are infrastructure-hot). Phase B EMPTY across ≥10 min of Tatooine outdoor + Mos Eisley cantina interior gameplay on D3D9 baseline (`rasterMajor=5`, `gl05_d.dll`): 17-row CSV at `stage/dpvs-profile/ffp-spike.csv` carries 16 `StateCache_init` device-default rows at frame=0 + ZERO post-init activations across `StateCache_restore`/`ImplStage_build`/`ImplStage_cascade`. Plan 05 (Wave 5 — Shader layer) MUST OMIT `Direct3d11_FfpGenerator.{h,cpp}` from `Direct3d11.vcxproj` source list. THROWAWAY pattern reaffirmed: single revert-shaped commit `82f068a4a` removed all 35 `// THROWAWAY D-04` markers across 3 D3D9 files in -42 lines (second clean precedent after Phase 10 plan 10-07's 726-line revert). D-05 verified clean: all three D3D9 variants (`gl05_d.dll`, `gl06_d.dll`, `gl07_d.dll`) build EXIT=0 post-revert. **Bonus deliverable**: build-system fix `266e173b3` makes the Koogie post-build copy steps in `SwgClient.vcxproj` + `Direct3d9*.vcxproj` auto-stage debug binaries to `stage/` — eliminates the manual `cp` workflow that contributed to the mid-session stale-exe trap, benefits the whole project going forward. Commit chain: `69af9adb6` (Phase A finding) → `0293ef310` (Task 3 ADD) → `6c11640bc` (path fix) → `266e173b3` (bonus build-system fix) → `200cc7694` (Phase B Findings + DESCOPE verdict) → `82f068a4a` (Task 4 REVERT). Plan 02 (Wave 2 plugin scaffold) and Plan 05 (Wave 5 shader layer) UNBLOCKED. Lessons learned: stale-exe trap surfaced in Plan 11-01's first Kenny play session; documented in finding doc as a Phase 11 reminder.
+
 ### v2 Phase Plan
 
 | Phase | Goal | Key Requirements | Status |
@@ -75,7 +80,7 @@ Decisions carried forward from v1:
 | 8 | Dead code Track B: ~40 tools wired to CMake | CLEAN-06 | Closed-as-scoped (12 wired, ~30 deferred to Phase 9 + 12.x) |
 | 9 | STLPort → MSVC STL | STL-01..05 | Complete (2026-05-10 via Option D: Koogie merge 479d35df3 + IFF guard port 460f4540d) |
 | 10 | DPVS culling experiment | DPVS-01..02 | ✓ Complete 2026-05-15. Verdict = `remove` (Option α). DPVS occlusion culling permanently disabled at RenderWorld.cpp:909/913; runtime toggle + config key deleted; measurement instrumentation removed (-726 lines across 12 files). Phase 11 reconsideration in ROADMAP criterion #6. Verdict doc: docs/recon/10-dpvs-profiling.md |
-| 11 | D3D11 renderer plugin | D3D11-01..05 | Not started |
+| 11 | D3D11 renderer plugin | D3D11-01..05 | In progress (1/9 plans complete: 11-01 FFP spike → DESCOPE verdict 2026-05-16; D3D11-04 satisfied) |
 
 ### Pending Todos
 
@@ -102,6 +107,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-16T00:02:51.049Z
-Stopped at: Phase 11 context gathered
-Resume: /clear then `/gsd-debug` (start with cantina corner-snap since it has the strongest lead: OutputDebugString in Report.cpp:145; run Kenny's Release-build binary-search test first per the todo's pre-fix-test protocol; then apply IsDebuggerPresent() wrap if confirmed). OR `/gsd-debug` for SafeCast.h:29 if you want to tackle that first. Both todos in `.planning/todos/pending/`. Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (`.planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md`, next session via /gsd-debug); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate).
+Last session: 2026-05-16T19:55:00.000Z
+Stopped at: Phase 11 Plan 01 closed (D-04a DESCOPE verdict; Plan 11-02 unblocked)
+Resume: /clear then `/gsd-execute-phase 11` to advance to Plan 11-02 (Wave 2 plugin scaffold + engine-side range-check at Graphics.cpp:209-215 + sln integration + .gitignore + D3D9 baseline reference screenshots for SPEC R6). Note: Plan 11-02's scope is now slightly simplified — the conditional FFP-generator decision from D-04a is fully resolved as DESCOPE so the scaffold authors `Direct3d11.vcxproj` knowing the source list excludes `Direct3d11_FfpGenerator.{h,cpp}`. Phase 11 bonus deliverable in place: Koogie post-build copy auto-stages binaries to `stage/` (commit `266e173b3`). Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (resolved 2026-05-15 via ContrailData D-18 guard port — memory note); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate, still present); pre-existing C4456 declaration-shadowing warnings in Direct3d9.cpp/Direct3d9_VertexBufferDescriptorMap.cpp (out of scope).

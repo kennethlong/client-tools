@@ -35,7 +35,7 @@
 - [ ] **D3D11-01**: New `Direct3d11` CMake project producing `Direct3d11.dll` satisfying the existing 119-function `Gl_api` function-pointer table; both `Direct3d9.dll` and `Direct3d11.dll` functional; switch by loading different DLL at startup
 - [ ] **D3D11-02**: `IDirect3DDevice9` resource management replaced with `ID3D11Device` / `ID3D11DeviceContext`; manual resource management replacing `D3DPOOL_MANAGED`; lost-device recovery paths removed
 - [ ] **D3D11-03**: Vertex/pixel shader recompilation — VS/PS 1.1–2.0 HLSL → HLSL 4.0 (`SV_POSITION` semantics, updated constant buffer model)
-- [ ] **D3D11-04**: FFP pixel shader generator for `D3DTSS_*` texture combiner operations (replaces fixed-function pipeline; SWG uses texture combiners extensively for material combinations)
+- [x] **D3D11-04**: FFP pixel shader generator for `D3DTSS_*` texture combiner operations (replaces fixed-function pipeline; SWG uses texture combiners extensively for material combinations) — **SATISFIED 2026-05-16 by DESCOPE verdict from Plan 11-01 D-04 two-phase spike. Combined static-analysis non-empty + Phase B runtime-empty evidence per CONTEXT D-04a → Plan 11-05 (Wave 5) MUST OMIT Direct3d11_FfpGenerator.{h,cpp}. Verdict doc: `.planning/phases/11-d3d11-renderer-plugin/11-01-ffp-spike-finding.md`. Plan summary: `.planning/phases/11-d3d11-renderer-plugin/11-01-SUMMARY.md`. Commit chain: 69af9adb6 → 0293ef310 → 6c11640bc → 266e173b3 → 200cc7694 → 82f068a4a.**
 - [ ] **D3D11-05**: Client renders a ground scene using the D3D11 plugin; visual parity with D3D9 baseline on at least one reference zone
 
 ---
@@ -86,7 +86,7 @@ These are acknowledged but out of scope for v2:
 | D3D11-01 | Phase 11 | Plugin scaffold + Gl_api table |
 | D3D11-02 | Phase 11 | Resource management |
 | D3D11-03 | Phase 11 | Shader recompilation |
-| D3D11-04 | Phase 11 | FFP pixel shader generator |
+| D3D11-04 | Phase 11 | FFP pixel shader generator (SATISFIED 2026-05-16 by DESCOPE verdict; see Plan 11-01 SUMMARY) |
 | D3D11-05 | Phase 11 | Ground scene render verification |
 
 **Coverage:** 17 / 17 requirements mapped to phases (100%).
