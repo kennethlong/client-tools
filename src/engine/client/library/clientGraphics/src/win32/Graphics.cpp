@@ -62,8 +62,9 @@ namespace GraphicsNamespace
 	void  setDebugMouseCursorPosition(int x, int y);
 #endif
 
-	const Tag TAG_DX8 = TAG3(D,X,8);
-	const Tag TAG_DX9 = TAG3(D,X,9);
+	const Tag TAG_DX8  = TAG3(D,X,8);
+	const Tag TAG_DX9  = TAG3(D,X,9);
+	const Tag TAG_DX11 = TAG3(D,1,1);   // Per CONTEXT D-02a; fallback spelling: TAG3(D,X,B)
 
 	HINSTANCE                                 ms_dll;
 	const Gl_api                             *ms_api;
@@ -208,11 +209,18 @@ bool Graphics::install()
 
 	if (ms_rasterMajor >= 5 && ms_rasterMajor <= 7)
 	{
-		GraphicsOptionTags::set(TAG_DX8, false);
-		GraphicsOptionTags::set(TAG_DX9, true);
+		GraphicsOptionTags::set(TAG_DX8,  false);
+		GraphicsOptionTags::set(TAG_DX9,  true);
+		GraphicsOptionTags::set(TAG_DX11, false);
+	}
+	else if (ms_rasterMajor == 11)
+	{
+		GraphicsOptionTags::set(TAG_DX8,  false);
+		GraphicsOptionTags::set(TAG_DX9,  false);
+		GraphicsOptionTags::set(TAG_DX11, true);
 	}
 	else
-		DEBUG_FATAL(true, ("unknown rasterizer"));
+		DEBUG_FATAL(true, ("unknown rasterizer (rasterMajor=%d; supported: 5-7, 11)", ms_rasterMajor));
 
 	// load the graphics layer dll
 	char library[16];
