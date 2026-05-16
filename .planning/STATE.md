@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: phase-complete
-stopped_at: "Phase 10 COMPLETE (7/7 plans, 100%). DPVS occlusion culling permanently removed from outdoor + indoor rendering paths via Option α (one-bit decision in cullingParameters; aggregate user experience favors outdoor magnitude × frequency over indoor regression × frequency). D-13 (OCCLUSION_CULLING bit strip at RenderWorld.cpp:909/913) + D-14 (config-key + setter/getter deletion) permanent edits in commit 18bc4fdc5. D-15 THROWAWAY cleanup commit 151167d2c removed all measurement instrumentation (-726 lines across 12 files including DpvsProfileInstrumentation.{h,cpp} deletion). SwgClient_d.exe at 72,541,696 bytes (-10,752 vs pre-cleanup baseline). Phase 10 verdict canonical home: docs/recon/10-dpvs-profiling.md. Phase 10 closeout doc: .planning/phases/10-dpvs-culling-experiment/10-SUMMARY.md. Phase 11 reconsideration captured in ROADMAP success criterion #6. Two orthogonal /gsd-debug candidates surfaced: (1) SafeCast.h:29 dialog-twice on world load (Koogie's stricter assert; todo 2026-05-14); (2) cantina corner-snap regression with smoking-gun OutputDebugString lead from Report.cpp:145 + Kenny's Release-build binary-search test idea (todo 2026-05-15). User direction: do both /gsd-debug sessions before Phase 11 D3D11. Phase 11 recovery anchor: tag phase-10-instrumentation-pre-cleanup at commit 9f2ec3715."
-last_updated: "2026-05-15T10:30:00.000Z"
+status: "PHASE CLOSED. Verdict applied + instrumentation removed + closeout authored. Next: two /gsd-debug sessions (SafeCast.h:29 then cantina corner-snap) per user direction, then Phase 11 D3D11."
+stopped_at: Phase 11 context gathered
+last_updated: "2026-05-16T00:02:51.063Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 7
-  completed_plans: 7
+  completed_plans: 8
   percent: 100
 ---
 
@@ -102,6 +102,6 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-15T10:30:00.000Z
-Stopped at: Phase 10 COMPLETE (7/7 plans, 100%). Verdict `remove` globally applied; all measurement instrumentation removed; phase closeout doc authored at .planning/phases/10-dpvs-culling-experiment/10-SUMMARY.md. Two orthogonal /gsd-debug candidates queued per user direction (do both before Phase 11): (1) SafeCast.h:29 dialog-twice on world load — todo 2026-05-14; (2) cantina corner-snap regression with smoking-gun OutputDebugString lead from Report.cpp:145 + Kenny's Release-build binary-search test idea — todo 2026-05-15. Phase 11 D3D11 ready to start after the two debug sessions complete (or in parallel if /gsd-debug sessions stall on something hard).
+Last session: 2026-05-16T00:02:51.049Z
+Stopped at: Phase 11 context gathered
 Resume: /clear then `/gsd-debug` (start with cantina corner-snap since it has the strongest lead: OutputDebugString in Report.cpp:145; run Kenny's Release-build binary-search test first per the todo's pre-fix-test protocol; then apply IsDebuggerPresent() wrap if confirmed). OR `/gsd-debug` for SafeCast.h:29 if you want to tackle that first. Both todos in `.planning/todos/pending/`. Deferred long-tails (unchanged): SafeCast.h:29 dialog-twice on world load (`.planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md`, next session via /gsd-debug); post-Phase-9 upstream PR series for the IFF guard (commit `460f4540d`) per D-19; ExceptionHandler crash after ~11 min in-world (future `/gsd-debug`); first-launch login flakiness; pre-existing Koogie post-build copy MSB3073; pre-existing Direct3d9.vcxproj MSB8012 TargetName/OutputFile mismatch (Phase 11 candidate).
