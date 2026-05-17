@@ -17,6 +17,8 @@
 
 // ======================================================================
 
+#include <d3d11.h>
+
 class  VertexBufferFormat;
 struct VertexBufferDescriptor;
 
@@ -31,6 +33,15 @@ public:
 
 	static const VertexBufferDescriptor &getDescriptor(const VertexBufferFormat &vertexFormat);
 	static const VertexBufferDescriptor &getDescriptor(uint32 formatFlags);
+
+	// Plan 11-06: build D3D11_INPUT_ELEMENT_DESC[] for the given engine
+	// VertexBufferFormat. Writes <= 16 entries (D3D11 hard max for input
+	// elements per shader stage) into outDesc; returns the count actually
+	// written. The semantic / format / offset table per RESEARCH Pitfall 6
+	// (engine VertexBufferFormat -> D3D11 input layout).
+	static int buildInputElementDesc(
+		VertexBufferFormat const &format,
+		D3D11_INPUT_ELEMENT_DESC outDesc[16]);
 };
 
 // ======================================================================

@@ -272,6 +272,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_TextureData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_VertexDeclarationMap.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_VertexShaderData.cpp" />
     <ClCompile Include="..\..\src\win32\FirstDirect3d11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -296,6 +297,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_TextureData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_VertexDeclarationMap.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_VertexShaderData.h" />
   </ItemGroup>
   <ItemGroup>

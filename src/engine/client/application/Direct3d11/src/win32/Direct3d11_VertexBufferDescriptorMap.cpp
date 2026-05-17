@@ -149,3 +149,102 @@ const VertexBufferDescriptor &Direct3d11_VertexBufferDescriptorMap::getDescripto
 }
 
 // ======================================================================
+//
+// Plan 11-06: build D3D11_INPUT_ELEMENT_DESC[] for the given engine
+// VertexBufferFormat. Mirrors the layout that getDescriptor() computes for
+// vertexSize / offsetXxx -- same component order, same byte offsets. This
+// is the second half of the input-layout cache (Pitfall 6); the first half
+// (per-format descriptor cache) is shared with Plan 11-04.
+//
+// Engine vertex layout (matches getDescriptor offset table above):
+//   POSITION (float3)        if hasPosition
+//   RHW      (float)         if hasPosition AND isTransformed
+//   NORMAL   (float3)        if hasNormal
+//   PSIZE    (float)         if hasPointSize
+//   COLOR0   (uint32 BGRA)   if hasColor0
+//   COLOR1   (uint32 BGRA)   if hasColor1
+//   TEXCOORDn (float<dim>)   for n in [0, numberOfTextureCoordinateSets)
+//
+// D3D9 D3DCOLOR is ARGB packed; engine PackedArgb mirrors that. DXGI
+// equivalent is DXGI_FORMAT_B8G8R8A8_UNORM which the shader receives in
+// .bgra channel order (HLSL sees .rgba => engine's a, r, g, b -- which is
+// the same swizzle the D3D9 plugin relies on by convention).
+// ======================================================================
+
+int Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc(
+	VertexBufferFormat const &format,
+	D3D11_INPUT_ELEMENT_DESC outDesc[16])
+{
+	NOT_NULL(outDesc);
+
+	int n = 0;          // running element count (caps at 16)
+	UINT offset = 0;    // running byte offset within one vertex
+
+	auto add = [&](char const *semantic, UINT semanticIndex, DXGI_FORMAT fmt, UINT bytes)
+	{
+		if (n >= 16)
+			return;
+		D3D11_INPUT_ELEMENT_DESC &d = outDesc[n++];
+		d.SemanticName         = semantic;
+		d.SemanticIndex        = semanticIndex;
+		d.Format               = fmt;
+		d.InputSlot            = 0;            // single-stream (Phase 11 SPEC §Boundaries)
+		d.AlignedByteOffset    = offset;
+		d.InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
+		d.InstanceDataStepRate = 0;
+		offset += bytes;
+	};
+
+	if (format.hasPosition())
+	{
+		if (format.isTransformed())
+		{
+			// Transformed vertices use the SV_POSITION-equivalent xyzrhw
+			// layout; pack as float4 covering xyz + rhw together. We emit a
+			// single POSITION float4 instead of POSITION float3 + a separate
+			// RHW float, because the layout that getDescriptor lays out keeps
+			// them adjacent (12 + 4 = 16 bytes). Same byte cost; cleaner HLSL.
+			add("POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, sizeof(float) * 4);
+		}
+		else
+		{
+			add("POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, sizeof(float) * 3);
+		}
+	}
+
+	if (format.hasNormal())
+		add("NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, sizeof(float) * 3);
+
+	if (format.hasPointSize())
+		add("PSIZE", 0, DXGI_FORMAT_R32_FLOAT, sizeof(float));
+
+	if (format.hasColor0())
+		add("COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, sizeof(uint32));
+
+	if (format.hasColor1())
+		add("COLOR", 1, DXGI_FORMAT_B8G8R8A8_UNORM, sizeof(uint32));
+
+	const int numberOfTexCoordSets = format.getNumberOfTextureCoordinateSets();
+	for (int t = 0; t < numberOfTexCoordSets; ++t)
+	{
+		const int dim = format.getTextureCoordinateSetDimension(t);
+		DXGI_FORMAT dxgi = DXGI_FORMAT_UNKNOWN;
+		UINT bytes = 0;
+		switch (dim)
+		{
+			case 1: dxgi = DXGI_FORMAT_R32_FLOAT;           bytes = sizeof(float) * 1; break;
+			case 2: dxgi = DXGI_FORMAT_R32G32_FLOAT;        bytes = sizeof(float) * 2; break;
+			case 3: dxgi = DXGI_FORMAT_R32G32B32_FLOAT;     bytes = sizeof(float) * 3; break;
+			case 4: dxgi = DXGI_FORMAT_R32G32B32A32_FLOAT;  bytes = sizeof(float) * 4; break;
+			default:
+				DEBUG_FATAL(true, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: invalid texcoord dim=%d", dim));
+				break;
+		}
+		add("TEXCOORD", static_cast<UINT>(t), dxgi, bytes);
+	}
+
+	DEBUG_FATAL(n == 0, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: empty layout"));
+	return n;
+}
+
+// ======================================================================
