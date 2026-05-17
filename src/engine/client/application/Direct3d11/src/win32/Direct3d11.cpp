@@ -25,13 +25,17 @@
 #include "Direct3d11_Device.h"
 #include "Direct3d11_DynamicIndexBufferData.h"
 #include "Direct3d11_DynamicVertexBufferData.h"
+#include "Direct3d11_LightManager.h"
+#include "Direct3d11_Metrics.h"
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_RenderTarget.h"
 #include "Direct3d11_ShaderCache.h"
+#include "Direct3d11_StateCache.h"
 #include "Direct3d11_StaticIndexBufferData.h"
 #include "Direct3d11_StaticVertexBufferData.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
+#include "Direct3d11_VertexDeclarationMap.h"
 #include "Direct3d11_VertexShaderData.h"
 
 #include "clientGraphics/Gl_dll.def"
@@ -189,10 +193,14 @@ namespace Direct3d11Namespace
 
 	void remove_impl()
 	{
-		// Plugin tear-down. Plan 11-05 extends Plan 11-04 with shader-class
-		// teardown in REVERSE install order (so device is the last thing
-		// released; resources released first while their ComPtrs still see
+		// Plugin tear-down. Plan 11-06 extends Plan 11-05 with state-cache /
+		// light-manager / metrics / input-layout-cache teardown in REVERSE
+		// install order (so device is the last thing released; ComPtrs see
 		// a live device).
+		Direct3d11_Metrics::remove();
+		Direct3d11_LightManager::remove();
+		Direct3d11_StateCache::remove();
+		Direct3d11_VertexDeclarationMap::remove();
 		Direct3d11_ConstantBuffer::remove();
 		Direct3d11_PixelShaderProgramData::remove();
 		Direct3d11_VertexShaderData::remove();
@@ -454,6 +462,21 @@ bool Direct3d11::install(Gl_install * gl_install)
 	Direct3d11_ConstantBuffer::install();
 
 	// ------------------------------------------------------------------
+	// Plan 11-06: state cache + draw dispatch + input-layout cache + light
+	// manager + metrics. Order matters:
+	//   - VertexDeclarationMap depends on ShaderCache + VertexShaderData
+	//     (it caches input layouts keyed by VS bytecode hash).
+	//   - StateCache depends on ConstantBuffer + all resource layers
+	//     above (it dispatches draws against them).
+	//   - LightManager depends on ConstantBuffer (LightingCB output).
+	//   - Metrics is leaf -- depends on DebugFlags only.
+
+	Direct3d11_VertexDeclarationMap::install();
+	Direct3d11_StateCache::install();
+	Direct3d11_LightManager::install();
+	Direct3d11_Metrics::install();
+
+	// ------------------------------------------------------------------
 	// Real implementations -- engine queries these during startup.
 
 	ms_glApi.remove                            = remove_impl;
@@ -507,9 +530,14 @@ bool Direct3d11::install(Gl_install * gl_install)
 	STUB(resize);
 	STUB(setWindowedMode);
 
-	STUB(setFillMode);
-	STUB(setCullMode);
+	// Plan 11-06: rasterizer-state setters land on Direct3d11_StateCache.
+	ms_glApi.setFillMode = Direct3d11_StateCache::setFillMode;
+	ms_glApi.setCullMode = Direct3d11_StateCache::setCullMode;
 
+	// Point-sprite state: D3D11 has no fixed-function point-sprite control;
+	// gl_PointSize-equivalent lives in HLSL via SV_PointSize. Plan 11-06
+	// stubs out the setters as no-ops; Plan 11-07 smoke surfaces whether
+	// engine particle subsystems rely on engine-side point-sprite emit.
 	STUB(setPointSize);
 	STUB(setPointSizeMax);
 	STUB(setPointSizeMin);
@@ -517,7 +545,7 @@ bool Direct3d11::install(Gl_install * gl_install)
 	STUB(setPointScaleFactor);
 	STUB(setPointSpriteEnable);
 
-	STUB(setAntialiasEnabled);
+	ms_glApi.setAntialiasEnabled = Direct3d11_StateCache::setAntialiasEnabled;
 
 	// Plan 11-03 (Wave 3): per-frame clear-to-color slot bodies wired to
 	// Direct3d11_Device. update is a no-op shim (engine calls every frame
@@ -544,46 +572,59 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(screenShot);
 
+	// Plan 11-06: shader-implementation factory slots still STUB() --
+	// these create per-template GraphicsData wrappers that the engine
+	// invokes during ShaderTemplate::install. The wrappers themselves
+	// are NOT created in Plan 11-06 (no Direct3d11_ShaderImplementationData
+	// nor Direct3d11_StaticShaderData yet); Plan 11-07's iterative
+	// fix-by-fix smoke surfaces what they need to do at minimum. The
+	// engine's call path through these will FATAL on first invocation
+	// and Plan 11-07's first iteration replaces them.
 	STUB(createShaderImplementationGraphicsData);
 	STUB(createStaticShaderGraphicsData);
-	STUB(setBadVertexShaderStaticShader);
-	STUB(setStaticShader);
+	ms_glApi.setBadVertexShaderStaticShader = Direct3d11_StateCache::setBadVertexShaderStaticShader;
+	ms_glApi.setStaticShader                = Direct3d11_StateCache::setStaticShader;
 
+	// Windowing utilities -- Plan 11-09 / Wave 7+ territory.
 	STUB(setMouseCursor);
 	STUB(showMouseCursor);
 
-	STUB(setViewport);
-	STUB(setScissorRect);
-	STUB(setWorldToCameraTransform);
-	STUB(setProjectionMatrix);
-	STUB(setFog);
-	STUB(setObjectToWorldTransformAndScale);
-	STUB(setGlobalTexture);
-	STUB(releaseAllGlobalTextures);
-	STUB(setTextureTransform);
-	// Plan 11-05: cbuffer user-constant setters. Currently shadow-only --
-	// Plan 11-06's draw dispatch will flush via Direct3d11_ConstantBuffer::
-	// updateVS(1, ...) + bindVS(1) / updatePS(2, ...) + bindPS(2) at the
-	// appropriate moment.
+	// Plan 11-06: per-frame transform + viewport + scissor + global-texture
+	// + per-stage texture-transform + alpha-fade slot bodies.
+	ms_glApi.setViewport                       = Direct3d11_StateCache::setViewport;
+	ms_glApi.setScissorRect                    = Direct3d11_StateCache::setScissorRect;
+	ms_glApi.setWorldToCameraTransform         = Direct3d11_StateCache::setWorldToCameraTransform;
+	ms_glApi.setProjectionMatrix               = Direct3d11_StateCache::setProjectionMatrix;
+	ms_glApi.setFog                            = Direct3d11_StateCache::setFog;
+	ms_glApi.setObjectToWorldTransformAndScale = Direct3d11_StateCache::setObjectToWorldTransformAndScale;
+	ms_glApi.setGlobalTexture                  = Direct3d11_StateCache::setGlobalTexture;
+	ms_glApi.releaseAllGlobalTextures          = Direct3d11_StateCache::releaseAllGlobalTextures;
+	ms_glApi.setTextureTransform               = Direct3d11_StateCache::setTextureTransform;
+	// Plan 11-05: cbuffer user-constant setters. Plan 11-06's draw dispatch
+	// flushes via Direct3d11_ConstantBuffer::bindVS(1) + bindPS(2) in
+	// applyPreDrawState.
 	ms_glApi.setVertexShaderUserConstants  = setVertexShaderUserConstants_impl;
 	ms_glApi.setPixelShaderUserConstants   = setPixelShaderUserConstants_impl;
 
-	STUB(setAlphaFadeOpacity);
+	ms_glApi.setAlphaFadeOpacity           = Direct3d11_StateCache::setAlphaFadeOpacity;
 
-	STUB(setLights);
+	// Plan 11-06: lighting flows through Direct3d11_LightManager -> cbuffer.
+	ms_glApi.setLights                     = Direct3d11_LightManager::setLights;
 
-	// Plan 11-04: VB + IB factory slots wired. setVertexBuffer/setIndexBuffer
-	// and the VertexBufferVector path remain STUB'd (state-cache + draw-call
-	// territory, Plan 11-06).
+	// Plan 11-04: VB + IB factory slots wired.
+	// Plan 11-06: setVertexBuffer / setIndexBuffer slots now route through
+	// the state cache (geometry tracking + draw-time binding).
+	// setVertexBufferVector + createVertexBufferVectorData remain STUB() --
+	// multi-stream is deferred (Phase 11 SPEC §Boundaries: single-stream).
 	ms_glApi.createStaticVertexBufferData  = createStaticVertexBufferData_impl;
 	ms_glApi.createDynamicVertexBufferData = createDynamicVertexBufferData_impl;
 	STUB(createVertexBufferVectorData);
-	STUB(setVertexBuffer);
+	ms_glApi.setVertexBuffer               = Direct3d11_StateCache::setVertexBuffer;
 	STUB(setVertexBufferVector);
 
 	ms_glApi.createStaticIndexBufferData   = createStaticIndexBufferData_impl;
 	ms_glApi.createDynamicIndexBufferData  = createDynamicIndexBufferData_impl;
-	STUB(setIndexBuffer);
+	ms_glApi.setIndexBuffer                = Direct3d11_StateCache::setIndexBuffer;
 	ms_glApi.setDynamicIndexBufferSize     = setDynamicIndexBufferSize_impl;
 
 	STUB(getOneToOneUVMapping);
@@ -601,34 +642,35 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ms_glApi.createVertexShaderData       = createVertexShaderData_impl;
 	ms_glApi.createPixelShaderProgramData = createPixelShaderProgramData_impl;
 
-	STUB(drawPointList);
-	STUB(drawLineList);
-	STUB(drawLineStrip);
-	STUB(drawTriangleList);
-	STUB(drawTriangleStrip);
-	STUB(drawTriangleFan);
-	STUB(drawQuadList);
+	// Plan 11-06: draw-call dispatch all wired to Direct3d11_StateCache.
+	ms_glApi.drawPointList               = Direct3d11_StateCache::drawPointList;
+	ms_glApi.drawLineList                = Direct3d11_StateCache::drawLineList;
+	ms_glApi.drawLineStrip               = Direct3d11_StateCache::drawLineStrip;
+	ms_glApi.drawTriangleList            = Direct3d11_StateCache::drawTriangleList;
+	ms_glApi.drawTriangleStrip           = Direct3d11_StateCache::drawTriangleStrip;
+	ms_glApi.drawTriangleFan             = Direct3d11_StateCache::drawTriangleFan;
+	ms_glApi.drawQuadList                = Direct3d11_StateCache::drawQuadList;
 
-	STUB(drawIndexedPointList);
-	STUB(drawIndexedLineList);
-	STUB(drawIndexedLineStrip);
-	STUB(drawIndexedTriangleList);
-	STUB(drawIndexedTriangleStrip);
-	STUB(drawIndexedTriangleFan);
+	ms_glApi.drawIndexedPointList        = Direct3d11_StateCache::drawIndexedPointList;
+	ms_glApi.drawIndexedLineList         = Direct3d11_StateCache::drawIndexedLineList;
+	ms_glApi.drawIndexedLineStrip        = Direct3d11_StateCache::drawIndexedLineStrip;
+	ms_glApi.drawIndexedTriangleList     = Direct3d11_StateCache::drawIndexedTriangleList;
+	ms_glApi.drawIndexedTriangleStrip    = Direct3d11_StateCache::drawIndexedTriangleStrip;
+	ms_glApi.drawIndexedTriangleFan      = Direct3d11_StateCache::drawIndexedTriangleFan;
 
-	STUB(drawPartialPointList);
-	STUB(drawPartialLineList);
-	STUB(drawPartialLineStrip);
-	STUB(drawPartialTriangleList);
-	STUB(drawPartialTriangleStrip);
-	STUB(drawPartialTriangleFan);
+	ms_glApi.drawPartialPointList        = Direct3d11_StateCache::drawPartialPointList;
+	ms_glApi.drawPartialLineList         = Direct3d11_StateCache::drawPartialLineList;
+	ms_glApi.drawPartialLineStrip        = Direct3d11_StateCache::drawPartialLineStrip;
+	ms_glApi.drawPartialTriangleList     = Direct3d11_StateCache::drawPartialTriangleList;
+	ms_glApi.drawPartialTriangleStrip    = Direct3d11_StateCache::drawPartialTriangleStrip;
+	ms_glApi.drawPartialTriangleFan      = Direct3d11_StateCache::drawPartialTriangleFan;
 
-	STUB(drawPartialIndexedPointList);
-	STUB(drawPartialIndexedLineList);
-	STUB(drawPartialIndexedLineStrip);
-	STUB(drawPartialIndexedTriangleList);
-	STUB(drawPartialIndexedTriangleStrip);
-	STUB(drawPartialIndexedTriangleFan);
+	ms_glApi.drawPartialIndexedPointList     = Direct3d11_StateCache::drawPartialIndexedPointList;
+	ms_glApi.drawPartialIndexedLineList      = Direct3d11_StateCache::drawPartialIndexedLineList;
+	ms_glApi.drawPartialIndexedLineStrip     = Direct3d11_StateCache::drawPartialIndexedLineStrip;
+	ms_glApi.drawPartialIndexedTriangleList  = Direct3d11_StateCache::drawPartialIndexedTriangleList;
+	ms_glApi.drawPartialIndexedTriangleStrip = Direct3d11_StateCache::drawPartialIndexedTriangleStrip;
+	ms_glApi.drawPartialIndexedTriangleFan   = Direct3d11_StateCache::drawPartialIndexedTriangleFan;
 
 	STUB(optimizeIndexBuffer);
 
