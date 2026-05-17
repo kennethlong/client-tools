@@ -21,22 +21,30 @@
 #include "Direct3d11.h"
 
 #include "ConfigDirect3d11.h"
+#include "Direct3d11_ConstantBuffer.h"
 #include "Direct3d11_Device.h"
 #include "Direct3d11_DynamicIndexBufferData.h"
 #include "Direct3d11_DynamicVertexBufferData.h"
+#include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_RenderTarget.h"
+#include "Direct3d11_ShaderCache.h"
 #include "Direct3d11_StaticIndexBufferData.h"
 #include "Direct3d11_StaticVertexBufferData.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
+#include "Direct3d11_VertexShaderData.h"
 
 #include "clientGraphics/Gl_dll.def"
 #include "clientGraphics/ShaderCapability.h"
+#include "clientGraphics/ShaderImplementation.h"
 #include "clientGraphics/StaticVertexBuffer.h"
 #include "clientGraphics/DynamicVertexBuffer.h"
 #include "clientGraphics/StaticIndexBuffer.h"
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
+#include "sharedMath/VectorRgba.h"
+
+#include <DirectXMath.h>
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
@@ -181,10 +189,14 @@ namespace Direct3d11Namespace
 
 	void remove_impl()
 	{
-		// Plugin tear-down. Plan 11-04 extends Plan 11-03 with resource-class
+		// Plugin tear-down. Plan 11-05 extends Plan 11-04 with shader-class
 		// teardown in REVERSE install order (so device is the last thing
 		// released; resources released first while their ComPtrs still see
 		// a live device).
+		Direct3d11_ConstantBuffer::remove();
+		Direct3d11_PixelShaderProgramData::remove();
+		Direct3d11_VertexShaderData::remove();
+		Direct3d11_ShaderCache::remove();
 		Direct3d11_RenderTarget::remove();
 		Direct3d11_TextureData::remove();
 		Direct3d11_DynamicIndexBufferData::remove();
@@ -285,6 +297,87 @@ namespace Direct3d11Namespace
 	{
 		return Direct3d11_RenderTarget::copyRenderTargetToNonRenderTargetTexture();
 	}
+
+	// ------------------------------------------------------------------
+	// Plan 11-05 (Wave 5 -- shader layer): Gl_api factory slot bodies
+	// for the shader compile pipeline (D3DCompile vs_5_0/ps_5_0 with
+	// D-03 hybrid .cso cache) and the cbuffer user-constant setters
+	// (Pitfall 2 -- D3D11_USAGE_DYNAMIC + Map/Unmap).
+	//
+	// These replace 4 scaffold_fatal_stub bindings:
+	//   - createVertexShaderData
+	//   - createPixelShaderProgramData
+	//   - setVertexShaderUserConstants
+	//   - setPixelShaderUserConstants
+	//
+	// createShaderImplementationGraphicsData / createStaticShaderGraphicsData /
+	// setBadVertexShaderStaticShader / setStaticShader remain STUB() until
+	// Plan 11-06 (state cache + draw dispatch). The engine will FATAL on
+	// one of those (probably createShaderImplementationGraphicsData -- the
+	// first one called during ShaderTemplate::install) -- that's the new
+	// FATAL boundary advanced by Plan 11-05.
+
+	ShaderImplementationPassVertexShaderGraphicsData *createVertexShaderData_impl(
+		ShaderImplementationPassVertexShader const &vertexShader)
+	{
+		return new Direct3d11_VertexShaderData(vertexShader);
+	}
+
+	ShaderImplementationPassPixelShaderProgramGraphicsData *createPixelShaderProgramData_impl(
+		ShaderImplementationPassPixelShaderProgram const &pixelShaderProgram)
+	{
+		return new Direct3d11_PixelShaderProgramData(pixelShaderProgram);
+	}
+
+	void setVertexShaderUserConstants_impl(int index, float c0, float c1, float c2, float c3)
+	{
+		// D3D9 analog: Direct3d9_StateCache::setVertexShaderConstants(
+		//   VCSR_userConstant0 + index, {c0,c1,c2,c3}, 1);
+		//
+		// D3D11 cbuffer migration: index becomes the per-object userConstants[]
+		// slot. We accumulate one VS user-constant per call into PerObjectCB.
+		// Plan 11-06's draw dispatch flushes the cbuffer via
+		// Direct3d11_ConstantBuffer::updateVS(1, ...) + bindVS(1) at the
+		// right moment in the draw-call sequence.
+		//
+		// For Plan 11-05 we maintain a static shadow copy of the cbuffer
+		// payload that Plan 11-06 will read on flush. This lets us NOT call
+		// updateVS per-setter (Map/Unmap on every constant is wasteful).
+		static Direct3d11_PerObjectCB s_perObjectShadow = {};
+		if (index >= 0 && index < 8)
+		{
+			s_perObjectShadow.userConstants[index] = DirectX::XMFLOAT4(c0, c1, c2, c3);
+		}
+		else
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11::setVertexShaderUserConstants: index=%d out of PerObjectCB userConstants[] range [0,8)\n",
+				index));
+		}
+	}
+
+	void setPixelShaderUserConstants_impl(VectorRgba const *constants, int count)
+	{
+		// D3D9 analog: Direct3d9_StateCache::setPixelShaderConstants(
+		//   PSCR_userConstant, constants, count);
+		//
+		// D3D11 cbuffer migration: shadow into Direct3d11_PerMaterialCB
+		// userConstants[]. Same flush pattern as VS (Plan 11-06 territory).
+		static Direct3d11_PerMaterialCB s_perMaterialShadow = {};
+		int const slots = sizeof(s_perMaterialShadow.userConstants) / sizeof(s_perMaterialShadow.userConstants[0]);
+		int const clamped = (count > slots) ? slots : count;
+		for (int i = 0; i < clamped; ++i)
+		{
+			s_perMaterialShadow.userConstants[i] = DirectX::XMFLOAT4(
+				constants[i].r, constants[i].g, constants[i].b, constants[i].a);
+		}
+		if (count > slots)
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11::setPixelShaderUserConstants: count=%d > userConstants[] slots=%d; truncated\n",
+				count, slots));
+		}
+	}
 }
 using namespace Direct3d11Namespace;
 
@@ -348,6 +441,17 @@ bool Direct3d11::install(Gl_install * gl_install)
 	Direct3d11_StaticIndexBufferData::install();
 	Direct3d11_DynamicIndexBufferData::install();
 	Direct3d11_RenderTarget::install();
+
+	// ------------------------------------------------------------------
+	// Plan 11-05: shader-class install. ShaderCache must come first so that
+	// VertexShaderData / PixelShaderProgramData constructors find a valid
+	// cache directory during ShaderImplementation::install (which loads the
+	// asset shader templates).
+
+	Direct3d11_ShaderCache::install(ConfigDirect3d11::getShaderCacheDir());
+	Direct3d11_VertexShaderData::install();
+	Direct3d11_PixelShaderProgramData::install();
+	Direct3d11_ConstantBuffer::install();
 
 	// ------------------------------------------------------------------
 	// Real implementations -- engine queries these during startup.
@@ -457,8 +561,12 @@ bool Direct3d11::install(Gl_install * gl_install)
 	STUB(setGlobalTexture);
 	STUB(releaseAllGlobalTextures);
 	STUB(setTextureTransform);
-	STUB(setVertexShaderUserConstants);
-	STUB(setPixelShaderUserConstants);
+	// Plan 11-05: cbuffer user-constant setters. Currently shadow-only --
+	// Plan 11-06's draw dispatch will flush via Direct3d11_ConstantBuffer::
+	// updateVS(1, ...) + bindVS(1) / updatePS(2, ...) + bindPS(2) at the
+	// appropriate moment.
+	ms_glApi.setVertexShaderUserConstants  = setVertexShaderUserConstants_impl;
+	ms_glApi.setPixelShaderUserConstants   = setPixelShaderUserConstants_impl;
 
 	STUB(setAlphaFadeOpacity);
 
@@ -483,8 +591,15 @@ bool Direct3d11::install(Gl_install * gl_install)
 	// FATAL boundary. Now serves real ID3D11Texture2D + SRV pairs.
 	ms_glApi.createTextureData             = createTextureData_impl;
 
-	STUB(createVertexShaderData);
-	STUB(createPixelShaderProgramData);
+	// Plan 11-05: VS + PS shader-program factories wired. The VS path
+	// compiles HLSL source to vs_5_0 via D3DCompile + ShaderCache (D-03
+	// hybrid). The PS path constructs the wrapper but currently leaves
+	// the ID3D11PixelShader NULL because the asset pipeline ships
+	// pre-compiled D3D9 bytecode (Plan 11-06 draw dispatch handles NULL).
+	// See Direct3d11_PixelShaderProgramData.cpp header for the asset
+	// re-author follow-up note.
+	ms_glApi.createVertexShaderData       = createVertexShaderData_impl;
+	ms_glApi.createPixelShaderProgramData = createPixelShaderProgramData_impl;
 
 	STUB(drawPointList);
 	STUB(drawLineList);
