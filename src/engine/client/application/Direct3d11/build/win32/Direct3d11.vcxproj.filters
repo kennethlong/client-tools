@@ -51,10 +51,16 @@
     <ClCompile Include="..\..\src\win32\Direct3d11_ShaderCache.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_ShaderImplementationData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_StateCache.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_StaticShaderData.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.cpp">
@@ -119,10 +125,16 @@
     <ClInclude Include="..\..\src\win32\Direct3d11_ShaderCache.h">
       <Filter>src\win32</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_ShaderImplementationData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_StateCache.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_StaticShaderData.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.h">

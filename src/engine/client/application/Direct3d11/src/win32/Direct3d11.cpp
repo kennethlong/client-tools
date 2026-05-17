@@ -30,8 +30,10 @@
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_RenderTarget.h"
 #include "Direct3d11_ShaderCache.h"
+#include "Direct3d11_ShaderImplementationData.h"
 #include "Direct3d11_StateCache.h"
 #include "Direct3d11_StaticIndexBufferData.h"
+#include "Direct3d11_StaticShaderData.h"
 #include "Direct3d11_StaticVertexBufferData.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
@@ -41,6 +43,7 @@
 #include "clientGraphics/Gl_dll.def"
 #include "clientGraphics/ShaderCapability.h"
 #include "clientGraphics/ShaderImplementation.h"
+#include "clientGraphics/StaticShader.h"
 #include "clientGraphics/StaticVertexBuffer.h"
 #include "clientGraphics/DynamicVertexBuffer.h"
 #include "clientGraphics/StaticIndexBuffer.h"
@@ -196,7 +199,11 @@ namespace Direct3d11Namespace
 		// Plugin tear-down. Plan 11-06 extends Plan 11-05 with state-cache /
 		// light-manager / metrics / input-layout-cache teardown in REVERSE
 		// install order (so device is the last thing released; ComPtrs see
-		// a live device).
+		// a live device). Plan 11-07 Iteration 1 adds the StaticShaderData
+		// + ShaderImplementationData teardown FIRST (last installed, first
+		// removed).
+		Direct3d11_StaticShaderData::remove();
+		Direct3d11_ShaderImplementationData::remove();
 		Direct3d11_Metrics::remove();
 		Direct3d11_LightManager::remove();
 		Direct3d11_StateCache::remove();
@@ -386,6 +393,29 @@ namespace Direct3d11Namespace
 				count, slots));
 		}
 	}
+
+	// ------------------------------------------------------------------
+	// Plan 11-07 Iteration 1: shader-implementation + static-shader factory
+	// slot bodies. These replace 2 STUB() bindings inherited from Plan 11-06.
+	// Iteration 1 contract: construct successfully so the engine's
+	// ShaderImplementation::load_NNNN() + StaticShader::construct() complete
+	// past the FATAL boundary predicted by Plan 11-06 SUMMARY.
+	//
+	// Per-pass state apply (BS/DSS overrides) + per-pass VS/PS lookup are
+	// recorded no-ops in Iteration 1; subsequent iterations populate them
+	// driven by specific visual symptoms.
+
+	ShaderImplementationGraphicsData * createShaderImplementationGraphicsData_impl(
+		ShaderImplementation const &shaderImplementation)
+	{
+		return new Direct3d11_ShaderImplementationData(shaderImplementation);
+	}
+
+	StaticShaderGraphicsData * createStaticShaderGraphicsData_impl(
+		StaticShader const &shader)
+	{
+		return new Direct3d11_StaticShaderData(shader);
+	}
 }
 using namespace Direct3d11Namespace;
 
@@ -475,6 +505,17 @@ bool Direct3d11::install(Gl_install * gl_install)
 	Direct3d11_StateCache::install();
 	Direct3d11_LightManager::install();
 	Direct3d11_Metrics::install();
+
+	// ------------------------------------------------------------------
+	// Plan 11-07 Iteration 1: shader-template wrapper classes. The
+	// ShaderImplementationData + StaticShaderData wrappers are the
+	// engine's per-template / per-instance handles used during
+	// ShaderImplementation::load_NNNN and StaticShader::construct.
+	// They must be installed BEFORE the factory slots are wired below
+	// (which the engine calls during asset load).
+
+	Direct3d11_ShaderImplementationData::install();
+	Direct3d11_StaticShaderData::install();
 
 	// ------------------------------------------------------------------
 	// Real implementations -- engine queries these during startup.
@@ -572,16 +613,15 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(screenShot);
 
-	// Plan 11-06: shader-implementation factory slots still STUB() --
-	// these create per-template GraphicsData wrappers that the engine
-	// invokes during ShaderTemplate::install. The wrappers themselves
-	// are NOT created in Plan 11-06 (no Direct3d11_ShaderImplementationData
-	// nor Direct3d11_StaticShaderData yet); Plan 11-07's iterative
-	// fix-by-fix smoke surfaces what they need to do at minimum. The
-	// engine's call path through these will FATAL on first invocation
-	// and Plan 11-07's first iteration replaces them.
-	STUB(createShaderImplementationGraphicsData);
-	STUB(createStaticShaderGraphicsData);
+	// Plan 11-07 Iteration 1: shader-implementation + static-shader factory
+	// slots wired. The wrappers (Direct3d11_ShaderImplementationData +
+	// Direct3d11_StaticShaderData) construct successfully so the engine's
+	// ShaderImplementation::load_NNNN + StaticShader::construct complete
+	// past the Plan 11-06 FATAL boundary. Per-pass state apply (BS/DSS
+	// overrides) + per-pass VS/PS lookup are recorded no-ops; subsequent
+	// iterations populate them driven by specific visual symptoms.
+	ms_glApi.createShaderImplementationGraphicsData = createShaderImplementationGraphicsData_impl;
+	ms_glApi.createStaticShaderGraphicsData         = createStaticShaderGraphicsData_impl;
 	ms_glApi.setBadVertexShaderStaticShader = Direct3d11_StateCache::setBadVertexShaderStaticShader;
 	ms_glApi.setStaticShader                = Direct3d11_StateCache::setStaticShader;
 
