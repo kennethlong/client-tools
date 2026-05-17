@@ -32,6 +32,7 @@ public:
 		friend class Texture;
 		friend class Direct3d8_TextureData;
 		friend class Direct3d9_TextureData;
+		friend class Direct3d11_TextureData;
 
 	public:
 
