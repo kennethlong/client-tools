@@ -268,6 +268,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClCompile Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_RenderTarget.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_ShaderCache.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_StateCache.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_TextureData.cpp" />
@@ -293,6 +294,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClInclude Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_RenderTarget.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_ShaderCache.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_StateCache.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_TextureData.h" />

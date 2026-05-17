@@ -45,6 +45,9 @@
     <ClCompile Include="..\..\src\win32\Direct3d11_ShaderCache.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_StateCache.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
@@ -102,6 +105,9 @@
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_ShaderCache.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_StateCache.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.h">
