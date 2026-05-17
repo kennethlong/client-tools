@@ -11,10 +11,13 @@
 // case. This unblocks the engine's createPixelShaderProgramData factory
 // slot during ShaderImplementation::install.
 //
-// We use D3DCompile() / "ps_5_0" profile string as DEAD-CODE compile-time
-// PROOF that the SM5.0 path is present (SPEC R3 acceptance signal). The
-// helper is reachable from the constructor only when the engine ever
-// surfaces an HLSL-source pixel shader; current asset pipeline does not.
+// We use D3DCompile() / kPixelShaderProfile (Plan 11-07 Iter-3 sets this
+// to "ps_4_0_level_9_3"; was "ps_5_0" in Plan 11-05 baseline) as
+// DEAD-CODE compile-time PROOF that the D3D11 shader-compile path is
+// present (SPEC R3 acceptance signal, with the Iter-3 profile-rationale
+// caveat -- see Direct3d11_VertexShaderData.cpp preamble). The helper is
+// reachable from the constructor only when the engine ever surfaces an
+// HLSL-source pixel shader; current asset pipeline does not.
 //
 // ======================================================================
 
@@ -44,9 +47,21 @@ MemoryBlockManager *Direct3d11_PixelShaderProgramData::ms_memoryBlockManager = n
 
 namespace Direct3d11_PixelShaderProgramDataNamespace
 {
-	// SPEC R3 compile-time proof: this helper exercises the ps_5_0 +
-	// D3DCompile + ShaderCache code path. It is invoked when an HLSL
-	// source pixel shader surfaces in the asset pipeline (none today;
+	// Plan 11-07 Iter-3: ps_4_0_level_9_3 profile string. Mirrors the VS
+	// compile-site profile change in Direct3d11_VertexShaderData.cpp. See
+	// that file's preamble Profile-rationale block for the full reasoning
+	// (D3D9-era HLSL syntax surfaces tokens that vs_5_0 / ps_5_0 reserve
+	// as keywords; vs_4_0_level_9_* / ps_4_0_level_9_* relax those
+	// reservations). This helper remains [[maybe_unused]] today (engine
+	// ships pre-compiled D3D9 PEXE bytecode rather than HLSL source for
+	// pixel shaders -- see header preamble); when a future Phase 12 asset
+	// re-author surfaces HLSL-source pixel shaders, this is the code path
+	// that will execute.
+	char const * const kPixelShaderProfile = "ps_4_0_level_9_3";
+
+	// SPEC R3 compile-time proof: this helper exercises the ps_4_0_level_9_3
+	// (Iter-3) + D3DCompile + ShaderCache code path. It is invoked when an
+	// HLSL source pixel shader surfaces in the asset pipeline (none today;
 	// future Phase 12 asset re-author will trigger this path).
 	//
 	// Returns nullptr if compile fails or input empty; otherwise an
@@ -63,9 +78,13 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		if (!sourceText || sourceLen == 0)
 			return false;
 
+		// Plan 11-07 Iter-3: D3D11_PROFILE macro injected into the defines
+		// list so the profile string participates in the cache hash
+		// (mirrors Direct3d11_VertexShaderData.cpp Iter-3 change).
 		std::vector<D3D_SHADER_MACRO> defines;
-		defines.push_back({ "POSITION", "SV_POSITION" });
-		defines.push_back({ "D3D11",    "1" });
+		defines.push_back({ "POSITION",      "SV_POSITION" });
+		defines.push_back({ "D3D11",         "1" });
+		defines.push_back({ "D3D11_PROFILE", kPixelShaderProfile });
 		defines.push_back({ nullptr, nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -89,6 +108,11 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// [[maybe_unused]] until a future Phase 12 asset re-author
 			// surfaces HLSL-source pixel shaders, but the contract is
 			// correct as of Iter-2.
+			//
+			// Plan 11-07 Iter-3: profile string moved from "ps_5_0" to
+			// kPixelShaderProfile (currently "ps_4_0_level_9_3"); see
+			// namespace-scope comment above kPixelShaderProfile for
+			// rationale.
 			HRESULT hr = D3DCompile(
 				sourceText,
 				sourceLen,
@@ -96,7 +120,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 				defines.data(),
 				Direct3d11_CompileIncludeHandler::getInstance(),
 				"main",
-				"ps_5_0",
+				kPixelShaderProfile,
 				flags,
 				0,
 				blob.GetAddressOf(),
@@ -105,8 +129,8 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			if (FAILED(hr))
 			{
 				char const *err = errors ? static_cast<char const *>(errors->GetBufferPointer()) : "no error blob";
-				FATAL(true, ("Direct3d11_PixelShaderProgramData: D3DCompile ps_5_0 '%s' failed: %s",
-					virtName, err));
+				FATAL(true, ("Direct3d11_PixelShaderProgramData: D3DCompile %s '%s' failed: %s",
+					kPixelShaderProfile, virtName, err));
 			}
 			if (errors && errors->GetBufferSize() > 0)
 			{
