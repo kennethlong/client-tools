@@ -22,9 +22,19 @@
 
 #include "ConfigDirect3d11.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_DynamicIndexBufferData.h"
+#include "Direct3d11_DynamicVertexBufferData.h"
+#include "Direct3d11_RenderTarget.h"
+#include "Direct3d11_StaticIndexBufferData.h"
+#include "Direct3d11_StaticVertexBufferData.h"
+#include "Direct3d11_TextureData.h"
+#include "Direct3d11_VertexBufferDescriptorMap.h"
 
 #include "clientGraphics/Gl_dll.def"
 #include "clientGraphics/ShaderCapability.h"
+#include "clientGraphics/StaticVertexBuffer.h"
+#include "clientGraphics/DynamicVertexBuffer.h"
+#include "clientGraphics/StaticIndexBuffer.h"
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
 
@@ -171,7 +181,17 @@ namespace Direct3d11Namespace
 
 	void remove_impl()
 	{
-		// Plugin tear-down. Plan 11-03 wires the real device destruction.
+		// Plugin tear-down. Plan 11-04 extends Plan 11-03 with resource-class
+		// teardown in REVERSE install order (so device is the last thing
+		// released; resources released first while their ComPtrs still see
+		// a live device).
+		Direct3d11_RenderTarget::remove();
+		Direct3d11_TextureData::remove();
+		Direct3d11_DynamicIndexBufferData::remove();
+		Direct3d11_StaticIndexBufferData::remove();
+		Direct3d11_DynamicVertexBufferData::remove();
+		Direct3d11_StaticVertexBufferData::remove();
+		Direct3d11_VertexBufferDescriptorMap::remove();
 		Direct3d11_Device::destroy();
 		ms_deviceLostCallbacks.clear();
 		ms_deviceRestoredCallbacks.clear();
@@ -214,6 +234,57 @@ namespace Direct3d11Namespace
 		v = 0; p = 0; l = 0; t = 0; c = 0;
 	}
 #endif
+
+	// ------------------------------------------------------------------
+	// Plan 11-04 (Wave 4 -- resource layer): Gl_api factory slot bodies
+	// for textures, static + dynamic vertex / index buffers, and the
+	// render-target re-target / read-back slots. These replace the
+	// scaffold_fatal_stub bindings from Plan 11-02 and let the engine
+	// hold the geometry / texture resources it pushes in. The plugin
+	// still FATALs further downstream on draw-call / shader slots that
+	// remain STUB'd until Plan 11-05 / 11-06.
+
+	TextureGraphicsData * createTextureData_impl(const Texture &texture,
+	                                             const TextureFormat *runtimeFormats,
+	                                             int numberOfRuntimeFormats)
+	{
+		return new Direct3d11_TextureData(texture, runtimeFormats, numberOfRuntimeFormats);
+	}
+
+	StaticVertexBufferGraphicsData * createStaticVertexBufferData_impl(const StaticVertexBuffer &vb)
+	{
+		return new Direct3d11_StaticVertexBufferData(vb);
+	}
+
+	DynamicVertexBufferGraphicsData * createDynamicVertexBufferData_impl(const DynamicVertexBuffer &vb)
+	{
+		return new Direct3d11_DynamicVertexBufferData(vb);
+	}
+
+	StaticIndexBufferGraphicsData * createStaticIndexBufferData_impl(const StaticIndexBuffer &ib)
+	{
+		return new Direct3d11_StaticIndexBufferData(ib);
+	}
+
+	DynamicIndexBufferGraphicsData * createDynamicIndexBufferData_impl()
+	{
+		return new Direct3d11_DynamicIndexBufferData();
+	}
+
+	void setDynamicIndexBufferSize_impl(int numberOfIndices)
+	{
+		Direct3d11_DynamicIndexBufferData::setSize(numberOfIndices);
+	}
+
+	void setRenderTarget_impl(Texture *texture, CubeFace cubeFace, int mipmapLevel)
+	{
+		Direct3d11_RenderTarget::setRenderTarget(texture, cubeFace, mipmapLevel);
+	}
+
+	bool copyRenderTargetToNonRenderTargetTexture_impl()
+	{
+		return Direct3d11_RenderTarget::copyRenderTargetToNonRenderTargetTexture();
+	}
 }
 using namespace Direct3d11Namespace;
 
@@ -263,6 +334,20 @@ bool Direct3d11::install(Gl_install * gl_install)
 	{
 		return false;
 	}
+
+	// ------------------------------------------------------------------
+	// Plan 11-04: resource-class install in dependency order. Each class
+	// allocates its MemoryBlockManager and any process-wide ring buffers.
+	// VertexBufferDescriptorMap first (consumed by VB/IB ctors), then
+	// the GPU-resource classes, finally the render-target manager.
+
+	Direct3d11_VertexBufferDescriptorMap::install();
+	Direct3d11_TextureData::install();
+	Direct3d11_StaticVertexBufferData::install();
+	Direct3d11_DynamicVertexBufferData::install();
+	Direct3d11_StaticIndexBufferData::install();
+	Direct3d11_DynamicIndexBufferData::install();
+	Direct3d11_RenderTarget::install();
 
 	// ------------------------------------------------------------------
 	// Real implementations -- engine queries these during startup.
@@ -345,8 +430,13 @@ bool Direct3d11::install(Gl_install * gl_install)
 	STUB(unlockBackBuffer);
 
 	STUB(presentToWindow);
-	STUB(setRenderTarget);
-	STUB(copyRenderTargetToNonRenderTargetTexture);
+	// Plan 11-04: render-target re-target + read-back wired to
+	// Direct3d11_RenderTarget. The "create" half is folded into
+	// createTextureData via Texture::isRenderTarget() (D3D11 has no
+	// dedicated createRenderTarget Gl_api slot -- Texture+RTV pair lives
+	// inside Direct3d11_TextureData).
+	ms_glApi.setRenderTarget                       = setRenderTarget_impl;
+	ms_glApi.copyRenderTargetToNonRenderTargetTexture = copyRenderTargetToNonRenderTargetTexture_impl;
 
 	STUB(screenShot);
 
@@ -374,19 +464,24 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(setLights);
 
-	STUB(createStaticVertexBufferData);
-	STUB(createDynamicVertexBufferData);
+	// Plan 11-04: VB + IB factory slots wired. setVertexBuffer/setIndexBuffer
+	// and the VertexBufferVector path remain STUB'd (state-cache + draw-call
+	// territory, Plan 11-06).
+	ms_glApi.createStaticVertexBufferData  = createStaticVertexBufferData_impl;
+	ms_glApi.createDynamicVertexBufferData = createDynamicVertexBufferData_impl;
 	STUB(createVertexBufferVectorData);
 	STUB(setVertexBuffer);
 	STUB(setVertexBufferVector);
 
-	STUB(createStaticIndexBufferData);
-	STUB(createDynamicIndexBufferData);
+	ms_glApi.createStaticIndexBufferData   = createStaticIndexBufferData_impl;
+	ms_glApi.createDynamicIndexBufferData  = createDynamicIndexBufferData_impl;
 	STUB(setIndexBuffer);
-	STUB(setDynamicIndexBufferSize);
+	ms_glApi.setDynamicIndexBufferSize     = setDynamicIndexBufferSize_impl;
 
 	STUB(getOneToOneUVMapping);
-	STUB(createTextureData);
+	// Plan 11-04: createTextureData -- the slot that was the Plan 11-03
+	// FATAL boundary. Now serves real ID3D11Texture2D + SRV pairs.
+	ms_glApi.createTextureData             = createTextureData_impl;
 
 	STUB(createVertexShaderData);
 	STUB(createPixelShaderProgramData);
