@@ -21,6 +21,7 @@
 #include "Direct3d11.h"
 
 #include "ConfigDirect3d11.h"
+#include "Direct3d11_Device.h"
 
 #include "clientGraphics/Gl_dll.def"
 #include "clientGraphics/ShaderCapability.h"
@@ -165,11 +166,13 @@ namespace Direct3d11Namespace
 
 	int  getMaximumVertexBufferStreamCount_impl() { return 1; }
 
-	void displayModeChanged_impl()           { /* no-op until Wave 3 */ }
+	// Plan 11-03: displayModeChanged delegates directly to Direct3d11_Device.
+	// (Old Plan 11-02 displayModeChanged_impl no-op shim removed.)
 
 	void remove_impl()
 	{
-		// Plugin tear-down -- no-op in scaffold (no device yet).
+		// Plugin tear-down. Plan 11-03 wires the real device destruction.
+		Direct3d11_Device::destroy();
 		ms_deviceLostCallbacks.clear();
 		ms_deviceRestoredCallbacks.clear();
 	}
@@ -177,6 +180,28 @@ namespace Direct3d11Namespace
 	void flushResources_impl(bool /*fullReset*/)
 	{
 		// No-op until Wave 3 lands the resource layer.
+	}
+
+	// ------------------------------------------------------------------
+	// Plan 11-03: no-op slots that fire BEFORE the per-frame loop
+	// (Graphics::install line 320 setBrightnessContrastGamma) or every
+	// frame BEFORE beginScene (Game::run line 1211 Graphics::update).
+	// Wave 4+ wires real implementations:
+	//   - setBrightnessContrastGamma -> DXGI output color-space / per-frame
+	//     post-process LUT (D3D11 has no IDirect3DDevice9::SetGammaRamp
+	//     equivalent at the device level)
+	//   - update -> per-frame elapsed-time bookkeeping (DPVS-style timing,
+	//     dynamic-vertex-buffer discard, etc.; Wave 4+ when resource layer
+	//     and instrumentation arrive)
+
+	void setBrightnessContrastGamma_impl(float /*brightness*/, float /*contrast*/, float /*gamma*/)
+	{
+		// no-op in scaffold; Wave 4+ wires real gamma/contrast/brightness
+	}
+
+	void update_impl(float /*elapsedTime*/)
+	{
+		// no-op in scaffold; Wave 4+ wires per-frame timing bookkeeping
 	}
 
 #ifdef _DEBUG
@@ -196,8 +221,8 @@ using namespace Direct3d11Namespace;
 // Direct3d11 class -- public surface used by the engine.
 // In Plan 11-02 the singletons are nullptr; Wave 3 creates the real device.
 
-ID3D11Device *        Direct3d11::getDevice()                  { return nullptr; }
-ID3D11DeviceContext * Direct3d11::getContext()                 { return nullptr; }
+ID3D11Device *        Direct3d11::getDevice()                  { return Direct3d11_Device::getDevice(); }
+ID3D11DeviceContext * Direct3d11::getContext()                 { return Direct3d11_Device::getContext(); }
 int                   Direct3d11::getShaderCapability()        { return getShaderCapability_impl(); }
 int                   Direct3d11::getVideoMemoryInMegabytes()  { return getVideoMemoryInMegabytes_impl(); }
 bool                  Direct3d11::supportsPixelShaders()       { return true; }
@@ -226,10 +251,24 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ConfigDirect3d11::install();
 
 	// ------------------------------------------------------------------
+	// Plan 11-03 (Wave 3): create the D3D11 device + DXGI flip-model
+	// swap chain + back-buffer RTV + depth-stencil DSV BEFORE wiring
+	// the per-frame slots. If this fails, return false; the engine
+	// reports plugin-install failure (Graphics::install fail path).
+
+	if (!Direct3d11_Device::create(gl_install->window,
+	                               gl_install->width,
+	                               gl_install->height,
+	                               gl_install->windowed))
+	{
+		return false;
+	}
+
+	// ------------------------------------------------------------------
 	// Real implementations -- engine queries these during startup.
 
 	ms_glApi.remove                            = remove_impl;
-	ms_glApi.displayModeChanged                = displayModeChanged_impl;
+	ms_glApi.displayModeChanged                = Direct3d11_Device::displayModeChanged;
 
 	ms_glApi.getShaderCapability               = getShaderCapability_impl;
 	ms_glApi.requiresVertexAndPixelShaders     = requiresVertexAndPixelShaders_impl;
@@ -271,7 +310,10 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	#define STUB(slot) ms_glApi.slot = reinterpret_cast<decltype(ms_glApi.slot)>(scaffold_fatal_stub)
 
-	STUB(setBrightnessContrastGamma);
+	// Plan 11-03: setBrightnessContrastGamma fires from inside Graphics::install
+	// at Graphics.cpp:320 -- MUST be a no-op for install to complete and the
+	// per-frame loop to start. Wave 4+ wires real gamma/contrast/brightness.
+	ms_glApi.setBrightnessContrastGamma = setBrightnessContrastGamma_impl;
 
 	STUB(resize);
 	STUB(setWindowedMode);
@@ -288,15 +330,20 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(setAntialiasEnabled);
 
-	STUB(clearViewport);
-	STUB(update);
-	STUB(beginScene);
-	STUB(endScene);
+	// Plan 11-03 (Wave 3): per-frame clear-to-color slot bodies wired to
+	// Direct3d11_Device. update is a no-op shim (engine calls every frame
+	// at Game::run:1211 BEFORE beginScene; Wave 4+ wires real timing).
+	// presentToWindow remains STUB'd (swap-chain-to-arbitrary-HWND used by
+	// the launcher overlay -- Wave 4+ territory).
+	ms_glApi.beginScene    = Direct3d11_Device::beginScene;
+	ms_glApi.endScene      = Direct3d11_Device::endScene;
+	ms_glApi.clearViewport = Direct3d11_Device::clearViewport;
+	ms_glApi.present       = Direct3d11_Device::present;
+	ms_glApi.update        = update_impl;
 
 	STUB(lockBackBuffer);
 	STUB(unlockBackBuffer);
 
-	STUB(present);
 	STUB(presentToWindow);
 	STUB(setRenderTarget);
 	STUB(copyRenderTargetToNonRenderTargetTexture);

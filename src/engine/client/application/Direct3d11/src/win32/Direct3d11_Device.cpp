@@ -218,6 +218,25 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
 		 width, height));
 
 	ms_installed = true;
+
+	// ------------------------------------------------------------------
+	// Initial clear + present (mirrors D3D9 plugin's pattern at
+	// Direct3d9.cpp:1363-1367). Puts dark blue on the screen IMMEDIATELY
+	// at install-time, before any other engine slot has a chance to fire.
+	// Without this, the per-frame loop may FATAL on an unstubbed slot
+	// (Wave 4+ territory) before reaching beginScene/clearViewport/present
+	// at all, and Plan 11-03's "dark blue window" deliverable would never
+	// be visually observable.
+	//
+	// Direct3d11_Device::beginScene rebinds RTV+DSV (Pitfall 3).
+
+	Direct3d11_Device::beginScene();
+	Direct3d11_Device::clearViewport(true, 0, true, 1.0f, true, 0);
+	Direct3d11_Device::endScene();
+	Direct3d11_Device::present();
+
+	DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11: initial clear-to-color present complete (dark blue 0,0,0.25,1)\n"));
+
 	return true;
 }
 
