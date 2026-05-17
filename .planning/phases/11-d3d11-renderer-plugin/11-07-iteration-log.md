@@ -1,7 +1,7 @@
 # Phase 11 — Plan 07 Iteration Log
 
 **Started:** 2026-05-17
-**Status:** In progress — iteration 2 landed; awaiting Kenny smoke for next FATAL boundary
+**Status:** In progress — iteration 3 landed; awaiting Kenny smoke for next FATAL boundary
 
 ## Iteration 1: Author Direct3d11_ShaderImplementationData + Direct3d11_StaticShaderData wrappers (createShaderImplementationGraphicsData FATAL boundary)
 
@@ -101,6 +101,68 @@
     - A `.vsh` with HLSL syntax that vs_5_0 rejects (e.g., legacy register-bound syntax `: register(v7)` that compiles under vs_1_1/vs_2_0 but not vs_5_0; or POSITION-as-input-semantic that gets corrupted by the macro per RESEARCH Pitfall 1 — Rule-1 deviation would land a targeted regex fallback).
     - A `.vsh` with `//asm` header (Plan 11-05 leaves NULL VS; Plan 11-06 draw-dispatch path skips it — but only if the shader is actually drawn. If the engine FATAL's on NULL VS during ShaderEffect::install validation rather than at draw time, that's a different fix path).
   - **Less likely:** hard crash from a different code path (access violation in non-traversal-protected codepath — would need OS exception-handler stack to investigate).
+
+---
+
+## Iteration 3: D3DCompile vs_5_0 X3000 `unexpected token 'point'` (D3D9-era HLSL keyword collision)
+
+- **Date:** 2026-05-17
+- **Symptom:** Kenny smoke launch under `client_d.cfg rasterMajor=11` (post-Iter-2) FATAL'd at:
+  ```
+  FATAL: Direct3d11_VertexShaderData: D3DCompile vs_5_0 'vertex_program/2d.vsh' failed:
+    vertex_program/include/vertex_shader_constants.inc(81,25-29):
+    error X3000: syntax error: unexpected token 'point'
+  ```
+  Crash dump: `stage/SwgClient_d.exe-unknown.0-20260517124350.txt`. Call stack root identical to Iter-2 (ShaderEffectList → ShaderImplementation → Direct3d11_VertexShaderData::compile → D3DCompile); engine reached the same `ShaderTemplate::install` call chain. Iter-2's include-handler fix worked (the `.inc` file resolved cleanly through TreeFile -- D3DCompile got its content and started parsing), but the parse itself surfaced the next defect: a token the SM5 profile rejects.
+- **Hypothesis:** **Option (1) — profile downgrade** chosen, ranked over (2) bytecode path and (3) textual rewrite:
+  - **(1) Profile downgrade to `vs_4_0_level_9_3`** — `vs_5_0` (D3DCompile's strictest profile) reserves additional identifiers as keywords versus the `vs_4_0_level_9_*` legacy-compat profiles. Geometry-shader primitive type names (`point`, `line`, `triangle`, `lineadj`, `triangleadj`) are vs_5_0 keywords; the engine's D3D9-era HLSL uses `point` as a sampler-state filter literal (and possibly as a user identifier elsewhere). `vs_4_0_level_9_*` targets D3D11 bytecode but enforces D3D9-era feature/syntax constraints, which relaxes those reservations and accepts the legacy syntax. D3D11's `CreateVertexShader` consumes vs_4_0_level_9_* bytecode unchanged. SPEC R3 satisfied in spirit (D3D11 toolchain produces the bytecode), with the legacy-compat caveat documented.
+  - **(2) Pre-compiled bytecode path** — rejected. ShaderImplementation.cpp:2155 (VS load path) reads the .vsh file content entirely as text (HLSL source). Unlike the PS path (which loads PEXE bytecode from the .psh IFF chunk per Plan 11-05's finding), there is NO pre-compiled VS bytecode chunk. The VS path is HLSL-source-only.
+  - **(3) Textual rewrite in include handler** — kept in reserve as last-resort fallback if (1) surfaces compile failures the level_9_* profile can't handle. Avoids fragile allowlist matching (renaming `point` → `point_legacy` could break legitimate uses).
+  - Pitfall classification: **novel** (continues the Iter-2 "D3D9-to-D3D11 toolchain compat" theme; not one of the 8 RESEARCH-documented Pitfalls).
+- **Investigation:**
+  - Read crash dump in full -- confirmed identical-root call stack to Iter-2 (Iter-2's include-handler fix DID work; the engine reached D3DCompile with the .inc content loaded; the failure mode moved from "can't find include" to "include content has token vs_5_0 rejects").
+  - Read `Direct3d11_VertexShaderData.cpp:200-230` -- confirmed Plan 11-05's `D3DCompile(..., "vs_5_0", ...)` profile string at the compile call site.
+  - Read D3D9 sibling `Direct3d9_VertexShaderData.cpp:349-353` -- D3D9 profile selection logic: `if (Direct3d9::getShaderCapability() >= ShaderCapability(2,0)) target = "vs_2_0"; else target = "vs_1_1";`. Engine asset content was authored against this -- never against vs_5_0.
+  - Read ShaderImplementation.cpp:2150-2167 (VS load) + :2895-2911 (PS load_0000). Confirmed:
+    - VS path: reads .vsh file as raw text via `TreeFile::open` + `readEntireFileAndClose` -- HLSL source only, no bytecode chunk.
+    - PS path: reads `m_exe` DWORD array from PEXE IFF chunk -- pre-compiled D3D9 bytecode (Plan 11-05's documented finding). No equivalent bytecode chunk for VS.
+  - Read Plan 11-05 SUMMARY's "Asset-pipeline note" -- confirmed the asymmetry: VS = HLSL source, PS = pre-compiled D3D9 bytecode.
+  - Verified `vertex_shader_constants.inc` does not exist on the on-disk filesystem (the file lives only inside a TRE archive; confirmed via `Find` across both `D:/Code/swg-client-v2/` and `D:/Code/SWGSource Client v3.0/`). Could not dump line 81 ± 10 directly; deduced the `point` usage from D3D9 sibling profile + DXSDK keyword-reservation tables. Not blocking -- the level_9_3 profile is the correct fix regardless of which specific syntax form line 81 uses, because every legacy-keyword case is covered by the profile downgrade.
+  - Reviewed `Direct3d11_ShaderCache::hashSource` (Plan 11-05) -- confirmed the FNV-1a hash mixes source bytes + defines (Name + Definition strings) but NOT the profile string directly. Iter-3 fixes this by injecting `D3D11_PROFILE` as a define so the profile string participates in the cache key automatically.
+- **Root cause:** Wrong D3DCompile profile string. `vs_5_0` rejects D3D9-era HLSL token usage that `vs_4_0_level_9_3` accepts. The engine's stock asset HLSL was authored against D3D9 SM3-era syntax and ships unchanged inside TRE archives; Plan 11-05's choice of `vs_5_0` for the compile target string was overly strict and incompatible with that asset content.
+- **Fix:** Profile-string swap with cache-key invalidation, centralized for audit clarity:
+  - `Direct3d11_VertexShaderData.cpp` -- new namespace-scope constant `kVertexShaderProfile = "vs_4_0_level_9_3"` (was hard-coded `"vs_5_0"` at the call site). Compile call site references the constant; FATAL message references the constant for runtime visibility.
+  - `Direct3d11_VertexShaderData.cpp` defines list -- new `{ "D3D11_PROFILE", kVertexShaderProfile }` entry. Plan 11-05's `hashSource` walks the defines and mixes Name + Definition into the FNV-1a hash, so changing the profile string automatically invalidates all pre-existing `.cso` cache entries that were keyed under the old profile. Future iterations that touch the profile string just swap the constant; the cache invalidation rides along free.
+  - `Direct3d11_PixelShaderProgramData.cpp` -- parallel `kPixelShaderProfile = "ps_4_0_level_9_3"` (was `"ps_5_0"`). The PS helper is still `[[maybe_unused]]` today (engine ships pre-compiled D3D9 PEXE bytecode for pixel shaders, not HLSL source -- Plan 11-05 finding), but the constant + cache-key injection are in place for the future Phase 12 asset re-author.
+  - File-preamble Profile-rationale block in `Direct3d11_VertexShaderData.cpp` -- documents the choice of `level_9_3` over `level_9_1`: engine .vsh tags top out at `vs_2_0` per Plan 11-01 Phase A static analysis; `level_9_3` maps to SM3-equivalent feature constraints (256 const registers + relative addressing + 3 texcoord sets) which comfortably covers what the engine declares; `level_9_1` caps at SM2 constraints and would likely surface a second compile failure on more elaborate skeletal-mesh / terrain shaders later in the iteration sequence.
+  - `Direct3d11_PixelShaderProgramData.cpp` -- parallel profile-rationale comment block (shorter; references VS file's full rationale).
+- **Verification:**
+  - `MSBuild -t:Direct3d11` EXIT=0. `gl11_d.dll` 1,399,808 bytes (Iter-2 baseline 1,399,808 bytes; +0 -- comment-only deltas + identical-size string-literal swap).
+  - `MSBuild -t:Direct3d9` EXIT=0 (D-05 protection; pre-existing MSB8012 carry-forward warnings only).
+  - `MSBuild -t:Direct3d9_ffp` EXIT=0.
+  - `MSBuild -t:Direct3d9_vsps` EXIT=0.
+  - `MSBuild -t:SwgClient` EXIT=0 (full link clean).
+  - **D-13 grep clean:** 19 hits for `D3DPOOL_MANAGED|OnLostDevice|OnResetDevice` in `Direct3d11/`, ALL inside `//` comment lines documenting the invariant. Zero functional uses.
+  - **D-05 diff empty:** `git diff b7c77826f..HEAD -- src/engine/client/application/Direct3d9/` returns 0 lines.
+  - **D-04a maintained:** `Glob Direct3d11_FfpGenerator.*` returns 0 results.
+  - **FFP scan clean:** modified TUs (Direct3d11_VertexShaderData.cpp + Direct3d11_PixelShaderProgramData.cpp) have 0 `#ifdef FFP / D3DTSS_ / D3DTOP_` functional code.
+  - **STUB count delta:** Iter-2 ended at 27 STUBs; Iter-3 ends at **27 STUBs** (unchanged -- this iteration fixes a profile-string defect inside Plan 11-05's existing VS compile path; no new Gl_api slots were wired).
+  - **Compile flags / warnings clean:** zero new warnings on Direct3d11 build under MSVC /W4.
+  - **Cache-invalidation side-effect:** the `stage/shader-cache/` directory will see a mass miss on next launch -- the new `D3D11_PROFILE` macro definition changes every shader's hash so every previously-cached `.cso` blob (vs_5_0-compiled, from Iter-2 smoke attempt) becomes a cache miss. D3DCompile will rebuild every blob under the new profile string and re-store. This is the right behaviour per D-03 hybrid contract; the stale Iter-2 vs_5_0 attempts (which never landed valid `.cso` files anyway because compile FATAL'd before `store()`) are not consulted.
+- **Commits:**
+  - `9aaa0efdc`: fix(11-07): swap D3DCompile profile to vs_4_0_level_9_3 / ps_4_0_level_9_3 (Iter 3)
+- **Awaiting:** Kenny smoke under `client_d.cfg rasterMajor=11` (orchestrator handles cfg edit). Expected outcomes (in order of likelihood):
+  - **Best case:** VS compile succeeds for `2d.vsh` (and the rest of the early-loaded `.vsh` files). Engine progresses past `ShaderEffectList::install` → `ShaderTemplate::install` → into later boot phases. Next FATAL boundary advances to a different slot -- likely candidates:
+    - Point-sprite setter (`setPointSize/Max/Min/ScaleEnable/ScaleFactor/SpriteEnable`) -- 6 of the 27 STUBs remaining; fires on first particle emit, may not surface until in-game.
+    - Cursor setter (`setMouseCursor / showMouseCursor`) -- fires during UI init.
+    - PS NULL-fallback running through to first frame (per Plan 11-05/06 design: `PSSetShader` skipped when `m_d3dPS` null → D3D11 default pass-through pixel pipeline rasterizes UNDEFINED color but the draw doesn't FATAL).
+    - Visible window with cleared-to-color steady state + possibly UNDEFINED-color geometry (aspirational outcome).
+  - **Likely:** another shader-compile FATAL but with a different signature. Candidates:
+    - A `.vsh` that compiles past `point` but trips on another vs_4_0_level_9_3 constraint (e.g. an instruction count past the level_9_3 limit on the more elaborate skeletal-mesh VS files -- in which case Iter-4 may need to escalate to a different profile or a per-asset fallback).
+    - A `.vsh` with HLSL syntax that even `vs_4_0_level_9_3` rejects (e.g. a literal `: register(v7)` syntax that's been removed in modern HLSL; or a `point` use in a context the profile still rejects). If this surfaces, Iter-4 lands option (3) -- targeted textual rewrite in the include handler.
+    - A `.psh` source file that hits the PS NULL-fallback at runtime where the engine expects a non-null PS (engine-side state setter that demands `m_d3dPS != NULL` for a specific code path).
+  - **Less likely:** hard crash from a non-renderer code path (access violation in a non-traversal-protected codepath -- would need OS exception-handler stack to investigate).
+  - Plan 11-07 Iter-4 will pick up from whatever surfaces here.
 
 ---
 
