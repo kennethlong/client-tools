@@ -22,6 +22,7 @@
 #include "Direct3d11_PixelShaderProgramData.h"
 
 #include "Direct3d11.h"
+#include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
 #include "Direct3d11_ShaderCache.h"
 
@@ -82,12 +83,18 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 #endif
 			char const *virtName = (displayName && *displayName) ? displayName : "pixel_shader.psh";
 
+			// Plan 11-07 Iter-2: route `#include "..."` directives
+			// through TreeFile so TRE-archived `.inc` headers resolve.
+			// Mirrors the VS compile path; this helper remains
+			// [[maybe_unused]] until a future Phase 12 asset re-author
+			// surfaces HLSL-source pixel shaders, but the contract is
+			// correct as of Iter-2.
 			HRESULT hr = D3DCompile(
 				sourceText,
 				sourceLen,
 				virtName,
 				defines.data(),
-				D3D_COMPILE_STANDARD_FILE_INCLUDE,
+				Direct3d11_CompileIncludeHandler::getInstance(),
 				"main",
 				"ps_5_0",
 				flags,

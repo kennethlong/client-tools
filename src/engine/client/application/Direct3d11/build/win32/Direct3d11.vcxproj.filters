@@ -24,6 +24,9 @@
     <ClCompile Include="..\..\src\win32\Direct3d11.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_CompileIncludeHandler.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_ConstantBuffer.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
@@ -96,6 +99,9 @@
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_CompileIncludeHandler.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_ConstantBuffer.h">

@@ -14,7 +14,9 @@
 //   2. Build defines: inject POSITION -> SV_POSITION macro (Pitfall 1).
 //   3. Hash (source text + defines) via Direct3d11_ShaderCache::hashSource.
 //   4. tryLoad: on hit, skip D3DCompile; on miss, D3DCompile with vs_5_0
-//      profile + same defines + D3D_COMPILE_STANDARD_FILE_INCLUDE, then store.
+//      profile + same defines + Direct3d11_CompileIncludeHandler (Plan 11-07
+//      Iter-2; routes `#include "..."` through TreeFile so TRE-archived
+//      `.inc` headers resolve correctly), then store.
 //   5. CreateVertexShader from the resulting blob; cache the bytecode hash
 //      for Pitfall 6 input-layout cache use (Plan 11-06).
 //
@@ -30,6 +32,7 @@
 #include "Direct3d11_VertexShaderData.h"
 
 #include "Direct3d11.h"
+#include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
 #include "Direct3d11_ShaderCache.h"
 
@@ -207,12 +210,18 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		// error messages point at something useful.
 		char const *virtName = (displayName && *displayName) ? displayName : "vertex_shader.vsh";
 
+		// Plan 11-07 Iter-2: route `#include "..."` directives through
+		// TreeFile so TRE-archived `.inc` headers resolve. Previously
+		// passed D3D_COMPILE_STANDARD_FILE_INCLUDE (default Win32 FS
+		// handler), which caused X1507 errors for engine `.vsh` sources
+		// that include `vertex_program/include/vertex_shader_constants.inc`
+		// and similar TRE-resident headers.
 		HRESULT hr = D3DCompile(
 			sourceText,
 			sourceLen,
 			virtName,
 			defines.data(),
-			D3D_COMPILE_STANDARD_FILE_INCLUDE,
+			Direct3d11_CompileIncludeHandler::getInstance(),
 			"main",
 			"vs_5_0",
 			flags,
