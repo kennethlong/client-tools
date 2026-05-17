@@ -261,15 +261,18 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClCompile Include="..\..\src\shared\WriteTga.cpp" />
     <ClCompile Include="..\..\src\win32\ConfigDirect3d11.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_ConstantBuffer.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_Device.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_RenderTarget.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_ShaderCache.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_TextureData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_VertexShaderData.cpp" />
     <ClCompile Include="..\..\src\win32\FirstDirect3d11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
@@ -282,15 +285,18 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClInclude Include="..\..\src\shared\WriteTga.h" />
     <ClInclude Include="..\..\src\win32\ConfigDirect3d11.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_ConstantBuffer.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_Device.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_RenderTarget.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_ShaderCache.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_TextureData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_VertexShaderData.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\DllExport\build\win32\DllExport.vcxproj">
