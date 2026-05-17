@@ -27,10 +27,25 @@
     <ClCompile Include="..\..\src\win32\Direct3d11_Device.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_RenderTarget.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_TextureData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\win32\FirstDirect3d11.cpp">
@@ -56,10 +71,25 @@
     <ClInclude Include="..\..\src\win32\Direct3d11_Device.h">
       <Filter>src\win32</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_RenderTarget.h">
       <Filter>src\win32</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_StaticIndexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_StaticVertexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_TextureData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_VertexBufferDescriptorMap.h">
       <Filter>src\win32</Filter>
     </ClInclude>
   </ItemGroup>
