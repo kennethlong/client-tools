@@ -1,7 +1,7 @@
 # Phase 11 — Plan 07 Iteration Log
 
 **Started:** 2026-05-17
-**Status:** In progress — iteration 3 landed; awaiting Kenny smoke for next FATAL boundary
+**Status:** In progress — iteration 4 landed; awaiting Kenny smoke for next FATAL boundary
 
 ## Iteration 1: Author Direct3d11_ShaderImplementationData + Direct3d11_StaticShaderData wrappers (createShaderImplementationGraphicsData FATAL boundary)
 
@@ -163,6 +163,57 @@
     - A `.psh` source file that hits the PS NULL-fallback at runtime where the engine expects a non-null PS (engine-side state setter that demands `m_d3dPS != NULL` for a specific code path).
   - **Less likely:** hard crash from a non-renderer code path (access violation in a non-traversal-protected codepath -- would need OS exception-handler stack to investigate).
   - Plan 11-07 Iter-4 will pick up from whatever surfaces here.
+
+---
+
+## Iteration 4: D3DCompile vs_4_0_level_9_3 X3000 `unexpected token 'point'` -- lexer-level SM4+ keyword reservation (profile-string-independent)
+
+- **Date:** 2026-05-18
+- **Symptom:** Kenny smoke launch under `client_d.cfg rasterMajor=11` (post-Iter-3 profile swap to `vs_4_0_level_9_3`) FATAL'd at the SAME X3000 signature as Iter-3, only the profile string in the message body differs:
+  ```
+  FATAL: Direct3d11_VertexShaderData: D3DCompile vs_4_0_level_9_3 'vertex_program/2d.vsh' failed:
+    vertex_program/include/vertex_shader_constants.inc(81,25-29):
+    error X3000: syntax error: unexpected token 'point'
+  ```
+  Crash dump: `stage/SwgClient_d.exe-unknown.0-20260517131430.txt`. Call stack root identical to Iter-2/Iter-3 (ShaderEffectList -> ShaderImplementation -> Direct3d11_VertexShaderData::compile -> D3DCompile); engine reached the same `ShaderTemplate::install` call chain. Iter-3's profile downgrade succeeded at the toolchain layer (D3DCompile accepted the level_9_3 target string and ran the lexer) but the lexer rejected the same token. Iter-3's hypothesis -- "level_9_* profiles relax SM5 keyword reservations" -- was wrong: the reservation lives at the LEXER level, not at the profile-feature-gating level.
+- **Hypothesis:** **Option (3) from Iter-3's notes -- textual whole-word rewrite in the include handler.** The d3dcompiler_47 HLSL lexer classifies identifiers BEFORE any profile-specific code paths run. Once the lexer sees `point` (followed by non-identifier characters), it emits a `point`-keyword token. Profile-feature gating (which decides whether geometry shaders are available) runs LATER on the token stream -- by which point the keyword classification is fixed. Iter-3's profile swap moved the toolchain to a profile that doesn't SUPPORT geometry shaders, but did not change the lexer's identifier table. The only path that avoids the lexer-level rejection is to never present the bare identifier to the lexer in the first place -- i.e., rewrite the source bytes before D3DCompile sees them. Pitfall classification: **novel** (continues the D3D9-to-D3D11 toolchain-compat theme of Iter-2/3; not one of the 8 RESEARCH-documented Pitfalls).
+- **Investigation:**
+  - Read the Iter-3 crash dump in full -- confirmed identical-root call stack to Iter-2/Iter-3 (the engine reached D3DCompile with the include resolved AND with the level_9_3 profile string -- the only failure mode change is that the FATAL message's profile-string slot reads `vs_4_0_level_9_3` instead of `vs_5_0`).
+  - Cross-referenced d3dcompiler internals (DXSDK + community lexer behaviour notes) -- the geometry-shader primitive-type keywords (`point`, `line`, `triangle`, `lineadj`, `triangleadj`) are added to the lexer's reserved-identifier table when d3dcompiler_47 initializes -- INDEPENDENT of which profile string the caller eventually passes. Profile-specific gating decides "can you use a GS primitive declaration at all" but the reservation that promotes the identifier to a keyword is global.
+  - Verified `Direct3d11_CompileIncludeHandler::Open()` is the cleanest seam to apply the rewrite for `#include`-resolved content: it already owns the heap buffer that goes to D3DCompile, and the rewrite-then-return pattern fits naturally into the existing read-then-return flow.
+  - Verified `Direct3d11_ShaderCache::hashSource` (Plan 11-05) hashes the ORIGINAL source bytes + defines (the include handler runs LATER, during D3DCompile's parse phase, so the rewritten bytes never enter the FNV-1a accumulator). Cache invalidation therefore needs a separate trigger -- a `D3D11_REWRITE_VERSION` define mirroring the Iter-3 `D3D11_PROFILE` define pattern, so future keyword-list changes auto-invalidate stale `.cso` entries.
+  - Confirmed HLSL identifier character class is `[A-Za-z_][A-Za-z0-9_]*` (same as C; HLSL is case-sensitive). Whole-word matching for the rewrite needs left-boundary + right-boundary checks against that class. `endpoint`, `linear`, `pointSize`, `triangleStrip_x` etc. must NOT match.
+  - Confirmed HLSL has no real string-literal type (no need to skip `"foo"` blocks during the scan) and D3DCompile strips comments before lexing (so rewriting inside comments is harmless).
+- **Root cause:** The HLSL lexer in d3dcompiler_47 reserves SM4+ geometry-shader primitive-type keywords (`point`, `line`, `triangle`, `lineadj`, `triangleadj`) at the lexer level, independent of profile-string targeting. SWG's D3D9-era HLSL source content (TRE-archived `.inc` files) uses these identifiers as ordinary variable / constant / sampler-state names. The lexer rejects them with X3000 before profile-specific feature gating runs.
+- **Fix:** Apply a textual whole-word rewrite of the 5 reserved keywords -> `<keyword>_id` inside `Direct3d11_CompileIncludeHandler::Open()` after `readEntireFileAndClose()` and BEFORE returning the buffer to D3DCompile. Two-pass implementation in a new `Direct3d11_CompileIncludeHandlerNamespace`:
+  1. `computeRewrittenLength(src, length)` -- single-pass scan returning required output size. Walks the buffer byte-by-byte; at each position checks left boundary (preceding char is non-identifier or BOF), tries each of the 5 keywords as a candidate prefix, verifies right boundary (following char is non-identifier or EOF). On match: adds `kw.length + 3` (`_id` suffix) to output size + advances past the keyword. On no match: adds 1 + advances 1.
+  2. `emitRewritten(src, length, dst, dstCapacity)` -- emits the rewritten bytes. Mirror of the first pass; copies the keyword + appends `_id` on match, copies the single byte on no-match. `DEBUG_FATAL` overflow guards verify the second pass's writes stay within the precomputed capacity.
+  3. `applyKeywordRewrite(inBuffer, inLength, &outLength, diagName)` -- thin orchestrator. Returns the original buffer untouched when `computeRewrittenLength == inLength` (no occurrences; fast path -- no allocation cost). Otherwise allocates a fresh `new unsigned char[rewrittenLen]`, calls emitRewritten, deletes the original buffer (we own it via `readEntireFileAndClose`), returns the new buffer. Close() delete[]'s whatever pointer Open() returned, so the lifetime contract is preserved.
+  - `Open()` now invokes `applyKeywordRewrite` after the existing read, replacing the previous direct `*ppData = buffer; *pBytes = length` with a rewrite call + assignment from the helper's return values.
+  - `Direct3d11_VertexShaderData.cpp` defines list -- new `{ "D3D11_REWRITE_VERSION", "1" }` entry alongside the existing `D3D11_PROFILE` entry from Iter-3. Plan 11-05's `hashSource` walks the defines and mixes Name + Definition into the FNV-1a 64-bit hash; bumping `"1"` -> `"2"` when adding keywords to `kReservedKeywords[]` auto-invalidates all stale `.cso` cache entries that were keyed under the old keyword list.
+  - `Direct3d11_PixelShaderProgramData.cpp` -- parallel `D3D11_REWRITE_VERSION` entry in the `[[maybe_unused]]` HLSL-PS compile helper (forward-compat with the future Phase 12 asset re-author that will surface HLSL-source pixel shaders).
+  - File preamble of `Direct3d11_CompileIncludeHandler.cpp` -- new "Plan 11-07 Iteration 4" block documents the lexer-reservation analysis, the rewrite policy, edge cases (comments harmless, preprocessor consistent, no string literals to worry about), the cache-invalidation strategy, and the scope caveat (rewrite touches `#include`-resolved content only; main `.vsh` body would need an Iter-5 fix at compileOrLoad if it surfaces the same identifier).
+- **Verification:**
+  - `MSBuild -t:Direct3d11` EXIT=0. `gl11_d.dll` 1,399,808 bytes (Iter-3 baseline 1,399,808 bytes; identical -- MSVC debug builds dedupe debug-section data such that the rewrite TU's added code doesn't manifest as a file-size delta in this build configuration. The .obj for `Direct3d11_CompileIncludeHandler` grew from ~14 KB (Iter-3) to 40,194 bytes, confirming the new code compiled into the link.)
+  - `MSBuild -t:Direct3d9` EXIT=0 (D-05 protection; pre-existing MSB8012 carry-forward warnings only).
+  - `MSBuild -t:Direct3d9_ffp` EXIT=0.
+  - `MSBuild -t:Direct3d9_vsps` EXIT=0.
+  - `MSBuild -t:SwgClient` EXIT=0 (full link clean).
+  - **D-13 grep clean:** 19 hits for `D3DPOOL_MANAGED|OnLostDevice|OnResetDevice` in `Direct3d11/`, ALL inside `//` comment lines documenting the invariant. Zero functional uses.
+  - **D-05 diff empty:** `git diff d614f85dd..HEAD -- src/engine/client/application/Direct3d9/` returns 0 lines.
+  - **D-04a maintained:** `Glob Direct3d11_FfpGenerator.*` returns 0 results.
+  - **FFP scan clean:** modified TUs (Direct3d11_CompileIncludeHandler.cpp / .h / Direct3d11_VertexShaderData.cpp / Direct3d11_PixelShaderProgramData.cpp) have 0 `#ifdef FFP / D3DTSS_ / D3DTOP_` functional code.
+  - **STUB count delta:** Iter-3 ended at 27 STUBs; Iter-4 ends at **27 STUBs** (unchanged -- this iteration fixes a defect inside Plan 11-05's existing wired-up VS compile path via Plan 11-07 Iter-2's include handler; no new Gl_api slots were wired).
+  - **Compile flags / warnings clean:** zero new warnings on Direct3d11 build under MSVC /W4.
+  - **Cache-invalidation side-effect:** the `D3D11_REWRITE_VERSION` macro changes the hash key for every shader, so the `stage/shader-cache/` directory will see a mass miss on next launch -- D3DCompile rebuilds every blob under the new effective defines list and re-stores. Iter-3's vs_4_0_level_9_3 `.cso` blobs (none of which were valid -- compile FATAL'd before `store()`) are unaffected; this is the right behaviour per D-03 hybrid contract.
+- **Commits:**
+  - `182317b27`: fix(11-07): rewrite SM4+ reserved keywords in include handler (Iter 4)
+- **Awaiting:** Kenny smoke under `client_d.cfg rasterMajor=11` (orchestrator handles cfg edit). Expected outcomes (ranked):
+  1. **Best:** All keyword collisions resolved; `2d.vsh` + its `vertex_shader_constants.inc` compile clean; engine progresses past `ShaderEffectList::install` -> `ShaderTemplate::install` -> into later boot phases. Next FATAL boundary advances to a different slot -- candidates: cursor setters (`setMouseCursor / showMouseCursor`, UI init), point-sprite setters (6 of the 27 STUBs; particle subsystem), or visible-window PS-NULL undefined-color geometry.
+  2. **Likely:** Another shader-compile FATAL -- same `point`/`line`/`triangle` keyword family addressed, but a different SM4+ reserved keyword surfaces in another shader (`packoffset`, `register`, `vector`, `matrix` used as identifiers; or D3D9-specific sampler-state syntax that doesn't translate). The whole-word rewrite list would extend in Iter-5; bump `D3D11_REWRITE_VERSION` to "2" at the same time.
+  3. **Possible:** A FATAL pointing at `vertex_program/2d.vsh(LINE,COL)` itself rather than the `.inc` -- meaning the main shader body uses one of these identifiers and the rewrite (scoped to include-handler-routed content per the Iter-4 design) doesn't reach it. Iter-5 would extend the rewrite to `Direct3d11_VertexShaderData::compileOrLoad`'s source buffer staging point. The cache-invalidation rides along with the same `D3D11_REWRITE_VERSION` bump.
+  4. **Less likely:** Different X3000-class error -- semantic-layer rejections (type mismatch, undefined symbol) that profile-downgrade-plus-rewrite still can't accommodate.
+  5. **Least likely:** Visible window with cleared-to-color steady state -- the breakthrough outcome.
 
 ---
 
