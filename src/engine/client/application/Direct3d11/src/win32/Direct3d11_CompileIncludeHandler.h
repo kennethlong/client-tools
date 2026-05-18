@@ -5,7 +5,11 @@
 // HLSL `#include "..."` directives through the engine's TreeFile
 // abstraction (TRE archives + on-disk overlay).
 //
-// Plan 11-07 Iteration 2.
+// Plan 11-07 Iteration 2 -- initial implementation.
+// Plan 11-07 Iteration 4 -- SM4+ reserved-keyword whole-word rewrite
+// applied to the returned buffer before D3DCompile parses it (see
+// .cpp file preamble for the full rationale + lexer-reservation
+// background).
 //
 // Background: D3DCompile resolves `#include "foo"` directives by calling
 // back into an ID3DInclude::Open implementation. Plan 11-05 passed
@@ -22,6 +26,15 @@
 // directories first, TRE archive content second). Engine HLSH assets
 // use LOCAL exclusively today; SYSTEM is routed identically as a safe
 // default.
+//
+// Iter-4 layer: after the file content is loaded, Open() applies a
+// whole-word textual rewrite of SM4+ reserved-keyword identifiers
+// (`point`, `line`, `triangle`, `lineadj`, `triangleadj`) to
+// `<keyword>_id` to side-step the X3000 lexer reservation that
+// rejected SWG's D3D9-era HLSL when targeting any SM4+ profile
+// (including vs_4_0_level_9_*). See the .cpp file preamble for the
+// full lexer-reservation analysis and the cache-invalidation strategy
+// (D3D11_REWRITE_VERSION macro injection at the VS/PS compile sites).
 //
 // Per CONTEXT D-13: no D3DPOOL_MANAGED / OnLostDevice / OnResetDevice
 // (the handler does not own GPU resources at all).

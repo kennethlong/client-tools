@@ -230,11 +230,22 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// iteration) automatically invalidates any pre-existing .cso disk
 	// cache entries that were keyed under the old profile -- avoids
 	// silent profile-mismatch bugs from stale cached bytecode.
+	//
+	// Plan 11-07 Iter-4: also inject D3D11_REWRITE_VERSION. This macro
+	// rides along with the FNV-1a cache key (hashSource walks the
+	// defines list and mixes Name + Definition for each entry). The
+	// include-handler's SM4+ keyword rewrite (Direct3d11_CompileIncludeHandler::
+	// Open) is applied AFTER hashSource computes the key, so without
+	// this macro a future change to the rewrite keyword list would not
+	// invalidate stale .cso entries that pre-date the rewrite-list
+	// change. Bump the version when you change the keyword list in
+	// Direct3d11_CompileIncludeHandler.cpp's kReservedKeywords[].
 	std::vector<D3D_SHADER_MACRO> defines;
-	defines.push_back({ "POSITION",      "SV_POSITION" });
-	defines.push_back({ "D3D11",         "1" });
-	defines.push_back({ "D3D11_PROFILE", kVertexShaderProfile });
-	defines.push_back({ nullptr,    nullptr });   // terminator
+	defines.push_back({ "POSITION",               "SV_POSITION" });
+	defines.push_back({ "D3D11",                  "1" });
+	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "1" });
+	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
 	// so that hashSource sees the full effective defines list.

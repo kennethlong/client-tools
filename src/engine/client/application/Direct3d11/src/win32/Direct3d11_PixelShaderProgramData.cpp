@@ -81,11 +81,18 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// Plan 11-07 Iter-3: D3D11_PROFILE macro injected into the defines
 		// list so the profile string participates in the cache hash
 		// (mirrors Direct3d11_VertexShaderData.cpp Iter-3 change).
+		//
+		// Plan 11-07 Iter-4: D3D11_REWRITE_VERSION macro added (mirrors
+		// the VS compile path). Rides along with hashSource so changes
+		// to the include-handler's SM4+ keyword rewrite list
+		// (Direct3d11_CompileIncludeHandler.cpp kReservedKeywords[])
+		// auto-invalidate stale .cso cache entries when the version bumps.
 		std::vector<D3D_SHADER_MACRO> defines;
-		defines.push_back({ "POSITION",      "SV_POSITION" });
-		defines.push_back({ "D3D11",         "1" });
-		defines.push_back({ "D3D11_PROFILE", kPixelShaderProfile });
-		defines.push_back({ nullptr, nullptr });
+		defines.push_back({ "POSITION",               "SV_POSITION" });
+		defines.push_back({ "D3D11",                  "1" });
+		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "1" });
+		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
 			sourceText, sourceLen, defines.data());
