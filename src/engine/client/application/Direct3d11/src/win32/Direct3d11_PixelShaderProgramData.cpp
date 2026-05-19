@@ -94,11 +94,17 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// Direct3d11_VertexShaderData.cpp's Iter-7 block for the full
 		// rationale; the PS helper mirrors all VS-side changes for
 		// symmetry + future Phase 12 HLSL-PS asset compatibility.
+		//
+		// Plan 11-07 Iter-8: version bumped 4 -> 5 to ride the VS-side
+		// Rules B/C register-type-letter set expansion from `c` only to
+		// the full `[bcstu]` set (b/cbuffer, c/constant, s/sampler,
+		// t/texture, u/UAV). See Direct3d11_VertexShaderData.cpp's
+		// Iter-8 block for the full rationale.
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "4" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "5" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
