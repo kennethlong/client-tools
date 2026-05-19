@@ -91,7 +91,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "2" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "3" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -101,7 +101,14 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		if (!Direct3d11_ShaderCache::tryLoad(hash, blob))
 		{
 			ComPtr<ID3DBlob> errors;
-			UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+			// Plan 11-07 Iter-6: D3DCOMPILE_ENABLE_STRICTNESS removed.
+			// Mirrors the VS-compile-site Iter-6 fix in
+			// Direct3d11_VertexShaderData.cpp. The Iter-5 addition of
+			// ENABLE_BACKWARDS_COMPATIBILITY here was mutually exclusive
+			// with the Plan 11-05 baseline ENABLE_STRICTNESS, producing
+			// X3116. Drop STRICTNESS (compat mode is by-design the opposite
+			// stance). See VS compile site for the full meta-lesson.
+			UINT flags = 0;
 #ifdef _DEBUG
 			flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else

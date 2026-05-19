@@ -244,7 +244,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "2" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "3" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
@@ -259,7 +259,24 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		// Cache miss -- compile via D3DCompile.
 		ComPtr<ID3DBlob> errors;
 
-		UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+		// Plan 11-07 Iter-6: D3DCOMPILE_ENABLE_STRICTNESS removed.
+		// Plan 11-05 baseline set Flags1 = ENABLE_STRICTNESS, then Iter-5
+		// added ENABLE_BACKWARDS_COMPATIBILITY without noticing the two are
+		// mutually exclusive at the d3dcompiler_47 entry validation layer.
+		// Smoke under Iter-5 surfaced:
+		//   error X3116: Flags specified both compatibility and strict mode.
+		//   These are mutually exclusive
+		// (crash dump SwgClient_d.exe-unknown.0-20260519010725.txt).
+		// Iter-6 drops STRICTNESS because backwards-compatibility mode is BY
+		// DESIGN the opposite stance: we WANT the compiler to accept SOE's
+		// D3D9-era HLSL leniently, so the strict-mode flag is incompatible
+		// with our chosen strategy.
+		//
+		// Meta-lesson recorded in Iter-6 iteration log entry: when modifying
+		// D3DCompile Flags1, always read the existing value first and audit
+		// for conflicts. Iter-5 surfaced this lesson by failing to inspect
+		// the baseline flag set before adding BACKWARDS_COMPATIBILITY.
+		UINT flags = 0;
 #ifdef _DEBUG
 		flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
