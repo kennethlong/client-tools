@@ -10,6 +10,13 @@
 // applied to the returned buffer before D3DCompile parses it (see
 // .cpp file preamble for the full rationale + lexer-reservation
 // background).
+// Plan 11-07 Iteration 7 -- the rewrite logic moved out to
+// Direct3d11_HlslRewrite.{h,cpp} so the same rules also apply to the
+// MAIN shader source (Direct3d11_VertexShaderData::compileOrLoad) in
+// addition to `#include`-resolved content. The Iter-4 inline rewrite
+// is gone; Open() now calls Direct3d11_HlslRewrite::applyToIncludeBuffer.
+// Iter-7 also added two new rules (B/C) for D3D9-era struct-member
+// register-binding shortcut semantics (`: c<N>` / `: register(c<N>)`).
 //
 // Background: D3DCompile resolves `#include "foo"` directives by calling
 // back into an ID3DInclude::Open implementation. Plan 11-05 passed
@@ -27,14 +34,16 @@
 // use LOCAL exclusively today; SYSTEM is routed identically as a safe
 // default.
 //
-// Iter-4 layer: after the file content is loaded, Open() applies a
-// whole-word textual rewrite of SM4+ reserved-keyword identifiers
-// (`point`, `line`, `triangle`, `lineadj`, `triangleadj`) to
-// `<keyword>_id` to side-step the X3000 lexer reservation that
-// rejected SWG's D3D9-era HLSL when targeting any SM4+ profile
-// (including vs_4_0_level_9_*). See the .cpp file preamble for the
-// full lexer-reservation analysis and the cache-invalidation strategy
-// (D3D11_REWRITE_VERSION macro injection at the VS/PS compile sites).
+// Iter-4 / Iter-7 layer: after the file content is loaded, Open() calls
+// Direct3d11_HlslRewrite::applyToIncludeBuffer to apply the SM4+
+// keyword-rename rule (Iter-4) plus the legacy struct-member register-
+// binding shortcut rules (Iter-7) to side-step X3000 / X3202 errors
+// surfaced when SWG's D3D9-era HLSL is fed to d3dcompiler_47.
+// See Direct3d11_HlslRewrite.{h,cpp} for the full rule set + lexer-
+// reservation analysis + semantic-loss caveat for the register-
+// binding rules. Cache-invalidation strategy (D3D11_REWRITE_VERSION
+// macro injection at the VS/PS compile sites) lives in
+// Direct3d11_VertexShaderData.cpp's defines list.
 //
 // Per CONTEXT D-13: no D3DPOOL_MANAGED / OnLostDevice / OnResetDevice
 // (the handler does not own GPU resources at all).

@@ -27,6 +27,7 @@
 #include "Direct3d11.h"
 #include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_HlslRewrite.h"
 #include "Direct3d11_ShaderCache.h"
 
 #include "sharedFoundation/MemoryBlockManager.h"
@@ -84,14 +85,20 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		//
 		// Plan 11-07 Iter-4: D3D11_REWRITE_VERSION macro added (mirrors
 		// the VS compile path). Rides along with hashSource so changes
-		// to the include-handler's SM4+ keyword rewrite list
-		// (Direct3d11_CompileIncludeHandler.cpp kReservedKeywords[])
-		// auto-invalidate stale .cso cache entries when the version bumps.
+		// to the rewrite rules in Direct3d11_HlslRewrite.cpp auto-
+		// invalidate stale .cso cache entries when the version bumps.
+		//
+		// Plan 11-07 Iter-7: version bumped 3 -> 4 to ride the VS-side
+		// rule extension (Rules B/C for `: c<N>` / `: register(c<N>)`)
+		// and the main-source rewrite call site added below. See
+		// Direct3d11_VertexShaderData.cpp's Iter-7 block for the full
+		// rationale; the PS helper mirrors all VS-side changes for
+		// symmetry + future Phase 12 HLSL-PS asset compatibility.
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "3" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "4" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -100,6 +107,19 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		ComPtr<ID3DBlob> blob;
 		if (!Direct3d11_ShaderCache::tryLoad(hash, blob))
 		{
+			// Plan 11-07 Iter-7: apply the HLSL textual rewrite to the
+			// MAIN shader source (mirrors the VS-side Iter-7 addition in
+			// Direct3d11_VertexShaderData.cpp::compileOrLoad). The
+			// engine ships pre-compiled D3D9 PEXE bytecode for pixel
+			// shaders today (Plan 11-05 finding), so this helper
+			// remains [[maybe_unused]]; the rewrite call is added for
+			// symmetry with the VS path so when a future Phase 12 asset
+			// re-author surfaces HLSL-source pixel shaders, the rule
+			// coverage is identical.
+			std::vector<char> rewrittenSource;
+			Direct3d11_HlslRewrite::applyToMainSource(
+				sourceText, sourceLen, rewrittenSource, displayName);
+
 			ComPtr<ID3DBlob> errors;
 			// Plan 11-07 Iter-6: D3DCOMPILE_ENABLE_STRICTNESS removed.
 			// Mirrors the VS-compile-site Iter-6 fix in
@@ -139,8 +159,8 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// namespace-scope comment above kPixelShaderProfile for
 			// rationale.
 			HRESULT hr = D3DCompile(
-				sourceText,
-				sourceLen,
+				rewrittenSource.data(),
+				rewrittenSource.size(),
 				virtName,
 				defines.data(),
 				Direct3d11_CompileIncludeHandler::getInstance(),

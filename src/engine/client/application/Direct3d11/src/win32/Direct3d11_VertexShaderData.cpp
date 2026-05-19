@@ -68,6 +68,7 @@
 #include "Direct3d11.h"
 #include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_HlslRewrite.h"
 #include "Direct3d11_ShaderCache.h"
 
 #include "sharedFoundation/MemoryBlockManager.h"
@@ -234,17 +235,32 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// Plan 11-07 Iter-4: also inject D3D11_REWRITE_VERSION. This macro
 	// rides along with the FNV-1a cache key (hashSource walks the
 	// defines list and mixes Name + Definition for each entry). The
-	// include-handler's SM4+ keyword rewrite (Direct3d11_CompileIncludeHandler::
-	// Open) is applied AFTER hashSource computes the key, so without
-	// this macro a future change to the rewrite keyword list would not
-	// invalidate stale .cso entries that pre-date the rewrite-list
-	// change. Bump the version when you change the keyword list in
-	// Direct3d11_CompileIncludeHandler.cpp's kReservedKeywords[].
+	// include-handler's SM4+ keyword rewrite (Direct3d11_HlslRewrite,
+	// invoked from both Direct3d11_CompileIncludeHandler::Open and --
+	// since Iter-7 -- this compileOrLoad function below) is applied
+	// AFTER hashSource computes the key, so without this macro a
+	// change to the rewrite rules would not invalidate stale .cso
+	// entries that pre-date the change. Bump the version when you
+	// change ANY rule in Direct3d11_HlslRewrite.cpp.
+	//
+	// Plan 11-07 Iter-7: version bumped 3 -> 4. Iter-7 changes:
+	//   * extracted the rewrite logic from Direct3d11_CompileIncludeHandler
+	//     into Direct3d11_HlslRewrite so it can apply to both `#include`
+	//     content AND the main shader source.
+	//   * added Rule B (`:\s*c\d+\b` -> whitespace) and Rule C
+	//     (`:\s*register\s*\(\s*c\d+\s*\)` -> whitespace) targeting the
+	//     X3202 "location semantics cannot be specified on members"
+	//     class surfaced by Iter-5/6 smoke on `2d.vsh(8,44-45)`.
+	//   * applied the rewrite to the MAIN shader source below (new
+	//     call site).
+	// Every cached .cso from Iter-6 (or any prior iteration) is now a
+	// mass miss; D3DCompile rebuilds every blob under the new effective
+	// source bytes + re-stores.
 	std::vector<D3D_SHADER_MACRO> defines;
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "3" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "4" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
@@ -256,6 +272,42 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	ComPtr<ID3DBlob> blob;
 	if (!Direct3d11_ShaderCache::tryLoad(hash, blob))
 	{
+		// Plan 11-07 Iter-7: apply the HLSL textual rewrite to the
+		// MAIN shader source before handing it to D3DCompile. The Iter-4
+		// rewrite ran in the include-handler only -- covering `#include`-
+		// resolved `.inc` content -- which left the main `.vsh` body
+		// (e.g., `2d.vsh` itself) unrewritten. Iter-5/6 smoke surfaced
+		// the X3202 error class in the main body, not the includes:
+		//
+		//   D:\Code\swg-client-v2\stage\vertex_program\2d.vsh(8,44-45):
+		//     error X3202: location semantics cannot be specified on members
+		//
+		// The new Direct3d11_HlslRewrite::applyToMainSource copies the
+		// engine-owned source view into a stack-scoped std::vector<char>
+		// with the same rules applied (Rule A: SM4+ keyword rename;
+		// Rule B: `:\s*c\d+\b` -> whitespace; Rule C:
+		// `:\s*register\s*\(\s*c\d+\s*\)` -> whitespace). D3DCompile
+		// is invoked synchronously against the vector's storage; the
+		// vector goes out of scope cleanly after the call.
+		//
+		// The engine's source buffer (sourceText / sourceLen) is read-
+		// only here -- ownership stays with ShaderImplementationPassVertexShader::
+		// m_text, which is unchanged.
+		//
+		// Caveat (recorded in Direct3d11_HlslRewrite.h preamble +
+		// Plan 11-07 Iter-7 iteration log): Rules B/C DROP the register-
+		// binding metadata. D3DCompile's automatic register-allocator
+		// picks registers from the available pool. If the engine
+		// assumes a specific register layout at the C++ level
+		// (SetVertexShaderConstantF(N, ...) expecting the shader to
+		// read constant cN), runtime rendering could break in subtle
+		// ways. Plan 11-07 Task 3 smoke would surface any such issue
+		// as visual artifacts; the rewrite's semantic-info loss is on
+		// the suspect list if visuals look wrong.
+		std::vector<char> rewrittenSource;
+		Direct3d11_HlslRewrite::applyToMainSource(
+			sourceText, sourceLen, rewrittenSource, displayName);
+
 		// Cache miss -- compile via D3DCompile.
 		ComPtr<ID3DBlob> errors;
 
@@ -339,8 +391,8 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		// vs_4_0_level_9_* accepts. D3D11's CreateVertexShader consumes
 		// the resulting bytecode unchanged.
 		HRESULT hr = D3DCompile(
-			sourceText,
-			sourceLen,
+			rewrittenSource.data(),
+			rewrittenSource.size(),
 			virtName,
 			defines.data(),
 			Direct3d11_CompileIncludeHandler::getInstance(),
