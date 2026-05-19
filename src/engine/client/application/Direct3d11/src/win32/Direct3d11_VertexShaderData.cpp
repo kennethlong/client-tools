@@ -315,15 +315,27 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// under the implicit `$Globals` cbuffer that SM4+ creates. See the
 	// Iter-12 entry in 11-07-iteration-log.md for the diagnostic findings.
 	//
-	// Plan 11-07 Iter-13: version bumped 10 -> 11 to invalidate any
-	// cached blobs from the Iter-12 throwaway window. Rules unchanged
-	// from Iter-11 in this revert commit; the actual X4016 fix lands in
-	// the second Iter-13 commit (cbuffer-wrap rewrite -- Rule D).
+	// Plan 11-07 Iter-13: version bumped 10 -> 11 (revert commit, Rules
+	// unchanged from Iter-11) then 11 -> 12 (this commit -- Rule D
+	// cbuffer-wrap of c-register-bound globals in
+	// vertex_shader_constants.inc). Rule D runs as a pre-pass in
+	// Direct3d11_HlslRewrite::applyToIncludeBuffer, detecting the
+	// contiguous run of `float<...> name : register(cN);` declarations
+	// and wrapping them in `cbuffer SwgVertexConstants : register(b0)
+	// { ... };` with each `register(cN)` converted to `packoffset(cN)`.
+	// This sidesteps the FXC X4016 "overlapping register semantics not
+	// yet implemented 'c0'" rejection that fires when D3D9-era explicit
+	// register bindings sit at file scope and get auto-promoted to the
+	// implicit $Globals cbuffer under SM4+ / vs_4_0_level_9_3 even with
+	// BACKWARDS_COMPATIBILITY enabled. See Direct3d11_HlslRewrite.cpp's
+	// Rule D block for the full diagnostic narrative + Iter-12 dump
+	// evidence that confirmed hypothesis #2 (D3DCompile-level rejection
+	// of preserved bindings) as the X4016 root cause.
 	std::vector<D3D_SHADER_MACRO> defines;
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "11" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "12" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry

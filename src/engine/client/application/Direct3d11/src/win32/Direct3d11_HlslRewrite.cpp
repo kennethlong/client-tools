@@ -8,6 +8,13 @@
 // rewrite rules A/B/C, semantic-loss caveat, cache-invalidation strategy).
 //
 // Implementation summary:
+//   The include-handler path runs a Rule D PRE-PASS first (Iter-13;
+//   structural cbuffer wrap of c-register-bound globals -- see the
+//   Rule D block below for full rationale). Whatever buffer Rule D
+//   produces (or the original if no section was found) then feeds the
+//   single-pass A/B/C scanner. The main-source path skips Rule D
+//   because main `.vsh` sources don't carry c-register globals.
+//
 //   Single-pass scanner walks the source byte-by-byte. At each position
 //   it tries (in order):
 //     1. Rule A: SM4+ reserved-keyword whole-word match (Iter-4 origin).
@@ -594,6 +601,265 @@ namespace
 			 " expected=%zu (Pass1/Pass2 divergence)",
 			 outPos, dstCapacity));
 	}
+
+	// ------------------------------------------------------------------
+	// Rule D (Iter-13): structural cbuffer wrap.
+	//
+	// Detects a contiguous run of GLOBAL declarations with `: register(cN)`
+	// bindings and wraps them in an explicit cbuffer block, converting each
+	// `register(cN)` to `packoffset(cN)`. Sidesteps the FXC X4016
+	// "overlapping register semantics not yet implemented 'c0'" rejection
+	// that fires when D3D9-era explicit register bindings sit at file scope
+	// and get auto-promoted to the implicit $Globals cbuffer under SM4+ /
+	// vs_4_0_level_9_3 even with BACKWARDS_COMPATIBILITY enabled.
+	//
+	// Input form (vertex_shader_constants.inc):
+	//   float4x4  objectWorldCameraProjectionMatrix : register(c0);
+	//   ...
+	//   ExtendedLightData extendedLightData : register(c60);
+	// Output form:
+	//   cbuffer SwgVertexConstants : register(b0)
+	//   {
+	//   float4x4  objectWorldCameraProjectionMatrix : packoffset(c0);
+	//   ...
+	//   ExtendedLightData extendedLightData : packoffset(c60);
+	//   };
+	//
+	// Section detection: scan for `: register(c<digits>)` occurrences.
+	// Section starts at the START of the line containing the FIRST match
+	// and extends through the END of the line (inclusive of newline)
+	// containing the LAST match. Anything between the first and last
+	// match -- including blank lines and `//`-comments -- stays inside
+	// the cbuffer. Anything AFTER the last match's line (e.g. `#if
+	// VERTEX_SHADER_VERSION >= 20` blocks, `#pragma def(...)` directives)
+	// stays OUTSIDE the cbuffer.
+	//
+	// Letter filter: matches ONLY `register(c<digits>)`. The other letter
+	// classes (b/s/t/u/v) are deliberately excluded so a (currently
+	// inactive under D3D11) `const bool ... : register(bN)` declaration
+	// in vertex_shader_constants.inc is not pulled into the cbuffer.
+	//
+	// Output size: the section bytes grow by `+2 bytes per substitution`
+	// because `register` is 8 chars and `packoffset` is 10 chars. The
+	// prologue + epilogue add a fixed constant. Column offsets DO shift
+	// for tokens after a substitution on the same line -- this is the one
+	// place the rewrite cannot preserve columns. Line numbers are NOT
+	// preserved: the cbuffer prologue + epilogue add 2 + 2 lines to the
+	// post-section buffer, which shifts the line numbering of every
+	// subsequent line. Acceptable -- D3DCompile errors after this point
+	// will reference shifted line numbers but the surrounding text is
+	// otherwise identical, so a `diff` of input vs output makes the shift
+	// obvious to a human reader.
+	//
+	// Cbuffer slot choice: `register(b0)`. D3D11 reserves cbuffer slots
+	// b0..b13 for the application. The existing Direct3d11_ConstantBuffer
+	// plumbing (PerFrameCB / PerObjectCB / PerMaterialCB at slots 0/1/2)
+	// uses a different layout that does NOT match vertex_shader_constants
+	// .inc's c0..c60+ layout; the SwgVertexConstants cbuffer at slot b0
+	// supersedes PerFrameCB for now and the engine's eventual constant
+	// push (Plan 11-08) will mirror the legacy c-register layout into a
+	// single shadow buffer targeted at slot b0. Until Plan 11-08 wires
+	// that, the cbuffer compiles but its contents are uninitialized at
+	// runtime; Plan 11-07's goal is shader compile + load, not visual
+	// fidelity.
+	// ------------------------------------------------------------------
+
+	constexpr char const  kCbufferPrologue[]    =
+		"cbuffer SwgVertexConstants : register(b0)\n{\n";
+	constexpr std::size_t kCbufferPrologueLen   = sizeof(kCbufferPrologue) - 1;
+	constexpr char const  kCbufferEpilogue[]    = "};\n";
+	constexpr std::size_t kCbufferEpilogueLen   = sizeof(kCbufferEpilogue) - 1;
+	constexpr char const  kRegisterToken[]      = "register";
+	constexpr std::size_t kRegisterTokenLen     = 8;
+	constexpr char const  kPackoffsetToken[]    = "packoffset";
+	constexpr std::size_t kPackoffsetTokenLen   = 10;
+
+	// Try to match `:\s*register\s*\(\s*c\d+\s*\)` starting at `pos`.
+	// Returns total match length (advance past the closing `)`), or 0 on
+	// no-match. On success, `outRegStart` / `outRegEnd` receive the byte
+	// range of the literal `register` keyword inside the match (so the
+	// emitter substitutes `register` -> `packoffset` while preserving the
+	// surrounding `: `, parens, and `cN` text verbatim).
+	std::size_t tryMatchRuleD_CRegister(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t          pos,
+		std::size_t         &outRegStart,
+		std::size_t         &outRegEnd)
+	{
+		if (pos >= length || src[pos] != ':')
+			return 0;
+		std::size_t i = pos + 1;
+		while (i < length && isHlslSpace(src[i]))
+			++i;
+		if (i + kRegisterTokenLen > length)
+			return 0;
+		if (std::memcmp(src + i, kRegisterToken, kRegisterTokenLen) != 0)
+			return 0;
+		std::size_t const afterRegister = i + kRegisterTokenLen;
+		if (afterRegister < length && isIdentChar(src[afterRegister]))
+			return 0;
+		outRegStart = i;
+		outRegEnd   = afterRegister;
+		i = afterRegister;
+		while (i < length && isHlslSpace(src[i]))
+			++i;
+		if (i >= length || src[i] != '(')
+			return 0;
+		++i;
+		while (i < length && isHlslSpace(src[i]))
+			++i;
+		// Rule D specific filter: ONLY `c` (excludes b/s/t/u/v).
+		if (i >= length || src[i] != 'c')
+			return 0;
+		++i;
+		std::size_t const digitStart = i;
+		while (i < length && isAsciiDigit(src[i]))
+			++i;
+		if (i == digitStart)
+			return 0;
+		while (i < length && isHlslSpace(src[i]))
+			++i;
+		if (i >= length || src[i] != ')')
+			return 0;
+		++i;
+		return i - pos;
+	}
+
+	// Returns the start byte of the line containing `pos` (i.e., 0 or
+	// first byte after the previous '\n').
+	std::size_t lineStartOf(unsigned char const *src, std::size_t pos)
+	{
+		while (pos > 0 && src[pos - 1] != '\n')
+			--pos;
+		return pos;
+	}
+
+	// Returns the byte just past the end of the line containing `pos`,
+	// inclusive of the trailing '\n' if present (or `length` at EOF).
+	std::size_t lineEndOf(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t          pos)
+	{
+		while (pos < length && src[pos] != '\n')
+			++pos;
+		if (pos < length)
+			++pos;
+		return pos;
+	}
+
+	// Rule D core. Scans `src` for c-register-bound global declarations,
+	// produces a wrapped + substituted output buffer. Returns a freshly-
+	// allocated heap buffer (caller takes ownership; delete[]) on match,
+	// or nullptr if no section is found (caller retains the original).
+	// On match, `outLen` is populated with the wrapped buffer's length.
+	// On no-match, `outLen` is left unchanged.
+	unsigned char *tryRuleDWrap(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t         &outLen)
+	{
+		// Pass 1: locate the first and last `: register(c\d+)` matches,
+		// count the substitutions for sizing.
+		std::size_t sectionStart = 0;
+		std::size_t sectionEnd   = 0;
+		std::size_t substCount   = 0;
+		bool        found        = false;
+		{
+			std::size_t i = 0;
+			while (i < length)
+			{
+				if (src[i] == ':')
+				{
+					std::size_t regStart = 0, regEnd = 0;
+					std::size_t const matchLen = tryMatchRuleD_CRegister(
+						src, length, i, regStart, regEnd);
+					if (matchLen != 0)
+					{
+						if (!found)
+						{
+							sectionStart = lineStartOf(src, i);
+							found = true;
+						}
+						sectionEnd = lineEndOf(src, length, i + matchLen);
+						++substCount;
+						i += matchLen;
+						continue;
+					}
+				}
+				++i;
+			}
+		}
+
+		if (!found)
+			return nullptr;
+
+		// Pass 2: size + emit.
+		std::size_t const sectionLen = sectionEnd - sectionStart;
+		std::size_t const wrappedLen =
+			sectionStart
+			+ kCbufferPrologueLen
+			+ (sectionLen + 2 * substCount)
+			+ kCbufferEpilogueLen
+			+ (length - sectionEnd);
+
+		unsigned char *dst = new unsigned char[wrappedLen];
+		std::size_t outPos = 0;
+
+		// Prefix (bytes before section, unchanged).
+		std::memcpy(dst + outPos, src, sectionStart);
+		outPos += sectionStart;
+
+		// Prologue.
+		std::memcpy(dst + outPos, kCbufferPrologue, kCbufferPrologueLen);
+		outPos += kCbufferPrologueLen;
+
+		// Section bytes with `register` -> `packoffset` substitutions.
+		for (std::size_t i = sectionStart; i < sectionEnd; )
+		{
+			if (src[i] == ':')
+			{
+				std::size_t regStart = 0, regEnd = 0;
+				std::size_t const matchLen = tryMatchRuleD_CRegister(
+					src, length, i, regStart, regEnd);
+				if (matchLen != 0)
+				{
+					// Emit bytes [i, regStart) verbatim (the `:` + any
+					// whitespace between `:` and `register`).
+					std::memcpy(dst + outPos, src + i, regStart - i);
+					outPos += (regStart - i);
+					// Emit `packoffset` in place of `register`.
+					std::memcpy(dst + outPos, kPackoffsetToken, kPackoffsetTokenLen);
+					outPos += kPackoffsetTokenLen;
+					// Emit bytes [regEnd, i+matchLen) verbatim (whitespace +
+					// `(` + whitespace + `cN` + whitespace + `)`).
+					std::size_t const tailLen = (i + matchLen) - regEnd;
+					std::memcpy(dst + outPos, src + regEnd, tailLen);
+					outPos += tailLen;
+					i += matchLen;
+					continue;
+				}
+			}
+			dst[outPos++] = src[i++];
+		}
+
+		// Epilogue.
+		std::memcpy(dst + outPos, kCbufferEpilogue, kCbufferEpilogueLen);
+		outPos += kCbufferEpilogueLen;
+
+		// Suffix (bytes after section, unchanged).
+		std::memcpy(dst + outPos, src + sectionEnd, length - sectionEnd);
+		outPos += (length - sectionEnd);
+
+		DEBUG_FATAL(outPos != wrappedLen,
+			("Direct3d11_HlslRewrite Rule D: emit length mismatch outPos=%zu"
+			 " expected=%zu (substCount=%zu sectionLen=%zu)",
+			 outPos, wrappedLen, substCount, sectionLen));
+
+		outLen = wrappedLen;
+		return dst;
+	}
 }
 
 // ======================================================================
@@ -610,14 +876,35 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 		return inBuffer;
 	}
 
+	// Iter-13 Rule D pre-pass: cbuffer-wrap c-register-bound globals.
+	// On match, `tryRuleDWrap` allocates a fresh heap buffer and returns
+	// it; we take ownership and discard the original. On no-match, the
+	// original buffer is unchanged. After this block, `inBuffer` /
+	// `inLength` always reference the current working source (wrapped
+	// or original); Rules A/B/C below run on whichever it is.
+	std::size_t wrappedLen = 0;
+	if (unsigned char *wrapped = tryRuleDWrap(inBuffer, inLength, wrappedLen))
+	{
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11_HlslRewrite: include '%s' Rule D wrapped"
+			 " globals in cbuffer (input=%zu bytes -> wrapped=%zu bytes;"
+			 " delta=%+zd)\n",
+			 diagName ? diagName : "<unnamed>",
+			 inLength, wrappedLen,
+			 static_cast<ptrdiff_t>(wrappedLen) - static_cast<ptrdiff_t>(inLength)));
+		delete[] inBuffer;
+		inBuffer = wrapped;
+		inLength = wrappedLen;
+	}
+
 	std::size_t rewriteCount = 0;
 	std::size_t const rewrittenLen = computeRewrittenLength(
 		inBuffer, inLength, rewriteCount);
 
 	if (rewriteCount == 0)
 	{
-		// Fast path -- no occurrences of any rule. Pass the buffer
-		// through; no allocation.
+		// Fast path -- no Rule A/B/C occurrences. Pass the (possibly
+		// Rule-D-wrapped) buffer through; no further allocation.
 		DEBUG_FATAL(rewrittenLen != inLength,
 			("Direct3d11_HlslRewrite: include-handler fast-path size"
 			 " mismatch rewrittenLen=%zu inLength=%zu",
@@ -631,11 +918,11 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 	unsigned char *outBuffer = new unsigned char[rewrittenLen];
 	emitRewritten(inBuffer, inLength, outBuffer, rewrittenLen);
 
-	// Discard the original (we own it via the include-handler contract).
+	// Discard the (possibly Rule-D-wrapped) intermediate buffer.
 	delete[] inBuffer;
 
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_HlslRewrite: include '%s' rewritten"
+		("Direct3d11_HlslRewrite: include '%s' Rules A/B/C rewritten"
 		 " (%zu rewrite%s; input=%zu bytes -> output=%zu bytes; delta=%+zd)\n",
 		 diagName ? diagName : "<unnamed>",
 		 rewriteCount, (rewriteCount == 1) ? "" : "s",

@@ -124,15 +124,18 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// first commit; see Direct3d11_VertexShaderData.cpp for the
 		// trimmed past-tense reference).
 		//
-		// Plan 11-07 Iter-13: version bumped 10 -> 11 to invalidate any
-		// cached blobs from the Iter-12 throwaway window. See
+		// Plan 11-07 Iter-13: version bumped 10 -> 11 (revert commit) then
+		// 11 -> 12 (this commit -- Rule D cbuffer-wrap). See
 		// Direct3d11_VertexShaderData.cpp's Iter-13 block for the full
-		// rationale.
+		// rationale; the PS helper rides the version bump in lockstep
+		// even though Rule D only fires on include content seen during
+		// VS compiles (the PS compile path uses the same rewrite utility
+		// + cache key, so the bump must match).
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "11" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "12" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
