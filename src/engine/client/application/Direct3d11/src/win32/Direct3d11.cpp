@@ -305,6 +305,24 @@ namespace Direct3d11Namespace
 
 	void setRenderTarget_impl(Texture *texture, CubeFace cubeFace, int mipmapLevel)
 	{
+		if (texture == nullptr)
+		{
+			// Engine passes NULL to mean "restore the back buffer as the
+			// render target." This idiom is used by PostProcessingEffectsManager
+			// (PostProcessingEffectsManager.cpp:247), Bloom restore paths, and
+			// any post-FX path that needs to rebind the primary swap-chain RT
+			// after a baked / secondary RT pass. cubeFace and mipmapLevel are
+			// meaningless in this case (the back buffer is a flat 2D target
+			// with no mip chain).
+			//
+			// Direct3d11_RenderTarget::setRenderTargetToPrimary handles this
+			// via Direct3d11_Device::beginScene's back-buffer RTV+DSV rebind;
+			// it's idempotent (early-out on ms_primaryTargetSet) so spurious
+			// repeated calls are safe.
+			Direct3d11_RenderTarget::setRenderTargetToPrimary();
+			return;
+		}
+
 		Direct3d11_RenderTarget::setRenderTarget(texture, cubeFace, mipmapLevel);
 	}
 
