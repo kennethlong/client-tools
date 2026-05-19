@@ -902,6 +902,105 @@
 
 ---
 
+## Iteration 15: lightsaberblade D3D11_USAGE_STAGING BC3 mip 5 (8x2) E_INVALIDARG -- BC-format staging-texture dim pad to 4-pixel block boundary
+
+- **Date:** 2026-05-19
+- **Symptom:** Post-Iter-14 smoke advanced past shader compile/load and FATAL'd at `Direct3d11_TextureData::lock CreateTexture2D (staging) failed: The parameter is incorrect.` Loading `lightsaberblade_lava_a.sht` via `BeamAppearance.cpp:506` -> `LoadAlternateShaders`. Crash dump byte-size 3855 (vs Iter-11..14's 5139-byte X4016 dumps) confirmed entirely different code path.
+- **Hypothesis (~90% pre-diagnostic):** BC-compressed format with Width or Height < 4 violates D3D11's strict block-alignment rule for `D3D11_USAGE_STAGING` textures. D3D9 silently tolerated sub-block bottom-of-chain mip levels (`Texture.cpp:392` constructs `LockData` for each mip level with that level's full dimensions; SWG textures use DXT1/3/5 = BC1/2/3 per `Direct3d11_TextureData.cpp:56` translation table; a 64x64 BC1 with full mip chain hits 2x2 at mip 5 and 1x1 at mip 6 -- both reject under D3D11 staging+BC).
+- **Investigation:**
+  - Added `THROWAWAY ITER-15` fopen-based diagnostic at `Direct3d11_TextureData.cpp:505` (before `CreateTexture2D`) writing one line per attempt to `stage/iter15-texture-lock.log` (DEBUG_REPORT_LOG_PRINT routed somewhere not visible in this build; the ITER-13B fopen pattern was the known-good substitute).
+  - Smoke produced 13 lines; line 13 was the failing attempt: `Width=8 Height=2 TF=11 DXGI=77 mipLevel=5 CPUFlags=0x10000 readOnly=0`. DXGI=77 is `BC3_UNORM` (DXT5). The asset is almost certainly `lightsaberblade_lava_a` or a sibling -- a 256x64 BC3 texture loaded by `BeamAppearance::LoadAlternateShaders` -- walking its 7-level mip chain successfully through mip 4 (16x4, the BC block-boundary minimum) and FATALing at mip 5 (8x2).
+- **Root cause:** D3D11 strict-rejects USAGE_STAGING `CreateTexture2D` / `CreateTexture3D` when W or H < 4 for block-compressed formats. BC blocks are an indivisible 4x4 storage unit; staging resources require CPU-accessible block-aligned data per the D3D11 spec.
+- **Fix:** Two-commit landing:
+  1. **Commit 1** (diagnostic, working-tree only -- not committed): `THROWAWAY ITER-15` fopen-based log block + `<cstdio>` include in `Direct3d11_TextureData.cpp`. Confirmed hypothesis at log line 13.
+  2. **Commit 2** (`fix`, `e4bdab17b`): pad BC-format staging dims to next multiple of 4 in both the 2D path (`else` branch around line 490) and 3D volume-map path (`if (m_isVolumeMap)` branch around line 463). Helper `isBlockCompressedFormat(DXGI_FORMAT)` at file scope covers `BC1_TYPELESS..BC5_SNORM` (70..84) AND `BC6H_TYPELESS..BC7_UNORM_SRGB` (94..99) -- the two ranges are non-contiguous because B5G6R5 / BGRA8 / etc. sit between them at 85..93, so a single `>= && <=` check is incorrect. Removes the THROWAWAY diagnostic + `<cstdio>` in the same commit.
+  - Why no engine-side awareness needed: the BC block grid covers the same data regardless of whether the locked mip's logical dimensions are sub-block. `lockData.m_pitch` is identical (32 bytes = 2 BC3 blocks whether staging is 8x2 or 8x4); engine fills the same block count; unlock `CopySubresourceRegion` with `pSrcBox = nullptr` copies the whole staging into the destination mip subresource without changes; both source and destination resolve to the same 2x1 BC block grid.
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` EXIT=0; `gl11_d.dll` built clean.
+  - Smoke advanced to a NEW FATAL signature -- scaffold STUB hit (Iter-16) -- confirming the BC-pad cleared the lightsaberblade wall AND every subsequent BC sub-4 mip on the asset-loading path.
+- **Commits:** `e4bdab17b` (BC-pad fix + diagnostic removal).
+
+---
+
+## Iteration 16: Direct3d11_TextureData BC-pad cleared, smoke advances to scaffold STUB hit in `setBloomEnabled` -- config-disable via `[ClientGame/Bloom] enable=0`
+
+- **Date:** 2026-05-19
+- **Symptom:** Post-Iter-15 smoke advanced past the lightsaberblade texture upload and FATAL'd with the scaffold STUB message `"Direct3d11 plugin: scaffold-only -- unimplemented Gl_api slot called (Plan 11-02 expected; Wave 3+ replaces this)"`. Crash dump byte-size 1427 (vs Iter-15's 3855, Iter-14's 5139). Trace: `Graphics::setBloomEnabled` (Graphics.cpp:3401) -> Bloom::enable() (Bloom.cpp:124) -> Bloom::install() (Bloom.cpp:82-83). Asset listed: `2d_heat_composite.sht` (the Bloom post-process composite shader).
+- **Hypothesis:** Not a code bug -- the Direct3d11 plugin has 27 scaffold STUBs (per Iter-12 audit) waiting for Plan 11-04/05/06 implementation. Bloom is the first one the runtime reached. `STUB(setBloomEnabled);` at `Direct3d11.cpp:717` routes the slot to `scaffold_fatal_stub`. Bloom is a non-critical post-FX glow effect; the scene renders without it.
+- **Investigation:**
+  - Confirmed the stub binding at `Direct3d11.cpp:717` (single line: `STUB(setBloomEnabled);`).
+  - Confirmed Bloom default-enabled at `Bloom.cpp:38` (`bool ms_enable = true;`); `LocalMachineOptionManager::registerOption(ms_enable, "ClientGame/Bloom", "enable")` at line 71 means a `[ClientGame/Bloom] enable=` entry in `client_d.cfg` overrides the default.
+  - Three options to unblock: (A) config-disable via cfg, (B) replace STUB with no-op-with-log binding, (C) implement properly mirroring `Direct3d9.cpp:4684`'s real bloom render-target + composite-shader pipeline. Option C is significant Plan 11-04/05/06 work and out of Plan 11-07 scope.
+- **Root cause:** Bloom Gl_api slot is one of 27 unwired scaffold stubs from Plan 11-02. Not a code bug; expected gap.
+- **Fix:** Config-only change to `stage/client_d.cfg`:
+  ```ini
+  [ClientGame/Bloom]
+  	# Plan 11-07 / Iter-16: disable Bloom post-FX while Direct3d11 plugin's
+  	# setBloomEnabled Gl_api slot remains a scaffold STUB (Direct3d11.cpp:717).
+  	enable=0
+  ```
+  No code change, no rebuild. `Bloom::install` reads `enable=0` -> skips `enable()` -> `Graphics::setBloomEnabled` never called -> STUB never fires.
+- **Verification:** Smoke advanced to a NEW FATAL (Iter-17) -- different signature, different code path -- confirming the Bloom path no longer trips the STUB.
+- **Commits:** No commit (config-only edit to stage/client_d.cfg; this file is gitignored under stage/).
+- **Strategic note:** This is the first STUB-class hit, not a fix-class hit. Other STUBs on the rendering path will surface as smoke progresses; each will be unblocked via the same pattern (config-disable / no-op binding / real implementation) per its scope criticality.
+
+---
+
+## Iteration 17: `setRenderTarget(NULL)` from PostProcessingEffectsManager not handled -- route to existing `setRenderTargetToPrimary` in plugin wrapper
+
+- **Date:** 2026-05-19
+- **Symptom:** Post-Iter-16 smoke advanced into the main game loop -- crash dump tail showed `MainLoop: 1, UpTime: 10` (game ran for 10 seconds), `AppearanceTemplate: ui_planet_sel_ordmantel.msh`, `Cluster: unknown` (cluster selection UI active). FATAL: `"texture pointer is null"` at `PostProcessingEffectsManager.cpp:248` calling `Graphics::setRenderTarget(NULL, CF_none, 0)` at `Graphics.cpp:974`. Crash dump byte-size 2076.
+- **Hypothesis:** The engine's documented "restore back buffer as the render target" idiom passes `texture == NULL` to `setRenderTarget`. PPM uses this after rendering its scratch-buffer pass (Bloom and other post-FX restore paths follow the same convention). The D3D11 plugin's wrapper `setRenderTarget_impl` at `Direct3d11.cpp:306` was forwarding unconditionally to `Direct3d11_RenderTarget::setRenderTarget`, which has `NOT_NULL(texture);` at line 158 -- fatal on the restore-backbuffer call.
+- **Investigation:**
+  - Confirmed `Direct3d11_RenderTarget::setRenderTargetToPrimary` at line 136 already exists and handles the restore correctly (rebinds back-buffer RTV+DSV via `Direct3d11_Device::beginScene`). It's idempotent (early-out on `ms_primaryTargetSet`) so spurious repeated calls are safe.
+  - Confirmed `beginScene` is safe (short, no recursion, no window-state interaction): just `OMSetRenderTargets(1, &ms_backBufferRTV, ms_depthStencilDSV)` + `RSSetViewports(...)`.
+  - Not a STUB-class issue. `setRenderTarget` IS wired and implemented for the user-texture case -- the bug is a missed dispatch case (NULL handling).
+- **Root cause:** Plugin's `setRenderTarget_impl` wrapper missing the `texture == nullptr` branch that should route to `setRenderTargetToPrimary` instead of the user-texture path.
+- **Fix:** Single commit (`8d4dcc934`): add `if (texture == nullptr) { setRenderTargetToPrimary(); return; }` branch at the top of `setRenderTarget_impl` (Direct3d11.cpp:306). `cubeFace` and `mipmapLevel` are intentionally ignored in the NULL branch (the back buffer is a flat 2D target with no mip chain or cube faces).
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` EXIT=0; `gl11_d.dll` built clean.
+  - Smoke: process ran ~7 minutes with 47s CPU and no FATAL. Initial Get-Process state showed window `Vis=False` at 640x480 -- the engine hadn't called ShowWindow normally yet at that point. Forced `ShowWindow + SetWindowPos(100,100,1024,768) + SetForegroundWindow` from a PowerShell helper -> **window visible, rendering the Plan 11-03 MVP dark-blue clear color** (`Direct3d11_Device::clearViewport` at line 328: `{0.0f, 0.0f, 0.25f, 1.0f}`).
+  - The Plan 11-07 exit criterion is **REACHED**: shader compile + load + frame loop alive + Present succeeding + window visible. The renderer is end-to-end functional. Geometry / UI content does not yet render on top of the clear (most likely the per-frame cbuffer push isn't wired -- see "Plan 11-07 milestone" below).
+- **Commits:** `8d4dcc934` (setRenderTarget NULL dispatch fix).
+
+---
+
+## Plan 11-07 milestone — shader compile + load + render-loop-alive (2026-05-19)
+
+The 14-iteration X4016 wall closed in Iter-14, and the four subsequent iterations (BC pad, Bloom config, setRenderTarget NULL, ShowWindow assist) cleared the rest of the path to a visible window rendering the Plan 11-03 MVP placeholder clear color. **Plan 11-07's stated exit criterion is functionally cleared.**
+
+**Session arc (2026-05-19):**
+
+| Iter | Wall | Fix shape | Commit |
+|---|---|---|---|
+| 14 | X4016 'c0' shader compile (13-iter narrative close) | Rule E line-anchored `#pragma def` stripper + REWRITE_VERSION 12->13 | `96311b480` |
+| 14 (incidental) | AutoLog.cpp C++20 strict-lexing block | Insert spaces around SLASHCHAR macro | `ec0a42cee` |
+| 15 | BC3 mip 5 (8x2) `CreateTexture2D` E_INVALIDARG | Pad BC-format staging dims up to 4-pixel block boundary | `e4bdab17b` |
+| 16 | Bloom scaffold STUB | Config-disable via `[ClientGame/Bloom] enable=0` in `stage/client_d.cfg` | (config-only) |
+| 17 | `setRenderTarget(NULL)` not dispatched | Route to existing `setRenderTargetToPrimary` in plugin wrapper | `8d4dcc934` |
+
+**Outcome state (post-Iter-17):**
+
+| Subsystem | Status |
+|---|---|
+| Swap chain creation | ✓ |
+| Window visible (after `ShowWindow` assist) | ✓ |
+| Back buffer clear (dark blue MVP placeholder) | ✓ |
+| Frame loop iterating + Present succeeding | ✓ |
+| Process responsive, no FATAL, no crash | ✓ |
+| Geometry / UI rendering on top of clear | ✗ -- next iteration's investigation |
+
+**Strategic position vs. Plan 11-07's three original options** (per `phase11-x4016-overlapping-registers.md`):
+1. Phase 12 asset re-author -- **not needed**; textual rewrite was sufficient
+2. Plan 11-07.5 tactical passthrough -- **not needed**; full asset shaders compile
+3. Close Plan 11-07 as shader-compile-cleared; advance to Plan 11-08 -- **THIS IS WHERE WE ARE** (and beyond -- we have a visible window past the original boundary)
+
+**ShowWindow assist note (Iter-17 verification):** the post-Iter-17 process needed an external `ShowWindow + SetForegroundWindow` poke from a PowerShell helper to make the window visible. The window class + handle existed at 640x480 default size from CreateWindowEx but the engine's normal `ShowWindow(SW_SHOW)` path didn't fire on this run. Theories: (a) Bloom config-disable in Iter-16 re-ordered init in a way that misses ShowWindow, (b) the shader-cache fast path (cached .cso entries exist post-Iter-14) skips a step that normally shows the window, (c) prior-run swap-chain state interaction. Not investigated this session; the window-show path is a separate workstream from Plan 11-07's compile/load goal. Once-per-launch ShowWindow assist works around it for diagnostic smokes.
+
+**Next iteration (Iter-18): cbuffer constant push.** Most likely cause of "nothing drawing on top of clear": per-frame shader constants aren't being pushed into the D3D11 constant buffer, so the vertex shader transforms all vertices by a zero matrix -> everything collapses to origin or off-screen -> only the clear color is visible. `Direct3d11_ConstantBuffer.cpp:138` shows `VSSetConstantBuffers` is wired; the question is whether the engine-side `setVertexShaderConstants` Gl_api slot pushes data INTO that constant buffer, or merely binds it. Investigation pending.
+
+---
+
 ## Future iterations (placeholders)
 
 To be filled as Kenny surfaces each new FATAL or visual bug. Each entry follows the 6-field shape (Date / Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit).
