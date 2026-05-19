@@ -244,7 +244,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "1" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "2" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
@@ -265,6 +265,43 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 #else
 		flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
+		// Plan 11-07 Iter-5: enable backwards-compatibility mode in the
+		// HLSL compiler. Microsoft documents this flag (0x1000) as
+		// "Directs the compiler to enable older shaders to compile to
+		// 5_0 targets." -- it relaxes a number of legacy-syntax
+		// restrictions that vs_5_0 / ps_5_0 / vs_4_0_level_9_* otherwise
+		// reject.
+		//
+		// Smoke under Iter-4 surfaced:
+		//   D:\...\stage\vertex_program\2d.vsh(8,44-45):
+		//   error X3202: location semantics cannot be specified on members
+		//
+		// X3202 = D3D9-era HLSL allowed struct members to carry
+		// register-binding shortcut semantics like `: c0`, `: c4`,
+		// `: register(c8)` directly on the member declaration. SM4+
+		// permits register bindings on (a) global variables, (b) cbuffer
+		// members (with packoffset), (c) samplers/textures -- NOT on
+		// struct members. The flag (per MS docs) is the single canonical
+		// path that accepts the legacy-struct-member-register form along
+		// with many other D3D9-era constructs.
+		//
+		// Strategy: try the flag first (high-value, low-effort). If it
+		// resolves the X3202 case it likely also resolves any further
+		// legacy-syntax surface area we haven't surfaced yet -- could
+		// short-circuit several future iterations. If it does NOT
+		// resolve X3202, Iter-6 lands a textual rewrite of `: c<N>` /
+		// `: register(c<N>)` from struct-member contexts (mirrors the
+		// Iter-4 include-handler approach, but also routes the MAIN
+		// shader source through the rewrite -- the X3202 is in 2d.vsh
+		// itself, not a `.inc` file, so the Iter-4 handler does not
+		// reach it).
+		//
+		// Caveat (forward-looking): the flag changes COMPILE output, not
+		// just lexing. If subtle runtime rendering issues surface in a
+		// later iteration (Plan 11-07 Task 3 smoke), the
+		// BACKWARDS_COMPATIBILITY flag becomes a suspect alongside the
+		// other compile-flag / rewrite-version changes.
+		flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
 
 		// Use a virtual filename of the asset's filename so D3DCompile's
 		// error messages point at something useful.

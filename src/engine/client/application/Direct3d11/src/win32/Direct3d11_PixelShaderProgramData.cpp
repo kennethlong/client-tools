@@ -91,7 +91,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "1" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "2" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -107,6 +107,17 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 #else
 			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
+			// Plan 11-07 Iter-5: mirror the VS-compile-site addition of
+			// D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY (0x1000). The flag
+			// enables D3D9-era HLSL syntax (e.g. legacy struct-member
+			// register-binding shortcut semantics) to compile under SM4+
+			// targets. See Direct3d11_VertexShaderData.cpp's matching
+			// block for the full Iter-5 rationale + the X3202
+			// crash-dump-driven motivation. This PS helper remains
+			// [[maybe_unused]] until a future Phase 12 asset re-author
+			// surfaces HLSL-source pixel shaders; the flag is added
+			// for symmetry + correctness when that code path activates.
+			flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
 			char const *virtName = (displayName && *displayName) ? displayName : "pixel_shader.psh";
 
 			// Plan 11-07 Iter-2: route `#include "..."` directives
