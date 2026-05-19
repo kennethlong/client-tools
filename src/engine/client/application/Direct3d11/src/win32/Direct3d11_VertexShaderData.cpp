@@ -266,6 +266,22 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// applyToMainSource input bytes to stage/shader-debug-first-
 	// source.txt; the dump was reverted in Iter-9's first commit.
 	//
+	// Plan 11-07 Iter-9: version bumped 5 -> 6. Iter-8 smoke ALSO
+	// produced the IDENTICAL X3202 at `2d.vsh(8,44-45)` despite the
+	// `[bcstu]` expansion. The Iter-8 THROWAWAY dump revealed the
+	// actual line-8 content:
+	//   `float4  position  : POSITION0  : register(v0);`
+	// The register-type letter is `v` -- vertex input stream register
+	// (D3D9-era vertex declaration syntax). Neither `c` (Iter-7) nor
+	// `[bcstu]` (Iter-8) covered it. Iter-9 extends Rules B/C to
+	// `[bcstuv]` -- all 6 canonical D3D HLSL register-type letters
+	// per MSDN. The `v` case is structurally safer than the others:
+	// D3D11's input-layout binding happens at the IA stage via
+	// Direct3d11_VertexDeclarationMap (Plan 11-06) using
+	// D3D11_INPUT_ELEMENT_DESC, not at the shader level -- so
+	// stripping the `register(vN)` hint drops a binding the SM4+
+	// compiler doesn't consume anyway.
+	//
 	// Every cached .cso from any prior iteration is now a mass miss;
 	// D3DCompile rebuilds every blob under the new effective source
 	// bytes + re-stores.
@@ -273,7 +289,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "5" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "6" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry

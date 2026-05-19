@@ -40,35 +40,54 @@
 //     uniqueness without colliding with any existing identifier in the
 //     engine HLSL corpus.
 //
-//   Rule B (Iter-7 origin; Iter-8 expanded register-type set):
-//     Match `:\s*[bcstu]\d+\b` (e.g., `: c4`, `:c12`, `: s0`, `: t3`,
-//     `: b0`, `: u1`) becomes the same number of whitespace characters
-//     (so the column offset on subsequent tokens is preserved -- error
-//     messages with `(line,col)` still point at the right place).
+//   Rule B (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
+//   Iter-9 added `v` -> `[bcstuv]`):
+//     Match `:\s*[bcstuv]\d+\b` (e.g., `: c4`, `:c12`, `: s0`, `: t3`,
+//     `: b0`, `: u1`, `: v0`) becomes the same number of whitespace
+//     characters (so the column offset on subsequent tokens is
+//     preserved -- error messages with `(line,col)` still point at
+//     the right place).
 //
-//   Rule C (Iter-7 origin; Iter-8 expanded register-type set):
-//     Match `:\s*register\s*\(\s*[bcstu]\d+\s*\)` (e.g.,
-//     `: register(c4)`, `:register( s0 )`, `: register(t3)`) becomes
-//     the same number of whitespace characters. Same column-
-//     preservation rationale as Rule B.
+//   Rule C (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
+//   Iter-9 added `v` -> `[bcstuv]`):
+//     Match `:\s*register\s*\(\s*[bcstuv]\d+\s*\)` (e.g.,
+//     `: register(c4)`, `:register( s0 )`, `: register(t3)`,
+//     `: register(v0)`) becomes the same number of whitespace
+//     characters. Same column-preservation rationale as Rule B.
 //
-//   Register-type letters covered: `b#` (cbuffer), `t#` (texture/SRV),
-//   `s#` (sampler), `u#` (UAV), `c#` (constant). All 5 are reserved
-//   register types per the HLSL reference; struct members may not
-//   carry any of these as semantics under SM4+ (only globals,
-//   cbuffer-members-with-packoffset, and sampler/texture declarations
-//   can). Iter-7 hardcoded just `c` based on a speculative read of
-//   the X3202 site; Iter-7 smoke produced the identical X3202 at the
-//   identical site, proving the letter is NOT `c`. Iter-8 expanded to
-//   the full set.
+//   Register-type letters covered: all 6 canonical D3D HLSL register
+//   types per the MSDN HLSL `register()` grammar:
+//     `b#` -- cbuffer / constant-buffer slot
+//     `c#` -- single constant register (D3D9 legacy + D3D11 cbuffer-
+//             member packoffset offset)
+//     `s#` -- sampler slot
+//     `t#` -- texture / SRV slot
+//     `u#` -- UAV (unordered access view) slot (D3D10+)
+//     `v#` -- vertex input stream register (D3D9-era vertex
+//             declaration syntax; appears on struct members in
+//             SWG's `.vsh` corpus, e.g. 2d.vsh line 8:
+//             `float4 position : POSITION0 : register(v0);`)
+//   Struct members may not carry any of these as semantics under SM4+
+//   (only globals, cbuffer-members-with-packoffset, and sampler/
+//   texture declarations can). Iteration history:
+//     * Iter-7 hardcoded just `c` based on a speculative read.
+//     * Iter-7 smoke produced X3202 unchanged -> letter is NOT `c`.
+//     * Iter-8 expanded to `[bcstu]` + landed a THROWAWAY diagnostic
+//       dump capturing the first main-source bytes.
+//     * Iter-8 smoke produced X3202 unchanged -> letter is NOT in
+//       `[bcstu]` either. The THROWAWAY dump revealed the actual
+//       syntax: `: register(v0)` -- letter is `v`.
+//     * Iter-9 reverted the dump (first commit) and extended the
+//       set to `[bcstuv]` (this commit). The dump's purpose is now
+//       served and the set is now exhaustive per the HLSL grammar.
 //
 //   Case sensitivity for Rules B/C: the register-type letter and the
 //   literal `register` keyword must be lowercase. `: COLOR` /
 //   `: COLOR0` / `: COLOR1` / `: SV_TARGET` are user/system semantics
 //   that legitimately appear on struct members and MUST NOT be
 //   touched. HLSL is case-sensitive so the lowercase regex letters
-//   distinguish them naturally. The Iter-8 expansion does NOT widen
-//   case sensitivity -- uppercase `B0` / `S0` / `T0` etc. would not
+//   distinguish them naturally. The Iter-9 expansion does NOT widen
+//   case sensitivity -- uppercase `B0` / `S0` / `V0` etc. would not
 //   match.
 //
 // Semantic-loss caveat (Iter-7 forward-looking note):

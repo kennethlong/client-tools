@@ -14,13 +14,15 @@
 //        On match -- emit the keyword followed by the `_id` suffix; output
 //        grows by 3 bytes per match. Left + right boundary checks ensure
 //        `endpoint` / `pointSize` / `linear` / etc. don't trigger.
-//     2. Rule B: `:\s*[bcstu]\d+\b` -- legacy struct-member register-
-//        binding shortcut (Iter-7 origin; Iter-8 expanded register-type
-//        set from `c` only to all 5 D3D11 HLSL register types b/c/s/t/u).
+//     2. Rule B: `:\s*[bcstuv]\d+\b` -- legacy struct-member register-
+//        binding shortcut (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
+//        Iter-9 further expanded to `[bcstuv]` after the THROWAWAY dump
+//        revealed `2d.vsh:8` uses `v0` -- vertex input stream register).
 //        On match -- emit the same number of spaces; output size unchanged
 //        from this rule.
-//     3. Rule C: `:\s*register\s*\(\s*[bcstu]\d+\s*\)` -- explicit
-//        register() form (Iter-7 origin; Iter-8 expanded the same way).
+//     3. Rule C: `:\s*register\s*\(\s*[bcstuv]\d+\s*\)` -- explicit
+//        register() form (Iter-7 origin; Iter-8 and Iter-9 expanded the
+//        same way as Rule B).
 //        On match -- emit the same number of spaces; output size unchanged
 //        from this rule.
 //   No match -- emit the single byte unchanged + advance one position.
@@ -128,28 +130,49 @@ namespace
 		return (c == ' ') || (c == '\t') || (c == '\r') || (c == '\n');
 	}
 
-	// D3D11 HLSL register-type letter (used by Rules B/C). The full set
-	// per MSDN / HLSL reference:
+	// D3D HLSL register-type letter (used by Rules B/C). The full
+	// canonical set per the MSDN HLSL reference + the `register()`
+	// keyword grammar:
 	//   `b#` -- constant buffer (cbuffer) register
-	//   `t#` -- texture / SRV register
-	//   `s#` -- sampler register
-	//   `u#` -- UAV (unordered access view) register (D3D11 only)
 	//   `c#` -- single constant register (D3D9 legacy + D3D11 cbuffer-
 	//           member packoffset offset)
+	//   `s#` -- sampler register
+	//   `t#` -- texture / SRV register
+	//   `u#` -- UAV (unordered access view) register (D3D10+)
+	//   `v#` -- vertex input stream register (D3D9-era vertex
+	//           declaration syntax; struct-member `: register(vN)`
+	//           bindings are common in SWG's `.vsh` corpus)
 	//
 	// Iter-7 originally hardcoded just `c` here because the X3202 error
 	// site visible at the time (`2d.vsh(8,44-45)`) was speculatively
 	// thought to be a `: c<N>` binding. Iter-7's smoke produced the
 	// identical X3202 at the identical site, meaning the actual letter
-	// at line 8 col 44 was NOT `c`. Iter-8 expands the set to all 5
-	// canonical D3D11 register-type letters so a `: s0` (sampler) /
-	// `: t0` (texture/SRV) / `: b0` (cbuffer) / `: u0` (UAV) binding
-	// on a struct member also gets stripped. HLSL is case-sensitive;
-	// these letters are lowercase by HLSL convention -- uppercase user
-	// semantics like `: COLOR0` / `: SV_POSITION` are not affected.
+	// at line 8 col 44 was NOT `c`. Iter-8 expanded the set to
+	// `[bcstu]`, but Iter-8's THROWAWAY diagnostic dump (reverted in
+	// Iter-9's first commit) revealed the ground truth: 2d.vsh line 8
+	// is literally `float4 position : POSITION0 : register(v0);`. The
+	// letter is `v` -- vertex input stream register binding, which
+	// neither Iter-7's single-`c` rule nor Iter-8's `[bcstu]` expansion
+	// covered. Iter-9 extends the set to `[bcstuv]` -- all 6 canonical
+	// D3D HLSL register-type letters.
+	//
+	// Semantic-loss note specific to `v#`: vertex input stream register
+	// bindings are normally honored by D3D9's vertex-declaration stage;
+	// under D3D11 the IA stage handles input-layout binding via
+	// Direct3d11_VertexDeclarationMap (Plan 11-06). Stripping `: register(vN)`
+	// from a struct member drops a binding hint that D3D11 doesn't
+	// consume at the shader level -- the actual binding happens at the
+	// input-layout level via D3D11_INPUT_ELEMENT_DESC. The semantic-loss
+	// caveat in the file preamble still applies generally, but the
+	// `v#` case in particular should be safe.
+	//
+	// HLSL is case-sensitive; these letters are lowercase by HLSL
+	// convention -- uppercase user semantics like `: COLOR0` /
+	// `: SV_POSITION` are not affected.
 	inline bool isHlslRegisterTypeLetter(unsigned char c)
 	{
-		return (c == 'b') || (c == 'c') || (c == 's') || (c == 't') || (c == 'u');
+		return (c == 'b') || (c == 'c') || (c == 's')
+			|| (c == 't') || (c == 'u') || (c == 'v');
 	}
 
 	// ------------------------------------------------------------------
@@ -199,7 +222,7 @@ namespace
 		return 0;
 	}
 
-	// Rule C: `:\s*register\s*\(\s*[bcstu]\d+\s*\)`
+	// Rule C: `:\s*register\s*\(\s*[bcstuv]\d+\s*\)`
 	// Tried BEFORE Rule B (both start at `:`; Rule C is the more-specific
 	// longer match). Returns total match length (from `:` through the
 	// closing `)`) on match else 0.
@@ -208,9 +231,12 @@ namespace
 	// because the pattern is purely sequential: `:`, then optional
 	// whitespace, then the literal `register` token, etc.
 	//
-	// Iter-8: the single `c` register-type letter is now any of the 5
-	// canonical D3D11 register-type letters `[bcstu]` -- see
-	// isHlslRegisterTypeLetter() above for the rationale.
+	// Iter-9: the register-type letter set is `[bcstuv]` (all 6 canonical
+	// D3D HLSL register types: b/cbuffer, c/constant, s/sampler,
+	// t/texture, u/UAV, v/vertex-input-stream). Iter-7 started with `c`
+	// only; Iter-8 expanded to `[bcstu]`; Iter-9 added `v` after the
+	// THROWAWAY dump (reverted) revealed `2d.vsh:8` uses `register(v0)`.
+	// See isHlslRegisterTypeLetter() above for the full rationale.
 	std::size_t tryMatchRuleC(
 		unsigned char const *src,
 		std::size_t          length,
@@ -253,8 +279,9 @@ namespace
 		while (i < length && isHlslSpace(src[i]))
 			++i;
 
-		// `[bcstu]` (single register-type letter, lowercase). Iter-8
-		// expanded set from just `c`.
+		// `[bcstuv]` (single register-type letter, lowercase). Iter-9
+		// set: b/c/s/t/u/v -- see isHlslRegisterTypeLetter() for the
+		// canonical-6-letter rationale.
 		if (i >= length || !isHlslRegisterTypeLetter(src[i]))
 			return 0;
 		++i;
@@ -278,14 +305,16 @@ namespace
 		return i - pos;
 	}
 
-	// Rule B: `:\s*[bcstu]\d+\b`
+	// Rule B: `:\s*[bcstuv]\d+\b`
 	// Tried AFTER Rule C at the same `:` site so the longer, more-specific
 	// register() form wins when present. Returns total match length on
 	// match else 0.
 	//
-	// Iter-8: the single `c` register-type letter is now any of the 5
-	// canonical D3D11 register-type letters `[bcstu]` -- see
-	// isHlslRegisterTypeLetter() above for the rationale.
+	// Iter-9: the register-type letter set is `[bcstuv]` (all 6 canonical
+	// D3D HLSL register types). Iter-7 started with `c` only; Iter-8
+	// expanded to `[bcstu]`; Iter-9 added `v` after the THROWAWAY dump
+	// (reverted) revealed `2d.vsh:8` uses `register(v0)`. See
+	// isHlslRegisterTypeLetter() above for the full rationale.
 	std::size_t tryMatchRuleB(
 		unsigned char const *src,
 		std::size_t          length,
@@ -300,8 +329,9 @@ namespace
 		while (i < length && isHlslSpace(src[i]))
 			++i;
 
-		// `[bcstu]` (single register-type letter, lowercase). Iter-8
-		// expanded set from just `c`.
+		// `[bcstuv]` (single register-type letter, lowercase). Iter-9
+		// set: b/c/s/t/u/v -- see isHlslRegisterTypeLetter() for the
+		// canonical-6-letter rationale.
 		if (i >= length || !isHlslRegisterTypeLetter(src[i]))
 			return 0;
 		++i;

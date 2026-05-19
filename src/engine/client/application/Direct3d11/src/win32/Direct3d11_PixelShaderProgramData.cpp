@@ -100,11 +100,19 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// the full `[bcstu]` set (b/cbuffer, c/constant, s/sampler,
 		// t/texture, u/UAV). See Direct3d11_VertexShaderData.cpp's
 		// Iter-8 block for the full rationale.
+		//
+		// Plan 11-07 Iter-9: version bumped 5 -> 6 to ride the VS-side
+		// Rules B/C register-type-letter set expansion `[bcstu]` ->
+		// `[bcstuv]`. The Iter-8 THROWAWAY diagnostic dump (reverted in
+		// Iter-9's first commit) revealed `2d.vsh:8` uses `register(v0)`
+		// -- vertex input stream register. See
+		// Direct3d11_VertexShaderData.cpp's Iter-9 block for the full
+		// rationale.
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "5" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "6" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
