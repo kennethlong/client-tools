@@ -847,6 +847,61 @@
 
 ---
 
+## Iteration 13: Iter-12 dumps refute state-machine hypothesis -- Rule D structural cbuffer-wrap of c-register globals (rule lands, but smoke FATAL'd again at identical X4016 'c0')
+
+- **Date:** 2026-05-19
+- **Symptom:** Same FATAL signature `D3DCompile vs_4_0_level_9_3 'vertex_program/2d.vsh' failed: error X4016 'c0'` as Iter-11. Iter-12's 12 diagnostic dump files written to `stage/shader-rewrite-{main,inc-{0..4}}-{input,output}.txt`.
+- **Hypothesis:** Iter-10's Hypothesis 2 (D3DCompile-level rejection) confirmed by dump analysis. The ~15 globals in `vertex_shader_constants.inc` survive Iter-11's `sawColonThisLine` context-aware rule intact (Hypothesis 1 ruled out -- state machine works). The collision is at FXC's auto-allocator level: file-scope globals with explicit `register(cN)` bindings get promoted to the implicit `$Globals` cbuffer under SM4+ / vs_4_0_level_9_3 even with `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` enabled, and FXC's level9 path computes overlapping placements when the cbuffer layout meets the declared `cN` offsets. Fix shape: structural pre-pass that wraps the globals in an explicit `cbuffer SwgVertexConstants : register(b0) { ... };` block with each `register(cN)` rewritten to `packoffset(cN)`. Conceptually equivalent to a Phase 12 asset-re-author of `vertex_shader_constants.inc`, but executed at rewrite time so the source stays D3D9-shaped.
+- **Investigation:**
+  - Diffed `stage/shader-rewrite-inc-0-{input,output}.txt`: confirmed `Material material : register(c11)`, `LightData lightData : register(c16)`, `ExtendedLightData extendedLightData : register(c60)`, and the other ~12 `: register(c<N>)` globals all survive byte-identical post-rewrite. Iter-11's context-aware rule is correct.
+  - Cross-checked the `#if VERTEX_SHADER_VERSION >= 20` block with `const bool ... : register(bN)` bindings -- these are deliberately excluded from Rule D's letter filter (only `c`, not `b`) so the boolean bindings stay verbatim.
+  - Designed Rule D as a pre-pass in `applyToIncludeBuffer` only (main `.vsh` sources don't carry c-register globals; main-source path skips Rule D). Heap-allocated wrapped buffer; feeds Rules A/B/C as usual.
+- **Root cause (confirmed by Iter-12 dumps):** D3DCompile auto-promotes file-scope globals with `register(cN)` to the implicit `$Globals` cbuffer; the auto-allocator then computes a layout that overlaps the explicitly-declared `cN` positions. Wrapping the globals in an explicit `cbuffer` block with `packoffset(cN)` gives FXC the layout it needs without the implicit promotion.
+- **Fix:** Three-commit landing:
+  1. **Commit 1** (`revert`, `a493000fe`): remove THROWAWAY ITER-12 HLSL rewrite I/O dumps from `Direct3d11_HlslRewrite.cpp` + trim the `<cstdio>` include + drop the Iter-12 commentary block in `Direct3d11_VertexShaderData.cpp` (active-tense -> past-tense cross-reference per the Iter-9/11 pattern).
+  2. **Commit 2** (`feat`, `5976a3530`): Rule D cbuffer-wrap pre-pass in `applyToIncludeBuffer` + bump `D3D11_REWRITE_VERSION` 11 -> 12 in both VS + PS compile sites (atomic; the rule changes rewriter output so the cache key MUST invalidate or FNV-1a serves stale Iter-11 binaries).
+  3. **Commit 3** (`docs`, this entry -- deferred until Iter-14 close).
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` EXIT=0; `gl11_d.dll` built clean.
+  - All 5 build targets verified clean (Direct3d11 + 3 D3D9 ffp/vsps/main + SwgClient).
+  - **Smoke FATAL'd at IDENTICAL X4016 'c0' signature.** Crash dump `stage/SwgClient_d.exe-unknown.0-20260519165951.txt` byte-identical to Iter-11/12 in error message and call stack. Rule D was syntactically correct but not the missing piece.
+  - Added uncommitted **ITER-13B** throwaway diagnostic dump in working tree (gated by `static bool s_firstInc`) that writes the post-Rule-D + post-Rules-A/B/C output to `stage/shader-iter13b-inc-0-output.txt`. Inspection confirmed Rule D produced syntactically valid HLSL: explicit cbuffer header + epilogue, `register(cN)` replaced with `packoffset(cN)` on every global, struct-typed members carry `packoffset(c11/c16/c60)` correctly.
+  - Triggered **CODEX phone-a-friend** with the ITER-13B dump as the controlled artifact. The wall at this point: textual-rewrite arc has spanned 7 iterations (Iter-7..Iter-13); Rule D was the natural-limit extension; the next iteration would require either type-awareness (differentiate built-in vs struct globals to mixed-mode the packoffsets) or Phase 12 asset re-author.
+- **Commits:** `a493000fe`, `5976a3530`.
+
+---
+
+## Iteration 14: CODEX FXC repro identifies `#pragma def(vs, c95, ...)` as the actual X4016 trigger -- Rule E line-anchored stripper clears the wall; smoke advances to NEW boundary in `Direct3d11_TextureData::lock`
+
+- **Date:** 2026-05-19
+- **Symptom:** Iter-13 Rule D produced syntactically valid cbuffer-wrapped HLSL (verified via uncommitted ITER-13B dump in `stage/shader-iter13b-inc-0-output.txt`) but the X4016 'c0' wall persisted byte-identically. Strategic concern from Iter-13: the textual-rewrite arc had hit a structural limit; next move was either type-aware packoffset mixing or Phase 12 asset re-author.
+- **Hypothesis (from CODEX):** The struct-typed packoffset hypothesis from Iter-13 is **REFUTED** -- CODEX's controlled FXC repro against the exact ITER-13B dump compiled successfully under `vs_4_0_level_9_3` and `vs_5_0` with the cbuffer + nested struct packoffsets intact, AND with `register(b0)` removed, AND with struct declarations removed. The compile **only succeeded** when `#pragma def(vs, c95, 0.0, 0.5f, 1.0f, 1.4426950408889634f)` was stripped. The 'c0' in the error message is FXC's first-register report from its level9 c-register allocator, not the literal c95 slot the pragma names. The pragma is a D3D9-era explicit float-register pre-fill (per MSDN: "manually allocates a floating-point shader register"); under SM4+ level9 FXC emits its own legacy c#-register mappings from the cbuffer layout, and the pragma's manual allocation collides with that pass.
+- **Investigation:**
+  - CODEX repro methodology: extracted `stage/shader-iter13b-inc-0-output.txt` (142 lines, Rule D's verified output), wrapped in a minimal VS, toggled each variable independently in SDK FXC 10.0.26100.0 and 10.0.19041.0. Only `#pragma def` strip cleared X4016; struct-typed packoffset, `register(b0)`, and struct declarations were all proven irrelevant.
+  - Local verification: `grep -n "pragma def" stage/shader-iter13b-inc-0-output.txt` returned `141:#pragma def(vs, c95, 0.0, 0.5f, 1.0f, 1.4426950408889634f)`. The pragma is literally in the include file; CODEX's diagnosis isn't theoretical.
+  - Rule E shape: line-anchored (`pos == 0` OR `src[pos - 1] == '\n'`), matches `^\s*#\s*pragma\s+def\b.*` up to (but not including) the trailing `\n`. Emits match-length spaces in place -- preserves both column AND line counts. The `\n` flows through the byte-copy fallback so the existing `sawColonThisLine` reset machinery stays canonical. Lives in the single-pass scanner next to Rules A/B/C; tried between Rule B and the fallback. Symmetric implementation in `computeRewrittenLength` and `emitRewritten` with `DEBUG_FATAL`-guarded length parity.
+- **Root cause (confirmed by CODEX repro + local artifact verification):** legacy D3D9-era `#pragma def(vs, c95, ...)` directive embedded in `vertex_shader_constants.inc` collides with FXC's SM4+ / vs_4_0_level_9_3 c-register allocator. The pragma pre-fills a float register slot; FXC's level9 path drives its own allocation from the cbuffer layout; the two collide and the first reported register ('c0') is FXC's report, not the literal c95. Stripping the pragma is safe for Plan 11-07's compile/load goal -- the four floats it defines (`0.0, 0.5, 1.0, 1/ln(2)`) are not semantically required for shader load; Plan 11-08's reflection-driven cbuffer push will catch them at runtime if any active shader path needs them.
+- **Fix:** Three-commit landing:
+  1. **Implicit revert** of ITER-13B uncommitted throwaway dump in working tree (file returned to HEAD; no commit needed because the dump was never committed -- per project memory note `phase11-x4016-overlapping-registers.md` line 71).
+  2. **Commit 2** (`feat`, `96311b480`): Rule E + bump `D3D11_REWRITE_VERSION` 12 -> 13 in both VS + PS compile sites (atomic per the Iter-13 pattern; cache invalidation must land with rewriter-output change).
+  3. **Commit 3** (`chore`, `ec0a42cee`): C++20 strict-lexing fix in 3rd-party `src/external/3rd/library/platform/utils/Base/AutoLog.cpp` -- `"%s"SLASHCHAR"%s"` -> `"%s" SLASHCHAR "%s"` at lines 291, 334. Zero behavioral change; unblocks the wider solution build that Iter-14 smoke triggered. Pre-existing condition surfaced because today's source-tree activity invalidated Base.vcxproj's incremental `.tlog`; previous builds reused stale `.obj`.
+  4. **Commit 4** (`docs`, this entry).
+- **Verification:**
+  - `MSBuild` Direct3d11.vcxproj: EXIT=0; `gl11_d.dll` built clean at `src/compile/win32/Direct3d11/Debug/gl11_d.dll` (mtime 2026-05-19 12:46). Koogie's post-build copy step landed it in `stage/gl11_d.dll` (mtime 12:46) -- confirmed via mtime cross-check.
+  - **Smoke result -- X4016 'c0' WALL CLEARED.** Crash dump `stage/SwgClient_d.exe-unknown.0-20260519175709.txt` shows entirely different signature, different code path, different shader template:
+    - **Old (Iter-11..Iter-13 dumps, 5139 bytes):** `Direct3d11_VertexShaderData: D3DCompile vs_4_0_level_9_3 'vertex_program/2d.vsh' failed: ... error X4016: overlapping register semantics not yet implemented 'c0'`
+    - **New (Iter-14 dump, 3855 bytes):** `Direct3d11_TextureData::lock CreateTexture2D (staging) failed: The parameter is incorrect.` Call stack: `Texture.cpp(683)` -> `TextureList` -> `StaticShaderTemplate` -> `SwitchShaderTemplate` -> `BeamAppearance.cpp(506)` loading `lightsaberblade_lava_a.sht`.
+  - **Strategic implication: Plan 11-07's "shader compile + load" boundary is FUNCTIONALLY CLEARED.** The 13-iteration X4016 narrative is closed. The new FATAL is in a different subsystem (D3D11 texture data implementation) and is not a Plan 11-07 concern under the plan's stated exit criterion.
+  - **Wider solution build:** Build #2 (post-AutoLog fix) cascaded into additional pre-existing C++20 strict-lexing issues in tooling and external SOE libraries (BugTool, SwgContentSync, LoginAPI, CommonAPI, atlalloc.h). None of these are on the SwgClient runtime path -- the 11:31-stamped `SwgClient_d.exe` + 12:46-stamped `gl11_d.dll` combo runs correctly because the renderer plugin is loaded as a DLL at runtime, not statically linked into the exe. Wider-than-Direct3d11 build is deferred (not needed to validate Iter-14 or progress Plan 11-07).
+- **Commits:** `96311b480` (Rule E + version bump), `ec0a42cee` (AutoLog chore), plus this docs commit.
+- **Next iteration / plan-level decision:** Plan 11-07's shader-compile boundary is reached. The new wall (`Direct3d11_TextureData::lock` E_INVALIDARG on `CreateTexture2D`) is in a different code area -- D3D11 texture upload, specifically the staging-texture descriptor. Three paths forward, matching the strategic options articulated in `phase11-x4016-overlapping-registers.md`:
+  1. **Continue Plan 11-07 with texture-create as the new wall** -- expand the plan's de-facto scope to "shader compile + load + first-texture-upload"; investigate `Direct3d11_TextureData::lock` translation from D3D9 texture params to `D3D11_TEXTURE2D_DESC`.
+  2. **Close Plan 11-07 as shader-compile-cleared; advance to Plan 11-08** -- the X4016 narrative is the headline win of this plan; texture-upload is naturally Plan 11-05 territory (D3D11 texture data) or a new follow-on plan.
+  3. **Tactical passthrough** -- hardcoded passthrough VS/PS pair for the texture-failing assets; defer texture fidelity to Phase 12.
+  Decision deferred to Kenny / plan-orchestrator.
+
+---
+
 ## Future iterations (placeholders)
 
 To be filled as Kenny surfaces each new FATAL or visual bug. Each entry follows the 6-field shape (Date / Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit).
