@@ -1,7 +1,7 @@
 # Phase 11 — Plan 07 Iteration Log
 
 **Started:** 2026-05-17
-**Status:** In progress — iteration 5 landed; awaiting Kenny smoke for next FATAL boundary
+**Status:** In progress — iteration 6 landed; awaiting Kenny smoke for next FATAL boundary
 
 ## Iteration 1: Author Direct3d11_ShaderImplementationData + Direct3d11_StaticShaderData wrappers (createShaderImplementationGraphicsData FATAL boundary)
 
@@ -265,6 +265,57 @@
   4. **Less likely:** Hard crash from a different code path (access violation outside the shader-compile call chain) -- would need OS exception-handler stack to investigate.
 
 - **Strategic concern (surfaced for forward planning):** if Iter-5 does NOT unblock us, the team is 5+ iterations deep into the legacy-HLSL-vs-SM4+ incompatibility well with no clear bottom in sight (each iteration so far has surfaced a NEW shader-compile error class: missing include resolver -> profile too strict -> lexer keyword reservation -> member-semantic location binding -> ...). Plan 11-07 was scoped as iterative bug-fix, but the iteration cost on Kenny's side is real per round (smoke + check + report). After Iter-5 (especially if it surfaces a 6th distinct X-error class), Kenny + orchestrator should evaluate the Phase 12 **asset re-author** decision point: invest in modernizing the engine's HLSL source bodies to SM4+-clean syntax once, rather than chasing per-construct compat fixes ad-infinitum. The static-analysis pass would enumerate the universe of D3D9-era constructs in the asset HLSL set; that catalog drives a one-time pass to land Phase-12-style `.vsh` source updates that compile clean under `vs_5_0` without BACKWARDS_COMPATIBILITY or the include-handler rewrite. Phase 11 stays scoped to "make the existing assets work"; Phase 12 (if surfaced) is "modernize the asset HLSL source".
+
+---
+
+## Iteration 6: D3DCompile vs_4_0_level_9_3 X3116 `Flags specified both compatibility and strict mode` -- drop D3DCOMPILE_ENABLE_STRICTNESS
+
+- **Date:** 2026-05-18
+- **Symptom:** Kenny smoke launch under `client_d.cfg rasterMajor=11` (post-Iter-5 BACKWARDS_COMPATIBILITY flag addition) FATAL'd at:
+  ```
+  FATAL: Direct3d11_VertexShaderData: D3DCompile vs_4_0_level_9_3 'vertex_program/2d.vsh' failed:
+    error X3116: Flags specified both compatibility and strict mode. These are mutually exclusive
+  ```
+  Crash dump: `stage/SwgClient_d.exe-unknown.0-20260519010725.txt`. Call stack identical to Iter-2/3/4/5 (ShaderEffectList -> StaticShaderTemplate -> ShaderImplementation -> Direct3d11_VertexShaderData::compileOrLoad -> D3DCompile). The error message has no `(line,col)` source location -- it is emitted by d3dcompiler_47 BEFORE any shader source bytes are lexed, at the entry-validation layer that checks Flags1 for impossible combinations. Iter-5 never reached the shader body.
+- **Hypothesis:** Drop `D3DCOMPILE_ENABLE_STRICTNESS` from Flags1 in both compile call sites. The HLSL compiler validates Flags1 at the front door and refuses to begin parsing when the bitfield combines `D3DCOMPILE_ENABLE_STRICTNESS` (`0x800`) with `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` (`0x1000`) -- these are documented in `d3dcompiler.h` as mutually exclusive: STRICTNESS opts out of legacy/deprecated constructs and treats warnings as errors, while BACKWARDS_COMPATIBILITY explicitly opts INTO legacy SM-3-era syntax to compile under SM4+ targets. The two flags express opposite stances on lenience and the compiler refuses to honor both. Iter-5 added BACKWARDS_COMPATIBILITY without inspecting the pre-existing Flags1 value (set to ENABLE_STRICTNESS by Plan 11-05 baseline); the X3116 is the predictable result of that oversight. Pitfall classification: **self-inflicted toolchain-flag conflict** (a sub-class of the Iter-2/3/4/5 toolchain-compat theme, but mechanically attributable to Iter-5's incomplete read-before-write rather than a new D3D9-vs-D3D11 incompatibility class).
+- **Investigation:**
+  - Read the Iter-5 crash dump in full -- confirmed the FATAL message body contains the X3116 code and no source-location prefix (no `2d.vsh(LINE,COL):` and no `.inc(LINE,COL):`). That absence is diagnostic: d3dcompiler_47 emits source-location-prefixed errors during lex/parse, but emits source-location-LESS errors for Flags1 validation failures and other entry-point sanity checks. The X3116 lives in the latter category.
+  - Re-read Plan 11-05 baseline Flags1 setup in `Direct3d11_VertexShaderData.cpp` (the file that Iter-5 modified). Confirmed the baseline read `UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;` then OR'd in DEBUG/SKIP_OPTIMIZATION (debug build) or OPTIMIZATION_LEVEL3 (release build). Iter-5's add `flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;` landed AFTER that initial assignment, so the effective bitfield was `STRICTNESS | DEBUG | SKIP_OPT | BACKWARDS_COMPATIBILITY` (debug build) -- the X3116-trigger combination.
+  - Cross-referenced `d3dcompiler.h` flag definitions:
+    - `D3DCOMPILE_ENABLE_STRICTNESS` = `(1 << 11)` = `0x800` -- "treat all warnings as errors" + "reject legacy/deprecated constructs"
+    - `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` = `(1 << 12)` = `0x1000` -- "enable older shaders to compile to 5_0 targets"
+    - Microsoft documents these as mutually exclusive; d3dcompiler_47 validates the combination at entry and emits X3116 if both are set.
+  - Confirmed `Direct3d11_PixelShaderProgramData.cpp` (the `[[maybe_unused]]` HLSL-PS compile helper -- forward-compat for Phase 12 asset re-author) has the SAME flag-set bug: Iter-5 mirrored the BACKWARDS_COMPATIBILITY addition there too, so when the helper eventually executes (currently dormant) it would produce the same X3116. Iter-6 fixes both files for symmetry.
+  - Reviewed `Direct3d11_ShaderCache::hashSource` (Plan 11-05) -- defines hashed by Name + Definition. `D3D11_REWRITE_VERSION` is the established mechanism for forcing mass cache invalidation when a compile-flag change alters compile output. Bumping `"2"` -> `"3"` invalidates every cached `.cso` that pre-dates the STRICTNESS removal.
+- **Root cause:** Plan 11-07 Iter-5 added `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` to the `flags` bitfield in both D3DCompile call sites without inspecting the existing Flags1 value (Plan 11-05 baseline `D3DCOMPILE_ENABLE_STRICTNESS`). The two flags are mutually exclusive per `d3dcompiler.h` semantics; the combination trips X3116 at d3dcompiler_47's Flags1 validation -- before any shader source is lexed. The intent of Iter-5 was to opt INTO compatibility mode (correct strategic choice for SOE's D3D9-era HLSL); the bug is that the baseline strict-mode flag was left in place when the compatibility flag was added.
+- **Fix:** Remove `D3DCOMPILE_ENABLE_STRICTNESS` from the Flags1 initialization in both compile call sites. Keep `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` -- that's the Iter-5 strategic flag we WANT active. Initialize `flags = 0`, then OR in the DEBUG/SKIP_OPTIMIZATION (debug) or OPTIMIZATION_LEVEL3 (release) flags + BACKWARDS_COMPATIBILITY. Bump `D3D11_REWRITE_VERSION` from `"2"` -> `"3"` so the cache invalidates and D3DCompile rebuilds every blob under the new flag set.
+  - `Direct3d11_VertexShaderData.cpp` -- replaced `UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;` with `UINT flags = 0;` preceded by a 17-line block comment documenting the X3116 root cause, the Iter-5 oversight, the rationale (compat mode is the opposite stance from strictness; we want compat for SOE's D3D9-era HLSL), and the meta-lesson (read existing Flags1 before adding flags).
+  - `Direct3d11_PixelShaderProgramData.cpp` -- parallel change in the `[[maybe_unused]]` HLSL-PS compile helper. Shorter cross-reference comment block pointing back to the VS file's full Iter-6 rationale.
+  - Both files: `defines.push_back({ "D3D11_REWRITE_VERSION",  "2" });` -> `"3"`. Plan 11-05's `hashSource` walks Name + Definition; every stale `.cso` from Iter-5 (any that landed -- compile FATAL'd at the front door so no `.cso` actually wrote) is now a cache miss + rebuild under the corrected flag set.
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` EXIT=0. `gl11_d.dll` rebuild clean.
+  - `MSBuild -t:Direct3d9 -p:Configuration=Debug -p:Platform=Win32` EXIT=0 (D-05 protection; pre-existing MSB8012 carry-forward warnings only).
+  - `MSBuild -t:SwgClient -p:Configuration=Debug -p:Platform=Win32` EXIT=0 (full link clean; MSB8012 carry-forward warnings only).
+  - **D-13 grep clean:** 19 hits for `D3DPOOL_MANAGED|OnLostDevice|OnResetDevice` in `Direct3d11/`, ALL inside `//` comment lines documenting the invariant. Zero functional uses.
+  - **D-05 diff empty:** `git diff 47ddad633..HEAD -- src/engine/client/application/Direct3d9/` returns 0 lines (47ddad633 = Iter-5 log close).
+  - **D-04a maintained:** `Glob Direct3d11_FfpGenerator.*` returns 0 results.
+  - **FFP scan clean:** modified TUs (Direct3d11_VertexShaderData.cpp + Direct3d11_PixelShaderProgramData.cpp) have 0 `#ifdef FFP / D3DTSS_ / D3DTOP_` functional code.
+  - **STUB count delta:** Iter-5 ended at 27 STUBs; Iter-6 ends at **27 STUBs** (unchanged -- this iteration fixes a defect inside Iter-5's own Flags1 change; no new Gl_api slots were wired).
+  - **Compile flags / warnings clean:** zero new warnings on Direct3d11 build under MSVC /W4.
+  - **Cache-invalidation side-effect:** the `D3D11_REWRITE_VERSION` macro version bump changes the hash key for every shader -> mass cache miss on next launch -> D3DCompile rebuilds every blob under the STRICTNESS-cleared / BACKWARDS_COMPATIBILITY-enabled flag set + re-stores. None of Iter-5's compile attempts produced valid `.cso` blobs (compile FATAL'd at the front door before any `store()` call); this is the right behavior per D-03 hybrid contract.
+- **Meta-lesson recorded for future iterations:** when modifying D3DCompile Flags1, ALWAYS read the existing value first and audit the bitfield for conflicts BEFORE adding a new flag. Iter-5 surfaced this lesson by failing to inspect the Plan 11-05 baseline `D3DCOMPILE_ENABLE_STRICTNESS` before adding `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY`; the X3116 was the direct cost of that oversight (one full iteration round-trip with Kenny). Future iterations that touch D3DCompile flag bitfields should:
+  1. Read the existing `UINT flags = ...;` initial assignment and any subsequent `flags |= ...;` updates.
+  2. Cross-reference each pre-existing flag against `d3dcompiler.h` and Microsoft's mutual-exclusivity documentation for the flag being added.
+  3. Land flag additions/removals as an atomic edit that updates the bitfield to the final intended state -- not as a `|=` accumulator that leaves the prior state implicit.
+- **Commits:**
+  - `79e364709`: fix(11-07): drop D3DCOMPILE_ENABLE_STRICTNESS for X3116 (Iter 6)
+- **Awaiting:** Kenny smoke under `client_d.cfg rasterMajor=11` (orchestrator handles cfg edit). Expected outcomes (ranked):
+  1. **Best:** ENFORCE_STRICTNESS gone, BACKWARDS_COMPATIBILITY active -> D3DCompile accepts the X3202 struct-member register-binding shortcut (the original Iter-5 hypothesis) -> `2d.vsh` compiles -> engine progresses past `ShaderEffectList::install`. Next FATAL advances to a cursor / point-sprite slot or visible-window outcome.
+  2. **Likely:** Compatibility mode bypasses X3202 but a different X-error surfaces (semantic issue BACKWARDS_COMPATIBILITY doesn't fully relax). Iter-7 evaluates.
+  3. **Possible:** X3202 still fires even with BACKWARDS_COMPATIBILITY -- would mean member-semantic location binding is on the "strict-only-can't-be-relaxed" side of the compatibility line. Iter-7 falls back to the textual-rewrite plan from Iter-5's notes (rewrite `: c<N>` / `: register(c<N>)` patterns + extend rewrite to main-source staging in `Direct3d11_VertexShaderData::compileOrLoad`).
+  4. **Less likely:** Hard crash from non-shader code path (access violation outside the shader-compile chain) -- would need OS exception-handler stack to investigate.
+
+- **Strategic concern (carried forward from Iter-5):** still on the table. If Iter-6 unblocks compile but a Iter-7 surfaces yet another X-error class, the team is 6+ iterations deep into the legacy-HLSL-vs-SM4+ well. Kenny + orchestrator should evaluate the Phase 12 asset-re-author decision point at the next strategic pause -- a one-time HLSL modernization pass against the entire `.vsh` / `.inc` corpus would compile clean under `vs_5_0` without BACKWARDS_COMPATIBILITY or the include-handler rewrite. Phase 11 stays scoped to "make existing assets work"; Phase 12 (if surfaced) is "modernize the assets".
 
 ---
 
