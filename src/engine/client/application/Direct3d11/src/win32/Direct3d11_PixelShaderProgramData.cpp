@@ -108,11 +108,22 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// -- vertex input stream register. See
 		// Direct3d11_VertexShaderData.cpp's Iter-9 block for the full
 		// rationale.
+		//
+		// Plan 11-07 Iter-10: version bumped 6 -> 7 to ride the VS-side
+		// THROWAWAY diagnostic dump pair added at both Direct3d11_HlslRewrite
+		// entry points. Iter-9 smoke surfaced X4016 (globals-level
+		// "overlapping register semantics" with no line/col info); the
+		// dumps capture rewrite input + output bytes so Iter-11 can
+		// diff them and design the fix. The PS helper has no behavior
+		// change of its own -- the version bump just keeps the PS cache
+		// hash in lockstep with the VS cache hash. See
+		// Direct3d11_VertexShaderData.cpp's Iter-10 block for the full
+		// rationale + dump file paths.
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "6" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "7" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(

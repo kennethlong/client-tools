@@ -69,6 +69,7 @@
 #include "sharedDebug/DebugFlags.h"
 
 #include <cstddef>
+#include <cstdio>     // THROWAWAY ITER-10 DIAGNOSTIC -- fopen/fwrite/fclose for the I/O dumps in both entry points; remove with the dump blocks in Iter-11's first commit
 #include <cstring>
 
 // ======================================================================
@@ -504,6 +505,35 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 		return inBuffer;
 	}
 
+	// THROWAWAY ITER-10 DIAGNOSTIC -- one-shot dump of the FIRST include's
+	// rewrite input bytes. Iter-9's X4016 "overlapping register semantics"
+	// FATAL has no line/col info, so we can't tell from the crash dump
+	// which globals-level register binding is colliding. Dumping the
+	// pre-rewrite bytes of the first include (likely vertex_shader_constants.inc
+	// per Iter-8's main-source dump showing it as the first #include in
+	// 2d.vsh) lets Iter-11's design see whether any `register(c<N>)` /
+	// `: c<N>` declarations are surviving the rewrite. Subsequent calls
+	// fast-path -- s_firstInclude flips on the first invocation, irrespective
+	// of whether the rewrite actually fires below. Remove this block
+	// AND the matching output-side dump below in Iter-11's first commit.
+	static bool s_firstInclude = true;  // THROWAWAY ITER-10 DIAGNOSTIC
+	bool const dumpThisCall = s_firstInclude;  // THROWAWAY ITER-10 DIAGNOSTIC
+	if (s_firstInclude)  // THROWAWAY ITER-10 DIAGNOSTIC
+	{
+		s_firstInclude = false;  // THROWAWAY ITER-10 DIAGNOSTIC
+		FILE *fp = std::fopen("D:/Code/swg-client-v2/stage/shader-rewrite-firstinc-input.txt", "wb");  // THROWAWAY ITER-10 DIAGNOSTIC
+		if (fp)  // THROWAWAY ITER-10 DIAGNOSTIC
+		{
+			std::fwrite(inBuffer, 1, inLength, fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			std::fclose(fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			DEBUG_REPORT_LOG_PRINT(true,  // THROWAWAY ITER-10 DIAGNOSTIC
+				("Direct3d11_HlslRewrite: ITER-10 THROWAWAY -- dumped"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " first-include input '%s' (%zu bytes) to"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " stage/shader-rewrite-firstinc-input.txt\n",  // THROWAWAY ITER-10 DIAGNOSTIC
+				 diagName ? diagName : "<unnamed>", inLength));  // THROWAWAY ITER-10 DIAGNOSTIC
+		}  // THROWAWAY ITER-10 DIAGNOSTIC
+	}  // THROWAWAY ITER-10 DIAGNOSTIC
+
 	std::size_t rewriteCount = 0;
 	std::size_t const rewrittenLen = computeRewrittenLength(
 		inBuffer, inLength, rewriteCount);
@@ -516,6 +546,26 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 			("Direct3d11_HlslRewrite: include-handler fast-path size"
 			 " mismatch rewrittenLen=%zu inLength=%zu",
 			 rewrittenLen, inLength));
+
+		// THROWAWAY ITER-10 DIAGNOSTIC -- fast-path output is byte-identical
+		// to input. Dump the same bytes to the output file so Iter-11 can
+		// compare the two without a special case (the output dump path
+		// always exists when the input dump path exists).
+		if (dumpThisCall)  // THROWAWAY ITER-10 DIAGNOSTIC
+		{
+			FILE *fp = std::fopen("D:/Code/swg-client-v2/stage/shader-rewrite-firstinc-output.txt", "wb");  // THROWAWAY ITER-10 DIAGNOSTIC
+			if (fp)  // THROWAWAY ITER-10 DIAGNOSTIC
+			{
+				std::fwrite(inBuffer, 1, inLength, fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+				std::fclose(fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+				DEBUG_REPORT_LOG_PRINT(true,  // THROWAWAY ITER-10 DIAGNOSTIC
+					("Direct3d11_HlslRewrite: ITER-10 THROWAWAY -- dumped"  // THROWAWAY ITER-10 DIAGNOSTIC
+					 " first-include output (fast-path; identical to input;"  // THROWAWAY ITER-10 DIAGNOSTIC
+					 " %zu bytes) to stage/shader-rewrite-firstinc-output.txt\n",  // THROWAWAY ITER-10 DIAGNOSTIC
+					 inLength));  // THROWAWAY ITER-10 DIAGNOSTIC
+			}  // THROWAWAY ITER-10 DIAGNOSTIC
+		}  // THROWAWAY ITER-10 DIAGNOSTIC
+
 		outLength = inLength;
 		return inBuffer;
 	}
@@ -526,6 +576,26 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 
 	// Discard the original (we own it via the include-handler contract).
 	delete[] inBuffer;
+
+	// THROWAWAY ITER-10 DIAGNOSTIC -- dump the post-rewrite output bytes
+	// (what D3DCompile actually sees). One-shot per the s_firstInclude gate
+	// captured at function entry above. Iter-11 diffs input vs output to
+	// identify which (if any) globals-level register bindings survived
+	// the rewrite and could cause the X4016 register collision.
+	if (dumpThisCall)  // THROWAWAY ITER-10 DIAGNOSTIC
+	{
+		FILE *fp = std::fopen("D:/Code/swg-client-v2/stage/shader-rewrite-firstinc-output.txt", "wb");  // THROWAWAY ITER-10 DIAGNOSTIC
+		if (fp)  // THROWAWAY ITER-10 DIAGNOSTIC
+		{
+			std::fwrite(outBuffer, 1, rewrittenLen, fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			std::fclose(fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			DEBUG_REPORT_LOG_PRINT(true,  // THROWAWAY ITER-10 DIAGNOSTIC
+				("Direct3d11_HlslRewrite: ITER-10 THROWAWAY -- dumped"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " first-include output (%zu rewrites; %zu bytes) to"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " stage/shader-rewrite-firstinc-output.txt\n",  // THROWAWAY ITER-10 DIAGNOSTIC
+				 rewriteCount, rewrittenLen));  // THROWAWAY ITER-10 DIAGNOSTIC
+		}  // THROWAWAY ITER-10 DIAGNOSTIC
+	}  // THROWAWAY ITER-10 DIAGNOSTIC
 
 	DEBUG_REPORT_LOG_PRINT(true,
 		("Direct3d11_HlslRewrite: include '%s' rewritten"
@@ -555,6 +625,36 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 	unsigned char const *srcU =
 		reinterpret_cast<unsigned char const *>(src);
 
+	// THROWAWAY ITER-10 DIAGNOSTIC -- one-shot dump of the FIRST main-source
+	// rewrite input bytes. Iter-8 also dumped main-source input (to
+	// stage/shader-debug-first-source.txt, reverted in Iter-9); Iter-10
+	// repeats that capture under a new path AND adds a matching output
+	// dump so Iter-11 can diff the two and see exactly what D3DCompile
+	// received vs what the engine handed in. The Iter-9 X4016 "overlapping
+	// register semantics" error has no line/col info, so the input/output
+	// pair on this entry point is the primary diagnostic surface (the
+	// include-handler dump on the other entry point is the secondary
+	// surface, covering header content like vertex_shader_constants.inc).
+	// Subsequent calls fast-path. Remove this block AND the matching
+	// output-side dump below in Iter-11's first commit.
+	static bool s_firstMain = true;  // THROWAWAY ITER-10 DIAGNOSTIC
+	bool const dumpThisCall = s_firstMain;  // THROWAWAY ITER-10 DIAGNOSTIC
+	if (s_firstMain)  // THROWAWAY ITER-10 DIAGNOSTIC
+	{
+		s_firstMain = false;  // THROWAWAY ITER-10 DIAGNOSTIC
+		FILE *fp = std::fopen("D:/Code/swg-client-v2/stage/shader-rewrite-main-input.txt", "wb");  // THROWAWAY ITER-10 DIAGNOSTIC
+		if (fp)  // THROWAWAY ITER-10 DIAGNOSTIC
+		{
+			std::fwrite(src, 1, length, fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			std::fclose(fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			DEBUG_REPORT_LOG_PRINT(true,  // THROWAWAY ITER-10 DIAGNOSTIC
+				("Direct3d11_HlslRewrite: ITER-10 THROWAWAY -- dumped"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " first-main-source input '%s' (%zu bytes) to"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " stage/shader-rewrite-main-input.txt\n",  // THROWAWAY ITER-10 DIAGNOSTIC
+				 diagName ? diagName : "<unnamed>", length));  // THROWAWAY ITER-10 DIAGNOSTIC
+		}  // THROWAWAY ITER-10 DIAGNOSTIC
+	}  // THROWAWAY ITER-10 DIAGNOSTIC
+
 	std::size_t rewriteCount = 0;
 	std::size_t const rewrittenLen = computeRewrittenLength(
 		srcU, length, rewriteCount);
@@ -568,6 +668,25 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 		length,
 		reinterpret_cast<unsigned char *>(outVec.data()),
 		rewrittenLen);
+
+	// THROWAWAY ITER-10 DIAGNOSTIC -- dump the post-rewrite output bytes
+	// (what D3DCompile actually sees). One-shot per the s_firstMain gate
+	// captured at function entry. Iter-11 diffs input vs output to
+	// identify whether `: register(c<N>)` directives survive the rewrite.
+	if (dumpThisCall)  // THROWAWAY ITER-10 DIAGNOSTIC
+	{
+		FILE *fp = std::fopen("D:/Code/swg-client-v2/stage/shader-rewrite-main-output.txt", "wb");  // THROWAWAY ITER-10 DIAGNOSTIC
+		if (fp)  // THROWAWAY ITER-10 DIAGNOSTIC
+		{
+			std::fwrite(outVec.data(), 1, rewrittenLen, fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			std::fclose(fp);  // THROWAWAY ITER-10 DIAGNOSTIC
+			DEBUG_REPORT_LOG_PRINT(true,  // THROWAWAY ITER-10 DIAGNOSTIC
+				("Direct3d11_HlslRewrite: ITER-10 THROWAWAY -- dumped"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " first-main-source output (%zu rewrites; %zu bytes) to"  // THROWAWAY ITER-10 DIAGNOSTIC
+				 " stage/shader-rewrite-main-output.txt\n",  // THROWAWAY ITER-10 DIAGNOSTIC
+				 rewriteCount, rewrittenLen));  // THROWAWAY ITER-10 DIAGNOSTIC
+		}  // THROWAWAY ITER-10 DIAGNOSTIC
+	}  // THROWAWAY ITER-10 DIAGNOSTIC
 
 	if (rewriteCount != 0)
 	{

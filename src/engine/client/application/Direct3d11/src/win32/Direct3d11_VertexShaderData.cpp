@@ -282,6 +282,44 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// stripping the `register(vN)` hint drops a binding the SM4+
 	// compiler doesn't consume anyway.
 	//
+	// Plan 11-07 Iter-10: version bumped 6 -> 7. Iter-9 smoke surfaced
+	// a NEW FATAL class with no line/col info:
+	//   error X4016: overlapping register semantics not yet
+	//                implemented 'c0'
+	// X4016 is a globals-level register collision (two declarations
+	// binding to constant register c0). Rules B/C now match all 6
+	// canonical D3D HLSL register-type letters including `c`, so any
+	// surviving `: register(c0)` / `: c0` directives SHOULD be stripped.
+	// The fact that X4016 fires means either (a) our patterns miss some
+	// surface syntax, (b) macros expand to `register(...)` AFTER our
+	// rewrite runs (we rewrite before D3DCompile preprocesses), or
+	// (c) a syntax variant we haven't seen.
+	//
+	// Iter-10 is a PURE DIAGNOSTIC THROWAWAY iteration that adds I/O
+	// dumps at both Direct3d11_HlslRewrite entry points -- one-shot
+	// input + output captures to:
+	//   stage/shader-rewrite-main-input.txt   (applyToMainSource input)
+	//   stage/shader-rewrite-main-output.txt  (applyToMainSource output)
+	//   stage/shader-rewrite-firstinc-input.txt   (first include input)
+	//   stage/shader-rewrite-firstinc-output.txt  (first include output)
+	// Gated by static-bool flags (s_firstMain / s_firstInclude); fire
+	// only on the first call to each entry point. Marked with
+	// `// THROWAWAY ITER-10 DIAGNOSTIC` so Iter-11's first commit can
+	// grep-clean revert them. Iter-11 will read the dumps to design
+	// the actual X4016 fix.
+	//
+	// Cache implications: this iteration changes NO rewrite-rule
+	// behavior -- the dumps are read-only side-effects. But the dumps
+	// only fire on D3DCompile cache MISS (the rewrite code path is
+	// inside the cache-miss branch). If REWRITE_VERSION stayed at "6",
+	// every shader would hit the .cso cache from Iter-9 and the dumps
+	// would never fire. Bumping to "7" forces a mass cache miss,
+	// causes the dumps to capture, and gives Iter-11 the ground-truth
+	// data it needs. The post-rewrite bytes are byte-identical to
+	// Iter-9 (rules unchanged), so the new .cso blobs after this
+	// launch are effectively the same content Iter-9's would have
+	// been; no semantic shift, just diagnostic capture.
+	//
 	// Every cached .cso from any prior iteration is now a mass miss;
 	// D3DCompile rebuilds every blob under the new effective source
 	// bytes + re-stores.
@@ -289,7 +327,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "6" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "7" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
