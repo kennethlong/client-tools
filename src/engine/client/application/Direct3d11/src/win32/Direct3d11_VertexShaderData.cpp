@@ -257,15 +257,14 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// Plan 11-07 Iter-8: version bumped 4 -> 5. Iter-7 smoke produced
 	// the IDENTICAL X3202 at the identical `2d.vsh(8,44-45)` site,
 	// meaning the actual register-type letter on line 8 col 44-45 is
-	// NOT `c` (which was Iter-7's speculative choice). Iter-8 expands
-	// Rules B/C to match ALL 5 canonical D3D11 register-type letters
-	// `[bcstu]`: `b#` (cbuffer), `t#` (texture/SRV), `s#` (sampler),
-	// `u#` (UAV), `c#` (constant). Iter-8 also lands a THROWAWAY
-	// diagnostic dump in Direct3d11_HlslRewrite::applyToMainSource so
-	// the first input source is written to stage/shader-debug-first-
-	// source.txt -- the dev team can read it to learn what line 8
-	// actually says and design the correct rule if Iter-8 itself
-	// doesn't unblock the X3202.
+	// NOT `c` (which was Iter-7's speculative choice). Iter-8 expanded
+	// Rules B/C to match the (then-canonical) 5 D3D11 register-type
+	// letters `[bcstu]`: `b#` (cbuffer), `t#` (texture/SRV), `s#`
+	// (sampler), `u#` (UAV), `c#` (constant). Iter-8 also landed a
+	// THROWAWAY diagnostic dump in
+	// Direct3d11_HlslRewrite::applyToMainSource that wrote the first
+	// applyToMainSource input bytes to stage/shader-debug-first-
+	// source.txt; the dump was reverted in Iter-9's first commit.
 	//
 	// Every cached .cso from any prior iteration is now a mass miss;
 	// D3DCompile rebuilds every blob under the new effective source

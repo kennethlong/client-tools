@@ -67,7 +67,6 @@
 #include "sharedDebug/DebugFlags.h"
 
 #include <cstddef>
-#include <cstdio>   // THROWAWAY Iter-8 -- diagnostic dump (revert in Iter-9)
 #include <cstring>
 
 // ======================================================================
@@ -522,66 +521,6 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 
 	if (!src || length == 0)
 		return;
-
-	// ------------------------------------------------------------------
-	// THROWAWAY Iter-8 diagnostic dump -- REVERT IN ITER-9.
-	//
-	// One-shot: on the very first call to applyToMainSource, write the
-	// raw INPUT source bytes (pre-rewrite) to a fixed path under
-	// `stage/`. Purpose: Iter-4..Iter-7 have repeatedly FATAL'd at
-	// `2d.vsh(8,44-45) error X3202: location semantics cannot be
-	// specified on members`, but the actual line-8 contents of `2d.vsh`
-	// are not visible to the dev team because the source ships inside
-	// a TRE archive (the on-disk `stage/vertex_program/` doesn't even
-	// exist -- the path is a synthetic D3DCompile construct from the
-	// displayName argument).
-	//
-	// This dump captures whatever source the engine handed us so the
-	// next iteration can read the actual file content (in particular
-	// line 8 column 44-45) and design the correct rewrite rule against
-	// concrete data instead of speculation.
-	//
-	// The first call is whatever shader loads first. Today that is the
-	// VS for `shader/2d_vertexcolor.sht` -> `vertex_program/2d.vsh` per
-	// the Iter-7 crash dump tail (`ShaderTemplate_Iff:` line). If a
-	// different first shader surfaces later, dump still captures
-	// whatever it is -- the file content alone is enough to decode.
-	//
-	// One-shot is intentional: dumping every shader spams the filesystem
-	// and obscures the data point we actually need. A static bool gate
-	// is the simplest possible implementation.
-	//
-	// File path: `stage/shader-debug-first-source.txt` (gitignored under
-	// the existing `stage/` rule).
-	//
-	// Mirrors the Plan 11-01 THROWAWAY D-04 pattern: diagnostic
-	// instrumentation that lands as part of an iteration to unblock the
-	// next iteration's design, and gets reverted as the first commit of
-	// that next iteration. Iter-9 should remove this entire block plus
-	// the `#include <cstdio>` line and revert all related preamble
-	// comments.
-	{
-		static bool dumped = false;
-		if (!dumped)
-		{
-			dumped = true;
-			FILE *fp = std::fopen(
-				"D:/Code/swg-client-v2/stage/shader-debug-first-source.txt",
-				"wb");
-			if (fp)
-			{
-				std::fwrite(src, 1, length, fp);
-				std::fclose(fp);
-				DEBUG_REPORT_LOG_PRINT(true,
-					("Direct3d11_HlslRewrite (THROWAWAY Iter-8): dumped"
-					 " first applyToMainSource input '%s' (%zu bytes)"
-					 " to stage/shader-debug-first-source.txt\n",
-					 diagName ? diagName : "<unnamed>", length));
-			}
-		}
-	}
-	// END THROWAWAY Iter-8 diagnostic dump.
-	// ------------------------------------------------------------------
 
 	unsigned char const *srcU =
 		reinterpret_cast<unsigned char const *>(src);
