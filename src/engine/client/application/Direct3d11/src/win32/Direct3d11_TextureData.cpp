@@ -81,6 +81,27 @@ static const DXGI_FORMAT translationTable[] =
 static_assert(sizeof(translationTable) / sizeof(translationTable[0]) == (TF_Count + 2),
               "translationTable must have one entry per TextureFormat enum value (TF_ARGB_8888..TF_Native)");
 
+// Identifies the block-compressed DXGI families (BC1..BC7). All BC formats
+// use a 4x4 pixel block as the indivisible storage unit; D3D11 strict-
+// rejects USAGE_STAGING CreateTexture2D/CreateTexture3D when Width or
+// Height is not a multiple of 4 for these formats (D3D9 silently tolerated
+// the sub-block bottom-of-chain mip levels). Used in lock() to pad the
+// staging-texture descriptor up to the block boundary; the BC block grid
+// covers the same data regardless of whether the locked mip's logical
+// dimensions are sub-block, so RowPitch / engine payload / unlock
+// CopySubresourceRegion all behave identically.
+//
+// Range coverage:
+//   BC1_TYPELESS (70) .. BC5_SNORM (84)       -- BC1/BC2/BC3/BC4/BC5
+//   BC6H_TYPELESS (94) .. BC7_UNORM_SRGB (99) -- BC6H/BC7
+// Values 85..93 are non-BC formats (B5G6R5, BGRA8, etc.) interleaved
+// between the two BC ranges, so a single >= && <= check is incorrect.
+static bool isBlockCompressedFormat(DXGI_FORMAT fmt)
+{
+	return (fmt >= DXGI_FORMAT_BC1_TYPELESS && fmt <= DXGI_FORMAT_BC5_SNORM)
+	    || (fmt >= DXGI_FORMAT_BC6H_TYPELESS && fmt <= DXGI_FORMAT_BC7_UNORM_SRGB);
+}
+
 // ======================================================================
 // install -- create MemoryBlockManager + probe DXGI_FORMAT support.
 // ======================================================================
@@ -462,9 +483,21 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 
 	if (m_isVolumeMap)
 	{
+		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+		// strict-rejects USAGE_STAGING with sub-block W or H. Depth has no
+		// block-alignment rule (BC blocks are 4x4 in the X/Y plane only).
+		// See isBlockCompressedFormat() comment for the full rationale.
+		UINT stagingWidth  = static_cast<UINT>(lockData.getWidth());
+		UINT stagingHeight = static_cast<UINT>(lockData.getHeight());
+		if (isBlockCompressedFormat(native))
+		{
+			stagingWidth  = (stagingWidth  + 3u) & ~3u;
+			stagingHeight = (stagingHeight + 3u) & ~3u;
+		}
+
 		D3D11_TEXTURE3D_DESC desc = {};
-		desc.Width          = static_cast<UINT>(lockData.getWidth());
-		desc.Height         = static_cast<UINT>(lockData.getHeight());
+		desc.Width          = stagingWidth;
+		desc.Height         = stagingHeight;
 		desc.Depth          = static_cast<UINT>(lockData.getDepth());
 		desc.MipLevels      = 1;
 		desc.Format         = native;
@@ -489,9 +522,30 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 	}
 	else
 	{
+		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+		// strict-rejects USAGE_STAGING CreateTexture2D when W or H is < 4 for
+		// BC formats. Iter-15 diagnostic confirmed this fires at the bottom-
+		// of-chain mips of BC3 textures: a 256x64 BC3 (DXT5) texture's mip 5
+		// is 8x2, and CreateTexture2D returns E_INVALIDARG. D3D9 silently
+		// tolerated sub-block dims. The BC block grid covers the same data
+		// regardless of whether the logical mip dims are sub-block, so the
+		// engine's RowPitch read and payload write are identical, and the
+		// unlock CopySubresourceRegion (with pSrcBox = nullptr) copies the
+		// whole staging into the destination mip subresource without any
+		// changes -- both source and destination resolve to the same BC
+		// block grid. See isBlockCompressedFormat() comment for the full
+		// DXGI range coverage rationale.
+		UINT stagingWidth  = static_cast<UINT>(lockData.getWidth());
+		UINT stagingHeight = static_cast<UINT>(lockData.getHeight());
+		if (isBlockCompressedFormat(native))
+		{
+			stagingWidth  = (stagingWidth  + 3u) & ~3u;
+			stagingHeight = (stagingHeight + 3u) & ~3u;
+		}
+
 		D3D11_TEXTURE2D_DESC desc = {};
-		desc.Width            = static_cast<UINT>(lockData.getWidth());
-		desc.Height           = static_cast<UINT>(lockData.getHeight());
+		desc.Width            = stagingWidth;
+		desc.Height           = stagingHeight;
 		desc.MipLevels        = 1;
 		desc.ArraySize        = 1;
 		desc.Format           = native;
