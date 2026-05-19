@@ -294,39 +294,56 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// produced.
 	//
 	// Plan 11-07 Iter-11: version bumped 8 -> 9 to ride the context-aware
-	// Rules B/C revision. The Iter-10/11 dumps showed
-	// vertex_shader_constants.inc was being OVER-STRIPPED: ~15 GLOBAL
-	// declarations had their `: register(cN)` bindings deleted (e.g.
-	// `float4x4 objectWorldCameraProjectionMatrix : register(c0)` ->
-	// `float4x4 objectWorldCameraProjectionMatrix               `). With
-	// the bindings gone, D3DCompile's auto-allocator could not produce
-	// non-overlapping placements for the resulting unannotated globals
-	// (especially the multi-register `LightData lightData : register(c16)`
-	// struct, which contains nested arrays of point/parallel/spot lights
-	// spanning tens of constant registers). It emitted X4016 "overlapping
-	// register semantics not yet implemented 'c0'".
+	// Rules B/C revision. Iter-10/11 dumps showed vertex_shader_constants
+	// .inc was being OVER-STRIPPED on its ~15 GLOBAL `: register(cN)`
+	// declarations (including the multi-register `LightData lightData :
+	// register(c16)` struct), defeating D3DCompile's auto-allocator and
+	// producing X4016 "overlapping register semantics not yet implemented
+	// 'c0'". Iter-11 added a `sawColonThisLine` line-scoped flag to Rules
+	// B/C: strip only on SECOND-or-later `:` on the same line (struct-
+	// member stacked-semantic shape, SM4+ rejects); preserve on FIRST `:`
+	// of a line (global-declaration register binding, SM4+ accepts). See
+	// the Iter-11 entry in 11-07-iteration-log.md for the diagnosis
+	// narrative + the Iter-11 fix description.
 	//
-	// Iter-11 fix: Rules B/C now check `sawColonThisLine` before firing.
-	// On the FIRST `:` of a line (a global-declaration register binding
-	// like the ones in vertex_shader_constants.inc), the rules no-op and
-	// the binding is preserved verbatim. On a SECOND or later `:` on the
-	// same line (the SM4+-illegal stacked-semantic struct-member shape
-	// like `: POSITION0 : register(v0)` in 2d.vsh), the rules strip as
-	// before. See Direct3d11_HlslRewrite.cpp for the matcher + scanner-
-	// state implementation; see Direct3d11_HlslRewrite.h preamble for
-	// the rule-evolution narrative.
+	// Plan 11-07 Iter-12: version bumped 9 -> 10 alongside a PURE
+	// DIAGNOSTIC THROWAWAY iteration that re-adds the Iter-10/11 rewrite
+	// I/O dump pair (counter-extended to 5 includes). Iter-11's smoke
+	// FATAL'd at the IDENTICAL X4016 signature as Iter-10 (crash dump
+	// stage/SwgClient_d.exe-unknown.0-20260519145821.txt) despite the
+	// context-aware rule fix. Three hypotheses are in play and none can
+	// be distinguished from the crash dump alone:
+	//   (1) Iter-11 still over-strips due to a subtle bug in the
+	//       `sawColonThisLine` state machine (set/reset edge cases vs
+	//       the Rule-B/C byte-stepping interaction).
+	//   (2) Iter-11 correctly preserves globals, but D3DCompile
+	//       interprets the preserved bindings as overlapping (implicit
+	//       $Globals cbuffer competing with explicit `register(c0)`,
+	//       or BACKWARDS_COMPATIBILITY mode quirks).
+	//   (3) Something else entirely (new declaration class we haven't
+	//       seen; post-rewrite content surprises).
+	// The dumps capture to stage/shader-rewrite-{main,inc-0..4}-
+	// {input,output}.txt and are reverted in Iter-13's first commit per
+	// the established THROWAWAY closeout pattern (mirrors the Iter-8 ->
+	// Iter-9 and Iter-10 -> Iter-11 reverts). The rewrite rules
+	// themselves are UNCHANGED between Iter-11 and Iter-12 -- this
+	// iteration adds no rule coverage, only diagnostic output. See the
+	// Iter-12 entry in 11-07-iteration-log.md for the diagnostic-purpose
+	// narrative + expected outcomes per hypothesis.
 	//
-	// Cache implications: REWRITE_VERSION 8 -> 9 forces a mass cache miss
-	// on next launch; D3DCompile rebuilds every blob under the new
-	// context-aware Rules B/C and re-stores. Iter-10 `.cso` blobs would
-	// have FATAL'd at X4016 before any `store()` call so there are no
-	// existing entries to invalidate -- the bump just makes the cache-
-	// hash story honest about the rule change.
+	// Cache implications: REWRITE_VERSION 9 -> 10 forces a mass cache miss
+	// on next launch; D3DCompile rebuilds every blob with byte-identical
+	// post-rewrite content from Iter-11 (rules unchanged) + re-stores.
+	// Iter-11 `.cso` blobs (none exist -- compile FATAL'd at X4016 before
+	// any `store()` call) are unaffected. The bump is essential because
+	// the dumps live INSIDE the cache-miss branch -- without it, any
+	// cached blob from a prior compile would short-circuit the rewrite
+	// + the dumps would never fire.
 	std::vector<D3D_SHADER_MACRO> defines;
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "9" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "10" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
