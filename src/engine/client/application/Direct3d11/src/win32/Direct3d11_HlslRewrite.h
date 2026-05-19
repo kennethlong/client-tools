@@ -40,22 +40,36 @@
 //     uniqueness without colliding with any existing identifier in the
 //     engine HLSL corpus.
 //
-//   Rule B (Iter-7 NEW -- struct-member register-binding shortcut):
-//     Match `:\s*c\d+\b` (e.g., `: c4`, `:c12`) becomes the same number
-//     of whitespace characters (so the column offset on subsequent
-//     tokens is preserved -- error messages with `(line,col)` still
-//     point at the right place).
+//   Rule B (Iter-7 origin; Iter-8 expanded register-type set):
+//     Match `:\s*[bcstu]\d+\b` (e.g., `: c4`, `:c12`, `: s0`, `: t3`,
+//     `: b0`, `: u1`) becomes the same number of whitespace characters
+//     (so the column offset on subsequent tokens is preserved -- error
+//     messages with `(line,col)` still point at the right place).
 //
-//   Rule C (Iter-7 NEW -- explicit register() form):
-//     Match `:\s*register\s*\(\s*c\d+\s*\)` (e.g., `: register(c4)`,
-//     `:register( c12 )`) becomes the same number of whitespace
-//     characters. Same column-preservation rationale as Rule B.
+//   Rule C (Iter-7 origin; Iter-8 expanded register-type set):
+//     Match `:\s*register\s*\(\s*[bcstu]\d+\s*\)` (e.g.,
+//     `: register(c4)`, `:register( s0 )`, `: register(t3)`) becomes
+//     the same number of whitespace characters. Same column-
+//     preservation rationale as Rule B.
 //
-//     Case sensitivity for Rules B/C: the literal `c` and `register`
-//     must be lowercase. `: COLOR` / `: COLOR0` / `: COLOR1` are user
-//     semantics that legitimately appear on struct members and MUST
-//     NOT be touched. HLSL is case-sensitive so the lowercase regex
-//     letters distinguish them naturally.
+//   Register-type letters covered: `b#` (cbuffer), `t#` (texture/SRV),
+//   `s#` (sampler), `u#` (UAV), `c#` (constant). All 5 are reserved
+//   register types per the HLSL reference; struct members may not
+//   carry any of these as semantics under SM4+ (only globals,
+//   cbuffer-members-with-packoffset, and sampler/texture declarations
+//   can). Iter-7 hardcoded just `c` based on a speculative read of
+//   the X3202 site; Iter-7 smoke produced the identical X3202 at the
+//   identical site, proving the letter is NOT `c`. Iter-8 expanded to
+//   the full set.
+//
+//   Case sensitivity for Rules B/C: the register-type letter and the
+//   literal `register` keyword must be lowercase. `: COLOR` /
+//   `: COLOR0` / `: COLOR1` / `: SV_TARGET` are user/system semantics
+//   that legitimately appear on struct members and MUST NOT be
+//   touched. HLSL is case-sensitive so the lowercase regex letters
+//   distinguish them naturally. The Iter-8 expansion does NOT widen
+//   case sensitivity -- uppercase `B0` / `S0` / `T0` etc. would not
+//   match.
 //
 // Semantic-loss caveat (Iter-7 forward-looking note):
 //   Rules B and C DROP the register-binding metadata entirely. When

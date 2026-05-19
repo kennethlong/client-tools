@@ -14,12 +14,15 @@
 //        On match -- emit the keyword followed by the `_id` suffix; output
 //        grows by 3 bytes per match. Left + right boundary checks ensure
 //        `endpoint` / `pointSize` / `linear` / etc. don't trigger.
-//     2. Rule B: `:\s*c\d+\b` -- legacy struct-member register-binding
-//        shortcut (Iter-7 NEW). On match -- emit the same number of
-//        spaces; output size is unchanged from this rule.
-//     3. Rule C: `:\s*register\s*\(\s*c\d+\s*\)` -- explicit
-//        register() form (Iter-7 NEW). On match -- emit the same number
-//        of spaces; output size unchanged from this rule.
+//     2. Rule B: `:\s*[bcstu]\d+\b` -- legacy struct-member register-
+//        binding shortcut (Iter-7 origin; Iter-8 expanded register-type
+//        set from `c` only to all 5 D3D11 HLSL register types b/c/s/t/u).
+//        On match -- emit the same number of spaces; output size unchanged
+//        from this rule.
+//     3. Rule C: `:\s*register\s*\(\s*[bcstu]\d+\s*\)` -- explicit
+//        register() form (Iter-7 origin; Iter-8 expanded the same way).
+//        On match -- emit the same number of spaces; output size unchanged
+//        from this rule.
 //   No match -- emit the single byte unchanged + advance one position.
 //
 // Order matters: Rule C is tried BEFORE Rule B because Rule C is a
@@ -64,6 +67,7 @@
 #include "sharedDebug/DebugFlags.h"
 
 #include <cstddef>
+#include <cstdio>   // THROWAWAY Iter-8 -- diagnostic dump (revert in Iter-9)
 #include <cstring>
 
 // ======================================================================
@@ -125,6 +129,30 @@ namespace
 		return (c == ' ') || (c == '\t') || (c == '\r') || (c == '\n');
 	}
 
+	// D3D11 HLSL register-type letter (used by Rules B/C). The full set
+	// per MSDN / HLSL reference:
+	//   `b#` -- constant buffer (cbuffer) register
+	//   `t#` -- texture / SRV register
+	//   `s#` -- sampler register
+	//   `u#` -- UAV (unordered access view) register (D3D11 only)
+	//   `c#` -- single constant register (D3D9 legacy + D3D11 cbuffer-
+	//           member packoffset offset)
+	//
+	// Iter-7 originally hardcoded just `c` here because the X3202 error
+	// site visible at the time (`2d.vsh(8,44-45)`) was speculatively
+	// thought to be a `: c<N>` binding. Iter-7's smoke produced the
+	// identical X3202 at the identical site, meaning the actual letter
+	// at line 8 col 44 was NOT `c`. Iter-8 expands the set to all 5
+	// canonical D3D11 register-type letters so a `: s0` (sampler) /
+	// `: t0` (texture/SRV) / `: b0` (cbuffer) / `: u0` (UAV) binding
+	// on a struct member also gets stripped. HLSL is case-sensitive;
+	// these letters are lowercase by HLSL convention -- uppercase user
+	// semantics like `: COLOR0` / `: SV_POSITION` are not affected.
+	inline bool isHlslRegisterTypeLetter(unsigned char c)
+	{
+		return (c == 'b') || (c == 'c') || (c == 's') || (c == 't') || (c == 'u');
+	}
+
 	// ------------------------------------------------------------------
 	// Match helpers for Rules A/B/C. Each returns 0 on no-match, else
 	// the number of input bytes the match consumes (i.e., how far to
@@ -172,7 +200,7 @@ namespace
 		return 0;
 	}
 
-	// Rule C: `:\s*register\s*\(\s*c\d+\s*\)`
+	// Rule C: `:\s*register\s*\(\s*[bcstu]\d+\s*\)`
 	// Tried BEFORE Rule B (both start at `:`; Rule C is the more-specific
 	// longer match). Returns total match length (from `:` through the
 	// closing `)`) on match else 0.
@@ -180,6 +208,10 @@ namespace
 	// Implementation walks the input strictly forward, never backtracking,
 	// because the pattern is purely sequential: `:`, then optional
 	// whitespace, then the literal `register` token, etc.
+	//
+	// Iter-8: the single `c` register-type letter is now any of the 5
+	// canonical D3D11 register-type letters `[bcstu]` -- see
+	// isHlslRegisterTypeLetter() above for the rationale.
 	std::size_t tryMatchRuleC(
 		unsigned char const *src,
 		std::size_t          length,
@@ -222,8 +254,9 @@ namespace
 		while (i < length && isHlslSpace(src[i]))
 			++i;
 
-		// `c` (lowercase, single char)
-		if (i >= length || src[i] != 'c')
+		// `[bcstu]` (single register-type letter, lowercase). Iter-8
+		// expanded set from just `c`.
+		if (i >= length || !isHlslRegisterTypeLetter(src[i]))
 			return 0;
 		++i;
 
@@ -246,10 +279,14 @@ namespace
 		return i - pos;
 	}
 
-	// Rule B: `:\s*c\d+\b`
+	// Rule B: `:\s*[bcstu]\d+\b`
 	// Tried AFTER Rule C at the same `:` site so the longer, more-specific
 	// register() form wins when present. Returns total match length on
 	// match else 0.
+	//
+	// Iter-8: the single `c` register-type letter is now any of the 5
+	// canonical D3D11 register-type letters `[bcstu]` -- see
+	// isHlslRegisterTypeLetter() above for the rationale.
 	std::size_t tryMatchRuleB(
 		unsigned char const *src,
 		std::size_t          length,
@@ -264,8 +301,9 @@ namespace
 		while (i < length && isHlslSpace(src[i]))
 			++i;
 
-		// `c` (lowercase)
-		if (i >= length || src[i] != 'c')
+		// `[bcstu]` (single register-type letter, lowercase). Iter-8
+		// expanded set from just `c`.
+		if (i >= length || !isHlslRegisterTypeLetter(src[i]))
 			return 0;
 		++i;
 
@@ -484,6 +522,66 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 
 	if (!src || length == 0)
 		return;
+
+	// ------------------------------------------------------------------
+	// THROWAWAY Iter-8 diagnostic dump -- REVERT IN ITER-9.
+	//
+	// One-shot: on the very first call to applyToMainSource, write the
+	// raw INPUT source bytes (pre-rewrite) to a fixed path under
+	// `stage/`. Purpose: Iter-4..Iter-7 have repeatedly FATAL'd at
+	// `2d.vsh(8,44-45) error X3202: location semantics cannot be
+	// specified on members`, but the actual line-8 contents of `2d.vsh`
+	// are not visible to the dev team because the source ships inside
+	// a TRE archive (the on-disk `stage/vertex_program/` doesn't even
+	// exist -- the path is a synthetic D3DCompile construct from the
+	// displayName argument).
+	//
+	// This dump captures whatever source the engine handed us so the
+	// next iteration can read the actual file content (in particular
+	// line 8 column 44-45) and design the correct rewrite rule against
+	// concrete data instead of speculation.
+	//
+	// The first call is whatever shader loads first. Today that is the
+	// VS for `shader/2d_vertexcolor.sht` -> `vertex_program/2d.vsh` per
+	// the Iter-7 crash dump tail (`ShaderTemplate_Iff:` line). If a
+	// different first shader surfaces later, dump still captures
+	// whatever it is -- the file content alone is enough to decode.
+	//
+	// One-shot is intentional: dumping every shader spams the filesystem
+	// and obscures the data point we actually need. A static bool gate
+	// is the simplest possible implementation.
+	//
+	// File path: `stage/shader-debug-first-source.txt` (gitignored under
+	// the existing `stage/` rule).
+	//
+	// Mirrors the Plan 11-01 THROWAWAY D-04 pattern: diagnostic
+	// instrumentation that lands as part of an iteration to unblock the
+	// next iteration's design, and gets reverted as the first commit of
+	// that next iteration. Iter-9 should remove this entire block plus
+	// the `#include <cstdio>` line and revert all related preamble
+	// comments.
+	{
+		static bool dumped = false;
+		if (!dumped)
+		{
+			dumped = true;
+			FILE *fp = std::fopen(
+				"D:/Code/swg-client-v2/stage/shader-debug-first-source.txt",
+				"wb");
+			if (fp)
+			{
+				std::fwrite(src, 1, length, fp);
+				std::fclose(fp);
+				DEBUG_REPORT_LOG_PRINT(true,
+					("Direct3d11_HlslRewrite (THROWAWAY Iter-8): dumped"
+					 " first applyToMainSource input '%s' (%zu bytes)"
+					 " to stage/shader-debug-first-source.txt\n",
+					 diagName ? diagName : "<unnamed>", length));
+			}
+		}
+	}
+	// END THROWAWAY Iter-8 diagnostic dump.
+	// ------------------------------------------------------------------
 
 	unsigned char const *srcU =
 		reinterpret_cast<unsigned char const *>(src);
