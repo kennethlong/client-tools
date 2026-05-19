@@ -1,7 +1,7 @@
 # Phase 11 — Plan 07 Iteration Log
 
 **Started:** 2026-05-17
-**Status:** In progress — iteration 7 landed; awaiting Kenny smoke for next FATAL boundary
+**Status:** In progress — iteration 8 landed; awaiting Kenny smoke for next FATAL boundary
 
 ## Iteration 1: Author Direct3d11_ShaderImplementationData + Direct3d11_StaticShaderData wrappers (createShaderImplementationGraphicsData FATAL boundary)
 
@@ -385,6 +385,89 @@
   4. **Less likely:** Visible-window breakthrough with cleared-to-color steady state -- the aspirational outcome that ends the iteration cycle.
 
 - **Strategic concern (carried forward, refined):** the team is now 7 iterations deep into the legacy-HLSL-vs-SM4+ well. Iter-7 addresses TWO classes (X3000 keyword and X3202 member-binding) with a unified rewrite utility, which compresses some future iteration cost. If Iter-8 surfaces yet another distinct X-error class -- specifically a class that the textual-rewrite approach cannot accommodate (e.g., a semantic mismatch like `vector<bool, 4>` -> `bool4` -> `int4` chain, or sampler-state inline assignment that requires structural rewriting of the shader's `sampler` declarations) -- that is a strong signal to revisit the Phase 12 asset-re-author decision. The textual-rewrite path is at its natural limit when fix complexity exceeds "two-rule regex + whitespace replacement"; structural rewrites should land at the asset layer, not in the runtime compile path.
+
+---
+
+## Iteration 8: D3DCompile vs_4_0_level_9_3 X3202 (identical site) -- expand Rules B/C register-type letters from `c` to `[bcstu]` + THROWAWAY diagnostic dump
+
+- **Date:** 2026-05-19
+- **Symptom:** Kenny smoke launch under `client_d.cfg rasterMajor=11` (post-Iter-7 Rules B/C addition + main-source rewrite call site + REWRITE_VERSION="4") FATAL'd at the IDENTICAL X3202 signature, IDENTICAL file, IDENTICAL line, IDENTICAL columns as Iter-4/5/6/7:
+  ```
+  FATAL: Direct3d11_VertexShaderData: D3DCompile vs_4_0_level_9_3 'vertex_program/2d.vsh' failed:
+    [12 X3206 non-fatal truncation warnings in functions.inc at lines 45/69/197/200/203/216/290/370/397/430/465]
+    D:\Code\swg-client-v2\stage\vertex_program\2d.vsh(8,44-45):
+      error X3202: location semantics cannot be specified on members
+  ```
+  Crash dump: `stage/SwgClient_d.exe-unknown.0-20260519125959.txt`. Call stack identical to Iter-7 (ShaderTemplate -> ShaderImplementation -> Direct3d11_VertexShaderData::compileOrLoad -> D3DCompile). Iter-7's REWRITE_VERSION bump 3 -> 4 successfully invalidated the cache (cache miss + recompile path was hit), the rewrite ran on the main source (Iter-7 wiring at `Direct3d11_VertexShaderData.cpp:308-309` confirmed correct + feeding `rewrittenSource.data()/.size()` at lines 393-395 confirmed correct), but Rules B/C did NOT match the offending pattern on line 8 col 44-45 -- so the post-rewrite output was byte-identical to the input, D3DCompile saw the same bytes as Iter-7-before-rewrite, and the X3202 fired at the same site. **Conclusion:** Iter-7's Rules B/C hardcoded the literal `c` for the register-type letter; the actual letter at `2d.vsh(8,44-45)` is NOT `c`.
+- **Hypothesis:** Two-axis fix:
+  1. **Axis 1 (rule coverage expansion):** D3D11 HLSL has 5 canonical register-type letters per the MSDN / HLSL reference: `b#` (cbuffer), `t#` (texture/SRV), `s#` (sampler), `u#` (UAV, D3D11-only), `c#` (constant; D3D9 legacy + D3D11 cbuffer-member packoffset offset). Iter-7 only covered `c`. Iter-8 expands Rules B/C to match ALL 5 letters via the character class `[bcstu]`. If the line-8 syntax is any of `: s0` / `: t0` / `: b0` / `: u0` (or a bound thereof in `register(...)` form), the expanded rule strips it.
+  2. **Axis 2 (diagnostic dump -- THROWAWAY):** add a one-shot debug dump in `applyToMainSource` that writes the FIRST input source bytes to `stage/shader-debug-first-source.txt` on the very first call. Purpose: surface ground truth for `2d.vsh` line 8 content -- the dev team has never been able to see this directly because the source ships inside a TRE archive and the on-disk `stage/vertex_program/` doesn't exist (it's a synthetic D3DCompile path constructed from `displayName`). If Iter-8's expanded rules ALSO miss (the syntax is something exotic like `: packoffset(c0)`, vector-of-structs binding, sampler-state inline assignment, or a totally different non-register semantic), the dump gives Iter-9 actual file content to design the right rule against. **Meta-bet:** even if Iter-8 itself doesn't unblock, the dump unblocks Iter-9. Mirrors the Plan 11-01 THROWAWAY D-04 pattern (diagnostic instrumentation that lands as part of an iteration to unblock the next iteration's design, and gets reverted as the first commit of that next iteration).
+  Pitfall classification: **continued textual-rewrite arc** (Iter-2/3/4/7/8); not one of the 8 RESEARCH-documented Pitfalls. The Iter-7-vs-Iter-8 evolution is "speculative single-letter rule" -> "exhaustive character-class rule + diagnostic instrumentation for actual ground truth".
+- **Investigation:**
+  - Read the Iter-7 crash dump in full -- confirmed identical-root call stack to Iter-2..Iter-7. Failure point: `2d.vsh(8,44-45)`. The 12 X3206 truncation warnings in `functions.inc` are unchanged from Iter-7 (non-fatal preamble noise from `mul()` calls on legacy float-vector arithmetic; documented in Iter-7's semantic-loss caveat suspect list).
+  - Verified the Iter-7 wiring shape end-to-end (so future sessions don't re-investigate):
+    - `Direct3d11_VertexShaderData.cpp:308-309` -- `Direct3d11_HlslRewrite::applyToMainSource(sourceText, sourceLen, rewrittenSource, displayName);` -- confirmed present + receiving the engine-owned `m_text` view.
+    - `Direct3d11_VertexShaderData.cpp:393-395` -- D3DCompile invoked with `rewrittenSource.data()` + `rewrittenSource.size()` as `pSrcData` / `SrcDataSize`. Vector storage is what D3DCompile sees, not the original buffer. Wiring is correct -- the bug is in the RULES themselves not matching what's actually in the source.
+    - REWRITE_VERSION="4" in the defines list -- cache miss on every shader -> rebuild path hit on every shader during launch -> rewrite ran on every shader -> Rules B/C had ample opportunity to match if the patterns covered the actual syntax.
+  - Cross-referenced the D3D11 HLSL register-type letter set against MSDN's HLSL reference + the `register()` keyword documentation. The 5-letter set `[bcstu]` is exhaustive for SM4+/SM5+ register bindings:
+    - `b<N>` -- constant-buffer register slot (cbuffer / ConstantBuffer<T>)
+    - `t<N>` -- shader resource view register slot (Texture* / Buffer<T> / StructuredBuffer<T>)
+    - `s<N>` -- sampler register slot
+    - `u<N>` -- unordered-access-view register slot (RWBuffer / RWTexture / RWStructuredBuffer)
+    - `c<N>` -- single-constant register slot (D3D9 legacy + D3D11 cbuffer-member `packoffset` offset)
+    There are no other register-type letters defined in the D3D11 HLSL grammar; the expanded `[bcstu]` set is complete for this error class.
+  - Verified case sensitivity: HLSL is case-sensitive. Engine .vsh sources use ALL-CAPS for system semantics (`POSITION`, `COLOR`, `SV_POSITION`, `TEXCOORD0`, `SV_TARGET`). The new `isHlslRegisterTypeLetter` helper only matches lowercase `b/c/s/t/u`; uppercase user/system semantics like `: COLOR` / `: COLOR0` / `: SV_POSITION` are unaffected. Tested mentally against likely false-positive candidates: `: BINORMAL0` (starts with `B` uppercase, would not match -- good), `: TANGENT` (uppercase T, no match -- good), `: SV_POSITION` (uppercase S, no match -- good).
+  - Verified column-preservation property still holds: replacing the match-length bytes with spaces preserves column counts in subsequent D3DCompile error messages. Newlines are never produced/consumed, so line numbers are also preserved.
+  - Reviewed the THROWAWAY pattern: Plan 11-01 introduced `THROWAWAY D-04` diagnostic instrumentation that landed as part of an iteration and was reverted in the next; the same shape applies here. Iter-9's first commit should remove the entire diagnostic block in `applyToMainSource` plus the `#include <cstdio>` plus the related preamble comments. The data exfiltrates via a single fwrite to a fixed path under `stage/`; `stage/` is an untracked directory tree so the dump file is invisible to git.
+  - Confirmed `stage/` is untracked (not in `.gitignore` but also has zero tracked files in the directory tree -- git's `--others --directory` mode confirms the whole subtree is "other"). The diagnostic dump file will never appear in `git status --short` because the whole directory is already excluded from git's view.
+- **Root cause:** Iter-7's Rules B/C hardcoded the literal `c` for the register-type letter in both `tryMatchRuleB` and `tryMatchRuleC`. The X3202 site on `2d.vsh(8,44-45)` uses one of the other 4 canonical D3D11 register-type letters (`b` / `s` / `t` / `u`) -- which letter exactly is unknown until the THROWAWAY diagnostic dump reveals the actual line-8 content. The Iter-7 wiring (Direct3d11_HlslRewrite call site in compileOrLoad + REWRITE_VERSION cache invalidation) was correct end-to-end; the defect is purely in the rules' coverage scope.
+- **Fix:** Two-commit landing:
+  1. **Commit 1** (`feat`, `4920f3edd`): `Direct3d11_HlslRewrite.{h,cpp}` --
+     - New helper `isHlslRegisterTypeLetter(c)` -- returns true for any of `b/c/s/t/u`. Lowercase only; uppercase user/system semantics are explicitly excluded by case sensitivity.
+     - `tryMatchRuleB` -- replaced the hardcoded `src[i] != 'c'` check with `!isHlslRegisterTypeLetter(src[i])`.
+     - `tryMatchRuleC` -- same replacement at the `c` literal inside `register(...)`.
+     - `applyToMainSource` -- added THROWAWAY one-shot diagnostic dump (static bool gate). On first call, writes the raw input source bytes to `D:/Code/swg-client-v2/stage/shader-debug-first-source.txt` via `std::fopen / std::fwrite / std::fclose`. Includes the `displayName` and length in a `DEBUG_REPORT_LOG_PRINT` so the log captures which shader was first.
+     - Added `#include <cstdio>` for `FILE*` / `fopen` / `fwrite` / `fclose`. Marked with `// THROWAWAY Iter-8` comment for Iter-9's revert.
+     - Updated preamble comments in both `.h` and `.cpp` to describe the expanded register-type-letter set + the THROWAWAY caveat + the Iter-7 vs. Iter-8 rationale evolution.
+  2. **Commit 2** (`fix`, `3b66af98b`): `Direct3d11_VertexShaderData.cpp` + `Direct3d11_PixelShaderProgramData.cpp` --
+     - `defines.push_back({ "D3D11_REWRITE_VERSION",  "4" });` -> `"5"` in both VS and PS compile sites.
+     - Added Iter-8 explanatory comment block in `Direct3d11_VertexShaderData.cpp` cross-referencing the Iter-7 block (full rationale) and noting the THROWAWAY dump location.
+     - Shorter Iter-8 cross-reference comment in the PS helper pointing back at the VS file's full block (mirrors Iter-6/7 PS-helper documentation pattern).
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` EXIT=0. `gl11_d.dll` 1,411,584 bytes (Iter-7 baseline 1,411,584 bytes; unchanged at section-alignment granularity -- the source delta is small: one new helper function body + a diagnostic dump block + comments, all within `.text` section padding).
+  - `MSBuild -t:Direct3d9 -p:Configuration=Debug -p:Platform=Win32` EXIT=0 (D-05 protection; pre-existing MSB8012 carry-forward warnings only).
+  - `MSBuild -t:Direct3d9_ffp -p:Configuration=Debug -p:Platform=Win32` EXIT=0.
+  - `MSBuild -t:Direct3d9_vsps -p:Configuration=Debug -p:Platform=Win32` EXIT=0.
+  - `MSBuild -t:SwgClient -p:Configuration=Debug -p:Platform=Win32` EXIT=0 (full link clean; MSB8012 carry-forward warnings only).
+  - **D-13 grep clean:** 20 hits for `D3DPOOL_MANAGED|OnLostDevice|OnResetDevice` in `Direct3d11/`, ALL inside `//` comment lines documenting the invariant. Zero functional uses. Unchanged from Iter-7.
+  - **D-05 diff empty:** `git diff 6074fdeb2..HEAD -- src/engine/client/application/Direct3d9/` returns 0 lines (6074fdeb2 = Iter-7 log close).
+  - **D-04a maintained:** `Glob Direct3d11_FfpGenerator.*` returns 0 results.
+  - **FFP scan clean:** modified TUs have 0 `#ifdef FFP / D3DTSS_ / D3DTOP_` functional code.
+  - **STUB count delta:** Iter-7 ended at 27 STUBs; Iter-8 ends at **27 STUBs** (unchanged -- this iteration fixes a coverage defect inside the existing rewrite path; no new Gl_api slots were wired).
+  - **Compile flags / warnings clean:** zero new warnings on Direct3d11 build under MSVC /W4. The new `<cstdio>` include + `FILE*` / `fopen` / `fwrite` / `fclose` calls are inside `applyToMainSource` and compile silently.
+  - **Cache-invalidation side-effect:** REWRITE_VERSION 4 -> 5 changes the hash key for every shader -> mass cache miss on next launch -> D3DCompile rebuilds every blob under the expanded Rules B/C `[bcstu]` set + re-stores. Iter-7's `.cso` blobs (none exist -- compile FATAL'd at the X3202 boundary before any `store()` call) are unaffected.
+- **THROWAWAY revert plan (for Iter-9):** Iter-9's first commit should:
+  1. Read `stage/shader-debug-first-source.txt` to see the actual line-8 content of the first shader (likely `2d.vsh` per the Iter-7 crash dump tail).
+  2. Adjust Rules B/C or add new rules based on what the actual syntax turns out to be.
+  3. Remove the THROWAWAY diagnostic block in `applyToMainSource` (the entire `{ static bool dumped = false; ... }` block).
+  4. Remove `#include <cstdio>` from `Direct3d11_HlslRewrite.cpp`.
+  5. Revert all "THROWAWAY Iter-8" comment markers in the preamble of `Direct3d11_HlslRewrite.cpp` + the Iter-8 comment in `Direct3d11_VertexShaderData.cpp`.
+  6. Bump REWRITE_VERSION 5 -> 6 to invalidate any Iter-8 cache hits.
+- **Commits:**
+  - `4920f3edd`: feat(11-07): expand HLSL rewrite Rules B/C to [bcstu] + THROWAWAY diagnostic dump (Iter 8)
+  - `3b66af98b`: fix(11-07): bump D3D11_REWRITE_VERSION 4 -> 5 (Iter 8)
+- **Awaiting:** Kenny smoke under `client_d.cfg rasterMajor=11` (orchestrator handles cfg edit). Expected outcomes (ranked):
+  1. **Best:** Rules B/C now match the broader register-type set; `2d.vsh` line 8 compiles past X3202; engine progresses past `ShaderEffectList::install`. Next FATAL advances to a cursor / point-sprite slot, a different shader-compile FATAL class, or a visible-window outcome. The THROWAWAY dump still fires (one-shot is unconditional on first call) and provides confirmation of what the syntax was.
+  2. **Likely:** Rules B/C STILL don't match -- the actual syntax is something we haven't anticipated. Candidates:
+     - `: packoffset(c0)` (D3D11 cbuffer-member offset syntax; legal on cbuffer members but illegal on struct members; mentions `c` but uses the `packoffset` keyword)
+     - vector-of-structs register binding (e.g., `float4 mat[4] : register(c0)` -- multi-register binding, possibly with a different grammar)
+     - Sampler-state inline assignment (D3D9-era `sampler s = sampler_state { ... };` inside shader body)
+     - A completely different non-register-binding semantic on a struct member (the X3202 error text says "location semantics cannot be specified on members" -- "location" might be a misleading word for something we don't expect)
+     The THROWAWAY dump gives Iter-9 the actual content to decide which is the case + design the correct fix. **This is the meta-bet of Iter-8**: even on rule-coverage miss, the dump unblocks Iter-9 with concrete data.
+  3. **Possible:** Rules B/C match this line but a different X-error class surfaces elsewhere (next FATAL, different file). Iter-9 evaluates.
+  4. **Less likely:** Visible-window breakthrough with cleared-to-color steady state -- the aspirational outcome.
+- **Diagnostic dump location for Kenny:** `D:/Code/swg-client-v2/stage/shader-debug-first-source.txt` will be created on first shader compile. The file content is the raw bytes of the first VS source the engine handed to the plugin (most likely `vertex_program/2d.vsh` per the Iter-7 crash dump tail `ShaderTemplate_Iff: shader/2d_vertexcolor.sht`). Whether the launch FATALs at X3202 or breaks through to the next phase, the dump file should be present after the run -- Kenny can `head -10` it to surface line 8 directly.
+- **Strategic concern (carried forward, refined):** the team is now 8 iterations deep into the legacy-HLSL-vs-SM4+ well. Iter-7 added 2 rules; Iter-8 generalizes the same 2 rules to cover the full register-type set + adds diagnostic instrumentation for ground truth. If Iter-9 surfaces a class that requires STRUCTURAL rewriting (not regex/whitespace replacement) -- e.g., sampler-state inline assignment that requires moving sampler declarations from struct members to global scope -- that's the strong signal Iter-7's strategic-concern paragraph predicted: textual rewrite at its natural limit. Phase 12 asset re-author becomes the right next step rather than Iter-10/11/12 stacking structural rewrites. Kenny + orchestrator should re-evaluate at Iter-9 close if the dump reveals an exotic non-register-binding syntax that the textual-rewrite approach can't naturally accommodate.
 
 ---
 
