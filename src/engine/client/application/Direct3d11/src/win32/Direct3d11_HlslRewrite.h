@@ -41,19 +41,24 @@
 //     engine HLSL corpus.
 //
 //   Rule B (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
-//   Iter-9 added `v` -> `[bcstuv]`):
+//   Iter-9 added `v` -> `[bcstuv]`; Iter-11 made context-aware):
 //     Match `:\s*[bcstuv]\d+\b` (e.g., `: c4`, `:c12`, `: s0`, `: t3`,
 //     `: b0`, `: u1`, `: v0`) becomes the same number of whitespace
 //     characters (so the column offset on subsequent tokens is
 //     preserved -- error messages with `(line,col)` still point at
-//     the right place).
+//     the right place). Iter-11 context check: only fires when a
+//     PREVIOUS `:` has already appeared on the SAME logical line
+//     (the stacked-semantic struct-member shape). On the FIRST `:`
+//     of a line (a legal global-declaration register binding), the
+//     rule no-ops and the binding survives verbatim.
 //
 //   Rule C (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
-//   Iter-9 added `v` -> `[bcstuv]`):
+//   Iter-9 added `v` -> `[bcstuv]`; Iter-11 made context-aware):
 //     Match `:\s*register\s*\(\s*[bcstuv]\d+\s*\)` (e.g.,
 //     `: register(c4)`, `:register( s0 )`, `: register(t3)`,
 //     `: register(v0)`) becomes the same number of whitespace
 //     characters. Same column-preservation rationale as Rule B.
+//     Same Iter-11 context check as Rule B.
 //
 //   Register-type letters covered: all 6 canonical D3D HLSL register
 //   types per the MSDN HLSL `register()` grammar:
@@ -78,8 +83,28 @@
 //       `[bcstu]` either. The THROWAWAY dump revealed the actual
 //       syntax: `: register(v0)` -- letter is `v`.
 //     * Iter-9 reverted the dump (first commit) and extended the
-//       set to `[bcstuv]` (this commit). The dump's purpose is now
-//       served and the set is now exhaustive per the HLSL grammar.
+//       set to `[bcstuv]`. The dump's purpose was served and the
+//       set is exhaustive per the HLSL grammar.
+//     * Iter-9 smoke cleared X3202 but surfaced X4016 "overlapping
+//       register semantics not yet implemented 'c0'" with no
+//       line/col info -- a globals-level binding collision.
+//     * Iter-10 was a PURE DIAGNOSTIC THROWAWAY iteration adding I/O
+//       dumps at both rewrite entry points (orchestrator extended
+//       the include dump to 5 includes late in Iter-10 / early in
+//       Iter-11).
+//     * Iter-10/11 dumps revealed the OVER-STRIP root cause: Rules
+//       B/C were stripping `: register(cN)` on GLOBAL declarations
+//       in vertex_shader_constants.inc (e.g.
+//       `float4x4 objectWorldCameraProjectionMatrix : register(c0)`)
+//       not just on the SM4+-illegal struct-member position. The
+//       resulting unannotated globals (including the multi-register
+//       `LightData lightData : register(c16)` struct) defeated
+//       D3DCompile's auto-allocator -> X4016.
+//     * Iter-11 makes Rules B/C context-aware (this commit): only
+//       strip when a previous `:` has appeared on the same line
+//       (struct-member stacked-semantic position). On global
+//       declarations (single-colon shape), the binding is preserved
+//       verbatim -- which is exactly what SM4+ requires.
 //
 //   Case sensitivity for Rules B/C: the register-type letter and the
 //   literal `register` keyword must be lowercase. `: COLOR` /

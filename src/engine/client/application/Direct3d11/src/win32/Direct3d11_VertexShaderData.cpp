@@ -292,11 +292,41 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// to design the actual X4016 fix -- was served. See the Iter-11
 	// log entry in 11-07-iteration-log.md for the diagnosis the dumps
 	// produced.
+	//
+	// Plan 11-07 Iter-11: version bumped 8 -> 9 to ride the context-aware
+	// Rules B/C revision. The Iter-10/11 dumps showed
+	// vertex_shader_constants.inc was being OVER-STRIPPED: ~15 GLOBAL
+	// declarations had their `: register(cN)` bindings deleted (e.g.
+	// `float4x4 objectWorldCameraProjectionMatrix : register(c0)` ->
+	// `float4x4 objectWorldCameraProjectionMatrix               `). With
+	// the bindings gone, D3DCompile's auto-allocator could not produce
+	// non-overlapping placements for the resulting unannotated globals
+	// (especially the multi-register `LightData lightData : register(c16)`
+	// struct, which contains nested arrays of point/parallel/spot lights
+	// spanning tens of constant registers). It emitted X4016 "overlapping
+	// register semantics not yet implemented 'c0'".
+	//
+	// Iter-11 fix: Rules B/C now check `sawColonThisLine` before firing.
+	// On the FIRST `:` of a line (a global-declaration register binding
+	// like the ones in vertex_shader_constants.inc), the rules no-op and
+	// the binding is preserved verbatim. On a SECOND or later `:` on the
+	// same line (the SM4+-illegal stacked-semantic struct-member shape
+	// like `: POSITION0 : register(v0)` in 2d.vsh), the rules strip as
+	// before. See Direct3d11_HlslRewrite.cpp for the matcher + scanner-
+	// state implementation; see Direct3d11_HlslRewrite.h preamble for
+	// the rule-evolution narrative.
+	//
+	// Cache implications: REWRITE_VERSION 8 -> 9 forces a mass cache miss
+	// on next launch; D3DCompile rebuilds every blob under the new
+	// context-aware Rules B/C and re-stores. Iter-10 `.cso` blobs would
+	// have FATAL'd at X4016 before any `store()` call so there are no
+	// existing entries to invalidate -- the bump just makes the cache-
+	// hash story honest about the rule change.
 	std::vector<D3D_SHADER_MACRO> defines;
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "8" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "9" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry

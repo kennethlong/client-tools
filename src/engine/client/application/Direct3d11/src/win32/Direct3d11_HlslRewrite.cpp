@@ -17,15 +17,41 @@
 //     2. Rule B: `:\s*[bcstuv]\d+\b` -- legacy struct-member register-
 //        binding shortcut (Iter-7 origin; Iter-8 expanded `c` -> `[bcstu]`;
 //        Iter-9 further expanded to `[bcstuv]` after the THROWAWAY dump
-//        revealed `2d.vsh:8` uses `v0` -- vertex input stream register).
+//        revealed `2d.vsh:8` uses `v0`; Iter-11 made context-aware --
+//        only strips when a previous `:` appears on the SAME logical
+//        line, i.e. the stacked-semantic struct-member shape).
 //        On match -- emit the same number of spaces; output size unchanged
 //        from this rule.
 //     3. Rule C: `:\s*register\s*\(\s*[bcstuv]\d+\s*\)` -- explicit
-//        register() form (Iter-7 origin; Iter-8 and Iter-9 expanded the
-//        same way as Rule B).
+//        register() form (Iter-7 origin; Iter-8 / Iter-9 / Iter-11 all
+//        evolved the same way as Rule B).
 //        On match -- emit the same number of spaces; output size unchanged
 //        from this rule.
 //   No match -- emit the single byte unchanged + advance one position.
+//
+// Iter-11 context-aware-rule state (line-scoped):
+//   A single bool `sawColonThisLine` is threaded through both passes of
+//   the scanner. It is FALSE at start-of-buffer; set to TRUE the FIRST
+//   time the scanner encounters a `:` on the current logical line; reset
+//   to FALSE on every `\n`. Rules B and C only fire when this flag is
+//   already TRUE at the matching `:` position -- i.e. the rule attempts
+//   to strip a SECOND `:` on the same line, which is the SM4+-illegal
+//   stacked-semantic-on-struct-member shape (`: POSITION0 : register(v0)`).
+//   On the FIRST `:` of a line (e.g. a global `float4 foo : register(c0);`
+//   in vertex_shader_constants.inc), the flag is still FALSE, the rule
+//   returns 0, and the binding is preserved verbatim -- which is exactly
+//   what SM4+ requires for global register bindings.
+//
+//   This context check was added in Iter-11 after Iter-10's diagnostic
+//   dumps revealed that Iter-7..Iter-10's rules were OVER-STRIPPING:
+//   they stripped `: register(cN)` regardless of whether the `:` was
+//   the first colon (global -- binding is LEGAL and required) or a
+//   subsequent colon (struct-member stacked semantic -- binding is
+//   ILLEGAL under SM4+). The over-strip removed all bindings from
+//   vertex_shader_constants.inc's ~15 global declarations including
+//   the multi-register `LightData lightData : register(c16)` struct,
+//   forcing D3DCompile's auto-allocator to invent non-overlapping
+//   placements -- which it could not, emitting X4016.
 //
 // Order matters: Rule C is tried BEFORE Rule B because Rule C is a
 // superset / more-specific match starting at the same `:` position.
@@ -237,12 +263,28 @@ namespace
 	// only; Iter-8 expanded to `[bcstu]`; Iter-9 added `v` after the
 	// THROWAWAY dump (reverted) revealed `2d.vsh:8` uses `register(v0)`.
 	// See isHlslRegisterTypeLetter() above for the full rationale.
+	//
+	// Iter-11: context-aware -- the `sawColonThisLine` parameter must be
+	// TRUE for the match to fire. When FALSE, this is the first `:` on
+	// the line (a legal global-declaration register binding) and we MUST
+	// NOT strip it -- doing so produced X4016 in Iter-10 by removing
+	// vertex_shader_constants.inc's globals-level bindings. When TRUE,
+	// this is a second-or-later `:` on the line (the SM4+-illegal
+	// stacked-semantic struct-member shape `: POSITION0 : register(v0)`)
+	// and we strip as before.
 	std::size_t tryMatchRuleC(
 		unsigned char const *src,
 		std::size_t          length,
-		std::size_t          pos)
+		std::size_t          pos,
+		bool                 sawColonThisLine)
 	{
 		if (pos >= length || src[pos] != ':')
+			return 0;
+
+		// Iter-11 context check: only strip when this is NOT the first
+		// `:` of the line -- i.e. we're at a stacked-semantic struct-
+		// member position, not at a legal global-declaration binding.
+		if (!sawColonThisLine)
 			return 0;
 
 		std::size_t i = pos + 1;
@@ -315,12 +357,22 @@ namespace
 	// expanded to `[bcstu]`; Iter-9 added `v` after the THROWAWAY dump
 	// (reverted) revealed `2d.vsh:8` uses `register(v0)`. See
 	// isHlslRegisterTypeLetter() above for the full rationale.
+	//
+	// Iter-11: context-aware -- the `sawColonThisLine` parameter must be
+	// TRUE for the match to fire. Same rationale as Rule C above; see
+	// the comment block there for the over-strip / X4016 narrative.
 	std::size_t tryMatchRuleB(
 		unsigned char const *src,
 		std::size_t          length,
-		std::size_t          pos)
+		std::size_t          pos,
+		bool                 sawColonThisLine)
 	{
 		if (pos >= length || src[pos] != ':')
+			return 0;
+
+		// Iter-11 context check: only strip on a second-or-later `:`
+		// on the same line. Mirrors Rule C's guard above.
+		if (!sawColonThisLine)
 			return 0;
 
 		std::size_t i = pos + 1;
@@ -366,11 +418,22 @@ namespace
 		if (!src || length == 0)
 			return 0;
 
+		// Iter-11 line-scoped state: see file preamble. FALSE at start-
+		// of-buffer; set to TRUE the first time we see a `:` on the
+		// current line; reset to FALSE on every `\n`. Rules B/C only
+		// fire when TRUE -- i.e. on a SECOND or later `:` on the line,
+		// which is the stacked-semantic struct-member shape that SM4+
+		// rejects.
+		bool sawColonThisLine = false;
+
 		std::size_t out = 0;
 		std::size_t i   = 0;
 		while (i < length)
 		{
 			// Rule A -- reserved-keyword rename (output = match + 3).
+			// Rule-A keyword bytes are pure-alpha (point/line/triangle/
+			// lineadj/triangleadj); they cannot contain `:` or `\n`, so
+			// stepping past them does not perturb sawColonThisLine.
 			std::size_t kwIndex = 0;
 			std::size_t matchA = tryMatchRuleA(src, length, i, kwIndex);
 			if (matchA != 0)
@@ -384,26 +447,50 @@ namespace
 			// Rule C -- explicit register() form (output = match, all
 			// spaces). Tried before Rule B because both start at `:`
 			// and Rule C is the more-specific longer match.
-			std::size_t matchC = tryMatchRuleC(src, length, i);
+			//
+			// Iter-11: context-aware. Rule C internally guards on
+			// `sawColonThisLine` -- returns 0 (no match) on a global-
+			// declaration first-colon; matches only on stacked-semantic
+			// struct-member second-colon shape.
+			std::size_t matchC = tryMatchRuleC(src, length, i, sawColonThisLine);
 			if (matchC != 0)
 			{
 				out += matchC;
 				i   += matchC;
 				++outRewriteCount;
+				// The `:` that opened the match counts as "saw colon
+				// this line" for any subsequent `:` later on the same
+				// line. The remaining bytes consumed by Rule C
+				// (whitespace + `register` + `(` + letter + digits +
+				// `)` ) contain no `:` or `\n` by construction (Rule C's
+				// matcher rejects them via its strict character classes).
+				sawColonThisLine = true;
 				continue;
 			}
 
-			// Rule B -- shortcut `:\s*c\d+\b` (output = match, all spaces).
-			std::size_t matchB = tryMatchRuleB(src, length, i);
+			// Rule B -- shortcut `:\s*[bcstuv]\d+\b` (output = match,
+			// all spaces). Iter-11: context-aware -- same
+			// sawColonThisLine guard as Rule C.
+			std::size_t matchB = tryMatchRuleB(src, length, i, sawColonThisLine);
 			if (matchB != 0)
 			{
 				out += matchB;
 				i   += matchB;
 				++outRewriteCount;
+				// Same rationale as above -- Rule B's consumed bytes
+				// after the `:` are whitespace + letter + digits, none
+				// of which can be `:` or `\n`.
+				sawColonThisLine = true;
 				continue;
 			}
 
-			// No rule matched -- copy single byte through.
+			// No rule matched -- copy single byte through. Update the
+			// line-scoped state based on the byte we just passed.
+			unsigned char const ch = src[i];
+			if (ch == '\n')
+				sawColonThisLine = false;
+			else if (ch == ':')
+				sawColonThisLine = true;
 			out += 1;
 			i   += 1;
 		}
@@ -417,11 +504,19 @@ namespace
 		unsigned char       *dst,
 		std::size_t          dstCapacity)
 	{
+		// Iter-11 line-scoped state: MUST mirror computeRewrittenLength
+		// exactly. Both passes are guaranteed to evolve sawColonThisLine
+		// identically because they read the same input bytes and use
+		// identical match predicates -- if they ever diverge, the
+		// DEBUG_FATAL at function end catches the length mismatch.
+		bool sawColonThisLine = false;
+
 		std::size_t outPos = 0;
 		std::size_t i      = 0;
 		while (i < length)
 		{
-			// Rule A -- emit keyword + "_id" suffix.
+			// Rule A -- emit keyword + "_id" suffix. (Rule-A keyword
+			// bytes are pure-alpha; cannot contain `:` or `\n`.)
 			std::size_t kwIndex = 0;
 			std::size_t matchA = tryMatchRuleA(src, length, i, kwIndex);
 			if (matchA != 0)
@@ -445,8 +540,10 @@ namespace
 				continue;
 			}
 
-			// Rule C -- emit match-length spaces.
-			std::size_t matchC = tryMatchRuleC(src, length, i);
+			// Rule C -- emit match-length spaces. Iter-11: context-
+			// aware via sawColonThisLine -- skipped on global-
+			// declaration first-colon.
+			std::size_t matchC = tryMatchRuleC(src, length, i, sawColonThisLine);
 			if (matchC != 0)
 			{
 				DEBUG_FATAL(outPos + matchC > dstCapacity,
@@ -456,11 +553,13 @@ namespace
 				std::memset(dst + outPos, ' ', matchC);
 				outPos += matchC;
 				i      += matchC;
+				sawColonThisLine = true;
 				continue;
 			}
 
-			// Rule B -- emit match-length spaces.
-			std::size_t matchB = tryMatchRuleB(src, length, i);
+			// Rule B -- emit match-length spaces. Iter-11: same
+			// sawColonThisLine guard.
+			std::size_t matchB = tryMatchRuleB(src, length, i, sawColonThisLine);
 			if (matchB != 0)
 			{
 				DEBUG_FATAL(outPos + matchB > dstCapacity,
@@ -470,15 +569,22 @@ namespace
 				std::memset(dst + outPos, ' ', matchB);
 				outPos += matchB;
 				i      += matchB;
+				sawColonThisLine = true;
 				continue;
 			}
 
-			// No rule matched -- pass byte through.
+			// No rule matched -- pass byte through. Update line-scoped
+			// state based on the byte we're about to emit.
 			DEBUG_FATAL(outPos + 1 > dstCapacity,
 				("Direct3d11_HlslRewrite: emit overflow passthrough byte"
 				 " src[%zu]=0x%02x, outPos=%zu/%zu",
 				 i, src[i], outPos, dstCapacity));
-			dst[outPos] = src[i];
+			unsigned char const ch = src[i];
+			if (ch == '\n')
+				sawColonThisLine = false;
+			else if (ch == ':')
+				sawColonThisLine = true;
+			dst[outPos] = ch;
 			++outPos;
 			++i;
 		}

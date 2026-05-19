@@ -110,20 +110,28 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// rationale.
 		//
 		// Plan 11-07 Iter-10: version bumped 6 -> 7 to ride the VS-side
-		// THROWAWAY diagnostic dump pair added at both Direct3d11_HlslRewrite
-		// entry points. Iter-9 smoke surfaced X4016 (globals-level
-		// "overlapping register semantics" with no line/col info); the
-		// dumps capture rewrite input + output bytes so Iter-11 can
-		// diff them and design the fix. The PS helper has no behavior
-		// change of its own -- the version bump just keeps the PS cache
-		// hash in lockstep with the VS cache hash. See
-		// Direct3d11_VertexShaderData.cpp's Iter-10 block for the full
-		// rationale + dump file paths.
+		// THROWAWAY diagnostic dump pair (reverted in Iter-11's first
+		// commit; see Direct3d11_VertexShaderData.cpp for the trimmed
+		// past-tense reference).
+		//
+		// Plan 11-07 Iter-11: version bumped 8 -> 9 to ride the VS-side
+		// context-aware Rules B/C revision. The Iter-10/11 dumps revealed
+		// Rules B/C were OVER-STRIPPING `: register(cN)` on global
+		// declarations in vertex_shader_constants.inc, defeating
+		// D3DCompile's auto-allocator and emitting X4016 "overlapping
+		// register semantics not yet implemented 'c0'". Iter-11's fix
+		// adds a `sawColonThisLine` guard so the rules only fire on
+		// stacked-semantic struct-member positions, not on first-`:`
+		// global declarations. The PS helper has no behavior change of
+		// its own -- the version bump just keeps the PS cache hash in
+		// lockstep with the VS cache hash. See
+		// Direct3d11_VertexShaderData.cpp's Iter-11 block for the full
+		// rationale + diagnosis narrative.
 		std::vector<D3D_SHADER_MACRO> defines;
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "8" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "9" });
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
