@@ -266,6 +266,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClCompile Include="..\..\src\win32\Direct3d11_Device.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_HlslRewrite.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_LightManager.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_Metrics.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.cpp" />
@@ -297,6 +298,7 @@ copy /Y "$(OutDir)gl11_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <ClInclude Include="..\..\src\win32\Direct3d11_Device.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_DynamicIndexBufferData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_HlslRewrite.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_LightManager.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_Metrics.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.h" />

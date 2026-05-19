@@ -39,6 +39,9 @@
     <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_HlslRewrite.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_LightManager.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
@@ -114,6 +117,9 @@
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_HlslRewrite.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_LightManager.h">
