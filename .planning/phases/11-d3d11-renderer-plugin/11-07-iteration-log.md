@@ -1001,6 +1001,43 @@ The 14-iteration X4016 wall closed in Iter-14, and the four subsequent iteration
 
 ---
 
+## Iteration 18: minimal-viable WVP composition attempt -- BSOD ~2 min after launch; reverted
+
+- **Date:** 2026-05-19
+- **Symptom:** Plan 11-07 milestone reached visible dark-blue clear post-Iter-17, but no geometry rendered on top. Investigation traced to three structural gaps in cbuffer wiring: (1) `setProjectionMatrix` + `setObjectToWorldTransformAndScale` both wrote to slot 1 with per-object overwrite clobbering projection; (2) shader's `objectWorldCameraProjectionMatrix` at packoffset(c0) was receiving only the view matrix; (3) `setVertexShaderUserConstants_impl` wrote to a function-local static that was never flushed. Attempted minimum-viable fix for gaps (1) and (2) -- mirror D3D9 plugin's composition pattern (`Direct3d9.cpp:4034`) and push a 128-byte WVP+O2W blob to slot 0.
+- **Hypothesis (pre-attempt):** mirror D3D9 exactly should work since D3D9 ships and renders correctly with the same shaders. Specifically:
+  - Add file-scope shadows for view, projection, world matrices
+  - `setWorldToCameraTransform`: shadow view matrix only (drop the slot-0 PerFrameCB write)
+  - `setProjectionMatrix`: shadow projection matrix only (drop the slot-1 write that clobbered world)
+  - `setObjectToWorldTransformAndScale`: shadow world matrix, compose `WTP = V * P` then `WVP = WTP * W`, push `{WVP, W}` to slot 0 with NO transpose (mirror D3D9's row-major-no-transpose convention)
+- **Investigation:** confirmed all three gaps via source read of `Direct3d11_StateCache.cpp` (setters) + `Direct3d11.cpp:306-389` (user-constants). Confirmed shader expectation via `stage/shader-iter13b-inc-0-output.txt` line 97-99: `float4x4 objectWorldCameraProjectionMatrix : packoffset(c0); float4x4 objectWorldMatrix : packoffset(c4);`. Confirmed D3D9 plugin composition pattern at `Direct3d9.cpp:4034`. Confirmed no `pack_matrix` pragma anywhere in dumped shaders (HLSL default = column-major storage).
+- **Fix attempt (working-tree only, NEVER committed):**
+  - Added `namespace Iter18_TransformShadow` at file scope with `s_cachedView` / `s_cachedProj` / `s_cachedWorld` (identity-initialized XMFLOAT4X4) plus `struct WvpBlob` (128 bytes = 2 x 4x4).
+  - Rewrote `setWorldToCameraTransform`, `setProjectionMatrix`, `setObjectToWorldTransformAndScale` per the hypothesis above.
+- **OUTCOME -- BSOD ~2 minutes after launch:** the new binary launched, hit the same hidden-window state as Iter-17 (forced visible via PowerShell ShowWindow assist), ran for approximately 2 minutes, then triggered a **system-level Blue Screen of Death**. No Windows minidump captured (`%WINDIR%\Minidump\` did not exist); no SwgClient crash dump (the BSOD took down the OS before any user-mode dump could be written). Hard reboot recovered the system.
+- **Root cause hypotheses (any combination plausible):**
+  1. **Matrix-composition order wrong.** D3D9's `ms_cachedWorldToProjectionMatrix` might NOT be `V * P` -- could be `P * V` or pre-transposed. My `WTP = V * P` then `WVP = WTP * W` is one of several plausible orders; the wrong one produces extreme / NaN clip-space coords -> GPU rasterizer enters a degenerate path -> Timeout Detection and Recovery (TDR) fires -> recovery fails -> BSOD.
+  2. **Shader reads beyond my 128-byte write.** Slot 0 is 1024 bytes total. My update covers only c0..c7 (128 bytes); `Map(WRITE_DISCARD)` zeroes bytes 128..1024. Shader reads `LightData` (c16, 28 registers), `Material` (c11, 5 regs), `ExtendedLightData` (c60, 8 regs) as zeros. If any path uses `LightData.numLights` as a loop count or `1.0 / count` divisor without guard, an infinite loop or NaN cascade in the shader -> GPU hang -> TDR -> BSOD.
+  3. **`objectWorldMatrix` at c4 malformed.** My XMFLOAT4X4 construction from `Transform::getMatrix()` (real[3][4]) might have a row/column-major confusion at the C++/XMMath boundary.
+  4. **Per-frame setter race.** If `setObjectToWorldTransformAndScale` fires before `setWorldToCameraTransform` or `setProjectionMatrix` ever ran (first-draw race), `s_cachedView` / `s_cachedProj` are identity -> `WVP = I * I * W = W` -> object-space coordinates rendered in clip space -> huge values -> degenerate rasterization.
+  5. **2-minute timing.** The BSOD did not fire instantly. Something accumulated -- a periodic draw call (particle system, deferred-loaded asset, animation tick) eventually hit a code path that exercised the bad matrix data.
+- **Action:** working-tree change reverted via `git restore` (zero `Iter18_TransformShadow` / `WvpBlob` markers remain in `Direct3d11_StateCache.cpp`). Direct3d11.vcxproj rebuilt clean (build-log-revert-iter18.txt, 1418240 bytes); `stage/gl11_d.dll` manually copied from `src/compile/.../Debug/` after a brief file-lock on stage forced a Move-aside-then-copy pattern. The Iter-18 BSOD binary preserved as `stage/gl11_d.dll.iter18-bsod-backup` for forensics; current `stage/gl11_d.dll` is the Iter-17 known-safe binary.
+- **Verification:**
+  - `MSBuild -t:Direct3d11 -p:Configuration=Debug -p:Platform=Win32` post-revert EXIT=0; zero new warnings (the `DirectXMathVector.inl C4459 'E' hides global declaration` is a pre-existing SDK warning, not from this iteration).
+  - `grep -c "Iter18_TransformShadow|Iter-18|WvpBlob"` on `Direct3d11_StateCache.cpp` -> 0 matches.
+  - `stage/gl11_d.dll` mtime 18:00 == fresh; size 1,418,240 bytes != 1,413,632 (the BSOD binary).
+- **Strategic conclusion -- cbuffer-wiring arc is NOT a single-iteration fix.** The BSOD demonstrates the work requires:
+  1. **D3D9 plugin trace** -- read the exact `ms_cachedWorldToProjectionMatrix` composition site to confirm matrix multiplication order
+  2. **Initial-state guarantee** -- ensure identity matrices are uploaded before any draw fires so even a first-draw race produces safe (if visually wrong) output
+  3. **Full slot-0 coverage** -- write all 1024 bytes of slot 0 with at least sane defaults (identity matrices, zero lights with `numLights=0` explicitly clamped, identity materials, zero fog) before any draw call so shader reads of c8..c63 don't return garbage
+  4. **D3D11 debug-layer enabled** -- catch driver-class errors at the API level (e.g., `ID3D11Debug` warnings) before they escalate to TDR / BSOD
+  5. **Per-draw flush + bind sequencing** -- explicitly call `updateVS(0, ...)` and `bindVS(0)` at the top of each draw call so the shadow + binding state is coherent
+  This is research + design + multi-iteration implementation work, properly Plan 11-08+ scope. Plan 11-07 closes at the visible-dark-blue-clear milestone (Iter-17 outcome); Iter-18's diagnostic value is the BSOD itself + the five-hypothesis enumeration above for whoever picks up the cbuffer-wiring plan next.
+- **Commits:** NONE. The Iter-18 attempt is entirely uncommitted; this iteration log entry is the only record. (Decision: do not commit code that BSOD'd the user's machine, even with a "broken" marker -- the iteration log entry alone is enough provenance.)
+- **Plan 11-07 final state:** CLOSED at the post-Iter-17 milestone. Renderer alive end-to-end, dark-blue MVP clear visible, frame loop iterating. Geometry / UI does not render on top of the clear pending the cbuffer-wiring arc.
+
+---
+
 ## Future iterations (placeholders)
 
 To be filled as Kenny surfaces each new FATAL or visual bug. Each entry follows the 6-field shape (Date / Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit).
