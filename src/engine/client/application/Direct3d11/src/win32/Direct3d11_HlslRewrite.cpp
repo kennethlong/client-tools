@@ -12,7 +12,7 @@
 //   structural cbuffer wrap of c-register-bound globals -- see the
 //   Rule D block below for full rationale). Whatever buffer Rule D
 //   produces (or the original if no section was found) then feeds the
-//   single-pass A/B/C scanner. The main-source path skips Rule D
+//   single-pass A/B/C/E scanner. The main-source path skips Rule D
 //   because main `.vsh` sources don't carry c-register globals.
 //
 //   Single-pass scanner walks the source byte-by-byte. At each position
@@ -34,6 +34,18 @@
 //        evolved the same way as Rule B).
 //        On match -- emit the same number of spaces; output size unchanged
 //        from this rule.
+//     4. Rule E: line-start `#pragma def` directive (Iter-14 origin --
+//        CODEX phone-a-friend identified `#pragma def(vs, c95, ...)` as
+//        the actual X4016 'c0' trigger via controlled FXC repro). Strips
+//        the entire line (up to but not including the trailing `\n`),
+//        emitting match-length spaces -- the `\n` itself flows through
+//        the byte-copy fallback so line-count parity is preserved.
+//        D3D9-era explicit float-register pre-fill; the SM4+ level9 path
+//        emits its own c#-register mappings from the cbuffer layout and
+//        the legacy pragma collides with that allocator. Safe to strip
+//        for compile/load; Plan 11-08's reflection-driven cbuffer push
+//        catches the four floats (`0.0, 0.5, 1.0, 1/ln(2)`) if any path
+//        turns out to need them.
 //   No match -- emit the single byte unchanged + advance one position.
 //
 // Iter-11 context-aware-rule state (line-scoped):
@@ -412,6 +424,100 @@ namespace
 		return i - pos;
 	}
 
+	// Rule E: line-start `#pragma def` directive (Iter-14 origin).
+	// Matches the shape `^\s*#\s*pragma\s+def\b.*` where `^` is the start
+	// of a logical line (start-of-buffer OR preceded by `\n`). On match,
+	// consumes through the rest of the line up to (but not including) the
+	// trailing `\n`; returns the total consumed length. Returns 0 on
+	// no-match. The trailing `\n` is intentionally NOT consumed so the
+	// scanner's line-state machinery (sawColonThisLine) resets normally
+	// when it emits the `\n` via the byte-copy fallback on the next loop
+	// iteration. Match-length spaces are emitted in place, preserving line
+	// counts AND column offsets for downstream FXC error messages.
+	//
+	// Rationale (CODEX phone-a-friend, 2026-05-19): controlled FXC repro
+	// against `vertex_shader_constants.inc` identified
+	// `#pragma def(vs, c95, 0.0, 0.5f, 1.0f, 1.4426950408889634f)` as the
+	// X4016 'c0' trigger -- struct-typed packoffset was REFUTED. The
+	// pragma is a D3D9-era explicit float-register pre-fill; under
+	// vs_4_0_level_9_3 FXC emits its own legacy c#-register mappings from
+	// the cbuffer layout and the pragma collides with that allocator.
+	// 'c0' in the error message is FXC's first-register report, not the
+	// literal c95 slot. Stripping the pragma is safe for compile/load;
+	// Plan 11-08's reflection-driven cbuffer push handles the four floats
+	// if any active shader path semantically requires them.
+	//
+	// Pattern is line-anchored deliberately -- a `#pragma def` substring
+	// that ever appears mid-line (e.g. inside a string literal, though
+	// HLSL has none at file scope) would NOT match. Line-anchoring is
+	// stateless: pos == 0 OR src[pos - 1] == '\n'.
+	std::size_t tryMatchRuleE(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t          pos)
+	{
+		if (pos >= length)
+			return 0;
+
+		// Line-start check: start-of-buffer OR immediately after `\n`.
+		if (pos != 0 && src[pos - 1] != '\n')
+			return 0;
+
+		std::size_t i = pos;
+
+		// `\s*` before `#` (spaces/tabs only -- a `\n` here would mean
+		// we're past the start of the line we tried to match, so it
+		// belongs to the NEXT line; treat as no-match).
+		while (i < length && (src[i] == ' ' || src[i] == '\t'))
+			++i;
+
+		// Literal `#`
+		if (i >= length || src[i] != '#')
+			return 0;
+		++i;
+
+		// `\s*` between `#` and `pragma` (HLSL preprocessor allows it).
+		while (i < length && (src[i] == ' ' || src[i] == '\t'))
+			++i;
+
+		// Literal `pragma` (whole-word).
+		constexpr char const kPragma[]    = "pragma";
+		constexpr std::size_t kPragmaLen  = 6;
+		if (i + kPragmaLen > length)
+			return 0;
+		if (std::memcmp(src + i, kPragma, kPragmaLen) != 0)
+			return 0;
+		std::size_t const afterPragma = i + kPragmaLen;
+		if (afterPragma < length && isIdentChar(src[afterPragma]))
+			return 0;
+		i = afterPragma;
+
+		// `\s+` (REQUIRED at least one space/tab before `def`).
+		if (i >= length || (src[i] != ' ' && src[i] != '\t'))
+			return 0;
+		while (i < length && (src[i] == ' ' || src[i] == '\t'))
+			++i;
+
+		// Literal `def` (whole-word; right boundary check rejects e.g.
+		// `#pragma define` or `#pragma default` if such things ever existed).
+		constexpr char const kDef[]    = "def";
+		constexpr std::size_t kDefLen  = 3;
+		if (i + kDefLen > length)
+			return 0;
+		if (std::memcmp(src + i, kDef, kDefLen) != 0)
+			return 0;
+		std::size_t const afterDef = i + kDefLen;
+		if (afterDef < length && isIdentChar(src[afterDef]))
+			return 0;
+		i = afterDef;
+
+		// Match confirmed -- consume through end-of-line (exclusive of `\n`).
+		while (i < length && src[i] != '\n')
+			++i;
+
+		return i - pos;
+	}
+
 	// ------------------------------------------------------------------
 	// Two-pass core: compute output size, then emit bytes.
 	// ------------------------------------------------------------------
@@ -488,6 +594,25 @@ namespace
 				// after the `:` are whitespace + letter + digits, none
 				// of which can be `:` or `\n`.
 				sawColonThisLine = true;
+				continue;
+			}
+
+			// Rule E -- line-start `#pragma def` directive (Iter-14;
+			// output = match, all spaces). Line-anchored via pos==0 or
+			// src[pos-1]=='\n'. Consumes up to (but not including) the
+			// trailing `\n`, so the next loop iteration emits the `\n`
+			// via the byte-copy fallback and the existing
+			// sawColonThisLine reset logic stays intact.
+			std::size_t matchE = tryMatchRuleE(src, length, i);
+			if (matchE != 0)
+			{
+				out += matchE;
+				i   += matchE;
+				++outRewriteCount;
+				// No sawColonThisLine update needed -- Rule E only fires
+				// at line-start where the flag is already FALSE, and the
+				// trailing `\n` flows through the fallback path below to
+				// keep the reset behavior canonical.
 				continue;
 			}
 
@@ -577,6 +702,22 @@ namespace
 				outPos += matchB;
 				i      += matchB;
 				sawColonThisLine = true;
+				continue;
+			}
+
+			// Rule E -- emit match-length spaces. Mirrors the Pass 1
+			// dispatch in computeRewrittenLength; identical match
+			// predicate guarantees the same length is consumed here.
+			std::size_t matchE = tryMatchRuleE(src, length, i);
+			if (matchE != 0)
+			{
+				DEBUG_FATAL(outPos + matchE > dstCapacity,
+					("Direct3d11_HlslRewrite: emit overflow Rule E at"
+					 " src[%zu] (len=%zu), outPos=%zu/%zu",
+					 i, matchE, outPos, dstCapacity));
+				std::memset(dst + outPos, ' ', matchE);
+				outPos += matchE;
+				i      += matchE;
 				continue;
 			}
 
@@ -922,7 +1063,7 @@ unsigned char *Direct3d11_HlslRewrite::applyToIncludeBuffer(
 	delete[] inBuffer;
 
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_HlslRewrite: include '%s' Rules A/B/C rewritten"
+		("Direct3d11_HlslRewrite: include '%s' Rules A/B/C/E rewritten"
 		 " (%zu rewrite%s; input=%zu bytes -> output=%zu bytes; delta=%+zd)\n",
 		 diagName ? diagName : "<unnamed>",
 		 rewriteCount, (rewriteCount == 1) ? "" : "s",
