@@ -307,43 +307,23 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// narrative + the Iter-11 fix description.
 	//
 	// Plan 11-07 Iter-12: version bumped 9 -> 10 alongside a PURE
-	// DIAGNOSTIC THROWAWAY iteration that re-adds the Iter-10/11 rewrite
-	// I/O dump pair (counter-extended to 5 includes). Iter-11's smoke
-	// FATAL'd at the IDENTICAL X4016 signature as Iter-10 (crash dump
-	// stage/SwgClient_d.exe-unknown.0-20260519145821.txt) despite the
-	// context-aware rule fix. Three hypotheses are in play and none can
-	// be distinguished from the crash dump alone:
-	//   (1) Iter-11 still over-strips due to a subtle bug in the
-	//       `sawColonThisLine` state machine (set/reset edge cases vs
-	//       the Rule-B/C byte-stepping interaction).
-	//   (2) Iter-11 correctly preserves globals, but D3DCompile
-	//       interprets the preserved bindings as overlapping (implicit
-	//       $Globals cbuffer competing with explicit `register(c0)`,
-	//       or BACKWARDS_COMPATIBILITY mode quirks).
-	//   (3) Something else entirely (new declaration class we haven't
-	//       seen; post-rewrite content surprises).
-	// The dumps capture to stage/shader-rewrite-{main,inc-0..4}-
-	// {input,output}.txt and are reverted in Iter-13's first commit per
-	// the established THROWAWAY closeout pattern (mirrors the Iter-8 ->
-	// Iter-9 and Iter-10 -> Iter-11 reverts). The rewrite rules
-	// themselves are UNCHANGED between Iter-11 and Iter-12 -- this
-	// iteration adds no rule coverage, only diagnostic output. See the
-	// Iter-12 entry in 11-07-iteration-log.md for the diagnostic-purpose
-	// narrative + expected outcomes per hypothesis.
+	// DIAGNOSTIC THROWAWAY iteration that re-added the Iter-10/11 rewrite
+	// I/O dump pair (counter-extended to 5 includes; reverted in Iter-13's
+	// first commit). The dumps confirmed Iter-11's context-aware rule
+	// preserves global `: register(cN)` bindings correctly; X4016 is a
+	// D3DCompile-level rejection of D3D9-era explicit register bindings
+	// under the implicit `$Globals` cbuffer that SM4+ creates. See the
+	// Iter-12 entry in 11-07-iteration-log.md for the diagnostic findings.
 	//
-	// Cache implications: REWRITE_VERSION 9 -> 10 forces a mass cache miss
-	// on next launch; D3DCompile rebuilds every blob with byte-identical
-	// post-rewrite content from Iter-11 (rules unchanged) + re-stores.
-	// Iter-11 `.cso` blobs (none exist -- compile FATAL'd at X4016 before
-	// any `store()` call) are unaffected. The bump is essential because
-	// the dumps live INSIDE the cache-miss branch -- without it, any
-	// cached blob from a prior compile would short-circuit the rewrite
-	// + the dumps would never fire.
+	// Plan 11-07 Iter-13: version bumped 10 -> 11 to invalidate any
+	// cached blobs from the Iter-12 throwaway window. Rules unchanged
+	// from Iter-11 in this revert commit; the actual X4016 fix lands in
+	// the second Iter-13 commit (cbuffer-wrap rewrite -- Rule D).
 	std::vector<D3D_SHADER_MACRO> defines;
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "10" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "11" });
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
