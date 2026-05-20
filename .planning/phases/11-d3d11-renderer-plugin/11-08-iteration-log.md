@@ -202,9 +202,37 @@
 
 ---
 
+## Iteration 2.5: Plan 11-05 retrofit — expand cbuffer slot 1024 → 1152 bytes + declare Direct3d11_VertexSlot0CB with per-field static_asserts (CODEX Q3a+Q3b)
+
+- **Date:** 2026-05-20
+- **Predicted symptom:** none — pre-implementation retrofit. Plan 11-05's `Direct3d11_ConstantBuffer::kMaxCBufferBytes = 1024` was an unverified "comfortable headroom" assumption that under-provisioned `c60..c67` (ExtendedLightData) by 64 bytes. Combined with `Map(WRITE_DISCARD)` returning UNDEFINED bytes (CODEX sixth hypothesis), Iter-18 BSOD's downstream cbuffer-wiring iterations would have left arbitrary garbage in the unwritten 1024..1088 region — exactly the symptom that took the OS down.
+- **Hypothesis:** CODEX Q3a verdict: ExtendedLightData is 8 registers (2 × HemisphericLightData; HemisphericLightData = 4 float4 per HLSL struct-row-alignment rules); occupies c60..c67. Cbuffer total span = (67+1) × 16 = 1088 bytes. CODEX Q3b verdict: EXPAND THE SLOT (splitting / dropping both untenable). Plan 11-08 chooses 1152 bytes (72 registers) — 64 bytes of safety margin above the 1088 requirement, room for the trailing pad block in `Direct3d11_VertexSlot0CB` and any future ±1-register drift. Static_assert constellation enforces every packoffset boundary at compile time so any future drift (C++ side OR HLSL side) surfaces as a build error, never a runtime NaN cascade / BSOD.
+- **Investigation:**
+  - Read `Direct3d11_ConstantBuffer.h` lines 70-101 — confirmed Plan 11-05's `kMaxCBufferBytes = 1024` is a single point-of-truth used by `createOneSlot` for `D3D11_BUFFER_DESC::ByteWidth` (cpp:43), the install log line (cpp:73), and the bounds checks in `updateVS/updatePS` (cpp:93/94/114/115). No hardcoded 1024 elsewhere — bumping the constant propagates everywhere cleanly.
+  - Confirmed `Direct3d11_PerFrameCB` / `Direct3d11_PerObjectCB` / `Direct3d11_PerMaterialCB` are still consumed by Plan 11-06 LightManager + other call sites — declarations must be PRESERVED (Plan 11-08's struct is ADDITIVE, not replacement).
+  - Placed the new struct + static_asserts AFTER the `Direct3d11_ConstantBuffer` class closing brace so the `static_assert(sizeof(Direct3d11_VertexSlot0CB) <= Direct3d11_ConstantBuffer::kMaxCBufferBytes)` reference resolves cleanly.
+- **Root cause:** none — this is a structural retrofit iteration. Plan 11-05's slot capacity decision was made before the HLSL register-usage audit landed; CODEX's Q3a analysis surfaced the gap during Plan 11-08 peer review.
+- **Fix:** `src/engine/client/application/Direct3d11/src/win32/Direct3d11_ConstantBuffer.h` extended:
+  1. `kMaxCBufferBytes` constant bumped 1024 → 1152 with a 12-line comment block documenting CODEX Q3a/Q3b verdict + Iter-18 BSOD redux risk + 64-byte safety margin rationale.
+  2. After class closing brace, added the `Direct3d11_VertexSlot0CB` struct with 8 fields covering c0..c71 (WVP / World / fog region / material / LightData / gap / ExtendedLightData / trailing pad).
+  3. 10 static_asserts: sizeof == 1152, sizeof % 16 == 0, sizeof <= kMaxCBufferBytes, and 7 offsetof checks (c0 / c4 / c8 / c11 / c16 / c44 / c60 boundaries).
+  4. `Direct3d11_ConstantBuffer.cpp` UNCHANGED — all uses of `kMaxCBufferBytes` flow through the single constant; no hardcoded 1024 anywhere in the cpp.
+- **Verification (11-gate set):**
+  - Gate 1: MSBuild Direct3d11 EXIT=0 confirmed — ALL 10 static_asserts passed at compile time. The struct layout matches the locked design.
+  - Gates 2-5: MSBuild Direct3d9 / _ffp / _vsps / SwgClient — pending (will batch with Iter-1.8 + 2.5 build sweep). Not expected to regress; no shared headers touched.
+  - Gates 6-10: D-13/D-04a/D-05 unchanged; MSVC /W4 clean (pre-existing C4459 DirectXMathVector carry-forward only).
+  - Gate 11 (ERROR-severity message count): unchanged from Iter-1.8 baseline expectation (zero BC2 errors next smoke); cbuffer-write changes don't land until Task 3a/3b.
+  - Gate 12 (ROW_MAJOR flag present): unchanged from Iter-1.5.
+  - **Gate 13 (slot capacity ≥1088B): SATISFIED.** kMaxCBufferBytes = 1152, 64 bytes above the 1088 minimum. `sizeof(Direct3d11_VertexSlot0CB) == 1152` confirmed at compile time. 7 packoffset boundary offsetof checks pass at compile time.
+  - STUB count unchanged at 27.
+- **Commits:** one commit `feat(11-08): Plan-11-05 retrofit -- expand cbuffer slot 1024->1152 bytes; declare Direct3d11_VertexSlot0CB with per-field static_asserts (CODEX Q3a+Q3b)`.
+- **Awaiting:** no smoke required — compile-only change. The static_assert constellation is the at-compile-time enforcement. Task 3a is the next iteration (initial-state guarantee + primeDefaults install-time landing). Task 3a's smoke checkpoint is where the new slot capacity gets exercised at runtime.
+
+---
+
 ## Future iterations (placeholders)
 
-Filled as Task 2.5+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
+Filled as Task 3a+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
 
 ## Final state (filled at plan close)
 
