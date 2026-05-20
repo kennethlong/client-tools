@@ -308,9 +308,53 @@
 
 ---
 
+## Iteration 3b: matrix-shadow setters + full-fill WVP composition + per-draw flush+bind sequencing (the actual Iter-18 fix)
+
+- **Date:** 2026-05-20
+- **Predicted symptom:** the Plan 11-08 critical-path delivery. Pre-Task-3b: dark-blue clear visible, geometry NOT visible (Plan 11-07 close milestone preserved). Post-Task-3b: dark-blue clear MUST remain visible AND at least ONE visible-geometry candidate (char-select planet sphere / planet-name text / HUD overlay / any visible mesh) renders on top. Iter-18 BSOD risk re-tested: this iteration lands the cbuffer composition that BSOD'd Plan 11-07 Iter-18, but with all 8 must-have prerequisites in place (Iter-1 verified D3D9 composition order, Iter-1.5 ROW_MAJOR flag, Iter-1.6 break-on-severity tuned, Iter-1.7 file-sink diagnostics, Iter-1.8 BC2 srcBox pad, Iter-2.5 slot capacity 1152B with per-field static_asserts, Iter-3a primeDefaults install-time fill, Iter-3a.1 RTV cache). The safety net is fully populated; if anything goes wrong this time, drainInfoQueue captures the validation message BEFORE TDR escalates.
+- **Hypothesis:** The three per-frame transform setters (`setWorldToCameraTransform` / `setProjectionMatrix` / `setObjectToWorldTransformAndScale`) currently each write a SMALL struct (96 / 192 / 192 bytes) to slot 0 or slot 1 -- partial writes against the new 1152-byte slot, leaving 1056+ bytes UNDEFINED via Map(WRITE_DISCARD). This pattern IS the Iter-18 BSOD root cause #6 lurking in the working tree from before Plan 11-08 retrofits landed. Replace with the canonical shadow-and-compose pattern: each setter shadows its matrix into a file-scope static; setObjectToWorldTransformAndScale composes WVP = (P*V)*W per CODEX Q1 + uploads the FULL Direct3d11_VertexSlot0CB struct (1152 bytes). Per-draw flush+bind is handled by applyPreDrawState's existing bindVS(0) call (Plan 11-06) plus a first-draw race guard at the top of applyPreDrawState that composes+uploads with identity defaults if no setObjectToWorldTransformAndScale call has fired this session.
+- **Investigation:**
+  - Read `Direct3d11_StateCache.cpp` lines 593-657: confirmed the three setters' current partial-write pattern. `setWorldToCameraTransform` builds Direct3d11_PerFrameCB (96 bytes) and updateVS(0, ...) -- a 96-of-1152-byte slot 0 write. `setProjectionMatrix` builds Direct3d11_PerObjectCB (192 bytes) and updateVS(1, ...) -- a 192-of-1152-byte slot 1 write. `setObjectToWorldTransformAndScale` builds Direct3d11_PerObjectCB (192 bytes) and updateVS(1, ...) -- ALSO writing slot 1, clobbering setProjectionMatrix's write. The shader's c0..c3 (WVP) was never being composed; c4..c7 (World) was getting overwritten with the projection matrix in some frames and the world matrix in others depending on call order. Plan 11-07 closed at "visible-dark-blue clear" because no draw call exercised slot 0 yet -- the bug was latent until Task 3b actually wires the matrices.
+  - Read `Direct3d11_StateCache.cpp` lines 317-407: confirmed `applyPreDrawState` already calls `Direct3d11_ConstantBuffer::bindVS(0)` at line 372. The "per-draw flush+bind sequencing" Iter-18 must-have is partially satisfied by the existing bind; the new addition is the first-draw race guard above the bind call.
+  - Confirmed shader IR layout via direct read of `stage/shader-iter13b-inc-0-output.txt` lines 99-103: `c8 = float3 cameraPosition_w`, `c9 = float4 viewportData`, `c10 = float4 fog`. The Iter-2.5 struct labeled c8..c10 as "fog region" (planner guess); the verified layout places camera at c8, viewport at c9, fog at c10. composeAndUploadSlot0 writes cameraPosition into cb.c8_to_c10[0]; c9 + c10 stay zero by {}-init (Task 4 wires viewport + fog if smoke surfaces visual issues).
+  - CODEX Q1 ratification (recorded in Iter-1 §Investigation): D3D9 plugin at Direct3d9.cpp:3291 + 3359 computes `ms_cachedWorldToProjectionMatrix = D3DXMatrixMultiply(P, V) = P * V`; D3D9 plugin at Direct3d9.cpp:4034 computes `matrices[0] = D3DXMatrixMultiply(WtP, W) = (P*V)*W`. Per CODEX peer review, `XMMatrixMultiply(A, B) == D3DXMatrixMultiply(&out, &A, &B)` (same row-major + row-vector + pre-multiplication semantics). The port is byte-for-byte equivalent. NO CHECKPOINT surfaced.
+- **Root cause:** missing matrix wiring + partial writes leaking undefined bytes into the shader-readable cbuffer region. The fix is shadow-and-compose with full-fill upload.
+- **Fix:** Single-file edit (`Direct3d11_StateCache.cpp`):
+  1. Added to `Direct3d11_StateCacheNamespace` (after the metrics block):
+     - File-scope `XMFLOAT4X4 s_cachedView` / `s_cachedProj` / `s_cachedWorld` shadows, each identity-initialized at file scope (NOT zero-initialized -- identity-init is required so the first-draw guard's compose-and-upload uses correct defaults).
+     - `XMFLOAT4 s_cachedCameraPos = (0,0,0,0)` for the c8 region.
+     - `bool s_anyMatrixWritten = false` sentinel.
+     - `void composeAndUploadSlot0()` helper: zero-inits `Direct3d11_VertexSlot0CB cb = {};` (1152 bytes); XMLoad the three shadows; XMMatrixMultiply(P, V) for WtP; XMMatrixMultiply(WtP, W) for WvP; XMStoreFloat4x4 both into cb.objectWorldCameraProjectionMatrix and cb.objectWorldMatrix; assign cameraPos into cb.c8_to_c10[0]; updateVS(0, &cb, sizeof(cb)) for the full 1152-byte upload.
+  2. Added to `applyPreDrawState` (top of function): `if (!s_anyMatrixWritten) { composeAndUploadSlot0(); s_anyMatrixWritten = true; }` -- closes the first-draw race even if the engine fires draws before any setObjectToWorldTransformAndScale call.
+  3. Rewrote `setWorldToCameraTransform`: extract view from `objectToWorld.getMatrix()` into `s_cachedView`; cache `s_cachedCameraPos`; NO cbuffer write. The upload happens in setObjectToWorldTransformAndScale or first-draw guard.
+  4. Rewrote `setProjectionMatrix`: memcpy `projectionMatrix.matrix` into `s_cachedProj`; NO cbuffer write. (Removed the slot-1 PerObjectCB write that was clobbering world.)
+  5. Rewrote `setObjectToWorldTransformAndScale`: extract world matrix from `objectToWorld.getMatrix()` with per-axis scale composed into basis columns (preserved Plan 11-06's correct scale-compose logic) into `s_cachedWorld`; call `composeAndUploadSlot0()`; set `s_anyMatrixWritten = true`.
+  - Total: ~80 lines net positive (the helper + shadows + first-draw guard add lines; the setter rewrites swap partial-write blocks for shadow assignments).
+- **Verification (13-gate set):**
+  - Gate 1: `MSBuild Direct3d11 EXIT=0` confirmed; gl11_d.dll auto-restages.
+  - Gates 2-5: MSBuild Direct3d9 / _ffp / _vsps / SwgClient -- pending; no D3D9 source or shared header touched.
+  - Gate 6: D-13 grep -- 0 non-comment hits (unchanged).
+  - Gate 7: D-05 git diff -- unchanged (no D3D9 source touched).
+  - Gate 8: D-04a Glob -- 0 (unchanged).
+  - Gate 9: FFP scan on `Direct3d11_StateCache.cpp` -- 0 functional `#ifdef FFP / D3DTSS_ / D3DTOP_`.
+  - Gate 10: MSVC /W4 -- clean (pre-existing C4459 carry-forward only).
+  - Gate 11 (ERROR-severity message count during steady-state): pending Kenny smoke. Expected: 0. Iter-3a smoke produced 0 ERRORs; Task 3b adds matrix-wiring + cbuffer upload changes but uses the same validated updateVS/Map(WRITE_DISCARD)/Unmap pattern primeDefaults uses, with the safety net of identity-init shadows + first-draw guard + full-fill upload. Worst case: a NEW class of debug-layer warning surfaces (e.g. about matrix-data type mismatch); drainInfoQueue captures it.
+  - Gate 12 (ROW_MAJOR flag present): unchanged from Iter-1.5.
+  - Gate 13 (slot capacity ≥1088B + Direct3d11_VertexSlot0CB defined): unchanged from Iter-2.5; full 1152-byte upload in composeAndUploadSlot0() uses sizeof(Direct3d11_VertexSlot0CB) which the static_assert pins to 1152.
+  - STUB count unchanged at 27.
+- **Commits:** one commit `feat(11-08): matrix-shadow setters rewrite + full-fill WVP composition + per-draw flush+bind (Iter-18 must-haves 5+7+8 of 8; CODEX Q1 ratified order)`.
+- **Awaiting Kenny smoke (Iter-3b verdict; THE BIG ONE):**
+  - **Best outcome (~50% prior, the milestone target):** process launches; dark-blue clear visible (Plan 11-07 milestone preserved); ShowWindow assist still needed; THEN visible geometry appears on top of the clear -- char-select planet sphere, planet-name text, HUD overlay text, any mesh. `stage/d3d11-debug.log` carries 0 ERROR-severity messages this session. Process runs ≥60 sec without crash. **This is the Plan 11-08 exit milestone.**
+  - **Acceptable outcome (~30% prior):** process launches; dark-blue clear visible; NO visible geometry yet but ALSO no crash + 0 ERRORs. The matrix wiring is structurally correct but some other piece (PS-side cbuffer wiring, vertex shader bytecode mismatch with the new input layout, shader read of c44..c67 garbage, etc.) prevents geometry from showing up. drainInfoQueue captures whatever D3D11 IS complaining about (WARNING-severity maybe). Verdict: REVIEW; the D3D11 WARNING messages become the design input for Task 4's iterative fix-by-fix loop.
+  - **FATAL outcome (~10% prior):** process launches but FATAL's with a new boundary (e.g. an asset path the engine takes once it tries to render real geometry). FATAL is normal iteration progress per Plan 11-07 precedent. Commit the code WITH the FATAL message; Task 4 picks up from the new boundary.
+  - **BSOD outcome (~5% prior, the dreaded redux):** Iter-18 pattern repeats despite all 8 safety nets. Working tree reverted via `git restore`, recorded as a FAILURE iteration with updated hypothesis. The most likely surviving failure path would be a NaN-cascade-from-shader-loop issue that drainInfoQueue can't see because the TDR is GPU-side. Recovery: bisect the 8 safety nets to find which one didn't catch what was needed.
+  - **REVIEW outcome (~5% prior):** something else unexpected -- e.g. dark-blue clear regresses (lost back-buffer rebind), input loop stops responding, hover SFX go silent. Verdict: REVIEW; bisect commits Iter-3a.1 / Iter-3a / Task 2.5 / Iter-1.x to find the regression.
+
+---
+
 ## Future iterations (placeholders)
 
-Filled as Task 3b+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
+Filled as Task 4 (iterative fix-by-fix to exit milestone) lands. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
 
 ## Final state (filled at plan close)
 

@@ -158,6 +158,88 @@ namespace Direct3d11_StateCacheNamespace
 	int ms_skippedDrawsNullLayout = 0;
 
 	// ------------------------------------------------------------------
+	// Plan 11-08 Task 3b: matrix-shadow file-scope statics. The three
+	// per-frame transform setters (setWorldToCameraTransform /
+	// setProjectionMatrix / setObjectToWorldTransformAndScale) write
+	// ONLY to these shadows -- they do NOT touch the GPU cbuffer. The
+	// per-object setter (setObjectToWorldTransformAndScale) is the
+	// canonical upload site: it composes WVP = (P * V) * W from the
+	// current shadows and uploads the FULL Direct3d11_VertexSlot0CB
+	// (1152 bytes) to slot 0 via composeAndUploadSlot0().
+	//
+	// Iter-18 BSOD root-cause analysis (the never-committed minimum-WVP
+	// attempt that BSOD'd the OS via GPU TDR escalation) enumerated 5
+	// must-haves; CODEX peer review added a 6th. This block satisfies
+	// must-haves #1 (verified D3D9 composition order via Iter-1 source
+	// read), #4 (initial-state guarantee via identity-matrix defaults
+	// here + primeDefaults at install), #5 (per-draw flush+bind via
+	// applyPreDrawState's existing bindVS(0)), #7 (full-fill mandatory:
+	// every composeAndUploadSlot0() call uploads the entire 1152-byte
+	// struct -- partial writes FORBIDDEN per CODEX 6th hypothesis).
+	//
+	// Identity-initialized at file scope so the first applyPreDrawState
+	// call (before any engine setter has fired) finds safe defaults
+	// regardless of primeDefaults's success. s_anyMatrixWritten is the
+	// belt-and-suspenders sentinel for the first-draw race guard.
+
+	XMFLOAT4X4 s_cachedView  = XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f,
+	                                      0.0f, 1.0f, 0.0f, 0.0f,
+	                                      0.0f, 0.0f, 1.0f, 0.0f,
+	                                      0.0f, 0.0f, 0.0f, 1.0f);
+	XMFLOAT4X4 s_cachedProj  = XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f,
+	                                      0.0f, 1.0f, 0.0f, 0.0f,
+	                                      0.0f, 0.0f, 1.0f, 0.0f,
+	                                      0.0f, 0.0f, 0.0f, 1.0f);
+	XMFLOAT4X4 s_cachedWorld = XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f,
+	                                      0.0f, 1.0f, 0.0f, 0.0f,
+	                                      0.0f, 0.0f, 1.0f, 0.0f,
+	                                      0.0f, 0.0f, 0.0f, 1.0f);
+	XMFLOAT4   s_cachedCameraPos = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	bool       s_anyMatrixWritten = false;
+
+	// Compose WVP from current shadows + upload full Direct3d11_VertexSlot0CB
+	// to slot 0. CODEX Q1 ratified order: wtp = P * V; wvp = wtp * W = P*V*W.
+	// Direct port of D3D9 plugin's draw-time site at Direct3d9.cpp:4034
+	// (D3DXMatrixMultiply(matrices+0, &ms_cachedWorldToProjectionMatrix,
+	// &ms_cachedObjectToWorldMatrix) where ms_cachedWorldToProjectionMatrix
+	// = P*V per Direct3d9.cpp:3291,3359). Per CODEX peer review,
+	// XMMatrixMultiply(A, B) == D3DXMatrixMultiply(&out, &A, &B) with the
+	// same row-major + row-vector + pre-multiplication semantics, so the
+	// port is byte-for-byte equivalent.
+	//
+	// Per the cbuffer struct layout (Iter-2.5, verified against shader IR
+	// dump stage/shader-iter13b-inc-0-output.txt lines 97-103):
+	//   c0..c3   = objectWorldCameraProjectionMatrix (WVP)
+	//   c4..c7   = objectWorldMatrix (World)
+	//   c8       = cameraPosition_w (float3, world-space camera pos)
+	//   c9       = viewportData     (float4, zero for now -- Task 4 if needed)
+	//   c10      = fog              (float4, zero for now -- Task 4 if needed)
+	//   c11..c71 = material / lightData / gap / extendedLightData / pad,
+	//             all zero by {}-init (numLights = lightData[0].x = 0 is
+	//             the shader-side loop-bomb guard per Iter-18 must-have #2).
+	void composeAndUploadSlot0()
+	{
+		Direct3d11_VertexSlot0CB cb = {};   // 1152 bytes zero-init -- mandatory per CODEX 6th hypothesis
+
+		DirectX::XMMATRIX V   = DirectX::XMLoadFloat4x4(&s_cachedView);
+		DirectX::XMMATRIX P   = DirectX::XMLoadFloat4x4(&s_cachedProj);
+		DirectX::XMMATRIX W   = DirectX::XMLoadFloat4x4(&s_cachedWorld);
+		DirectX::XMMATRIX wtp = DirectX::XMMatrixMultiply(P, V);     // P * V (CODEX Q1)
+		DirectX::XMMATRIX wvp = DirectX::XMMatrixMultiply(wtp, W);   // (P * V) * W
+
+		DirectX::XMStoreFloat4x4(&cb.objectWorldCameraProjectionMatrix, wvp);
+		DirectX::XMStoreFloat4x4(&cb.objectWorldMatrix,                 W);
+
+		// c8 = cameraPosition_w. Shader declares as float3, but our struct
+		// member is XMFLOAT4 -- the float w component (s_cachedCameraPos.w)
+		// is ignored by the shader per HLSL float3-from-float4 conversion
+		// rules. c9 + c10 stay zero (default viewport scale, no fog).
+		cb.c8_to_c10[0] = s_cachedCameraPos;
+
+		Direct3d11_ConstantBuffer::updateVS(0, &cb, sizeof(cb));
+	}
+
+	// ------------------------------------------------------------------
 	// Defaults applied at install time -- mirror Direct3d9_StateCache::install
 	// (lines 52-100) for the engine-visible "starting state" the engine
 	// expects on first frame.
@@ -319,6 +401,25 @@ namespace Direct3d11_StateCacheNamespace
 		ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
 		if (!ctx)
 			return false;
+
+		// Plan 11-08 Task 3b: first-draw race guard. If the engine fires
+		// applyPreDrawState before any setObjectToWorldTransformAndScale
+		// has run this session, slot 0 still has the install-time
+		// primeDefaults identity payload -- which is safe (renders at
+		// identity transform), but the s_cachedView / s_cachedProj
+		// shadows may have been written by setWorldToCameraTransform /
+		// setProjectionMatrix without the slot 0 cbuffer having been
+		// updated to reflect them. Composing+uploading once here closes
+		// that race so the slot 0 contents match the current shadow
+		// state regardless of which setter ran most recently. The cost
+		// is one extra updateVS(0,...) on the very first draw of the
+		// session; every subsequent draw uses the slot 0 contents that
+		// setObjectToWorldTransformAndScale wrote.
+		if (!s_anyMatrixWritten)
+		{
+			composeAndUploadSlot0();
+			s_anyMatrixWritten = true;
+		}
 
 		// 1. Shaders
 		if (!resolveShaders())
@@ -592,34 +693,36 @@ void Direct3d11_StateCache::setScissorRect(bool enabled, int x, int y, int width
 
 void Direct3d11_StateCache::setWorldToCameraTransform(Transform const &objectToWorld, Vector const &cameraPosition)
 {
-	// Build PerFrame view portion. We mirror the D3D9 plugin: store the
-	// view matrix in the world+view combo (Plan 11-06 doesn't yet
-	// implement projection composition; that's the next setter).
-	Direct3d11_PerFrameCB cb = {};
-	auto const &m = objectToWorld.getMatrix();    // real[3][4]
-	cb.viewProj = XMFLOAT4X4(
+	// Plan 11-08 Task 3b: shadow-only. The cbuffer upload happens in
+	// setObjectToWorldTransformAndScale (the canonical per-object site
+	// where the full WVP is composed). Pre-Plan-11-08 this site wrote
+	// Direct3d11_PerFrameCB to slot 0 (96 bytes) -- which under the new
+	// Direct3d11_VertexSlot0CB layout (1152 bytes) would be a partial
+	// write leaving 1056 bytes UNDEFINED via Map(WRITE_DISCARD), exactly
+	// the Iter-18 BSOD root cause #6. Replaced with shadow assignment;
+	// see composeAndUploadSlot0 helper in this file's namespace block.
+	auto const &m = objectToWorld.getMatrix();    // real[3][4]; 4th row is implicit (0,0,0,1)
+	s_cachedView = XMFLOAT4X4(
 		static_cast<float>(m[0][0]), static_cast<float>(m[0][1]), static_cast<float>(m[0][2]), static_cast<float>(m[0][3]),
 		static_cast<float>(m[1][0]), static_cast<float>(m[1][1]), static_cast<float>(m[1][2]), static_cast<float>(m[1][3]),
 		static_cast<float>(m[2][0]), static_cast<float>(m[2][1]), static_cast<float>(m[2][2]), static_cast<float>(m[2][3]),
 		0.0f, 0.0f, 0.0f, 1.0f);
-	cb.cameraPos_pad    = XMFLOAT4(cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.0f);
-	cb.fogColor_density = XMFLOAT4(0, 0, 0, 0);
-	Direct3d11_ConstantBuffer::updateVS(0, &cb, sizeof(cb));
+	s_cachedCameraPos = XMFLOAT4(cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.0f);
 }
 
 // ----------------------------------------------------------------------
 
 void Direct3d11_StateCache::setProjectionMatrix(GlMatrix4x4 const &projectionMatrix)
 {
-	// In the D3D9 plugin setProjectionMatrix is paired with the world-view;
-	// for Plan 11-06 we update the PerObject world slot (slot 1) with the
-	// projection matrix. Plan 11-07 (subsystem coverage) refines the
-	// composition order once smoke surfaces what the shaders actually expect.
-	Direct3d11_PerObjectCB cb = {};
-	std::memcpy(&cb.world, projectionMatrix.matrix, sizeof(float) * 16);
-	for (int i = 0; i < 8; ++i)
-		cb.userConstants[i] = XMFLOAT4(0, 0, 0, 0);
-	Direct3d11_ConstantBuffer::updateVS(1, &cb, sizeof(cb));
+	// Plan 11-08 Task 3b: shadow-only. Pre-Plan-11-08 this site wrote
+	// Direct3d11_PerObjectCB to slot 1 (192 bytes), clobbering the world
+	// matrix that setObjectToWorldTransformAndScale also wrote to slot 1.
+	// The shader's c4..c7 (objectWorldMatrix) was therefore overwritten
+	// by the projection matrix every frame -- a structural bug. Under
+	// the Plan 11-08 layout slot 1 is unused by the per-frame pipeline;
+	// projection lives in the WVP composition uploaded to slot 0 via
+	// composeAndUploadSlot0().
+	std::memcpy(&s_cachedProj, projectionMatrix.matrix, sizeof(float) * 16);
 }
 
 // ----------------------------------------------------------------------
@@ -643,17 +746,26 @@ void Direct3d11_StateCache::setFog(bool enabled, real density, PackedArgb const 
 
 void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale)
 {
-	Direct3d11_PerObjectCB cb = {};
+	// Plan 11-08 Task 3b: the canonical per-object upload site. Shadows
+	// the world matrix (with uniform per-axis scale composed into basis
+	// columns -- same logic as the pre-Plan-11-08 version), then composes
+	// the full WVP from the three shadows and uploads the entire
+	// Direct3d11_VertexSlot0CB (1152 bytes) to slot 0. See
+	// composeAndUploadSlot0 in this file's namespace block for the WVP
+	// composition order (CODEX Q1 ratified: wtp = P * V; wvp = wtp * W).
+	// Pre-Plan-11-08 this site wrote Direct3d11_PerObjectCB to slot 1
+	// (clobbered by setProjectionMatrix), with no WVP composition; the
+	// shader's c0..c3 was therefore reading uninitialized memory --
+	// exactly the Iter-18 BSOD root cause.
 	auto const &m = objectToWorld.getMatrix();    // real[3][4]
-	// Compose uniform per-axis scale into objectToWorld's basis columns.
-	cb.world = XMFLOAT4X4(
+	s_cachedWorld = XMFLOAT4X4(
 		static_cast<float>(m[0][0]) * scale.x, static_cast<float>(m[0][1]),           static_cast<float>(m[0][2]),           static_cast<float>(m[0][3]),
 		static_cast<float>(m[1][0]),           static_cast<float>(m[1][1]) * scale.y, static_cast<float>(m[1][2]),           static_cast<float>(m[1][3]),
 		static_cast<float>(m[2][0]),           static_cast<float>(m[2][1]),           static_cast<float>(m[2][2]) * scale.z, static_cast<float>(m[2][3]),
 		0.0f, 0.0f, 0.0f, 1.0f);
-	for (int i = 0; i < 8; ++i)
-		cb.userConstants[i] = XMFLOAT4(0, 0, 0, 0);
-	Direct3d11_ConstantBuffer::updateVS(1, &cb, sizeof(cb));
+
+	composeAndUploadSlot0();
+	s_anyMatrixWritten = true;
 }
 
 // ----------------------------------------------------------------------
