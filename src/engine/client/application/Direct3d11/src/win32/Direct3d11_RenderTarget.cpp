@@ -196,22 +196,24 @@ void Direct3d11_RenderTarget::setRenderTarget(Texture *texture, CubeFace cubeFac
 	}
 	else
 	{
-		// Texture is itself a render target -- create (or reuse) an RTV
-		// directly on its underlying ID3D11Texture2D / Cube via the
-		// Direct3d11_TextureData helper.
+		// Texture is itself a render target -- use the RTV cached on
+		// Direct3d11_TextureData. Plan 11-08 Iter-3a.1: pre-fix every
+		// bind called CreateRenderTargetView, producing ~20,975
+		// per-session Create+Destroy RTV cycles in the InfoQueue stream.
+		// Post-fix the RTV is lazy-created on first bind and persists
+		// for the texture's lifetime; ms_userRTV holds a per-binding
+		// reference so setRenderTargetToPrimary's Reset() doesn't tear
+		// down the master cache on the TextureData.
 		Direct3d11_TextureData const *texData =
 			static_cast<Direct3d11_TextureData const *>(texture->getGraphicsData());
 		NOT_NULL(texData);
 
-		D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-		// We don't know the exact format here without re-querying the
-		// resource; let the runtime infer with a nullptr desc (works for
-		// non-typeless formats which the engine uses exclusively).
-		ms_userRTV.Reset();
-		HRESULT const hr = device->CreateRenderTargetView(texData->getTexture(), nullptr, &ms_userRTV);
-		FATAL_DX_HR("Direct3d11_RenderTarget::setRenderTarget CreateRenderTargetView failed: %s", hr);
+		ID3D11RenderTargetView * const cachedRTV = texData->getOrCreateRenderTargetView(device);
+		FATAL(!cachedRTV,
+		      ("Direct3d11_RenderTarget::setRenderTarget: getOrCreateRenderTargetView returned null; "
+		       "render-target texture cannot bind"));
 
-		UNREF(rtvDesc);
+		ms_userRTV = cachedRTV;   // ComPtr AddRef -- texture retains master ownership
 
 		ID3D11RenderTargetView * rtvs[1] = { ms_userRTV.Get() };
 		context->OMSetRenderTargets(1, rtvs, nullptr);

@@ -697,3 +697,40 @@ void Direct3d11_TextureData::copyFrom(int surfaceLevel,
 }
 
 // ======================================================================
+// Plan 11-08 Iter-3a.1: lazy-create + cache the RTV for render-target
+// textures. Pre-fix Direct3d11_RenderTarget::setRenderTarget called
+// CreateRenderTargetView every bind, producing the ~20,975 per-session
+// Create+Destroy RTV churn observed in stage/d3d11-debug.log. Post-fix
+// the RTV is created on first bind and persists for the texture's
+// lifetime; subsequent binds reuse the cached ComPtr.
+
+ID3D11RenderTargetView * Direct3d11_TextureData::getOrCreateRenderTargetView(ID3D11Device *device) const
+{
+	if (!m_engineTexture.isRenderTarget())
+		return nullptr;
+
+	if (m_rtv)
+		return m_rtv.Get();
+
+	NOT_NULL(device);
+	NOT_NULL(m_texture);
+
+	// nullptr desc preserves the existing setRenderTarget behavior: the
+	// runtime infers the format + full-subresource binding from the
+	// underlying ID3D11Texture2D. Cube/mip-specific RTVs would require
+	// a populated D3D11_RENDER_TARGET_VIEW_DESC; the existing engine
+	// callers do not differentiate and this fix preserves that contract.
+	HRESULT const hr = device->CreateRenderTargetView(m_texture.Get(), nullptr, m_rtv.GetAddressOf());
+	if (FAILED(hr))
+	{
+		DEBUG_WARNING(true,
+			("Direct3d11_TextureData::getOrCreateRenderTargetView: CreateRenderTargetView failed (hr=0x%08X); "
+			 "callers will see nullptr and may fall back to no-op binding.\n",
+			 static_cast<unsigned>(hr)));
+		return nullptr;
+	}
+
+	return m_rtv.Get();
+}
+
+// ======================================================================

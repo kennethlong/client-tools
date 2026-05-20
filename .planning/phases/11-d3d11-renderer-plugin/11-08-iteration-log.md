@@ -272,6 +272,42 @@
 
 ---
 
+## Iteration 3a.1: cache RTV on Direct3d11_TextureData — eliminate per-frame RTV churn from Direct3d11_RenderTarget::setRenderTarget
+
+- **Date:** 2026-05-20
+- **Symptom:** Iter-3a + Iter-1.8 smoke produced a clean 64,450-message d3d11-debug.log over ~5 minutes (20,975 frames at ~60fps); ZERO ERROR-severity messages. But the INFO-severity frequency rollup showed 20,975 `Create ID3D11RenderTargetView` (id=2097243) + 20,975 `Destroy ID3D11RenderTargetView` (id=2097245) + 20,974 `OMSetRenderTargets ... FLIP_SEQUENTIAL unbind` (id=49). That's roughly 1.2 RT-bind cycles per frame burning a fresh `CreateRenderTargetView` + matching `Destroy` every cycle. Wasteful but not crash-class; not a Plan 11-08 critical-path issue but worth closing before Task 3b's cbuffer-wiring work touches the same render-loop code.
+- **Hypothesis:** `Direct3d11_RenderTarget::setRenderTarget` at lines 197-221 (the `texture->isRenderTarget()` branch) calls `ms_userRTV.Reset()` followed by `device->CreateRenderTargetView(texData->getTexture(), nullptr, &ms_userRTV)` on EVERY bind, then `setRenderTargetToPrimary` at line 150 calls `ms_userRTV.Reset()` again on every restore. Single-slot `ms_userRTV` cache cannot persist across different RT-texture bindings. The fix: cache the RTV on the `Direct3d11_TextureData` itself (mirrors the D3D9 plugin pattern where each render-target texture owns its `IDirect3DSurface9`). Lazy-create on first `setRenderTarget` call, reuse on subsequent calls; lifetime tied to the engine texture lifetime via the existing `Direct3d11_TextureData` destructor.
+- **Investigation:**
+  - Read `Direct3d11_RenderTarget.cpp` lines 136-221 — confirmed two RTV churn sites: (a) line 150 `ms_userRTV.Reset()` in `setRenderTargetToPrimary`, (b) lines 210-211 `Reset() + CreateRenderTargetView` in `setRenderTarget`'s `isRenderTarget()` branch.
+  - Read `Direct3d11_RenderTarget.cpp` lines 192-195 (the `!isRenderTarget()` branch) — uses the persistent `ms_renderTargetView` (the baked 512x512 RTV created once in `install()` at line 104-105). This branch does NOT churn; only the isRenderTarget branch does.
+  - Read `Direct3d11_Device.cpp` `beginScene()` lines 285-298 — uses cached `ms_backBufferRTV` from install. No per-frame creates here. Confirmed the churn source is NOT the back-buffer rebind path.
+  - Read `Direct3d11_TextureData.h` lines 31-118 — confirmed there's no existing RTV slot; `m_srv` is the only paired view. Need to add `m_rtv` slot + a `getOrCreateRenderTargetView(ID3D11Device *device) const` lazy accessor. The `mutable` keyword keeps the accessor `const` per the engine's "logical const = no observable state change" model.
+  - Verified that `setRenderTarget`'s `cubeFace` + `mipmapLevel` parameters are NOT used in the existing `CreateRenderTargetView` call (line 211 passes `nullptr` for the desc — whole-texture binding). The cache is therefore SINGLE-RTV-per-texture; cube/mip differentiation would require a (cubeFace, mip)-keyed map but is out of scope here (preserves existing engine behavior).
+- **Root cause:** missing cache. The author of Plan 11-04's `Direct3d11_RenderTarget::setRenderTarget` followed the simplest correct pattern (Reset + CreateRenderTargetView every bind) which is functionally right but performance-wasteful. The fix is a textbook D3D11 cache-on-resource pattern.
+- **Fix:** Three file edits:
+  1. **`Direct3d11_TextureData.h`** — added `mutable Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;` private member + public `ID3D11RenderTargetView * getOrCreateRenderTargetView(ID3D11Device *device) const;` declaration with header comment.
+  2. **`Direct3d11_TextureData.cpp`** — implemented `getOrCreateRenderTargetView` at the bottom of the file. Returns `nullptr` if `m_engineTexture.isRenderTarget()` is false; returns cached `m_rtv.Get()` if already created; otherwise calls `device->CreateRenderTargetView(m_texture.Get(), nullptr, m_rtv.GetAddressOf())` and returns the new pointer. `FAILED(hr)` path emits a `DEBUG_WARNING` and returns nullptr so callers can fall back gracefully (existing setRenderTarget call site asserts non-null via `FATAL(!cachedRTV, ...)` — the FATAL is intentional, an RT texture that cannot create an RTV is a malformed asset/format combination worth surfacing loudly).
+  3. **`Direct3d11_RenderTarget.cpp`** lines 197-221 (the `isRenderTarget()` branch in `setRenderTarget`) — replaced `ms_userRTV.Reset() + CreateRenderTargetView(...)` with `ID3D11RenderTargetView * cachedRTV = texData->getOrCreateRenderTargetView(device); FATAL(!cachedRTV, ...); ms_userRTV = cachedRTV;`. `ms_userRTV` is still a ComPtr — the AddRef on assignment is cheap and `setRenderTargetToPrimary`'s `Reset()` (line 150) releases the per-binding ref without destroying the master cache on the TextureData. Removed the unused `D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {}` + `UNREF(rtvDesc)` debt that was preserved from Plan 11-04's stub.
+- **Verification (11-gate set):**
+  - Gate 1: MSBuild Direct3d11 EXIT=0 confirmed; gl11_d.dll restages clean. Touched 3 TUs (TextureData.h + .cpp + RenderTarget.cpp); incremental build only recompiles those.
+  - Gates 2-5: MSBuild Direct3d9 / _ffp / _vsps / SwgClient — pending; no D3D9 source touched.
+  - Gate 6: D-13 grep — unchanged from Iter-1 baseline (0 non-comment hits).
+  - Gate 7: D-05 git diff — unchanged.
+  - Gate 8: D-04a Glob — unchanged.
+  - Gate 9: FFP scan on TextureData.h/cpp + RenderTarget.cpp — 0 functional `#ifdef FFP / D3DTSS_ / D3DTOP_`.
+  - Gate 10: MSVC /W4 — clean (pre-existing C4459 carry-forward only).
+  - Gate 11 (ERROR-severity message count): expected unchanged at 0 from Iter-3a; the cache change is functionally equivalent to the pre-fix behavior plus persistence.
+  - Gate 12 (ROW_MAJOR): unchanged.
+  - Gate 13 (slot capacity): unchanged.
+  - STUB count unchanged at 27.
+- **Commits:** one commit `fix(11-04): cache RTV on Direct3d11_TextureData -- eliminate per-frame RTV churn in Direct3d11_RenderTarget::setRenderTarget (Plan 11-08 Iter-3a.1)`. `fix(11-04):` prefix mirrors Iter-15, Iter-17, Iter-1.8 — Plan 11-04 resource-layer fixes surfaced during later-plan smokes.
+- **Awaiting Kenny smoke (Iter-3a.1 verification):**
+  - **Best outcome (~80% prior):** smoke produces a fresh `stage/d3d11-debug.log` showing dramatically reduced RTV traffic — ideally a HANDFUL of `Create ID3D11RenderTargetView id=2097243` lines total (one per distinct RT texture bound during the session) instead of ~20,975. `Destroy ID3D11RenderTargetView` count similarly drops to roughly match the number of distinct RT textures actually freed during the session (likely 0 if no RT texture was destroyed mid-session). Plan 11-07 milestone still preserved. Process responsive, no crash.
+  - **Likely outcome (~15% prior):** small lingering RTV traffic if some engine code path destroys + recreates RT textures within a frame (less likely, but possible for transient FBO use). If observed, log the rate to compare against the pre-fix 70/sec baseline.
+  - **Less likely outcome (~5% prior):** unexpected behavioral regression — e.g. an RT texture whose RTV was cached from a stale device/format. Surface as REVIEW with the new D3D11 message text.
+
+---
+
 ## Future iterations (placeholders)
 
 Filled as Task 3b+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).

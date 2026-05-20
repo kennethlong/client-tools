@@ -64,6 +64,21 @@ public:
 	ID3D11ShaderResourceView * getShaderResourceView() const;
 	TextureFormat              getTextureFormat() const;
 
+	// Plan 11-08 Iter-3a.1: lazy-create and cache an RTV for render-target
+	// textures so Direct3d11_RenderTarget::setRenderTarget reuses it across
+	// bind cycles instead of creating a fresh one every call. Pre-fix the
+	// per-frame churn was ~20,975 CreateRenderTargetView + matching destroy
+	// per ~5-minute session (one Create+Destroy pair per RT-bind cycle); the
+	// D3D11 debug layer was reporting the create/destroy as INFO traffic in
+	// stage/d3d11-debug.log. Single create per RT-texture lifetime after this
+	// fix. Pattern mirrors the engine's D3D9 design where each render-target
+	// texture owns its IDirect3DSurface9. Caller passes the device so we
+	// don't need to circular-include Direct3d11_Device.h.
+	//
+	// Returns nullptr if the texture is not a render-target OR the RTV
+	// creation fails (rare; format-incompat surfaces here).
+	ID3D11RenderTargetView *   getOrCreateRenderTargetView(ID3D11Device *device) const;
+
 private:
 
 	// disabled
@@ -89,6 +104,14 @@ private:
 	const Texture                                    &m_engineTexture;
 	Microsoft::WRL::ComPtr<ID3D11Resource>            m_texture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>  m_srv;
+
+	// Plan 11-08 Iter-3a.1: lazy-cached RTV for render-target textures.
+	// Mutable so getOrCreateRenderTargetView() can stay const (matches the
+	// engine's "logical const = no observable state change" model -- the
+	// cache is an implementation detail). Null when m_engineTexture is
+	// not a render target OR the lazy creator hasn't fired yet.
+	mutable Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
+
 	TextureFormat                                     m_destFormat;
 	bool                                              m_isCubeMap;
 	bool                                              m_isVolumeMap;
