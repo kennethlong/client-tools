@@ -31,8 +31,11 @@
 #include "sharedFoundation/Os.h"
 
 #include <d3d11.h>
+#include <d3d11sdklayers.h>   // ID3D11InfoQueue (Plan 11-08 Iter-1 safety net)
 #include <dxgi1_2.h>
 #include <wrl/client.h>
+
+#include <cstdio>             // snprintf for InfoQueue category/severity formatting
 
 // ======================================================================
 
@@ -55,6 +58,13 @@ namespace Direct3d11_DeviceNamespace
 	ComPtr<ID3D11RenderTargetView> ms_backBufferRTV;
 	ComPtr<ID3D11Texture2D>        ms_depthStencilTex;
 	ComPtr<ID3D11DepthStencilView> ms_depthStencilDSV;
+
+	// Plan 11-08 Iter-1: D3D11 debug-layer InfoQueue. Non-null only when
+	// the device was created with D3D11_CREATE_DEVICE_DEBUG (i.e. _DEBUG
+	// build AND ConfigDirect3d11::getEnableDebugLayer() AND the Pitfall 8
+	// fallback did NOT strip the DEBUG bit). drainInfoQueue() guards on
+	// this and is a no-op when null.
+	ComPtr<ID3D11InfoQueue>        ms_infoQueue;
 
 	// ------------------------------------------------------------------
 	// Helper: create back-buffer RTV + depth-stencil texture + DSV.
@@ -170,6 +180,45 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
 		 (createDeviceFlags & D3D11_CREATE_DEVICE_DEBUG) ? "on" : "off"));
 
 	// ------------------------------------------------------------------
+	// Plan 11-08 Iter-1: acquire ID3D11InfoQueue when the debug layer is
+	// live so every D3D11 debug-layer validation message reaches the
+	// runtime log on the same frame it fires. The Iter-18 BSOD established
+	// that the next cbuffer-wiring bug MUST surface as a logged warning
+	// BEFORE escalating to TDR -- without this drain in place, a bad
+	// cbuffer-write would race the rasterizer to BSOD with no diagnostic
+	// trace recoverable from disk.
+
+	if (createDeviceFlags & D3D11_CREATE_DEVICE_DEBUG)
+	{
+		HRESULT const qiHr = ms_device.As(&ms_infoQueue);
+		if (SUCCEEDED(qiHr) && ms_infoQueue)
+		{
+			// Start with no filter -- capture every severity. Later
+			// iterations can tighten if the steady-state log is too noisy.
+			ms_infoQueue->PushEmptyStorageFilter();
+
+			// Corruption is unrecoverable -- break into debugger when
+			// attached, or terminate the process when not. ERROR-severity
+			// in debug builds is treated the same; warnings/info flow
+			// through the drain to the runtime log.
+			ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+			ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR,      TRUE);
+
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11: ID3D11InfoQueue acquired; per-frame drain installed; "
+				 "break-on-severity = CORRUPTION + ERROR.\n"));
+		}
+		else
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11: ID3D11InfoQueue QueryInterface failed (hr=0x%08X); "
+				 "debug-layer messages WILL NOT route to the runtime log this session. "
+				 "Install 'Graphics Tools' optional feature via Windows Settings.\n",
+				 static_cast<unsigned>(qiHr)));
+		}
+	}
+
+	// ------------------------------------------------------------------
 	// Step 2: Create DXGI flip-model swap chain.
 
 	ComPtr<IDXGIDevice>   dxgiDevice;
@@ -252,6 +301,13 @@ void Direct3d11_Device::destroy()
 		return;
 
 	DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device: destroy\n"));
+
+	// Drain any final pending validation messages so they reach the log
+	// before the InfoQueue itself goes away. Then release the InfoQueue
+	// BEFORE the device -- explicit pre-device reset eliminates a
+	// debug-layer late-destruction warning even with ComPtr.
+	Direct3d11_Device::drainInfoQueue();
+	ms_infoQueue.Reset();
 
 	ms_depthStencilDSV.Reset();
 	ms_depthStencilTex.Reset();
@@ -351,6 +407,12 @@ bool Direct3d11_Device::present()
 	if (!ms_swapChain)
 		return false;
 
+	// Plan 11-08 Iter-1: drain D3D11 debug-layer validation messages
+	// accumulated by this frame's draw calls BEFORE Present so they reach
+	// the runtime log on the same frame they fire. No-op when ms_infoQueue
+	// is null (debug layer not live).
+	drainInfoQueue();
+
 	HRESULT hr = ms_swapChain->Present(1, 0);  // vsync=1 for Wave 3 MVP (allowTearing override is Wave 4+)
 	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
 	{
@@ -405,6 +467,63 @@ void Direct3d11_Device::displayModeChanged()
 	ms_height = newHeight;
 
 	createBackBufferViews(newWidth, newHeight);
+}
+
+// ======================================================================
+// Plan 11-08 Iter-1: drainInfoQueue -- pump every D3D11 debug-layer
+// validation message accumulated since the previous call through
+// DEBUG_REPORT_LOG_PRINT. Hot-loop guarded on ms_infoQueue so callers
+// don't need to gate. SetBreakOnSeverity(CORRUPTION/ERROR, TRUE) means
+// fatal severities trap before reaching this drain when a debugger is
+// attached -- warnings + info routes here in the steady state.
+
+void Direct3d11_Device::drainInfoQueue()
+{
+	if (!ms_infoQueue)
+		return;
+
+	UINT64 const count = ms_infoQueue->GetNumStoredMessages();
+	for (UINT64 i = 0; i < count; ++i)
+	{
+		SIZE_T messageBytes = 0;
+		HRESULT hr = ms_infoQueue->GetMessage(i, nullptr, &messageBytes);
+		if (FAILED(hr) || messageBytes == 0)
+			continue;
+
+		// Stack-bounded scratch for typical messages; heap-fallback for
+		// long descriptions. Most validation strings are under 512 bytes.
+		char stackBuf[1024];
+		void * buf = (messageBytes <= sizeof(stackBuf)) ? static_cast<void *>(stackBuf)
+		                                                : ::operator new(messageBytes);
+
+		D3D11_MESSAGE * msg = static_cast<D3D11_MESSAGE *>(buf);
+		hr = ms_infoQueue->GetMessage(i, msg, &messageBytes);
+		if (SUCCEEDED(hr))
+		{
+			char const * severity = "INFO";
+			switch (msg->Severity)
+			{
+				case D3D11_MESSAGE_SEVERITY_CORRUPTION: severity = "CORRUPTION"; break;
+				case D3D11_MESSAGE_SEVERITY_ERROR:      severity = "ERROR";      break;
+				case D3D11_MESSAGE_SEVERITY_WARNING:    severity = "WARNING";    break;
+				case D3D11_MESSAGE_SEVERITY_INFO:       severity = "INFO";       break;
+				case D3D11_MESSAGE_SEVERITY_MESSAGE:    severity = "MESSAGE";    break;
+			}
+
+			DEBUG_REPORT_LOG_PRINT(true,
+				("D3D11 [%s] category=%d id=%d: %.*s\n",
+				 severity,
+				 static_cast<int>(msg->Category),
+				 static_cast<int>(msg->ID),
+				 static_cast<int>(msg->DescriptionByteLength),
+				 msg->pDescription));
+		}
+
+		if (buf != stackBuf)
+			::operator delete(buf);
+	}
+
+	ms_infoQueue->ClearStoredMessages();
 }
 
 // ======================================================================

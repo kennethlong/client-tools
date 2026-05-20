@@ -64,6 +64,18 @@ public:
 	// Gl_api::displayModeChanged  -- void (*displayModeChanged)()
 	// Recreates back-buffer RTV + DSV at the new HWND client-rect size.
 	static void displayModeChanged();
+
+	// ------------------------------------------------------------------
+	// Plan 11-08 Iter-1: ID3D11InfoQueue frame-drain. Drains every D3D11
+	// debug-layer message accumulated since the previous call and routes
+	// each via DEBUG_REPORT_LOG_PRINT. Called from present() before the
+	// swap-chain Present so a frame's draw-call validation messages land
+	// in the runtime log on the same frame they fire. No-op when the
+	// debug layer is not live (ConfigDirect3d11::getEnableDebugLayer()
+	// returned false, OR Pitfall 8 fallback stripped the DEBUG flag at
+	// device creation time). The Iter-18 BSOD established this drain is
+	// the prerequisite safety net for any cbuffer-write change.
+	static void drainInfoQueue();
 };
 
 // ======================================================================
