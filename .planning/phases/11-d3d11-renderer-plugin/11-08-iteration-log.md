@@ -136,9 +136,36 @@
 
 ---
 
+## Iteration 1.7: FILE* sink in drainInfoQueue → stage/d3d11-debug.log so InfoQueue messages persist beyond the OutputDebugString stream
+
+- **Date:** 2026-05-20
+- **Symptom:** Kenny smoke #1 retry under the Iter-1.6 binary CONFIRMED Plan 11-07 visible-dark-blue-clear milestone preserved (window pops via tools/d3d11-smoke/show-window.ps1; dark-blue clear visible; back/next button hover SFX audible; no crash). Window-enumeration confirmed engine's render window is class+title `SwgClient (swg-client-v2.0)` 640x480 Visible=False post-CreateWindowEx, same pattern as Iter-17. **Task 2 verdict = GO.** But: no D3D11 InfoQueue messages captured to any file. `Direct3d11_Device::drainInfoQueue` routes every message through `DEBUG_REPORT_LOG_PRINT` which `sharedDebug/src/shared/Report.cpp:127-149` writes to `stdout + OutputDebugString + stderr` only — invisible when `SwgClient_d.exe` is launched from explorer with no attached console. Task 3a/3b (the actual cbuffer matrix wiring) needs to see the D3D11 ERROR messages that fired during shader-template-iff load to know what's wrong; without persistent log capture we'd be debugging blind.
+- **Hypothesis:** Add a parallel file sink directly in `Direct3d11_Device.cpp` — open `d3d11-debug.log` (CWD-relative; SwgClient_d.exe runs with CWD=stage/ so the file lands at `stage/d3d11-debug.log`) in append mode at create() time when ms_infoQueue is acquired; mirror every drained message to it; flush after each write so a crash mid-frame doesn't strand messages in stdio's internal buffer; close at destroy() before ComPtr release. Engine-side `DEBUG_REPORT_LOG_PRINT` continues in parallel for live DebugView observation. fopen failure is non-fatal — the engine route still runs.
+- **Investigation:**
+  - Verified `Report.cpp` output sinks via grep: line 127 `fputs(buffer, stdout)`, line 145 `OutputDebugString(buffer)`, line 147+149 `fputs(buffer, stderr)`. No FILE* sink in the engine's Report.cpp — file logging is not a built-in capability of the engine's DEBUG_REPORT subsystem.
+  - Checked `D:\SWGEmu-Client\SWGEmu\logs\` (Kenny's actual client install) — contains only `SWGEmu.exe-stage.*` files from the OFFICIAL SWGEmu launcher, not our SwgClient_d.exe. No log file from our build.
+  - Checked `D:\Code\swg-client-v2\stage\` — `ui.log` exists (UI subsystem load-time profile, written by sharedClientUi/ TreeView+font load tracking; mtime 08:25:24 reflects the just-killed PID 51424 session) but it's a UI-specific format, not a general engine log.
+  - Conclusion: no existing log file destination captures `DEBUG_REPORT_LOG_PRINT` output. A parallel file sink in `drainInfoQueue` is the minimal-surface fix.
+- **Root cause:** none — this is a structural diagnostic-infrastructure iteration. Iter-1's `drainInfoQueue` implementation correctly satisfied the Plan 11-08 Task 1 contract ("route via DEBUG_REPORT_LOG_PRINT"); the contract just didn't account for SwgClient_d.exe's launch-from-explorer profile having no captured stdout/stderr destination.
+- **Fix:** `src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp` extended:
+  - `#include <ctime>` for time_t / localtime_s / strftime (session header timestamp formatting).
+  - `FILE * ms_d3d11LogFile = nullptr;` added to `Direct3d11_DeviceNamespace` state.
+  - In `create()` immediately after the InfoQueue is acquired + configured: `std::fopen("d3d11-debug.log", "ab")`; on success write a 5-line session header (`========...` separator + `=== D3D11 InfoQueue session begin` + ISO-8601 timestamp + feature-level + debug-flag state + separator) and `fflush`; on fopen failure log a fallback message via `DEBUG_REPORT_LOG_PRINT` and continue.
+  - In `drainInfoQueue()` inside the per-message loop (after the existing `DEBUG_REPORT_LOG_PRINT` call): `fprintf` the same `D3D11 [SEV] category=N id=N: description` line to `ms_d3d11LogFile` + `fflush` after each message.
+  - In `destroy()` immediately after the final drain + before `ms_infoQueue.Reset()`: write `=== D3D11 InfoQueue session end ===` + `fclose` + nullptr the FILE pointer (idempotent if create() never opened it).
+- **Verification (11-gate set):**
+  - Gates 1-10: MSBuild Direct3d11 EXIT=0 confirmed; gl11_d.dll auto-restages. D3D9/_ffp/_vsps/SwgClient builds untouched (no shared headers changed). D-13/D-04a/D-05 unchanged. MSVC /W4 clean (pre-existing C4459 DirectXMathVector carry-forward only).
+  - Gate 11 (ERROR-severity message count during steady-state): now MEASURABLE. First measurement at Kenny's next smoke will land in `stage/d3d11-debug.log`.
+  - Gates 12 + 13: unchanged from Iter-1.5 / pending Task 2.5.
+  - STUB count unchanged at 27.
+- **Commits:** one commit `feat(11-08): add file sink stage/d3d11-debug.log to drainInfoQueue so D3D11 messages persist across launches (Iter-1.7)`.
+- **Awaiting Kenny smoke (next launch):** the next time SwgClient_d.exe launches under the Iter-1.7 binary, `stage/d3d11-debug.log` will be created (or appended to) with a session header + every D3D11 InfoQueue message that fires during the launch. Best-case outcome: log captures the actual ERROR-severity message that triggered the Iter-1 abort on `lightsaberblade_lava_a.sht` (now demoted to log-only by Iter-1.6) AND any WARNING/INFO messages from device creation + shader compile + first-draw state. Likely-case outcome: log is non-trivial (dozens to hundreds of messages) but mostly WARNING/INFO; the ERROR set is bounded and points at the specific cbuffer / state / asset issues Task 3a/3b needs to address. Less-likely-case outcome: fopen fails (CWD different from `stage/` per launch context, or filesystem permission) — falls back to engine-only logging with a clear log message indicating the fallback fired.
+
+---
+
 ## Future iterations (placeholders)
 
-Filled as Task 2 smoke result returns + subsequent tasks land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
+Filled as Task 2.5+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
 
 ## Final state (filled at plan close)
 

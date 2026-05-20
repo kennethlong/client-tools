@@ -35,7 +35,8 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
-#include <cstdio>             // snprintf for InfoQueue category/severity formatting
+#include <cstdio>             // snprintf for InfoQueue category/severity formatting; fopen for Iter-1.7 file sink
+#include <ctime>              // time_t / localtime_s / strftime for Iter-1.7 session header
 
 // ======================================================================
 
@@ -65,6 +66,17 @@ namespace Direct3d11_DeviceNamespace
 	// fallback did NOT strip the DEBUG bit). drainInfoQueue() guards on
 	// this and is a no-op when null.
 	ComPtr<ID3D11InfoQueue>        ms_infoQueue;
+
+	// Plan 11-08 Iter-1.7: file sink for InfoQueue messages. Opened in
+	// append mode at create() time when ms_infoQueue is acquired so a
+	// crash mid-frame doesn't lose any messages drained since the
+	// previous launch. NULL when the InfoQueue is not live OR fopen
+	// failed; drainInfoQueue() guards on it. Engine-side
+	// DEBUG_REPORT_LOG_PRINT still runs in parallel for live debugger
+	// observation; this sink exists because that route goes to
+	// OutputDebugString + stdout/stderr which are invisible when
+	// SwgClient_d.exe is launched from explorer.
+	FILE *                         ms_d3d11LogFile = nullptr;
 
 	// ------------------------------------------------------------------
 	// Helper: create back-buffer RTV + depth-stencil texture + DSV.
@@ -215,6 +227,41 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
 			DEBUG_REPORT_LOG_PRINT(true,
 				("Direct3d11: ID3D11InfoQueue acquired; per-frame drain installed; "
 				 "break-on-severity = CORRUPTION (ERROR downgraded to log-only per Iter-1.6).\n"));
+
+			// Plan 11-08 Iter-1.7: open the parallel file sink. Append
+			// mode + line-buffered flush after each message (set below in
+			// drainInfoQueue) so a crash mid-frame doesn't strand
+			// messages in stdio's internal buffer. Path is CWD-relative;
+			// SwgClient_d.exe runs with CWD = stage/ in normal launches
+			// so the file lands at stage/d3d11-debug.log. fopen failure
+			// is non-fatal -- DEBUG_REPORT_LOG_PRINT still runs in
+			// parallel; if Kenny is running with DebugView attached he
+			// gets the messages even if the file sink can't open.
+			ms_d3d11LogFile = std::fopen("d3d11-debug.log", "ab");
+			if (ms_d3d11LogFile)
+			{
+				time_t const now = std::time(nullptr);
+				struct tm tmBuf = {};
+				localtime_s(&tmBuf, &now);
+				char ts[64] = {};
+				std::strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", &tmBuf);
+				std::fprintf(ms_d3d11LogFile,
+					"\n========================================\n"
+					"=== D3D11 InfoQueue session begin\n"
+					"=== %s\n"
+					"=== feature level 0x%x   debug flag = %s\n"
+					"========================================\n",
+					ts,
+					static_cast<unsigned>(fl),
+					(createDeviceFlags & D3D11_CREATE_DEVICE_DEBUG) ? "on" : "off");
+				std::fflush(ms_d3d11LogFile);
+			}
+			else
+			{
+				DEBUG_REPORT_LOG_PRINT(true,
+					("Direct3d11: could not open d3d11-debug.log for append; "
+					 "InfoQueue messages will route through DEBUG_REPORT_LOG_PRINT only.\n"));
+			}
 		}
 		else
 		{
@@ -316,6 +363,15 @@ void Direct3d11_Device::destroy()
 	// debug-layer late-destruction warning even with ComPtr.
 	Direct3d11_Device::drainInfoQueue();
 	ms_infoQueue.Reset();
+
+	// Plan 11-08 Iter-1.7: close the file sink after the final drain,
+	// before ComPtrs Reset(), so the closing newline + EOF land cleanly.
+	if (ms_d3d11LogFile)
+	{
+		std::fprintf(ms_d3d11LogFile, "=== D3D11 InfoQueue session end ===\n");
+		std::fclose(ms_d3d11LogFile);
+		ms_d3d11LogFile = nullptr;
+	}
 
 	ms_depthStencilDSV.Reset();
 	ms_depthStencilTex.Reset();
@@ -525,6 +581,21 @@ void Direct3d11_Device::drainInfoQueue()
 				 static_cast<int>(msg->ID),
 				 static_cast<int>(msg->DescriptionByteLength),
 				 msg->pDescription));
+
+			// Plan 11-08 Iter-1.7: mirror to file sink. Same format as
+			// the DEBUG_REPORT_LOG_PRINT route. Flush each message so a
+			// later crash preserves everything drained so far.
+			if (ms_d3d11LogFile)
+			{
+				std::fprintf(ms_d3d11LogFile,
+					"D3D11 [%s] category=%d id=%d: %.*s\n",
+					severity,
+					static_cast<int>(msg->Category),
+					static_cast<int>(msg->ID),
+					static_cast<int>(msg->DescriptionByteLength),
+					msg->pDescription);
+				std::fflush(ms_d3d11LogFile);
+			}
 		}
 
 		if (buf != stackBuf)
