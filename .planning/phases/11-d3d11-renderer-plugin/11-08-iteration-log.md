@@ -103,6 +103,39 @@
 
 ---
 
+## Iteration 1.6: Tuning fix to Iter-1 — SetBreakOnSeverity(ERROR, FALSE) so ERROR-severity D3D11 messages log instead of killing the process
+
+- **Date:** 2026-05-20
+- **Symptom:** Kenny smoke #1 launched the Iter-1 + Iter-1.5 binary; engine progressed past shader-cache invalidation + ROW_MAJOR recompile (3 new `.cso` blobs written to `stage/stage/shader-cache/` at mtime 07:06 today, confirming REWRITE_VERSION=14 cache key took effect) into shader-template-iff loading; crashed during `shader/lightsaberblade_lava_a.sht` load with `Exception 0000087a(2170)=code 77454984=addr`. Cursor remained constrained (window class was created), no window was visible, no FATAL dialog surfaced. Crash dump at `stage/SwgClient_d.exe-unknown.0-20260520120641.{txt,mdmp}`.
+- **Hypothesis:** Iter-1 configured `SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE)` per the Plan 11-08 Task 1 contract's stated "abort is preferable to silent NaN cascade." The D3D11 debug layer calls `DebugBreak()` synchronously when a message of the configured severity is ADDED to the queue (not when the queue is drained). With no debugger attached, `DebugBreak()` raises an unhandled exception → process terminates. The 0x0000087a exception code is in the kernel32/ntdll user-mode raise path consistent with this signature. `drainInfoQueue()` never got the chance to log the actual D3D11 message because the break fired before the next `present()` call. The "early warning BEFORE TDR/BSOD" intent of the safety net is satisfied by the LOG, not by the BREAK — ERROR-severity should route through `drainInfoQueue → DEBUG_REPORT_LOG_PRINT` without killing the process.
+- **Investigation:**
+  - Crash dump `.txt` contents (3 lines after the header): `GameFeatureBits: 1111` / `SubscriptionFeatureBits: 1` / `ShaderTemplate_Iff: shader/lightsaberblade_lava_a.sht` — the asset-load marker confirms engine progressed deep into asset loading before the abort. Plan 11-07's Iter-15 fixed BC-format staging-texture dim pad for `lightsaberblade` family textures, but that fix was for `lock()`-time E_INVALIDARG, not shader-template-iff loading.
+  - Shader cache directory at `stage/stage/shader-cache/` (the relative-path double-`stage` artifact from Plan 11-05) contains 22 `.cso` blobs total, 3 of which carry today's mtime. The pre-Iter-1.5 hash space (REWRITE_VERSION=13) and the post-Iter-1.5 hash space (REWRITE_VERSION=14) co-exist; the 3 May 20 entries are the post-1.5 newly-compiled blobs — confirms shader cache invalidation worked AND ROW_MAJOR shader recompile didn't surface X-class errors (or the engine would have FATAL'd before reaching shader-template-iff load with a `D3DCompile ... failed:` message).
+  - **No runtime log file written.** The engine's `DEBUG_REPORT_LOG_PRINT` calls during this launch went to the debugger output / console only; nothing under `stage/*.log` or `stage/log.txt` was updated. This is consistent with the engine's logging config + the abort-before-log-flush pattern. The InfoQueue drain in `present()` would have routed the D3D11 messages to `DEBUG_REPORT_LOG_PRINT` BUT the break happened before any `present()` call could fire.
+  - Plan 11-07 ran cleanly through the same shader-template loading without the InfoQueue installed. The difference is solely the Iter-1 break-on-severity config.
+- **Root cause:** Iter-1's `SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE)` is too aggressive. D3D11's debug layer fires ERROR-severity messages for many recoverable conditions (CreateXxx with bad arg → returns E_INVALIDARG instead of valid resource; Draw with invalid state → skips draw; etc.). Plan 11-07's plugin almost certainly hits one of these during `lightsaberblade_lava_a.sht` shader load (PEXE bytecode mismatch per Plan 11-05 caveat, or shader-implementation-data per-pass apply that hasn't been wired yet, or similar). With ERROR=TRUE the first such message kills the process before drainInfoQueue can route the message text to the log. The Plan 11-08 Task 1 contract anticipated ERROR-severity = "fatal" but the actual D3D11 ERROR-severity spectrum is wider than that.
+- **Fix:** Direct3d11_Device.cpp single-line change:
+  ```cpp
+  // OLD (Iter-1):
+  ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+  // NEW (Iter-1.6):
+  ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+  ```
+  CORRUPTION stays TRUE (genuinely unrecoverable; trap is appropriate). The "Direct3d11: ID3D11InfoQueue acquired..." log line text also updated to reflect the new policy. Iter-1's intent ("safety net for the next cbuffer-wiring BSOD") is satisfied by the per-frame log drain alone — when a future iteration causes a near-TDR bug, drainInfoQueue() emits the D3D11 messages to the log BEFORE the GPU hangs, and the user sees them in the log without losing the smoke process. The break-on-CORRUPTION still fires for true heap-corruption-class events; ERROR-severity now produces a logged line per message.
+- **Verification (11-gate set):**
+  - Gates 1-10: MSBuild D3D11/D3D9/_ffp/_vsps/SwgClient EXIT=0; D-13/D-05/D-04a invariants; FFP scan; STUB count unchanged; MSVC /W4 clean.
+  - Gate 11 (ERROR-severity debug-layer message count during steady-state): FIRST MEASUREMENT pending Kenny smoke #1 retry. Expected: non-zero (the Iter-1.6 smoke is the first time we'll actually SEE what D3D11 is complaining about during `lightsaberblade_lava_a.sht` load).
+  - Gates 12 + 13: ROW_MAJOR flag still present (Iter-1.5 carry-forward); slot capacity still N/A (Task 2.5 pending).
+  - STUB count unchanged at 27.
+- **Commits:** one commit `fix(11-08): SetBreakOnSeverity(ERROR, FALSE) so ERROR-severity D3D11 messages log instead of killing the process (Iter-1.6 tuning fix to Iter-1)`.
+- **Awaiting Kenny smoke #1 retry (Iter-1 + Iter-1.5 + Iter-1.6 combined):**
+  - **Best outcome (~40% prior):** process launches; dark-blue clear visible (Plan 11-07 milestone preserved); drainInfoQueue logs N non-zero ERROR-severity D3D11 messages including the one that fired during `lightsaberblade_lava_a.sht` load; process runs ≥30 sec. The actual ERROR message text becomes the design input for whether Task 2.5 onward can proceed OR a new diagnostic iteration is needed.
+  - **Likely outcome (~35% prior):** same as best PLUS the ShowWindow assist is needed (Iter-17 carry-forward; Iter-16 Bloom config + shader-cache fast-path may still misfire ShowWindow). Kenny's existing PowerShell helper covers this.
+  - **Possible outcome (~15% prior):** process crashes again at a DIFFERENT asset (not lightsaberblade) — would indicate that ERROR-severity messages are frequent enough that a different asset hits CORRUPTION-class severity. Less likely because corruption is rare; if it surfaces, the iteration would need to investigate the specific corruption message.
+  - **Less likely outcome (~10% prior):** process aborts again at the same `lightsaberblade_lava_a.sht` site — would indicate the abort is NOT from SetBreakOnSeverity, and the real bug is in the asset-load path itself. If this happens, the log will have D3D11 message context just before the abort.
+
+---
+
 ## Future iterations (placeholders)
 
 Filled as Task 2 smoke result returns + subsequent tasks land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).

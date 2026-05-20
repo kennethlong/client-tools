@@ -199,14 +199,22 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
 
 			// Corruption is unrecoverable -- break into debugger when
 			// attached, or terminate the process when not. ERROR-severity
-			// in debug builds is treated the same; warnings/info flow
-			// through the drain to the runtime log.
+			// is downgraded to log-only (NOT break): the Iter-1 initial
+			// configuration set ERROR=TRUE, which killed the smoke during
+			// ShaderTemplate_Iff load of `lightsaberblade_lava_a.sht`
+			// before drainInfoQueue() could log the actual D3D11 message
+			// (DebugBreak fires synchronously when the message is added
+			// to the queue, not when the queue is drained). The safety
+			// net's intent is "early warning BEFORE TDR/BSOD" -- the LOG
+			// is the early warning, not the BREAK. ERROR + WARNING + INFO
+			// all flow through drainInfoQueue() each frame. CORRUPTION
+			// stays TRUE because it's genuinely unrecoverable.
 			ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-			ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR,      TRUE);
+			ms_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR,      FALSE);
 
 			DEBUG_REPORT_LOG_PRINT(true,
 				("Direct3d11: ID3D11InfoQueue acquired; per-frame drain installed; "
-				 "break-on-severity = CORRUPTION + ERROR.\n"));
+				 "break-on-severity = CORRUPTION (ERROR downgraded to log-only per Iter-1.6).\n"));
 		}
 		else
 		{
