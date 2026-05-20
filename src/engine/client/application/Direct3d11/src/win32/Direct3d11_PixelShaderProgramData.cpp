@@ -135,7 +135,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "13" });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "14" });   // Iter-1.5: ROW_MAJOR flag retrofit per CODEX Q2 (VS-site mirror).
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -182,6 +182,20 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// surfaces HLSL-source pixel shaders; the flag is added
 			// for symmetry + correctness when that code path activates.
 			flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+
+			// Plan 11-08 Iter-1.5 retrofit (CODEX Q2 mandate; PS-site
+			// mirror of VS site): force row-major matrix packing in
+			// compiled HLSL cbuffer storage. See Direct3d11_VertexShaderData.cpp
+			// matching block for the full Iter-1.5 narrative. Flag value
+			// (1 << 3 = 0x8) does NOT bit-collide with the previously-
+			// dropped STRICTNESS (1 << 11 = 0x800). Pairs with the
+			// D3D11_REWRITE_VERSION 13 -> 14 bump above for shader-cache
+			// invalidation. The PS helper remains [[maybe_unused]] today
+			// (engine ships pre-compiled D3D9 PEXE bytecode); the retrofit
+			// lands here for symmetry so a future Phase 12 asset
+			// re-author starts on a row-major-correct foundation.
+			flags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
+
 			char const *virtName = (displayName && *displayName) ? displayName : "pixel_shader.psh";
 
 			// Plan 11-07 Iter-2: route `#include "..."` directives

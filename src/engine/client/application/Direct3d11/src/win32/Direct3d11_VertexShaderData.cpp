@@ -335,7 +335,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "13" });
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "14" });   // Iter-1.5: ROW_MAJOR flag retrofit per CODEX Q2.
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
@@ -446,6 +446,19 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		// BACKWARDS_COMPATIBILITY flag becomes a suspect alongside the
 		// other compile-flag / rewrite-version changes.
 		flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+
+		// Plan 11-08 Iter-1.5 retrofit (CODEX Q2 mandate): force row-major
+		// matrix packing in compiled HLSL cbuffer storage. Without this
+		// flag, HLSL `float4x4` defaults to COLUMN-MAJOR; XMFLOAT4X4
+		// (row-major bytes) uploaded to a cbuffer slot would be read
+		// TRANSPOSED by the shader -- Iter-18 BSOD Hypothesis 1 redux,
+		// structurally guaranteed by the layout mismatch. The flag value
+		// (1 << 3 = 0x8) does NOT bit-collide with the previously-dropped
+		// STRICTNESS (1 << 11 = 0x800) that Iter-5/6 resolved; confirmed
+		// by CODEX peer review. Pairs with D3D11_REWRITE_VERSION bump
+		// 13 -> 14 above so the FNV-1a shader-cache hash invalidates
+		// every cached .cso on next launch.
+		flags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
 		// Use a virtual filename of the asset's filename so D3DCompile's
 		// error messages point at something useful.
