@@ -128,7 +128,7 @@ PLAN deviation from "2 lines on `ShaderImplementation.h`" guidance: **+3 friend 
 - `build-log-11-09-iter1-04.txt` (attempt 4, success)
 
 ### Commit
-TBD — to land after Kenny smoke verdict.
+`288b7b5f7` — `feat(11-09): wire setStaticShader + StaticShaderData::apply per-pass VS+PS extraction (Iter-1; CODEX-reframed acceptance bar 'draw activity observable')`. Pushed to `origin/koogie-msvc-cpp20-base` 2026-05-20 (post-nap session). 10 files changed, 499 insertions(+), 53 deletions(−).
 
 ### Awaiting Kenny smoke (Iter-1 verdict; CODEX-reframed acceptance bar)
 
