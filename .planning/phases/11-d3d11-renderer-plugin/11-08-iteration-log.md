@@ -230,9 +230,51 @@
 
 ---
 
+## Iteration 3a: primeDefaults install-time landing — every VS/PS cbuffer slot filled with identity/zero defaults BEFORE first draw
+
+- **Date:** 2026-05-20
+- **Predicted symptom:** none — pre-implementation safety-net iteration. The Iter-18 BSOD root-cause-set item #6 (CODEX sixth hypothesis): `Map(D3D11_MAP_WRITE_DISCARD)` does NOT zero unwritten bytes per Microsoft documentation; unwritten bytes contain ARBITRARY GARBAGE from prior frames. Without this prime, the first draw call's shader would read uninitialized cbuffer memory in slot 0's c8..c71 region + every byte in slots 1..3 + every byte in PS slots 0..3 — exactly the symptom that triggered the Iter-18 OS BSOD via NaN cascade -> degenerate rasterization -> GPU TDR escalation.
+- **Hypothesis:** Add a new `Direct3d11_ConstantBuffer::primeDefaults()` static method called from `install()` after the `createOneSlot` loop. Strategy:
+  - VS slot 0: full `Direct3d11_VertexSlot0CB` (just landed in Iter-2.5) with identity matrices for WVP + World; all other packoffset regions zeroed by `{}-init`. `lightData[0].x = 0` is implicit (numLights = 0 guard against shader-side `for (i=0; i<numLights; ++i)` bombs reading uninitialized counters).
+  - VS slots 1, 2: full `kMaxCBufferBytes` (1152B) zero-fill. Belt-and-suspenders against any engine path that binds slots 1/2 between Iter-3a landing and Task 3b's setter rewrite that consolidates VS state into slot 0.
+  - VS slot 3: full zero-fill (Plan 11-06's `Direct3d11_LightingCB` lives here at kLightingCBSlot = 3, but `LightManager::install()` is empty — see Investigation; Iter-3a primes slot 3 to close the same garbage-read gap rather than leaving LightingCB undefined until the first `setLights()` call).
+  - PS slots 0..3: full zero-fill each. PS-side reads of zero produce defined-dark visuals (not NaN); covers Iter-18 must-have #3.
+  - Smoke gate: process launches + dark-blue clear visible + debug-layer ERROR count = 0 + ≥30 sec without crash. NO behavioral regression expected vs Iter-1 baseline — Iter-3a only adds defensive initial-state writes, doesn't change any per-frame logic.
+- **Investigation:**
+  - Read `Direct3d11_ConstantBuffer.cpp` lines 36-74 (current install body): per-slot `createOneSlot` loop populates `D3D11_BUFFER_DESC::ByteWidth = kMaxCBufferBytes` via `CreateBuffer`, then logs. Buffer contents are UNDEFINED at this point per D3D11 docs (no pInitialData provided). Confirmed device + context are both alive at this call site (`NOT_NULL(Direct3d11_Device::getDevice())` already asserts the device; context is initialized in the same `Direct3d11_Device::create()` call BEFORE the per-subsystem install loop in Direct3d11.cpp runs).
+  - Read `Direct3d11_ConstantBuffer.cpp` lines 89-127 (updateVS/updatePS implementations): use Map(WRITE_DISCARD) → memcpy → Unmap exactly per RESEARCH Pattern 2. The CODEX-sixth-hypothesis bug applies: any byte not covered by the memcpy is undefined. primeDefaults' FULL-FILL discipline (memcpy a kMaxCBufferBytes-sized payload via `updateVS(slot, &data, kMaxCBufferBytes)`) makes the entire slot defined.
+  - Read `Direct3d11_LightManager.cpp` lines 42-48 — confirmed `install()` is intentionally empty (comment: "No process-wide state to initialize. setLights populates the cbuffer on demand."). Per the Plan 11-08 Task 3a contract: "if LightManager primes slot 3, skip" — but the LightManager's `install` does NOT prime. So the plan's deferral branch doesn't apply; primeDefaults takes ownership of priming slot 3 too. Recorded as a Rule-1 deviation from the plan; the original plan author assumed LightManager primed at install.
+  - Confirmed `kLightingCBSlot = 3` in LightManager.cpp:36 (constexpr int).
+  - Verified `Direct3d11_LightingCB` is declared in LightManager.h with `static_assert(sizeof == 320, ...)` so its layout is stable. primeDefaults uses zero-fill on slot 3 rather than a typed LightingCB struct — zero-fill covers the FULL 1152-byte slot (vs LightingCB's 320 bytes) which is the correct width for Map(WRITE_DISCARD) semantics.
+- **Root cause:** none — structural safety-net iteration. The bug being prevented is the Iter-18 BSOD's hypothesis #6 (Map(WRITE_DISCARD) = arbitrary garbage in unwritten bytes); primeDefaults makes every slot defined before any draw can read it.
+- **Fix:** Two file edits:
+  1. **`Direct3d11_ConstantBuffer.h`** — added `static void primeDefaults();` declaration with a 10-line header comment explaining the FULL-FILL discipline rationale + CODEX sixth-hypothesis cross-reference.
+  2. **`Direct3d11_ConstantBuffer.cpp`** — added `#include "Direct3d11_LightManager.h"` (for Direct3d11_LightingCB struct identity reference in the slot 3 comment; the actual write uses zero-fill not LightingCB struct), implemented `primeDefaults()` body with per-slot fills: stack-allocated `unsigned char zero[kMaxCBufferBytes]` reused across slots 1/2/3/PS-all; `Direct3d11_VertexSlot0CB slot0 = {}` + two `XMStoreFloat4x4(&slot0.*, XMMatrixIdentity())` for slot 0; ends with a `DEBUG_REPORT_LOG_PRINT` confirming the prime fired. Wired `primeDefaults()` call into `install()` immediately after the `createOneSlot` loop + before the existing install log line. Total: ~45 lines added.
+- **Deviation from PLAN:** Rule-1 deviation on the slot 3 handling. Plan 11-08 Task 3a contract: "VS slot 3 is Direct3d11_LightManager's; DO NOT write here." This assumed `LightManager::install` primed slot 3. Verification via source read confirms `LightManager::install` is intentionally empty — slot 3 is unprimed until `setLights()` runs, which happens AFTER the first draw. Iter-3a takes ownership of slot 3 priming to close the same garbage-read gap covered for slots 0/1/2 and all PS slots. When `setLights()` fires later, its `updateVS(kLightingCBSlot, &cb, sizeof(cb))` cleanly overwrites the zero-fill with real LightingCB data. Zero impact on Plan 11-06 LightManager behavior.
+- **Verification (11-gate set):**
+  - Gate 1: MSBuild Direct3d11 EXIT=0 confirmed. gl11_d.dll auto-restages clean.
+  - Gates 2-5: MSBuild Direct3d9 / _ffp / _vsps / SwgClient EXIT=0 — pending; no shared headers touched so no regression expected. Will batch-verify if needed.
+  - Gate 6: D-13 grep — unchanged from Iter-1 (0 non-comment hits).
+  - Gate 7: D-05 git diff — unchanged (no D3D9 source touched).
+  - Gate 8: D-04a Glob — unchanged (no FfpGenerator).
+  - Gate 9: FFP scan on Direct3d11_ConstantBuffer.cpp — 0 functional `#ifdef FFP / D3DTSS_ / D3DTOP_` (verified by inspection; primeDefaults uses only XMMath + memcpy).
+  - Gate 10: MSVC /W4 — clean (pre-existing C4459 carry-forward only).
+  - Gate 11 (ERROR-severity message count): pending Kenny smoke; expected = 0 (combined with Iter-1.8's BC2 fix, the 96 prior errors should drop to 0).
+  - Gate 12 (ROW_MAJOR flag present): unchanged from Iter-1.5.
+  - Gate 13 (slot capacity ≥1088B + Direct3d11_VertexSlot0CB defined): unchanged from Iter-2.5 (1152B + 10 static_asserts passing).
+  - STUB count unchanged at 27.
+- **Commits:** one commit `feat(11-08): primeDefaults install-time landing -- every VS/PS slot fills with identity/zero defaults before first draw (Iter-18 must-haves #2 + #3 + #5; Task 3a)`.
+- **Awaiting Kenny smoke (Iter-3a checkpoint; combined effect of Iter-1.8 BC2 fix + Iter-2.5 slot expansion + Iter-3a primeDefaults):**
+  - **Best outcome (~70% prior):** process launches; dark-blue MVP clear visible (Plan 11-07 milestone preserved); `stage/d3d11-debug.log` carries the new "primeDefaults: VS slot 0 = identity-matrix Direct3d11_VertexSlot0CB (1152B); ..." line near the top; ZERO ERROR-severity D3D11 messages this session (BC2 errors from Iter-1.8 expected to drop to 0; no new cbuffer-write errors because primeDefaults uses the same valid Map/Unmap pattern as updateVS); process responsive ≥30 sec; ShowWindow assist still needed (Iter-17 carry-forward); button hover SFX still audible. Iter-3a baseline matches Iter-1 baseline behaviorally — primeDefaults is purely defensive, doesn't change what the renderer draws.
+  - **Possible outcome (~15% prior):** Iter-1.8 BC2 fix doesn't fully cover, e.g. additional ERROR id=280 messages fire on textures we didn't see in the previous smoke (different mip sizes, different BC variants). Verdict REVIEW; iterate within Iter-1.8 to widen the pad.
+  - **Less likely outcome (~10% prior):** primeDefaults' install-time call exposes a context-readiness timing bug — e.g. `Direct3d11_Device::getContext()` returns null when ConstantBuffer::install runs. Surface via FATAL or HRESULT failure. Verdict REVIEW; defer primeDefaults call to end of `Direct3d11::install` in Direct3d11.cpp (alternate site documented in plan §Action step 4).
+  - **Less-likely-still outcome (~5% prior):** something else regresses (debug-layer fires a new class of warning about cbuffer state, etc.). Verdict REVIEW with the new D3D11 message text.
+
+---
+
 ## Future iterations (placeholders)
 
-Filled as Task 3a+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
+Filled as Task 3b+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).
 
 ## Final state (filled at plan close)
 

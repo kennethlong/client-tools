@@ -21,6 +21,7 @@
 
 #include "Direct3d11.h"   // FATAL_DX_HR
 #include "Direct3d11_Device.h"
+#include "Direct3d11_LightManager.h"   // Iter-3a primeDefaults: Direct3d11_LightingCB struct identity
 
 #include <cstring>
 
@@ -71,6 +72,69 @@ void Direct3d11_ConstantBuffer::install()
 	DEBUG_REPORT_LOG_PRINT(true,
 		("Direct3d11_ConstantBuffer: installed %d VS slots + %d PS slots (each %d bytes; D3D11_USAGE_DYNAMIC)\n",
 		kNumSlots, kNumSlots, kMaxCBufferBytes));
+
+	// Plan 11-08 Iter-3a: prime every slot with identity / zero defaults
+	// before any draw call has a chance to read uninitialized cbuffer
+	// memory. See primeDefaults header comment for the full Iter-18 BSOD
+	// root-cause-item-#6 rationale (Map(WRITE_DISCARD) yields UNDEFINED
+	// bytes, not zeros).
+	primeDefaults();
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_ConstantBuffer::primeDefaults()
+{
+	NOT_NULL(Direct3d11_Device::getDevice());
+	NOT_NULL(Direct3d11_Device::getContext());
+
+	// Single zero-fill buffer reused for slots that don't have a
+	// dedicated struct shape. Allocated on stack; kMaxCBufferBytes is
+	// 1152 -- well under any reasonable stack-frame budget.
+	unsigned char zero[kMaxCBufferBytes] = {};
+
+	// -- VS slot 0: full Direct3d11_VertexSlot0CB shape with identity
+	// matrices for WVP + World; remaining packoffset regions stay
+	// zeroed by the {}-init. lightData[0].x = 0 is already covered by
+	// zero-init (it's the implicit numLights = 0 guard against
+	// shader-side for-loop bombs reading uninitialized counters).
+	Direct3d11_VertexSlot0CB slot0 = {};
+	DirectX::XMStoreFloat4x4(&slot0.objectWorldCameraProjectionMatrix, DirectX::XMMatrixIdentity());
+	DirectX::XMStoreFloat4x4(&slot0.objectWorldMatrix,                 DirectX::XMMatrixIdentity());
+	updateVS(0, &slot0, sizeof(slot0));
+
+	// -- VS slots 1, 2: zero-fill the FULL kMaxCBufferBytes payload.
+	// These slots are not actively used by Plan 11-08's per-draw path
+	// (Task 3b consolidates VS state into slot 0). Belt-and-suspenders
+	// against any engine path that binds them between Iter-3a landing
+	// and the Task 3b setter rewrite.
+	updateVS(1, zero, sizeof(zero));
+	updateVS(2, zero, sizeof(zero));
+
+	// -- VS slot 3: Plan 11-06 LightManager's reserved slot
+	// (Direct3d11_LightingCB at kLightingCBSlot = 3). Direct3d11_LightManager::install
+	// (LightManager.cpp:42-48) is intentionally empty -- it primes via
+	// setLights only when the engine first pushes a light list, which
+	// happens AFTER first-draw. Iter-3a Rule-1 deviation from the plan
+	// (which assumed LightManager primed at install): primeDefaults
+	// FILLS slot 3 with a zeroed payload so a first-draw read of
+	// LightingCB returns defined zeros (zero ambient, no directional,
+	// no point lights, count = 0) instead of garbage. When setLights
+	// fires later it overwrites cleanly. Without this prime the
+	// CODEX-sixth-hypothesis garbage applies to slot 3 too.
+	updateVS(3, zero, sizeof(zero));
+
+	// -- PS slots 0..3: zero-fill the FULL payload each. PS-side reads
+	// of zero produce defined-dark visuals rather than NaN, matching
+	// Iter-18 must-have #3 (initial-state guarantee covers EVERY slot
+	// the engine binds, not just VS slot 0).
+	for (int s = 0; s < kNumSlots; ++s)
+		updatePS(s, zero, sizeof(zero));
+
+	DEBUG_REPORT_LOG_PRINT(true,
+		("Direct3d11_ConstantBuffer::primeDefaults: VS slot 0 = identity-matrix Direct3d11_VertexSlot0CB (1152B); "
+		 "VS slots 1/2/3 + PS slots 0..3 = full %d-byte zero-fill. Iter-18 BSOD safety net.\n",
+		 kMaxCBufferBytes));
 }
 
 // ----------------------------------------------------------------------

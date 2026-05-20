@@ -93,6 +93,20 @@ public:
 	static void install();
 	static void remove();
 
+	// Plan 11-08 Iter-3a: fill every VS/PS slot with sane defaults via
+	// Map(WRITE_DISCARD) -> memcpy a full kMaxCBufferBytes payload. The
+	// FULL-FILL discipline is mandatory per the Iter-18 BSOD root-cause
+	// item #6 (CODEX sixth hypothesis): Map(WRITE_DISCARD) does NOT zero
+	// unwritten bytes -- unwritten bytes contain ARBITRARY GARBAGE from
+	// prior frames. Without this prime, the first-draw race produces
+	// undefined shader reads of c8..c71 in slot 0 + every byte in slots
+	// 1..3 + every byte in PS slots 0..3, which is exactly the symptom
+	// that took the OS down in Plan 11-07 Iter-18 (TDR escalation from
+	// a NaN cascade in the shader). Called from install() after the
+	// per-slot CreateBuffer loop; safe to call again at runtime when a
+	// soft-reset path is added (no soft-reset path exists yet).
+	static void primeDefaults();
+
 	// CPU-side update: Map(WRITE_DISCARD) -> memcpy -> Unmap. Per
 	// RESEARCH §Pattern 2 the WRITE_DISCARD mode ensures GPU/CPU
 	// non-aliasing for whole-buffer replacement (which is the only
