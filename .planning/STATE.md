@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 11 Plan 06 complete -- D3D11 state cache + draw-call dispatch + input-layout cache + light manager + metrics; 43 Gl_api scaffold_fatal_stub bindings replaced (Plan 11-05 72 -> Plan 11-06 29 remaining); Pitfalls 4 (SRV/sampler split) + 6 (input-layout cache keyed by VS bytecode hash) enforced; PS NULL fallback honored per Plan 11-05 caveat; FATAL boundary predicted at createShaderImplementationGraphicsData (Plan 11-07 first iteration target)
-last_updated: "2026-05-16T23:30:00.000Z"
-last_activity: 2026-05-16 -- Phase 11 Plan 06 closed (D3D11 state-cache + draw-call dispatch + input-layout cache + light manager + metrics; 8 new source files / 1,707 lines: Direct3d11_VertexDeclarationMap + Direct3d11_StateCache + Direct3d11_LightManager + Direct3d11_Metrics + buildInputElementDesc extension; 43 Gl_api slots wired; Pitfall 4 SRV/sampler split + Pitfall 6 input-layout-cache-key-by-VS-bytecode-hash + PS NULL fallback; D-05 + D-13 + D-04a + cbuffer-migration invariants intact; 2 deviations Rule-3 engine-header friend additions on 4 buffer classes + Rule-1 LightingCB static_assert size 320 not 304)
+last_updated: "2026-05-19T18:00:00.000Z"
+last_activity: 2026-05-19 -- Phase 11 Plan 07 CLOSED at visible-dark-blue-clear milestone (Iter-17). 18-iteration arc: Iter-1..13 spent on a single shader-compile FATAL chain on vertex_program/2d.vsh (X1507 missing include resolver -> X3000 keyword reservation -> X3202 member-binding -> X3116 strictness conflict -> X3202 redux -> X4016 register collision). Iter-14 cleared X4016 via CODEX-diagnosed Rule E #pragma def stripper. Iter-15 (BC-staging dim pad), Iter-16 (Bloom config-disable), Iter-17 (setRenderTarget NULL -> setRenderTargetToPrimary) cleared subsequent walls. Renderer end-to-end functional, MVP dark-blue clear visible. Iter-18 minimal-WVP cbuffer push attempt BSOD'd OS via GPU TDR escalation; reverted, not committed. Cbuffer-wiring multi-iteration arc deferred to Plan 11-08+. Learnings extracted to 11-07-LEARNINGS.md
 progress:
   total_phases: 5
   completed_phases: 1
