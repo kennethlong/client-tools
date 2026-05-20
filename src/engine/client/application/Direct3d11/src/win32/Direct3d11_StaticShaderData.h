@@ -47,11 +47,15 @@
 
 // ======================================================================
 
+class Direct3d11_PixelShaderProgramData;
+class Direct3d11_VertexShaderData;
 class MemoryBlockManager;
 class ShaderImplementation;
 class StaticShader;
 
 #include "clientGraphics/StaticShader.h"
+
+#include <vector>
 
 // ======================================================================
 
@@ -101,6 +105,16 @@ private:
 
 	StaticShader const *         m_shader;
 	ShaderImplementation const * m_implementation;
+
+	// Plan 11-09 Iter-1: per-pass VS + PS pointer cache. Populated by
+	// construct() via the public StaticShader -> StaticShaderTemplate ->
+	// ShaderEffect -> ShaderImplementation traversal (CODEX consult locked
+	// the friend set at ShaderImplementation.h only; m_pass private access
+	// is the only field that needs friend). Non-owning -- engine owns the
+	// VertexShader / PixelShaderProgram lifetimes via the ShaderImplementation
+	// graph above; we hold raw pointers per CODEX Q4 D3D9-mirror guidance.
+	std::vector<Direct3d11_VertexShaderData const *>          m_passVS;
+	std::vector<Direct3d11_PixelShaderProgramData const *>    m_passPS;
 };
 
 // ======================================================================

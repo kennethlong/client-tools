@@ -42,6 +42,8 @@ class ShaderImplementation
 	friend class Direct3d8_StaticShaderData;
 	friend class Direct3d9_ShaderImplementationData;
 	friend class Direct3d9_StaticShaderData;
+	friend class Direct3d11_ShaderImplementationData;
+	friend class Direct3d11_StaticShaderData;
 
 public:
 

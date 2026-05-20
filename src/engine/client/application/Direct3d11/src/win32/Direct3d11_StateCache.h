@@ -38,6 +38,8 @@
 #include "clientGraphics/Graphics.def"
 #include "sharedFoundation/Tag.h"
 
+class Direct3d11_PixelShaderProgramData;
+class Direct3d11_VertexShaderData;
 class StaticShader;
 class Texture;
 class HardwareVertexBuffer;
@@ -84,6 +86,13 @@ public:
 	// Shader binding (drives input-layout reselect + VS/PS swap).
 	static void setBadVertexShaderStaticShader(StaticShader const *shader);
 	static void setStaticShader(StaticShader const &shader, int pass);
+
+	// Plan 11-09 Iter-1: per-pass VS + PS pointer wiring. Called by
+	// Direct3d11_StaticShaderData::apply once per draw. Assigning a non-null
+	// pointer marks ms_geometryRebindNeeded so the next applyPreDrawState
+	// reselects the input layout against the new VS signature.
+	static void setCurrentVSData(Direct3d11_VertexShaderData const *vs);
+	static void setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps);
 
 	// ------------------------------------------------------------------
 	// Draw-call dispatch -- the Gl_api draw* slot bodies.

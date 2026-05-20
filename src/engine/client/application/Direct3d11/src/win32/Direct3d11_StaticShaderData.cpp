@@ -16,8 +16,10 @@
 
 #include "Direct3d11.h"
 #include "Direct3d11_PixelShaderProgramData.h"
+#include "Direct3d11_StateCache.h"
 #include "Direct3d11_VertexShaderData.h"
 
+#include "clientGraphics/ShaderEffect.h"          // m_effect -> ShaderEffect *
 #include "clientGraphics/ShaderImplementation.h"
 #include "clientGraphics/StaticShader.h"
 #include "clientGraphics/StaticShaderTemplate.h"
@@ -82,7 +84,18 @@ void Direct3d11_StaticShaderData::operator delete(void *memory)
 Direct3d11_StaticShaderData::Direct3d11_StaticShaderData(StaticShader const &shader)
 :	StaticShaderGraphicsData(),
 	m_shader(&shader),
-	m_implementation(nullptr)
+	// Plan 11-09 Iter-1: direct field access mirroring D3D9 sibling
+	// (Direct3d9_StaticShaderData.cpp:988-992). CODEX consult initially
+	// recommended the public getter chain
+	// (.getShaderEffect().getActiveShaderImplementation()), but those
+	// methods are non-inline and non-DLLEXPORT in clientGraphics, so plugin
+	// DLLs can't link them -- LNK2019 fired on the first build attempt.
+	// Field-access-via-friend is the established plugin pattern; D3D8 +
+	// D3D9 both do this. Friend declarations in StaticShaderTemplate.h +
+	// ShaderEffect.h + ShaderImplementation.h match the D3D9 friend set.
+	m_implementation(shader.getStaticShaderTemplate().m_effect->m_implementation),
+	m_passVS(),
+	m_passPS()
 {
 	construct(shader);
 }
@@ -104,25 +117,63 @@ Direct3d11_StaticShaderData::~Direct3d11_StaticShaderData()
 
 void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 {
-	// We need the ShaderImplementation reference for apply()'s per-pass
-	// VS/PS lookup. The engine wires it as
-	//   shader.getStaticShaderTemplate().m_effect->m_implementation
-	// in the D3D9 sibling (Direct3d9_StaticShaderData ctor at line 988).
-	// However m_effect is a PRIVATE field of StaticShaderTemplate and
-	// the engine's friend lists for that field include Direct3d8/9 only.
+	// Plan 11-09 Iter-1: walk ShaderImplementation::m_pass[] and extract
+	// per-pass Direct3d11_VertexShaderData + Direct3d11_PixelShaderProgramData
+	// pointers. ms_currentVSData / ms_currentPSData wiring happens in apply().
 	//
-	// For Iteration 1 we DO NOT need it -- we deliberately use only the
-	// public StaticShader surface (which doesn't expose the
-	// ShaderImplementation either). apply() therefore cannot walk pass
-	// state in this iteration; it routes through the Plan 11-06 default
-	// state machinery.
-	//
-	// Subsequent iterations (driven by smoke) will likely need to add a
-	// Direct3d11_StaticShaderData friend to ShaderEffect /
-	// StaticShaderTemplate / ShaderImplementation alongside the existing
-	// Direct3d8/9 friends -- mirrors the Plan 11-04/06 Rule-3 friend
-	// pattern. We defer that until the bind work actually needs it.
+	// m_implementation is populated by the ctor init list via direct field
+	// access (D3D9 verbatim mirror): plugin DLLs can't link non-inline
+	// clientGraphics member functions, so the CODEX-recommended public
+	// getter chain doesn't work here -- see consult file for the discovery.
+	// Field-access-via-friend covers all four engine headers:
+	//   - StaticShader.h          (Direct3d11_StateCache for m_graphicsData)
+	//   - StaticShaderTemplate.h  (Direct3d11_StaticShaderData for m_effect)
+	//   - ShaderEffect.h          (Direct3d11_StaticShaderData for m_implementation)
+	//   - ShaderImplementation.h  (Direct3d11_StaticShaderData for m_pass)
 	UNREF(shader);
+
+	m_passVS.clear();
+	m_passPS.clear();
+
+	if (!m_implementation)
+		return;
+
+	ShaderImplementation::Passes const & passes = *m_implementation->m_pass;
+	size_t const passCount = passes.size();
+	m_passVS.assign(passCount, nullptr);
+	m_passPS.assign(passCount, nullptr);
+
+	size_t passIndex = 0;
+	for (ShaderImplementation::Passes::const_iterator i = passes.begin(); i != passes.end(); ++i, ++passIndex)
+	{
+		ShaderImplementation::Pass const * const pass = *i;
+		if (!pass)
+			continue;
+
+		// VS: pass->m_vertexShader is public (ShaderImplementation.h:263);
+		// m_graphicsData on ShaderImplementationPassVertexShader is public via
+		// ShaderImplementationPassVertexShaderGraphicsData base. May be null
+		// when the pass has no VS (FFP path -- D-04a omitted in this plugin).
+		if (pass->m_vertexShader && pass->m_vertexShader->m_graphicsData)
+		{
+			m_passVS[passIndex] = static_cast<Direct3d11_VertexShaderData const *>(
+				pass->m_vertexShader->m_graphicsData);
+		}
+
+		// PS: pass->m_pixelShader (public, ShaderImplementation.h:265) -->
+		// m_program (public, ShaderImplementation.h:611) --> m_graphicsData
+		// (public, ShaderImplementation.h:681). May be null per Plan 11-05
+		// PEXE caveat -- D3D11 CreatePixelShader rejects D3D9-era bytecode,
+		// so Direct3d11_PixelShaderProgramData::m_d3dPS often stays null.
+		// Iter-2 wires the magenta fallback PS to handle that case.
+		if (pass->m_pixelShader
+		    && pass->m_pixelShader->m_program
+		    && pass->m_pixelShader->m_program->m_graphicsData)
+		{
+			m_passPS[passIndex] = static_cast<Direct3d11_PixelShaderProgramData const *>(
+				pass->m_pixelShader->m_program->m_graphicsData);
+		}
+	}
 }
 
 // ======================================================================
@@ -156,32 +207,44 @@ int Direct3d11_StaticShaderData::getTextureSortKey() const
 
 bool Direct3d11_StaticShaderData::apply(int passNumber) const
 {
-	// Per-draw shader binding. Iteration 1 contract:
+	// Plan 11-09 Iter-1: per-draw VS + PS binding via the per-pass extraction
+	// cache populated in construct(). Matches D3D9 sibling shape
+	// (Direct3d9_StaticShaderData.cpp:1045) minus the material/texFactor/
+	// alpha-test/fog/stencil/texture-stage wiring (CODEX scoped Iter-1 to
+	// VS+PS pointers only; those features land Iter-3+ as visual-correctness
+	// symptoms surface).
 	//
-	//   1. Activate-cache check -- if we're already the active shader at
-	//      this pass, skip rebind work (matches D3D9 sibling shape and
-	//      avoids redundant per-draw bindings within a sorted batch).
-	//   2. Record the bind so subsequent iterations have a canonical
-	//      entry point to thread per-pass VS/PS lookup through.
-	//   3. Return false -- "no vertex shader successfully bound" --
-	//      so the Plan 11-06 draw-call dispatch keeps using the engine's
-	//      previously-bound VS (or skips the draw via applyPreDrawState's
-	//      NULL-VS guard, which is the iteration-1 expected behavior).
-	//
-	// Per-pass VS / PS binding requires friend access to
-	// ShaderImplementation::m_pass + StaticShaderTemplate::m_effect (see
-	// construct() rationale). That friend extension lands when smoke
-	// surfaces a specific symptom that requires it (e.g. solid-color
-	// rendering because the engine's default VS doesn't transform
-	// correctly for the asset's vertex format).
-	if (ms_active == this && ms_activePass == passNumber)
+	// CODEX-reframed Iter-1 acceptance bar: "draw activity observable, not
+	// geometry visible." A returned true here trips
+	// applyPreDrawState::resolveShaders into reaching VertexDeclarationMap::
+	// getOrCreate -- producing the CreateInputLayout + IASet*/Draw* InfoQueue
+	// traffic that is the Iter-1 success signal.
+	bool const cacheHit = (ms_active == this && ms_activePass == passNumber);
+
+	if (!cacheHit)
+	{
+		ms_active     = this;
+		ms_activePass = passNumber;
+
+		if (passNumber >= 0 && static_cast<size_t>(passNumber) < m_passVS.size())
+		{
+			size_t const idx = static_cast<size_t>(passNumber);
+			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx]);
+			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
+		}
+		else
+		{
+			// Out-of-bounds pass index. Clear the slot so
+			// applyPreDrawState's null-VS guard skips the draw rather than
+			// re-using stale state from another shader.
+			Direct3d11_StateCache::setCurrentVSData(nullptr);
+			Direct3d11_StateCache::setCurrentPSData(nullptr);
+		}
+	}
+
+	if (passNumber < 0 || static_cast<size_t>(passNumber) >= m_passVS.size())
 		return false;
-
-	ms_active     = this;
-	ms_activePass = passNumber;
-
-	UNREF(passNumber);
-	return false;
+	return m_passVS[static_cast<size_t>(passNumber)] != nullptr;
 }
 
 // ======================================================================

@@ -35,6 +35,7 @@
 #include "Direct3d11_DynamicVertexBufferData.h"
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_StaticIndexBufferData.h"
+#include "Direct3d11_StaticShaderData.h"
 #include "Direct3d11_StaticVertexBufferData.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
@@ -909,19 +910,55 @@ void Direct3d11_StateCache::setBadVertexShaderStaticShader(StaticShader const * 
 
 // ----------------------------------------------------------------------
 
-void Direct3d11_StateCache::setStaticShader(StaticShader const & /*shader*/, int /*pass*/)
+void Direct3d11_StateCache::setStaticShader(StaticShader const &shader, int pass)
 {
-	// Plan 11-06: the engine's StaticShader -> ShaderImplementation pass
-	// resolution flow is data-driven and routes the per-pass VS/PS through
-	// the createShaderImplementationGraphicsData / createStaticShaderGraphicsData
-	// factory slots (still STUB() in Direct3d11.cpp). Until those land
-	// (their own slot wiring in Plan 11-06 Task 4 below), Plan 11-06
-	// leaves setStaticShader as a no-op record. Plan 11-07 will iterate
-	// over the FATAL boundaries that surface from there.
+	// Plan 11-09 Iter-1: the canonical port of Direct3d9.cpp:3044-3072. Cast
+	// shader.m_graphicsData -> Direct3d11_StaticShaderData const * and call
+	// apply(pass); StaticShaderData::apply wires ms_currentVSData /
+	// ms_currentPSData via the new setCurrentVSData/setCurrentPSData
+	// setters below.
 	//
-	// Importantly: this slot is called by the engine PER DRAW. Treating
-	// it as no-op means draws happen with whatever VS/PS was last bound
-	// (likely nothing on the first draw -- which is fine, draw skips).
+	// Plan 11-06's original "no-op record" comment is OBSOLETE -- treating
+	// this slot as a no-op was the root cause of Plan 11-08's post-Task-3b
+	// "zero draws reach the GPU" diagnostic (setStaticShader never wired
+	// ms_currentVSData, so applyPreDrawState's resolveShaders always
+	// short-circuited). Confirmed by CODEX post-implementation consult.
+	//
+	// shader.m_graphicsData was populated by Graphics::createStaticShader
+	// GraphicsData -> Direct3d11::createStaticShaderGraphicsData (Plan 11-06)
+	// -> new Direct3d11_StaticShaderData(shader). It is non-null for every
+	// StaticShader the engine asks us to bind.
+	Direct3d11_StaticShaderData const * d3dShader =
+		static_cast<Direct3d11_StaticShaderData const *>(shader.m_graphicsData);
+	NOT_NULL(d3dShader);
+	IGNORE_RETURN(d3dShader->apply(pass));
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs)
+{
+	// Plan 11-09 Iter-1: Direct3d11_StaticShaderData::apply calls this
+	// once per draw with the per-pass VS pointer. Trip ms_geometryRebindNeeded
+	// so the next applyPreDrawState reselects the input layout against the
+	// new VS bytecode signature (Pitfall 6 territory).
+	if (Direct3d11_StateCacheNamespace::ms_currentVSData != vs)
+	{
+		Direct3d11_StateCacheNamespace::ms_currentVSData = vs;
+		Direct3d11_StateCacheNamespace::ms_geometryRebindNeeded = true;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps)
+{
+	// Plan 11-09 Iter-1: per-pass PS pointer wiring. May be null per Plan
+	// 11-05 PEXE caveat -- applyPreDrawState's PS-NULL guard at the
+	// PSSetShader call site handles that gracefully (leave previous PS bound).
+	// Iter-2 will replace the leave-previous-PS-bound path with the magenta
+	// fallback PS so geometry surfaces visibly.
+	Direct3d11_StateCacheNamespace::ms_currentPSData = ps;
 }
 
 // ======================================================================
