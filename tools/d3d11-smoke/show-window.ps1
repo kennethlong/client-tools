@@ -8,39 +8,55 @@
 # Usage:
 #   pwsh ./tools/d3d11-smoke/show-window.ps1
 #   pwsh ./tools/d3d11-smoke/show-window.ps1 -Width 1280 -Height 720
-#   pwsh ./tools/d3d11-smoke/show-window.ps1 -ProcessName SwgClient -WindowTitle SwgClient
+#   pwsh ./tools/d3d11-smoke/show-window.ps1 -List          # enumerate only
+#   pwsh ./tools/d3d11-smoke/show-window.ps1 -WindowHandle 0x000A1234
 #
-# Run AFTER launching stage/SwgClient_d.exe. The script:
-#   1. Resolves the SwgClient_d process and its main window handle.
-#   2. Falls back to FindWindow by class/title if MainWindowHandle is 0
-#      (happens when the engine created the window without SW_SHOW).
-#   3. Forces SW_SHOW, repositions to (100,100), sizes to Width x Height,
-#      and pulls to foreground.
+# The script:
+#   1. Resolves the SwgClient_d process and ENUMERATES every top-level
+#      window owned by its threads (EnumThreadWindows). This is more
+#      reliable than MainWindowHandle (which depends on Windows shell
+#      heuristics) or FindWindow (which depends on knowing the title).
+#   2. Picks the largest visible-or-hidden window (engine windows
+#      typically dominate any debug-stub windows by size).
+#   3. Forces SW_SHOW, repositions to (X,Y), sizes to Width x Height,
+#      pulls to foreground.
 
 [CmdletBinding()]
 param(
     [string]$ProcessName = 'SwgClient_d',
-    [string]$WindowTitle = 'SwgClient',
     [int]$X = 100,
     [int]$Y = 100,
     [int]$Width = 1024,
-    [int]$Height = 768
+    [int]$Height = 768,
+    [IntPtr]$WindowHandle = [IntPtr]::Zero,    # override target window
+    [switch]$List                              # enumerate only, no ShowWindow
 )
 
 Add-Type -TypeDefinition @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 public class Win {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumThreadWindows(uint dwThreadId, EnumWindowsProc lpfn, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll", SetLastError = true)] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    public static List<IntPtr> WindowsForThread(uint tid) {
+        var list = new List<IntPtr>();
+        EnumThreadWindows(tid, (h, l) => { list.Add(h); return true; }, IntPtr.Zero);
+        return list;
+    }
 }
 "@
 
 $SW_SHOW = 5
-$HWND_TOP = [IntPtr]::Zero
 
 $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
 if (-not $proc) {
@@ -48,16 +64,66 @@ if (-not $proc) {
     exit 1
 }
 
-$hwnd = if ($proc.MainWindowHandle -ne [IntPtr]::Zero) { $proc.MainWindowHandle }
-        else { [Win]::FindWindow($null, $WindowTitle) }
+Write-Host "Process: $($proc.Name) (PID $($proc.Id)) -- enumerating top-level windows per thread..."
 
-if ($hwnd -eq [IntPtr]::Zero) {
-    Write-Host "Could not resolve window handle. Process is alive but no window matches '$WindowTitle' yet -- engine may still be in CreateWindowEx; retry in a few seconds." -ForegroundColor Yellow
+$candidates = @()
+foreach ($t in $proc.Threads) {
+    $tid = [uint32]$t.Id
+    foreach ($h in [Win]::WindowsForThread($tid)) {
+        if ($h -eq [IntPtr]::Zero) { continue }
+        $title = New-Object System.Text.StringBuilder 256
+        [Win]::GetWindowText($h, $title, 256) | Out-Null
+        $cls = New-Object System.Text.StringBuilder 256
+        [Win]::GetClassName($h, $cls, 256) | Out-Null
+        $rect = New-Object Win+RECT
+        [Win]::GetWindowRect($h, [ref]$rect) | Out-Null
+        $vis = [Win]::IsWindowVisible($h)
+        $w = $rect.Right - $rect.Left
+        $hgt = $rect.Bottom - $rect.Top
+        $candidates += [PSCustomObject]@{
+            hWnd  = "0x{0:X8}" -f $h.ToInt32()
+            Class = $cls.ToString()
+            Title = $title.ToString()
+            W     = $w
+            H     = $hgt
+            Visible = $vis
+            RawHandle = $h
+        }
+    }
+}
+
+$candidates = $candidates | Sort-Object -Property @{Expression = "W"; Descending = $true}, @{Expression = "H"; Descending = $true}
+
+if ($candidates.Count -eq 0) {
+    Write-Host "No top-level windows found for any thread of $ProcessName. Process is alive but has not called CreateWindowEx yet, OR has only message-only windows." -ForegroundColor Yellow
     exit 2
 }
 
-Write-Host "Process: $($proc.Name) (PID $($proc.Id))  hWnd=$hwnd  visible-before=$([Win]::IsWindowVisible($hwnd))"
-[Win]::ShowWindow($hwnd, $SW_SHOW) | Out-Null
-[Win]::SetWindowPos($hwnd, $HWND_TOP, $X, $Y, $Width, $Height, 0) | Out-Null
-[Win]::SetForegroundWindow($hwnd) | Out-Null
-Write-Host "After assist: pos=($X,$Y) size=${Width}x${Height} visible-after=$([Win]::IsWindowVisible($hwnd))"
+$candidates | Format-Table hWnd, Class, Title, W, H, Visible -AutoSize
+
+if ($List) {
+    Write-Host "List-only mode; not invoking ShowWindow."
+    exit 0
+}
+
+$target = if ($WindowHandle -ne [IntPtr]::Zero) {
+    ($candidates | Where-Object { $_.RawHandle -eq $WindowHandle }).RawHandle
+} else {
+    # Pick the largest window. Engine windows dominate any stub windows.
+    $candidates[0].RawHandle
+}
+
+if (-not $target -or $target -eq [IntPtr]::Zero) {
+    Write-Host "Could not resolve target window." -ForegroundColor Yellow
+    exit 3
+}
+
+Write-Host "Targeting hWnd=$('0x{0:X8}' -f $target.ToInt32()) -- forcing SW_SHOW + reposition + foreground..."
+[Win]::ShowWindow($target, $SW_SHOW) | Out-Null
+[Win]::SetWindowPos($target, [IntPtr]::Zero, $X, $Y, $Width, $Height, 0) | Out-Null
+[Win]::SetForegroundWindow($target) | Out-Null
+
+$rect = New-Object Win+RECT
+[Win]::GetWindowRect($target, [ref]$rect) | Out-Null
+$vis = [Win]::IsWindowVisible($target)
+Write-Host "After assist: pos=($($rect.Left),$($rect.Top)) size=$($rect.Right - $rect.Left)x$($rect.Bottom - $rect.Top) visible=$vis"
