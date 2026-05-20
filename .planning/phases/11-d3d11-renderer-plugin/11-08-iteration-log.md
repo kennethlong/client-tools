@@ -163,6 +163,45 @@
 
 ---
 
+## Iteration 1.8: close Plan 11-07 Iter-15's second-half hole — pad CopySubresourceRegion srcBox to 4-aligned for BC formats
+
+- **Date:** 2026-05-20
+- **Symptom:** Iter-1.7's `stage/d3d11-debug.log` capture revealed the actual ERROR-severity message pattern firing during the smoke. Frequency rollup: 19,222 INFO Create/Destroy RTV per-frame + 19,220 OMSetRenderTargets unbind-from-FLIP_SEQUENTIAL informational + **96 ERROR-severity hits, all category=8 id=280**. First-occurrence text: `ID3D11DeviceContext::CopySubresourceRegion: Cannot invoke CopySubresourceRegion with a SrcBox that contains coordinates that are unaligned to a block or byte addressable boundary. *pSrcBox = { {left:0, top:0, front:0}, {right:1, bottom:1, back:1} }. BC2_UNORM requires alignment of coodinates to multiples of {4, 4, 1}.` Identical message text with `right:1,bottom:1` and `right:2,bottom:2` variants. ~5 minutes of smoke runtime (19,220 frames at ~60fps) with 96 BC2 errors firing during texture-asset load and not recurring per-frame (steady state has zero ERRORs).
+- **Hypothesis:** This is the second half of the Plan 11-07 Iter-15 BC-format pad fix that wasn't closed. Iter-15 (commit `e4bdab17b`, `fix(11-04):` prefix) padded the staging-texture ALLOCATION dimensions to a 4-pixel block boundary so D3D11's `CreateTexture2D` no longer rejects sub-4 BC mips. But the matching `CopySubresourceRegion` srcBox passed by `Direct3d11_TextureData::unlock` was never padded — it still uses the LOGICAL `lockData.getWidth()` / `getHeight()` which are 1 or 2 at the bottom-of-chain BC mips of textures like `lightsaberblade_lava_a.tga`. D3D11 strict-rejects: `BC2_UNORM requires alignment of coordinates to multiples of {4, 4, 1}`. The staging texture itself was already padded to 4-aligned in `lock()` so its BC block grid covers the same data; padding `srcBox` here makes the source coordinates block-aligned end-to-end, mirroring Iter-15's allocation pad pattern.
+- **Investigation:**
+  - Read `Direct3d11_TextureData.cpp` lines 525-571 (lock site): confirmed Iter-15's allocation pad at line 540-544 applies `(N + 3u) & ~3u` to `stagingWidth` + `stagingHeight` when `isBlockCompressedFormat(native)` is true. Comment at line 533 explicitly states "unlock CopySubresourceRegion (with pSrcBox = nullptr)" — the author's INTENT was for unlock to pass nullptr, but the code at line 605-621 unconditionally passes `&srcBox` with the unpadded logical dims. The Iter-15 commit history shows the lock-site pad was added but no corresponding unlock-site edit.
+  - Read `Direct3d11_TextureData.cpp` lines 595-621 (unlock site): srcBox dims are populated from `lockData.getWidth() / getHeight() / getDepth()` directly. No padding. This is the gap.
+  - Looked at `isBlockCompressedFormat()` declared at line 99: covers both BC1..BC5 (70..84) and BC6H..BC7 (94..99) ranges per Iter-15's existing helper. Reusable here.
+  - `m_texture` is declared as `ComPtr<ID3D11Resource>` at TextureData.h:90 — to inspect the destination format from unlock, query interface to `ID3D11Texture2D` via `ComPtr::As`. Volume textures hit a separate 3D code path and are not BC-typical; safe to short-circuit the pad to the 2D path.
+- **Root cause:** missing srcBox dim pad in `Direct3d11_TextureData::unlock`. Iter-15's allocation pad was the first half of the fix; the unlock-site srcBox pad is the second half. Without the unlock pad, every sub-4 BC mip lock-unlock cycle fires id=280 from the D3D11 debug layer. The errors did not surface in Plan 11-07 smokes because Iter-15 closed the FATAL path (`E_INVALIDARG` from `CreateTexture2D`); the surviving validation messages went to OutputDebugString only. Iter-1.7's file-sink finally surfaced them.
+- **Fix:** `src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp` lines 605-621 (unlock site) extended:
+  ```cpp
+  // Existing srcBox population stays as-is...
+  // NEW: after srcBox is populated, before CopySubresourceRegion:
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> dstTex2d;
+  if (SUCCEEDED(m_texture.As(&dstTex2d)) && dstTex2d)
+  {
+      D3D11_TEXTURE2D_DESC dstDesc = {};
+      dstTex2d->GetDesc(&dstDesc);
+      if (isBlockCompressedFormat(dstDesc.Format))
+      {
+          srcBox.right  = (srcBox.right  + 3u) & ~3u;
+          srcBox.bottom = (srcBox.bottom + 3u) & ~3u;
+          // srcBox.back stays as-is; BC block grid is {4,4,1}
+      }
+  }
+  ```
+  Volume-texture path (3D) is separate code and BC-typical for 3D is rare; left unchanged.
+- **Verification (11-gate set):**
+  - Gates 1-10: MSBuild Direct3d11 EXIT=0 confirmed; gl11_d.dll grew from 1,420,288 → 1,484,288 bytes (+64 KB; the QueryInterface pattern + extra braces compile into a small block). D-13/D-04a unchanged. D-05 unchanged. MSVC /W4 clean.
+  - Gate 11 (ERROR-severity message count during steady-state): EXPECTED to drop from 96 → 0 for the BC2-pSrcBox class on next smoke. First measurement at Kenny's next smoke.
+  - Gates 12 + 13: unchanged from Iter-1.5 / pending Task 2.5.
+  - STUB count unchanged at 27.
+- **Commits:** one commit `fix(11-04): pad CopySubresourceRegion srcBox to 4-aligned for BC formats (Plan 11-08 Iter-1.8; closes Iter-15 hole)`. The `fix(11-04):` prefix mirrors Iter-15 (`e4bdab17b`) and Iter-17 (`8d4dcc934`) — these are all Plan 11-04 resource-layer fixes surfaced during later-plan smokes.
+- **Awaiting Kenny smoke (next launch):** expected outcome is `stage/d3d11-debug.log` carries ZERO `D3D11 [ERROR] category=8 id=280` lines this session. Other invariants unchanged (window still requires ShowWindow assist; per-frame RTV churn still firing — separate issue tracked but not addressed here; Plan 11-07 dark-blue-clear milestone still preserved). When the 96 BC2 errors are confirmed gone, log noise drops by ~5% allowing future Task 3a/3b iterations to spot new ERROR messages more easily.
+
+---
+
 ## Future iterations (placeholders)
 
 Filled as Task 2.5+ land. Each entry follows the 6-field shape (Date / Predicted symptom or Symptom / Hypothesis / Investigation / Root cause / Fix / Verification + Commit hash + Awaiting block).

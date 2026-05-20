@@ -610,6 +610,37 @@ void Direct3d11_TextureData::unlock(LockData &lockData)
 			srcBox.bottom = static_cast<UINT>(lockData.getHeight());
 			srcBox.back   = static_cast<UINT>(lockData.getDepth());
 
+			// Plan 11-08 Iter-1.8: pad srcBox dims to 4-aligned for
+			// block-compressed formats. Iter-15 (commit e4bdab17b)
+			// padded the staging-texture ALLOCATION dims so
+			// CreateTexture2D no longer rejects sub-4 BC mips, but
+			// the matching CopySubresourceRegion srcBox pad never
+			// landed. Pre-fix the D3D11 debug layer fires id=280
+			// "BC2_UNORM requires alignment of coordinates to
+			// multiples of {4, 4, 1}" on every sub-4 BC mip lock
+			// (lightsaberblade_lava_a + similar assets carry
+			// bottom-of-chain mips at 1x1 and 2x2; 96 hits captured
+			// per Iter-1.7's d3d11-debug.log session). The staging
+			// texture itself was already padded to 4-aligned in
+			// lock() so its BC block grid covers the same data;
+			// padding srcBox here makes the source coordinates
+			// block-aligned end-to-end, mirroring Iter-15's
+			// allocation pad pattern. Volume textures hit the
+			// separate 3D code path above and are not BC-typical.
+			Microsoft::WRL::ComPtr<ID3D11Texture2D> dstTex2d;
+			if (SUCCEEDED(m_texture.As(&dstTex2d)) && dstTex2d)
+			{
+				D3D11_TEXTURE2D_DESC dstDesc = {};
+				dstTex2d->GetDesc(&dstDesc);
+				if (isBlockCompressedFormat(dstDesc.Format))
+				{
+					srcBox.right  = (srcBox.right  + 3u) & ~3u;
+					srcBox.bottom = (srcBox.bottom + 3u) & ~3u;
+					// srcBox.back stays as-is; BC block grid is {4,4,1}
+					// with the depth axis byte-aligned to 1.
+				}
+			}
+
 			context->CopySubresourceRegion(
 				m_texture.Get(),
 				dstSubresource,
