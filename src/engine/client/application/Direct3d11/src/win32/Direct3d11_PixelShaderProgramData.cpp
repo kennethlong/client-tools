@@ -49,22 +49,28 @@ Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_
 
 namespace Direct3d11_PixelShaderProgramDataNamespace
 {
-	// Plan 11-07 Iter-3: ps_4_0_level_9_3 profile string. Mirrors the VS
-	// compile-site profile change in Direct3d11_VertexShaderData.cpp. See
-	// that file's preamble Profile-rationale block for the full reasoning
-	// (D3D9-era HLSL syntax surfaces tokens that vs_5_0 / ps_5_0 reserve
-	// as keywords; vs_4_0_level_9_* / ps_4_0_level_9_* relax those
-	// reservations). This helper remains [[maybe_unused]] today (engine
-	// ships pre-compiled D3D9 PEXE bytecode rather than HLSL source for
-	// pixel shaders -- see header preamble); when a future Phase 12 asset
-	// re-author surfaces HLSL-source pixel shaders, this is the code path
-	// that will execute.
-	char const * const kPixelShaderProfile = "ps_4_0_level_9_3";
+	// Plan 11-09.6: ps_4_0 profile string. Mirrors the VS compile-site
+	// profile bump in Direct3d11_VertexShaderData.cpp (vs_4_0_level_9_3 ->
+	// vs_4_0). See that file's preamble Profile-rationale block for the
+	// full reasoning -- vs_5_0/ps_5_0 reserves D3D9-era HLSL identifiers
+	// as keywords (still avoided here); the level_9 profile bucket
+	// enforces SM2.x-style limits including the 256-instruction-slot
+	// ceiling (busted by vertex_program/a_specmap_bump_vs20_for_ps20.vsh
+	// on Plan 11-09.5 char-create smoke; X5615). Plain ps_4_0 drops the
+	// cap while keeping legacy-syntax compatibility. CODEX pre-Plan-11-09.6
+	// consult endorsed this over ps_5_0. This helper remains [[maybe_unused]]
+	// today for stock engine assets (engine ships pre-compiled D3D9 PEXE
+	// bytecode rather than HLSL source for pixel shaders -- see header
+	// preamble); the fallback magenta PS path DOES execute through here
+	// (Plan 11-09 Iter-2), so the profile bump is exercised at install
+	// time on every D3D11 session.
+	char const * const kPixelShaderProfile = "ps_4_0";
 
-	// SPEC R3 compile-time proof: this helper exercises the ps_4_0_level_9_3
-	// (Iter-3) + D3DCompile + ShaderCache code path. It is invoked when an
-	// HLSL source pixel shader surfaces in the asset pipeline (none today;
-	// future Phase 12 asset re-author will trigger this path).
+	// SPEC R3 compile-time proof: this helper exercises the ps_4_0
+	// (Plan 11-09.6) + D3DCompile + ShaderCache code path. It is invoked
+	// at install time for the magenta fallback PS (Plan 11-09 Iter-2) and
+	// when an HLSL source pixel shader surfaces in the asset pipeline (none
+	// today; future Phase 12 asset re-author will trigger that path).
 	//
 	// Returns nullptr if compile fails or input empty; otherwise an
 	// ID3D11PixelShader owned by `outComPtr`.
@@ -136,7 +142,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "14" });   // Iter-1.5: ROW_MAJOR flag retrofit per CODEX Q2 (VS-site mirror).
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "15" });   // Plan 11-09.6 Iter-1: ps_4_0_level_9_3 -> ps_4_0 target bump (VS-site mirror).
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
