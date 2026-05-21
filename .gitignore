@@ -80,3 +80,30 @@ src/external/3rd/library/wolfssl/
 src/build/win32/.vs/*
 *.unrealvs
 stage/shader-cache/
+
+# ============================================================
+# Phase 11+ runtime / harness / tooling cruft (added 2026-05-21)
+# ============================================================
+
+# Per-iteration build logs (the .txt convention; .log already globally ignored)
+build-log-*.txt
+
+# Automated crash dump pairs (.mdmp binary + .txt symbol dump) -- generated
+# by the engine's fatal handler; can land at repo root or inside stage/.
+SwgClient_d.exe-unknown.*
+
+# MSBuild incremental tracker state for the build/win32 solution-level targets
+src/build/win32/_all_*.tlog/
+src/build/win32/_all_*.recipe
+
+# Claude Code harness state (slash-command cache, settings, etc.)
+.claude/
+
+# Node tool install picked up by an unrelated tool; not part of the engine build
+node_modules/
+package.json
+package-lock.json
+
+# Planning subsystem runtime state (the .md docs under .planning/ stay tracked)
+.planning/config.json
+.planning/debug/
