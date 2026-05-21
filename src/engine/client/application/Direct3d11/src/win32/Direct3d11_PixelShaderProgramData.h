@@ -65,6 +65,13 @@ public:
 	// must handle the NULL case (skip PSSetShader -> D3D11 default).
 	ID3D11PixelShader *getPixelShader() const;
 
+	// Plan 11-09 Iter-2: minimal magenta pass-through PS, compiled in
+	// install(). applyPreDrawState binds this when ms_currentPSData has
+	// no real PS (per Plan 11-05 PEXE caveat). Output color is debug
+	// magenta float4(1,0,1,1) -- a visible "Phase 12 asset re-author
+	// owes us a real PS" signal that still surfaces geometry visibly.
+	static ID3D11PixelShader *getFallbackPS();
+
 private:
 
 	Direct3d11_PixelShaderProgramData();
@@ -74,6 +81,11 @@ private:
 private:
 
 	static MemoryBlockManager *ms_memoryBlockManager;
+
+	// Plan 11-09 Iter-2: magenta pass-through PS singleton. Compiled at
+	// install(), released at remove(). Bound by applyPreDrawState when
+	// the active StaticShader has no real PS (Plan 11-05 PEXE caveat).
+	static Microsoft::WRL::ComPtr<ID3D11PixelShader> ms_fallbackPS;
 
 private:
 
@@ -86,6 +98,13 @@ private:
 inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getPixelShader() const
 {
 	return m_d3dPS.Get();
+}
+
+// ----------------------------------------------------------------------
+
+inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPS()
+{
+	return ms_fallbackPS.Get();
 }
 
 // ======================================================================

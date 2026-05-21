@@ -94,6 +94,16 @@ public:
 	static void setCurrentVSData(Direct3d11_VertexShaderData const *vs);
 	static void setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps);
 
+	// Plan 11-09 Iter-2.7 Fix C: raw register-index write into the VS slot 0
+	// cbuffer shadow. Mirrors D3D9's Direct3d9_StateCache::setVertexShaderConstants
+	// API. registerIndex is the D3D9 c-register number; data points to
+	// `count` XMFLOAT4 (16 byte) entries. Bounds-checked against the
+	// Direct3d11_VertexSlot0CB capacity (72 registers); out-of-range calls
+	// are silently dropped with a one-time probe log.
+	// Called from Direct3d11.cpp's setVertexShaderUserConstants_impl with
+	// registerIndex = VCSR_userConstant0 + index = 52 + index.
+	static void setVSConstants(int registerIndex, void const *data, int count);
+
 	// ------------------------------------------------------------------
 	// Draw-call dispatch -- the Gl_api draw* slot bodies.
 	// Non-partial slots use the engine's currently-set VB/IB ranges

@@ -43,6 +43,7 @@
 using Microsoft::WRL::ComPtr;
 
 MemoryBlockManager *Direct3d11_PixelShaderProgramData::ms_memoryBlockManager = nullptr;
+Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_fallbackPS;
 
 // ======================================================================
 
@@ -68,9 +69,9 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 	// Returns nullptr if compile fails or input empty; otherwise an
 	// ID3D11PixelShader owned by `outComPtr`.
 	//
-	// Annotated [[maybe_unused]] so MSVC /W4 doesn't warn during the
-	// Plan 11-05 baseline where no HLSL PS asset surfaces.
-	[[maybe_unused]] bool compilePixelShaderFromHlsl(
+	// Plan 11-09 Iter-2 first real caller: install-time fallback PS compile.
+	// [[maybe_unused]] dropped now that ms_fallbackPS routes through here.
+	bool compilePixelShaderFromHlsl(
 		char const *sourceText,
 		size_t sourceLen,
 		char const *displayName,
@@ -270,12 +271,43 @@ void Direct3d11_PixelShaderProgramData::install()
 	ms_memoryBlockManager = new MemoryBlockManager(
 		"Direct3d11_PixelShaderProgramData", true,
 		sizeof(Direct3d11_PixelShaderProgramData), 0, 0, 0);
+
+	// Plan 11-09 Iter-2: compile the magenta fallback PS so applyPreDrawState
+	// has something to bind when an asset's PS is null (Plan 11-05 PEXE
+	// caveat -- D3D11 CreatePixelShader rejects D3D9-era bytecode, so
+	// stock assets ship with m_d3dPS = null). Output color float4(1,0,1,1)
+	// is intentional debug magenta -- a visible "Phase 12 asset re-author
+	// owes us a real PS" signal that still surfaces geometry rather than
+	// rasterizing to no fragment writes.
+	//
+	// PS signature is the absolute minimum: float4 pos : SV_POSITION input
+	// (D3D11 spec mandates SV_POSITION is always available from the
+	// rasterizer; PS input is allowed to be a subset of VS output, so
+	// declaring only SV_POSITION is safe regardless of what the engine's
+	// VS outputs). Output is a single SV_TARGET float4 (the default
+	// render-target slot 0).
+	char const kFallbackHlsl[] =
+		"// Plan 11-09 Iter-2 magenta fallback PS.\n"
+		"float4 main(float4 pos : SV_POSITION) : SV_TARGET\n"
+		"{\n"
+		"    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n"
+		"}\n";
+
+	bool const compiled = compilePixelShaderFromHlsl(
+		kFallbackHlsl,
+		sizeof(kFallbackHlsl) - 1,   // exclude trailing null
+		"fallback_magenta.hlsl",
+		ms_fallbackPS);
+
+	FATAL(!compiled, ("Direct3d11_PixelShaderProgramData::install: fallback magenta PS compile returned false"));
+	FATAL(!ms_fallbackPS, ("Direct3d11_PixelShaderProgramData::install: fallback PS compiled but ComPtr is empty"));
 }
 
 // ----------------------------------------------------------------------
 
 void Direct3d11_PixelShaderProgramData::remove()
 {
+	ms_fallbackPS.Reset();
 	delete ms_memoryBlockManager;
 	ms_memoryBlockManager = nullptr;
 }

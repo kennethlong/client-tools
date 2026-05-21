@@ -166,7 +166,7 @@ namespace Direct3d11_StateCacheNamespace
 	// per-object setter (setObjectToWorldTransformAndScale) is the
 	// canonical upload site: it composes WVP = (P * V) * W from the
 	// current shadows and uploads the FULL Direct3d11_VertexSlot0CB
-	// (1152 bytes) to slot 0 via composeAndUploadSlot0().
+	// (1152 bytes) to slot 0 via composeSlot0Shadow().
 	//
 	// Iter-18 BSOD root-cause analysis (the never-committed minimum-WVP
 	// attempt that BSOD'd the OS via GPU TDR escalation) enumerated 5
@@ -175,7 +175,7 @@ namespace Direct3d11_StateCacheNamespace
 	// read), #4 (initial-state guarantee via identity-matrix defaults
 	// here + primeDefaults at install), #5 (per-draw flush+bind via
 	// applyPreDrawState's existing bindVS(0)), #7 (full-fill mandatory:
-	// every composeAndUploadSlot0() call uploads the entire 1152-byte
+	// every composeSlot0Shadow() call uploads the entire 1152-byte
 	// struct -- partial writes FORBIDDEN per CODEX 6th hypothesis).
 	//
 	// Identity-initialized at file scope so the first applyPreDrawState
@@ -198,6 +198,21 @@ namespace Direct3d11_StateCacheNamespace
 	XMFLOAT4   s_cachedCameraPos = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 	bool       s_anyMatrixWritten = false;
 
+	// Plan 11-09 Iter-2.7 Fix C: namespace-scope shadow of the full VS slot 0
+	// cbuffer (1152 bytes, Direct3d11_VertexSlot0CB layout). Replaces Plan
+	// 11-05's broken function-local-static shadow in Direct3d11.cpp's
+	// setVertexShaderUserConstants_impl AND Plan 11-08's first-draw race
+	// guard upload pattern. All slot 0 mutations (matrix setters + user
+	// constants via setVSConstants) target this shadow + mark dirty; the
+	// shadow is uploaded ONCE per applyPreDrawState (lazy flush per CODEX
+	// Round 3 guidance: avoids dozens of Map(WRITE_DISCARD) per frame).
+	//
+	// Coherence with GPU: install() runs composeSlot0Shadow + flushes once
+	// so shadow and GPU state both reflect identity matrices + zero defaults
+	// (matches primeDefaults' install-time GPU upload).
+	Direct3d11_VertexSlot0CB s_slot0Shadow = {};
+	bool                     s_slot0Dirty = false;
+
 	// Compose WVP from current shadows + upload full Direct3d11_VertexSlot0CB
 	// to slot 0. CODEX Q1 ratified order: wtp = P * V; wvp = wtp * W = P*V*W.
 	// Direct port of D3D9 plugin's draw-time site at Direct3d9.cpp:4034
@@ -218,26 +233,67 @@ namespace Direct3d11_StateCacheNamespace
 	//   c11..c71 = material / lightData / gap / extendedLightData / pad,
 	//             all zero by {}-init (numLights = lightData[0].x = 0 is
 	//             the shader-side loop-bomb guard per Iter-18 must-have #2).
-	void composeAndUploadSlot0()
+	// Plan 11-09 Iter-2.7 Fix C: composes WVP from cached matrices into the
+	// slot 0 shadow's c0..c3 + c4..c7 + c8 regions; marks shadow dirty so
+	// the next applyPreDrawState flushes. Other shadow regions (c9..c71)
+	// are preserved -- user constants pushed via setVSConstants land at
+	// c52..c59 and lighting/material/etc. live elsewhere in slot 0.
+	// Renamed from composeAndUploadSlot0 since the upload is now deferred
+	// to flushSlot0IfDirty (called once per draw).
+	void composeSlot0Shadow()
 	{
-		Direct3d11_VertexSlot0CB cb = {};   // 1152 bytes zero-init -- mandatory per CODEX 6th hypothesis
-
 		DirectX::XMMATRIX V   = DirectX::XMLoadFloat4x4(&s_cachedView);
 		DirectX::XMMATRIX P   = DirectX::XMLoadFloat4x4(&s_cachedProj);
 		DirectX::XMMATRIX W   = DirectX::XMLoadFloat4x4(&s_cachedWorld);
 		DirectX::XMMATRIX wtp = DirectX::XMMatrixMultiply(P, V);     // P * V (CODEX Q1)
 		DirectX::XMMATRIX wvp = DirectX::XMMatrixMultiply(wtp, W);   // (P * V) * W
 
-		DirectX::XMStoreFloat4x4(&cb.objectWorldCameraProjectionMatrix, wvp);
-		DirectX::XMStoreFloat4x4(&cb.objectWorldMatrix,                 W);
+		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldCameraProjectionMatrix, wvp);
+		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldMatrix,                 W);
 
 		// c8 = cameraPosition_w. Shader declares as float3, but our struct
 		// member is XMFLOAT4 -- the float w component (s_cachedCameraPos.w)
 		// is ignored by the shader per HLSL float3-from-float4 conversion
-		// rules. c9 + c10 stay zero (default viewport scale, no fog).
-		cb.c8_to_c10[0] = s_cachedCameraPos;
+		// rules. c9 + c10 stay at whatever value other setters put there
+		// (c9 = viewportData, c10 = fog -- preserved from setFog calls).
+		s_slot0Shadow.c8_to_c10[0] = s_cachedCameraPos;
 
-		Direct3d11_ConstantBuffer::updateVS(0, &cb, sizeof(cb));
+		// Plan 11-09 Iter-2.7 Fix C: defer GPU upload to flushSlot0IfDirty.
+		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
+		// flagged anti-pattern (dozens of full-fill uploads per frame).
+		s_slot0Dirty = true;
+	}
+
+	// Plan 11-09 Iter-2.7 Fix C: write arbitrary float4 values into the slot 0
+	// shadow by D3D9-style register index. Mirrors Direct3d9_StateCache::
+	// setVertexShaderConstants(register, data, count). Used by
+	// setVertexShaderUserConstants_impl (Direct3d11.cpp) to land user constants
+	// at VCSR_userConstant0..7 = registers 52..59 (verified against
+	// Direct3d9_VertexShaderConstantRegisters.h:37).
+	void setVSConstantsRaw(int registerIndex, void const *data, int count)
+	{
+		if (registerIndex < 0 || count <= 0)
+			return;
+		// VertexSlot0CB is 72 registers (c0..c71); reject writes that would
+		// overflow. Engine push beyond this would require growing the struct
+		// (or extending Plan 11-08's c68..c71 pad region).
+		if (registerIndex + count > 72)
+			return;
+		uint8_t * const bytes = reinterpret_cast<uint8_t *>(&s_slot0Shadow);
+		std::memcpy(bytes + registerIndex * 16, data, static_cast<size_t>(count) * 16);
+		s_slot0Dirty = true;
+	}
+
+	// Plan 11-09 Iter-2.7 Fix C: lazy upload of the slot 0 shadow once per
+	// applyPreDrawState. Replaces Plan 11-08's first-draw race guard +
+	// setObjectToWorldTransformAndScale-canonical-upload pattern. If no
+	// setter has touched the shadow since the last flush, this is a no-op.
+	void flushSlot0IfDirty()
+	{
+		if (!s_slot0Dirty)
+			return;
+		Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, sizeof(s_slot0Shadow));
+		s_slot0Dirty = false;
 	}
 
 	// ------------------------------------------------------------------
@@ -275,6 +331,10 @@ namespace Direct3d11_StateCacheNamespace
 		}
 
 		// Depth-stencil (D3D9 D3DRS_ZENABLE=TRUE, ZFUNC=LESSEQUAL, ZWRITEENABLE=TRUE)
+		// Plan 11-09 Iter-2.3 diagnostic ran with DepthEnable=FALSE; magenta
+		// did NOT surface (PSInvocations still 0). Depth ELIMINATED as a
+		// suspect. Iter-2.4 reverts depth + adds state probes (viewport /
+		// scissor / IL / topology) to bisect topology vs WVP.
 		ms_dssDesc.DepthEnable    = TRUE;
 		ms_dssDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		ms_dssDesc.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
@@ -403,24 +463,12 @@ namespace Direct3d11_StateCacheNamespace
 		if (!ctx)
 			return false;
 
-		// Plan 11-08 Task 3b: first-draw race guard. If the engine fires
-		// applyPreDrawState before any setObjectToWorldTransformAndScale
-		// has run this session, slot 0 still has the install-time
-		// primeDefaults identity payload -- which is safe (renders at
-		// identity transform), but the s_cachedView / s_cachedProj
-		// shadows may have been written by setWorldToCameraTransform /
-		// setProjectionMatrix without the slot 0 cbuffer having been
-		// updated to reflect them. Composing+uploading once here closes
-		// that race so the slot 0 contents match the current shadow
-		// state regardless of which setter ran most recently. The cost
-		// is one extra updateVS(0,...) on the very first draw of the
-		// session; every subsequent draw uses the slot 0 contents that
-		// setObjectToWorldTransformAndScale wrote.
-		if (!s_anyMatrixWritten)
-		{
-			composeAndUploadSlot0();
-			s_anyMatrixWritten = true;
-		}
+		// Plan 11-09 Iter-2.7 Fix C: lazy upload of slot 0 shadow once per
+		// draw. Replaces Plan 11-08's first-draw race guard pattern. Any
+		// matrix setter OR setVSConstants call between draws marks shadow
+		// dirty; this flush uploads the full 1152 bytes (Plan 11-08 full-
+		// fill mandate) and clears the dirty flag.
+		flushSlot0IfDirty();
 
 		// 1. Shaders
 		if (!resolveShaders())
@@ -459,11 +507,28 @@ namespace Direct3d11_StateCacheNamespace
 		if (ms_currentIBValid && ms_currentIB)
 			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 
-		// 5. VS + PS (PS NULL fallback per Plan 11-05 caveat)
+		// 5. VS + PS (Plan 11-09 Iter-2: magenta fallback when asset PS is null).
 		ctx->VSSetShader(vs, nullptr, 0);
 		if (ms_currentPSData && ms_currentPSData->getPixelShader())
+		{
 			ctx->PSSetShader(ms_currentPSData->getPixelShader(), nullptr, 0);
-		// else: leave previous PS bound (D3D11 default pass-through after init).
+		}
+		else if (ID3D11PixelShader *fallback = Direct3d11_PixelShaderProgramData::getFallbackPS())
+		{
+			// Plan 11-09 Iter-2: bind the install-time magenta pass-through
+			// PS so geometry surfaces visibly. Without this, draws rasterize
+			// but produce no fragment writes (D3D11 has no implicit FFP
+			// pass-through PS) -- the Plan 11-05 PEXE-caveat invisible-
+			// geometry failure mode. Magenta is intentional debug color;
+			// real per-shader PS lands when Phase 12 re-authors the .psh
+			// assets to DXBC-format SM4+ bytecode.
+			ctx->PSSetShader(fallback, nullptr, 0);
+		}
+		else
+		{
+			// Defensive: should never fire post-Iter-2 since install() FATALs
+			// on fallback compile failure. Leave previous PS bound if it does.
+		}
 
 		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by
 		// Direct3d11.cpp's setVertexShaderUserConstants_impl /
@@ -505,6 +570,13 @@ namespace Direct3d11_StateCacheNamespace
 		}
 
 		++ms_drawCallCount;
+
+		// Plan 11-09 Iter-2.7f (CODEX Round 6): mark frame as having draw
+		// activity. clearViewport's escape hatch checks this to decide
+		// whether a primary-backbuffer clear should be deferred to next
+		// beginScene (avoiding the D3D11 flip-model wipe-after-draw hazard).
+		Direct3d11_Device::setFrameHasDrawActivity();
+
 		return true;
 	}
 }
@@ -538,6 +610,14 @@ void Direct3d11_StateCache::install()
 
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateSamplerState(&ssDesc, ms_defaultSampler.GetAddressOf());
 	FATAL_DX_HR("Direct3d11_StateCache::install: CreateSamplerState (default) failed: %s", hr);
+
+	// Plan 11-09 Iter-2.7 Fix C: populate slot 0 shadow with identity matrices
+	// so it matches primeDefaults' install-time GPU upload. Subsequent setter
+	// calls mutate the shadow + mark dirty; flushSlot0IfDirty uploads at draw
+	// time. Without this, the first flush would overwrite primeDefaults'
+	// identity matrices with the zero-initialized shadow contents.
+	composeSlot0Shadow();   // composes from s_cached* (identity at file scope)
+	s_slot0Dirty = false;   // shadow now matches GPU (post-primeDefaults); skip the redundant upload
 
 	uint64_t const ssKey = fnv1a64(&ssDesc, sizeof(ssDesc));
 	(*ms_ssCache)[ssKey] = ms_defaultSampler;
@@ -663,6 +743,28 @@ void Direct3d11_StateCache::setViewport(int x, int y, int width, int height, rea
 	vp.MinDepth = static_cast<float>(minZ);
 	vp.MaxDepth = static_cast<float>(maxZ);
 	ctx->RSSetViewports(1, &vp);
+
+	// Plan 11-09 Iter-2.7b (CODEX Round 4): write VSCR_viewportData at c9
+	// of the slot 0 cbuffer. This is the renderer-internal constant the
+	// engine's UI/HUD vertex shader reads to convert screen-space (already-
+	// transformed) vertex positions into clip space. Pre-Fix, c9 stayed at
+	// install-time zero, so the UI VS multiplied screen-space x/y by zero
+	// -> all UI verts collapsed to a single clip-space point -> CPrimitives
+	// counted them but PSInvocations stayed 0 (degenerate triangles).
+	// Formula verbatim from Direct3d9.cpp:3240-3243 (VSPS path).
+	float const xOffset = (static_cast<float>(x) * 2.0f) / static_cast<float>(width);
+	float const yOffset = (static_cast<float>(y) * 2.0f) / static_cast<float>(height);
+	float const viewportData[4] = {
+		 2.0f / static_cast<float>(width),
+		-2.0f / static_cast<float>(height),
+		-1.0f - xOffset,
+		 1.0f + yOffset
+	};
+	constexpr int kVSCR_viewportData = 9;
+	setVSConstants(kVSCR_viewportData, viewportData, 1);
+
+	UNREF(minZ);
+	UNREF(maxZ);
 }
 
 // ----------------------------------------------------------------------
@@ -709,6 +811,15 @@ void Direct3d11_StateCache::setWorldToCameraTransform(Transform const &objectToW
 		static_cast<float>(m[2][0]), static_cast<float>(m[2][1]), static_cast<float>(m[2][2]), static_cast<float>(m[2][3]),
 		0.0f, 0.0f, 0.0f, 1.0f);
 	s_cachedCameraPos = XMFLOAT4(cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.0f);
+
+	// Plan 11-09 Iter-2.7 Fix C: re-compose WVP into shadow so the View
+	// change propagates to GPU on next applyPreDrawState. Pre-Fix-C
+	// (Plan 11-08 Task 3b) this was shadow-only because setObjectToWorld-
+	// TransformAndScale was the canonical upload site; but the engine
+	// doesn't always call setObjectToWorld... (Iter-2.6 smoke proved),
+	// so View/Proj changes would never reach GPU. Now every setter
+	// triggers the compose + dirty path.
+	composeSlot0Shadow();
 }
 
 // ----------------------------------------------------------------------
@@ -722,8 +833,12 @@ void Direct3d11_StateCache::setProjectionMatrix(GlMatrix4x4 const &projectionMat
 	// by the projection matrix every frame -- a structural bug. Under
 	// the Plan 11-08 layout slot 1 is unused by the per-frame pipeline;
 	// projection lives in the WVP composition uploaded to slot 0 via
-	// composeAndUploadSlot0().
+	// composeSlot0Shadow().
 	std::memcpy(&s_cachedProj, projectionMatrix.matrix, sizeof(float) * 16);
+
+	// Plan 11-09 Iter-2.7 Fix C: re-compose + mark dirty. See note in
+	// setWorldToCameraTransform above.
+	composeSlot0Shadow();
 }
 
 // ----------------------------------------------------------------------
@@ -765,8 +880,8 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
 		static_cast<float>(m[2][0]),           static_cast<float>(m[2][1]),           static_cast<float>(m[2][2]) * scale.z, static_cast<float>(m[2][3]),
 		0.0f, 0.0f, 0.0f, 1.0f);
 
-	composeAndUploadSlot0();
-	s_anyMatrixWritten = true;
+	composeSlot0Shadow();
+	s_anyMatrixWritten = true;   // Kept for back-compat; Fix C uses s_slot0Dirty instead
 }
 
 // ----------------------------------------------------------------------
@@ -959,6 +1074,16 @@ void Direct3d11_StateCache::setCurrentPSData(Direct3d11_PixelShaderProgramData c
 	// Iter-2 will replace the leave-previous-PS-bound path with the magenta
 	// fallback PS so geometry surfaces visibly.
 	Direct3d11_StateCacheNamespace::ms_currentPSData = ps;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setVSConstants(int registerIndex, void const *data, int count)
+{
+	// Plan 11-09 Iter-2.7 Fix C: public thunk to the namespace-scope helper.
+	// Routes engine register pushes (D3D9 SetVertexShaderConstantF analog)
+	// into the slot 0 shadow.
+	Direct3d11_StateCacheNamespace::setVSConstantsRaw(registerIndex, data, count);
 }
 
 // ======================================================================

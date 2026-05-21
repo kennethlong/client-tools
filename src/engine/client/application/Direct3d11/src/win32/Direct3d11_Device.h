@@ -40,6 +40,21 @@ public:
 	static int                   getWidth();
 	static int                   getHeight();
 
+	// Plan 11-09 Iter-2.7c (CODEX Round 5): expose backbuffer RTV for
+	// post-PS-rejection diagnostic. applyPreDrawState's first-fallback probe
+	// compares OMGetRenderTargets vs this pointer to determine if UI draws
+	// hit an offscreen RT instead of the swapchain backbuffer.
+	static ID3D11RenderTargetView * getBackBufferRTV();
+
+	// Plan 11-09 Iter-2.7f (CODEX Round 6): signal that a draw was submitted
+	// in the current frame. Used by clearViewport's primary-backbuffer escape
+	// hatch -- if clearViewport targets the backbuffer AFTER draw activity,
+	// it stashes a pending clear that beginScene applies at the start of the
+	// next frame. (D3D9 engine pattern is clear-after-draw; D3D11 flip-model
+	// would wipe the to-be-presented surface if we cleared immediately.)
+	// Idempotent; cheap; safe to call per-draw.
+	static void setFrameHasDrawActivity();
+
 	// ------------------------------------------------------------------
 	// Gl_api per-frame slot bodies (replace FATAL stubs from Plan 11-02).
 	// Signatures match Gl_api struct field types in Gl_dll.def exactly.

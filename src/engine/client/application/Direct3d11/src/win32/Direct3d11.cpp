@@ -29,6 +29,7 @@
 #include "Direct3d11_Metrics.h"
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_RenderTarget.h"
+#include "Direct3d11_StateCache.h"   // Plan 11-09 Iter-2.7 Fix C: setVSConstants
 #include "Direct3d11_ShaderCache.h"
 #include "Direct3d11_ShaderImplementationData.h"
 #include "Direct3d11_StateCache.h"
@@ -364,29 +365,21 @@ namespace Direct3d11Namespace
 
 	void setVertexShaderUserConstants_impl(int index, float c0, float c1, float c2, float c3)
 	{
-		// D3D9 analog: Direct3d9_StateCache::setVertexShaderConstants(
-		//   VCSR_userConstant0 + index, {c0,c1,c2,c3}, 1);
-		//
-		// D3D11 cbuffer migration: index becomes the per-object userConstants[]
-		// slot. We accumulate one VS user-constant per call into PerObjectCB.
-		// Plan 11-06's draw dispatch flushes the cbuffer via
-		// Direct3d11_ConstantBuffer::updateVS(1, ...) + bindVS(1) at the
-		// right moment in the draw-call sequence.
-		//
-		// For Plan 11-05 we maintain a static shadow copy of the cbuffer
-		// payload that Plan 11-06 will read on flush. This lets us NOT call
-		// updateVS per-setter (Map/Unmap on every constant is wasteful).
-		static Direct3d11_PerObjectCB s_perObjectShadow = {};
-		if (index >= 0 && index < 8)
-		{
-			s_perObjectShadow.userConstants[index] = DirectX::XMFLOAT4(c0, c1, c2, c3);
-		}
-		else
-		{
-			DEBUG_REPORT_LOG_PRINT(true,
-				("Direct3d11::setVertexShaderUserConstants: index=%d out of PerObjectCB userConstants[] range [0,8)\n",
-				index));
-		}
+		// Plan 11-09 Iter-2.7 Fix C: route engine user-constants directly into
+		// the VS slot 0 shadow at D3D9 register VCSR_userConstant0 + index
+		// (= 52 + index). Verified against
+		// Direct3d9_VertexShaderConstantRegisters.h:37 and
+		// Direct3d9.cpp:3497. Pre-Fix-C this stored to a function-local-static
+		// shadow that nothing read (Iter-2.6 smoke proved Plan 11-05 user-
+		// constants impl was a dead-write). Now the shadow lives in
+		// Direct3d11_StateCacheNamespace and is flushed once-per-draw via
+		// flushSlot0IfDirty at applyPreDrawState top.
+		if (index < 0 || index >= 8)
+			return;
+
+		constexpr int kVCSR_userConstant0 = 52;
+		float const data[4] = { c0, c1, c2, c3 };
+		Direct3d11_StateCache::setVSConstants(kVCSR_userConstant0 + index, data, 1);
 	}
 
 	void setPixelShaderUserConstants_impl(VectorRgba const *constants, int count)

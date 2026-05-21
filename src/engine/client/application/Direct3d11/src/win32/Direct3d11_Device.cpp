@@ -391,6 +391,26 @@ void Direct3d11_Device::destroy()
 // Singleton accessors.
 
 ID3D11Device *        Direct3d11_Device::getDevice()  { return ms_device.Get(); }
+ID3D11RenderTargetView * Direct3d11_Device::getBackBufferRTV() { return ms_backBufferRTV.Get(); }
+
+// Plan 11-09 Iter-2.7f (CODEX Round 6): frame-draw-activity flag + pending
+// primary clear state. clearViewport's escape hatch defers primary-RT
+// clears that happen after a draw within the same frame; beginScene applies
+// them at the start of the next frame.
+namespace {
+	bool                                 s_frameHasDraws = false;
+	bool                                 s_pendingPrimaryColorClear   = false;
+	uint32                               s_pendingPrimaryColorValue   = 0;
+	bool                                 s_pendingPrimaryDepthClear   = false;
+	real                                 s_pendingPrimaryDepthValue   = 1.0f;
+	bool                                 s_pendingPrimaryStencilClear = false;
+	uint32                               s_pendingPrimaryStencilValue = 0;
+}
+
+void Direct3d11_Device::setFrameHasDrawActivity()
+{
+	s_frameHasDraws = true;
+}
 ID3D11DeviceContext * Direct3d11_Device::getContext() { return ms_context.Get(); }
 int                   Direct3d11_Device::getWidth()   { return ms_width; }
 int                   Direct3d11_Device::getHeight()  { return ms_height; }
@@ -415,6 +435,39 @@ void Direct3d11_Device::beginScene()
 	vp.MinDepth = 0.0f;
 	vp.MaxDepth = 1.0f;
 	ms_context->RSSetViewports(1, &vp);
+
+	// Plan 11-09 Iter-2.7f (CODEX Round 6): apply pending primary-RT clear
+	// from previous frame's clearViewport-after-draw. Engine's D3D9-era
+	// pattern issues clearViewport AFTER UI render thinking it'll affect
+	// the next frame's start; under D3D11 flip-model that would wipe the
+	// to-be-presented surface, so we deferred the clear. Now we apply it
+	// against this frame's freshly-bound backbuffer.
+	if (s_pendingPrimaryColorClear && ms_backBufferRTV)
+	{
+		// D3DCOLOR is 0xAARRGGBB (CODEX Q3 verified).
+		float const a = static_cast<float>((s_pendingPrimaryColorValue >> 24) & 0xFFu) / 255.0f;
+		float const r = static_cast<float>((s_pendingPrimaryColorValue >> 16) & 0xFFu) / 255.0f;
+		float const g = static_cast<float>((s_pendingPrimaryColorValue >>  8) & 0xFFu) / 255.0f;
+		float const b = static_cast<float>((s_pendingPrimaryColorValue >>  0) & 0xFFu) / 255.0f;
+		float const color[4] = { r, g, b, a };
+		ms_context->ClearRenderTargetView(ms_backBufferRTV.Get(), color);
+	}
+	UINT clearFlags = 0;
+	if (s_pendingPrimaryDepthClear)   clearFlags |= D3D11_CLEAR_DEPTH;
+	if (s_pendingPrimaryStencilClear) clearFlags |= D3D11_CLEAR_STENCIL;
+	if (clearFlags && ms_depthStencilDSV)
+	{
+		ms_context->ClearDepthStencilView(
+			ms_depthStencilDSV.Get(),
+			clearFlags,
+			static_cast<FLOAT>(s_pendingPrimaryDepthValue),
+			static_cast<UINT8>(s_pendingPrimaryStencilValue & 0xFFu));
+	}
+	// Reset pending state + frame-draw flag for this new frame.
+	s_pendingPrimaryColorClear   = false;
+	s_pendingPrimaryDepthClear   = false;
+	s_pendingPrimaryStencilClear = false;
+	s_frameHasDraws              = false;
 }
 
 // ----------------------------------------------------------------------
@@ -438,28 +491,67 @@ void Direct3d11_Device::endScene()
 // Depth/stencil components honor the engine's clear flags + values
 // (depth in [0,1], stencil in [0,255]).
 
-void Direct3d11_Device::clearViewport(bool clearColor, uint32 /*colorValue*/,
+void Direct3d11_Device::clearViewport(bool clearColor, uint32 colorValue,
                                       bool clearDepth, real depthValue,
                                       bool clearStencil, uint32 stencilValue)
 {
-	if (clearColor && ms_backBufferRTV)
+	// Plan 11-09 Iter-2.7f (CODEX Round 6 final): targeted fix for the D3D9->
+	// D3D11 clear-after-draw hazard.
+	//
+	// Architecture:
+	//   - Clear the BOUND RTV/DSV (D3D9 Clear semantics), not always backbuffer.
+	//   - Use engine's colorValue (ARGB -> float4), not Plan 11-03's hardcoded
+	//     placeholder.
+	//   - Primary-backbuffer escape hatch: if bound RTV is the backbuffer AND
+	//     a draw has already submitted this frame, stash the clear and let
+	//     beginScene apply it next frame. This is the only case where the
+	//     D3D11 flip-model would wipe the to-be-presented surface.
+	//   - Offscreen / user RTs: clear immediately. Those are typically
+	//     intentional pass-local clears.
+
+	ID3D11RenderTargetView * boundRTV = nullptr;
+	ID3D11DepthStencilView * boundDSV = nullptr;
+	ms_context->OMGetRenderTargets(1, &boundRTV, &boundDSV);
+
+	bool const boundIsPrimary = (boundRTV == ms_backBufferRTV.Get());
+	bool const deferThisClear = boundIsPrimary && s_frameHasDraws;
+
+	if (deferThisClear)
 	{
-		// Plan 11-03 MVP dark-blue clear (Wave 4+ wires real argb).
-		float const mvpClearColor[4] = { 0.0f, 0.0f, 0.25f, 1.0f };
-		ms_context->ClearRenderTargetView(ms_backBufferRTV.Get(), mvpClearColor);
+		// Stash for next beginScene. Coalesce: last value wins per aspect.
+		if (clearColor)   { s_pendingPrimaryColorClear   = true; s_pendingPrimaryColorValue   = colorValue;   }
+		if (clearDepth)   { s_pendingPrimaryDepthClear   = true; s_pendingPrimaryDepthValue   = depthValue;   }
+		if (clearStencil) { s_pendingPrimaryStencilClear = true; s_pendingPrimaryStencilValue = stencilValue; }
+	}
+	else
+	{
+		// Immediate clear of the bound target (D3D9 semantics).
+		if (clearColor && boundRTV)
+		{
+			float const a = static_cast<float>((colorValue >> 24) & 0xFFu) / 255.0f;
+			float const r = static_cast<float>((colorValue >> 16) & 0xFFu) / 255.0f;
+			float const g = static_cast<float>((colorValue >>  8) & 0xFFu) / 255.0f;
+			float const b = static_cast<float>((colorValue >>  0) & 0xFFu) / 255.0f;
+			float const color[4] = { r, g, b, a };
+			ms_context->ClearRenderTargetView(boundRTV, color);
+		}
+
+		UINT clearFlags = 0;
+		if (clearDepth)   clearFlags |= D3D11_CLEAR_DEPTH;
+		if (clearStencil) clearFlags |= D3D11_CLEAR_STENCIL;
+		if (clearFlags && boundDSV)
+		{
+			ms_context->ClearDepthStencilView(
+				boundDSV,
+				clearFlags,
+				static_cast<FLOAT>(depthValue),
+				static_cast<UINT8>(stencilValue & 0xFFu));
+		}
 	}
 
-	UINT clearFlags = 0;
-	if (clearDepth)   clearFlags |= D3D11_CLEAR_DEPTH;
-	if (clearStencil) clearFlags |= D3D11_CLEAR_STENCIL;
-	if (clearFlags && ms_depthStencilDSV)
-	{
-		ms_context->ClearDepthStencilView(
-			ms_depthStencilDSV.Get(),
-			clearFlags,
-			static_cast<FLOAT>(depthValue),
-			static_cast<UINT8>(stencilValue & 0xFF));
-	}
+	// OMGetRenderTargets added refs; release them.
+	if (boundRTV) boundRTV->Release();
+	if (boundDSV) boundDSV->Release();
 }
 
 // ----------------------------------------------------------------------
