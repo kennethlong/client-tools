@@ -216,7 +216,7 @@ Plan 11-05 documented PEXE caveat: `ShaderImplementationPassPixelShaderProgram::
 **Build log:** `build-log-11-09-iter2-01.txt`.
 
 ### Commit
-TBD — to land after Kenny smoke verdict.
+`f3b27054b` — bundled into the Iter-2 close commit (see Iter-2 close-out section below for the 7-sub-iteration arc that landed alongside the base magenta fallback PS).
 
 ### Awaiting Kenny smoke (Iter-2 verdict; **Plan 11-09 EXIT MILESTONE candidate**)
 
@@ -313,7 +313,7 @@ Visible magenta geometry on the engine-intended clear. Login-screen UI quads ren
 
 ### Commit (close-out)
 
-TBD — atomic Plan 11-09 close commit (to be filled by docs touch-up after the close commit lands; mirrors Plan 11-08 / Plan 11-09 Iter-1 pattern `288b7b5f7` → `cf40c74a3`).
+`f3b27054b` — `feat(11-09): close Plan 11-09 at visible-magenta milestone (Iter-2; 7-sub-iteration CODEX-driven arc surfaced 4 distinct architectural bugs)`. 14 files changed, 1262 insertions(+), 74 deletions(-). Refer to commit message for the per-bug narrative.
 
 ### Plan 11-10 scope
 
