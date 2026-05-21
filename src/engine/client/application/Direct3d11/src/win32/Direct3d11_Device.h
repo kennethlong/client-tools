@@ -31,7 +31,7 @@ class Direct3d11_Device
 {
 public:
 	// Lifecycle -- called from Direct3d11::install.
-	static bool create(HWND hwnd, int width, int height, bool windowed);
+	static bool create(HWND hwnd, int width, int height, bool windowed, bool engineOwnsWindow);
 	static void destroy();
 
 	// Singleton accessors -- nullptr before create() and after destroy().
@@ -39,6 +39,26 @@ public:
 	static ID3D11DeviceContext * getContext();
 	static int                   getWidth();
 	static int                   getHeight();
+	static HWND                  getWindow();
+	static bool                  isWindowed();
+	static bool                  engineOwnsWindow();
+
+	// Plan 11-09.5: plugin-side window-show parity with D3D9. Mirrors
+	// Direct3d9Namespace::updateWindowSettings (Direct3d9.cpp:1870-1930):
+	// sets WS_CAPTION-class style (windowed) or WS_POPUP (fullscreen),
+	// adjusts client-rect for chrome, centers on the DXGI containing-output
+	// monitor on first call, and ends in SetWindowPos(... SWP_SHOWWINDOW)
+	// which is what reveals the engine-created hidden window
+	// (Os::install creates with WS_POPUP and no WS_VISIBLE by design).
+	// Called from Direct3d11::install after create() succeeds.
+	static void updateWindowSettings();
+
+	// Plan 11-09.5: real binding for Gl_api::setWindowedMode (replaces
+	// the Plan 11-02 scaffold_fatal_stub STUB). For Iter-1 the DXGI
+	// fullscreen toggle is intentionally deferred (windowed-mode only)
+	// per 11-09.5-PLAN.md Task 1d scope guardrail; the function logs and
+	// re-applies updateWindowSettings rather than FATAL'ing on toggle.
+	static void setWindowedMode(bool windowed);
 
 	// Plan 11-09 Iter-2.7c (CODEX Round 5): expose backbuffer RTV for
 	// post-PS-rejection diagnostic. applyPreDrawState's first-fallback probe

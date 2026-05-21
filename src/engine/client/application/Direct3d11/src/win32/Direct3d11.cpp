@@ -472,10 +472,21 @@ bool Direct3d11::install(Gl_install * gl_install)
 	if (!Direct3d11_Device::create(gl_install->window,
 	                               gl_install->width,
 	                               gl_install->height,
-	                               gl_install->windowed))
+	                               gl_install->windowed,
+	                               gl_install->engineOwnsWindow))
 	{
 		return false;
 	}
+
+	// Plan 11-09.5: plugin-side window-show parity with D3D9. Os::install
+	// creates the engine window hidden (WS_POPUP without WS_VISIBLE, no
+	// ShowWindow); the plugin owns reveal responsibility. This call ends
+	// in SetWindowPos(..., SWP_SHOWWINDOW) which makes the window visible.
+	// Mirrors Direct3d9.cpp:1535 placement (right after device-create
+	// succeeds, before resource installs). Eliminates the
+	// tools/d3d11-smoke/show-window.ps1 external workaround carried forward
+	// since Plan 11-07 Iter-17.
+	Direct3d11_Device::updateWindowSettings();
 
 	// ------------------------------------------------------------------
 	// Plan 11-04: resource-class install in dependency order. Each class
@@ -580,7 +591,12 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ms_glApi.setBrightnessContrastGamma = setBrightnessContrastGamma_impl;
 
 	STUB(resize);
-	STUB(setWindowedMode);
+
+	// Plan 11-09.5: real binding replaces the Plan 11-02 STUB(setWindowedMode)
+	// scaffold_fatal_stub reinterpret_cast. Iter-1 scope: windowed-mode only;
+	// real DXGI SetFullscreenState toggle deferred to a future plan
+	// (flip-discard swap chains have stricter semantics than D3D9 blit-model).
+	ms_glApi.setWindowedMode = Direct3d11_Device::setWindowedMode;
 
 	// Plan 11-06: rasterizer-state setters land on Direct3d11_StateCache.
 	ms_glApi.setFillMode = Direct3d11_StateCache::setFillMode;

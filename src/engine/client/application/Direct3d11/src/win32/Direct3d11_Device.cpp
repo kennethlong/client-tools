@@ -37,6 +37,7 @@
 
 #include <cstdio>             // snprintf for InfoQueue category/severity formatting; fopen for Iter-1.7 file sink
 #include <ctime>              // time_t / localtime_s / strftime for Iter-1.7 session header
+#include <climits>            // INT_MAX sentinel for ms_windowX/Y (Plan 11-09.5)
 
 // ======================================================================
 
@@ -52,6 +53,14 @@ namespace Direct3d11_DeviceNamespace
 	int  ms_width     = 0;
 	int  ms_height    = 0;
 	bool ms_windowed  = true;
+
+	// Plan 11-09.5: window-position state mirroring Direct3d9Namespace.
+	// INT_MAX sentinel triggers monitor-center fallback in updateWindowSettings
+	// (matches Direct3d9.cpp:1906-1910 behavior).
+	bool ms_engineOwnsWindow = false;
+	int  ms_windowX          = INT_MAX;
+	int  ms_windowY          = INT_MAX;
+	bool ms_borderlessWindow = false;
 
 	ComPtr<ID3D11Device>           ms_device;
 	ComPtr<ID3D11DeviceContext>    ms_context;
@@ -130,7 +139,7 @@ using namespace Direct3d11_DeviceNamespace;
 // SPEC §Constraints: D3D_FEATURE_LEVEL_11_0 minimum -- FATAL if driver
 // downgrades.
 
-bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
+bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed, bool engineOwnsWindow)
 {
 	if (ms_installed)
 	{
@@ -138,10 +147,11 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed)
 		return true;
 	}
 
-	ms_window   = hwnd;
-	ms_width    = width;
-	ms_height   = height;
-	ms_windowed = windowed;
+	ms_window           = hwnd;
+	ms_width            = width;
+	ms_height           = height;
+	ms_windowed         = windowed;
+	ms_engineOwnsWindow = engineOwnsWindow;
 
 	// ------------------------------------------------------------------
 	// Step 1: Create ID3D11Device + immediate context.
@@ -381,10 +391,14 @@ void Direct3d11_Device::destroy()
 	ms_context.Reset();
 	ms_device.Reset();
 
-	ms_window    = nullptr;
-	ms_width     = 0;
-	ms_height    = 0;
-	ms_installed = false;
+	ms_window           = nullptr;
+	ms_width            = 0;
+	ms_height           = 0;
+	ms_engineOwnsWindow = false;
+	ms_windowX          = INT_MAX;
+	ms_windowY          = INT_MAX;
+	ms_borderlessWindow = false;
+	ms_installed        = false;
 }
 
 // ======================================================================
@@ -414,6 +428,165 @@ void Direct3d11_Device::setFrameHasDrawActivity()
 ID3D11DeviceContext * Direct3d11_Device::getContext() { return ms_context.Get(); }
 int                   Direct3d11_Device::getWidth()   { return ms_width; }
 int                   Direct3d11_Device::getHeight()  { return ms_height; }
+HWND                  Direct3d11_Device::getWindow()  { return ms_window; }
+bool                  Direct3d11_Device::isWindowed() { return ms_windowed; }
+bool                  Direct3d11_Device::engineOwnsWindow() { return ms_engineOwnsWindow; }
+
+// ======================================================================
+// Plan 11-09.5 -- plugin-side window-show parity with D3D9.
+//
+// Mirrors Direct3d9Namespace::updateWindowSettings (Direct3d9.cpp:1870-1930)
+// with the following DXGI substitutions:
+//   - Monitor info: DXGI IDXGIOutput->GetDesc().DesktopCoordinates via
+//     ms_swapChain->GetContainingOutput (replaces D3D9's
+//     IDirect3D9::GetAdapterMonitor + Win32 GetMonitorInfo). Fallback to
+//     MonitorFromWindow + GetMonitorInfo if DXGI returns null/E_FAIL.
+//   - State references go through the namespace ms_-prefixed statics
+//     directly (we live in the same TU as the state).
+// Everything else (style bits, AdjustWindowRect, SetWindowPos flag combo
+// including the crucial SWP_SHOWWINDOW) is identical to D3D9.
+
+void Direct3d11_Device::updateWindowSettings()
+{
+	if (!ms_engineOwnsWindow)
+		return;
+
+	DWORD const windowStyleWindowed   = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+	DWORD const windowStyleFullscreen = WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+
+	// Resolve the containing monitor's desktop rect. DXGI first; fall back to
+	// the Win32 MonitorFromWindow path if DXGI is unavailable (e.g. the swap
+	// chain hasn't been bound to an output yet).
+	RECT monitorRect = { 0, 0, 0, 0 };
+	bool monitorRectValid = false;
+
+	if (ms_swapChain)
+	{
+		ComPtr<IDXGIOutput> output;
+		if (SUCCEEDED(ms_swapChain->GetContainingOutput(&output)) && output)
+		{
+			DXGI_OUTPUT_DESC outputDesc;
+			if (SUCCEEDED(output->GetDesc(&outputDesc)))
+			{
+				monitorRect = outputDesc.DesktopCoordinates;
+				monitorRectValid = true;
+			}
+		}
+	}
+
+	if (!monitorRectValid)
+	{
+		HMONITOR const monitor = MonitorFromWindow(ms_window, MONITOR_DEFAULTTOPRIMARY);
+		MONITORINFO mi;
+		ZeroMemory(&mi, sizeof(mi));
+		mi.cbSize = sizeof(mi);
+		if (GetMonitorInfo(monitor, &mi))
+		{
+			monitorRect = mi.rcMonitor;
+			monitorRectValid = true;
+		}
+	}
+
+	if (ms_windowed)
+	{
+		RECT rect;
+		rect.left   = 0;
+		rect.top    = 0;
+		rect.right  = ms_width;
+		rect.bottom = ms_height;
+
+		DWORD const windowStyle = ms_borderlessWindow ? windowStyleFullscreen : windowStyleWindowed;
+		SetWindowLong(ms_window, GWL_STYLE, windowStyle);
+
+		// Adjust client-area rect to include the WS_CAPTION/border chrome.
+		BOOL const result1 = AdjustWindowRect(&rect, windowStyle, FALSE);
+		DEBUG_FATAL(!result1, ("AdjustWindowRect failed"));
+		UNREF(result1);
+
+		if (monitorRectValid)
+		{
+			if (ms_borderlessWindow)
+			{
+				ms_windowX = monitorRect.left;
+				ms_windowY = monitorRect.top;
+			}
+			else if (ms_windowX == INT_MAX || ms_windowY == INT_MAX)
+			{
+				// Center on monitor (first-launch fallback; matches
+				// Direct3d9.cpp:1906-1910).
+				ms_windowX = monitorRect.left + (((monitorRect.right - monitorRect.left) - ms_width) / 2);
+				ms_windowY = monitorRect.top  + (((monitorRect.bottom - monitorRect.top) - ms_height) / 2);
+			}
+		}
+		else
+		{
+			// Last-resort fallback if both DXGI and Win32 monitor queries
+			// failed. Place at (0,0) so the window is at least visible
+			// on the primary display.
+			if (ms_windowX == INT_MAX) ms_windowX = 0;
+			if (ms_windowY == INT_MAX) ms_windowY = 0;
+		}
+
+		BOOL const result2 = SetWindowPos(ms_window, HWND_NOTOPMOST,
+		                                  ms_windowX, ms_windowY,
+		                                  rect.right - rect.left, rect.bottom - rect.top,
+		                                  SWP_NOCOPYBITS | SWP_SHOWWINDOW);
+		FATAL(!result2, ("SetWindowPos failed"));
+	}
+	else
+	{
+		SetWindowLong(ms_window, GWL_STYLE, windowStyleFullscreen);
+
+		// Use the monitor rect if we have it; otherwise fall back to the
+		// current window position (the SetWindowPos call will still apply
+		// SWP_SHOWWINDOW which is the bit that actually matters here).
+		RECT placement = monitorRect;
+		if (!monitorRectValid)
+		{
+			if (!GetWindowRect(ms_window, &placement))
+			{
+				placement.left = placement.top = 0;
+				placement.right = ms_width;
+				placement.bottom = ms_height;
+			}
+		}
+
+		BOOL const result2 = SetWindowPos(ms_window, HWND_TOPMOST,
+		                                  placement.left, placement.top,
+		                                  ms_width, ms_height,
+		                                  SWP_NOCOPYBITS | SWP_SHOWWINDOW);
+		FATAL(!result2, ("SetWindowPos failed"));
+	}
+}
+
+// ----------------------------------------------------------------------
+// Plan 11-09.5 -- Gl_api::setWindowedMode real binding.
+//
+// Replaces the Plan 11-02 STUB(setWindowedMode) scaffold_fatal_stub
+// reinterpret_cast. Iter-1 scope: real DXGI fullscreen toggle deferred --
+// flip-discard swap chains have stricter SetFullscreenState semantics than
+// D3D9 blit-model. For now: if the engine attempts a windowed<->fullscreen
+// toggle, log a warning and re-apply existing settings (so the engine's
+// Options->Display menu doesn't FATAL). Real toggle is a future plan.
+
+void Direct3d11_Device::setWindowedMode(bool windowed)
+{
+	if (!ms_engineOwnsWindow)
+		return;
+
+	if (ms_windowed == windowed)
+	{
+		// Boot-time case: engine asks for the mode it's already in. Re-apply
+		// to keep behavior aligned with D3D9 (which always calls SetWindowPos
+		// regardless of the toggle direction).
+		updateWindowSettings();
+		return;
+	}
+
+	DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device::setWindowedMode toggle (%d -> %d) deferred to a future plan; D3D11 fullscreen state change not yet implemented (Plan 11-09.5 Iter-1 scope is window-show only). Leaving windowed-mode unchanged.\n",
+	                              static_cast<int>(ms_windowed), static_cast<int>(windowed)));
+	updateWindowSettings();
+}
 
 // ======================================================================
 // Per-frame slot bodies.
