@@ -1719,7 +1719,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 	//     Plan 11-09.15 merely unmasked it by fixing the half-render that
 	//     was hiding it.
 	// Disambiguates H4 in the .continue-here.md hypothesis matrix.
-	constexpr bool kBypassFanIBForTestB = true;
+	constexpr bool kBypassFanIBForTestB = false;
 	if (kBypassFanIBForTestB)
 	{
 		ctx->Draw(static_cast<UINT>(vertCount), 0);
