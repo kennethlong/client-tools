@@ -24,6 +24,7 @@
 #include <wrl/client.h>
 
 class PackedArgb;
+struct ID3D11InfoQueue;   // Plan 11-09.13 Iter-4: forward-decl to keep <d3d11sdklayers.h> out of this header
 
 // ======================================================================
 
@@ -120,6 +121,16 @@ public:
 	// device creation time). The Iter-18 BSOD established this drain is
 	// the prerequisite safety net for any cbuffer-write change.
 	static void drainInfoQueue();
+
+	// Plan 11-09.13 Iter-4: raw ID3D11InfoQueue accessor for application
+	// diagnostics. AddApplicationMessage messages drain through the file
+	// sink at stage/d3d11-debug.log alongside debug-layer messages -- the
+	// route DEBUG_REPORT_LOG_PRINT does NOT take (it goes to
+	// OutputDebugString + stdout, invisible from explorer-launched
+	// smokes per Direct3d11_Device.cpp:91 preamble). Returns null when
+	// the debug layer is not live. Caller must NOT Release; the device
+	// holds the ComPtr.
+	static ID3D11InfoQueue *getInfoQueue();
 };
 
 // ======================================================================

@@ -904,4 +904,18 @@ void Direct3d11_Device::drainInfoQueue()
 	ms_infoQueue->ClearStoredMessages();
 }
 
+// ----------------------------------------------------------------------
+// Plan 11-09.13 Iter-4: raw InfoQueue accessor for application
+// diagnostics via AddApplicationMessage. Iter-3's SRV0 diagnostic via
+// DEBUG_REPORT_LOG_PRINT didn't surface in stage/d3d11-debug.log because
+// DEBUG_REPORT_LOG_PRINT routes to OutputDebugString + stdout (invisible
+// from explorer-launched smokes). The InfoQueue path IS the file sink
+// path; AddApplicationMessage entries land in d3d11-debug.log alongside
+// debug-layer messages on the next drainInfoQueue cycle.
+
+ID3D11InfoQueue *Direct3d11_Device::getInfoQueue()
+{
+	return ms_infoQueue.Get();
+}
+
 // ======================================================================

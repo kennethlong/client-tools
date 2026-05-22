@@ -59,6 +59,7 @@
 #include "sharedMath/Vector.h"
 
 #include <DirectXMath.h>
+#include <d3d11sdklayers.h>   // Iter-4: ID3D11InfoQueue::AddApplicationMessage routing for first-dynamic-PS diagnostic
 
 #include <cstring>
 #include <unordered_map>
@@ -448,67 +449,35 @@ namespace Direct3d11_StateCacheNamespace
 	}
 
 	// ------------------------------------------------------------------
-	// Plan 11-09.13 Iter-3: pick the right fallback-PS variant based on
-	// the bound VS's reflected output signature. Variant M (magenta) is
-	// universal -- only requires SV_POSITION, which D3D11 always
-	// provides. Variant T (textured-passthrough) declares
-	// `float2 uv : TEXCOORD0` as a non-SV input; D3D11 stage-linkage
-	// rules REJECT the Draw (id=342) unless the bound VS outputs a
-	// compatible TEXCOORD0 signature (FLOAT32 component type + at least
-	// xy mask coverage).
+	// Plan 11-09.13 Iter-4: dispatch through the per-VS dynamic PS cache.
+	// getOrCompilePSForVS lazily generates a PS whose input struct
+	// mirrors the VS's reflected output struct register-for-register
+	// (D3D11 stage linkage matches by semantic AND hardware register
+	// position; Iter-3's static Variant T was register-position-limited
+	// and produced 65K id=343 errors per session for VSes whose TEXCOORD0
+	// wasn't at o0). On null return (compile-failure tombstone or empty
+	// reflection data), fall back to Variant M magenta so geometry still
+	// surfaces visibly.
 	//
-	// Selection criteria mirror Microsoft Learn signature compatibility
-	// (D3D11_SIGNATURE_PARAMETER_DESC): the VS output's semantic name +
-	// index + component type + mask must subset-match what Variant T
-	// declares as input. We check ComponentMask (the declared signature
-	// contract) not ReadWriteMask (which records actual writes inside
-	// the VS body) -- D3D11 stage linkage validates the SIGNATURE, not
-	// the runtime write behavior.
-	//
-	// CODEX-flagged stale-premise diagnostic: the first time per process
-	// lifetime that Variant T is selected, log the SRV slot 0 / sampler
-	// slot 0 state. Direct3d11_StaticShaderData::apply() (cpp:208-248)
-	// does NOT yet bind per-pass diffuse textures; SRV0 may be empty or
-	// stale even when Variant T is selected correctly. The diagnostic
-	// surfaces that gap so Iter-4 / Plan 11-09.14 can target it
-	// explicitly. PSGetShaderResources / PSGetSamplers AddRef -- release
-	// immediately after inspection.
+	// CODEX-flagged stale-premise diagnostic (Iter-4 routing): the first
+	// time per process lifetime that the per-VS path returns a non-null
+	// PS, log the SRV slot 0 / sampler slot 0 state via the InfoQueue
+	// (NOT DEBUG_REPORT_LOG_PRINT -- Iter-3 surfaced that the latter
+	// goes to OutputDebugString + stdout, invisible from explorer-
+	// launched smokes). PSGetShaderResources / PSGetSamplers AddRef --
+	// release immediately after inspection.
 
 	ID3D11PixelShader *selectFallbackPSForVS(Direct3d11_VertexShaderData const *vsData)
 	{
 		ID3D11PixelShader *variantM = Direct3d11_PixelShaderProgramData::getFallbackPS();
-		ID3D11PixelShader *variantT = Direct3d11_PixelShaderProgramData::getFallbackPSTextured();
-
 		if (!vsData)
 			return variantM;
 
-		std::vector<Direct3d11_ReflectedVSOutput> const &outputs = vsData->getReflectedOutputs();
+		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData);
+		if (!perVS)
+			return variantM;   // tombstone -> magenta safety net
 
-		bool texcoord0Compatible = false;
-		for (Direct3d11_ReflectedVSOutput const &out : outputs)
-		{
-			// D3D conventions: SemanticName lacks index suffix
-			// (e.g. "TEXCOORD" + SemanticIndex=0, not "TEXCOORD0").
-			if (_stricmp(out.SemanticName, "TEXCOORD") != 0)
-				continue;
-			if (out.SemanticIndex != 0)
-				continue;
-			if (out.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32)
-				continue;
-			// Variant T declares `float2 uv : TEXCOORD0` -- needs at least
-			// xy. ComponentMask bit 0 = x, bit 1 = y; require both. VSes
-			// outputting float3 or float4 TEXCOORD0 also match (D3D11
-			// truncates extra components at the PS-input boundary).
-			if ((out.ComponentMask & 0x3) != 0x3)
-				continue;
-			texcoord0Compatible = true;
-			break;
-		}
-
-		if (!texcoord0Compatible)
-			return variantM;
-
-		// Variant T selected. One-shot SRV0/sampler0 diagnostic.
+		// First dynamic-PS bind diagnostic. One-shot per process.
 		static bool s_diagnosticEmitted = false;
 		if (!s_diagnosticEmitted)
 		{
@@ -529,21 +498,26 @@ namespace Direct3d11_StateCacheNamespace
 					srvFormat = desc.Format;
 				}
 
-				DEBUG_REPORT_LOG_PRINT(true,
-					("Direct3d11_StateCache Plan 11-09.13 Iter-3 first Variant T (textured) select: "
-					 "SRV0=%s SRV0_format=%u sampler0=%s -- "
-					 "CODEX stale-premise diagnostic; per-pass texture binding in "
-					 "Direct3d11_StaticShaderData::apply() is Iter-4 work.\n",
-					 srv0 ? "BOUND" : "NULL",
-					 static_cast<unsigned>(srvFormat),
-					 ss0  ? "BOUND" : "NULL"));
+				char buf[512];
+				_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+					"Plan 11-09.13 Iter-4 first dynamic-PS bind: "
+					"SRV0=%s SRV0_format=%u sampler0=%s -- "
+					"CODEX stale-premise diagnostic; per-pass texture binding in "
+					"Direct3d11_StaticShaderData::apply() is Plan 11-09.14 / Phase 12 work.",
+					srv0 ? "BOUND" : "NULL",
+					static_cast<unsigned>(srvFormat),
+					ss0  ? "BOUND" : "NULL");
+
+				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				DEBUG_REPORT_LOG_PRINT(true, ("%s\n", buf));
 
 				if (srv0) srv0->Release();
 				if (ss0)  ss0->Release();
 			}
 		}
 
-		return variantT ? variantT : variantM;
+		return perVS;
 	}
 
 	// ------------------------------------------------------------------

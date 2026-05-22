@@ -41,8 +41,12 @@ class MemoryBlockManager;
 
 #include "clientGraphics/ShaderImplementation.h"
 
+#include <cstdint>
 #include <d3d11.h>
+#include <unordered_map>
 #include <wrl/client.h>
+
+class Direct3d11_VertexShaderData;
 
 // ======================================================================
 
@@ -67,21 +71,36 @@ public:
 
 	// Plan 11-09 Iter-2: minimal magenta pass-through PS, compiled in
 	// install(). applyPreDrawState binds this when ms_currentPSData has
-	// no real PS (per Plan 11-05 PEXE caveat). Output color is debug
+	// no real PS (per Plan 11-05 PEXE caveat) AND getOrCompilePSForVS
+	// returns null (compile-failure tombstone). Output color is debug
 	// magenta float4(1,0,1,1) -- a visible "Phase 12 asset re-author
 	// owes us a real PS" signal that still surfaces geometry visibly.
 	static ID3D11PixelShader *getFallbackPS();
 
-	// Plan 11-09.13 Iter-3: textured-passthrough Variant T PS, compiled
-	// alongside the magenta variant at install time. applyPreDrawState
-	// selects between Variant M (magenta, universal) and Variant T
-	// (textured, requires VS to output TEXCOORD0 float xy) based on
-	// reflection of the bound VS's output signature. See PLAN.md
-	// `<iter3_supersedes_iter1>` for the selection criteria + the SRV0
-	// stale-premise caveat captured by CODEX (StaticShaderData::apply()
-	// does not yet bind per-pass diffuse textures -- SRV0 may be empty/
-	// stale even when Variant T is selected correctly).
-	static ID3D11PixelShader *getFallbackPSTextured();
+	// Plan 11-09.13 Iter-4: per-VS dynamic PS compile (Bucket 2 override
+	// of CODEX's Bucket 1 recommendation; see PLAN.md
+	// <iter4_overrides_codex_bucket1>). At first encounter of each VS
+	// (keyed by VS bytecode hash), this generates a PS whose input
+	// struct mirrors the VS's reflected output struct register-for-
+	// register so D3D11 stage linkage is satisfied semantically AND
+	// positionally. Compile result is cached; compile failure stores a
+	// nullptr tombstone to avoid retry storms. Returns the cached PS,
+	// or null on tombstone (caller must fall back to getFallbackPS).
+	//
+	// Iter-3 used a static Variant T textured-passthrough PS; that path
+	// produced 65,034 id=343 register-position mismatch errors per smoke
+	// session because Variant T declared TEXCOORD0 at register v0 while
+	// most engine VSes output TEXCOORD0 at o1+/o2+. Per-VS dynamic
+	// compile eliminates the positional mismatch by construction.
+	//
+	// CODEX-flagged stale premise persists: Direct3d11_StaticShaderData::
+	// apply() does NOT yet bind per-pass diffuse textures. Even
+	// linkage-correct dynamic PSes sampling SRV slot 0 will read garbage
+	// / zero until that binding lands (Plan 11-09.14 / Phase 12 work).
+	// StateCache's selectFallbackPSForVS emits a one-shot
+	// SRV0/sampler0 diagnostic on first dynamic-PS bind so the gap is
+	// observable in stage/d3d11-debug.log.
+	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData);
 
 private:
 
@@ -98,11 +117,11 @@ private:
 	// the active StaticShader has no real PS (Plan 11-05 PEXE caveat).
 	static Microsoft::WRL::ComPtr<ID3D11PixelShader> ms_fallbackPS;
 
-	// Plan 11-09.13 Iter-3: textured-passthrough variant. Compiled at
-	// install() alongside ms_fallbackPS. Bound by applyPreDrawState
-	// only when the bound VS's reflected output signature contains
-	// TEXCOORD0 with FLOAT32 component type at xy mask coverage.
-	static Microsoft::WRL::ComPtr<ID3D11PixelShader> ms_fallbackPSTextured;
+	// Plan 11-09.13 Iter-4: per-VS dynamic PS cache. Keyed by VS
+	// bytecode hash; populated lazily by getOrCompilePSForVS at first
+	// draw using each VS. Entries may be null (compile-failure
+	// tombstone). Cleared in remove().
+	static std::unordered_map<uint64_t, Microsoft::WRL::ComPtr<ID3D11PixelShader>> ms_perVSCache;
 
 private:
 
@@ -122,13 +141,6 @@ inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getPixelShader() co
 inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPS()
 {
 	return ms_fallbackPS.Get();
-}
-
-// ----------------------------------------------------------------------
-
-inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPSTextured()
-{
-	return ms_fallbackPSTextured.Get();
 }
 
 // ======================================================================

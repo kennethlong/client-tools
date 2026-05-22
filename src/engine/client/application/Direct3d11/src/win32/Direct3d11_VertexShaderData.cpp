@@ -611,6 +611,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 					          desc.SemanticName, _TRUNCATE);
 				}
 				ro.SemanticIndex  = desc.SemanticIndex;
+				ro.Register       = desc.Register;   // Iter-4: HW output register, drives PS-input declaration order in buildHlslForVSOutputs
 				ro.ComponentMask  = desc.Mask;
 				ro.ReadWriteMask  = desc.ReadWriteMask;
 				ro.ComponentType  = desc.ComponentType;

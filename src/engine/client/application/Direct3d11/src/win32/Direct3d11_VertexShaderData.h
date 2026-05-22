@@ -83,6 +83,7 @@ struct Direct3d11_ReflectedVSOutput
 {
 	char                         SemanticName[16];   // null-terminated; truncate beyond 15 chars
 	UINT                         SemanticIndex;
+	UINT                         Register;           // Plan 11-09.13 Iter-4: HW output register the HLSL compiler assigned (o0/o1/o2/...). Load-bearing for D3D11 stage linkage: the PS input at register vN must match VS output at register oN by semantic + component type/mask.
 	UINT                         ComponentMask;      // .Mask from D3D11_SIGNATURE_PARAMETER_DESC
 	UINT                         ReadWriteMask;      // .ReadWriteMask -- which components VS wrote
 	D3D_REGISTER_COMPONENT_TYPE  ComponentType;

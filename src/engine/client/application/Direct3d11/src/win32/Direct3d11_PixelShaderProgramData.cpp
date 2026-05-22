@@ -29,12 +29,17 @@
 #include "Direct3d11_Device.h"
 #include "Direct3d11_HlslRewrite.h"
 #include "Direct3d11_ShaderCache.h"
+#include "Direct3d11_VertexShaderData.h"   // Iter-4: getBytecodeHash / getReflectedOutputs
 
 #include "sharedFoundation/MemoryBlockManager.h"
 
+#include <algorithm>      // Iter-4: std::sort
+#include <cstdio>         // Iter-4: snprintf
 #include <cstring>
+#include <string>         // Iter-4: HLSL generator builds std::string source
 #include <vector>
 #include <d3d11.h>
+#include <d3d11sdklayers.h>   // Iter-4: ID3D11InfoQueue::AddApplicationMessage
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
@@ -44,7 +49,7 @@ using Microsoft::WRL::ComPtr;
 
 MemoryBlockManager *Direct3d11_PixelShaderProgramData::ms_memoryBlockManager = nullptr;
 Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_fallbackPS;
-Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_fallbackPSTextured;
+std::unordered_map<uint64_t, Microsoft::WRL::ComPtr<ID3D11PixelShader>> Direct3d11_PixelShaderProgramData::ms_perVSCache;
 
 // ======================================================================
 
@@ -267,6 +272,184 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// "DXBC" little-endian
 		return first == 0x43425844u;
 	}
+
+	// ------------------------------------------------------------------
+	// Plan 11-09.13 Iter-4 helpers: per-VS PS HLSL generator + first-
+	// emit diagnostic.
+
+	// Map (D3D_REGISTER_COMPONENT_TYPE, ComponentMask) -> HLSL scalar/
+	// vector type. Mask bit count determines vector arity (1..4). Defaults
+	// to float4 for unrecognized component types.
+	std::string hlslTypeFor(D3D_REGISTER_COMPONENT_TYPE ct, UINT mask)
+	{
+		int components = 0;
+		if (mask & 0x1) ++components;
+		if (mask & 0x2) ++components;
+		if (mask & 0x4) ++components;
+		if (mask & 0x8) ++components;
+		if (components == 0) components = 4;   // defensive: unknown -> widest
+
+		char const *prefix = "float";
+		switch (ct)
+		{
+			case D3D_REGISTER_COMPONENT_FLOAT32: prefix = "float"; break;
+			case D3D_REGISTER_COMPONENT_SINT32:  prefix = "int";   break;
+			case D3D_REGISTER_COMPONENT_UINT32:  prefix = "uint";  break;
+			default:                             prefix = "float"; break;
+		}
+
+		std::string s = prefix;
+		if (components > 1)
+			s += static_cast<char>('0' + components);   // "float2", "float3", "float4"
+		return s;
+	}
+
+	// Validate that a reflected SemanticName is a strict HLSL identifier
+	// (letter / underscore prefix; alphanumeric / underscore body). Any
+	// failure aborts generator output -> getOrCompilePSForVS tombstones
+	// the VS and the caller falls back to Variant M magenta.
+	bool isValidHlslIdentifier(char const *name)
+	{
+		if (!name || !*name)
+			return false;
+		auto isAlpha = [](char c) {
+			return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+		};
+		auto isAlnum = [&](char c) {
+			return isAlpha(c) || (c >= '0' && c <= '9');
+		};
+		if (!isAlpha(name[0]))
+			return false;
+		for (char const *p = name + 1; *p; ++p)
+		{
+			if (!isAlnum(*p))
+				return false;
+		}
+		return true;
+	}
+
+	// Build per-VS PS HLSL source from reflected outputs. Walks outputs
+	// sorted by Register so PS-input declaration order matches the VS
+	// output HW register layout exactly (HLSL compiler assigns PS input
+	// registers in declaration order -> v0==o0, v1==o1, ...). Body
+	// samples SRV0/sampler0 via the matching TEXCOORD0 declaration when
+	// the VS provides TEXCOORD0 + FLOAT32 + at least xy; otherwise
+	// returns magenta. Returns empty string on validation failure
+	// (caller treats as tombstone).
+	std::string buildHlslForVSOutputs(std::vector<Direct3d11_ReflectedVSOutput> const &outputsIn)
+	{
+		// Defensive: validate semantic names BEFORE we start emitting.
+		for (Direct3d11_ReflectedVSOutput const &o : outputsIn)
+		{
+			if (!isValidHlslIdentifier(o.SemanticName))
+				return std::string();
+		}
+
+		// Sort by Register; ties broken by SemanticIndex for determinism.
+		std::vector<Direct3d11_ReflectedVSOutput> outputs = outputsIn;
+		std::sort(outputs.begin(), outputs.end(),
+			[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+				if (a.Register != b.Register) return a.Register < b.Register;
+				return a.SemanticIndex < b.SemanticIndex;
+			});
+
+		// Find TEXCOORD0 / FLOAT32 / xy declared -- decides whether the
+		// body samples or returns magenta. ComponentMask (declared
+		// signature contract) gates this, not ReadWriteMask (runtime
+		// write behavior).
+		int texcoord0Index = -1;
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			if (_stricmp(o.SemanticName, "TEXCOORD") != 0) continue;
+			if (o.SemanticIndex != 0) continue;
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			if ((o.ComponentMask & 0x3) != 0x3) continue;
+			texcoord0Index = static_cast<int>(i);
+			break;
+		}
+
+		std::string hlsl;
+		hlsl.reserve(1024);
+
+		hlsl += "// Plan 11-09.13 Iter-4 per-VS dynamic PS (Bucket 2).\n";
+		hlsl += "// Auto-generated to mirror VS output struct register-for-register.\n";
+
+		if (texcoord0Index >= 0)
+		{
+			hlsl += "Texture2D    t : register(t0);\n";
+			hlsl += "SamplerState s : register(s0);\n";
+		}
+
+		hlsl += "struct PSIn\n{\n";
+		hlsl += "    float4 _pos : SV_POSITION;\n";
+
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			std::string type = hlslTypeFor(o.ComponentType, o.ComponentMask);
+			char field[32];
+			snprintf(field, sizeof(field), "_v%zu", i);
+
+			char idxStr[16];
+			snprintf(idxStr, sizeof(idxStr), "%u", o.SemanticIndex);
+
+			hlsl += "    ";
+			hlsl += type;
+			hlsl += " ";
+			hlsl += field;
+			hlsl += " : ";
+			hlsl += o.SemanticName;
+			hlsl += idxStr;
+			hlsl += ";\n";
+		}
+		hlsl += "};\n\n";
+
+		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
+		if (texcoord0Index >= 0)
+		{
+			char field[32];
+			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
+			hlsl += "    return t.Sample(s, input.";
+			hlsl += field;
+			hlsl += ".xy);\n";
+		}
+		else
+		{
+			hlsl += "    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n";
+		}
+		hlsl += "}\n";
+
+		return hlsl;
+	}
+
+	// First-time-the-generator-runs diagnostic. Routes via the
+	// ID3D11InfoQueue file sink (d3d11-debug.log) so the message is
+	// observable from explorer-launched smokes; the
+	// DEBUG_REPORT_LOG_PRINT side-channel goes to OutputDebugString +
+	// stdout (invisible under explorer launch per Direct3d11_Device.cpp:91
+	// preamble). One-shot per process. Iter-3 dropped the equivalent
+	// SRV0 diagnostic into a sink that was invisible during smoke;
+	// Iter-4 fixes that.
+	void emitFirstGeneratorLog(uint64_t bytecodeHash, std::string const &hlsl)
+	{
+		static bool s_emitted = false;
+		if (s_emitted) return;
+		s_emitted = true;
+
+		char header[256];
+		snprintf(header, sizeof(header),
+			"Plan 11-09.13 Iter-4 first dynamic-PS generated HLSL (VS bytecode hash=0x%016llX, %zu bytes):",
+			static_cast<unsigned long long>(bytecodeHash),
+			hlsl.size());
+
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+		{
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, header);
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, hlsl.c_str());
+		}
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n%s\n", header, hlsl.c_str()));
+	}
 }
 using namespace Direct3d11_PixelShaderProgramDataNamespace;
 
@@ -302,30 +485,40 @@ void Direct3d11_PixelShaderProgramData::install()
 	// it") in one smoke session = every draw rejected by D3D11.
 	// Iter-2 reverted to magenta as the safe known-good.
 	//
-	// Plan 11-09.13 Iter-3 (this state): keep Variant M as the universal
-	// fallback and compile a Variant T (textured-passthrough) alongside.
-	// applyPreDrawState selects between them by reflecting the bound VS's
-	// output signature (Direct3d11_VertexShaderData::m_reflectedOutputs)
-	// and picking Variant T only when the VS provides TEXCOORD0 with
-	// FLOAT32 component type at xy mask coverage -- the D3D11 stage-
-	// linkage compatibility floor for `float2 uv : TEXCOORD0` PS input.
-	// CODEX-endorsed Bucket-1 architecture; full consult at
-	// 11-09.13-CODEX-CONSULT-reflection-driven-fallback-variant-selection.md.
+	// Plan 11-09.13 Iter-3 added a static Variant T (textured-passthrough
+	// PS) compiled at install time, selected by reflection when the
+	// bound VS's output signature contained TEXCOORD0 + FLOAT32 + xy
+	// mask. Smoke result: 0 id=342 (hard bar passed) but 65,034 id=343
+	// "Semantic 'TEXCOORD' is defined for mismatched hardware registers
+	// between the output stage and input stage." D3D11 stage linkage
+	// matches by semantic name AND hardware register position; Variant T
+	// declared TEXCOORD0 at register v0 but most engine VSes output
+	// TEXCOORD0 at register o1+/o2+ (after BLEND/COLOR/NORMAL semantics
+	// in their output struct). Bucket 1 (Compile-N-pick-1) was therefore
+	// register-position-limited for SWG's VS population.
 	//
-	// CODEX-flagged stale premise: Direct3d11_StaticShaderData::apply()
-	// does NOT yet bind per-pass diffuse textures (cpp:208-248 explicitly
-	// defers material/texture/sampler binding to Iter-3+). Variant T
-	// samples whatever SRV slot 0 holds from earlier engine state --
-	// possibly null, possibly stale. StateCache's selection path emits
-	// a one-shot SRV0/sampler0 diagnostic the first time Variant T is
-	// selected per session, surfacing this gap as telemetry rather than
-	// hiding it behind a magenta world. SRV0 binding fix itself is
-	// scoped to Iter-4 / Plan 11-09.14.
+	// Plan 11-09.13 Iter-4 (this state): override CODEX's "Bucket 2 is
+	// too much for this phase" guidance with Bucket 2 (per-VS dynamic
+	// PS compile). At first encounter of each VS, generate a PS whose
+	// input struct mirrors the VS's reflected output struct register-
+	// for-register; compile via D3DCompile; cache by VS bytecode hash.
+	// See getOrCompilePSForVS + buildHlslForVSOutputs. Variant T (Iter-3
+	// static) is gone -- the register-position mismatch is structurally
+	// resolved by construction.
+	//
+	// CODEX-flagged stale premise persists: Direct3d11_StaticShaderData::
+	// apply() (cpp:208-248) still does NOT bind per-pass diffuse
+	// textures. Linkage-correct dynamic PSes that sample SRV0 will read
+	// garbage / zero until per-pass texture binding lands (Plan 11-09.14
+	// or Phase 12). StateCache's first-dynamic-PS-bind SRV0/sampler0
+	// diagnostic surfaces the gap; Iter-3's id=353 INFO lines next to
+	// each id=343 confirmed SRV0 = null when textured PS was bound.
 	char const kFallbackMagentaHlsl[] =
-		"// Plan 11-09 Iter-2 / 11-09.13 Iter-3 Variant M magenta fallback PS.\n"
+		"// Plan 11-09 Iter-2 / 11-09.13 Iter-4 magenta safety-net PS.\n"
 		"// Universal -- only requires SV_POSITION (always provided by\n"
-		"// the rasterizer). Bound when the active VS does not output a\n"
-		"// TEXCOORD0 float xy signature compatible with Variant T.\n"
+		"// the rasterizer). Bound by applyPreDrawState only when the\n"
+		"// per-VS dynamic compile path returns null (compile-failure\n"
+		"// tombstone or empty reflection data).\n"
 		"float4 main(float4 pos : SV_POSITION) : SV_TARGET\n"
 		"{\n"
 		"    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n"
@@ -340,36 +533,14 @@ void Direct3d11_PixelShaderProgramData::install()
 	FATAL(!compiledMagenta, ("Direct3d11_PixelShaderProgramData::install: Variant M magenta fallback PS compile returned false"));
 	FATAL(!ms_fallbackPS,   ("Direct3d11_PixelShaderProgramData::install: Variant M compiled but ComPtr is empty"));
 
-	// Plan 11-09.13 Iter-3 Variant T (textured-passthrough). Selected per-
-	// draw only when reflection proves the bound VS outputs TEXCOORD0 with
-	// FLOAT32 component type at xy mask coverage (see Direct3d11_StateCache
-	// selectFallbackPSForVS). PS-input declaration matches Microsoft Learn
-	// stage-linkage rules: SV_POSITION input + non-SV TEXCOORD0 input at
-	// float2. SRV slot 0 + sampler slot 0 are read via t.Sample(s, uv);
-	// pre-Iter-4 the SRV may not be bound for this draw (CODEX stale-
-	// premise) -- StateCache emits a one-shot diagnostic on first
-	// selection so the gap is observable.
-	char const kFallbackTexturedHlsl[] =
-		"// Plan 11-09.13 Iter-3 Variant T textured-passthrough fallback PS.\n"
-		"// Selected when reflection proves bound VS outputs TEXCOORD0\n"
-		"// (FLOAT32, xy mask). Samples whatever the engine bound at\n"
-		"// SRV slot 0 / sampler slot 0; per-pass diffuse-texture binding\n"
-		"// in Direct3d11_StaticShaderData::apply() is Iter-4 work.\n"
-		"Texture2D    t : register(t0);\n"
-		"SamplerState s : register(s0);\n"
-		"float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET\n"
-		"{\n"
-		"    return t.Sample(s, uv);\n"
-		"}\n";
-
-	bool const compiledTextured = compilePixelShaderFromHlsl(
-		kFallbackTexturedHlsl,
-		sizeof(kFallbackTexturedHlsl) - 1,
-		"fallback_textured.hlsl",
-		ms_fallbackPSTextured);
-
-	FATAL(!compiledTextured,    ("Direct3d11_PixelShaderProgramData::install: Variant T textured fallback PS compile returned false"));
-	FATAL(!ms_fallbackPSTextured, ("Direct3d11_PixelShaderProgramData::install: Variant T compiled but ComPtr is empty"));
+	// Plan 11-09.13 Iter-4: per-VS dynamic PS variants are NOT compiled
+	// at install. They are generated lazily per VS bytecode hash by
+	// getOrCompilePSForVS at first encounter (first draw using each VS).
+	// Variant T (Iter-3 static textured-passthrough) is gone -- the
+	// register-position mismatch problem it caused (65K id=343 errors
+	// per session) is structurally resolved by the per-VS approach,
+	// which generates a PS whose input struct mirrors the VS's reflected
+	// output struct register-for-register.
 }
 
 // ----------------------------------------------------------------------
@@ -377,9 +548,60 @@ void Direct3d11_PixelShaderProgramData::install()
 void Direct3d11_PixelShaderProgramData::remove()
 {
 	ms_fallbackPS.Reset();
-	ms_fallbackPSTextured.Reset();
+	ms_perVSCache.clear();              // Iter-4: drop all per-VS dynamic PSes
 	delete ms_memoryBlockManager;
 	ms_memoryBlockManager = nullptr;
+}
+
+// ----------------------------------------------------------------------
+
+ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData)
+{
+	// Plan 11-09.13 Iter-4: lazy per-VS PS generation + cache. Keyed by
+	// VS bytecode hash so identical bytecode shares a PS. Cache miss
+	// triggers HLSL generation from reflected outputs + D3DCompile;
+	// compile failure tombstones the entry (null ComPtr stored) so
+	// subsequent calls hit the cache without retrying. Caller (StateCache
+	// selectFallbackPSForVS) falls back to ms_fallbackPS on null return.
+	if (!vsData)
+		return nullptr;
+
+	uint64_t const hash = vsData->getBytecodeHash();
+	auto it = ms_perVSCache.find(hash);
+	if (it != ms_perVSCache.end())
+		return it->second.Get();   // hit (may be null tombstone)
+
+	std::vector<Direct3d11_ReflectedVSOutput> const &outputs = vsData->getReflectedOutputs();
+
+	// No outputs (reflection failed or VS is degenerate) -> tombstone.
+	// Empty PS generator output (validation failure) -> tombstone.
+	// Compile failure -> tombstone. All paths cache-miss-then-tombstone
+	// to avoid retry storms across thousands of draws using the same VS.
+	std::string const hlsl = buildHlslForVSOutputs(outputs);
+	if (hlsl.empty())
+	{
+		ms_perVSCache[hash] = ComPtr<ID3D11PixelShader>();
+		return nullptr;
+	}
+
+	emitFirstGeneratorLog(hash, hlsl);
+
+	char displayName[64];
+	snprintf(displayName, sizeof(displayName), "perVS_dyn_%016llX.hlsl",
+	         static_cast<unsigned long long>(hash));
+
+	ComPtr<ID3D11PixelShader> ps;
+	bool const compiled = compilePixelShaderFromHlsl(
+		hlsl.c_str(), hlsl.size(), displayName, ps);
+
+	if (!compiled || !ps)
+	{
+		ms_perVSCache[hash] = ComPtr<ID3D11PixelShader>();
+		return nullptr;
+	}
+
+	ms_perVSCache[hash] = ps;
+	return ps.Get();
 }
 
 // ----------------------------------------------------------------------
