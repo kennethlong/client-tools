@@ -347,6 +347,27 @@ namespace Direct3d11_StateCacheNamespace
 	{
 		if (!s_slot0Dirty)
 			return;
+		// Plan 11-09.15 Iter-9 diagnostic: sample the c9 viewportData slot
+		// at flush time so we can confirm the value actually uploaded to
+		// the GPU. c9 is at byte offset 144 of s_slot0Shadow.
+		{
+			static int s_flushCount = 0;
+			++s_flushCount;
+			bool const early  = (s_flushCount <= 5);
+			bool const sample = (s_flushCount > 5) && ((s_flushCount % 1000) == 0);
+			if (early || sample)
+			{
+				float const *c9 = reinterpret_cast<float const *>(
+					reinterpret_cast<uint8_t const *>(&s_slot0Shadow) + 144);
+				char buf[256];
+				_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+					"Plan 11-09.15 Iter-9 flushSlot0#%d c9=(%.6f, %.6f, %.6f, %.6f) "
+					"shadowSize=%zu",
+					s_flushCount, c9[0], c9[1], c9[2], c9[3], sizeof(s_slot0Shadow));
+				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+			}
+		}
 		Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, sizeof(s_slot0Shadow));
 		s_slot0Dirty = false;
 	}

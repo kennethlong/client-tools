@@ -668,6 +668,28 @@ void Direct3d11_Device::beginScene()
 	// non-zero c9 from frame zero.
 	Direct3d11_StateCache::setViewport(0, 0, ms_width, ms_height, 0.0f, 1.0f);
 
+	// Plan 11-09.15 Iter-9 diagnostic: confirm the Iter-8 setViewport
+	// call actually executed and produced sane values. Sampled (first 3
+	// frames + every 500th) to limit log noise.
+	{
+		static int s_beginSceneCount = 0;
+		++s_beginSceneCount;
+		bool const early  = (s_beginSceneCount <= 3);
+		bool const sample = (s_beginSceneCount > 3) && ((s_beginSceneCount % 500) == 0);
+		if (early || sample)
+		{
+			float const vx = (ms_width  > 0) ?  2.0f / static_cast<float>(ms_width)  : 0.0f;
+			float const vy = (ms_height > 0) ? -2.0f / static_cast<float>(ms_height) : 0.0f;
+			char buf[256];
+			_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+				"Plan 11-09.15 Iter-9 beginScene#%d width=%d height=%d "
+				"computed viewportData=(%.6f, %.6f, -1.0, +1.0)",
+				s_beginSceneCount, ms_width, ms_height, vx, vy);
+			if (ID3D11InfoQueue *iq = getInfoQueue())
+				iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+		}
+	}
+
 	// Plan 11-09 Iter-2.7f (CODEX Round 6): apply pending primary-RT clear
 	// from previous frame's clearViewport-after-draw. Engine's D3D9-era
 	// pattern issues clearViewport AFTER UI render thinking it'll affect
