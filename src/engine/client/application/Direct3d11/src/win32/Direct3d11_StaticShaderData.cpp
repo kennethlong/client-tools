@@ -15,6 +15,7 @@
 #include "Direct3d11_StaticShaderData.h"
 
 #include "Direct3d11.h"
+#include "Direct3d11_Device.h"   // Plan 11-09.15 Iter-17: getInfoQueue for stage0-resolve diagnostic
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_StateCache.h"
 #include "Direct3d11_TextureData.h"
@@ -356,7 +357,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 				if (ts->m_textureTag)
 					shader.getTextureData(ts->m_textureTag, textureData);
 
-				if (ts->m_textureTag && Direct3d11_TextureData::isGlobalTexture(ts->m_textureTag))
+				bool const tagIsGlobal = ts->m_textureTag && Direct3d11_TextureData::isGlobalTexture(ts->m_textureTag);
+				if (tagIsGlobal)
 				{
 					stage.m_texture = Direct3d11_TextureData::getGlobalTexture(ts->m_textureTag);
 				}
@@ -368,6 +370,42 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 				else
 				{
 					stage.m_texture = nullptr;
+				}
+
+				// Plan 11-09.15 Iter-17: log stage-0 texture resolution for
+				// the first 30 shader builds. Iter-16 confirmed all splash
+				// draws bind the same wrong 1024x768 BGRA RT to SRV0 -- this
+				// instruments the build path so we can see WHICH tag the
+				// splash shader's stage 0 uses, whether it hits the global-
+				// texture short-circuit (tag starts with '_' OR == TAG_ENVM),
+				// AND what the per-shader textureData.texture resolves to.
+				{
+					static int s_iter17BuildCount = 0;
+					if (s_iter17BuildCount < 30)
+					{
+						++s_iter17BuildCount;
+						if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+						{
+							Tag const t = ts->m_textureTag;
+							char tagStr[5] = { static_cast<char>((t >> 24) & 0xFF),
+							                   static_cast<char>((t >> 16) & 0xFF),
+							                   static_cast<char>((t >>  8) & 0xFF),
+							                   static_cast<char>((t      ) & 0xFF),
+							                   '\0' };
+							for (int k = 0; k < 4; ++k)
+								if (tagStr[k] < 0x20 || tagStr[k] > 0x7E) tagStr[k] = '?';
+							char buf[384];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-17 stage0-resolve#%d pass=%d "
+								"tag='%s' (0x%08X) isGlobal=%d "
+								"textureData.texture=0x%p stage.m_texture=0x%p",
+								s_iter17BuildCount, passIndex,
+								tagStr, static_cast<unsigned int>(t), tagIsGlobal ? 1 : 0,
+								static_cast<void const *>(textureData.texture),
+								static_cast<void const *>(stage.m_texture));
+							iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+						}
+					}
 				}
 
 				if (stage.m_texture)
