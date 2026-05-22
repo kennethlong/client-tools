@@ -38,6 +38,7 @@
 #include "Direct3d11_StaticVertexBufferData.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
+#include "Direct3d11_VertexBufferVectorData.h"
 #include "Direct3d11_VertexDeclarationMap.h"
 #include "Direct3d11_VertexShaderData.h"
 
@@ -287,6 +288,13 @@ namespace Direct3d11Namespace
 	DynamicVertexBufferGraphicsData * createDynamicVertexBufferData_impl(const DynamicVertexBuffer &vb)
 	{
 		return new Direct3d11_DynamicVertexBufferData(vb);
+	}
+
+	// Plan 11-09.7: multi-stream VertexBufferVector factory. Mirrors
+	// Direct3d9Namespace::createVertexBufferVectorData (Direct3d9.cpp:3648).
+	VertexBufferVectorGraphicsData * createVertexBufferVectorData_impl(VertexBufferVector const &vbVector)
+	{
+		return new Direct3d11_VertexBufferVectorData(vbVector);
 	}
 
 	StaticIndexBufferGraphicsData * createStaticIndexBufferData_impl(const StaticIndexBuffer &ib)
@@ -681,13 +689,14 @@ bool Direct3d11::install(Gl_install * gl_install)
 	// Plan 11-04: VB + IB factory slots wired.
 	// Plan 11-06: setVertexBuffer / setIndexBuffer slots now route through
 	// the state cache (geometry tracking + draw-time binding).
-	// setVertexBufferVector + createVertexBufferVectorData remain STUB() --
-	// multi-stream is deferred (Phase 11 SPEC §Boundaries: single-stream).
-	ms_glApi.createStaticVertexBufferData  = createStaticVertexBufferData_impl;
-	ms_glApi.createDynamicVertexBufferData = createDynamicVertexBufferData_impl;
-	STUB(createVertexBufferVectorData);
-	ms_glApi.setVertexBuffer               = Direct3d11_StateCache::setVertexBuffer;
-	STUB(setVertexBufferVector);
+	// Plan 11-09.7: multi-stream slots wired -- skeletal-animation
+	// rendering (SoftwareBlendSkeletalShaderPrimitive) consumes these
+	// during char-customization preview + world entry.
+	ms_glApi.createStaticVertexBufferData   = createStaticVertexBufferData_impl;
+	ms_glApi.createDynamicVertexBufferData  = createDynamicVertexBufferData_impl;
+	ms_glApi.createVertexBufferVectorData   = createVertexBufferVectorData_impl;
+	ms_glApi.setVertexBuffer                = Direct3d11_StateCache::setVertexBuffer;
+	ms_glApi.setVertexBufferVector          = Direct3d11_VertexBufferVectorData::bind;
 
 	ms_glApi.createStaticIndexBufferData   = createStaticIndexBufferData_impl;
 	ms_glApi.createDynamicIndexBufferData  = createDynamicIndexBufferData_impl;

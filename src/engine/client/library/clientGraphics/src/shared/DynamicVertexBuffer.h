@@ -46,6 +46,7 @@ class DynamicVertexBuffer : public HardwareVertexBuffer
 	friend class  Direct3d11;
 	friend class  Direct3d11_StateCache;
 	friend class  Direct3d11_DynamicVertexBufferData;
+	friend class  Direct3d11_VertexBufferVectorData;   // Plan 11-09.7 (mirrors lines above + Plan 11-06 precedent)
 
 public:
 

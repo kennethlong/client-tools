@@ -28,6 +28,7 @@ class VertexBufferVector
 	friend class  Direct3d8;
 	friend class  Direct3d9;
 	friend class  Direct3d9_VertexBufferVectorData;
+	friend class  Direct3d11_VertexBufferVectorData;   // Plan 11-09.7 (Rule-3 deviation; parallels D3D9 line above; mirrors Plan 11-04 Texture.h + Plan 11-06 HardwareVB/IB + Plan 11-09 ShaderImplementation.h precedent)
 
 public:
 

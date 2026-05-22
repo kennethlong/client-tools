@@ -44,6 +44,7 @@ class StaticShader;
 class Texture;
 class HardwareVertexBuffer;
 class HardwareIndexBuffer;
+class VertexBufferFormat;
 class PackedArgb;
 class Transform;
 class Vector;
@@ -82,6 +83,21 @@ public:
 	// Geometry binding.
 	static void setVertexBuffer(HardwareVertexBuffer const &vb);
 	static void setIndexBuffer(HardwareIndexBuffer const &ib);
+
+	// Plan 11-09.7: multi-stream VertexBufferVector bind. Called by
+	// Direct3d11_VertexBufferVectorData::bind after iterating the engine
+	// VBVector + extracting per-stream ID3D11Buffer / stride / offset /
+	// format. Mutually exclusive with setVertexBuffer (each clears the
+	// other's state). resolveShaders + applyPreDrawState branch on the
+	// internal ms_currentVBVectorActive flag set here.
+	static void setVertexBufferVectorBindState(
+		int streamCount,
+		ID3D11Buffer * const *buffers,
+		UINT const *strides,
+		UINT const *offsets,
+		VertexBufferFormat const * const *formats,
+		int sliceFirstVertex,
+		int sliceVertexCount);
 
 	// Shader binding (drives input-layout reselect + VS/PS swap).
 	static void setBadVertexShaderStaticShader(StaticShader const *shader);

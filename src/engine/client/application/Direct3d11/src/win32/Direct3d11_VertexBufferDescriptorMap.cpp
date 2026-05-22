@@ -175,24 +175,40 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc(
 	VertexBufferFormat const &format,
 	D3D11_INPUT_ELEMENT_DESC outDesc[16])
 {
+	// Existing single-stream caller path -- delegates to the
+	// multi-stream variant with inputSlot=0 + full 16-element capacity.
+	int const n = buildInputElementDescForStream(format, outDesc, 16, 0);
+	DEBUG_FATAL(n <= 0, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: empty layout"));
+	return n;
+}
+
+// ----------------------------------------------------------------------
+
+int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
+	VertexBufferFormat const &format,
+	D3D11_INPUT_ELEMENT_DESC *outDesc,
+	int maxElements,
+	UINT inputSlot)
+{
 	NOT_NULL(outDesc);
 
-	int n = 0;          // running element count (caps at 16)
-	UINT offset = 0;    // running byte offset within one vertex
+	int n = 0;          // running element count (caps at maxElements)
+	UINT offset = 0;    // running byte offset within one vertex (per-stream)
 
-	auto add = [&](char const *semantic, UINT semanticIndex, DXGI_FORMAT fmt, UINT bytes)
+	auto add = [&](char const *semantic, UINT semanticIndex, DXGI_FORMAT fmt, UINT bytes) -> bool
 	{
-		if (n >= 16)
-			return;
+		if (n >= maxElements)
+			return false;
 		D3D11_INPUT_ELEMENT_DESC &d = outDesc[n++];
 		d.SemanticName         = semantic;
 		d.SemanticIndex        = semanticIndex;
 		d.Format               = fmt;
-		d.InputSlot            = 0;            // single-stream (Phase 11 SPEC §Boundaries)
+		d.InputSlot            = inputSlot;
 		d.AlignedByteOffset    = offset;
 		d.InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
 		d.InstanceDataStepRate = 0;
 		offset += bytes;
+		return true;
 	};
 
 	if (format.hasPosition())

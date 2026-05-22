@@ -81,6 +81,9 @@
     <ClCompile Include="..\..\src\win32\Direct3d11_VertexDeclarationMap.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\win32\Direct3d11_VertexBufferVectorData.cpp">
+      <Filter>src\win32</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\win32\Direct3d11_VertexShaderData.cpp">
       <Filter>src\win32</Filter>
     </ClCompile>
@@ -159,6 +162,9 @@
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_VertexDeclarationMap.h">
+      <Filter>src\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\win32\Direct3d11_VertexBufferVectorData.h">
       <Filter>src\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\win32\Direct3d11_VertexShaderData.h">

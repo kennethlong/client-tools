@@ -129,13 +129,27 @@ namespace Direct3d11_StateCacheNamespace
 	ID3D11ShaderResourceView * ms_boundSRV[kMaxSRVs]         = {};
 	ID3D11SamplerState       * ms_boundSampler[kMaxSamplers] = {};
 
-	// VB tracking (single stream for Phase 11; multi-stream deferred).
+	// VB tracking (single-stream path).
 	ID3D11Buffer *  ms_currentVB         = nullptr;
 	UINT            ms_currentVBStride   = 0;
 	UINT            ms_currentVBOffset   = 0;
 	int             ms_currentVBVertexCount = 0;
 	VertexBufferFormat ms_currentVBFormat;
 	bool            ms_currentVBValid    = false;
+
+	// Plan 11-09.7: multi-stream VertexBufferVector tracking. Mutually
+	// exclusive with the single-stream state above -- setVertexBuffer
+	// clears the vector flag and setVertexBufferVector clears the
+	// single-stream state. resolveShaders + applyPreDrawState branch
+	// on ms_currentVBVectorActive to pick the input-layout cache lookup
+	// + IASetVertexBuffers call shape.
+	enum { kMaxVBStreams = 2 };   // matches Direct3d11_VertexBufferVectorData::MAX_VERTEX_BUFFERS
+	bool                          ms_currentVBVectorActive               = false;
+	int                           ms_currentVBVectorStreamCount          = 0;
+	ID3D11Buffer *                ms_currentVBVectorBuffers[kMaxVBStreams] = {};
+	UINT                          ms_currentVBVectorStrides[kMaxVBStreams] = {};
+	UINT                          ms_currentVBVectorOffsets[kMaxVBStreams] = {};
+	VertexBufferFormat const *    ms_currentVBVectorFormats[kMaxVBStreams] = {};
 
 	// IB tracking.
 	ID3D11Buffer *  ms_currentIB         = nullptr;
@@ -445,6 +459,18 @@ namespace Direct3d11_StateCacheNamespace
 		if (!ms_currentVSData)
 			return false;
 
+		// Plan 11-09.7: multi-stream path takes precedence -- the engine
+		// calls either setVertexBuffer OR setVertexBufferVector, and they
+		// clear each other's state.
+		if (ms_currentVBVectorActive)
+		{
+			ms_currentInputLayout = Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
+				ms_currentVBVectorFormats,
+				ms_currentVBVectorStreamCount,
+				ms_currentVSData);
+			return ms_currentVSData->getVertexShader() != nullptr;
+		}
+
 		if (!ms_currentVBValid)
 			return ms_currentVSData->getVertexShader() != nullptr;
 
@@ -493,8 +519,17 @@ namespace Direct3d11_StateCacheNamespace
 		ctx->IASetInputLayout(ms_currentInputLayout);
 		ctx->IASetPrimitiveTopology(topology);
 
-		// 3. VB
-		if (ms_currentVBValid && ms_currentVB)
+		// 3. VB -- Plan 11-09.7 multi-stream path takes precedence.
+		if (ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0)
+		{
+			ctx->IASetVertexBuffers(
+				0,
+				static_cast<UINT>(ms_currentVBVectorStreamCount),
+				ms_currentVBVectorBuffers,
+				ms_currentVBVectorStrides,
+				ms_currentVBVectorOffsets);
+		}
+		else if (ms_currentVBValid && ms_currentVB)
 		{
 			ID3D11Buffer *vbs[1] = { ms_currentVB };
 			UINT strides[1]      = { ms_currentVBStride };
@@ -654,6 +689,16 @@ void Direct3d11_StateCache::remove()
 	ms_currentVSData = nullptr;
 	ms_currentPSData = nullptr;
 	ms_currentVBValid = ms_currentIBValid = false;
+	// Plan 11-09.7: clear multi-stream state too.
+	ms_currentVBVectorActive = false;
+	ms_currentVBVectorStreamCount = 0;
+	for (int i = 0; i < kMaxVBStreams; ++i)
+	{
+		ms_currentVBVectorBuffers[i] = nullptr;
+		ms_currentVBVectorStrides[i] = 0;
+		ms_currentVBVectorOffsets[i] = 0;
+		ms_currentVBVectorFormats[i] = nullptr;
+	}
 	ms_defaultSampler.Reset();
 
 	delete ms_rsCache;
@@ -939,6 +984,12 @@ void Direct3d11_StateCache::releaseAllGlobalTextures()
 
 void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
 {
+	// Plan 11-09.7: deactivate multi-stream state (mutual exclusion with
+	// the single-stream path below). resolveShaders + applyPreDrawState
+	// branch on ms_currentVBVectorActive.
+	ms_currentVBVectorActive = false;
+	ms_currentVBVectorStreamCount = 0;
+
 	ms_currentVBValid = false;
 	ms_currentVB = nullptr;
 	ms_currentVBStride = 0;
@@ -973,6 +1024,52 @@ void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
 		ms_currentVBFormat       = dvb->getFormat();
 		ms_currentVBValid        = (ms_currentVB != nullptr);
 	}
+
+	ms_geometryRebindNeeded = true;
+}
+
+// ----------------------------------------------------------------------
+// Plan 11-09.7: multi-stream VertexBufferVector bind path. Called by
+// Direct3d11_VertexBufferVectorData::bind, which is the slot wired to
+// Gl_api::setVertexBufferVector. The wrapper class iterates the
+// engine-side VBVector, extracts per-stream ID3D11Buffer + offset +
+// stride + format, and passes them in. resolveShaders + applyPreDrawState
+// branch on ms_currentVBVectorActive.
+
+void Direct3d11_StateCache::setVertexBufferVectorBindState(
+	int streamCount,
+	ID3D11Buffer * const *buffers,
+	UINT const *strides,
+	UINT const *offsets,
+	VertexBufferFormat const * const *formats,
+	int sliceFirstVertex,
+	int sliceVertexCount)
+{
+	// Clear single-stream state (mutual exclusion with the vector path).
+	ms_currentVB = nullptr;
+	ms_currentVBStride = 0;
+	ms_currentVBOffset = 0;
+	ms_currentVBValid = false;
+
+	DEBUG_FATAL(streamCount < 0 || streamCount > kMaxVBStreams,
+		("Direct3d11_StateCache::setVertexBufferVectorBindState: streamCount=%d outside [0,%d]",
+		streamCount, kMaxVBStreams));
+
+	ms_currentVBVectorActive      = (streamCount > 0);
+	ms_currentVBVectorStreamCount = streamCount;
+	for (int i = 0; i < kMaxVBStreams; ++i)
+	{
+		ms_currentVBVectorBuffers[i] = (i < streamCount && buffers) ? buffers[i] : nullptr;
+		ms_currentVBVectorStrides[i] = (i < streamCount && strides) ? strides[i] : 0;
+		ms_currentVBVectorOffsets[i] = (i < streamCount && offsets) ? offsets[i] : 0;
+		ms_currentVBVectorFormats[i] = (i < streamCount && formats) ? formats[i] : nullptr;
+	}
+
+	// Mirror Direct3d9.cpp:3773 / 3824 slice tracking. Engine draw calls
+	// use these to compute the BaseVertexLocation for indexed draws +
+	// vertex-count argument for non-indexed.
+	ms_currentVBVertexCount = sliceVertexCount;
+	(void)sliceFirstVertex; // single-stream slice offset; multi-stream uses streamOffsets[]
 
 	ms_geometryRebindNeeded = true;
 }
