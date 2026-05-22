@@ -1549,6 +1549,25 @@ void Direct3d11_StateCache::drawTriangleFan()
 	}
 
 	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+
+	// Plan 11-09.15 Iter-4 (Test B): fan-IB BYPASS test for radial-pattern
+	// attribution. When kBypassFanIBForTestB is true, render the fan VB as
+	// TRIANGLELIST topology (verts 0,1,2 -> tri 1; verts 3+ dropped) without
+	// binding our fan-list IB. This reproduces the pre-Plan-11-09.15
+	// half-screen behavior. Visual result interprets:
+	//   * Half-screen returns -> Plan 11-09.15 IS the regression vehicle
+	//     (the radial pattern was introduced by fan-list expansion).
+	//   * Radial pattern persists -> the bug is UPSTREAM of fan expansion;
+	//     Plan 11-09.15 merely unmasked it by fixing the half-render that
+	//     was hiding it.
+	// Disambiguates H4 in the .continue-here.md hypothesis matrix.
+	constexpr bool kBypassFanIBForTestB = true;
+	if (kBypassFanIBForTestB)
+	{
+		ctx->Draw(static_cast<UINT>(vertCount), 0);
+		return;
+	}
+
 	ctx->IASetIndexBuffer(
 		ms_triangleFanIB.Get(),
 		DXGI_FORMAT_R16_UINT,

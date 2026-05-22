@@ -46,6 +46,13 @@ int                               Direct3d11_DynamicVertexBufferData::ms_discard
 int                               Direct3d11_DynamicVertexBufferData::ms_locksEver;
 int                               Direct3d11_DynamicVertexBufferData::ms_discardsEver;
 
+// Plan 11-09.15 Iter-4 (Test A): stash the slice CPU pointer at lock() so
+// unlock() can snapshot the engine's written verts BEFORE Unmap invalidates
+// the mapped memory. Used by the fan-shaped-slice CPU snapshot diagnostic
+// in unlock(int). File-scope static because the ring buffer is shared; only
+// one lock can be active at a time.
+static void *s_lastLockedSliceCPUPtr = nullptr;
+
 // ======================================================================
 
 void Direct3d11_DynamicVertexBufferData::install()
@@ -235,6 +242,10 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
 
 	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
 	ms_used += length;
+
+	// Plan 11-09.15 Iter-4 (Test A): stash for unlock-time snapshot.
+	s_lastLockedSliceCPUPtr = sliceStart;
+
 	return sliceStart;
 }
 
@@ -249,6 +260,52 @@ void Direct3d11_DynamicVertexBufferData::unlock()
 
 void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
 {
+	// Plan 11-09.15 Iter-4 (Test A): CPU-side VB snapshot for radial-pattern
+	// investigation. Iter-3's per-fan-draw state diagnostic showed 15/16 fan
+	// samples at byte offset 0 + same shared-ring VB pointer; the math on
+	// the fan-list IB path is clean (CODEX Bucket A verified) so the next
+	// question is whether the engine is writing a real quad into CPU memory
+	// or degenerate/collapsed data. Read from s_lastLockedSliceCPUPtr BEFORE
+	// Unmap -- after Unmap the mapped memory may be rotated by the driver
+	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+	//
+	// Filtered to fan-shaped slices (numberOfVertices==4 && vertexSize==24:
+	// position(12)+color(4)+UV(8)) to keep log volume low. Sampled like the
+	// Iter-3 diagnostic: first 5 + every 500th.
+	{
+		int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+		bool const fanShaped = (numberOfVertices == 4) && (vertexSize == 24);
+		if (fanShaped && s_lastLockedSliceCPUPtr)
+		{
+			static int s_diagFanShapedUnlocks = 0;
+			++s_diagFanShapedUnlocks;
+			bool const earlyBucket  = (s_diagFanShapedUnlocks <= 5);
+			bool const sampleBucket = (s_diagFanShapedUnlocks > 5) && ((s_diagFanShapedUnlocks % 500) == 0);
+			if (earlyBucket || sampleBucket)
+			{
+				uint8_t const *vb = static_cast<uint8_t const *>(s_lastLockedSliceCPUPtr);
+				ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+				for (int v = 0; v < 4; ++v)
+				{
+					uint8_t const *src = vb + v * vertexSize;
+					float const px = *reinterpret_cast<float const *>(src + 0);
+					float const py = *reinterpret_cast<float const *>(src + 4);
+					float const pz = *reinterpret_cast<float const *>(src + 8);
+					uint32_t const c = *reinterpret_cast<uint32_t const *>(src + 12);
+					float const u  = *reinterpret_cast<float const *>(src + 16);
+					float const tv = *reinterpret_cast<float const *>(src + 20);
+					char buf[256];
+					_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+						"Plan 11-09.15 Iter-4 fan-shaped unlock#%d vert#%d pos=(%.3f,%.3f,%.3f) color=0x%08X uv=(%.3f,%.3f) offsetVerts=%d",
+						s_diagFanShapedUnlocks, v, px, py, pz, c, u, tv, m_offset);
+					if (iq)
+						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				}
+			}
+		}
+		s_lastLockedSliceCPUPtr = nullptr;
+	}
+
 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
 	NOT_NULL(context);
 
