@@ -771,6 +771,43 @@ namespace Direct3d11_StateCacheNamespace
 		if (ms_boundSRV[0])
 			++ms_drawsWithSRV0Bound;
 
+		// Plan 11-09.15 Iter-25: log topology + VS + SRV + RTV for the
+		// FIRST 100 transformed-vert draws of any kind (fan, list, strip,
+		// indexed, etc.) so we can identify which draw type the splash
+		// UI is actually using. Iter-24 confirmed all 50 first transformed-
+		// fan draws are the post-FX blit; the UI itself must be using
+		// some other primitive type or different VBFormat.
+		if (ms_currentVBFormat.isTransformed())
+		{
+			static int s_iter25Count = 0;
+			if (s_iter25Count < 100)
+			{
+				++s_iter25Count;
+				if (ID3D11InfoQueue *iq25 = Direct3d11_Device::getInfoQueue())
+				{
+					char const *vsFn = "<none>";
+					if (ms_currentVSData)
+					{
+						ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
+						if (eng) vsFn = eng->getFilename();
+					}
+					ID3D11RenderTargetView *cRTV25 = nullptr;
+					ctx->OMGetRenderTargets(1, &cRTV25, nullptr);
+					char buf25[384];
+					_snprintf_s(buf25, sizeof(buf25), _TRUNCATE,
+						"Plan 11-09.15 Iter-25 xform-draw#%d topo=%d VS='%s' "
+						"SRV0=0x%p RTV=0x%p vertCount=%d",
+						s_iter25Count, static_cast<int>(topology),
+						vsFn,
+						static_cast<void *>(ms_boundSRV[0]),
+						static_cast<void *>(cRTV25),
+						ms_currentVBVertexCount);
+					iq25->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf25);
+					if (cRTV25) cRTV25->Release();
+				}
+			}
+		}
+
 		// 8. RS / BS / DSS state objects (lazy reselect on dirty).
 		if (ms_rsDirty)
 		{
