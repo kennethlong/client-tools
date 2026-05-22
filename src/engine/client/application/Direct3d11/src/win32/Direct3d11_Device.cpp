@@ -26,6 +26,7 @@
 
 #include "ConfigDirect3d11.h"
 #include "Direct3d11.h"   // for FATAL_DX_HR + hresultString
+#include "Direct3d11_StateCache.h"   // Plan 11-09.15 Iter-8: route beginScene viewport setup through setViewport so cb0[9] viewportData lands in slot0 before the first draw
 
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
@@ -634,14 +635,38 @@ void Direct3d11_Device::beginScene()
 	ID3D11RenderTargetView * rtvs[1] = { ms_backBufferRTV.Get() };
 	ms_context->OMSetRenderTargets(1, rtvs, ms_depthStencilDSV.Get());
 
-	D3D11_VIEWPORT vp = {};
-	vp.TopLeftX = 0.0f;
-	vp.TopLeftY = 0.0f;
-	vp.Width    = static_cast<float>(ms_width);
-	vp.Height   = static_cast<float>(ms_height);
-	vp.MinDepth = 0.0f;
-	vp.MaxDepth = 1.0f;
-	ms_context->RSSetViewports(1, &vp);
+	// Plan 11-09.15 Iter-8: route per-frame viewport setup through
+	// Direct3d11_StateCache::setViewport instead of calling RSSetViewports
+	// directly. setViewport ALSO writes the VSCR_viewportData float4 into
+	// slot-0 cbuffer c9 (Plan 11-09 Iter-2.7b CODEX Round 4) -- the
+	// constant that SWG's stock 2D vertex shaders (2d.vsh, 2d_texture.vsh,
+	// ui_radar.vsh, ui.vsh, ...) read for the pixel-to-NDC conversion
+	// applied via transform2d() from vertex_program/include/functions.inc:
+	//     ndc.x = pixel.x * viewportData.x + viewportData.z
+	//     ndc.y = pixel.y * viewportData.y + viewportData.w
+	//
+	// Pre-Iter-8, beginScene called RSSetViewports directly with a
+	// locally-constructed D3D11_VIEWPORT, bypassing the StateCache. c9
+	// stayed at install-time zero until SOMETHING in the engine called
+	// Graphics::setViewport (typically Camera, PostProcessingEffectsManager,
+	// or ShaderPrimitiveSorter -- none of which run during splash/login).
+	// Result: splash and login UI XYZRHW quads were submitted with
+	// viewportData=(0,0,0,0), the VS multiplied screen-space x/y by zero,
+	// all four corners collapsed to clip-space origin, and the splash
+	// rendered as nothing visible (black). The same mechanism with
+	// stale-but-nonzero viewportData (Iter-4's longer session, after
+	// PostFX/Sorter had transiently set c9 to render-target dimensions)
+	// produced the radial-from-world-anchored-point stretched-triangle
+	// signature instead of black.
+	//
+	// Plan 11-09 Iter-2.7b's fix wired setViewport to write c9, but the
+	// engine doesn't call Graphics::setViewport during early-frame UI
+	// renders -- that gap is the actual hole. Iter-8 closes it by giving
+	// every frame a guaranteed valid viewportData write before the first
+	// draw, mirroring the spirit of D3D9's path where transformed-vertex
+	// callers (FFP D3DDECLUSAGE_POSITIONT or VSPS with c9 reads) had a
+	// non-zero c9 from frame zero.
+	Direct3d11_StateCache::setViewport(0, 0, ms_width, ms_height, 0.0f, 1.0f);
 
 	// Plan 11-09 Iter-2.7f (CODEX Round 6): apply pending primary-RT clear
 	// from previous frame's clearViewport-after-draw. Engine's D3D9-era
