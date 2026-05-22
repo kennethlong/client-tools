@@ -44,6 +44,7 @@ using Microsoft::WRL::ComPtr;
 
 MemoryBlockManager *Direct3d11_PixelShaderProgramData::ms_memoryBlockManager = nullptr;
 Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_fallbackPS;
+Microsoft::WRL::ComPtr<ID3D11PixelShader> Direct3d11_PixelShaderProgramData::ms_fallbackPSTextured;
 
 // ======================================================================
 
@@ -286,46 +287,89 @@ void Direct3d11_PixelShaderProgramData::install()
 	// owes us a real PS" signal that still surfaces geometry rather than
 	// rasterizing to no fragment writes.
 	//
-	// PS signature is the absolute minimum: float4 pos : SV_POSITION input
-	// (D3D11 spec mandates SV_POSITION is always available from the
-	// rasterizer; PS input MUST be a subset of VS output, so declaring
-	// only SV_POSITION is safe regardless of what the engine's VS
-	// outputs). Output is a single SV_TARGET float4 (the default
-	// render-target slot 0).
+	// Variant M (magenta) PS signature is the absolute minimum: float4
+	// pos : SV_POSITION input (D3D11 spec mandates SV_POSITION is always
+	// available from the rasterizer; PS input MUST be a subset of VS
+	// output, so declaring only SV_POSITION is safe regardless of what
+	// the engine's VS outputs). Output is a single SV_TARGET float4.
 	//
-	// Plan 11-09.13 Iter-1 ATTEMPTED a textured-passthrough body adding
-	// `float2 uv : TEXCOORD0` PS input + `t.Sample(s, uv)` body, hoping
+	// Plan 11-09.13 Iter-1 attempted a single textured-passthrough body
+	// adding `float2 uv : TEXCOORD0` PS input + `t.Sample(s, uv)`, hoping
 	// to lift the world from solid magenta to recognizable textures
 	// without requiring Phase 12 asset re-author. Result: 483,451 D3D11
 	// debug-layer id=342 ERRORs ("VS-PS linkage error: PS input requires
 	// Semantic/Index (TEXCOORD,0) but VS output stage doesn't provide
-	// it") in a single smoke session = **every** draw rejected by D3D11
-	// (no engine VS outputs TEXCOORD0 with that exact semantic index).
-	// Iter-2 reverts to magenta as the safe known-good. Iter-3 will land
-	// reflection-driven fallback-variant selection (mirror Plan 11-09.8's
-	// per-VS input-signature pattern, but for VS output signatures --
-	// compile TWO fallback PS variants at install, select per-draw based
-	// on whether the bound VS's output sig contains TEXCOORD0).
-	char const kFallbackHlsl[] =
-		"// Plan 11-09 Iter-2 magenta fallback PS.\n"
-		"// Plan 11-09.13 Iter-1 attempted textured-passthrough; reverted in\n"
-		"// Iter-2 after 483,451 VS-PS linkage errors in a single smoke\n"
-		"// session (no engine VS outputs TEXCOORD0 with the exact semantic\n"
-		"// index PS input requires). Iter-3 will land reflection-driven\n"
-		"// per-draw fallback-variant selection.\n"
+	// it") in one smoke session = every draw rejected by D3D11.
+	// Iter-2 reverted to magenta as the safe known-good.
+	//
+	// Plan 11-09.13 Iter-3 (this state): keep Variant M as the universal
+	// fallback and compile a Variant T (textured-passthrough) alongside.
+	// applyPreDrawState selects between them by reflecting the bound VS's
+	// output signature (Direct3d11_VertexShaderData::m_reflectedOutputs)
+	// and picking Variant T only when the VS provides TEXCOORD0 with
+	// FLOAT32 component type at xy mask coverage -- the D3D11 stage-
+	// linkage compatibility floor for `float2 uv : TEXCOORD0` PS input.
+	// CODEX-endorsed Bucket-1 architecture; full consult at
+	// 11-09.13-CODEX-CONSULT-reflection-driven-fallback-variant-selection.md.
+	//
+	// CODEX-flagged stale premise: Direct3d11_StaticShaderData::apply()
+	// does NOT yet bind per-pass diffuse textures (cpp:208-248 explicitly
+	// defers material/texture/sampler binding to Iter-3+). Variant T
+	// samples whatever SRV slot 0 holds from earlier engine state --
+	// possibly null, possibly stale. StateCache's selection path emits
+	// a one-shot SRV0/sampler0 diagnostic the first time Variant T is
+	// selected per session, surfacing this gap as telemetry rather than
+	// hiding it behind a magenta world. SRV0 binding fix itself is
+	// scoped to Iter-4 / Plan 11-09.14.
+	char const kFallbackMagentaHlsl[] =
+		"// Plan 11-09 Iter-2 / 11-09.13 Iter-3 Variant M magenta fallback PS.\n"
+		"// Universal -- only requires SV_POSITION (always provided by\n"
+		"// the rasterizer). Bound when the active VS does not output a\n"
+		"// TEXCOORD0 float xy signature compatible with Variant T.\n"
 		"float4 main(float4 pos : SV_POSITION) : SV_TARGET\n"
 		"{\n"
 		"    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n"
 		"}\n";
 
-	bool const compiled = compilePixelShaderFromHlsl(
-		kFallbackHlsl,
-		sizeof(kFallbackHlsl) - 1,   // exclude trailing null
+	bool const compiledMagenta = compilePixelShaderFromHlsl(
+		kFallbackMagentaHlsl,
+		sizeof(kFallbackMagentaHlsl) - 1,   // exclude trailing null
 		"fallback_magenta.hlsl",
 		ms_fallbackPS);
 
-	FATAL(!compiled, ("Direct3d11_PixelShaderProgramData::install: fallback textured-passthrough PS compile returned false"));
-	FATAL(!ms_fallbackPS, ("Direct3d11_PixelShaderProgramData::install: fallback PS compiled but ComPtr is empty"));
+	FATAL(!compiledMagenta, ("Direct3d11_PixelShaderProgramData::install: Variant M magenta fallback PS compile returned false"));
+	FATAL(!ms_fallbackPS,   ("Direct3d11_PixelShaderProgramData::install: Variant M compiled but ComPtr is empty"));
+
+	// Plan 11-09.13 Iter-3 Variant T (textured-passthrough). Selected per-
+	// draw only when reflection proves the bound VS outputs TEXCOORD0 with
+	// FLOAT32 component type at xy mask coverage (see Direct3d11_StateCache
+	// selectFallbackPSForVS). PS-input declaration matches Microsoft Learn
+	// stage-linkage rules: SV_POSITION input + non-SV TEXCOORD0 input at
+	// float2. SRV slot 0 + sampler slot 0 are read via t.Sample(s, uv);
+	// pre-Iter-4 the SRV may not be bound for this draw (CODEX stale-
+	// premise) -- StateCache emits a one-shot diagnostic on first
+	// selection so the gap is observable.
+	char const kFallbackTexturedHlsl[] =
+		"// Plan 11-09.13 Iter-3 Variant T textured-passthrough fallback PS.\n"
+		"// Selected when reflection proves bound VS outputs TEXCOORD0\n"
+		"// (FLOAT32, xy mask). Samples whatever the engine bound at\n"
+		"// SRV slot 0 / sampler slot 0; per-pass diffuse-texture binding\n"
+		"// in Direct3d11_StaticShaderData::apply() is Iter-4 work.\n"
+		"Texture2D    t : register(t0);\n"
+		"SamplerState s : register(s0);\n"
+		"float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET\n"
+		"{\n"
+		"    return t.Sample(s, uv);\n"
+		"}\n";
+
+	bool const compiledTextured = compilePixelShaderFromHlsl(
+		kFallbackTexturedHlsl,
+		sizeof(kFallbackTexturedHlsl) - 1,
+		"fallback_textured.hlsl",
+		ms_fallbackPSTextured);
+
+	FATAL(!compiledTextured,    ("Direct3d11_PixelShaderProgramData::install: Variant T textured fallback PS compile returned false"));
+	FATAL(!ms_fallbackPSTextured, ("Direct3d11_PixelShaderProgramData::install: Variant T compiled but ComPtr is empty"));
 }
 
 // ----------------------------------------------------------------------
@@ -333,6 +377,7 @@ void Direct3d11_PixelShaderProgramData::install()
 void Direct3d11_PixelShaderProgramData::remove()
 {
 	ms_fallbackPS.Reset();
+	ms_fallbackPSTextured.Reset();
 	delete ms_memoryBlockManager;
 	ms_memoryBlockManager = nullptr;
 }

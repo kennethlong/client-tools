@@ -539,10 +539,20 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// when the VBFormat-driven element list doesn't cover them. CODEX-
 	// reviewed (consult: 11-09.8-CODEX-CONSULT-texcoord2-signature-mismatch).
 	//
-	// Reflection failure is treated as defensive non-fatal; m_reflectedInputs
-	// stays empty and augmentation becomes a no-op, matching pre-Plan-11-09.8
-	// behavior.
+	// Plan 11-09.13 Iter-3: parallel capture of the VS OUTPUT signature
+	// for reflection-driven fallback-PS variant selection. Mirrors the
+	// input-side pattern but on the VS-output / PS-input boundary --
+	// applyPreDrawState selects Variant T (textured-passthrough) only
+	// when reflection proves the bound VS outputs TEXCOORD0 with a
+	// float component type at xy mask coverage. CODEX-reviewed (consult:
+	// 11-09.13-CODEX-CONSULT-reflection-driven-fallback-variant-selection.md).
+	//
+	// Reflection failure is treated as defensive non-fatal; both
+	// m_reflectedInputs and m_reflectedOutputs stay empty -- augmentation
+	// becomes a no-op, fallback-variant selection defaults to magenta,
+	// matching pre-Iter-3 behavior.
 	m_reflectedInputs.clear();
+	m_reflectedOutputs.clear();
 	ComPtr<ID3D11ShaderReflection> reflector;
 	HRESULT const reflectHr = D3DReflect(
 		blob->GetBufferPointer(),
@@ -574,6 +584,37 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 				ri.ComponentMask = desc.Mask;
 				ri.ComponentType = desc.ComponentType;
 				m_reflectedInputs.push_back(ri);
+			}
+
+			// Plan 11-09.13 Iter-3: parallel output-signature capture.
+			// Filter SV_* outputs (SV_POSITION, SV_Depth etc.) -- those are
+			// hardware-routed to rasterizer stage, not consumed by PS as a
+			// "normal" interpolated input. PS-declared inputs match VS
+			// outputs by (SemanticName, SemanticIndex) with component-type
+			// and mask compatibility per Microsoft Learn stage-linkage
+			// rules. We preserve the full descriptor (Mask + ReadWriteMask
+			// + ComponentType) so the selection logic in StateCache can
+			// pick variants conservatively.
+			m_reflectedOutputs.reserve(shaderDesc.OutputParameters);
+			for (UINT i = 0; i < shaderDesc.OutputParameters; ++i)
+			{
+				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
+				if (FAILED(reflector->GetOutputParameterDesc(i, &desc)))
+					continue;
+				if (desc.SystemValueType != D3D_NAME_UNDEFINED)
+					continue;
+
+				Direct3d11_ReflectedVSOutput ro = {};
+				if (desc.SemanticName)
+				{
+					strncpy_s(ro.SemanticName, sizeof(ro.SemanticName),
+					          desc.SemanticName, _TRUNCATE);
+				}
+				ro.SemanticIndex  = desc.SemanticIndex;
+				ro.ComponentMask  = desc.Mask;
+				ro.ReadWriteMask  = desc.ReadWriteMask;
+				ro.ComponentType  = desc.ComponentType;
+				m_reflectedOutputs.push_back(ro);
 			}
 		}
 	}

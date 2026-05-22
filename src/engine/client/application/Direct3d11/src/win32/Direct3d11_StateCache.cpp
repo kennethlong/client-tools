@@ -448,6 +448,105 @@ namespace Direct3d11_StateCacheNamespace
 	}
 
 	// ------------------------------------------------------------------
+	// Plan 11-09.13 Iter-3: pick the right fallback-PS variant based on
+	// the bound VS's reflected output signature. Variant M (magenta) is
+	// universal -- only requires SV_POSITION, which D3D11 always
+	// provides. Variant T (textured-passthrough) declares
+	// `float2 uv : TEXCOORD0` as a non-SV input; D3D11 stage-linkage
+	// rules REJECT the Draw (id=342) unless the bound VS outputs a
+	// compatible TEXCOORD0 signature (FLOAT32 component type + at least
+	// xy mask coverage).
+	//
+	// Selection criteria mirror Microsoft Learn signature compatibility
+	// (D3D11_SIGNATURE_PARAMETER_DESC): the VS output's semantic name +
+	// index + component type + mask must subset-match what Variant T
+	// declares as input. We check ComponentMask (the declared signature
+	// contract) not ReadWriteMask (which records actual writes inside
+	// the VS body) -- D3D11 stage linkage validates the SIGNATURE, not
+	// the runtime write behavior.
+	//
+	// CODEX-flagged stale-premise diagnostic: the first time per process
+	// lifetime that Variant T is selected, log the SRV slot 0 / sampler
+	// slot 0 state. Direct3d11_StaticShaderData::apply() (cpp:208-248)
+	// does NOT yet bind per-pass diffuse textures; SRV0 may be empty or
+	// stale even when Variant T is selected correctly. The diagnostic
+	// surfaces that gap so Iter-4 / Plan 11-09.14 can target it
+	// explicitly. PSGetShaderResources / PSGetSamplers AddRef -- release
+	// immediately after inspection.
+
+	ID3D11PixelShader *selectFallbackPSForVS(Direct3d11_VertexShaderData const *vsData)
+	{
+		ID3D11PixelShader *variantM = Direct3d11_PixelShaderProgramData::getFallbackPS();
+		ID3D11PixelShader *variantT = Direct3d11_PixelShaderProgramData::getFallbackPSTextured();
+
+		if (!vsData)
+			return variantM;
+
+		std::vector<Direct3d11_ReflectedVSOutput> const &outputs = vsData->getReflectedOutputs();
+
+		bool texcoord0Compatible = false;
+		for (Direct3d11_ReflectedVSOutput const &out : outputs)
+		{
+			// D3D conventions: SemanticName lacks index suffix
+			// (e.g. "TEXCOORD" + SemanticIndex=0, not "TEXCOORD0").
+			if (_stricmp(out.SemanticName, "TEXCOORD") != 0)
+				continue;
+			if (out.SemanticIndex != 0)
+				continue;
+			if (out.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32)
+				continue;
+			// Variant T declares `float2 uv : TEXCOORD0` -- needs at least
+			// xy. ComponentMask bit 0 = x, bit 1 = y; require both. VSes
+			// outputting float3 or float4 TEXCOORD0 also match (D3D11
+			// truncates extra components at the PS-input boundary).
+			if ((out.ComponentMask & 0x3) != 0x3)
+				continue;
+			texcoord0Compatible = true;
+			break;
+		}
+
+		if (!texcoord0Compatible)
+			return variantM;
+
+		// Variant T selected. One-shot SRV0/sampler0 diagnostic.
+		static bool s_diagnosticEmitted = false;
+		if (!s_diagnosticEmitted)
+		{
+			s_diagnosticEmitted = true;
+			ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+			if (ctx)
+			{
+				ID3D11ShaderResourceView *srv0 = nullptr;
+				ID3D11SamplerState       *ss0  = nullptr;
+				ctx->PSGetShaderResources(0, 1, &srv0);
+				ctx->PSGetSamplers(0, 1, &ss0);
+
+				DXGI_FORMAT srvFormat = DXGI_FORMAT_UNKNOWN;
+				if (srv0)
+				{
+					D3D11_SHADER_RESOURCE_VIEW_DESC desc = {};
+					srv0->GetDesc(&desc);
+					srvFormat = desc.Format;
+				}
+
+				DEBUG_REPORT_LOG_PRINT(true,
+					("Direct3d11_StateCache Plan 11-09.13 Iter-3 first Variant T (textured) select: "
+					 "SRV0=%s SRV0_format=%u sampler0=%s -- "
+					 "CODEX stale-premise diagnostic; per-pass texture binding in "
+					 "Direct3d11_StaticShaderData::apply() is Iter-4 work.\n",
+					 srv0 ? "BOUND" : "NULL",
+					 static_cast<unsigned>(srvFormat),
+					 ss0  ? "BOUND" : "NULL"));
+
+				if (srv0) srv0->Release();
+				if (ss0)  ss0->Release();
+			}
+		}
+
+		return variantT ? variantT : variantM;
+	}
+
+	// ------------------------------------------------------------------
 	// Resolve the VS / PS / input-layout from the currently-bound static
 	// shader's pass data. Sets ms_currentVSData / ms_currentPSData /
 	// ms_currentInputLayout. Returns true if at least the VS is valid
@@ -558,27 +657,30 @@ namespace Direct3d11_StateCacheNamespace
 		if (ms_currentIBValid && ms_currentIB)
 			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 
-		// 5. VS + PS (Plan 11-09 Iter-2: magenta fallback when asset PS is null).
+		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3: reflection-driven
+		// fallback-variant selection when asset PS is null).
 		ctx->VSSetShader(vs, nullptr, 0);
 		if (ms_currentPSData && ms_currentPSData->getPixelShader())
 		{
 			ctx->PSSetShader(ms_currentPSData->getPixelShader(), nullptr, 0);
 		}
-		else if (ID3D11PixelShader *fallback = Direct3d11_PixelShaderProgramData::getFallbackPS())
+		else if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
 		{
-			// Plan 11-09 Iter-2: bind the install-time magenta pass-through
-			// PS so geometry surfaces visibly. Without this, draws rasterize
-			// but produce no fragment writes (D3D11 has no implicit FFP
-			// pass-through PS) -- the Plan 11-05 PEXE-caveat invisible-
-			// geometry failure mode. Magenta is intentional debug color;
-			// real per-shader PS lands when Phase 12 re-authors the .psh
-			// assets to DXBC-format SM4+ bytecode.
+			// Plan 11-09.13 Iter-3: reflection-driven fallback-variant
+			// selection. selectFallbackPSForVS returns Variant T (textured-
+			// passthrough) when the bound VS's reflected output signature
+			// proves D3D11 stage-linkage compatibility with `float2 uv :
+			// TEXCOORD0`; otherwise Variant M (magenta). Without this,
+			// either every draw is magenta (Iter-2 state) or every draw
+			// gets a id=342 linkage rejection (Iter-1 state). Real per-
+			// shader PS lands when Phase 12 re-authors the .psh assets to
+			// DXBC-format SM4+ bytecode.
 			ctx->PSSetShader(fallback, nullptr, 0);
 		}
 		else
 		{
-			// Defensive: should never fire post-Iter-2 since install() FATALs
-			// on fallback compile failure. Leave previous PS bound if it does.
+			// Defensive: should never fire post-Iter-3 since install() FATALs
+			// on either variant's compile failure. Leave previous PS bound if it does.
 		}
 
 		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by

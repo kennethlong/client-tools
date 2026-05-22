@@ -72,6 +72,17 @@ public:
 	// owes us a real PS" signal that still surfaces geometry visibly.
 	static ID3D11PixelShader *getFallbackPS();
 
+	// Plan 11-09.13 Iter-3: textured-passthrough Variant T PS, compiled
+	// alongside the magenta variant at install time. applyPreDrawState
+	// selects between Variant M (magenta, universal) and Variant T
+	// (textured, requires VS to output TEXCOORD0 float xy) based on
+	// reflection of the bound VS's output signature. See PLAN.md
+	// `<iter3_supersedes_iter1>` for the selection criteria + the SRV0
+	// stale-premise caveat captured by CODEX (StaticShaderData::apply()
+	// does not yet bind per-pass diffuse textures -- SRV0 may be empty/
+	// stale even when Variant T is selected correctly).
+	static ID3D11PixelShader *getFallbackPSTextured();
+
 private:
 
 	Direct3d11_PixelShaderProgramData();
@@ -86,6 +97,12 @@ private:
 	// install(), released at remove(). Bound by applyPreDrawState when
 	// the active StaticShader has no real PS (Plan 11-05 PEXE caveat).
 	static Microsoft::WRL::ComPtr<ID3D11PixelShader> ms_fallbackPS;
+
+	// Plan 11-09.13 Iter-3: textured-passthrough variant. Compiled at
+	// install() alongside ms_fallbackPS. Bound by applyPreDrawState
+	// only when the bound VS's reflected output signature contains
+	// TEXCOORD0 with FLOAT32 component type at xy mask coverage.
+	static Microsoft::WRL::ComPtr<ID3D11PixelShader> ms_fallbackPSTextured;
 
 private:
 
@@ -105,6 +122,13 @@ inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getPixelShader() co
 inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPS()
 {
 	return ms_fallbackPS.Get();
+}
+
+// ----------------------------------------------------------------------
+
+inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPSTextured()
+{
+	return ms_fallbackPSTextured.Get();
 }
 
 // ======================================================================
