@@ -288,12 +288,31 @@ void Direct3d11_PixelShaderProgramData::install()
 	//
 	// PS signature is the absolute minimum: float4 pos : SV_POSITION input
 	// (D3D11 spec mandates SV_POSITION is always available from the
-	// rasterizer; PS input is allowed to be a subset of VS output, so
-	// declaring only SV_POSITION is safe regardless of what the engine's
-	// VS outputs). Output is a single SV_TARGET float4 (the default
+	// rasterizer; PS input MUST be a subset of VS output, so declaring
+	// only SV_POSITION is safe regardless of what the engine's VS
+	// outputs). Output is a single SV_TARGET float4 (the default
 	// render-target slot 0).
+	//
+	// Plan 11-09.13 Iter-1 ATTEMPTED a textured-passthrough body adding
+	// `float2 uv : TEXCOORD0` PS input + `t.Sample(s, uv)` body, hoping
+	// to lift the world from solid magenta to recognizable textures
+	// without requiring Phase 12 asset re-author. Result: 483,451 D3D11
+	// debug-layer id=342 ERRORs ("VS-PS linkage error: PS input requires
+	// Semantic/Index (TEXCOORD,0) but VS output stage doesn't provide
+	// it") in a single smoke session = **every** draw rejected by D3D11
+	// (no engine VS outputs TEXCOORD0 with that exact semantic index).
+	// Iter-2 reverts to magenta as the safe known-good. Iter-3 will land
+	// reflection-driven fallback-variant selection (mirror Plan 11-09.8's
+	// per-VS input-signature pattern, but for VS output signatures --
+	// compile TWO fallback PS variants at install, select per-draw based
+	// on whether the bound VS's output sig contains TEXCOORD0).
 	char const kFallbackHlsl[] =
 		"// Plan 11-09 Iter-2 magenta fallback PS.\n"
+		"// Plan 11-09.13 Iter-1 attempted textured-passthrough; reverted in\n"
+		"// Iter-2 after 483,451 VS-PS linkage errors in a single smoke\n"
+		"// session (no engine VS outputs TEXCOORD0 with the exact semantic\n"
+		"// index PS input requires). Iter-3 will land reflection-driven\n"
+		"// per-draw fallback-variant selection.\n"
 		"float4 main(float4 pos : SV_POSITION) : SV_TARGET\n"
 		"{\n"
 		"    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n"
@@ -305,7 +324,7 @@ void Direct3d11_PixelShaderProgramData::install()
 		"fallback_magenta.hlsl",
 		ms_fallbackPS);
 
-	FATAL(!compiled, ("Direct3d11_PixelShaderProgramData::install: fallback magenta PS compile returned false"));
+	FATAL(!compiled, ("Direct3d11_PixelShaderProgramData::install: fallback textured-passthrough PS compile returned false"));
 	FATAL(!ms_fallbackPS, ("Direct3d11_PixelShaderProgramData::install: fallback PS compiled but ComPtr is empty"));
 }
 
