@@ -408,11 +408,20 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
 		if (texcoord0Index >= 0)
 		{
+			// Plan 11-09.15 Iter-12 DIAGNOSTIC: temporarily force a known
+			// solid-green output instead of texture sampling. Isolates
+			// "does the PS run at all" (= green pixels appear) from "is
+			// the slot-0 texture sample returning black" (= black still
+			// appears). Iter-11's RT/SRV-conflict fix dropped warnings
+			// from 1966/session to 0 but the splash/login visual is still
+			// black, suggesting the issue is downstream of the conflict
+			// (the per-VS PS is bound but its texture sample returns
+			// black, OR the pipeline rejects the draw before the PS runs).
+			// REVERT after diagnosis.
 			char field[32];
 			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
-			hlsl += "    return t.Sample(s, input.";
-			hlsl += field;
-			hlsl += ".xy);\n";
+			(void)field;
+			hlsl += "    return float4(0.0f, 1.0f, 0.0f, 1.0f);\n";
 		}
 		else
 		{
