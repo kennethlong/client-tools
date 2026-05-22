@@ -413,18 +413,19 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 								Direct3d11_TextureData const * const td = *stage.m_texture;
 								srvPtr = static_cast<void const *>(td->getShaderResourceView());
 							}
-							// Plan 11-09.15 Iter-20: add the ShaderImplementation
-							// name so we can identify WHICH SWG shaders bind the
-							// primaryBuffer Texture as their MAIN. Iter-19 dump
-							// showed 27 of 100 builds share the same engine Texture
-							// (0x16070538 -> SRV 0x1F66B83C = primaryBuffer).
-							char const * const implName =
-								m_implementation ? m_implementation->getName() : "<no impl>";
+							// Plan 11-09.15 Iter-21: ShaderImplementation::getName()
+							// returned null in Iter-20 output; switch to the StaticShader
+							// template name (StaticShader -> ShaderTemplate -> PersistentCrcString)
+							// which is the actual .sht asset path.
+							CrcString const &templateName = shader.getStaticShaderTemplate().getName();
+							char const *templateNameStr = templateName.getString();
+							if (!templateNameStr || !*templateNameStr)
+								templateNameStr = "<empty>";
 							fprintf(fp,
-								"build#%d impl='%s' pass=%d tag='%s' (0x%08X) isGlobal=%d "
+								"build#%d sht='%s' pass=%d tag='%s' (0x%08X) isGlobal=%d "
 								"textureData.texture=0x%p stage.m_texture=0x%p stage.m_present=%d "
 								"derefSRV=0x%p\n",
-								s_iter18BuildCount, implName ? implName : "<null>",
+								s_iter18BuildCount, templateNameStr,
 								passIndex,
 								tagStr, static_cast<unsigned int>(t), tagIsGlobal ? 1 : 0,
 								static_cast<void const *>(textureData.texture),
