@@ -1718,6 +1718,32 @@ void Direct3d11_StateCache::drawTriangleFan()
 	// uploaded with real pixel data.
 	if (ms_currentVBFormat.isTransformed() && ms_boundSRV[0])
 	{
+		// Plan 11-09.15 Iter-16: log the SRV pointer + VS filename for
+		// the first 10 transformed-vert fan draws. Tells us whether SRV0
+		// is stable (same wrong texture for every draw -> something is
+		// pre-binding the RT and nobody overwrites) or thrashing
+		// (different textures per draw -> the binding logic is wrong
+		// for this specific shader/draw class).
+		static int s_iter16Count = 0;
+		if (s_iter16Count < 10)
+		{
+			++s_iter16Count;
+			if (ID3D11InfoQueue *iqHdr = Direct3d11_Device::getInfoQueue())
+			{
+				char const *vsFn = "<none>";
+				if (ms_currentVSData)
+				{
+					ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
+					if (eng) vsFn = eng->getFilename();
+				}
+				char hdr[256];
+				_snprintf_s(hdr, sizeof(hdr), _TRUNCATE,
+					"Plan 11-09.15 Iter-16 sample#%d VS='%s' SRV0_ptr=0x%p",
+					s_iter16Count, vsFn, static_cast<void *>(ms_boundSRV[0]));
+				iqHdr->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, hdr);
+			}
+		}
+
 		static bool s_iter15Done = false;
 		if (!s_iter15Done)
 		{
