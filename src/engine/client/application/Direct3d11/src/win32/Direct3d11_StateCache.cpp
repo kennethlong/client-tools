@@ -857,13 +857,20 @@ void Direct3d11_StateCache::install()
 
 void Direct3d11_StateCache::remove()
 {
-	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d "
+	// Plan 11-09.15 Iter-1 follow-up: also emit through InfoQueue so the
+	// shutdown stats land in stage/d3d11-debug.log (DEBUG_REPORT_LOG_PRINT
+	// is invisible from GUI-exe launches per Plan 11-09.13 Iter-3 finding).
+	char shutdownBuf[768];
+	_snprintf_s(shutdownBuf, sizeof(shutdownBuf), _TRUNCATE,
+		"Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d "
 		"drawTriangleFanCalls=%d drawPartialTriangleFanCalls=%d triangleFanIBRebuilds=%d triangleFanMaxVertices=%d "
-		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d\n",
+		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d",
 		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound,
 		ms_drawTriangleFanCalls, ms_drawPartialTriangleFanCalls, ms_triangleFanIBRebuilds, ms_triangleFanMaxVertices,
-		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls));
+		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls);
+	if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+		iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, shutdownBuf);
+	DEBUG_REPORT_LOG_PRINT(true, ("%s\n", shutdownBuf));
 
 	// Drop tracked-bind pointers BEFORE releasing the caches so we don't
 	// hold dangling raw pointers into the cache maps.
@@ -1489,18 +1496,27 @@ void Direct3d11_StateCache::drawTriangleFan()
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
 
-	// CODEX Q4: bind fan IB AFTER applyPreDrawState; do NOT mutate
-	// ms_currentIB shadow. Next indexed draw rebinds via applyPreDrawState's
-	// existing `if (ms_currentIBValid && ms_currentIB)` guard.
-	Direct3d11_Device::getContext()->IASetIndexBuffer(
+	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+	ctx->IASetIndexBuffer(
 		ms_triangleFanIB.Get(),
 		DXGI_FORMAT_R16_UINT,
 		0);
 
-	Direct3d11_Device::getContext()->DrawIndexed(
+	ctx->DrawIndexed(
 		static_cast<UINT>(triCount * 3),
 		0,
 		0);
+
+	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind after our DrawIndexed.
+	// CODEX Q4 said "next indexed draw rebinds via applyPreDrawState's existing
+	// guard" so this should be redundant -- but Kenny's smoke surfaced a
+	// world-anchored convergence pattern that's consistent with an IB leak
+	// (every triangle sharing vertex 0 as the apex). Cost is one extra
+	// IASetIndexBuffer per fan draw (~50ns); cheap insurance. If this fixes
+	// the artifact, we know applyPreDrawState's rebind guard wasn't catching
+	// some draw path.
+	if (ms_currentIBValid && ms_currentIB)
+		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 }
 
 void Direct3d11_StateCache::drawQuadList()
@@ -1564,11 +1580,17 @@ void Direct3d11_StateCache::drawIndexedTriangleFan()
 	if (!s_warnedOnce)
 	{
 		s_warnedOnce = true;
-		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11_StateCache::drawIndexedTriangleFan called -- STILL BROKEN "
-			"(TRIANGLELIST topology applied to fan-shaped indexed data). Plan 11-09.16 "
-			"territory; needs CPU-side index shadows in Direct3d11_StaticIndexBufferData::"
-			"lock/unlock first per CODEX 11-09.15 Q3.\n"));
+		// Plan 11-09.15 Iter-1 follow-up: DEBUG_REPORT_LOG_PRINT is invisible
+		// from GUI-exe launches per Plan 11-09.13 Iter-3 finding; route through
+		// ID3D11InfoQueue::AddApplicationMessage so the warning lands in
+		// stage/d3d11-debug.log.
+		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawIndexedTriangleFan called -- "
+			"STILL BROKEN (TRIANGLELIST topology applied to fan-shaped indexed data). "
+			"Plan 11-09.16 territory; needs CPU-side index shadows in "
+			"Direct3d11_StaticIndexBufferData::lock/unlock first per CODEX 11-09.15 Q3.";
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
 	}
 
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
@@ -1633,15 +1655,20 @@ void Direct3d11_StateCache::drawPartialTriangleFan(int startVertex, int primitiv
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
 
-	Direct3d11_Device::getContext()->IASetIndexBuffer(
+	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+	ctx->IASetIndexBuffer(
 		ms_triangleFanIB.Get(),
 		DXGI_FORMAT_R16_UINT,
 		0);
 
-	Direct3d11_Device::getContext()->DrawIndexed(
+	ctx->DrawIndexed(
 		static_cast<UINT>(primitiveCount * 3),
 		0,
 		static_cast<INT>(startVertex));
+
+	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind (see drawTriangleFan).
+	if (ms_currentIBValid && ms_currentIB)
+		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 }
 
 // ------------------------------------------------------------------
@@ -1706,10 +1733,14 @@ void Direct3d11_StateCache::drawPartialIndexedTriangleFan(int baseIndex, int /*m
 	if (!s_warnedOnce)
 	{
 		s_warnedOnce = true;
-		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11_StateCache::drawPartialIndexedTriangleFan called -- STILL BROKEN "
-			"(TRIANGLELIST topology applied to fan-shaped indexed data). Plan 11-09.16 "
-			"territory per CODEX 11-09.15 Q3.\n"));
+		// Plan 11-09.15 Iter-1 follow-up: route through InfoQueue (see
+		// drawIndexedTriangleFan).
+		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawPartialIndexedTriangleFan called -- "
+			"STILL BROKEN (TRIANGLELIST topology applied to fan-shaped indexed data). "
+			"Plan 11-09.16 territory per CODEX 11-09.15 Q3.";
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
 	}
 
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
