@@ -66,6 +66,15 @@ public:
 	// hit an offscreen RT instead of the swapchain backbuffer.
 	static ID3D11RenderTargetView * getBackBufferRTV();
 
+	// Plan 11-09.8: phantom zero buffer at InputSlot=15. A 16-byte
+	// zero-filled BIND_VERTEX_BUFFER (USAGE_IMMUTABLE) created at install
+	// time. Bound by Direct3d11_StateCache::applyPreDrawState with
+	// stride=0 + offset=0 so every vertex reads zero. Backs reflected-but-
+	// VBFormat-absent VS inputs (CreateInputLayout signature validation
+	// under vs_4_0 requires the layout cover the bytecode signature).
+	// Caller does NOT own the returned pointer.
+	static ID3D11Buffer *           getPhantomZeroBuffer();
+
 	// Plan 11-09 Iter-2.7f (CODEX Round 6): signal that a draw was submitted
 	// in the current frame. Used by clearViewport's primary-backbuffer escape
 	// hatch -- if clearViewport targets the backbuffer AFTER draw activity,

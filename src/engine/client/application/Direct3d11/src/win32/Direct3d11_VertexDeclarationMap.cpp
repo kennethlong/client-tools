@@ -120,9 +120,18 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 	++ms_cacheMisses;
 
 	D3D11_INPUT_ELEMENT_DESC elements[16] = {};
-	int const elementCount = Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc(format, elements);
+	int elementCount = Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc(format, elements);
 	if (elementCount <= 0)
 		return nullptr;
+
+	// Plan 11-09.8: augment with phantom elements (InputSlot=15) for any
+	// VS-declared inputs the VBFormat doesn't cover. vs_4_0 preserves
+	// unused declared inputs in the bytecode signature; CreateInputLayout
+	// rejects layouts that don't match the signature. CODEX-reviewed.
+	elementCount = Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
+		vsData->getReflectedInputs(), elements, elementCount, 16);
+	if (elementCount < 0)
+		return nullptr;   // overflow -- VS signature exceeds 16-element layout cap
 
 	ComPtr<ID3D11InputLayout> layout;
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateInputLayout(
@@ -224,6 +233,14 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 
 	if (total == 0)
 		return nullptr;
+
+	// Plan 11-09.8: augment with phantom elements (InputSlot=15) for any
+	// VS-declared inputs the multi-stream VBFormats don't cover. Same
+	// reasoning as single-stream getOrCreate above.
+	total = Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
+		vsData->getReflectedInputs(), elements, total, 16);
+	if (total < 0)
+		return nullptr;   // overflow
 
 	ComPtr<ID3D11InputLayout> layout;
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateInputLayout(

@@ -69,6 +69,13 @@ namespace Direct3d11_DeviceNamespace
 	ComPtr<ID3D11Texture2D>        ms_depthStencilTex;
 	ComPtr<ID3D11DepthStencilView> ms_depthStencilDSV;
 
+	// Plan 11-09.8: 16-byte zero-filled BIND_VERTEX_BUFFER created in
+	// Direct3d11_Device::create after the device is alive. Bound at
+	// InputSlot=15 by Direct3d11_StateCache::applyPreDrawState with
+	// stride=0 / offset=0 -- backs reflection-driven phantom layout
+	// elements for VS-declared semantics absent from the VBFormat.
+	ComPtr<ID3D11Buffer>           ms_phantomZeroBuffer;
+
 	// Plan 11-08 Iter-1: D3D11 debug-layer InfoQueue. Non-null only when
 	// the device was created with D3D11_CREATE_DEVICE_DEBUG (i.e. _DEBUG
 	// build AND ConfigDirect3d11::getEnableDebugLayer() AND the Pitfall 8
@@ -334,6 +341,29 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed, 
 	ms_installed = true;
 
 	// ------------------------------------------------------------------
+	// Plan 11-09.8: phantom zero buffer. 16-byte zero-filled
+	// BIND_VERTEX_BUFFER (immutable). Bound at InputSlot=15 by
+	// applyPreDrawState; backs reflected-but-VBFormat-absent VS inputs.
+	{
+		D3D11_BUFFER_DESC pzDesc = {};
+		pzDesc.ByteWidth          = 16;
+		pzDesc.Usage              = D3D11_USAGE_IMMUTABLE;
+		pzDesc.BindFlags          = D3D11_BIND_VERTEX_BUFFER;
+		pzDesc.CPUAccessFlags     = 0;
+		pzDesc.MiscFlags          = 0;
+		pzDesc.StructureByteStride = 0;
+
+		uint8_t zeros[16] = {};
+		D3D11_SUBRESOURCE_DATA pzInit = {};
+		pzInit.pSysMem = zeros;
+
+		HRESULT const pzHr = ms_device->CreateBuffer(&pzDesc, &pzInit, ms_phantomZeroBuffer.GetAddressOf());
+		FATAL_DX_HR("Direct3d11_Device: phantom zero buffer CreateBuffer failed: %s", pzHr);
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11: phantom zero buffer (slot 15, 16B immutable, stride=0) ready\n"));
+	}
+
+	// ------------------------------------------------------------------
 	// Initial clear + present (mirrors D3D9 plugin's pattern at
 	// Direct3d9.cpp:1363-1367). Puts dark blue on the screen IMMEDIATELY
 	// at install-time, before any other engine slot has a chance to fire.
@@ -383,6 +413,9 @@ void Direct3d11_Device::destroy()
 		ms_d3d11LogFile = nullptr;
 	}
 
+	// Plan 11-09.8: release phantom zero buffer alongside other VBs.
+	ms_phantomZeroBuffer.Reset();
+
 	ms_depthStencilDSV.Reset();
 	ms_depthStencilTex.Reset();
 	ms_backBufferRTV.Reset();
@@ -406,6 +439,7 @@ void Direct3d11_Device::destroy()
 
 ID3D11Device *        Direct3d11_Device::getDevice()  { return ms_device.Get(); }
 ID3D11RenderTargetView * Direct3d11_Device::getBackBufferRTV() { return ms_backBufferRTV.Get(); }
+ID3D11Buffer *        Direct3d11_Device::getPhantomZeroBuffer() { return ms_phantomZeroBuffer.Get(); }
 
 // Plan 11-09 Iter-2.7f (CODEX Round 6): frame-draw-activity flag + pending
 // primary clear state. clearViewport's escape hatch defers primary-RT

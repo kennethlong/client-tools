@@ -18,9 +18,11 @@
 // ======================================================================
 
 #include <d3d11.h>
+#include <vector>
 
 class  VertexBufferFormat;
 struct VertexBufferDescriptor;
+struct Direct3d11_ReflectedVSInput;   // Plan 11-09.8 (defined in Direct3d11_VertexShaderData.h)
 
 // ======================================================================
 
@@ -56,6 +58,23 @@ public:
 		D3D11_INPUT_ELEMENT_DESC *outDesc,
 		int maxElements,
 		UINT inputSlot);
+
+	// Plan 11-09.8: append phantom elements for VS-declared inputs not
+	// covered by the format-derived elements. Phantom elements use
+	// InputSlot=15 with AlignedByteOffset=0 (zero-stride read from the
+	// global phantom zero buffer). Mutates outDesc in place starting at
+	// outDesc[currentCount]. Returns the new total element count, OR -1
+	// on capacity overflow (caller treats as layout-creation failure).
+	//
+	// CODEX-endorsed (Plan 11-09.8 consult Q2 C-lite/A2 hybrid): per-VS
+	// reflection captured by Direct3d11_VertexShaderData drives this
+	// augmentation; format-driven elements remain authoritative for the
+	// real geometry streams, phantom elements fill the gap.
+	static int augmentWithPhantomElements(
+		std::vector<Direct3d11_ReflectedVSInput> const &reflectedInputs,
+		D3D11_INPUT_ELEMENT_DESC *outDesc,
+		int currentCount,
+		int maxElements);
 };
 
 // ======================================================================

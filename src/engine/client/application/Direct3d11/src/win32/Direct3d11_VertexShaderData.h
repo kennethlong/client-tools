@@ -33,8 +33,30 @@ class MemoryBlockManager;
 
 #include <cstdint>
 #include <d3d11.h>
-#include <d3dcompiler.h>
+#include <d3d11shader.h>     // Plan 11-09.8: ID3D11ShaderReflection + D3D11_SIGNATURE_PARAMETER_DESC
+#include <d3dcompiler.h>     // D3DReflect + D3DCompile
+#include <vector>
 #include <wrl/client.h>
+
+// ======================================================================
+//
+// Plan 11-09.8 compact reflected-VS-input descriptor. Captured once per
+// compile via D3DReflect; consumed by Direct3d11_VertexBufferDescriptorMap::
+// augmentWithPhantomElements at layout-creation time. SemanticName copied
+// (not pointer) because the reflection interface that owns the string
+// table is released after capture.
+//
+// System-value inputs (SV_VertexID etc.) are FILTERED OUT before storage
+// -- only "normal" semantics that may need a VBFormat or phantom-slot
+// element are recorded.
+
+struct Direct3d11_ReflectedVSInput
+{
+	char                         SemanticName[16];   // null-terminated; truncate beyond 15 chars
+	UINT                         SemanticIndex;
+	UINT                         ComponentMask;      // .Mask from D3D11_SIGNATURE_PARAMETER_DESC -- 0x1/0x3/0x7/0xF
+	D3D_REGISTER_COMPONENT_TYPE  ComponentType;      // D3D_REGISTER_COMPONENT_FLOAT32 etc.
+};
 
 // ======================================================================
 
@@ -61,6 +83,12 @@ public:
 	// (VBFormat, VS-bytecode-hash) input-layout cache key (Pitfall 6).
 	uint64_t            getBytecodeHash() const;
 
+	// Plan 11-09.8: VS-declared input signature (post-reflection,
+	// SV_* filtered). Empty vector if reflection failed (defensive
+	// non-fatal); layout creation then proceeds without phantom-
+	// element augmentation, matching pre-Plan-11-09.8 behavior.
+	std::vector<Direct3d11_ReflectedVSInput> const & getReflectedInputs() const;
+
 private:
 
 	Direct3d11_VertexShaderData();
@@ -80,6 +108,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3DBlob>             m_bytecode;
 	uint64_t                                     m_bytecodeHash;
 	bool                                         m_isAssembly;  // .vsh starts "//asm vs_..."; we can't compile that under D3D11
+
+	// Plan 11-09.8: captured post-compile via D3DReflect.
+	std::vector<Direct3d11_ReflectedVSInput>     m_reflectedInputs;
 };
 
 // ======================================================================
@@ -101,6 +132,13 @@ inline ID3DBlob *Direct3d11_VertexShaderData::getBytecode() const
 inline uint64_t Direct3d11_VertexShaderData::getBytecodeHash() const
 {
 	return m_bytecodeHash;
+}
+
+// ----------------------------------------------------------------------
+
+inline std::vector<Direct3d11_ReflectedVSInput> const & Direct3d11_VertexShaderData::getReflectedInputs() const
+{
+	return m_reflectedInputs;
 }
 
 // ======================================================================

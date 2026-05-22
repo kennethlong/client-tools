@@ -9,9 +9,12 @@
 #include "FirstDirect3d11.h"
 #include "Direct3d11_VertexBufferDescriptorMap.h"
 
+#include "Direct3d11_VertexShaderData.h"   // Plan 11-09.8: Direct3d11_ReflectedVSInput full definition
+
 #include "clientGraphics/VertexBufferFormat.h"
 #include "clientGraphics/VertexBufferDescriptor.h"
 
+#include <cstring>                          // Plan 11-09.8: _stricmp (Windows MSVC CRT extension)
 #include <map>
 
 // ======================================================================
@@ -260,6 +263,133 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
 	}
 
 	DEBUG_FATAL(n == 0, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: empty layout"));
+	return n;
+}
+
+// ======================================================================
+// Plan 11-09.8: phantom-element augmentation.
+//
+// CreateInputLayout under vs_4_0 validates the layout against the bytecode
+// input signature strictly. Engine D3D9-era HLSL declares TEXCOORD inputs
+// even when unused; vs_4_0 preserves them in the signature. When the
+// VBFormat-derived elements (above) don't cover every declared input, the
+// caller MUST add phantom elements that match -- otherwise CreateInputLayout
+// returns FAIL.
+//
+// Per CODEX 11-09.8 consult Q4: phantom elements live at InputSlot=15
+// (engine uses low slots for real streams; D3D11 exposes 16 IA slots).
+// The phantom buffer (Direct3d11_Device::getPhantomZeroBuffer) is a 16-byte
+// zero-filled VB bound with stride=0 -- every vertex reads zero, so the
+// VS sees zero for any phantom-backed input.
+//
+// CODEX Q3: filter system-value inputs (already done by VertexShaderData
+// when populating reflectedInputs; defensive double-check here).
+
+namespace
+{
+	enum { kPhantomInputSlot = 15 };
+
+	// Map reflected (ComponentType, ComponentMask) to a DXGI_FORMAT.
+	// CODEX Q4: phantom elements read zero from a stride-0 buffer; format
+	// type-equivalence with the source matters for SM4 signature validation
+	// (the layout must match the signature's per-element component type).
+	// Mask width 1/2/3/4 -> R/RG/RGB/RGBA channels.
+	DXGI_FORMAT reflectedToDxgi(D3D_REGISTER_COMPONENT_TYPE type, UINT mask)
+	{
+		// Determine channel count from the mask. The reflected mask packs
+		// the active component lanes; we take the highest set bit + 1.
+		int channels = 0;
+		if (mask & 0x1) channels = 1;
+		if (mask & 0x2) channels = 2;
+		if (mask & 0x4) channels = 3;
+		if (mask & 0x8) channels = 4;
+		if (channels == 0) channels = 4;   // defensive
+
+		switch (type)
+		{
+			case D3D_REGISTER_COMPONENT_UINT32:
+				switch (channels)
+				{
+					case 1: return DXGI_FORMAT_R32_UINT;
+					case 2: return DXGI_FORMAT_R32G32_UINT;
+					case 3: return DXGI_FORMAT_R32G32B32_UINT;
+					default: return DXGI_FORMAT_R32G32B32A32_UINT;
+				}
+			case D3D_REGISTER_COMPONENT_SINT32:
+				switch (channels)
+				{
+					case 1: return DXGI_FORMAT_R32_SINT;
+					case 2: return DXGI_FORMAT_R32G32_SINT;
+					case 3: return DXGI_FORMAT_R32G32B32_SINT;
+					default: return DXGI_FORMAT_R32G32B32A32_SINT;
+				}
+			case D3D_REGISTER_COMPONENT_FLOAT32:
+			default:
+				switch (channels)
+				{
+					case 1: return DXGI_FORMAT_R32_FLOAT;
+					case 2: return DXGI_FORMAT_R32G32_FLOAT;
+					case 3: return DXGI_FORMAT_R32G32B32_FLOAT;
+					default: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+				}
+		}
+	}
+}
+
+int Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
+	std::vector<Direct3d11_ReflectedVSInput> const &reflectedInputs,
+	D3D11_INPUT_ELEMENT_DESC *outDesc,
+	int currentCount,
+	int maxElements)
+{
+	NOT_NULL(outDesc);
+
+	int n = currentCount;
+	for (auto const & ri : reflectedInputs)
+	{
+		// Skip if format-derived elements already cover this semantic.
+		bool covered = false;
+		for (int i = 0; i < n; ++i)
+		{
+			D3D11_INPUT_ELEMENT_DESC const &existing = outDesc[i];
+			if (existing.SemanticName == nullptr)
+				continue;
+			if (existing.SemanticIndex != ri.SemanticIndex)
+				continue;
+			if (_stricmp(existing.SemanticName, ri.SemanticName) != 0)
+				continue;
+			covered = true;
+			break;
+		}
+		if (covered)
+			continue;
+
+		// Append phantom element at InputSlot=15.
+		if (n >= maxElements)
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements: "
+				 "max element capacity %d exceeded -- VS signature has more inputs than the layout can hold\n",
+				 maxElements));
+			return -1;
+		}
+
+		// The SemanticName pointer in D3D11_INPUT_ELEMENT_DESC must remain
+		// valid for the lifetime of the layout. Direct3d11_ReflectedVSInput
+		// owns its SemanticName storage (char array, not pointer) and lives
+		// in the VS data's vector, which the cache key (vsBytecodeHash)
+		// implicitly keeps alive for the input-layout lifetime. So storing
+		// the pointer to the ReflectedInput's char array is safe.
+		D3D11_INPUT_ELEMENT_DESC &d = outDesc[n++];
+		d.SemanticName         = ri.SemanticName;
+		d.SemanticIndex        = ri.SemanticIndex;
+		d.Format               = reflectedToDxgi(ri.ComponentType, ri.ComponentMask);
+		d.InputSlot            = kPhantomInputSlot;
+		d.AlignedByteOffset    = 0;
+		d.InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
+		d.InstanceDataStepRate = 0;
+	}
+
 	return n;
 }
 
