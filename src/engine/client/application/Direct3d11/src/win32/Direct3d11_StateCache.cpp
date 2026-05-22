@@ -1736,11 +1736,44 @@ void Direct3d11_StateCache::drawTriangleFan()
 					ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
 					if (eng) vsFn = eng->getFilename();
 				}
-				char hdr[256];
+
+				// Plan 11-09.15 Iter-23: also read the ACTUAL bound RT via
+				// OMGetRenderTargets. If RT differs from the backbuffer at
+				// draw time, UI is rendering to a different target (e.g.,
+				// primaryBuffer per PostProcessingEffectsManager). Use that
+				// to confirm where UI draws are landing.
+				ID3D11RenderTargetView *currentRTV = nullptr;
+				ID3D11DeviceContext *ctxRT = Direct3d11_Device::getContext();
+				if (ctxRT)
+					ctxRT->OMGetRenderTargets(1, &currentRTV, nullptr);
+				UINT rtWidth = 0, rtHeight = 0;
+				DXGI_FORMAT rtFmt = DXGI_FORMAT_UNKNOWN;
+				if (currentRTV)
+				{
+					Microsoft::WRL::ComPtr<ID3D11Resource> rtResource;
+					currentRTV->GetResource(rtResource.GetAddressOf());
+					Microsoft::WRL::ComPtr<ID3D11Texture2D> rtTex;
+					if (rtResource && SUCCEEDED(rtResource.As(&rtTex)) && rtTex)
+					{
+						D3D11_TEXTURE2D_DESC rtDesc = {};
+						rtTex->GetDesc(&rtDesc);
+						rtWidth = rtDesc.Width;
+						rtHeight = rtDesc.Height;
+						rtFmt = rtDesc.Format;
+					}
+				}
+
+				char hdr[384];
 				_snprintf_s(hdr, sizeof(hdr), _TRUNCATE,
-					"Plan 11-09.15 Iter-16 sample#%d VS='%s' SRV0_ptr=0x%p",
-					s_iter16Count, vsFn, static_cast<void *>(ms_boundSRV[0]));
+					"Plan 11-09.15 Iter-16/23 sample#%d VS='%s' SRV0_ptr=0x%p "
+					"boundRTV=0x%p rtW=%u rtH=%u rtFmt=%d",
+					s_iter16Count, vsFn, static_cast<void *>(ms_boundSRV[0]),
+					static_cast<void *>(currentRTV), rtWidth, rtHeight,
+					static_cast<int>(rtFmt));
 				iqHdr->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, hdr);
+
+				if (currentRTV)
+					currentRTV->Release();
 			}
 		}
 
