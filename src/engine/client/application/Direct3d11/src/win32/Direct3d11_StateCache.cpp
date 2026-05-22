@@ -1725,7 +1725,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 		// (different textures per draw -> the binding logic is wrong
 		// for this specific shader/draw class).
 		static int s_iter16Count = 0;
-		if (s_iter16Count < 10)
+		if (s_iter16Count < 50)
 		{
 			++s_iter16Count;
 			if (ID3D11InfoQueue *iqHdr = Direct3d11_Device::getInfoQueue())
