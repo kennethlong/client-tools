@@ -61,8 +61,10 @@
 #include <DirectXMath.h>
 #include <d3d11sdklayers.h>   // Iter-4: ID3D11InfoQueue::AddApplicationMessage routing for first-dynamic-PS diagnostic
 
+#include <cstdint>
 #include <cstring>
 #include <unordered_map>
+#include <vector>
 
 // ======================================================================
 
@@ -180,6 +182,36 @@ namespace Direct3d11_StateCacheNamespace
 	// (a) genuine slot-0-less passes, or (b) StaticShaderData-bypass paths
 	// (CODEX Q6 residual-gap survey).
 	int ms_drawsWithSRV0Bound = 0;
+
+	// Plan 11-09.15 (CODEX Bucket A): reusable static fan-to-list index
+	// buffer + 6 lifetime counters. D3D11 has no native TRIANGLEFAN topology;
+	// drawTriangleFan + drawPartialTriangleFan bind this IB after
+	// applyPreDrawState and issue DrawIndexed with the canonical fan-to-list
+	// pattern (0, 1, 2, 0, 2, 3, ..., 0, N-2, N-1). Pre-Plan-11-09.15 the
+	// Plan 11-06 STUB submitted fan vertex data with TRIANGLELIST topology;
+	// 4-vert quads (SkyBox6Sided face, sun, moon, planet, sprite, beam,
+	// marker, post-FX, Bink video) drew as upper-right triangle only.
+	//
+	// CODEX Q2: R16_UINT, initial capacity 1024 verts, doubling growth,
+	// hard cap 65535. ms_triangleFanMaxVertices surfaces actual max at
+	// shutdown so capacity sizing can be tuned post-soak.
+	constexpr int kTriangleFanIBInitialCapacityVerts = 1024;
+	constexpr int kTriangleFanIBMaxCapacityVerts     = 65535;
+	ComPtr<ID3D11Buffer> ms_triangleFanIB;
+	int ms_triangleFanIBCapacityVerts = 0;
+
+	int ms_drawTriangleFanCalls               = 0;
+	int ms_drawPartialTriangleFanCalls        = 0;
+	int ms_triangleFanIBRebuilds              = 0;
+	int ms_triangleFanMaxVertices             = 0;
+	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): indexed-fan variants still
+	// broken (TRIANGLELIST topology applied to fan-shaped indexed data). Real
+	// fix needs CPU-side index shadows in Direct3d11_StaticIndexBufferData at
+	// lock/unlock first; that is Plan 11-09.16+ scope. These counters tell
+	// smoke whether 11-09.16 is required (non-zero -> engine actively uses
+	// indexed fans per ShaderPrimitiveSetTemplate.cpp:673 SPSPT_indexedTriangleFan).
+	int ms_drawIndexedTriangleFanCalls        = 0;
+	int ms_drawPartialIndexedTriangleFanCalls = 0;
 
 	// ------------------------------------------------------------------
 	// Plan 11-08 Task 3b: matrix-shadow file-scope statics. The three
@@ -454,6 +486,78 @@ namespace Direct3d11_StateCacheNamespace
 		++ms_stateObjectCreates;
 		(*ms_ssCache)[key] = ss;
 		return ss.Get();
+	}
+
+	// Plan 11-09.15 (CODEX Bucket A): lazy-rebuild reusable fan-to-list IB.
+	// Returns true if ms_triangleFanIB can serve a fan with `vertCount`
+	// vertices; false on cap-overflow or CreateBuffer failure (caller skips
+	// the draw). CODEX Q2: R16_UINT; cap 65535; doubling growth from initial
+	// capacity 1024.
+	bool ensureTriangleFanIB(int vertCount)
+	{
+		if (vertCount > kTriangleFanIBMaxCapacityVerts)
+		{
+			DEBUG_FATAL(true, ("Direct3d11_StateCache::ensureTriangleFanIB: requested %d verts > R16_UINT cap %d; Plan 11-09.15 scope CODEX Q2 hard guard.\n",
+				vertCount, kTriangleFanIBMaxCapacityVerts));
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11_StateCache::ensureTriangleFanIB: requested %d verts > R16_UINT cap %d; skipping draw.\n",
+				vertCount, kTriangleFanIBMaxCapacityVerts));
+			return false;
+		}
+
+		if (ms_triangleFanIB && vertCount <= ms_triangleFanIBCapacityVerts)
+			return true;  // cache hit
+
+		// Compute new capacity (doubling growth from current or initial, up to cap).
+		int newCapacity = ms_triangleFanIBCapacityVerts > 0
+			? ms_triangleFanIBCapacityVerts
+			: kTriangleFanIBInitialCapacityVerts;
+		while (newCapacity < vertCount)
+		{
+			newCapacity *= 2;
+			if (newCapacity > kTriangleFanIBMaxCapacityVerts)
+				newCapacity = kTriangleFanIBMaxCapacityVerts;
+		}
+
+		int const indexCount = (newCapacity - 2) * 3;
+		std::vector<uint16_t> indices;
+		indices.reserve(static_cast<size_t>(indexCount));
+		for (int i = 1; i <= newCapacity - 2; ++i)
+		{
+			indices.push_back(0);
+			indices.push_back(static_cast<uint16_t>(i));
+			indices.push_back(static_cast<uint16_t>(i + 1));
+		}
+
+		D3D11_BUFFER_DESC bd = {};
+		bd.ByteWidth      = static_cast<UINT>(indexCount * sizeof(uint16_t));
+		bd.Usage          = D3D11_USAGE_IMMUTABLE;
+		bd.BindFlags      = D3D11_BIND_INDEX_BUFFER;
+		bd.CPUAccessFlags = 0;
+		bd.MiscFlags      = 0;
+
+		D3D11_SUBRESOURCE_DATA srd = {};
+		srd.pSysMem          = indices.data();
+		srd.SysMemPitch      = 0;
+		srd.SysMemSlicePitch = 0;
+
+		ComPtr<ID3D11Buffer> newIB;
+		HRESULT const hr = Direct3d11_Device::getDevice()->CreateBuffer(&bd, &srd, newIB.GetAddressOf());
+		if (FAILED(hr))
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11_StateCache::ensureTriangleFanIB: CreateBuffer failed (cap=%d, %d indices): %s\n",
+				newCapacity, indexCount, Direct3d11Namespace::hresultString(hr)));
+			// Leave ms_triangleFanIB at previous (possibly null) value; next
+			// call retries. Don't FATAL -- a transient CreateBuffer failure
+			// shouldn't kill the client, just drop the fan draw.
+			return false;
+		}
+
+		ms_triangleFanIB = newIB;
+		ms_triangleFanIBCapacityVerts = newCapacity;
+		++ms_triangleFanIBRebuilds;
+		return true;
 	}
 
 	// ------------------------------------------------------------------
@@ -734,6 +838,19 @@ void Direct3d11_StateCache::install()
 	ms_drawCallCount = ms_stateObjectCreates = 0;
 	ms_skippedDrawsNullVS = ms_skippedDrawsNullLayout = 0;
 	ms_drawsWithSRV0Bound = 0;  // Plan 11-09.14
+
+	// Plan 11-09.15: reset fan counters + pre-allocate the fan IB at the
+	// initial capacity so the first world-load drawTriangleFan doesn't stall
+	// on CreateBuffer.
+	ms_drawTriangleFanCalls               = 0;
+	ms_drawPartialTriangleFanCalls        = 0;
+	ms_triangleFanIBRebuilds              = 0;
+	ms_triangleFanMaxVertices             = 0;
+	ms_drawIndexedTriangleFanCalls        = 0;
+	ms_drawPartialIndexedTriangleFanCalls = 0;
+	ms_triangleFanIBCapacityVerts         = 0;
+	ms_triangleFanIB.Reset();
+	(void)ensureTriangleFanIB(kTriangleFanIBInitialCapacityVerts);
 }
 
 // ----------------------------------------------------------------------
@@ -741,8 +858,12 @@ void Direct3d11_StateCache::install()
 void Direct3d11_StateCache::remove()
 {
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d\n",
-		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound));
+		("Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d "
+		"drawTriangleFanCalls=%d drawPartialTriangleFanCalls=%d triangleFanIBRebuilds=%d triangleFanMaxVertices=%d "
+		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d\n",
+		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound,
+		ms_drawTriangleFanCalls, ms_drawPartialTriangleFanCalls, ms_triangleFanIBRebuilds, ms_triangleFanMaxVertices,
+		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls));
 
 	// Drop tracked-bind pointers BEFORE releasing the caches so we don't
 	// hold dangling raw pointers into the cache maps.
@@ -767,6 +888,10 @@ void Direct3d11_StateCache::remove()
 		ms_currentVBVectorFormats[i] = nullptr;
 	}
 	ms_defaultSampler.Reset();
+
+	// Plan 11-09.15: release fan IB.
+	ms_triangleFanIB.Reset();
+	ms_triangleFanIBCapacityVerts = 0;
 
 	delete ms_rsCache;
 	delete ms_bsCache;
@@ -1341,15 +1466,41 @@ void Direct3d11_StateCache::drawTriangleStrip()
 
 void Direct3d11_StateCache::drawTriangleFan()
 {
-	// D3D11 has no native TRIANGLEFAN. Emit a single draw with TRIANGLELIST
-	// topology; the engine's triangle-fan asset would normally be
-	// triangulated during VB build (D3D9 used D3DPT_TRIANGLEFAN directly).
-	// Plan 11-07 smoke will reveal whether any subsystem actually feeds
-	// us un-triangulated fans; if so, server-side re-emit lands as a
-	// Rule-1 deviation in Plan 11-07.
+	// Plan 11-09.15 (CODEX Bucket A): D3D11 has no native TRIANGLEFAN
+	// topology. Bind the reusable fan-to-list IB and issue DrawIndexed
+	// with the canonical (0, i, i+1) pattern that mirrors D3D9's native
+	// D3DPT_TRIANGLEFAN expansion. Mirror of D3D9 drawQuadList shape at
+	// Direct3d9.cpp:4277. Plan 11-09.14 SRV0 binding wired textures to the
+	// rendered half of every fan-drawn quad (SkyBox face, sprite, beam,
+	// sun, moon, planet, post-FX, Bink video), unmasking the half-render
+	// artifact that pre-Plan-11-09.15 was invisible under magenta-fallback.
+	int const vertCount = ms_currentVBVertexCount;
+	if (vertCount < 3)
+		return;  // need >= 3 verts for >= 1 triangle
+	int const triCount = vertCount - 2;
+
+	++ms_drawTriangleFanCalls;
+	if (vertCount > ms_triangleFanMaxVertices)
+		ms_triangleFanMaxVertices = vertCount;
+
+	if (!ensureTriangleFanIB(vertCount))
+		return;  // > 65535 cap or CreateBuffer failure -> skip draw
+
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+
+	// CODEX Q4: bind fan IB AFTER applyPreDrawState; do NOT mutate
+	// ms_currentIB shadow. Next indexed draw rebinds via applyPreDrawState's
+	// existing `if (ms_currentIBValid && ms_currentIB)` guard.
+	Direct3d11_Device::getContext()->IASetIndexBuffer(
+		ms_triangleFanIB.Get(),
+		DXGI_FORMAT_R16_UINT,
+		0);
+
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(triCount * 3),
+		0,
+		0);
 }
 
 void Direct3d11_StateCache::drawQuadList()
@@ -1398,8 +1549,28 @@ void Direct3d11_StateCache::drawIndexedTriangleStrip()
 
 void Direct3d11_StateCache::drawIndexedTriangleFan()
 {
-	// As with drawTriangleFan, D3D11 has no native indexed-triangle-fan.
-	// Emit as TRIANGLELIST; Plan 11-07 surfaces fix needs.
+	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): indexed-fan variants
+	// are still broken (TRIANGLELIST topology applied to fan-shaped indexed
+	// data). A real fix needs CPU-side index shadows in
+	// Direct3d11_StaticIndexBufferData::lock/unlock first --
+	// Direct3d11_StaticIndexBufferData.cpp:96 currently allocates a zeroed
+	// CPU buffer without reading GPU/engine indices back. Per CODEX Q3
+	// caveat, source search doesn't prove indexed fans are unused
+	// (ShaderPrimitiveSetTemplate.cpp:673 CAN dispatch
+	// SPSPT_indexedTriangleFan from asset data), so the diagnostic +
+	// counter pair tells smoke whether Plan 11-09.16 is required.
+	++ms_drawIndexedTriangleFanCalls;
+	static bool s_warnedOnce = false;
+	if (!s_warnedOnce)
+	{
+		s_warnedOnce = true;
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11_StateCache::drawIndexedTriangleFan called -- STILL BROKEN "
+			"(TRIANGLELIST topology applied to fan-shaped indexed data). Plan 11-09.16 "
+			"territory; needs CPU-side index shadows in Direct3d11_StaticIndexBufferData::"
+			"lock/unlock first per CODEX 11-09.15 Q3.\n"));
+	}
+
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
 	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
@@ -1445,9 +1616,32 @@ void Direct3d11_StateCache::drawPartialTriangleStrip(int startVertex, int primit
 
 void Direct3d11_StateCache::drawPartialTriangleFan(int startVertex, int primitiveCount)
 {
+	// Plan 11-09.15 (CODEX Bucket A): partial-fan variant. Uses the same
+	// reusable fan IB; BaseVertexLocation = startVertex shifts the (0,i,i+1)
+	// pattern to (startVertex, startVertex+i, startVertex+i+1).
+	if (primitiveCount < 1)
+		return;
+	int const vertCount = primitiveCount + 2;
+
+	++ms_drawPartialTriangleFanCalls;
+	if (vertCount > ms_triangleFanMaxVertices)
+		ms_triangleFanMaxVertices = vertCount;
+
+	if (!ensureTriangleFanIB(vertCount))
+		return;
+
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount + 2), static_cast<UINT>(startVertex));
+
+	Direct3d11_Device::getContext()->IASetIndexBuffer(
+		ms_triangleFanIB.Get(),
+		DXGI_FORMAT_R16_UINT,
+		0);
+
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(primitiveCount * 3),
+		0,
+		static_cast<INT>(startVertex));
 }
 
 // ------------------------------------------------------------------
@@ -1505,6 +1699,19 @@ void Direct3d11_StateCache::drawPartialIndexedTriangleStrip(int baseIndex, int /
 
 void Direct3d11_StateCache::drawPartialIndexedTriangleFan(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
 {
+	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): see drawIndexedTriangleFan
+	// for the deferral rationale. Same CPU-side-index-shadow gap.
+	++ms_drawPartialIndexedTriangleFanCalls;
+	static bool s_warnedOnce = false;
+	if (!s_warnedOnce)
+	{
+		s_warnedOnce = true;
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11_StateCache::drawPartialIndexedTriangleFan called -- STILL BROKEN "
+			"(TRIANGLELIST topology applied to fan-shaped indexed data). Plan 11-09.16 "
+			"territory per CODEX 11-09.15 Q3.\n"));
+	}
+
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
 	Direct3d11_Device::getContext()->DrawIndexed(
