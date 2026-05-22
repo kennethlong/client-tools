@@ -408,22 +408,29 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
 		if (texcoord0Index >= 0)
 		{
-			// Plan 11-09.15 Iter-13 DIAGNOSTIC: Iter-12 proved the PS runs
-			// (splash now green). Texture sample was returning something
-			// black-equivalent. Two candidates: alpha=0 (alpha-blend zeros
-			// out the output) OR rgb=0 (texture content / sampler failure
-			// / SRV not really bound). Sample the texture, output its
-			// .rgb but FORCE alpha=1. If we now see splash colors, the
-			// problem was alpha-blend with a transparent texture; if
-			// still black, the rgb channels themselves are zero and we
-			// pivot to texture-content / sampler-binding investigation.
-			// REVERT after diagnosis.
+			// Plan 11-09.15 Iter-14 DIAGNOSTIC (Step A from CODEX + Cursor
+			// converged consult on PS-texture-sample-returns-zero):
+			// visualize the input TEXCOORD0 as color (R=u, G=v, B=0, A=1).
+			// CODEX + Cursor both rule out H6 (PS register linkage drift)
+			// based on FXC analysis of the generated HLSL -- the prepended
+			// SV_POSITION at PSIn register 0 forces the auto-allocator to
+			// place TEXCOORD0 at v1, matching the VS output at o1. Both
+			// pivot to H3/H5/H7 (texture GPU content is zero / wrong / not
+			// uploaded). This UV viz pass either:
+			//   * Shows a red-to-yellow-to-green gradient across the splash
+			//     -> UVs reach the PS correctly -> texture content really
+			//     is zero -> Iter-15 adds GPU staging readback to confirm
+			//     and traces Direct3d11_TextureData::lock/unlock for the
+			//     splash format (likely TF_RGB_888 lock-bridge path).
+			//   * Shows solid black -> UVs are zeroed at PS input despite
+			//     clean linkage -> input layout / phantom element path
+			//     (lower probability per both consults).
+			// REVERT once root cause is fixed.
 			char field[32];
 			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
-			hlsl += "    float4 _sample = t.Sample(s, input.";
+			hlsl += "    return float4(input.";
 			hlsl += field;
-			hlsl += ".xy);\n";
-			hlsl += "    return float4(_sample.rgb, 1.0f);\n";
+			hlsl += ".xy, 0.0f, 1.0f);\n";
 		}
 		else
 		{
