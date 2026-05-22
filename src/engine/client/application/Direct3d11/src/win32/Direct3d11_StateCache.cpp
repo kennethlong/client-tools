@@ -1706,6 +1706,120 @@ void Direct3d11_StateCache::drawTriangleFan()
 		}
 	}
 
+	// Plan 11-09.15 Iter-15: GPU staging readback of the bound SRV0 texture.
+	// Iter-14 UV viz showed gradients on splash -> UVs reach PS correctly
+	// -> H6 (PS register linkage drift) is dead. CODEX + Cursor both rank
+	// H3 (texture content is zero on GPU) as the top suspect. This block
+	// runs once per session at the first transformed-vert fan draw with a
+	// bound SRV0: dump the texture's metadata, copy mip 0 to a STAGING
+	// resource, Map+Read center bytes, log byte hex + nonzero-byte counts.
+	// If center bytes are all zero and totalNonZero across the row is 0,
+	// H3 is confirmed -- the texture exists but its GPU memory was never
+	// uploaded with real pixel data.
+	if (ms_currentVBFormat.isTransformed() && ms_boundSRV[0])
+	{
+		static bool s_iter15Done = false;
+		if (!s_iter15Done)
+		{
+			s_iter15Done = true;
+			ID3D11InfoQueue * const iq = Direct3d11_Device::getInfoQueue();
+			ID3D11Device * const device = Direct3d11_Device::getDevice();
+			ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+			if (iq && device && context)
+			{
+				Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+				ms_boundSRV[0]->GetResource(resource.GetAddressOf());
+				Microsoft::WRL::ComPtr<ID3D11Texture2D> tex2d;
+				if (resource && SUCCEEDED(resource.As(&tex2d)) && tex2d)
+				{
+					D3D11_TEXTURE2D_DESC texDesc = {};
+					tex2d->GetDesc(&texDesc);
+					{
+						char buf[384];
+						_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+							"Plan 11-09.15 Iter-15 SRV0 texture: W=%u H=%u Mips=%u "
+							"Format=%d Usage=%d BindFlags=0x%X CPUAccess=0x%X SampleCount=%u",
+							texDesc.Width, texDesc.Height, texDesc.MipLevels,
+							static_cast<int>(texDesc.Format),
+							static_cast<int>(texDesc.Usage), texDesc.BindFlags,
+							texDesc.CPUAccessFlags, texDesc.SampleDesc.Count);
+						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+					}
+
+					D3D11_TEXTURE2D_DESC stagingDesc = texDesc;
+					stagingDesc.Usage          = D3D11_USAGE_STAGING;
+					stagingDesc.BindFlags      = 0;
+					stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+					stagingDesc.MipLevels      = 1;
+					stagingDesc.ArraySize      = 1;
+					stagingDesc.MiscFlags      = 0;
+
+					Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+					HRESULT hr = device->CreateTexture2D(&stagingDesc, nullptr, staging.GetAddressOf());
+					if (SUCCEEDED(hr) && staging)
+					{
+						context->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+							resource.Get(), 0, nullptr);
+						D3D11_MAPPED_SUBRESOURCE mapped = {};
+						hr = context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+						if (SUCCEEDED(hr) && mapped.pData)
+						{
+							UINT const cx = texDesc.Width  / 2;
+							UINT const cy = texDesc.Height / 2;
+							uint8_t const *centerRow = static_cast<uint8_t const *>(mapped.pData) + cy * mapped.RowPitch;
+							uint8_t centerBytes[16] = {};
+							int centerNonZero = 0;
+							UINT const bppGuess = (texDesc.Format == DXGI_FORMAT_BC1_UNORM ||
+							                       texDesc.Format == DXGI_FORMAT_BC1_UNORM_SRGB) ? 2 : 4;
+							UINT const centerByteOffset = cx * bppGuess;
+							for (int k = 0; k < 16 && centerByteOffset + k < mapped.RowPitch; ++k)
+							{
+								centerBytes[k] = centerRow[centerByteOffset + k];
+								if (centerBytes[k] != 0) ++centerNonZero;
+							}
+							int totalNonZero = 0;
+							for (UINT y = 0; y < texDesc.Height && totalNonZero < 100; ++y)
+							{
+								uint8_t const *r = static_cast<uint8_t const *>(mapped.pData) + y * mapped.RowPitch;
+								for (UINT b = 0; b < mapped.RowPitch && totalNonZero < 100; ++b)
+									if (r[b] != 0) ++totalNonZero;
+							}
+							char buf[512];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-15 SRV0 readback center(%u,%u) bppGuess=%u "
+								"bytes=[%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X] "
+								"centerNonZero=%d/16 totalNonZeroFirst100=%d RowPitch=%u",
+								cx, cy, bppGuess,
+								centerBytes[0], centerBytes[1], centerBytes[2], centerBytes[3],
+								centerBytes[4], centerBytes[5], centerBytes[6], centerBytes[7],
+								centerBytes[8], centerBytes[9], centerBytes[10], centerBytes[11],
+								centerBytes[12], centerBytes[13], centerBytes[14], centerBytes[15],
+								centerNonZero, totalNonZero, mapped.RowPitch);
+							iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+							context->Unmap(staging.Get(), 0);
+						}
+						else
+						{
+							char errBuf[160];
+							_snprintf_s(errBuf, sizeof(errBuf), _TRUNCATE,
+								"Plan 11-09.15 Iter-15 staging Map failed hr=0x%08X",
+								static_cast<unsigned int>(hr));
+							iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, errBuf);
+						}
+					}
+					else
+					{
+						char errBuf[160];
+						_snprintf_s(errBuf, sizeof(errBuf), _TRUNCATE,
+							"Plan 11-09.15 Iter-15 staging CreateTexture2D failed hr=0x%08X format=%d",
+							static_cast<unsigned int>(hr), static_cast<int>(texDesc.Format));
+						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, errBuf);
+					}
+				}
+			}
+		}
+	}
+
 	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
 
 	// Plan 11-09.15 Iter-4 (Test B): fan-IB BYPASS test for radial-pattern
