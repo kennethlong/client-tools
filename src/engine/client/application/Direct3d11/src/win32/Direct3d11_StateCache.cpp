@@ -1035,7 +1035,20 @@ void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
 			return;
 		ms_currentVB             = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
 		ms_currentVBStride       = static_cast<UINT>(data->getVertexSize());
-		ms_currentVBOffset       = static_cast<UINT>(data->getOffset());
+		// Plan 11-09.12 Iter-1: Direct3d11_DynamicVertexBufferData::getOffset()
+		// returns the slice's VERTEX index (Direct3d11_DynamicVertexBufferData.cpp
+		// :234 `m_offset = ms_used / vertexSize`), but IASetVertexBuffers expects
+		// the offset argument in BYTES. The multi-stream path
+		// (Direct3d11_VertexBufferVectorData.cpp:145) correctly multiplies by
+		// stride; the single-stream path here was missing the conversion. Pre-fix
+		// the D3D11 debug-layer fired 152,869 id=366 ERRORs per ~30s session
+		// ("Vertex Buffer Offset (N) at the input vertex slot 0 is not aligned
+		// properly. The current Input Layout imposes an alignment of (4)" with
+		// N = raw vertex index, mostly non-multiple-of-4). Mirrors the D3D9
+		// reference architecture intent (D3D9 keeps byteOffset=0 and uses
+		// BaseVertexIndex on the draw call -- a separate option here, but
+		// matching the multi-stream pattern is the minimum-blast-radius fix).
+		ms_currentVBOffset       = static_cast<UINT>(data->getOffset()) * ms_currentVBStride;
 		ms_currentVBVertexCount  = data->getNumberOfVertices();
 		ms_currentVBFormat       = dvb->getFormat();
 		ms_currentVBValid        = (ms_currentVB != nullptr);
