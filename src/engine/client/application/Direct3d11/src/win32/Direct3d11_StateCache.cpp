@@ -1638,6 +1638,49 @@ void Direct3d11_StateCache::drawTriangleFan()
 					}
 					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
 				}
+
+				// Plan 11-09.15 Iter-6: one-shot FULL VS source dump per unique
+				// bytecode hash. Iter-5 confirmed the right 2D VS is bound
+				// (2d_texture.vsh + ui_radar.vsh) -- we now need to see the
+				// VS body to determine WHY the position math is wrong. Reading
+				// the HLSL is the cheapest way to tell whether the VS uses
+				// viewportData/c9 vs mul(pos, worldViewProjection). Chunked
+				// across multiple InfoQueue messages because typical .vsh
+				// bodies run 300-1200 chars. Newlines/tabs flattened to
+				// spaces for log readability.
+				{
+					static uint64_t s_iter6SeenHashes[8] = {0};
+					static int      s_iter6SeenCount     = 0;
+					bool alreadySeen = false;
+					for (int k = 0; k < s_iter6SeenCount; ++k)
+						if (s_iter6SeenHashes[k] == vsHash) { alreadySeen = true; break; }
+					if (!alreadySeen && s_iter6SeenCount < 8 && eng && eng->m_text && eng->m_textLength > 0)
+					{
+						s_iter6SeenHashes[s_iter6SeenCount++] = vsHash;
+						int const totalLen   = eng->m_textLength;
+						int const kChunkSize = 240;
+						int const chunkCount = (totalLen + kChunkSize - 1) / kChunkSize;
+						for (int ci = 0; ci < chunkCount && ci < 8; ++ci)
+						{
+							int const startByte = ci * kChunkSize;
+							int const chunkLen  = (totalLen - startByte < kChunkSize) ? (totalLen - startByte) : kChunkSize;
+							char chunkBuf[256];
+							int chunkOut = 0;
+							for (int i = 0; i < chunkLen && chunkOut < static_cast<int>(sizeof(chunkBuf)) - 1; ++i)
+							{
+								char const c = eng->m_text[startByte + i];
+								chunkBuf[chunkOut++] = (c == '\n' || c == '\r' || c == '\t') ? ' ' : c;
+							}
+							chunkBuf[chunkOut] = '\0';
+							char buf[384];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-6 VS-full hash=0x%016llX file='%s' chunk%d/%d: %s",
+								static_cast<unsigned long long>(vsHash), vsFilename,
+								ci, chunkCount, chunkBuf);
+							iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+						}
+					}
+				}
 			}
 		}
 	}
