@@ -1548,6 +1548,100 @@ void Direct3d11_StateCache::drawTriangleFan()
 		}
 	}
 
+	// Plan 11-09.15 Iter-5 (CODEX consult follow-up): for transformed-vert
+	// (XYZRHW) callers, dump VS metadata so we can disambiguate between
+	// "right 2D VS bound, math broken somewhere downstream" vs "wrong 3D VS
+	// accidentally bound for transformed callers." CODEX recommended a
+	// narrow Path A fix targeting the 2D shader compile path, but only
+	// after we confirm which scenario applies. Sampled at the same cadence
+	// as the Iter-3 fan-draw-state diagnostic (first 5 + every 500th).
+	if (ms_currentVBFormat.isTransformed() && ms_currentVSData)
+	{
+		static int s_diagTransformedFanCalls = 0;
+		++s_diagTransformedFanCalls;
+		bool const earlyBucket = (s_diagTransformedFanCalls <= 5);
+		bool const sampleBucket = (s_diagTransformedFanCalls > 5) && ((s_diagTransformedFanCalls % 500) == 0);
+		if (earlyBucket || sampleBucket)
+		{
+			ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+			if (iq)
+			{
+				ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
+				char const *vsFilename = (eng ? eng->getFilename() : "<no engine shader>");
+				uint64_t const vsHash = ms_currentVSData->getBytecodeHash();
+
+				// Header line: which transformed-vert fan call this is +
+				// which VS is bound.
+				{
+					char buf[256];
+					_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+						"Plan 11-09.15 Iter-5 transformed-fan#%d VS='%s' bytecodeHash=0x%016llX vertCount=%d",
+						s_diagTransformedFanCalls, vsFilename,
+						static_cast<unsigned long long>(vsHash), vertCount);
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				}
+
+				// VS source-text first ~180 chars (signature decl is at the
+				// top of every .vsh body; that's what we need to see).
+				if (eng && eng->m_text && eng->m_textLength > 0)
+				{
+					int const snippetLen = (eng->m_textLength < 180) ? eng->m_textLength : 180;
+					char snippet[224];
+					int outIdx = 0;
+					for (int i = 0; i < snippetLen && outIdx < static_cast<int>(sizeof(snippet)) - 1; ++i)
+					{
+						char const c = eng->m_text[i];
+						snippet[outIdx++] = (c == '\n' || c == '\r' || c == '\t') ? ' ' : c;
+					}
+					snippet[outIdx] = '\0';
+					char buf[384];
+					_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+						"Plan 11-09.15 Iter-5 transformed-fan#%d VS-source-head: %s",
+						s_diagTransformedFanCalls, snippet);
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				}
+
+				// Reflected VS inputs (Plan 11-09.8 captured these).
+				{
+					auto const &inputs = ms_currentVSData->getReflectedInputs();
+					char buf[384];
+					int outIdx = _snprintf_s(buf, sizeof(buf), _TRUNCATE,
+						"Plan 11-09.15 Iter-5 transformed-fan#%d VS-inputs(%zu):",
+						s_diagTransformedFanCalls, inputs.size());
+					for (size_t k = 0; k < inputs.size() && outIdx > 0 && outIdx < static_cast<int>(sizeof(buf)) - 32; ++k)
+					{
+						int n = _snprintf_s(buf + outIdx, sizeof(buf) - outIdx, _TRUNCATE,
+							" [%s%u mask=0x%X type=%d]",
+							inputs[k].SemanticName, inputs[k].SemanticIndex,
+							inputs[k].ComponentMask, static_cast<int>(inputs[k].ComponentType));
+						if (n < 0) break;
+						outIdx += n;
+					}
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				}
+
+				// Reflected VS outputs (Plan 11-09.13 Iter-3 captured these).
+				{
+					auto const &outputs = ms_currentVSData->getReflectedOutputs();
+					char buf[384];
+					int outIdx = _snprintf_s(buf, sizeof(buf), _TRUNCATE,
+						"Plan 11-09.15 Iter-5 transformed-fan#%d VS-outputs(%zu):",
+						s_diagTransformedFanCalls, outputs.size());
+					for (size_t k = 0; k < outputs.size() && outIdx > 0 && outIdx < static_cast<int>(sizeof(buf)) - 32; ++k)
+					{
+						int n = _snprintf_s(buf + outIdx, sizeof(buf) - outIdx, _TRUNCATE,
+							" [%s%u r=o%u mask=0x%X rwmask=0x%X]",
+							outputs[k].SemanticName, outputs[k].SemanticIndex,
+							outputs[k].Register, outputs[k].ComponentMask, outputs[k].ReadWriteMask);
+						if (n < 0) break;
+						outIdx += n;
+					}
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+				}
+			}
+		}
+	}
+
 	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
 
 	// Plan 11-09.15 Iter-4 (Test B): fan-IB BYPASS test for radial-pattern

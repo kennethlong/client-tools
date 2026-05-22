@@ -126,6 +126,14 @@ public:
 	// defaults to Variant M (magenta), matching pre-Iter-3 behavior.
 	std::vector<Direct3d11_ReflectedVSOutput> const & getReflectedOutputs() const;
 
+	// Plan 11-09.15 Iter-5 diagnostic: expose the engine-side
+	// ShaderImplementationPassVertexShader so drawTriangleFan can dump
+	// VS filename + a source snippet when ms_currentVBFormat.isTransformed()
+	// is true. CODEX consult on XYZRHW-transformed-vertex-handling asked
+	// for filename + reflected inputs/outputs + whether the VS reads
+	// viewportData/c9 vs WVP -- this getter is the access point.
+	ShaderImplementationPassVertexShader const *getEngineShader() const { return m_vertexShader; }
+
 private:
 
 	Direct3d11_VertexShaderData();
