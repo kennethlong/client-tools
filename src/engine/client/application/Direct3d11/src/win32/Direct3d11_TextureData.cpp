@@ -261,7 +261,13 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 	m_srv(),
 	m_destFormat(TF_RGB_555),
 	m_isCubeMap(newEngineTexture.isCubeMap()),
-	m_isVolumeMap(newEngineTexture.isVolumeMap())
+	m_isVolumeMap(newEngineTexture.isVolumeMap()),
+	m_lockBridgeBuffer(),
+	m_lockBridgeFormat(TF_RGB_555),
+	m_lockBridgePitch(0),
+	m_lockBridgeWidth(0),
+	m_lockBridgeHeight(0),
+	m_lockBridgeActive(false)
 {
 	DEBUG_FATAL(!Os::isMainThread(), ("Creating texture from alternate thread"));
 
@@ -477,8 +483,51 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 	DXGI_FORMAT const native = translationTable[lockData.getFormat()];
 	if (native == DXGI_FORMAT_UNKNOWN)
 	{
-		FATAL(true, ("Direct3d11_TextureData::lock: TextureFormat %d has no DXGI mapping",
-		             static_cast<int>(lockData.getFormat())));
+		// Plan 11-09.9: lock-bridge for engine fill formats that have no
+		// DXGI counterpart but were already promoted to a wider DXGI format
+		// at create time (Plan 11-04 runtimeFormats walk). The engine fills
+		// at its narrow stride; we expand to the GPU surface's wider stride
+		// on unlock. Iter-1 covers TF_RGB_888 (24bpp BGR memory order) paired
+		// with TF_XRGB_8888 / TF_ARGB_8888 (32bpp DXGI BGRX/BGRA), which share
+		// memory byte order with the source -- straight 3->4 byte expansion,
+		// no channel swap.
+		DEBUG_FATAL(m_lockBridgeActive, ("Direct3d11_TextureData::lock: bridge already active -- double lock?"));
+		if (m_isCubeMap || m_isVolumeMap)
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge does not yet support cube/volume textures (lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+		if (lockData.isReadOnly())
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge does not yet support read-only locks (lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+		if (lockData.getFormat() != TF_RGB_888
+		    || (m_destFormat != TF_XRGB_8888 && m_destFormat != TF_ARGB_8888))
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge Iter-1 only handles TF_RGB_888 -> TF_XRGB_8888/TF_ARGB_8888 (got lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+
+		int  const width  = lockData.getWidth();
+		int  const height = lockData.getHeight();
+		UINT const pitch  = static_cast<UINT>(width) * 3u;
+
+		m_lockBridgeFormat = lockData.getFormat();
+		m_lockBridgePitch  = pitch;
+		m_lockBridgeWidth  = width;
+		m_lockBridgeHeight = height;
+		m_lockBridgeBuffer.assign(static_cast<size_t>(pitch) * static_cast<size_t>(height), 0);
+		m_lockBridgeActive = true;
+
+		lockData.m_pixelData  = m_lockBridgeBuffer.data();
+		lockData.m_pitch      = static_cast<int>(pitch);
+		lockData.m_slicePitch = static_cast<int>(pitch) * height;
+		lockData.m_reserved   = nullptr;  // unlock disambiguates via m_lockBridgeActive
+		return;
 	}
 
 	if (m_isVolumeMap)
@@ -578,6 +627,103 @@ void Direct3d11_TextureData::unlock(LockData &lockData)
 {
 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
 	NOT_NULL(context);
+
+	if (m_lockBridgeActive)
+	{
+		// Plan 11-09.9: bridge path -- engine filled m_lockBridgeBuffer at
+		// the narrow 24bpp stride; expand row-by-row into a freshly-allocated
+		// 32bpp staging texture at m_destFormat, then CopySubresourceRegion
+		// into the destination subresource. TF_RGB_888 byte order is BGR (per
+		// TextureFormatInfo rMask=0x00ff0000 -> R in byte index 2 on little-
+		// endian), same as DXGI BGRX/BGRA -- straight 3->4 byte expansion
+		// with 0xFF in byte 3 (X is unused; A is opaque).
+		ID3D11Device * const device = Direct3d11_Device::getDevice();
+		NOT_NULL(device);
+
+		DXGI_FORMAT const stagingFormat = translationTable[m_destFormat];
+		DEBUG_FATAL(stagingFormat == DXGI_FORMAT_UNKNOWN,
+		            ("Direct3d11_TextureData::unlock (bridge): m_destFormat %d has no DXGI mapping (translation table bug?)",
+		             static_cast<int>(m_destFormat)));
+
+		D3D11_TEXTURE2D_DESC desc = {};
+		desc.Width            = static_cast<UINT>(m_lockBridgeWidth);
+		desc.Height           = static_cast<UINT>(m_lockBridgeHeight);
+		desc.MipLevels        = 1;
+		desc.ArraySize        = 1;
+		desc.Format           = stagingFormat;
+		desc.SampleDesc.Count = 1;
+		desc.Usage            = D3D11_USAGE_STAGING;
+		desc.BindFlags        = 0;
+		desc.CPUAccessFlags   = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags        = 0;
+
+		ID3D11Texture2D *staging = nullptr;
+		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
+		FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) CreateTexture2D failed: %s", hr);
+
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		hr = context->Map(staging, 0, D3D11_MAP_WRITE, 0, &mapped);
+		if (FAILED(hr))
+		{
+			staging->Release();
+			FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) Map failed: %s", hr);
+		}
+
+		uint8_t const * const srcBase = m_lockBridgeBuffer.data();
+		uint8_t * const       dstBase = static_cast<uint8_t *>(mapped.pData);
+		UINT const            dstRowPitch = mapped.RowPitch;
+
+		for (int y = 0; y < m_lockBridgeHeight; ++y)
+		{
+			uint8_t const * const srcRow = srcBase + static_cast<size_t>(y) * static_cast<size_t>(m_lockBridgePitch);
+			uint8_t * const       dstRow = dstBase + static_cast<size_t>(y) * static_cast<size_t>(dstRowPitch);
+
+			for (int x = 0; x < m_lockBridgeWidth; ++x)
+			{
+				dstRow[x * 4 + 0] = srcRow[x * 3 + 0];  // B
+				dstRow[x * 4 + 1] = srcRow[x * 3 + 1];  // G
+				dstRow[x * 4 + 2] = srcRow[x * 3 + 2];  // R
+				dstRow[x * 4 + 3] = 0xFF;               // X (TF_XRGB_8888) or A (TF_ARGB_8888) opaque
+			}
+		}
+
+		context->Unmap(staging, 0);
+
+		UINT const dstSubresource = static_cast<UINT>(lockData.getLevel());
+
+		D3D11_BOX srcBox = {};
+		srcBox.left   = 0;
+		srcBox.top    = 0;
+		srcBox.front  = 0;
+		srcBox.right  = static_cast<UINT>(m_lockBridgeWidth);
+		srcBox.bottom = static_cast<UINT>(m_lockBridgeHeight);
+		srcBox.back   = 1;
+
+		context->CopySubresourceRegion(
+			m_texture.Get(),
+			dstSubresource,
+			static_cast<UINT>(lockData.getX()),
+			static_cast<UINT>(lockData.getY()),
+			static_cast<UINT>(lockData.getZ()),
+			staging,
+			0,
+			&srcBox);
+
+		staging->Release();
+
+		m_lockBridgeBuffer.clear();
+		m_lockBridgeBuffer.shrink_to_fit();
+		m_lockBridgePitch  = 0;
+		m_lockBridgeWidth  = 0;
+		m_lockBridgeHeight = 0;
+		m_lockBridgeActive = false;
+
+		lockData.m_pixelData  = nullptr;
+		lockData.m_pitch      = 0;
+		lockData.m_slicePitch = 0;
+		lockData.m_reserved   = nullptr;
+		return;
+	}
 
 	if (!lockData.m_reserved)
 	{

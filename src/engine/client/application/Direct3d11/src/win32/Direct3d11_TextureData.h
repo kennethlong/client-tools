@@ -23,7 +23,9 @@ class MemoryBlockManager;
 #include "clientGraphics/Texture.h"
 #include "sharedFoundation/Tag.h"
 
+#include <cstdint>
 #include <d3d11.h>
+#include <vector>
 #include <wrl/client.h>
 
 // ======================================================================
@@ -115,6 +117,23 @@ private:
 	TextureFormat                                     m_destFormat;
 	bool                                              m_isCubeMap;
 	bool                                              m_isVolumeMap;
+
+	// Plan 11-09.9: CPU shadow buffer for 24bpp-engine-fill -> 32bpp-DXGI-
+	// GPU-surface bridging. D3D11 / DXGI has no 24bpp packed surface format
+	// (D3DFMT_R8G8B8 has no DXGI counterpart), so TF_RGB_888 surfaces get
+	// allocated under a wider promoted format (TF_XRGB_8888 -> DXGI BGRX or
+	// TF_ARGB_8888 -> DXGI BGRA) at create time via the runtimeFormats walk.
+	// At lock time we detect the format-width mismatch, hand the engine a
+	// CPU shadow at its 24bpp expected stride, then on unlock expand row-by-
+	// row into a 32bpp staging texture before the normal CopySubresourceRegion
+	// upload path. Plan 11-09.9 covers TF_RGB_888 only; other UNKNOWN-mapped
+	// engine formats (TF_DXT2/4, TF_P_8) still FATAL until extended.
+	std::vector<uint8_t>                              m_lockBridgeBuffer;
+	TextureFormat                                     m_lockBridgeFormat;
+	UINT                                              m_lockBridgePitch;
+	int                                               m_lockBridgeWidth;
+	int                                               m_lockBridgeHeight;
+	bool                                              m_lockBridgeActive;
 
 	//lint -esym(1737, Direct3d11_TextureData::operator new)
 };
