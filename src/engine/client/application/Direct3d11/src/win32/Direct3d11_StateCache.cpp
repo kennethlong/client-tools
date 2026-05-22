@@ -851,6 +851,27 @@ void Direct3d11_StateCache::install()
 	ms_triangleFanIBCapacityVerts         = 0;
 	ms_triangleFanIB.Reset();
 	(void)ensureTriangleFanIB(kTriangleFanIBInitialCapacityVerts);
+
+	// Plan 11-09.15 Iter-2 follow-up: dump the first 12 indices of the fan IB
+	// (covers 4 fan-list triangles) to verify the (0,i,i+1) construction
+	// produces what we expect. Sanity check for the "radiating from world
+	// point" artifact -- if the IB content is wrong, the fan triangulation
+	// itself is broken. Emits via InfoQueue so it lands in stage/d3d11-debug.log.
+	{
+		// Re-derive the expected first-12 from our generator pattern. If
+		// CreateBuffer cleanly consumed the std::vector<uint16_t> source, the
+		// device IB should match these values exactly (we don't read back
+		// from D3D11 -- that's an additional Map+CopySubresource step and
+		// USAGE_IMMUTABLE doesn't allow it anyway).
+		char buf[256];
+		_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+			"Plan 11-09.15 Iter-2 fan IB at install cap=%d expected first-12 indices: "
+			"(0,1,2) (0,2,3) (0,3,4) (0,4,5) -- if fan-rendered geometry shows "
+			"radiating-from-apex pattern, the apex shared = vertex 0 of each fan VB.",
+			ms_triangleFanIBCapacityVerts);
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -1496,6 +1517,37 @@ void Direct3d11_StateCache::drawTriangleFan()
 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
 		return;
 
+	// Plan 11-09.15 Iter-3 diagnostic: sample fan-draw state at intervals
+	// to attribute the "radiating from world point" artifact. Iter-2's
+	// "first 5" capture showed all from startup-frame intro/loading (one
+	// fan per frame in first 5 frames -> all offset=0 because of frame-
+	// boundary discards). Iter-3 captures:
+	//   * The first 5 fans (intro/loading state)
+	//   * Then every 500th fan after that (mid-game samples)
+	// Both bucket batches surface as separate InfoQueue lines.
+	{
+		static int s_diagFanCallsTotal = 0;
+		++s_diagFanCallsTotal;
+		bool const earlyBucket = (s_diagFanCallsTotal <= 5);
+		bool const sampleBucket = (s_diagFanCallsTotal > 5) && ((s_diagFanCallsTotal % 500) == 0);
+		if (earlyBucket || sampleBucket)
+		{
+			char buf[384];
+			_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+				"Plan 11-09.15 Iter-3 fan-draw#%d state: vertCount=%d triCount=%d "
+				"VB=0x%p stride=%u offset=%u VBValid=%d "
+				"IB=0x%p IBValid=%d IBFormat=%d IBOffset=%u IBIndexCount=%d "
+				"VBVectorActive=%d VBVectorStreamCount=%d",
+				s_diagFanCallsTotal, vertCount, triCount,
+				(void *)ms_currentVB, ms_currentVBStride, ms_currentVBOffset, ms_currentVBValid ? 1 : 0,
+				(void *)ms_currentIB, ms_currentIBValid ? 1 : 0,
+				static_cast<int>(ms_currentIBFormat), ms_currentIBOffset, ms_currentIBIndexCount,
+				ms_currentVBVectorActive ? 1 : 0, ms_currentVBVectorStreamCount);
+			if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+				iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+		}
+	}
+
 	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
 	ctx->IASetIndexBuffer(
 		ms_triangleFanIB.Get(),
@@ -1509,12 +1561,10 @@ void Direct3d11_StateCache::drawTriangleFan()
 
 	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind after our DrawIndexed.
 	// CODEX Q4 said "next indexed draw rebinds via applyPreDrawState's existing
-	// guard" so this should be redundant -- but Kenny's smoke surfaced a
-	// world-anchored convergence pattern that's consistent with an IB leak
-	// (every triangle sharing vertex 0 as the apex). Cost is one extra
-	// IASetIndexBuffer per fan draw (~50ns); cheap insurance. If this fixes
-	// the artifact, we know applyPreDrawState's rebind guard wasn't catching
-	// some draw path.
+	// guard" so this should be redundant -- Kenny's Iter-2 smoke confirmed the
+	// rebind didn't fix the radiating pattern (i.e. the leak hypothesis was
+	// wrong; the bug is something else). Keep the rebind as defensive
+	// hygiene; harmless ~50ns/call.
 	if (ms_currentIBValid && ms_currentIB)
 		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 }
