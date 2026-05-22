@@ -632,6 +632,30 @@ void Direct3d11_Device::setWindowedMode(bool windowed)
 
 void Direct3d11_Device::beginScene()
 {
+	// Plan 11-09.15 Iter-11: clear PS SRV slots before OMSetRenderTargets
+	// to avoid the D3D11 "Resource being set to OM RenderTarget slot 0 is
+	// still bound on input!" warning class. Iter-9/10 diagnostics
+	// confirmed viewportData @ c9 is correct yet splash/login render
+	// black; Iter-10 shutdown stats surfaced 1966 instances per session
+	// of this exact warning pair:
+	//   "OMSetRenderTargets: Resource being set to OM RenderTarget slot 0
+	//      is still bound on input!"
+	//   "OMSetRenderTargets[AndUnorderedAccessViews]: Forcing PS shader
+	//      resource slot 0 to NULL."
+	// When D3D11 detects an RT and SRV pointing at the same resource, it
+	// FORCE-NULLS the conflicting SRV slot. For 2D UI draws that follow
+	// the RT bind, the PS samples a NULL slot-0 SRV and returns
+	// (0,0,0,0) -> black output, exactly matching the splash/login
+	// black-screen + char-select-magenta-lines visual (magenta = Variant
+	// M fallback for the draws that did pick up an alternate slot;
+	// most draws drop to zero color). Clearing SRVs explicitly before
+	// the RT swap decouples the binding ordering and lets D3D11 do its
+	// validation cleanly.
+	{
+		ID3D11ShaderResourceView * const kNullSRVs[16] = {};
+		ms_context->PSSetShaderResources(0, 16, kNullSRVs);
+	}
+
 	ID3D11RenderTargetView * rtvs[1] = { ms_backBufferRTV.Get() };
 	ms_context->OMSetRenderTargets(1, rtvs, ms_depthStencilDSV.Get());
 
