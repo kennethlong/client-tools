@@ -48,6 +48,7 @@
 // ======================================================================
 
 class Direct3d11_PixelShaderProgramData;
+class Direct3d11_TextureData;
 class Direct3d11_VertexShaderData;
 class MemoryBlockManager;
 class ShaderImplementation;
@@ -55,6 +56,7 @@ class StaticShader;
 
 #include "clientGraphics/StaticShader.h"
 
+#include <d3d11.h>
 #include <vector>
 
 // ======================================================================
@@ -115,6 +117,26 @@ private:
 	// graph above; we hold raw pointers per CODEX Q4 D3D9-mirror guidance.
 	std::vector<Direct3d11_VertexShaderData const *>          m_passVS;
 	std::vector<Direct3d11_PixelShaderProgramData const *>    m_passPS;
+
+	// Plan 11-09.14 (CODEX Bucket A): per-pass slot-0 stage cache. Mirrors
+	// the D3D9 sibling's Direct3d9_StaticShaderData::Stage but minimal --
+	// only the m_textureIndex==0 entry of pass.m_pixelShader->m_textureSamplers,
+	// because the Plan 11-09.13 Iter-4 dynamic fallback PS samples ONLY
+	// register(t0)/register(s0). Slots 1..7 are intentionally out-of-scope
+	// (CODEX Q1 Bucket B rejected as dead bind cost).
+	//
+	// Lifetime: Direct3d11_TextureData const * const * is a pointer-to-pointer
+	// into the engine Texture's m_graphicsData field, so texture reloads
+	// (engine swaps *m_graphicsData) automatically reflect at apply time
+	// via the double-indirection deref. Mirrors D3D9 sibling Stage::m_texture
+	// (Direct3d9_StaticShaderData.cpp:327).
+	struct Stage0
+	{
+		bool                                   m_present;       // false if pass has no m_textureIndex==0 sampler -> apply unbinds SRV0
+		Direct3d11_TextureData const * const * m_texture;       // null when global-texture short-circuit returned null OR textureData.texture was null
+		D3D11_SAMPLER_DESC                     m_samplerDesc;   // zero-init + filled by build helper
+	};
+	std::vector<Stage0>                                       m_passStage0;
 };
 
 // ======================================================================

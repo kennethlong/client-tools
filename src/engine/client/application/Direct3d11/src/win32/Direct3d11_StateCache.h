@@ -80,6 +80,23 @@ public:
 	static void setGlobalTexture(Tag textureTag, Texture const &texture);
 	static void releaseAllGlobalTextures();
 
+	// Plan 11-09.14: per-pass PS resource binding via the shadow arrays.
+	// Direct3d11_StaticShaderData::apply() routes the per-pass diffuse
+	// texture + sampler through these setters rather than calling
+	// PSSet*ShaderResources / PSSetSamplers directly. The setters write
+	// into ms_boundSRV[]/ms_boundSampler[]; applyPreDrawState flushes the
+	// full shadow with one PSSetShaderResources + PSSetSamplers per draw
+	// (Pitfall 4 lazy-bind model preserved).
+	//
+	// Slot must be in [0, kMaxSRVs / kMaxSamplers). Out-of-range silently
+	// ignored to avoid undefined behaviour. SRV null is a valid value
+	// (explicit unbind). Sampler null reverts the slot to the default
+	// sampler (avoids the unbound-sampler hazard CODEX flagged in the
+	// Plan 11-09.13 Iter-4 stale-state diagnostic).
+	static void setPixelShaderResource(int slot, ID3D11ShaderResourceView *srv);
+	static void setPixelShaderSampler(int slot, D3D11_SAMPLER_DESC const &desc);
+	static void setPixelShaderSampler(int slot, ID3D11SamplerState *sampler);
+
 	// Geometry binding.
 	static void setVertexBuffer(HardwareVertexBuffer const &vb);
 	static void setIndexBuffer(HardwareIndexBuffer const &ib);

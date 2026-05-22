@@ -173,6 +173,14 @@ namespace Direct3d11_StateCacheNamespace
 	int ms_skippedDrawsNullVS = 0;
 	int ms_skippedDrawsNullLayout = 0;
 
+	// Plan 11-09.14: lifetime count of applyPreDrawState flushes where
+	// ms_boundSRV[0] != nullptr at the PSSetShaderResources call. Pairs
+	// with the StaticShaderData-side per-pass counters to attribute id=353
+	// residue ("PS expects SRV at slot 0, but none is bound") to either
+	// (a) genuine slot-0-less passes, or (b) StaticShaderData-bypass paths
+	// (CODEX Q6 residual-gap survey).
+	int ms_drawsWithSRV0Bound = 0;
+
 	// ------------------------------------------------------------------
 	// Plan 11-08 Task 3b: matrix-shadow file-scope statics. The three
 	// per-frame transform setters (setWorldToCameraTransform /
@@ -459,13 +467,17 @@ namespace Direct3d11_StateCacheNamespace
 	// reflection data), fall back to Variant M magenta so geometry still
 	// surfaces visibly.
 	//
-	// CODEX-flagged stale-premise diagnostic (Iter-4 routing): the first
-	// time per process lifetime that the per-VS path returns a non-null
-	// PS, log the SRV slot 0 / sampler slot 0 state via the InfoQueue
-	// (NOT DEBUG_REPORT_LOG_PRINT -- Iter-3 surfaced that the latter
-	// goes to OutputDebugString + stdout, invisible from explorer-
-	// launched smokes). PSGetShaderResources / PSGetSamplers AddRef --
-	// release immediately after inspection.
+	// Plan 11-09.14 (CODEX correction #2): the previous Iter-4 first-dynamic-
+	// PS-bind diagnostic was REMOVED here. PSGetShaderResources/PSGetSamplers
+	// inside selectFallbackPSForVS read DEVICE state, but
+	// PSSetShaderResources/PSSetSamplers don't run until later in
+	// applyPreDrawState's flush block (StateCache.cpp:672-673). So the
+	// diagnostic always saw the previous draw's state, not the state for the
+	// upcoming draw -- it reported sampler0=NULL on the very first per-VS
+	// dynamic-PS bind even though the install-time bootstrap pre-fills
+	// ms_boundSampler[] with ms_defaultSampler.Get(). Replaced by the
+	// lifetime counters logged at Direct3d11_StaticShaderData::remove() +
+	// Direct3d11_StateCache::remove() shutdown.
 
 	ID3D11PixelShader *selectFallbackPSForVS(Direct3d11_VertexShaderData const *vsData)
 	{
@@ -476,46 +488,6 @@ namespace Direct3d11_StateCacheNamespace
 		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData);
 		if (!perVS)
 			return variantM;   // tombstone -> magenta safety net
-
-		// First dynamic-PS bind diagnostic. One-shot per process.
-		static bool s_diagnosticEmitted = false;
-		if (!s_diagnosticEmitted)
-		{
-			s_diagnosticEmitted = true;
-			ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
-			if (ctx)
-			{
-				ID3D11ShaderResourceView *srv0 = nullptr;
-				ID3D11SamplerState       *ss0  = nullptr;
-				ctx->PSGetShaderResources(0, 1, &srv0);
-				ctx->PSGetSamplers(0, 1, &ss0);
-
-				DXGI_FORMAT srvFormat = DXGI_FORMAT_UNKNOWN;
-				if (srv0)
-				{
-					D3D11_SHADER_RESOURCE_VIEW_DESC desc = {};
-					srv0->GetDesc(&desc);
-					srvFormat = desc.Format;
-				}
-
-				char buf[512];
-				_snprintf_s(buf, sizeof(buf), _TRUNCATE,
-					"Plan 11-09.13 Iter-4 first dynamic-PS bind: "
-					"SRV0=%s SRV0_format=%u sampler0=%s -- "
-					"CODEX stale-premise diagnostic; per-pass texture binding in "
-					"Direct3d11_StaticShaderData::apply() is Plan 11-09.14 / Phase 12 work.",
-					srv0 ? "BOUND" : "NULL",
-					static_cast<unsigned>(srvFormat),
-					ss0  ? "BOUND" : "NULL");
-
-				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
-					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
-				DEBUG_REPORT_LOG_PRINT(true, ("%s\n", buf));
-
-				if (srv0) srv0->Release();
-				if (ss0)  ss0->Release();
-			}
-		}
 
 		return perVS;
 	}
@@ -671,6 +643,8 @@ namespace Direct3d11_StateCacheNamespace
 		// 7. SRVs + samplers (Pitfall 4 split)
 		ctx->PSSetShaderResources(0, kMaxSRVs, ms_boundSRV);
 		ctx->PSSetSamplers(0, kMaxSamplers, ms_boundSampler);
+		if (ms_boundSRV[0])
+			++ms_drawsWithSRV0Bound;
 
 		// 8. RS / BS / DSS state objects (lazy reselect on dirty).
 		if (ms_rsDirty)
@@ -759,6 +733,7 @@ void Direct3d11_StateCache::install()
 
 	ms_drawCallCount = ms_stateObjectCreates = 0;
 	ms_skippedDrawsNullVS = ms_skippedDrawsNullLayout = 0;
+	ms_drawsWithSRV0Bound = 0;  // Plan 11-09.14
 }
 
 // ----------------------------------------------------------------------
@@ -766,8 +741,8 @@ void Direct3d11_StateCache::install()
 void Direct3d11_StateCache::remove()
 {
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d\n",
-		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout));
+		("Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d\n",
+		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound));
 
 	// Drop tracked-bind pointers BEFORE releasing the caches so we don't
 	// hold dangling raw pointers into the cache maps.
@@ -1070,6 +1045,43 @@ void Direct3d11_StateCache::releaseAllGlobalTextures()
 	Direct3d11_TextureData::releaseAllGlobalTextures();
 	for (int i = 0; i < kMaxSRVs; ++i)
 		ms_boundSRV[i] = nullptr;
+}
+
+// ----------------------------------------------------------------------
+// Plan 11-09.14: per-pass PS resource binding setters. Direct3d11_StaticShaderData::
+// apply() routes the per-pass diffuse SRV + sampler through these
+// (CODEX Q1: never call PSSet* directly from StaticShaderData -- preserves
+// the lazy-bind model where applyPreDrawState's single flush writes all
+// 16 slots per draw).
+
+void Direct3d11_StateCache::setPixelShaderResource(int slot, ID3D11ShaderResourceView *srv)
+{
+	if (slot < 0 || slot >= kMaxSRVs)
+		return;
+	ms_boundSRV[slot] = srv;
+}
+
+void Direct3d11_StateCache::setPixelShaderSampler(int slot, D3D11_SAMPLER_DESC const &desc)
+{
+	if (slot < 0 || slot >= kMaxSamplers)
+		return;
+	// Hash-cached via the existing FNV-1a-keyed SSCache (Plan 11-06).
+	// Zero-initialised desc fields are caller's responsibility -- padding
+	// bytes will drift the cache key otherwise.
+	ID3D11SamplerState *ss = getOrCreateSampler(desc);
+	ms_boundSampler[slot] = ss ? ss : ms_defaultSampler.Get();
+}
+
+void Direct3d11_StateCache::setPixelShaderSampler(int slot, ID3D11SamplerState *sampler)
+{
+	if (slot < 0 || slot >= kMaxSamplers)
+		return;
+	// Null -> default sampler keeps the slot in a defined, sane state so
+	// the next draw's flush doesn't push a null pointer at PSSetSamplers
+	// (PSSetSamplers tolerates null but the bound shader then reads garbage
+	// per the D3D11 spec; CODEX Q4 says "default sampler is fine" for the
+	// "no texture" path).
+	ms_boundSampler[slot] = sampler ? sampler : ms_defaultSampler.Get();
 }
 
 // ----------------------------------------------------------------------

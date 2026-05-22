@@ -93,13 +93,13 @@ public:
 	// most engine VSes output TEXCOORD0 at o1+/o2+. Per-VS dynamic
 	// compile eliminates the positional mismatch by construction.
 	//
-	// CODEX-flagged stale premise persists: Direct3d11_StaticShaderData::
-	// apply() does NOT yet bind per-pass diffuse textures. Even
-	// linkage-correct dynamic PSes sampling SRV slot 0 will read garbage
-	// / zero until that binding lands (Plan 11-09.14 / Phase 12 work).
-	// StateCache's selectFallbackPSForVS emits a one-shot
-	// SRV0/sampler0 diagnostic on first dynamic-PS bind so the gap is
-	// observable in stage/d3d11-debug.log.
+	// Plan 11-09.14 (CODEX Bucket A): the SRV0 binding gap is now closed.
+	// Direct3d11_StaticShaderData::apply() binds the slot-0 diffuse SRV +
+	// sampler via Direct3d11_StateCache::setPixelShaderResource(0, srv) +
+	// setPixelShaderSampler(0, desc). Dynamic PSes sampling register(t0)
+	// now read actual texture data for passes whose pixelShader has a
+	// TextureSampler with m_textureIndex == 0. Slots 1..7 still deferred
+	// to Phase 12 real per-asset PS compile.
 	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData);
 
 private:
