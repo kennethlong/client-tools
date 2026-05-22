@@ -771,19 +771,18 @@ namespace Direct3d11_StateCacheNamespace
 		if (ms_boundSRV[0])
 			++ms_drawsWithSRV0Bound;
 
-		// Plan 11-09.15 Iter-25: log topology + VS + SRV + RTV for the
-		// FIRST 100 transformed-vert draws of any kind (fan, list, strip,
-		// indexed, etc.) so we can identify which draw type the splash
-		// UI is actually using. Iter-24 confirmed all 50 first transformed-
-		// fan draws are the post-FX blit; the UI itself must be using
-		// some other primitive type or different VBFormat.
-		if (ms_currentVBFormat.isTransformed())
+		// Plan 11-09.15 Iter-26: log ALL draws (transformed + non-transformed)
+		// for the first 200 applyPreDrawState invocations. Iter-25 only
+		// captured isTransformed() draws and saw nothing but the post-FX
+		// blit. The splash UI must be using non-transformed VBFormat
+		// (clip-space verts) -- this iter captures every draw so we see
+		// the full picture: topology, VS, isTransformed flag, SRV0, RTV.
 		{
-			static int s_iter25Count = 0;
-			if (s_iter25Count < 100)
+			static int s_iter26Count = 0;
+			if (s_iter26Count < 200)
 			{
-				++s_iter25Count;
-				if (ID3D11InfoQueue *iq25 = Direct3d11_Device::getInfoQueue())
+				++s_iter26Count;
+				if (ID3D11InfoQueue *iq26 = Direct3d11_Device::getInfoQueue())
 				{
 					char const *vsFn = "<none>";
 					if (ms_currentVSData)
@@ -791,19 +790,20 @@ namespace Direct3d11_StateCacheNamespace
 						ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
 						if (eng) vsFn = eng->getFilename();
 					}
-					ID3D11RenderTargetView *cRTV25 = nullptr;
-					ctx->OMGetRenderTargets(1, &cRTV25, nullptr);
-					char buf25[384];
-					_snprintf_s(buf25, sizeof(buf25), _TRUNCATE,
-						"Plan 11-09.15 Iter-25 xform-draw#%d topo=%d VS='%s' "
+					ID3D11RenderTargetView *cRTV26 = nullptr;
+					ctx->OMGetRenderTargets(1, &cRTV26, nullptr);
+					char buf26[384];
+					_snprintf_s(buf26, sizeof(buf26), _TRUNCATE,
+						"Plan 11-09.15 Iter-26 draw#%d topo=%d xform=%d VS='%s' "
 						"SRV0=0x%p RTV=0x%p vertCount=%d",
-						s_iter25Count, static_cast<int>(topology),
+						s_iter26Count, static_cast<int>(topology),
+						ms_currentVBFormat.isTransformed() ? 1 : 0,
 						vsFn,
 						static_cast<void *>(ms_boundSRV[0]),
-						static_cast<void *>(cRTV25),
+						static_cast<void *>(cRTV26),
 						ms_currentVBVertexCount);
-					iq25->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf25);
-					if (cRTV25) cRTV25->Release();
+					iq26->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf26);
+					if (cRTV26) cRTV26->Release();
 				}
 			}
 		}
