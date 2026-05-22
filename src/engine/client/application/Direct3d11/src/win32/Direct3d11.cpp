@@ -253,6 +253,27 @@ namespace Direct3d11Namespace
 		// no-op in scaffold; Wave 4+ wires per-frame timing bookkeeping
 	}
 
+	// Plan 11-09.10: realize the design intent of the comment block at the
+	// install-time wire-up below -- D3D11 has no fixed-function point-sprite
+	// control (the D3DRS_POINTSIZE / D3DRS_POINTSPRITEENABLE / D3DRS_POINTSCALE*
+	// render states D3D9 used were dropped in D3D10+). HLSL SV_POINTSIZE
+	// could carry per-vertex point size, but only at Feature Level 9.x; we
+	// run vs_4_0 / FL10+ since Plan 11-09.6. These slots no-op so the
+	// engine's Graphics::setPointSize / setPointSize{Min,Max} /
+	// setPointScale{Enable,Factor} / setPointSpriteEnable callers (notably
+	// StarAppearance::draw for night-sky stars) return cleanly. POINTLIST
+	// topology draws as 1-pixel hardware-default points (Direct3d11_StateCache
+	// ::drawPointList is already wired). Visual fidelity for point sprites
+	// (engine-requested 2-pixel stars, particle point-sprites) is deferred
+	// to Plan 11-11 visual-parity; real emulation would require GS-side
+	// quad expansion or CPU expansion to TRIANGLELIST.
+	void setPointSize_impl(real /*size*/)                              {}
+	void setPointSizeMax_impl(real /*size*/)                           {}
+	void setPointSizeMin_impl(real /*size*/)                           {}
+	void setPointScaleEnable_impl(bool /*bEnable*/)                    {}
+	void setPointScaleFactor_impl(real /*A*/, real /*B*/, real /*C*/)  {}
+	void setPointSpriteEnable_impl(bool /*bEnable*/)                   {}
+
 #ifdef _DEBUG
 	bool getShowMipmapLevels_impl()                            { return false; }
 	void showMipmapLevels_impl(bool /*enabled*/)               { /* no-op */ }
@@ -611,15 +632,20 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ms_glApi.setCullMode = Direct3d11_StateCache::setCullMode;
 
 	// Point-sprite state: D3D11 has no fixed-function point-sprite control;
-	// gl_PointSize-equivalent lives in HLSL via SV_PointSize. Plan 11-06
-	// stubs out the setters as no-ops; Plan 11-07 smoke surfaces whether
-	// engine particle subsystems rely on engine-side point-sprite emit.
-	STUB(setPointSize);
-	STUB(setPointSizeMax);
-	STUB(setPointSizeMin);
-	STUB(setPointScaleEnable);
-	STUB(setPointScaleFactor);
-	STUB(setPointSpriteEnable);
+	// gl_PointSize-equivalent lives in HLSL via SV_PointSize (FL9.x only;
+	// we run vs_4_0 / FL10+). Plan 11-09.10 wires these as inline no-ops --
+	// the earlier Plan 11-06 STUB(...) routes redirected to scaffold_fatal_stub
+	// (FATAL), not no-op, which Plan 11-09.9 close smoke surfaced via
+	// StarAppearance::draw's setPointSize(2.f) call for night-sky stars.
+	// Stars + particle point sprites now render at 1-pixel hardware default;
+	// Plan 11-11 visual-parity decides whether real emulation (GS quad
+	// expansion or CPU point-to-quad) is needed for fidelity.
+	ms_glApi.setPointSize         = setPointSize_impl;
+	ms_glApi.setPointSizeMax      = setPointSizeMax_impl;
+	ms_glApi.setPointSizeMin      = setPointSizeMin_impl;
+	ms_glApi.setPointScaleEnable  = setPointScaleEnable_impl;
+	ms_glApi.setPointScaleFactor  = setPointScaleFactor_impl;
+	ms_glApi.setPointSpriteEnable = setPointSpriteEnable_impl;
 
 	ms_glApi.setAntialiasEnabled = Direct3d11_StateCache::setAntialiasEnabled;
 
