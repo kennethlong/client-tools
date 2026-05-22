@@ -274,6 +274,27 @@ namespace Direct3d11Namespace
 	void setPointScaleFactor_impl(real /*A*/, real /*B*/, real /*C*/)  {}
 	void setPointSpriteEnable_impl(bool /*bEnable*/)                   {}
 
+	// Plan 11-09.11: PIX markers / events are pure runtime instrumentation
+	// for the D3D PIX-for-Windows debugger. With no attached PIX session
+	// they're silent no-ops in BOTH D3D9 and D3D11; the engine guards its
+	// call sites with `#if PRODUCTION == 0` (Graphics::pixSetMarker at
+	// Graphics.cpp:3409, Graphics::pixBeginEvent at 3417, Graphics::pixEndEvent
+	// at 3428) so they only fire in Debug builds anyway. Plan 11-09.10 close
+	// smoke surfaced the scaffold_fatal_stub via GroundScene::drawScene's
+	// `pixSetMarker(L"CloseLoadingScreen")` (GroundScene.cpp:2217) -- the
+	// first exercise of any pix* slot in a typical launch flow. Native
+	// D3D11 PIX integration via ID3DUserDefinedAnnotation::SetMarker /
+	// BeginEvent / EndEvent is deferred to Plan 11-12+ if PIX-debugging
+	// becomes valuable for visual-parity diagnosis or perf work.
+	//
+	// Engine call-site audit (as of Plan 11-09.11 scaffold): pixSetMarker
+	// has 2 callers (Game.cpp:1009 "Quit", GroundScene.cpp:2217
+	// "CloseLoadingScreen"); pixBeginEvent / pixEndEvent have 0 callers in
+	// the current source tree. We no-op all 3 for symmetry + future-proofing.
+	void pixSetMarker_impl(WCHAR const * /*markerName*/)  {}
+	void pixBeginEvent_impl(WCHAR const * /*eventName*/)  {}
+	void pixEndEvent_impl(WCHAR const * /*eventName*/)    {}
+
 #ifdef _DEBUG
 	bool getShowMipmapLevels_impl()                            { return false; }
 	void showMipmapLevels_impl(bool /*enabled*/)               { /* no-op */ }
@@ -778,9 +799,14 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(setBloomEnabled);
 
-	STUB(pixSetMarker);
-	STUB(pixBeginEvent);
-	STUB(pixEndEvent);
+	// Plan 11-09.11: PIX instrumentation slots as inline no-ops. See the
+	// _impl block above for the design rationale (Graphics.cpp guards calls
+	// with `#if PRODUCTION == 0`; PIX-for-Windows is silent without an
+	// attached session; native ID3DUserDefinedAnnotation wire-up deferred
+	// to Plan 11-12+).
+	ms_glApi.pixSetMarker  = pixSetMarker_impl;
+	ms_glApi.pixBeginEvent = pixBeginEvent_impl;
+	ms_glApi.pixEndEvent   = pixEndEvent_impl;
 
 	STUB(writeImage);
 
