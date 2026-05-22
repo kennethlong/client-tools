@@ -401,14 +401,28 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 							                   '\0' };
 							for (int k = 0; k < 4; ++k)
 								if (tagStr[k] < 0x20 || tagStr[k] > 0x7E) tagStr[k] = '?';
+
+							// Plan 11-09.15 Iter-19: dereference stage.m_texture to
+							// get the actual SRV pointer. Cross-reference with the
+							// Iter-15 readback's SRV ptr (0x1F6AC9EC = primaryBuffer)
+							// to identify WHICH shader's MAIN texture resolves to the
+							// 1024x768 RT.
+							void const * srvPtr = nullptr;
+							if (stage.m_texture && *stage.m_texture)
+							{
+								Direct3d11_TextureData const * const td = *stage.m_texture;
+								srvPtr = static_cast<void const *>(td->getShaderResourceView());
+							}
 							fprintf(fp,
 								"build#%d pass=%d tag='%s' (0x%08X) isGlobal=%d "
-								"textureData.texture=0x%p stage.m_texture=0x%p stage.m_present=%d\n",
+								"textureData.texture=0x%p stage.m_texture=0x%p stage.m_present=%d "
+								"derefSRV=0x%p\n",
 								s_iter18BuildCount, passIndex,
 								tagStr, static_cast<unsigned int>(t), tagIsGlobal ? 1 : 0,
 								static_cast<void const *>(textureData.texture),
 								static_cast<void const *>(stage.m_texture),
-								stage.m_present ? 1 : 0);
+								stage.m_present ? 1 : 0,
+								srvPtr);
 							fclose(fp);
 						}
 					}
