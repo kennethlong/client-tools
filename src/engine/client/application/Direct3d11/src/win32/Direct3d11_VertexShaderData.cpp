@@ -520,6 +520,61 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	m_bytecode     = blob;
 	m_bytecodeHash = hash;
 
+	// Plan 11-09.15 Iter-7: dump disassembled VS bytecode to a single
+	// append-only file for offline analysis. CODEX consult Iter-5/6
+	// confirmed the right 2D VS is bound for transformed-vert callers
+	// (2d_texture.vsh / ui_radar.vsh) -- math goes through
+	// transform2d(vertex.position) from functions.inc, which should
+	// use viewportData @ c9 plumbed by Plan 11-09 Iter-2.7b. But the
+	// visual is still wrong (Iter-4 radial, Iter-5/6 black-splash).
+	// Disassembly tells us EXACTLY:
+	//   * which cbuffer slot/offset the VS reads for viewportData
+	//   * whether the VS output position semantic landed on
+	//     o0 / SV_POSITION (D3D11 rasterizer-recognized) or somewhere else
+	//   * any unexpected math
+	// First compile per session truncates the file; subsequent compiles
+	// append. Output: stage/vs-disasm-all.txt
+	{
+		static bool s_iter7FirstWrite = true;
+		Microsoft::WRL::ComPtr<ID3DBlob> disasmBlob;
+		HRESULT const disasmHr = D3DDisassemble(
+			blob->GetBufferPointer(),
+			blob->GetBufferSize(),
+			0, nullptr, disasmBlob.GetAddressOf());
+		if (SUCCEEDED(disasmHr) && disasmBlob)
+		{
+			char const * const mode = s_iter7FirstWrite ? "wb" : "ab";
+			s_iter7FirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/vs-disasm-all.txt", mode);
+			if (fp)
+			{
+				char header[512];
+				int const headerLen = _snprintf_s(header, sizeof(header), _TRUNCATE,
+					"\n=== Plan 11-09.15 Iter-7 VS disassembly: %s hash=0x%016llX bytecode_size=%zu ===\n",
+					displayName ? displayName : "<unknown>",
+					static_cast<unsigned long long>(m_bytecodeHash),
+					blob->GetBufferSize());
+				if (headerLen > 0)
+					fwrite(header, 1, static_cast<size_t>(headerLen), fp);
+				size_t const disasmSize = disasmBlob->GetBufferSize();
+				// D3DDisassemble blobs typically include a trailing null;
+				// strip it from the file write so the text isn't littered
+				// with null bytes between concatenated records.
+				size_t writeSize = disasmSize;
+				if (writeSize > 0)
+				{
+					char const * const disasmText = static_cast<char const *>(disasmBlob->GetBufferPointer());
+					if (disasmText[writeSize - 1] == '\0')
+						--writeSize;
+				}
+				if (writeSize > 0)
+					fwrite(disasmBlob->GetBufferPointer(), 1, writeSize, fp);
+				fclose(fp);
+			}
+		}
+	}
+
 	// Create the ID3D11VertexShader from the bytecode blob.
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateVertexShader(
 		blob->GetBufferPointer(),
