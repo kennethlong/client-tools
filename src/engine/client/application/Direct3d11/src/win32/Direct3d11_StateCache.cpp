@@ -320,8 +320,25 @@ namespace Direct3d11_StateCacheNamespace
 		DirectX::XMMATRIX wtp = DirectX::XMMatrixMultiply(P, V);     // P * V (CODEX Q1)
 		DirectX::XMMATRIX wvp = DirectX::XMMatrixMultiply(wtp, W);   // (P * V) * W
 
-		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldCameraProjectionMatrix, wvp);
-		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldMatrix,                 W);
+		// Plan 11-09.15 Iter-38B: TRANSPOSE before storing.
+		//
+		// Iter-38A2 captured V/P/W and demonstrated empirically that the
+		// shader bytecode does row-vector left-multiply (`pos_row * M`) per
+		// Cursor's disassembly, while the engine's source matrices are in
+		// column-vector convention (translation in last *column*: W has
+		// translation in W._14/_24/_34, not in row 3). For
+		// `(M * pos_col)` semantics to come out of `(pos_row * stored)`, the
+		// stored matrix must be the transpose of M.
+		//
+		// Verified by hand-walking sample #26 (terrain, identity W,
+		// in-world): vertex 10 units in front of camera gives clip.w ~ +9.97
+		// under (M * pos_col) (correct) but clip.w ~ -4.4e7 under
+		// (pos_row * M) (catastrophic radial-fan symptom). Transposing M
+		// makes (pos_row * M_T) = (M * pos_col).
+		DirectX::XMMATRIX wvp_t = DirectX::XMMatrixTranspose(wvp);
+		DirectX::XMMATRIX W_t   = DirectX::XMMatrixTranspose(W);
+		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldCameraProjectionMatrix, wvp_t);
+		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldMatrix,                 W_t);
 
 		// c8 = cameraPosition_w. Shader declares as float3, but our struct
 		// member is XMFLOAT4 -- the float w component (s_cachedCameraPos.w)
