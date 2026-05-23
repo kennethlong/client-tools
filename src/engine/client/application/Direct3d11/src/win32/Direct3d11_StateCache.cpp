@@ -682,11 +682,23 @@ namespace Direct3d11_StateCacheNamespace
 		// Safety: opaque draws output alpha=1, so SrcAlpha=1 + InvSrcAlpha=0
 		// yields the source pixel unchanged (no blending effect). UI assets
 		// with proper vColor.a and texture alpha get correct compositing.
+		//
+		// Plan 11-09.15 Iter-39A TEST: flipping BlendEnable=TRUE -> FALSE
+		// to confirm the Iter-32A safety assumption was wrong. Post-Iter-38B
+		// (transpose fix), world geometry renders correctly but appears
+		// washed/translucent -- world textures must NOT be outputting
+		// alpha=1 as Iter-32A assumed. With BlendEnable=FALSE the world
+		// should render opaque correctly, UI fonts will regress to
+		// invisible (Iter-29A symptom), and the char-select preview avatar
+		// should become visible (no longer multiplied to ~zero by texture
+		// alpha). Iter-39B will then implement per-pass blend state in
+		// Direct3d11_ShaderImplementationData::apply() so the engine's
+		// per-shader m_alphaBlendEnable reaches D3D11 and UI works again.
 		ms_bsDesc.AlphaToCoverageEnable = FALSE;
 		ms_bsDesc.IndependentBlendEnable = FALSE;
 		for (auto &rt : ms_bsDesc.RenderTarget)
 		{
-			rt.BlendEnable           = TRUE;
+			rt.BlendEnable           = FALSE;   // Iter-39A test (was TRUE in Iter-32A)
 			rt.SrcBlend              = D3D11_BLEND_SRC_ALPHA;
 			rt.DestBlend             = D3D11_BLEND_INV_SRC_ALPHA;
 			rt.BlendOp               = D3D11_BLEND_OP_ADD;
@@ -1724,6 +1736,29 @@ void Direct3d11_StateCache::setAlphaFadeOpacity(bool /*enabled*/, float opacity)
 	// userConstants[0].a or expect a dedicated slot.
 	XMFLOAT4 fade(opacity, opacity, opacity, opacity);
 	Direct3d11_ConstantBuffer::updatePS(0, &fade, sizeof(fade));
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setAlphaBlendEnable(bool enabled)
+{
+	// Plan 11-09.15 Iter-39B: mirror Direct3d9::setAlphaBlendEnable. Mutates
+	// the cached BlendState descriptor's RT0.BlendEnable and marks the
+	// blend cache entry dirty so the next applyPreDrawState picks up a
+	// (possibly cached) ID3D11BlendState matching the new descriptor.
+	//
+	// Default at install() is FALSE post-Iter-39A. UI canvas shaders
+	// (uicanvas_filtered.sht etc.), particle billboards, and glow sprites
+	// flip this to TRUE via their per-pass apply() call. Opaque world
+	// shaders leave it FALSE (or explicitly set FALSE if they were last-set
+	// after a UI draw).
+	D3D11_BLEND_DESC &desc = Direct3d11_StateCacheNamespace::ms_bsDesc;
+	BOOL const newVal = enabled ? TRUE : FALSE;
+	if (desc.RenderTarget[0].BlendEnable != newVal)
+	{
+		desc.RenderTarget[0].BlendEnable = newVal;
+		Direct3d11_StateCacheNamespace::ms_bsDirty = true;
+	}
 }
 
 // ----------------------------------------------------------------------

@@ -526,6 +526,28 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx]);
 			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
 
+			// Plan 11-09.15 Iter-39C: per-pass alpha-blend enable.
+			// Iter-39B wired this to Direct3d11_ShaderImplementationData::apply
+			// which turned out to be dead code (no virtual base, nothing in the
+			// engine ever calls it). The right site is here -- this method is
+			// called per draw from StateCache::draw*. Reads pass.m_alphaBlendEnable
+			// from the engine's ShaderImplementationPass and toggles the
+			// BlendState descriptor's BlendEnable. Mirrors D3D9 sibling
+			// Direct3d9::setAlphaBlendEnable. UI canvas / particles / glow get
+			// blend ON; opaque world content gets blend OFF.
+			//
+			// Still-deferred (small follow-on): m_alphaBlendSource/Dest, m_alphaBlendOperation,
+			// m_writeEnable, m_zEnable/Write/Compare. Existing install() defaults
+			// (SrcAlpha/InvSrcAlpha "over", DepthEnable=TRUE, LESSEQUAL, write-all)
+			// match what typical UI/particle/opaque shaders need.
+			if (m_implementation && m_implementation->m_pass
+				&& idx < m_implementation->m_pass->size())
+			{
+				ShaderImplementationPass const * const engPass = (*m_implementation->m_pass)[idx];
+				if (engPass)
+					Direct3d11_StateCache::setAlphaBlendEnable(engPass->m_alphaBlendEnable);
+			}
+
 			// Plan 11-09.14: slot-0 SRV/sampler binding via the public
 			// StateCache setters (CODEX Q1 -- never call PSSet* directly
 			// from StaticShaderData; preserve the lazy-bind model). The

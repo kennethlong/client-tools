@@ -76,6 +76,15 @@ public:
 	static void setTextureTransform(int stage, bool enabled, int dimension, bool projected, real const *transform);
 	static void setAlphaFadeOpacity(bool enabled, float opacity);
 
+	// Plan 11-09.15 Iter-39B: per-pass alpha-blend control. Called from
+	// Direct3d11_ShaderImplementationData::apply() to honor the engine's
+	// per-shader m_alphaBlendEnable (UI canvas / particles / glow billboards
+	// need TRUE; opaque world content needs FALSE). Mirrors D3D9 sibling
+	// Direct3d9::setAlphaBlendEnable. Default in install() is FALSE
+	// (Iter-39A flipped from Iter-32A's TRUE); shaders that need blending
+	// flip via this setter.
+	static void setAlphaBlendEnable(bool enabled);
+
 	// Pitfall 4: SRV binding only -- sampler is bound independently.
 	static void setGlobalTexture(Tag textureTag, Texture const &texture);
 	static void releaseAllGlobalTextures();

@@ -90,33 +90,16 @@ Direct3d11_ShaderImplementationData::~Direct3d11_ShaderImplementationData()
 
 void Direct3d11_ShaderImplementationData::apply(int /*passNumber*/) const
 {
-	// Iteration 1: recorded no-op.
-	//
-	// The D3D9 sibling (Direct3d9_ShaderImplementationData::apply) calls
-	// Direct3d9_StateCache::setRenderState(...) for every per-pass
-	// override (alphaBlend, colorWrite, z-compare, stencil) and -- under
-	// FFP -- iterates per-stage TextureStageState lists. Under D3D11:
-	//
-	//   - FFP per-stage texture-op state is descoped (D-04a). Pixel
-	//     work happens in HLSL pixel shaders (Plan 11-05); the D3D9
-	//     FFP combiner state has no D3D11 analog.
-	//
-	//   - Per-pass alpha-blend / z / color-write overrides ARE relevant
-	//     under D3D11 (they map to ID3D11BlendState +
-	//     ID3D11DepthStencilState descriptor mutations against the
-	//     Plan 11-06 StateCache caches). The mapping is mechanical:
-	//
-	//       m_alphaBlendEnable        -> bsDesc.RenderTarget[0].BlendEnable
-	//       m_alphaBlendSource / Dest -> bsDesc.SrcBlend / DestBlend
-	//       m_alphaBlendOperation     -> bsDesc.BlendOp
-	//       m_writeEnable             -> bsDesc.RenderTarget[0].RenderTargetWriteMask
-	//       m_zEnable / m_zWrite      -> dssDesc.DepthEnable / DepthWriteMask
-	//       m_zCompare                -> dssDesc.DepthFunc
-	//
-	//     Plan 11-07 Iteration 2+ (driven by smoke) will land these.
-	//
-	// For now: do nothing. The engine's per-frame draw loop applies
-	// StateCache defaults; that's enough to surface what fails next.
+	// Plan 11-09.15 Iter-39C: confirmed dead code. The base class
+	// ShaderImplementationGraphicsData has no virtual apply() member, so
+	// nothing in the engine ever calls this. Iter-39B mistakenly wired
+	// per-pass alpha-blend here, then learned from a regression smoke
+	// that fonts/cursor stayed broken because this method never fires.
+	// The per-pass apply now lives at the actual per-draw site
+	// (Direct3d11_StaticShaderData::apply, called from StateCache::draw*).
+	// Leaving the method as a no-op rather than deleting -- the D3D9
+	// sibling has the same shape, removing the override would diverge
+	// the file structure from the D3D9 reference.
 }
 
 // ======================================================================
