@@ -638,7 +638,13 @@ void KeyboardDevice::submitEvent()
 	else
 		m_mayHaveAltEnter = false;
 
-	if (m_screenShotFunction && pressed && key == DIK_SYSRQ)
+	// Phase 11 Plan 11-09.15 Iter-41: DIK_F12 added as a backup screenshot
+	// trigger because Windows 11's Snipping Tool registers a low-level
+	// keyboard hook on PrintScreen (DIK_SYSRQ) and consumes the key before
+	// DirectInput's foreground non-exclusive acquire sees it. The user can
+	// disable the OS-level hook in Settings -> Accessibility -> Keyboard,
+	// but F12 lets the keybind work without changing OS settings.
+	if (m_screenShotFunction && pressed && (key == DIK_SYSRQ || key == DIK_F12))
 		m_screenShotFunction();
 
 #if PRODUCTION == 0

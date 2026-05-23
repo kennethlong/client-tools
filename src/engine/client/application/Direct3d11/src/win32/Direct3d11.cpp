@@ -43,6 +43,7 @@
 #include "Direct3d11_VertexShaderData.h"
 
 #include "clientGraphics/Gl_dll.def"
+#include "clientGraphics/Graphics.h"
 #include "clientGraphics/ShaderCapability.h"
 #include "clientGraphics/ShaderImplementation.h"
 #include "clientGraphics/StaticShader.h"
@@ -52,6 +53,12 @@
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
 #include "sharedMath/VectorRgba.h"
+
+#include "WriteTGA.h"
+extern "C"
+{
+#include <jpeglib.h>
+}
 
 #include <DirectXMath.h>
 
@@ -382,6 +389,224 @@ namespace Direct3d11Namespace
 		return Direct3d11_RenderTarget::copyRenderTargetToNonRenderTargetTexture();
 	}
 
+	// Plan 11-09.15 Iter-41: screenShot implementation replacing the Plan 11-02
+	// STUB. Mirrors the D3D9 sibling's flow (Direct3d9.cpp:2768) but uses the
+	// D3D11 staging-texture readback pattern: walk back from the cached back-
+	// buffer RTV to the underlying ID3D11Texture2D, create a USAGE_STAGING
+	// copy, CopyResource, Map for CPU read, write the file. Back-buffer
+	// format is DXGI_FORMAT_B8G8R8A8_UNORM (Direct3d11_Device.cpp:313) -- BGRA
+	// matches WriteTGA's expectation and is one byte-swap away from libjpeg's
+	// RGB input.
+	bool screenShot_impl(GlScreenShotFormat format, int quality, char const *fileName)
+	{
+		ID3D11Device *        const device  = Direct3d11_Device::getDevice();
+		ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+		ID3D11RenderTargetView * const rtv  = Direct3d11_Device::getBackBufferRTV();
+		if (!device || !context || !rtv)
+		{
+			Graphics::setLastError("engine", "screenshot_failed_unknown");
+			return false;
+		}
+
+		Microsoft::WRL::ComPtr<ID3D11Resource> backResource;
+		rtv->GetResource(backResource.GetAddressOf());
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
+		if (!backResource || FAILED(backResource.As(&backBuffer)))
+		{
+			Graphics::setLastError("engine", "screenshot_failed_unknown");
+			return false;
+		}
+
+		D3D11_TEXTURE2D_DESC desc = {};
+		backBuffer->GetDesc(&desc);
+
+		if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM)
+		{
+			// All current D3D11 swap-chain paths use BGRA8 (per Direct3d11_Device.cpp:313).
+			// A different format would need per-format channel-shuffle logic.
+			Graphics::setLastError("engine", "screenshot_failed_wrong_format");
+			return false;
+		}
+
+		D3D11_TEXTURE2D_DESC stagingDesc = desc;
+		stagingDesc.Usage          = D3D11_USAGE_STAGING;
+		stagingDesc.BindFlags      = 0;
+		stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		stagingDesc.MiscFlags      = 0;
+		stagingDesc.MipLevels      = 1;
+		stagingDesc.ArraySize      = 1;
+
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+		HRESULT hr = device->CreateTexture2D(&stagingDesc, nullptr, staging.GetAddressOf());
+		if (FAILED(hr) || !staging)
+		{
+			Graphics::setLastError("engine", "screenshot_failed_unknown");
+			return false;
+		}
+
+		context->CopyResource(staging.Get(), backBuffer.Get());
+
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		hr = context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+		if (FAILED(hr) || !mapped.pData)
+		{
+			Graphics::setLastError("engine", "screenshot_failed_unknown");
+			return false;
+		}
+
+		int const width  = static_cast<int>(desc.Width);
+		int const height = static_cast<int>(desc.Height);
+		uint8 const * const src = static_cast<uint8 const *>(mapped.pData);
+		UINT const srcPitch = mapped.RowPitch;
+
+		bool ok = false;
+		char buffer[Os::MAX_PATH_LENGTH] = {};
+
+		switch (format)
+		{
+			case GSSF_tga:
+			{
+				sprintf(buffer, "%s.tga", fileName);
+				WriteTGA::write(buffer, width, height, src, true, static_cast<int>(srcPitch));
+				ok = true;
+				break;
+			}
+
+			case GSSF_jpg:
+			{
+				sprintf(buffer, "%s.jpg", fileName);
+				FILE *outputFile = fopen(buffer, "wb");
+				if (outputFile)
+				{
+					jpeg_compress_struct cinfo;
+					jpeg_error_mgr jerr;
+					cinfo.err = jpeg_std_error(&jerr);
+					jpeg_create_compress(&cinfo);
+					jpeg_stdio_dest(&cinfo, outputFile);
+					cinfo.image_width      = width;
+					cinfo.image_height     = height;
+					cinfo.input_components = 3;
+					cinfo.in_color_space   = JCS_RGB;
+					jpeg_set_defaults(&cinfo);
+					if (quality > 0)
+					{
+						int q = quality;
+						if (q < 0)   q = 0;
+						if (q > 100) q = 100;
+						jpeg_set_quality(&cinfo, q, TRUE);
+					}
+					jpeg_start_compress(&cinfo, TRUE);
+
+					std::vector<uint8> scanLine(static_cast<size_t>(width) * 3u);
+					uint8 const *row = src;
+					for (int y = 0; y < height; ++y, row += srcPitch)
+					{
+						uint32 const *source = reinterpret_cast<uint32 const *>(row);
+						for (int x = 0, b = 0; x < width; ++x)
+						{
+							uint32 const pixel = source[x];  // BGRA in mapped order
+							scanLine[b++] = static_cast<uint8>((pixel >> 16) & 0xff);  // R
+							scanLine[b++] = static_cast<uint8>((pixel >>  8) & 0xff);  // G
+							scanLine[b++] = static_cast<uint8>((pixel >>  0) & 0xff);  // B
+						}
+						JSAMPROW rowPtr = scanLine.data();
+						jpeg_write_scanlines(&cinfo, &rowPtr, 1);
+					}
+
+					jpeg_finish_compress(&cinfo);
+					jpeg_destroy_compress(&cinfo);
+					fclose(outputFile);
+					ok = true;
+				}
+				else
+				{
+					Graphics::setLastError("engine", "screenshot_failed_write_problem");
+				}
+				break;
+			}
+
+			case GSSF_bmp:
+			{
+				// Hand-rolled BGR 24bpp uncompressed BMP. The D3D9 sibling uses
+				// D3DXSaveSurfaceToFile which is not available in D3D11; WIC
+				// would be the modern equivalent but adds a new dependency.
+				// Uncompressed BMP is ~30 lines and has no external deps.
+				sprintf(buffer, "%s.bmp", fileName);
+				FILE *outputFile = fopen(buffer, "wb");
+				if (outputFile)
+				{
+					int const rowBytes      = width * 3;
+					int const paddedRowBytes = (rowBytes + 3) & ~3;
+					uint32 const pixelBytes  = static_cast<uint32>(paddedRowBytes) * static_cast<uint32>(height);
+					uint32 const fileSize    = 14u + 40u + pixelBytes;
+
+					uint8 fileHeader[14] = {};
+					fileHeader[0] = 'B';
+					fileHeader[1] = 'M';
+					fileHeader[2] = static_cast<uint8>(fileSize       & 0xff);
+					fileHeader[3] = static_cast<uint8>((fileSize >>  8) & 0xff);
+					fileHeader[4] = static_cast<uint8>((fileSize >> 16) & 0xff);
+					fileHeader[5] = static_cast<uint8>((fileSize >> 24) & 0xff);
+					fileHeader[10] = 54;  // pixel data offset (14 + 40)
+
+					uint8 infoHeader[40] = {};
+					infoHeader[0] = 40;   // header size
+					uint32 const w = static_cast<uint32>(width);
+					uint32 const h = static_cast<uint32>(height);
+					infoHeader[4]  = static_cast<uint8>( w        & 0xff);
+					infoHeader[5]  = static_cast<uint8>((w >>  8) & 0xff);
+					infoHeader[6]  = static_cast<uint8>((w >> 16) & 0xff);
+					infoHeader[7]  = static_cast<uint8>((w >> 24) & 0xff);
+					infoHeader[8]  = static_cast<uint8>( h        & 0xff);
+					infoHeader[9]  = static_cast<uint8>((h >>  8) & 0xff);
+					infoHeader[10] = static_cast<uint8>((h >> 16) & 0xff);
+					infoHeader[11] = static_cast<uint8>((h >> 24) & 0xff);
+					infoHeader[12] = 1;   // planes
+					infoHeader[14] = 24;  // bits per pixel
+					// compression = 0 (BI_RGB), bytes [16..19] image size (can be 0 for BI_RGB)
+
+					fwrite(fileHeader, 1, sizeof(fileHeader), outputFile);
+					fwrite(infoHeader, 1, sizeof(infoHeader), outputFile);
+
+					// BMP is BOTTOM-UP. Write last row first.
+					std::vector<uint8> rowBuf(static_cast<size_t>(paddedRowBytes), 0);
+					for (int y = height - 1; y >= 0; --y)
+					{
+						uint8 const *srcRow = src + static_cast<size_t>(y) * static_cast<size_t>(srcPitch);
+						uint8 *dstRow = rowBuf.data();
+						uint32 const *sp = reinterpret_cast<uint32 const *>(srcRow);
+						for (int x = 0; x < width; ++x)
+						{
+							uint32 const pixel = sp[x];  // BGRA
+							*dstRow++ = static_cast<uint8>((pixel >>  0) & 0xff);  // B
+							*dstRow++ = static_cast<uint8>((pixel >>  8) & 0xff);  // G
+							*dstRow++ = static_cast<uint8>((pixel >> 16) & 0xff);  // R
+						}
+						// Trailing bytes already zero from rowBuf initial fill.
+						fwrite(rowBuf.data(), 1, static_cast<size_t>(paddedRowBytes), outputFile);
+					}
+
+					fclose(outputFile);
+					ok = true;
+				}
+				else
+				{
+					Graphics::setLastError("engine", "screenshot_failed_write_problem");
+				}
+				break;
+			}
+
+			default:
+			{
+				Graphics::setLastError("engine", "screenshot_failed_unknown_format");
+				break;
+			}
+		}
+
+		context->Unmap(staging.Get(), 0);
+		return ok;
+	}
+
 	// ------------------------------------------------------------------
 	// Plan 11-05 (Wave 5 -- shader layer): Gl_api factory slot bodies
 	// for the shader compile pipeline (D3DCompile vs_5_0/ps_5_0 with
@@ -693,7 +918,11 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ms_glApi.setRenderTarget                       = setRenderTarget_impl;
 	ms_glApi.copyRenderTargetToNonRenderTargetTexture = copyRenderTargetToNonRenderTargetTexture_impl;
 
-	STUB(screenShot);
+	// Plan 11-09.15 Iter-41: real screenShot binding (Print Screen keybind via
+	// DirectInput::KeyboardDevice DIK_SYSRQ -> ScreenShotHelper::screenShot).
+	// Writes ./screenshots/screenShotNNNN.{tga|jpg|bmp} per Graphics's
+	// ms_screenShotFormat (default JPG -- Graphics.cpp:132).
+	ms_glApi.screenShot = screenShot_impl;
 
 	// Plan 11-07 Iteration 1: shader-implementation + static-shader factory
 	// slots wired. The wrappers (Direct3d11_ShaderImplementationData +

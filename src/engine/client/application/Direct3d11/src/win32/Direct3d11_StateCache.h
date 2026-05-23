@@ -85,6 +85,22 @@ public:
 	// flip via this setter.
 	static void setAlphaBlendEnable(bool enabled);
 
+	// Plan 11-09.15 Iter-43: per-pass alpha-blend FACTORS. Iter-39C wired
+	// the BlendEnable boolean per-pass but left SrcBlend/DestBlend/BlendOp
+	// hard-coded to the install() default (SrcAlpha/InvSrcAlpha/Add -- the
+	// standard "over" composite). UI shaders use that default, but particles
+	// + glow billboards use additive blend (One/One/Add) and a few effects
+	// use other modes. Pre-Iter-43 every blended draw collapsed to "over"
+	// blending, which against typical particle textures (alpha=1.0 because
+	// authoring expected additive) renders as a solid opaque tinted quad
+	// instead of a soft glow. Mirrors the D3D9 path's RSM(D3DRS_SRCBLEND/
+	// DESTBLEND/BLENDOP, ...) per-pass writes in Direct3d9_ShaderImplementation
+	// Data.cpp:259-261. Takes D3D11_BLEND / D3D11_BLEND_OP enums; the engine-
+	// enum mapping lives at the caller (StaticShaderData::apply).
+	static void setAlphaBlendFactors(D3D11_BLEND srcBlend,
+	                                 D3D11_BLEND destBlend,
+	                                 D3D11_BLEND_OP blendOp);
+
 	// Pitfall 4: SRV binding only -- sampler is bound independently.
 	static void setGlobalTexture(Tag textureTag, Texture const &texture);
 	static void releaseAllGlobalTextures();

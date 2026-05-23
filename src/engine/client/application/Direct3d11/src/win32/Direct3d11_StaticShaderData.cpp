@@ -99,6 +99,47 @@ namespace
 		}
 	}
 
+	// Plan 11-09.15 Iter-43: engine ShaderImplementation::Blend / BlendOperation
+	// to D3D11_BLEND / D3D11_BLEND_OP. Engine enum order is declarative
+	// (ShaderImplementation.h:219-241) and matches the D3D11 enum semantic
+	// order one-to-one; no semantic re-shuffle required, just a direct
+	// switch translation. Default-arms return the D3D11 "over"-composite
+	// default factors so an unrecognized engine value still produces a
+	// reasonable blend.
+	D3D11_BLEND translateBlend(ShaderImplementationPass::Blend b)
+	{
+		using SIP = ShaderImplementationPass;
+		switch (b)
+		{
+		case SIP::B_Zero:                    return D3D11_BLEND_ZERO;
+		case SIP::B_One:                     return D3D11_BLEND_ONE;
+		case SIP::B_SourceColor:             return D3D11_BLEND_SRC_COLOR;
+		case SIP::B_InverseSourceColor:      return D3D11_BLEND_INV_SRC_COLOR;
+		case SIP::B_SourceAlpha:             return D3D11_BLEND_SRC_ALPHA;
+		case SIP::B_InverseSourceAlpha:      return D3D11_BLEND_INV_SRC_ALPHA;
+		case SIP::B_DestinationAlpha:        return D3D11_BLEND_DEST_ALPHA;
+		case SIP::B_InverseDestinationAlpha: return D3D11_BLEND_INV_DEST_ALPHA;
+		case SIP::B_DestinationColor:        return D3D11_BLEND_DEST_COLOR;
+		case SIP::B_InverseDestinationColor: return D3D11_BLEND_INV_DEST_COLOR;
+		case SIP::B_SourceAlphaSaturate:     return D3D11_BLEND_SRC_ALPHA_SAT;
+		default:                             return D3D11_BLEND_SRC_ALPHA;
+		}
+	}
+
+	D3D11_BLEND_OP translateBlendOp(ShaderImplementationPass::BlendOperation op)
+	{
+		using SIP = ShaderImplementationPass;
+		switch (op)
+		{
+		case SIP::BO_Add:             return D3D11_BLEND_OP_ADD;
+		case SIP::BO_Subtract:        return D3D11_BLEND_OP_SUBTRACT;
+		case SIP::BO_ReverseSubtract: return D3D11_BLEND_OP_REV_SUBTRACT;
+		case SIP::BO_Min:             return D3D11_BLEND_OP_MIN;
+		case SIP::BO_Max:             return D3D11_BLEND_OP_MAX;
+		default:                      return D3D11_BLEND_OP_ADD;
+		}
+	}
+
 	D3D11_TEXTURE_ADDRESS_MODE toD3D11Address(StaticShaderTemplate::TextureAddress a)
 	{
 		using SST = StaticShaderTemplate;
@@ -546,6 +587,20 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 				ShaderImplementationPass const * const engPass = (*m_implementation->m_pass)[idx];
 				if (engPass)
 					Direct3d11_StateCache::setAlphaBlendEnable(engPass->m_alphaBlendEnable);
+
+				// Plan 11-09.15 Iter-43 REVERTED 2026-05-23: the per-pass
+				// blend FACTOR wiring (translateBlend/translateBlendOp ->
+				// StateCache::setAlphaBlendFactors) made the Mos Eisley smoke
+				// worse rather than better -- particle squares grew larger
+				// and white, mountain acquired snow patches. The translation
+				// itself is direct enum-to-enum, so the failure mode is
+				// upstream: many engine ShaderImplementationPass instances
+				// likely carry uninitialized/zero blend fields that the D3D9
+				// path tolerates (perhaps because D3D9's render-state engine
+				// applies them only under specific conditions). Restoring the
+				// install() default (SrcAlpha/InvSrcAlpha/Add) until we have
+				// a better mental model -- see consult markdown for
+				// proposed investigation.
 			}
 
 			// Plan 11-09.14: slot-0 SRV/sampler binding via the public

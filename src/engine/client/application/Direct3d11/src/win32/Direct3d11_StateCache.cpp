@@ -1676,11 +1676,29 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
 	// (clobbered by setProjectionMatrix), with no WVP composition; the
 	// shader's c0..c3 was therefore reading uninitialized memory --
 	// exactly the Iter-18 BSOD root cause.
+	// Plan 11-09.15 Iter-42 (corrected): scale ROWS of m, NOT columns.
+	// Pre-Iter-42 the code scaled only diagonals (m[0][0]*sx, m[1][1]*sy,
+	// m[2][2]*sz) which is wrong for any non-uniformly-scaled rotated
+	// object. My first Iter-42 attempt scaled columns (each m[*][i] by
+	// scale[i]); the Mos Eisley smoke 2026-05-23 showed that direction was
+	// wrong (no improvement on stretched ribbons, head, trim).
+	//
+	// The D3D9 sibling at Direct3d9.cpp:3155-3168 is the ground truth:
+	// it scales ROW i by scale[i] (every column of row 0 by scale.x, every
+	// column of row 1 by scale.y, etc.), leaving the m[i][3] translation
+	// untouched. The engine's m[i][3] = translation is the LAST ROW of the
+	// math matrix (storage transposed relative to math); row-scaling on
+	// stored m = column-scaling on math M = post-multiplying M by diag(scale)
+	// = standard object-space scale-then-rotate-then-translate composition.
+	//
+	// Iter-38B's transpose-at-upload (composeSlot0Shadow) handles the
+	// stored-vs-math packing for the cbuffer; this site just needs to
+	// match what D3D9 produces.
 	auto const &m = objectToWorld.getMatrix();    // real[3][4]
 	s_cachedWorld = XMFLOAT4X4(
-		static_cast<float>(m[0][0]) * scale.x, static_cast<float>(m[0][1]),           static_cast<float>(m[0][2]),           static_cast<float>(m[0][3]),
-		static_cast<float>(m[1][0]),           static_cast<float>(m[1][1]) * scale.y, static_cast<float>(m[1][2]),           static_cast<float>(m[1][3]),
-		static_cast<float>(m[2][0]),           static_cast<float>(m[2][1]),           static_cast<float>(m[2][2]) * scale.z, static_cast<float>(m[2][3]),
+		static_cast<float>(m[0][0]) * scale.x, static_cast<float>(m[0][1]) * scale.x, static_cast<float>(m[0][2]) * scale.x, static_cast<float>(m[0][3]),
+		static_cast<float>(m[1][0]) * scale.y, static_cast<float>(m[1][1]) * scale.y, static_cast<float>(m[1][2]) * scale.y, static_cast<float>(m[1][3]),
+		static_cast<float>(m[2][0]) * scale.z, static_cast<float>(m[2][1]) * scale.z, static_cast<float>(m[2][2]) * scale.z, static_cast<float>(m[2][3]),
 		0.0f, 0.0f, 0.0f, 1.0f);
 
 	composeSlot0Shadow();
@@ -1759,6 +1777,33 @@ void Direct3d11_StateCache::setAlphaBlendEnable(bool enabled)
 		desc.RenderTarget[0].BlendEnable = newVal;
 		Direct3d11_StateCacheNamespace::ms_bsDirty = true;
 	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setAlphaBlendFactors(D3D11_BLEND srcBlend,
+                                                 D3D11_BLEND destBlend,
+                                                 D3D11_BLEND_OP blendOp)
+{
+	// Plan 11-09.15 Iter-43: per-pass blend FACTORS. See header for the full
+	// rationale. Writes to RT0 only -- the engine assumes one render target
+	// for color writes (mirrors the D3D9 single-RT model). Mirrors the alpha
+	// side to the same factors / op as the color side; the D3D9 sibling uses
+	// D3DRS_SRCBLEND / DESTBLEND / BLENDOP which are color-side-only, with
+	// alpha implicitly tracking color (D3D9 default). D3D11 requires both
+	// sides set explicitly when independent-alpha-blend is OFF (which is our
+	// case -- D3D11_BLEND_DESC::IndependentBlendEnable defaults to FALSE).
+	D3D11_BLEND_DESC &desc = Direct3d11_StateCacheNamespace::ms_bsDesc;
+	D3D11_RENDER_TARGET_BLEND_DESC &rt = desc.RenderTarget[0];
+	bool changed = false;
+	if (rt.SrcBlend != srcBlend)         { rt.SrcBlend = srcBlend;             changed = true; }
+	if (rt.DestBlend != destBlend)       { rt.DestBlend = destBlend;           changed = true; }
+	if (rt.BlendOp != blendOp)           { rt.BlendOp = blendOp;               changed = true; }
+	if (rt.SrcBlendAlpha != srcBlend)    { rt.SrcBlendAlpha = srcBlend;        changed = true; }
+	if (rt.DestBlendAlpha != destBlend)  { rt.DestBlendAlpha = destBlend;      changed = true; }
+	if (rt.BlendOpAlpha != blendOp)      { rt.BlendOpAlpha = blendOp;          changed = true; }
+	if (changed)
+		Direct3d11_StateCacheNamespace::ms_bsDirty = true;
 }
 
 // ----------------------------------------------------------------------
