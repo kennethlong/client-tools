@@ -462,6 +462,68 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
 	const Transform &transform_apw = m_appearance.getTransform_w();
 	Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111);
 
+	// Plan 11-09.15 Iter-36D diagnostic: log the appearance-to-world
+	// transform passed into Graphics::setObjectToWorldTransformAndScale for
+	// the first 100 SoftwareBlendSkeletalShaderPrimitive draws. CODEX +
+	// Cursor convergent consult identified this as THE path that should
+	// push non-identity world matrices for standard skeletal meshes
+	// (a_specmap_bump_vs20_for_ps20.vsh family). Iter-34 cbuffer dump
+	// showed c4..c7 stays identity in the flushed cbuffer; if this
+	// transform is non-identity at prepareToDraw time, there's a
+	// plumbing/timing bug between the engine setter and the D3D11
+	// flush. If this transform is also identity, the bug is upstream:
+	// m_appearanceToWorld never gets populated before render.
+	//
+	// Writes to stage/iter36d-sbssp-transform.txt to keep d3d11-debug.log
+	// uncluttered (Iter-34 already logs flush-time c4..c7 from the
+	// D3D11 plugin; this is the engine-side counterpart for correlation).
+	{
+		static int s_iter36dCount = 0;
+		static int s_iter36dCallNum = 0;
+		++s_iter36dCallNum;
+		// Iter-36D2: first 100 (covers char-select preview burst) + every
+		// 100th thereafter (sample of in-world SBSSP draws). The original
+		// 100-cap filled with char-select-only entries; we need in-world
+		// SBSSP transforms to confirm whether the bug is upstream (engine
+		// not calling setTransform_w for the player) or in-world too.
+		bool const early  = (s_iter36dCallNum <= 100);
+		bool const sample = (s_iter36dCallNum > 100) && (s_iter36dCallNum % 100 == 0);
+		if ((early || sample) && s_iter36dCount < 500)
+		{
+			++s_iter36dCount;
+			static bool s_iter36dFirstWrite = true;
+			char const * const mode = s_iter36dFirstWrite ? "wb" : "ab";
+			s_iter36dFirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/iter36d-sbssp-transform.txt", mode);
+			if (fp)
+			{
+				Vector const pos = transform_apw.getPosition_p();
+				fprintf(fp,
+					"sbssp#%d (call#%d) pos=[%.3f %.3f %.3f] "
+					"row0=[%.3f %.3f %.3f %.3f] row1=[%.3f %.3f %.3f %.3f] "
+					"row2=[%.3f %.3f %.3f %.3f] vertCount=%d\n",
+					s_iter36dCount, s_iter36dCallNum,
+					static_cast<float>(pos.x), static_cast<float>(pos.y),
+					static_cast<float>(pos.z),
+					static_cast<float>(transform_apw.getMatrix()[0][0]),
+					static_cast<float>(transform_apw.getMatrix()[0][1]),
+					static_cast<float>(transform_apw.getMatrix()[0][2]),
+					static_cast<float>(transform_apw.getMatrix()[0][3]),
+					static_cast<float>(transform_apw.getMatrix()[1][0]),
+					static_cast<float>(transform_apw.getMatrix()[1][1]),
+					static_cast<float>(transform_apw.getMatrix()[1][2]),
+					static_cast<float>(transform_apw.getMatrix()[1][3]),
+					static_cast<float>(transform_apw.getMatrix()[2][0]),
+					static_cast<float>(transform_apw.getMatrix()[2][1]),
+					static_cast<float>(transform_apw.getMatrix()[2][2]),
+					static_cast<float>(transform_apw.getMatrix()[2][3]),
+					m_vertexCount);
+				fclose(fp);
+			}
+		}
+	}
+
 	//-- Get skeleton.
 	const Skeleton &skeleton = m_appearance.getSkeleton(m_lodIndex);
 

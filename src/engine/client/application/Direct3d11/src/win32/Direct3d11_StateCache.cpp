@@ -354,6 +354,32 @@ namespace Direct3d11_StateCacheNamespace
 		uint8_t * const bytes = reinterpret_cast<uint8_t *>(&s_slot0Shadow);
 		std::memcpy(bytes + registerIndex * 16, data, static_cast<size_t>(count) * 16);
 		s_slot0Dirty = true;
+
+		// Plan 11-09.15 Iter-35: log every setVSConstantsRaw call for the
+		// first 100 to see if the engine pushes WVP/W matrices directly via
+		// this register API. Iter-34 cbuffer dump showed c0..c7 always
+		// identity -- if the engine pushes matrices via THIS path, but the
+		// composeSlot0Shadow path overwrites them on next per-object setter
+		// call (clobbering them back to composed-from-shadow values), we'd
+		// see the symptom we have. Dump register, count, and first 4 floats.
+		{
+			static int s_iter35Count = 0;
+			if (s_iter35Count < 100)
+			{
+				++s_iter35Count;
+				if (ID3D11InfoQueue *iq35 = Direct3d11_Device::getInfoQueue())
+				{
+					float const *f = static_cast<float const *>(data);
+					char buf35[256];
+					_snprintf_s(buf35, sizeof(buf35), _TRUNCATE,
+						"Plan 11-09.15 Iter-35 setVSConstantsRaw#%d reg=%d count=%d "
+						"first4=[%.3f %.3f %.3f %.3f]",
+						s_iter35Count, registerIndex, count,
+						f[0], f[1], f[2], f[3]);
+					iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+				}
+			}
+		}
 	}
 
 	// Plan 11-09 Iter-2.7 Fix C: lazy upload of the slot 0 shadow once per
@@ -367,6 +393,15 @@ namespace Direct3d11_StateCacheNamespace
 		// Plan 11-09.15 Iter-9 diagnostic: sample the c9 viewportData slot
 		// at flush time so we can confirm the value actually uploaded to
 		// the GPU. c9 is at byte offset 144 of s_slot0Shadow.
+		//
+		// Plan 11-09.15 Iter-34: ALSO dump c0..c7 (WVP at c0..c3 +
+		// objectWorldMatrix at c4..c7). World VSes (a_specmap_bump_*,
+		// a_simple_*, etc.) consume these matrices to transform local-space
+		// verts to clip space. The Iter-26/33B WORLD logger showed all
+		// world draws collapse to a radial fan = bad WVP math = stale or
+		// wrong matrix in the cbuffer at upload time. Dumping c0..c7 for
+		// the first 20 flushes (covers first few frames of char-select)
+		// reveals what we're actually uploading.
 		{
 			static int s_flushCount = 0;
 			++s_flushCount;
@@ -383,6 +418,37 @@ namespace Direct3d11_StateCacheNamespace
 					s_flushCount, c9[0], c9[1], c9[2], c9[3], sizeof(s_slot0Shadow));
 				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
 					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+			}
+			// Iter-34: dump c0..c7 (WVP + worldMatrix) per flush, first 20
+			// + every 200th. Each matrix is 16 floats; write 4 floats per
+			// line to keep buffer size reasonable.
+			static int s_iter34Count = 0;
+			bool const i34_early  = (s_iter34Count < 20);
+			bool const i34_sample = (s_iter34Count >= 20) && (s_flushCount % 200 == 0);
+			if (i34_early || i34_sample)
+			{
+				++s_iter34Count;
+				float const *c0 = reinterpret_cast<float const *>(&s_slot0Shadow);
+				if (ID3D11InfoQueue *iq34 = Direct3d11_Device::getInfoQueue())
+				{
+					char buf34[768];
+					_snprintf_s(buf34, sizeof(buf34), _TRUNCATE,
+						"Plan 11-09.15 Iter-34 slot0#%d (flush#%d) "
+						"WVP c0=[%.3f %.3f %.3f %.3f] c1=[%.3f %.3f %.3f %.3f] "
+						"c2=[%.3f %.3f %.3f %.3f] c3=[%.3f %.3f %.3f %.3f] | "
+						"W c4=[%.3f %.3f %.3f %.3f] c5=[%.3f %.3f %.3f %.3f] "
+						"c6=[%.3f %.3f %.3f %.3f] c7=[%.3f %.3f %.3f %.3f]",
+						s_iter34Count, s_flushCount,
+						c0[ 0], c0[ 1], c0[ 2], c0[ 3],
+						c0[ 4], c0[ 5], c0[ 6], c0[ 7],
+						c0[ 8], c0[ 9], c0[10], c0[11],
+						c0[12], c0[13], c0[14], c0[15],
+						c0[16], c0[17], c0[18], c0[19],
+						c0[20], c0[21], c0[22], c0[23],
+						c0[24], c0[25], c0[26], c0[27],
+						c0[28], c0[29], c0[30], c0[31]);
+					iq34->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf34);
+				}
 			}
 		}
 		Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, sizeof(s_slot0Shadow));
@@ -874,16 +940,39 @@ namespace Direct3d11_StateCacheNamespace
 			++ms_drawsWithSRV0Bound;
 
 		// Plan 11-09.15 Iter-26: log ALL draws (transformed + non-transformed)
-		// for the first 200 applyPreDrawState invocations. Iter-25 only
+		// for the first applyPreDrawState invocations. Iter-25 only
 		// captured isTransformed() draws and saw nothing but the post-FX
 		// blit. The splash UI must be using non-transformed VBFormat
 		// (clip-space verts) -- this iter captures every draw so we see
 		// the full picture: topology, VS, isTransformed flag, SRV0, RTV.
+		//
+		// Plan 11-09.15 Iter-33: extended with shader template name and
+		// bumped cap from 200 -> 500 to cover the world-content draw
+		// routing investigation. UI rendering is resolved (Iter-32A); the
+		// next frontier is in-world geometry showing skewed textures, which
+		// flows through drawIndexedTriangleList / drawTriangleList / etc.
+		// (NOT drawQuadList, so Iter-29B's UI-focused logger doesn't catch
+		// it). All world draws still go through applyPreDrawState here, so
+		// enhancing this single logger covers every draw path.
+		//
+		// Plan 11-09.15 Iter-33B: split cap into two counters -- one for
+		// xform=1 (UI; XYZRHW pre-projected verts) and one for xform=0
+		// (world content; goes through full WVP). The first 200-cap run
+		// showed all xform=1 (UI), so world content draws AFTER the boot
+		// UI sequence. Separate counters guarantee world content captures
+		// regardless of when in the session it fires.
 		{
-			static int s_iter26Count = 0;
-			if (s_iter26Count < 200)
+			static int s_iter26CountUI    = 0;   // xform=1
+			static int s_iter26CountWorld = 0;   // xform=0
+			bool const isXformed = ms_currentVBFormat.isTransformed();
+			bool const shouldLog =
+				(isXformed && s_iter26CountUI < 500) ||
+				(!isXformed && s_iter26CountWorld < 500);
+			if (shouldLog)
 			{
-				++s_iter26Count;
+				if (isXformed) ++s_iter26CountUI; else ++s_iter26CountWorld;
+				int const drawNum = isXformed ? s_iter26CountUI : s_iter26CountWorld;
+				char const * const drawTag = isXformed ? "UI" : "WORLD";
 				if (ID3D11InfoQueue *iq26 = Direct3d11_Device::getInfoQueue())
 				{
 					char const *vsFn = "<none>";
@@ -892,15 +981,16 @@ namespace Direct3d11_StateCacheNamespace
 						ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
 						if (eng) vsFn = eng->getFilename();
 					}
+					char const * const sht = Direct3d11_StaticShaderData::getActiveStaticShaderName();
 					ID3D11RenderTargetView *cRTV26 = nullptr;
 					ctx->OMGetRenderTargets(1, &cRTV26, nullptr);
-					char buf26[384];
+					char buf26[512];
 					_snprintf_s(buf26, sizeof(buf26), _TRUNCATE,
-						"Plan 11-09.15 Iter-26 draw#%d topo=%d xform=%d VS='%s' "
+						"Plan 11-09.15 Iter-26/33B %s#%d topo=%d xform=%d sht='%s' VS='%s' "
 						"SRV0=0x%p RTV=0x%p vertCount=%d",
-						s_iter26Count, static_cast<int>(topology),
-						ms_currentVBFormat.isTransformed() ? 1 : 0,
-						vsFn,
+						drawTag, drawNum, static_cast<int>(topology),
+						isXformed ? 1 : 0,
+						sht, vsFn,
 						static_cast<void *>(ms_boundSRV[0]),
 						static_cast<void *>(cRTV26),
 						ms_currentVBVertexCount);
@@ -1253,6 +1343,36 @@ void Direct3d11_StateCache::setWorldToCameraTransform(Transform const &objectToW
 		0.0f, 0.0f, 0.0f, 1.0f);
 	s_cachedCameraPos = XMFLOAT4(cameraPosition.x, cameraPosition.y, cameraPosition.z, 0.0f);
 
+	// Plan 11-09.15 Iter-35: log first 30 setWorldToCameraTransform calls.
+	// Iter-34 cbuffer dump showed c0..c7 always identity -- if THIS setter
+	// fires regularly with non-identity input, the bug is in the upload
+	// pipeline. If it never fires (or always with identity), the engine
+	// uses a different mechanism.
+	{
+		static int s_iter35WtcCount = 0;
+		if (s_iter35WtcCount < 30)
+		{
+			++s_iter35WtcCount;
+			if (ID3D11InfoQueue *iq35 = Direct3d11_Device::getInfoQueue())
+			{
+				char buf35[384];
+				_snprintf_s(buf35, sizeof(buf35), _TRUNCATE,
+					"Plan 11-09.15 Iter-35 setWorldToCameraTransform#%d "
+					"row0=[%.3f %.3f %.3f %.3f] row1=[%.3f %.3f %.3f %.3f] "
+					"row2=[%.3f %.3f %.3f %.3f] camPos=[%.3f %.3f %.3f]",
+					s_iter35WtcCount,
+					static_cast<float>(m[0][0]), static_cast<float>(m[0][1]),
+					static_cast<float>(m[0][2]), static_cast<float>(m[0][3]),
+					static_cast<float>(m[1][0]), static_cast<float>(m[1][1]),
+					static_cast<float>(m[1][2]), static_cast<float>(m[1][3]),
+					static_cast<float>(m[2][0]), static_cast<float>(m[2][1]),
+					static_cast<float>(m[2][2]), static_cast<float>(m[2][3]),
+					cameraPosition.x, cameraPosition.y, cameraPosition.z);
+				iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+			}
+		}
+	}
+
 	// Plan 11-09 Iter-2.7 Fix C: re-compose WVP into shadow so the View
 	// change propagates to GPU on next applyPreDrawState. Pre-Fix-C
 	// (Plan 11-08 Task 3b) this was shadow-only because setObjectToWorld-
@@ -1280,6 +1400,30 @@ void Direct3d11_StateCache::setProjectionMatrix(GlMatrix4x4 const &projectionMat
 	// Plan 11-09 Iter-2.7 Fix C: re-compose + mark dirty. See note in
 	// setWorldToCameraTransform above.
 	composeSlot0Shadow();
+
+	// Plan 11-09.15 Iter-35: log first 30 setProjectionMatrix calls.
+	{
+		static int s_iter35ProjCount = 0;
+		if (s_iter35ProjCount < 30)
+		{
+			++s_iter35ProjCount;
+			if (ID3D11InfoQueue *iq35 = Direct3d11_Device::getInfoQueue())
+			{
+				float const *p = reinterpret_cast<float const *>(projectionMatrix.matrix);
+				char buf35[384];
+				_snprintf_s(buf35, sizeof(buf35), _TRUNCATE,
+					"Plan 11-09.15 Iter-35 setProjectionMatrix#%d "
+					"row0=[%.3f %.3f %.3f %.3f] row1=[%.3f %.3f %.3f %.3f] "
+					"row2=[%.3f %.3f %.3f %.3f] row3=[%.3f %.3f %.3f %.3f]",
+					s_iter35ProjCount,
+					p[ 0], p[ 1], p[ 2], p[ 3],
+					p[ 4], p[ 5], p[ 6], p[ 7],
+					p[ 8], p[ 9], p[10], p[11],
+					p[12], p[13], p[14], p[15]);
+				iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -1323,6 +1467,36 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
 
 	composeSlot0Shadow();
 	s_anyMatrixWritten = true;   // Kept for back-compat; Fix C uses s_slot0Dirty instead
+
+	// Plan 11-09.15 Iter-35: log first 50 setObjectToWorldTransformAndScale
+	// calls. This is THE per-mesh setter -- engine calls it before each
+	// world mesh draw. If we see N draws on the Iter-26/33B WORLD log but
+	// only M < N calls here, the engine is using a different path for
+	// (N - M) draws.
+	{
+		static int s_iter35OwtCount = 0;
+		if (s_iter35OwtCount < 50)
+		{
+			++s_iter35OwtCount;
+			if (ID3D11InfoQueue *iq35 = Direct3d11_Device::getInfoQueue())
+			{
+				char buf35[384];
+				_snprintf_s(buf35, sizeof(buf35), _TRUNCATE,
+					"Plan 11-09.15 Iter-35 setObjectToWorldTransformAndScale#%d "
+					"row0=[%.3f %.3f %.3f %.3f] row1=[%.3f %.3f %.3f %.3f] "
+					"row2=[%.3f %.3f %.3f %.3f] scale=[%.3f %.3f %.3f]",
+					s_iter35OwtCount,
+					static_cast<float>(m[0][0]), static_cast<float>(m[0][1]),
+					static_cast<float>(m[0][2]), static_cast<float>(m[0][3]),
+					static_cast<float>(m[1][0]), static_cast<float>(m[1][1]),
+					static_cast<float>(m[1][2]), static_cast<float>(m[1][3]),
+					static_cast<float>(m[2][0]), static_cast<float>(m[2][1]),
+					static_cast<float>(m[2][2]), static_cast<float>(m[2][3]),
+					scale.x, scale.y, scale.z);
+				iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------
