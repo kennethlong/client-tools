@@ -492,6 +492,41 @@ void Texture::load(const char * fileName)
 	DEBUG_FATAL(headerRead != isizeof(ddsHeader), ("DDS header read failed"));
 	UNREF(headerRead);
 
+	// Plan 11-09.15 Iter-31A2: dump raw bytes the engine sees for font
+	// textures. Previous Iter-31A confirmed Texture::load() identifies
+	// `verdana_14_000.dds` as TF_DXT5, but manual TRE extraction shows
+	// all 4 shipped versions are BGRA8 in their DDS header. The bytes
+	// the engine reads via TreeFile::open differ from what
+	// TreeFileExtractor produces. This dump captures the raw 128 byte
+	// DDS header the engine sees so we can compare against the
+	// extracted file bytes. One write per font texture; capped at 30.
+	if (fileName && strstr(fileName, "texture/font/"))
+	{
+		static int s_iter31a2Count = 0;
+		if (s_iter31a2Count < 30)
+		{
+			++s_iter31a2Count;
+			static bool s_iter31a2FirstWrite = true;
+			char const * const mode = s_iter31a2FirstWrite ? "wb" : "ab";
+			s_iter31a2FirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/iter31a2-raw-bytes.txt", mode);
+			if (fp)
+			{
+				fprintf(fp, "font#%d file='%s' (128 bytes after magic):",
+					s_iter31a2Count, fileName);
+				unsigned char const *hb = reinterpret_cast<unsigned char const *>(&ddsHeader);
+				for (int b = 0; b < 124; ++b)
+				{
+					if (b % 16 == 0) fprintf(fp, "\n  ");
+					fprintf(fp, "%02X ", hb[b]);
+				}
+				fprintf(fp, "\n");
+				fclose(fp);
+			}
+		}
+	}
+
 	// pixelformat flags in the DDS header are one of
 	// DDS_FOURCC, DDS_RGBA or DDS_RGB. For the RGB and RGBA
 	// format files, the bitcount and bitmasks are used to determine
@@ -597,6 +632,50 @@ void Texture::load(const char * fileName)
 	{
 		numberOfLowestMipmapLevelsToDiscard = m_mipmapLevelCount - 1;
 		m_mipmapLevelCount = 1;
+	}
+
+	// Plan 11-09.15 Iter-31A diagnostic: log DDS parse outcome for fonts
+	// so we can localize WHERE TF_DXT5 enters the runtime-format list for
+	// `verdana_14_000.dds`. Manual TRE extraction shows the source DDS in
+	// patch_05/06/12 is BGRA8 (DDPF_RGB|DDPF_ALPHAPIXELS, fourCC=0), yet
+	// Iter-30 shows the engine creates the texture as BC3 with
+	// rtFormats=[11,0] = [TF_DXT5, TF_ARGB_8888] -- matching ms_conversions[TF_DXT5].
+	// If THIS logger emits sourceFormat=TF_DXT5 for verdana_14_000.dds, the
+	// engine's DDS parser saw the FOURCC bit set on a file we believe is
+	// uncompressed. Logs are filtered to texture/font/* to keep noise low.
+	if (fileName && strstr(fileName, "texture/font/"))
+	{
+		static int s_iter31aTexCount = 0;
+		if (s_iter31aTexCount < 30)
+		{
+			++s_iter31aTexCount;
+			static bool s_iter31aFirstWrite = true;
+			char const * const mode = s_iter31aFirstWrite ? "wb" : "ab";
+			s_iter31aFirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/iter31a-dds-parse.txt", mode);
+			if (fp)
+			{
+				fprintf(fp,
+					"font#%d file='%s' sourceFormat=%d dxt=%d "
+					"ddspf.dwFlags=0x%X dwFourCC=0x%X dwRGBBitCount=%u "
+					"rMask=0x%X gMask=0x%X bMask=0x%X aMask=0x%X "
+					"width=%d height=%d depth=%d mipmaps=%d preGD=%d\n",
+					s_iter31aTexCount, fileName,
+					static_cast<int>(sourceFormat),
+					dxt ? 1 : 0,
+					static_cast<unsigned>(ddsHeader.ddspf.dwFlags),
+					static_cast<unsigned>(ddsHeader.ddspf.dwFourCC),
+					static_cast<unsigned>(ddsHeader.ddspf.dwRGBBitCount),
+					static_cast<unsigned>(ddsHeader.ddspf.dwRBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwGBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwBBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwABitMask),
+					m_width, m_height, m_depth, m_mipmapLevelCount,
+					m_graphicsData ? 1 : 0);
+				fclose(fp);
+			}
+		}
 	}
 
 	bool const isNormalMapName = strstr(fileName, "_n.dds") != 0;

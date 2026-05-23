@@ -408,17 +408,31 @@ namespace Direct3d11_StateCacheNamespace
 		ms_rsDesc.MultisampleEnable     = FALSE;
 		ms_rsDesc.AntialiasedLineEnable = FALSE;
 
-		// Blend (all targets off by default per D3D9 D3DRS_ALPHABLENDENABLE=FALSE)
+		// Plan 11-09.15 Iter-32A: ENABLE alpha-blend by default (SrcAlpha /
+		// InvSrcAlpha — the standard "over" composite). Iter-31B chain
+		// proved the font atlas IS correctly loaded as DXT5 with proper
+		// alpha-mask glyphs (white RGB + varying alpha) -- the bug is that
+		// Direct3d11_ShaderImplementationData::apply() is a documented
+		// no-op (TextureData.cpp:91-120 confirms), so the engine's per-pass
+		// m_alphaBlendEnable=true on `uicanvas_filtered.sht` never reaches
+		// D3D11. Without blending, alpha-mask glyphs render as solid color
+		// quads (the Iter-29A symptom). Globally enabling alpha-blend is
+		// the smoke test before Iter-32B wires it properly per-pass via
+		// Direct3d11_StaticShaderData::apply.
+		//
+		// Safety: opaque draws output alpha=1, so SrcAlpha=1 + InvSrcAlpha=0
+		// yields the source pixel unchanged (no blending effect). UI assets
+		// with proper vColor.a and texture alpha get correct compositing.
 		ms_bsDesc.AlphaToCoverageEnable = FALSE;
 		ms_bsDesc.IndependentBlendEnable = FALSE;
 		for (auto &rt : ms_bsDesc.RenderTarget)
 		{
-			rt.BlendEnable           = FALSE;
-			rt.SrcBlend              = D3D11_BLEND_ONE;
-			rt.DestBlend             = D3D11_BLEND_ZERO;
+			rt.BlendEnable           = TRUE;
+			rt.SrcBlend              = D3D11_BLEND_SRC_ALPHA;
+			rt.DestBlend             = D3D11_BLEND_INV_SRC_ALPHA;
 			rt.BlendOp               = D3D11_BLEND_OP_ADD;
 			rt.SrcBlendAlpha         = D3D11_BLEND_ONE;
-			rt.DestBlendAlpha        = D3D11_BLEND_ZERO;
+			rt.DestBlendAlpha        = D3D11_BLEND_INV_SRC_ALPHA;
 			rt.BlendOpAlpha          = D3D11_BLEND_OP_ADD;
 			rt.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 		}
@@ -2099,6 +2113,52 @@ void Direct3d11_StateCache::drawQuadList()
 		ms_quadListIB.Get(),
 		DXGI_FORMAT_R16_UINT,
 		0);
+
+	// Plan 11-09.15 Iter-29B: routing diagnostic. Log shader template
+	// name + VS filename + SRV0 + vertCount per drawQuadList call for
+	// the first 50 calls. CODEX+Cursor consult recommended this to
+	// localize whether font draws hit shader/uicanvas_filtered.sht (the
+	// path Iter-28 modulate fixes) or some other template entirely.
+	// Iter-29A1/A2/A3 PS-shape smoke (`.a` mask, `.r` mask, raw `tex`)
+	// all failed to produce letter shapes -- which rules out the PS-
+	// shape hypothesis and points to a routing or texture-binding bug.
+	{
+		static int s_iter29bCount = 0;
+		if (s_iter29bCount < 50)
+		{
+			++s_iter29bCount;
+			if (ID3D11InfoQueue *iq29b = Direct3d11_Device::getInfoQueue())
+			{
+				char const * const tmpl = Direct3d11_StaticShaderData::getActiveStaticShaderName();
+				char const *vsFn = "<none>";
+				if (ms_currentVSData)
+				{
+					ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
+					if (eng) vsFn = eng->getFilename();
+				}
+				char buf29b[512];
+				_snprintf_s(buf29b, sizeof(buf29b), _TRUNCATE,
+					"Plan 11-09.15 Iter-29B quad#%d sht='%s' VS='%s' "
+					"SRV0=0x%p vertCount=%d numQuads=%d",
+					s_iter29bCount, tmpl, vsFn,
+					static_cast<void *>(ms_boundSRV[0]),
+					ms_currentVBVertexCount, numQuads);
+				iq29b->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf29b);
+			}
+		}
+	}
+
+	// Plan 11-09.15 Iter-29D: Iter-29C readback REMOVED (caused first-frame
+	// crash at planet-select on Kenny's smoke 2026-05-22 20:36; only beginScene#1
+	// reached the d3d11-debug.log before crash, even though UpTime showed 22s
+	// of asset loading). Suspected cause: CopySubresourceRegion + Map of the
+	// font atlas SRV from inside drawQuadList interfered with the active draw
+	// stream OR called GetResource on a stale ms_boundSRV[0] raw pointer.
+	// Iter-29B routing diagnostic above is preserved (it WORKED the previous
+	// run -- we got 50 lines). A safer readback variant (Iter-30 candidate)
+	// would defer the dump to AFTER Present, capture the atlas SRV by
+	// AddRef'ing it during drawQuadList for later use, and run in a
+	// CallbackEnd-equivalent slot rather than mid-draw.
 
 	ctx->DrawIndexed(
 		static_cast<UINT>(numQuads * 6),

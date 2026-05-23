@@ -414,6 +414,72 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 
 	HRESULT const hr = device->CreateShaderResourceView(m_texture.Get(), &srvDesc, &m_srv);
 	FATAL_DX_HR("Direct3d11_TextureData: CreateShaderResourceView failed: %s", hr);
+
+	// Plan 11-09.15 Iter-30 diagnostic: log every texture as it's loaded
+	// with filename + dimensions + DXGI format + SRV pointer. Cross-
+	// reference against Iter-29B routing log to identify what asset file
+	// the font atlas SRV points to (Iter-29C readback was unsafe -- crashed
+	// the first frame -- so we identify via creation-time metadata instead
+	// of GPU readback). One line per texture; capped at 500 entries to
+	// bound log size during long load sequences. Output via InfoQueue so
+	// it lands in d3d11-debug.log alongside the other diagnostics.
+	//
+	// Plan 11-09.15 Iter-31A: extended to also log the FIRST FOUR
+	// runtimeFormats[] candidates passed by the engine. CODEX+Cursor
+	// convergent consult identified that ms_conversions[TF_ARGB_8888]
+	// is ONLY {TF_ARGB_8888, TF_ARGB_4444} -- TF_DXT5 (the destFormat we
+	// see for verdana_14_000.dds) is not reachable through the standard
+	// Texture::load() path. Either the engine called createTextureData
+	// with a non-conversion-table runtimeFormats array OR m_graphicsData
+	// was pre-existing (constructed by an explicit-runtime ctor before
+	// load). Logging the actual passed array localizes which case fires.
+	{
+		static int s_iter30Count = 0;
+		if (s_iter30Count < 500)
+		{
+			++s_iter30Count;
+			if (ID3D11InfoQueue *iq30 = Direct3d11_Device::getInfoQueue())
+			{
+				char const *fn = newEngineTexture.getName();
+				if (!fn || !*fn) fn = "<unnamed>";
+				DXGI_FORMAT const nativeFmt = translationTable[m_destFormat];
+
+				// Iter-31A: stringify the first 4 runtime-format candidates.
+				char rtList[64] = "";
+				int const rtCount = (numberOfRuntimeFormats > 4) ? 4 : numberOfRuntimeFormats;
+				for (int rti = 0; rti < rtCount; ++rti)
+				{
+					char piece[12];
+					_snprintf_s(piece, sizeof(piece), _TRUNCATE, "%s%d",
+						(rti == 0 ? "" : ","),
+						static_cast<int>(runtimeFormats[rti]));
+					size_t const rem = sizeof(rtList) - strlen(rtList) - 1;
+					strncat_s(rtList, sizeof(rtList), piece, rem);
+				}
+				if (numberOfRuntimeFormats > 4)
+					strncat_s(rtList, sizeof(rtList), ",...", _TRUNCATE);
+
+				char buf30[640];
+				_snprintf_s(buf30, sizeof(buf30), _TRUNCATE,
+					"Plan 11-09.15 Iter-30 tex#%d SRV=0x%p file='%s' W=%d H=%d Mips=%d "
+					"destFormat=%d nativeDXGI=%d rtFormats(n=%d)=[%s] %s%s%s",
+					s_iter30Count,
+					static_cast<void *>(m_srv.Get()),
+					fn,
+					newEngineTexture.getWidth(),
+					newEngineTexture.getHeight(),
+					newEngineTexture.getMipmapLevelCount(),
+					static_cast<int>(m_destFormat),
+					static_cast<int>(nativeFmt),
+					numberOfRuntimeFormats,
+					rtList,
+					m_isCubeMap   ? "[cube]"   : "",
+					m_isVolumeMap ? "[volume]" : "",
+					isRenderTarget ? "[rt]"    : "");
+				iq30->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf30);
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -447,6 +513,49 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 
 	if (lockData.getFormat() == TF_Native)
 		lockData.m_format = m_destFormat;
+
+	// Plan 11-09.15 Iter-31A diagnostic: log first-lock-per-texture when
+	// lockData format != m_destFormat. CODEX+Cursor convergent consult
+	// (font-atlas BGRA8 -> DXT5 mismatch) localized the bug here: the D3D9
+	// sibling explicitly handles this case via D3DXLoadSurfaceFromSurface
+	// (Direct3d9_TextureData.cpp:518/603); the D3D11 path just creates a
+	// staging at lockData.getFormat() and CopySubresourceRegions into a
+	// possibly-incompatible m_destFormat dest. Logging the mismatch tells
+	// us WHICH textures hit it and confirms our hypothesis before
+	// committing to either an Option A (CPU-side conversion) or
+	// Option B (recreate at source format) fix. Capped at 50 logs total
+	// to bound log size; we expect ~1-5 mismatches per session if the
+	// hypothesis is right.
+	if (lockData.getFormat() != m_destFormat)
+	{
+		static int s_iter31aCount = 0;
+		if (s_iter31aCount < 50)
+		{
+			++s_iter31aCount;
+			if (ID3D11InfoQueue *iq31a = Direct3d11_Device::getInfoQueue())
+			{
+				char const *fn = m_engineTexture.getName();
+				if (!fn || !*fn) fn = "<unnamed>";
+				char buf31a[384];
+				_snprintf_s(buf31a, sizeof(buf31a), _TRUNCATE,
+					"Plan 11-09.15 Iter-31A FORMAT_MISMATCH#%d file='%s' "
+					"lockFmt=%d destFmt=%d lockIsReadOnly=%d lockIsDiscard=%d "
+					"isDynamic=%d isCubeMap=%d isVolumeMap=%d level=%d "
+					"w=%d h=%d",
+					s_iter31aCount, fn,
+					static_cast<int>(lockData.getFormat()),
+					static_cast<int>(m_destFormat),
+					lockData.isReadOnly() ? 1 : 0,
+					lockData.shouldDiscardContents() ? 1 : 0,
+					m_engineTexture.isDynamic() ? 1 : 0,
+					m_isCubeMap ? 1 : 0,
+					m_isVolumeMap ? 1 : 0,
+					lockData.getLevel(),
+					lockData.getWidth(), lockData.getHeight());
+				iq31a->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf31a);
+			}
+		}
+	}
 
 	ID3D11Device *        const device  = Direct3d11_Device::getDevice();
 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();

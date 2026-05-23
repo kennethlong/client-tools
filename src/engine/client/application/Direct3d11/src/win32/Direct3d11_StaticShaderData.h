@@ -86,6 +86,15 @@ public:
 	// was successfully bound; false otherwise (caller may skip draw).
 	bool apply(int passNumber) const;
 
+	// Plan 11-09.15 Iter-29B diagnostic: return the active StaticShader's
+	// template name (i.e. the .sht asset path) for logging in drawQuadList,
+	// or "<none>" when nothing is currently bound. CODEX+Cursor consult
+	// recommended this routing diagnostic to localize whether font draws
+	// hit shader/uicanvas_filtered.sht (with the current Iter-28 modulate
+	// PS) or some other template path. ms_active is a private static, so
+	// expose via a public accessor rather than friending StateCache.
+	static char const * getActiveStaticShaderName();
+
 private:
 
 	Direct3d11_StaticShaderData();

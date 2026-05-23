@@ -148,7 +148,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "15" });   // Plan 11-09.6 Iter-1: ps_4_0_level_9_3 -> ps_4_0 target bump (VS-site mirror).
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "20" });   // Plan 11-09.15 Iter-29B: restore Iter-28 `tex*color` on ui.vsh branch so panels look correct during the drawQuadList-call diagnostic that lands in this iter. PS-shape exploration is suspended -- raw-tex output (Iter-29A3) still showed no fonts, which rules out the PS-shape hypothesis space and points to a routing/binding issue we need data to localize.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -369,6 +369,33 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			break;
 		}
 
+		// Plan 11-09.15 Iter-28: COLOR0 detection. Iter-27 surfaced UI
+		// quads (drawQuadList implemented) but fonts rendered invisible
+		// and panels showed no tint -- because the per-VS PS body did
+		// only `t.Sample(s, uv)` and IGNORED the COLOR0 VS output that
+		// carries vertex color (font text color, panel tint, fade alpha).
+		// ui.vsh outputs `COLOR0 xyzw FLOAT32` at register o1; the PS
+		// generator must consume it. Backdrop VS `2d_texture.vsh` has no
+		// COLOR0 output -- unaffected.
+		//
+		// Match: SemanticName=="COLOR", SemanticIndex==0, FLOAT32,
+		// ComponentMask has all four xyzw bits (matches ui.vsh exactly).
+		// We require xyzw rather than xyz-with-alpha-defaulted because
+		// the engine's vertex-color path always supplies a 4-channel
+		// PackedArgb -- partial masks would point to an unusual asset
+		// we should investigate separately.
+		int color0Index = -1;
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			if (_stricmp(o.SemanticName, "COLOR") != 0) continue;
+			if (o.SemanticIndex != 0) continue;
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			if ((o.ComponentMask & 0xF) != 0xF) continue;
+			color0Index = static_cast<int>(i);
+			break;
+		}
+
 		std::string hlsl;
 		hlsl.reserve(1024);
 
@@ -406,19 +433,55 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		hlsl += "};\n\n";
 
 		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
-		if (texcoord0Index >= 0)
+		if (texcoord0Index >= 0 && color0Index >= 0)
+		{
+			// Plan 11-09.15 Iter-29B: restored to Iter-28 `tex*color`
+			// modulate while we collect drawQuadList routing diagnostics
+			// (added in Direct3d11_StateCache.cpp this iter). Iter-29A1
+			// (`.a`-mask), 29A2 (`.r`-mask), and 29A3 (raw `tex`) all
+			// failed to surface letter shapes — which rules out the
+			// PS-shape hypothesis space and points to either a wrong-
+			// SRV-bound bug for font draws, or font draws taking a
+			// different VS path than ui.vsh entirely. The diagnostic
+			// landing in this iter logs template name + VS hash + SRV0
+			// + vertCount per drawQuadList call for the first 50 calls
+			// so we can SEE which routing path glyph batches take.
+			char texField[32], colField[32];
+			snprintf(texField, sizeof(texField), "_v%d", texcoord0Index);
+			snprintf(colField, sizeof(colField), "_v%d", color0Index);
+			hlsl += "    return t.Sample(s, input.";
+			hlsl += texField;
+			hlsl += ".xy) * input.";
+			hlsl += colField;
+			hlsl += ";\n";
+		}
+		else if (texcoord0Index >= 0)
 		{
 			// Plan 11-09.15 Iter-27: REVERTED Iter-12/13/14 diagnostic PS hacks.
 			// Iter-26 plus CODEX+Cursor consult identified the real bug:
 			// Direct3d11_StateCache::drawQuadList was an unimplemented stub
 			// that silently dropped all UI quad draws. With drawQuadList
-			// implemented (this iter) the per-VS PS texture-sample path
-			// is now the right thing to do.
+			// implemented (Iter-27) the per-VS PS texture-sample path is
+			// now the right thing to do. Backdrop VS `2d_texture.vsh`
+			// hits this branch (no COLOR0 output).
 			char field[32];
 			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
 			hlsl += "    return t.Sample(s, input.";
 			hlsl += field;
 			hlsl += ".xy);\n";
+		}
+		else if (color0Index >= 0)
+		{
+			// Plan 11-09.15 Iter-28: vertex-color-only (no texture). This
+			// path matches `2d.vsh` which the Iter-26 diagnostic logged
+			// with SRV0=NULL -- colored quads (panel fills, separators).
+			// Previously fell through to magenta because no TEXCOORD0
+			// output; now emits the vertex color directly.
+			char colField[32];
+			snprintf(colField, sizeof(colField), "_v%d", color0Index);
+			hlsl += "    return input.";
+			hlsl += colField;
+			hlsl += ";\n";
 		}
 		else
 		{

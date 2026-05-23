@@ -475,6 +475,23 @@ int Direct3d11_StaticShaderData::getTextureSortKey() const
 	return 0;
 }
 
+// ----------------------------------------------------------------------
+
+char const * Direct3d11_StaticShaderData::getActiveStaticShaderName()
+{
+	// Plan 11-09.15 Iter-29B diagnostic accessor. Returns the .sht
+	// template path of whatever StaticShader was most recently bound via
+	// setStaticShader -> apply(). Used by Direct3d11_StateCache::drawQuadList
+	// to log which shader template each UI quad batch routes through, so
+	// we can determine whether font draws hit shader/uicanvas_filtered.sht
+	// (current Iter-28 modulate branch) or some other path.
+	if (!ms_active || !ms_active->m_shader)
+		return "<none>";
+	CrcString const &name = ms_active->m_shader->getStaticShaderTemplate().getName();
+	char const * const s = name.getString();
+	return (s && *s) ? s : "<empty>";
+}
+
 // ======================================================================
 
 bool Direct3d11_StaticShaderData::apply(int passNumber) const
