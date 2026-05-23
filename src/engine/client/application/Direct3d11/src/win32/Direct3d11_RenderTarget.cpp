@@ -84,13 +84,31 @@ void Direct3d11_RenderTarget::install()
 	// the same texture is writable as RTV AND samplable as SRV (matches
 	// D3D9's "render to texture then sample" flow but without the
 	// system-memory intermediate).
+	//
+	// Plan 11-09.15 Iter-40: format is DXGI_FORMAT_B8G8R8A8_UNORM (BGRA),
+	// NOT DXGI_FORMAT_B8G8R8X8_UNORM (BGRX) as the D3D9 sibling uses
+	// (Direct3d9_RenderTarget.cpp:91 D3DFMT_X8R8G8B8). D3D9's
+	// D3DXLoadSurfaceFromSurface / StretchRect were format-permissive;
+	// D3D11's CopySubresourceRegion at copyRenderTargetToNonRenderTargetTexture
+	// (line 284 below) strict-rejects when source and dest formats differ
+	// AND are not in the same typeless family. BGRA8 and BGRX8 live in
+	// SEPARATE typeless families (B8G8R8A8_TYPELESS vs B8G8R8X8_TYPELESS),
+	// so a BGRX8 source rejects every BGRA8 dest. Engine bake-destination
+	// textures are predominantly TF_ARGB_8888 -> BGRA8 (TextureRendererTemplate
+	// singleTextureFormat = TF_ARGB_8888 at TextureRendererTemplate.cpp:74),
+	// so matching the persistent RT to BGRA8 closes the common case. The
+	// "X channel" of the D3D9 path was always ignored anyway; reading
+	// alpha=undef from a BGRA RTV is equivalent. A diagnostic at
+	// copyRenderTargetToNonRenderTargetTexture logs any non-BGRA dest that
+	// slips through; if such a case appears, a follow-up Iter-40b handles
+	// per-dest-format RT recreation.
 
 	D3D11_TEXTURE2D_DESC desc = {};
 	desc.Width              = static_cast<UINT>(cms_bakedTextureMaxDimension);
 	desc.Height             = static_cast<UINT>(cms_bakedTextureMaxDimension);
 	desc.MipLevels          = 1;
 	desc.ArraySize          = 1;
-	desc.Format             = DXGI_FORMAT_B8G8R8X8_UNORM;
+	desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
 	desc.SampleDesc.Count   = 1;
 	desc.SampleDesc.Quality = 0;
 	desc.Usage              = D3D11_USAGE_DEFAULT;
@@ -280,6 +298,49 @@ bool Direct3d11_RenderTarget::copyRenderTargetToNonRenderTargetTexture()
 		srcBox.right  = static_cast<UINT>(ms_copyWidth);
 		srcBox.bottom = static_cast<UINT>(ms_copyHeight);
 		srcBox.back   = 1;
+
+		// Plan 11-09.15 Iter-40 diagnostic: log the dest texture's DXGI
+		// format on first N copybacks. The persistent source RT is BGRA8
+		// (see install() above); if a dest texture has a different DXGI
+		// format AND is not in the same typeless family, the
+		// CopySubresourceRegion below will fire id=281 "Formats not
+		// castable" and the copy silently fails. The log tells us whether
+		// any non-BGRA8 dest formats reach this path, which guides the
+		// follow-up Iter-40b decision (per-format RT recreation vs the
+		// current single-format design).
+		{
+			static int s_iter40Count = 0;
+			if (s_iter40Count < 50)
+			{
+				ID3D11Resource *const dstRes = texData->getTexture();
+				ComPtr<ID3D11Texture2D> dstTex2d;
+				if (dstRes && SUCCEEDED(dstRes->QueryInterface(IID_PPV_ARGS(&dstTex2d))) && dstTex2d)
+				{
+					D3D11_TEXTURE2D_DESC dstDesc = {};
+					dstTex2d->GetDesc(&dstDesc);
+					if (dstDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM)
+					{
+						++s_iter40Count;
+						if (ID3D11InfoQueue *iq40 = Direct3d11_Device::getInfoQueue())
+						{
+							char const *fn = ms_userTexture ? "<userTex>" : "<null>";
+							char buf40[384];
+							_snprintf_s(buf40, sizeof(buf40), _TRUNCATE,
+								"Plan 11-09.15 Iter-40 BAKE_FMT_MISMATCH#%d dstDXGI=%d srcDXGI=%d "
+								"dstW=%u dstH=%u mip=%d cubeFace=%d userTex=%s",
+								s_iter40Count,
+								static_cast<int>(dstDesc.Format),
+								static_cast<int>(DXGI_FORMAT_B8G8R8A8_UNORM),
+								dstDesc.Width, dstDesc.Height,
+								ms_userMip,
+								static_cast<int>(ms_userCubeFace),
+								fn);
+							iq40->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, buf40);
+						}
+					}
+				}
+			}
+		}
 
 		context->CopySubresourceRegion(
 			texData->getTexture(),
