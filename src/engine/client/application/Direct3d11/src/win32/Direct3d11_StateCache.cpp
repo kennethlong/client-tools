@@ -200,10 +200,27 @@ namespace Direct3d11_StateCacheNamespace
 	ComPtr<ID3D11Buffer> ms_triangleFanIB;
 	int ms_triangleFanIBCapacityVerts = 0;
 
+	// Plan 11-09.15 Iter-27: reusable quad-list IB mirror of the fan-list
+	// IB infrastructure. CODEX + Cursor convergent consult on the
+	// engine-renders-only-postfx-blit symptom identified drawQuadList as
+	// the missing implementation that silently dropped every UI textured
+	// quad. D3D9 reference: Direct3d9.cpp:4277 uses ms_quadListIndexBuffer
+	// with pattern (4N+0, 4N+1, 4N+2, 4N+0, 4N+2, 4N+3) per quad.
+	// R16_UINT -> cap is 65535 / 4 = 16383 quads.
+	constexpr int kQuadListIBInitialCapacityQuads = 256;   // 1024 verts -- room for splash + mid-UI
+	constexpr int kQuadListIBMaxCapacityQuads     = 16383; // R16_UINT cap; 16383 * 4 = 65532 verts
+	ComPtr<ID3D11Buffer> ms_quadListIB;
+	int ms_quadListIBCapacityQuads = 0;
+
 	int ms_drawTriangleFanCalls               = 0;
 	int ms_drawPartialTriangleFanCalls        = 0;
 	int ms_triangleFanIBRebuilds              = 0;
 	int ms_triangleFanMaxVertices             = 0;
+
+	// Plan 11-09.15 Iter-27: drawQuadList counters parallel to fan counters.
+	int ms_drawQuadListCalls                  = 0;
+	int ms_quadListIBRebuilds                 = 0;
+	int ms_quadListMaxQuads                   = 0;
 	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): indexed-fan variants still
 	// broken (TRIANGLELIST topology applied to fan-shaped indexed data). Real
 	// fix needs CPU-side index shadows in Direct3d11_StaticIndexBufferData at
@@ -581,6 +598,77 @@ namespace Direct3d11_StateCacheNamespace
 		return true;
 	}
 
+	// Plan 11-09.15 Iter-27: reusable quad-list IB; lazy doubling growth.
+	// Mirrors ensureTriangleFanIB. Quad N indices pattern:
+	//   (4N+0, 4N+1, 4N+2, 4N+0, 4N+2, 4N+3) -- 6 indices per quad,
+	// matching D3D9's per-quad expansion at Direct3d9.cpp:4277.
+	bool ensureQuadListIB(int numQuads)
+	{
+		if (numQuads > kQuadListIBMaxCapacityQuads)
+		{
+			DEBUG_FATAL(true, ("Direct3d11_StateCache::ensureQuadListIB: requested %d quads > R16_UINT cap %d.\n",
+				numQuads, kQuadListIBMaxCapacityQuads));
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11_StateCache::ensureQuadListIB: requested %d quads > R16_UINT cap %d; skipping draw.\n",
+				numQuads, kQuadListIBMaxCapacityQuads));
+			return false;
+		}
+
+		if (ms_quadListIB && numQuads <= ms_quadListIBCapacityQuads)
+			return true;  // cache hit
+
+		int newCapacity = ms_quadListIBCapacityQuads > 0
+			? ms_quadListIBCapacityQuads
+			: kQuadListIBInitialCapacityQuads;
+		while (newCapacity < numQuads)
+		{
+			newCapacity *= 2;
+			if (newCapacity > kQuadListIBMaxCapacityQuads)
+				newCapacity = kQuadListIBMaxCapacityQuads;
+		}
+
+		int const indexCount = newCapacity * 6;
+		std::vector<uint16_t> indices;
+		indices.reserve(static_cast<size_t>(indexCount));
+		for (int q = 0; q < newCapacity; ++q)
+		{
+			uint16_t const base = static_cast<uint16_t>(q * 4);
+			indices.push_back(static_cast<uint16_t>(base + 0));
+			indices.push_back(static_cast<uint16_t>(base + 1));
+			indices.push_back(static_cast<uint16_t>(base + 2));
+			indices.push_back(static_cast<uint16_t>(base + 0));
+			indices.push_back(static_cast<uint16_t>(base + 2));
+			indices.push_back(static_cast<uint16_t>(base + 3));
+		}
+
+		D3D11_BUFFER_DESC bd = {};
+		bd.ByteWidth      = static_cast<UINT>(indexCount * sizeof(uint16_t));
+		bd.Usage          = D3D11_USAGE_IMMUTABLE;
+		bd.BindFlags      = D3D11_BIND_INDEX_BUFFER;
+		bd.CPUAccessFlags = 0;
+		bd.MiscFlags      = 0;
+
+		D3D11_SUBRESOURCE_DATA srd = {};
+		srd.pSysMem          = indices.data();
+		srd.SysMemPitch      = 0;
+		srd.SysMemSlicePitch = 0;
+
+		ComPtr<ID3D11Buffer> newIB;
+		HRESULT const hr = Direct3d11_Device::getDevice()->CreateBuffer(&bd, &srd, newIB.GetAddressOf());
+		if (FAILED(hr))
+		{
+			DEBUG_REPORT_LOG_PRINT(true,
+				("Direct3d11_StateCache::ensureQuadListIB: CreateBuffer failed (cap=%d, %d indices): %s\n",
+				newCapacity, indexCount, Direct3d11Namespace::hresultString(hr)));
+			return false;
+		}
+
+		ms_quadListIB = newIB;
+		ms_quadListIBCapacityQuads = newCapacity;
+		++ms_quadListIBRebuilds;
+		return true;
+	}
+
 	// ------------------------------------------------------------------
 	// Plan 11-09.13 Iter-4: dispatch through the per-VS dynamic PS cache.
 	// getOrCompilePSForVS lazily generates a PS whose input struct
@@ -910,6 +998,16 @@ void Direct3d11_StateCache::install()
 	ms_triangleFanIB.Reset();
 	(void)ensureTriangleFanIB(kTriangleFanIBInitialCapacityVerts);
 
+	// Plan 11-09.15 Iter-27: reset quad-list counters + pre-allocate the
+	// quad-list IB at the initial capacity so the first splash draw
+	// doesn't stall on CreateBuffer.
+	ms_drawQuadListCalls                  = 0;
+	ms_quadListIBRebuilds                 = 0;
+	ms_quadListMaxQuads                   = 0;
+	ms_quadListIBCapacityQuads            = 0;
+	ms_quadListIB.Reset();
+	(void)ensureQuadListIB(kQuadListIBInitialCapacityQuads);
+
 	// Plan 11-09.15 Iter-2 follow-up: dump the first 12 indices of the fan IB
 	// (covers 4 fan-list triangles) to verify the (0,i,i+1) construction
 	// produces what we expect. Sanity check for the "radiating from world
@@ -943,10 +1041,12 @@ void Direct3d11_StateCache::remove()
 	_snprintf_s(shutdownBuf, sizeof(shutdownBuf), _TRUNCATE,
 		"Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d "
 		"drawTriangleFanCalls=%d drawPartialTriangleFanCalls=%d triangleFanIBRebuilds=%d triangleFanMaxVertices=%d "
-		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d",
+		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d "
+		"drawQuadListCalls=%d quadListIBRebuilds=%d quadListMaxQuads=%d",
 		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound,
 		ms_drawTriangleFanCalls, ms_drawPartialTriangleFanCalls, ms_triangleFanIBRebuilds, ms_triangleFanMaxVertices,
-		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls);
+		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls,
+		ms_drawQuadListCalls, ms_quadListIBRebuilds, ms_quadListMaxQuads);
 	if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
 		iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, shutdownBuf);
 	DEBUG_REPORT_LOG_PRINT(true, ("%s\n", shutdownBuf));
@@ -978,6 +1078,10 @@ void Direct3d11_StateCache::remove()
 	// Plan 11-09.15: release fan IB.
 	ms_triangleFanIB.Reset();
 	ms_triangleFanIBCapacityVerts = 0;
+
+	// Plan 11-09.15 Iter-27: release quad-list IB.
+	ms_quadListIB.Reset();
+	ms_quadListIBCapacityQuads = 0;
 
 	delete ms_rsCache;
 	delete ms_bsCache;
@@ -1958,11 +2062,54 @@ void Direct3d11_StateCache::drawTriangleFan()
 
 void Direct3d11_StateCache::drawQuadList()
 {
-	// D3D9 plugin triangulates quads at draw time via a static quad-index
-	// buffer. Plan 11-06 emits a STUB-style log; Plan 11-07 smoke will
-	// surface whether any subsystem uses drawQuadList (UI overlays
-	// historically do; particle sprite renderer may).
-	DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_StateCache::drawQuadList: TODO Plan 11-07\n"));
+	// Plan 11-09.15 Iter-27: implementation of the stubbed drawQuadList.
+	// CODEX + Cursor convergent consult on the
+	// engine-renders-only-postfx-blit symptom identified this stub as the
+	// root cause of "splash UI never reaches D3D11 plugin": every UI
+	// textured quad goes through CuiLayerRenderer::flushRenderQueueQuads
+	// -> Graphics::drawQuadList -> the stub here -> silent drop.
+	//
+	// Mirrors Plan 11-09.15's fan-list IB pattern (drawTriangleFan):
+	// reusable quad-list IB with pattern (4N+0, 4N+1, 4N+2, 4N+0, 4N+2,
+	// 4N+3) per quad. Bind IB, applyPreDrawState(TRIANGLELIST), issue
+	// DrawIndexed(numQuads * 6, 0, 0). Defensive IB rebind matches the
+	// fan path.
+	//
+	// D3D9 reference: Direct3d9.cpp:4277 uses ms_quadListIndexBuffer
+	// with identical winding + same R16 cap.
+	int const vertCount = ms_currentVBVertexCount;
+	if (vertCount < 4)
+		return;
+	int const numQuads = vertCount / 4;
+	if (numQuads <= 0)
+		return;
+
+	++ms_drawQuadListCalls;
+	if (numQuads > ms_quadListMaxQuads)
+		ms_quadListMaxQuads = numQuads;
+
+	if (!ensureQuadListIB(numQuads))
+		return;  // > R16_UINT cap or CreateBuffer failure -- skip draw
+
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+		return;
+
+	ID3D11DeviceContext * const ctx = Direct3d11_Device::getContext();
+	ctx->IASetIndexBuffer(
+		ms_quadListIB.Get(),
+		DXGI_FORMAT_R16_UINT,
+		0);
+
+	ctx->DrawIndexed(
+		static_cast<UINT>(numQuads * 6),
+		0,
+		0);
+
+	// Defensive IB rebind matches the fan-list path: if a downstream
+	// caller assumes its prior setIndexBuffer is still bound on the
+	// device, restore the StateCache shadow's IB.
+	if (ms_currentIBValid && ms_currentIB)
+		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 }
 
 void Direct3d11_StateCache::drawIndexedPointList()

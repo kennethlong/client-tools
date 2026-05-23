@@ -408,29 +408,17 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
 		if (texcoord0Index >= 0)
 		{
-			// Plan 11-09.15 Iter-14 DIAGNOSTIC (Step A from CODEX + Cursor
-			// converged consult on PS-texture-sample-returns-zero):
-			// visualize the input TEXCOORD0 as color (R=u, G=v, B=0, A=1).
-			// CODEX + Cursor both rule out H6 (PS register linkage drift)
-			// based on FXC analysis of the generated HLSL -- the prepended
-			// SV_POSITION at PSIn register 0 forces the auto-allocator to
-			// place TEXCOORD0 at v1, matching the VS output at o1. Both
-			// pivot to H3/H5/H7 (texture GPU content is zero / wrong / not
-			// uploaded). This UV viz pass either:
-			//   * Shows a red-to-yellow-to-green gradient across the splash
-			//     -> UVs reach the PS correctly -> texture content really
-			//     is zero -> Iter-15 adds GPU staging readback to confirm
-			//     and traces Direct3d11_TextureData::lock/unlock for the
-			//     splash format (likely TF_RGB_888 lock-bridge path).
-			//   * Shows solid black -> UVs are zeroed at PS input despite
-			//     clean linkage -> input layout / phantom element path
-			//     (lower probability per both consults).
-			// REVERT once root cause is fixed.
+			// Plan 11-09.15 Iter-27: REVERTED Iter-12/13/14 diagnostic PS hacks.
+			// Iter-26 plus CODEX+Cursor consult identified the real bug:
+			// Direct3d11_StateCache::drawQuadList was an unimplemented stub
+			// that silently dropped all UI quad draws. With drawQuadList
+			// implemented (this iter) the per-VS PS texture-sample path
+			// is now the right thing to do.
 			char field[32];
 			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
-			hlsl += "    return float4(input.";
+			hlsl += "    return t.Sample(s, input.";
 			hlsl += field;
-			hlsl += ".xy, 0.0f, 1.0f);\n";
+			hlsl += ".xy);\n";
 		}
 		else
 		{
