@@ -470,6 +470,143 @@ namespace Direct3d11_StateCacheNamespace
 					iq34->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf34);
 				}
 			}
+
+			// Plan 11-09.15 Iter-38A: WVP composition + multiply-convention
+			// diagnostic. Both CODEX and Cursor closed the row/column-major
+			// packing hypothesis (D3DCOMPILE_PACK_MATRIX_ROW_MAJOR + row_major
+			// bytecode confirmed). Stale-CSO cache hypothesis ruled out by
+			// smoke after stage/stage/shader-cache purge (same broken visual).
+			// Remaining candidates: WVP composition order, or V/P input bug.
+			//
+			// Dumps per sampled flush:
+			//   - V, P, W as separate matrices (so D3D9 baseline can be diffed)
+			//   - WVP_current = (P*V)*W (current composeSlot0Shadow output)
+			//   - WVP_alt     = (W*V)*P (alternate composition)
+			//   - For a canonical head-height test point (0, 1.7, 0, 1):
+			//     * clip_PVW_col: WVP_current applied as column-vector right-mult
+			//     * clip_PVW_row: WVP_current applied as row-vector left-mult
+			//     * clip_WVP_col: WVP_alt     applied as column-vector right-mult
+			//     * clip_WVP_row: WVP_alt     applied as row-vector left-mult
+			//
+			// The interpretation that produces clip.w POSITIVE for an in-front
+			// vertex tells us the correct composition + convention pair. Iter-37A
+			// post-smoke math showed clip.w going catastrophically negative under
+			// (P*V*W column-vector) for the player at head height; this iter
+			// directly empirically tests the alternatives.
+			//
+			// Sampling: first 5 + every 500th flush. With ~1500 flushes/session,
+			// captures ~8 samples (5 startup + 3 in-world). Each sample emits
+			// ~12 InfoQueue messages so total log overhead is modest.
+			{
+				static int s_iter38aCount = 0;
+				bool const i38_early  = (s_iter38aCount < 5);
+				bool const i38_sample = (s_iter38aCount >= 5) && (s_flushCount % 500 == 0);
+				if (i38_early || i38_sample)
+				{
+					++s_iter38aCount;
+					if (ID3D11InfoQueue *iq38 = Direct3d11_Device::getInfoQueue())
+					{
+						char const *vsFn38 = "<none>";
+						if (ms_currentVSData)
+						{
+							ShaderImplementationPassVertexShader const *eng38 =
+								ms_currentVSData->getEngineShader();
+							if (eng38) vsFn38 = eng38->getFilename();
+						}
+						char const * const sht38 =
+							Direct3d11_StaticShaderData::getActiveStaticShaderName();
+
+						// Header.
+						char hdr[256];
+						_snprintf_s(hdr, sizeof(hdr), _TRUNCATE,
+							"Plan 11-09.15 Iter-38A sample#%d (flush#%d) sht='%s' VS='%s'",
+							s_iter38aCount, s_flushCount, sht38, vsFn38);
+						iq38->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, hdr);
+
+						// Build alt composition.
+						DirectX::XMMATRIX Vm  = DirectX::XMLoadFloat4x4(&s_cachedView);
+						DirectX::XMMATRIX Pm  = DirectX::XMLoadFloat4x4(&s_cachedProj);
+						DirectX::XMMATRIX Wm  = DirectX::XMLoadFloat4x4(&s_cachedWorld);
+						DirectX::XMMATRIX cur = DirectX::XMMatrixMultiply(
+							DirectX::XMMatrixMultiply(Pm, Vm), Wm);          // (P*V)*W
+						DirectX::XMMATRIX alt = DirectX::XMMatrixMultiply(
+							DirectX::XMMatrixMultiply(Wm, Vm), Pm);          // (W*V)*P
+						DirectX::XMFLOAT4X4 curM, altM;
+						DirectX::XMStoreFloat4x4(&curM, cur);
+						DirectX::XMStoreFloat4x4(&altM, alt);
+
+						auto dumpMatrix = [&](char const *label,
+							DirectX::XMFLOAT4X4 const &M)
+						{
+							char buf[512];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-38A   %s "
+								"r0=[%.3f %.3f %.3f %.3f] r1=[%.3f %.3f %.3f %.3f] "
+								"r2=[%.3f %.3f %.3f %.3f] r3=[%.3f %.3f %.3f %.3f]",
+								label,
+								M._11, M._12, M._13, M._14,
+								M._21, M._22, M._23, M._24,
+								M._31, M._32, M._33, M._34,
+								M._41, M._42, M._43, M._44);
+							iq38->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+						};
+
+						dumpMatrix("V        ", s_cachedView);
+						dumpMatrix("P        ", s_cachedProj);
+						dumpMatrix("W        ", s_cachedWorld);
+						dumpMatrix("WVP(cur) ", curM);
+						dumpMatrix("WVP(alt) ", altM);
+
+						// Compute 4 clip vectors for test point (head-height
+						// vertex above model origin = vertex you'd expect to
+						// be in front of camera & visible).
+						float const px = 0.0f, py = 1.7f, pz = 0.0f, pw = 1.0f;
+						auto clipColMul = [&](DirectX::XMFLOAT4X4 const &M)
+						{
+							// clip[i] = sum_j M[i][j] * pos[j]  (column-vector right-mult)
+							return DirectX::XMFLOAT4(
+								M._11*px + M._12*py + M._13*pz + M._14*pw,
+								M._21*px + M._22*py + M._23*pz + M._24*pw,
+								M._31*px + M._32*py + M._33*pz + M._34*pw,
+								M._41*px + M._42*py + M._43*pz + M._44*pw);
+						};
+						auto clipRowMul = [&](DirectX::XMFLOAT4X4 const &M)
+						{
+							// clip[j] = sum_i pos[i] * M[i][j]  (row-vector left-mult)
+							return DirectX::XMFLOAT4(
+								px*M._11 + py*M._21 + pz*M._31 + pw*M._41,
+								px*M._12 + py*M._22 + pz*M._32 + pw*M._42,
+								px*M._13 + py*M._23 + pz*M._33 + pw*M._43,
+								px*M._14 + py*M._24 + pz*M._34 + pw*M._44);
+						};
+						DirectX::XMFLOAT4 clipPVWcol = clipColMul(curM);
+						DirectX::XMFLOAT4 clipPVWrow = clipRowMul(curM);
+						DirectX::XMFLOAT4 clipWVPcol = clipColMul(altM);
+						DirectX::XMFLOAT4 clipWVProw = clipRowMul(altM);
+
+						auto dumpClip = [&](char const *label,
+							DirectX::XMFLOAT4 const &c)
+						{
+							char buf[256];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-38A   %s = [%.4f %.4f %.4f %.4f]  w_sign=%s",
+								label, c.x, c.y, c.z, c.w,
+								(c.w > 0.0f ? "POSITIVE" : "negative"));
+							iq38->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+						};
+
+						char tpHdr[128];
+						_snprintf_s(tpHdr, sizeof(tpHdr), _TRUNCATE,
+							"Plan 11-09.15 Iter-38A   testpt = (%.3f, %.3f, %.3f, %.3f)",
+							px, py, pz, pw);
+						iq38->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, tpHdr);
+						dumpClip("clip_PVW_col (current,    column-vec right-mul)", clipPVWcol);
+						dumpClip("clip_PVW_row (current,    row-vec    left-mul )", clipPVWrow);
+						dumpClip("clip_WVP_col (W*V*P alt,  column-vec right-mul)", clipWVPcol);
+						dumpClip("clip_WVP_row (W*V*P alt,  row-vec    left-mul )", clipWVProw);
+					}
+				}
+			}
 		}
 		Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, sizeof(s_slot0Shadow));
 		s_slot0Dirty = false;
