@@ -422,6 +422,17 @@ namespace Direct3d11_StateCacheNamespace
 			// Iter-34: dump c0..c7 (WVP + worldMatrix) per flush, first 20
 			// + every 200th. Each matrix is 16 floats; write 4 floats per
 			// line to keep buffer size reasonable.
+			//
+			// Plan 11-09.15 Iter-37A: also dump the current bound VS
+			// filename and active static-shader template name. Iter-36D2
+			// confirmed in-world SBSSP transforms are healthy, so the 41%
+			// identity-W flushes seen at Iter-34 must come from a different
+			// render family. Logging VS+template per flush lets us correlate
+			// identity-W cbuffer entries to the responsible engine path
+			// (batch skeletal, terrain, particles, attachments, etc.) so we
+			// know which prepareToDraw to instrument next. ms_currentVSData
+			// is updated when the shader binds (well before applyPreDrawState
+			// calls flushSlot0IfDirty), so it reflects THIS draw's VS.
 			static int s_iter34Count = 0;
 			bool const i34_early  = (s_iter34Count < 20);
 			bool const i34_sample = (s_iter34Count >= 20) && (s_flushCount % 200 == 0);
@@ -429,16 +440,25 @@ namespace Direct3d11_StateCacheNamespace
 			{
 				++s_iter34Count;
 				float const *c0 = reinterpret_cast<float const *>(&s_slot0Shadow);
+				char const *vsFn34 = "<none>";
+				if (ms_currentVSData)
+				{
+					ShaderImplementationPassVertexShader const *eng34 =
+						ms_currentVSData->getEngineShader();
+					if (eng34) vsFn34 = eng34->getFilename();
+				}
+				char const * const sht34 =
+					Direct3d11_StaticShaderData::getActiveStaticShaderName();
 				if (ID3D11InfoQueue *iq34 = Direct3d11_Device::getInfoQueue())
 				{
-					char buf34[768];
+					char buf34[1024];
 					_snprintf_s(buf34, sizeof(buf34), _TRUNCATE,
-						"Plan 11-09.15 Iter-34 slot0#%d (flush#%d) "
+						"Plan 11-09.15 Iter-34 slot0#%d (flush#%d) sht='%s' VS='%s' | "
 						"WVP c0=[%.3f %.3f %.3f %.3f] c1=[%.3f %.3f %.3f %.3f] "
 						"c2=[%.3f %.3f %.3f %.3f] c3=[%.3f %.3f %.3f %.3f] | "
 						"W c4=[%.3f %.3f %.3f %.3f] c5=[%.3f %.3f %.3f %.3f] "
 						"c6=[%.3f %.3f %.3f %.3f] c7=[%.3f %.3f %.3f %.3f]",
-						s_iter34Count, s_flushCount,
+						s_iter34Count, s_flushCount, sht34, vsFn34,
 						c0[ 0], c0[ 1], c0[ 2], c0[ 3],
 						c0[ 4], c0[ 5], c0[ 6], c0[ 7],
 						c0[ 8], c0[ 9], c0[10], c0[11],
@@ -961,13 +981,26 @@ namespace Direct3d11_StateCacheNamespace
 		// showed all xform=1 (UI), so world content draws AFTER the boot
 		// UI sequence. Separate counters guarantee world content captures
 		// regardless of when in the session it fires.
+		//
+		// Plan 11-09.15 Iter-37A: WORLD sampling switched from "first 500
+		// only" to "first 500 + every 50th call thereafter, cap 2000". The
+		// flat 500 cap exhausted entirely during char-select preview (all
+		// 500 entries were Sullustan armor/clothing shaders), leaving zero
+		// visibility into in-world VS/template diversity. Same pattern as
+		// Iter-36D2 SBSSP logger which successfully captured both the
+		// preview burst and post-preview in-world transforms.
 		{
-			static int s_iter26CountUI    = 0;   // xform=1
-			static int s_iter26CountWorld = 0;   // xform=0
+			static int s_iter26CountUI       = 0;   // xform=1, logged
+			static int s_iter26CountWorld    = 0;   // xform=0, logged
+			static int s_iter26CallsWorld    = 0;   // xform=0, total seen (Iter-37A sampling)
 			bool const isXformed = ms_currentVBFormat.isTransformed();
+			if (!isXformed) ++s_iter26CallsWorld;
+			bool const worldEarly  = (!isXformed) && (s_iter26CountWorld < 500);
+			bool const worldSample = (!isXformed) && (s_iter26CountWorld < 2000)
+				&& (s_iter26CallsWorld % 50 == 0);
 			bool const shouldLog =
 				(isXformed && s_iter26CountUI < 500) ||
-				(!isXformed && s_iter26CountWorld < 500);
+				worldEarly || worldSample;
 			if (shouldLog)
 			{
 				if (isXformed) ++s_iter26CountUI; else ++s_iter26CountWorld;

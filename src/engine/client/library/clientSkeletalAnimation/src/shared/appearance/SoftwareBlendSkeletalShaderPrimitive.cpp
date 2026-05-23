@@ -495,7 +495,10 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
 			char const * const mode = s_iter36dFirstWrite ? "wb" : "ab";
 			s_iter36dFirstWrite = false;
 			FILE *fp = nullptr;
-			fopen_s(&fp, "stage/iter36d-sbssp-transform.txt", mode);
+			// Iter-37A: cwd at runtime is already stage/, so the previous
+			// "stage/iter36d-..." path landed the artifact at stage/stage/.
+			// Use a bare filename to keep it next to d3d11-debug.log.
+			fopen_s(&fp, "iter36d-sbssp-transform.txt", mode);
 			if (fp)
 			{
 				Vector const pos = transform_apw.getPosition_p();
