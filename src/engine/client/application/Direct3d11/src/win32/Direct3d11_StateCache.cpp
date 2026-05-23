@@ -494,13 +494,32 @@ namespace Direct3d11_StateCacheNamespace
 			// (P*V*W column-vector) for the player at head height; this iter
 			// directly empirically tests the alternatives.
 			//
-			// Sampling: first 5 + every 500th flush. With ~1500 flushes/session,
-			// captures ~8 samples (5 startup + 3 in-world). Each sample emits
-			// ~12 InfoQueue messages so total log overhead is modest.
+			// Sampling: ONLY when V is non-identity (= world rendering phase,
+			// not UI/billboard phase). Iter-38A-take-1 sampled by flush-count
+			// modulo and ALL 372 captures landed on identity V/P/W -- the
+			// engine resets V/P to identity during UI/billboard draws (which
+			// use XYZRHW pre-transformed verts), and every 500th flush
+			// systematically aligned with UI/billboard bursts. Iter-34 (which
+			// reads s_slot0Shadow at different flushes) saw non-identity WVP
+			// from world draws between those bursts. So the gate has to be
+			// content-based: only sample when V indicates a real world
+			// camera. Take the first 8 such samples, then every 200th
+			// thereafter, capped at 30 total.
 			{
-				static int s_iter38aCount = 0;
-				bool const i38_early  = (s_iter38aCount < 5);
-				bool const i38_sample = (s_iter38aCount >= 5) && (s_flushCount % 500 == 0);
+				static int s_iter38aCount  = 0;
+				static int s_iter38aSeen   = 0;
+				// "World render phase" predicate: V is non-identity (camera
+				// has been set). Cheap byte-compare against the identity init.
+				bool const v_is_identity =
+					s_cachedView._11 == 1.0f && s_cachedView._12 == 0.0f &&
+					s_cachedView._13 == 0.0f && s_cachedView._14 == 0.0f &&
+					s_cachedView._21 == 0.0f && s_cachedView._22 == 1.0f &&
+					s_cachedView._44 == 1.0f;
+				bool const worldPhase = !v_is_identity;
+				if (worldPhase) ++s_iter38aSeen;
+				bool const i38_early  = worldPhase && (s_iter38aCount < 8);
+				bool const i38_sample = worldPhase && (s_iter38aCount < 30)
+					&& (s_iter38aCount >= 8) && (s_iter38aSeen % 200 == 0);
 				if (i38_early || i38_sample)
 				{
 					++s_iter38aCount;
