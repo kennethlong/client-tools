@@ -406,6 +406,18 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		{
 			hlsl += "Texture2D    t : register(t0);\n";
 			hlsl += "SamplerState s : register(s0);\n";
+
+			// Plan 11-09.15 Iter-44B: per-pass alpha-test parameters.
+			// alphaTest.x = enable (0/1), alphaTest.y = reference (0..1).
+			// State pushed by Direct3d11_StateCache::setAlphaTest from
+			// StaticShaderData::apply per-pass. Only matters when sampling
+			// a texture, so we only declare the cbuffer in branches that
+			// have texcoord0. Test semantics emulate D3D9's dominant
+			// GreaterOrEqual: discard pixel when sampled alpha < ref.
+			// Other compare functions are not currently supported in this
+			// scaffold; if a future asset needs them we extend the cbuffer
+			// with a function index.
+			hlsl += "cbuffer PSAlphaTest : register(b1) { float4 alphaTest; };\n";
 		}
 
 		hlsl += "struct PSIn\n{\n";
@@ -449,11 +461,15 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			char texField[32], colField[32];
 			snprintf(texField, sizeof(texField), "_v%d", texcoord0Index);
 			snprintf(colField, sizeof(colField), "_v%d", color0Index);
-			hlsl += "    return t.Sample(s, input.";
+			// Plan 11-09.15 Iter-44B: split the return into compute + clip + return so the
+			// per-pass alpha-test (state from PSAlphaTest cbuffer) can discard sub-ref pixels.
+			hlsl += "    float4 col = t.Sample(s, input.";
 			hlsl += texField;
 			hlsl += ".xy) * input.";
 			hlsl += colField;
 			hlsl += ";\n";
+			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
+			hlsl += "    return col;\n";
 		}
 		else if (texcoord0Index >= 0)
 		{
@@ -466,9 +482,13 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// hits this branch (no COLOR0 output).
 			char field[32];
 			snprintf(field, sizeof(field), "_v%d", texcoord0Index);
-			hlsl += "    return t.Sample(s, input.";
+			// Plan 11-09.15 Iter-44B: same alpha-test compute+clip+return shape as the
+			// texcoord+color branch above. PSAlphaTest cbuffer declared at the top.
+			hlsl += "    float4 col = t.Sample(s, input.";
 			hlsl += field;
 			hlsl += ".xy);\n";
+			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
+			hlsl += "    return col;\n";
 		}
 		else if (color0Index >= 0)
 		{

@@ -97,9 +97,46 @@ public:
 	// DESTBLEND/BLENDOP, ...) per-pass writes in Direct3d9_ShaderImplementation
 	// Data.cpp:259-261. Takes D3D11_BLEND / D3D11_BLEND_OP enums; the engine-
 	// enum mapping lives at the caller (StaticShaderData::apply).
+	//
+	// Iter-43 was REVERTED at the call site after Mos Eisley smoke regressed.
+	// CODEX + Cursor consult diagnosed the regression: blend factors alone
+	// run ahead of per-pass depth (44A) + alpha test (44B) + real PS (Phase
+	// 12). Re-land in Iter-44C after A+B close the prerequisite gaps.
 	static void setAlphaBlendFactors(D3D11_BLEND srcBlend,
 	                                 D3D11_BLEND destBlend,
 	                                 D3D11_BLEND_OP blendOp);
+
+	// Plan 11-09.15 Iter-44A: per-pass depth-stencil state. D3D9 sibling
+	// pushes ZENABLE / ZWRITEENABLE / ZFUNC per-pass via RSB / RSM
+	// (Direct3d9_ShaderImplementationData.cpp:255-257); D3D11 was using only
+	// the install() defaults (DepthEnable=TRUE, WriteMask=ALL, Func=LESS_EQUAL)
+	// for every draw. That's wrong for skeletal multi-pass shaders -- the
+	// back-of-head opaque pass writes depth, the eye/decal pass with
+	// m_zWrite=false expects to not write depth and the eye pass with
+	// m_zCompare=Always passes regardless of depth. The Mos Eisley smoke
+	// surfaced the symptom: when the player avatar faced away, the eye
+	// texture rendered visibly through the back of the head. Wiring per-pass
+	// depth from engPass->m_zEnable / m_zWrite / m_zCompare closes that.
+	// Takes D3D11 enums directly; engine-enum-to-D3D11 mapping lives at the
+	// caller (StaticShaderData::apply).
+	static void setDepthEnable(bool enabled);
+	static void setDepthWriteEnable(bool writeEnabled);
+	static void setDepthCompareFunc(D3D11_COMPARISON_FUNC func);
+
+	// Plan 11-09.15 Iter-44A: per-pass color-write mask. D3D9 sibling pushes
+	// COLORWRITEENABLE per-pass (Direct3d9_ShaderImplementationData.cpp). The
+	// engine's m_writeEnable is a uint8 bitmask with D3D9 D3DCOLORWRITEENABLE_*
+	// flags (RED=1, GREEN=2, BLUE=4, ALPHA=8) which are bitwise-identical to
+	// D3D11_COLOR_WRITE_ENABLE_* so the value passes through unchanged.
+	static void setColorWriteEnable(uint8 writeMask);
+
+	// Plan 11-09.15 Iter-44B: per-pass alpha-test. D3D11 has no FFP alpha-test
+	// state; the engine's m_alphaTestEnable + reference value gets pushed into
+	// PS cbuffer slot 1 (Direct3d11_PSAlphaTestCB) where the dynamic-generated
+	// PS reads it and conditionally clip()s. Reference is 0..1 (normalized
+	// from engine's uint8 via /255.0f). Caller (StaticShaderData::apply)
+	// resolves the engine's TAG-based reference to a uint8 before normalizing.
+	static void setAlphaTest(bool enabled, float reference);
 
 	// Pitfall 4: SRV binding only -- sampler is bound independently.
 	static void setGlobalTexture(Tag textureTag, Texture const &texture);

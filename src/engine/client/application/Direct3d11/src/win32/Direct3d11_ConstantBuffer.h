@@ -65,6 +65,25 @@ struct Direct3d11_PerMaterialCB
 static_assert(sizeof(Direct3d11_PerMaterialCB) == 112,              "Direct3d11_PerMaterialCB size mismatch");
 static_assert((sizeof(Direct3d11_PerMaterialCB) % 16) == 0,         "Direct3d11_PerMaterialCB not 16-byte aligned");
 
+// Plan 11-09.15 Iter-44B: per-pass alpha-test parameters for dynamic PS
+// clip(). D3D11 has no fixed-function alpha test (D3D9 D3DRS_ALPHATEST*
+// was removed); the test must live in the pixel shader as a clip() call.
+// We push the engine's m_alphaTestEnable + reference value into PS cbuffer
+// slot 1 (previously unused) and the dynamic-generated PS reads it and
+// emits clip(sampledAlpha - ref) when enabled. Only the dynamic fallback
+// PS uses this; real authored PSes (when present) are expected to do
+// their own alpha test.
+//
+// Compare function is NOT plumbed here -- the dominant case in SWG is
+// GreaterOrEqual (keep alpha >= ref, discard otherwise), so we emit
+// clip(alpha - ref) which has that semantic. If a future asset needs
+// other compare modes we can plumb a func index here.
+struct Direct3d11_PSAlphaTestCB
+{
+	DirectX::XMFLOAT4 alphaTest;   // x = enable (0/1), y = reference (0..1), z/w = pad
+};
+static_assert(sizeof(Direct3d11_PSAlphaTestCB) == 16,               "Direct3d11_PSAlphaTestCB size mismatch");
+
 // ======================================================================
 
 class Direct3d11_ConstantBuffer

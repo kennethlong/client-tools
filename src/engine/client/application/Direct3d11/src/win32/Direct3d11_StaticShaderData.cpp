@@ -48,6 +48,13 @@ int                                 Direct3d11_StaticShaderData::ms_activePass =
 
 namespace
 {
+	// Plan 11-09.15 Iter-44B: alpha-test reference-value tag constants.
+	// File-local to mirror the D3D9 sibling at Direct3d9_StaticShaderData.cpp:41-44.
+	Tag const TAG_A255 = TAG(A,2,5,5);
+	Tag const TAG_A128 = TAG(A,1,2,8);
+	Tag const TAG_A001 = TAG(A,0,0,1);
+	Tag const TAG_A000 = TAG(A,0,0,0);
+
 	// Plan 11-09.14: lifetime counts of slot-0 stage construction outcomes.
 	// Pair with Direct3d11_StateCache::ms_drawsWithSRV0Bound at shutdown to
 	// answer "did this run actually feed SRV0 through StaticShaderData::apply?"
@@ -137,6 +144,32 @@ namespace
 		case SIP::BO_Min:             return D3D11_BLEND_OP_MIN;
 		case SIP::BO_Max:             return D3D11_BLEND_OP_MAX;
 		default:                      return D3D11_BLEND_OP_ADD;
+		}
+	}
+
+	// Plan 11-09.15 Iter-44A: engine ShaderImplementationPass::Compare to
+	// D3D11_COMPARISON_FUNC. CODEX caveat preserved: D3D9's Compare[] table
+	// at Direct3d9_ShaderImplementationData.cpp:31-40 swaps the mapping for
+	// C_GreaterOrEqual and C_NotEqual relative to what the enum comments
+	// say (C_GreaterOrEqual -> D3DCMP_NOTEQUAL, C_NotEqual -> D3DCMP_GREATEREQUAL).
+	// Assets have been authored against this swap for years; mirroring it
+	// in D3D11 keeps parity. The D3D9 table comments themselves note the
+	// swap is "wrong" but we preserve it intentionally for asset parity --
+	// "fix"-ing it would break content that relies on the historical bug.
+	D3D11_COMPARISON_FUNC translateCompare(ShaderImplementationPass::Compare c)
+	{
+		using SIP = ShaderImplementationPass;
+		switch (c)
+		{
+		case SIP::C_Never:        return D3D11_COMPARISON_NEVER;
+		case SIP::C_Less:         return D3D11_COMPARISON_LESS;
+		case SIP::C_Equal:        return D3D11_COMPARISON_EQUAL;
+		case SIP::C_LessOrEqual:  return D3D11_COMPARISON_LESS_EQUAL;
+		case SIP::C_Greater:      return D3D11_COMPARISON_GREATER;
+		case SIP::C_GreaterOrEqual: return D3D11_COMPARISON_NOT_EQUAL;       // D3D9 PARITY SWAP
+		case SIP::C_NotEqual:     return D3D11_COMPARISON_GREATER_EQUAL;     // D3D9 PARITY SWAP
+		case SIP::C_Always:       return D3D11_COMPARISON_ALWAYS;
+		default:                  return D3D11_COMPARISON_LESS_EQUAL;
 		}
 	}
 
@@ -586,21 +619,60 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			{
 				ShaderImplementationPass const * const engPass = (*m_implementation->m_pass)[idx];
 				if (engPass)
+				{
 					Direct3d11_StateCache::setAlphaBlendEnable(engPass->m_alphaBlendEnable);
 
-				// Plan 11-09.15 Iter-43 REVERTED 2026-05-23: the per-pass
-				// blend FACTOR wiring (translateBlend/translateBlendOp ->
-				// StateCache::setAlphaBlendFactors) made the Mos Eisley smoke
-				// worse rather than better -- particle squares grew larger
-				// and white, mountain acquired snow patches. The translation
-				// itself is direct enum-to-enum, so the failure mode is
-				// upstream: many engine ShaderImplementationPass instances
-				// likely carry uninitialized/zero blend fields that the D3D9
-				// path tolerates (perhaps because D3D9's render-state engine
-				// applies them only under specific conditions). Restoring the
-				// install() default (SrcAlpha/InvSrcAlpha/Add) until we have
-				// a better mental model -- see consult markdown for
-				// proposed investigation.
+					// Plan 11-09.15 Iter-44B: per-pass ALPHA-TEST. D3D11 has
+					// no FFP alpha-test; we push enable + reference (0..1) into
+					// PS cbuffer slot 1 and the dynamic-generated PS reads it
+					// and conditionally clip()s. Reference resolution mirrors
+					// the D3D9 sibling at Direct3d9_StaticShaderData.cpp:740-760:
+					// hardcoded TAG_A255/A128/A001/A000 -> 255/128/1/0, otherwise
+					// per-StaticShader getAlphaTestReferenceValue(tag) lookup.
+					{
+						uint8 refUint = 128;  // safe default (50% threshold)
+						if (engPass->m_alphaTestEnable)
+						{
+							Tag const t = engPass->m_alphaTestReferenceValueTag;
+							if      (t == TAG_A255) refUint = 255;
+							else if (t == TAG_A128) refUint = 128;
+							else if (t == TAG_A001) refUint = 1;
+							else if (t == TAG_A000) refUint = 0;
+							else if (!m_shader || !m_shader->getAlphaTestReferenceValue(t, refUint))
+								refUint = 1;  // matches D3D9's fallback
+						}
+						Direct3d11_StateCache::setAlphaTest(
+							engPass->m_alphaTestEnable,
+							static_cast<float>(refUint) / 255.0f);
+					}
+
+					// Plan 11-09.15 Iter-44A: per-pass DEPTH state. Mirrors
+					// D3D9's RSB/RSM writes for ZENABLE/ZWRITEENABLE/ZFUNC
+					// (Direct3d9_ShaderImplementationData.cpp:255-257). Pre-
+					// Iter-44A every D3D11 draw used the install() defaults
+					// (DepthEnable=TRUE, WriteMask=ALL, Func=LESS_EQUAL),
+					// causing the "eyes through back-of-head" symptom: the
+					// eye/decal pass on the skeletal character expected
+					// either Z-disabled or Always-compare to render last over
+					// the back-of-head opaque pass, but got LESS_EQUAL with
+					// write-all so it depth-failed in the wrong direction.
+					Direct3d11_StateCache::setDepthEnable(engPass->m_zEnable);
+					Direct3d11_StateCache::setDepthWriteEnable(engPass->m_zWrite);
+					Direct3d11_StateCache::setDepthCompareFunc(translateCompare(engPass->m_zCompare));
+
+					// Plan 11-09.15 Iter-44A: per-pass COLOR-WRITE mask.
+					// Mirrors D3D9's RSB-equivalent push of COLORWRITEENABLE.
+					// Engine bits are D3D9 D3DCOLORWRITEENABLE_* which are
+					// bitwise-identical to D3D11_COLOR_WRITE_ENABLE_* so the
+					// value passes through unchanged.
+					Direct3d11_StateCache::setColorWriteEnable(engPass->m_writeEnable);
+
+					// Plan 11-09.15 Iter-43 (reverted, deferred to Iter-44C):
+					// per-pass blend FACTOR wiring. Re-land after Iter-44A
+					// (depth) + Iter-44B (alpha test) close prerequisite
+					// gaps. The CODEX + Cursor consult agreed the wiring is
+					// correct but ran ahead of the rest of the pass pipeline.
+				}
 			}
 
 			// Plan 11-09.14: slot-0 SRV/sampler binding via the public

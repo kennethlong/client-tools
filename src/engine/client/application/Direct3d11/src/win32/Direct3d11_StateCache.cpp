@@ -1781,6 +1781,102 @@ void Direct3d11_StateCache::setAlphaBlendEnable(bool enabled)
 
 // ----------------------------------------------------------------------
 
+void Direct3d11_StateCache::setDepthEnable(bool enabled)
+{
+	// Plan 11-09.15 Iter-44A: per-pass z-enable. Mirrors D3D9
+	// RSB(D3DRS_ZENABLE, m_zEnable). Writes ms_dssDesc.DepthEnable + marks
+	// the dss cache dirty. Cache lookup at applyPreDrawState picks up the
+	// matching (cached) ID3D11DepthStencilState.
+	D3D11_DEPTH_STENCIL_DESC &desc = Direct3d11_StateCacheNamespace::ms_dssDesc;
+	BOOL const newVal = enabled ? TRUE : FALSE;
+	if (desc.DepthEnable != newVal)
+	{
+		desc.DepthEnable = newVal;
+		Direct3d11_StateCacheNamespace::ms_dssDirty = true;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setDepthWriteEnable(bool writeEnabled)
+{
+	// Plan 11-09.15 Iter-44A: per-pass z-write. Mirrors D3D9
+	// RSB(D3DRS_ZWRITEENABLE, m_zWrite). D3D11 has no boolean write enable
+	// per se; the mask is D3D11_DEPTH_WRITE_MASK_ALL (write) or
+	// D3D11_DEPTH_WRITE_MASK_ZERO (no write). One-bit toggle matches D3D9.
+	D3D11_DEPTH_STENCIL_DESC &desc = Direct3d11_StateCacheNamespace::ms_dssDesc;
+	D3D11_DEPTH_WRITE_MASK const newMask = writeEnabled
+		? D3D11_DEPTH_WRITE_MASK_ALL
+		: D3D11_DEPTH_WRITE_MASK_ZERO;
+	if (desc.DepthWriteMask != newMask)
+	{
+		desc.DepthWriteMask = newMask;
+		Direct3d11_StateCacheNamespace::ms_dssDirty = true;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setDepthCompareFunc(D3D11_COMPARISON_FUNC func)
+{
+	// Plan 11-09.15 Iter-44A: per-pass z-compare. Mirrors D3D9
+	// RSM(D3DRS_ZFUNC, m_zCompare, Compare). Engine-enum-to-D3D11 mapping
+	// lives at caller (StaticShaderData::apply); see CODEX caveat about
+	// the C_GreaterOrEqual <-> C_NotEqual swap in D3D9's table that we
+	// preserve for asset parity.
+	D3D11_DEPTH_STENCIL_DESC &desc = Direct3d11_StateCacheNamespace::ms_dssDesc;
+	if (desc.DepthFunc != func)
+	{
+		desc.DepthFunc = func;
+		Direct3d11_StateCacheNamespace::ms_dssDirty = true;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setAlphaTest(bool enabled, float reference)
+{
+	// Plan 11-09.15 Iter-44B: per-pass alpha-test. Push enable+ref into PS
+	// cbuffer slot 1; the dynamic-generated PS reads it and conditionally
+	// clip()s. Dirty-skip when already-current to avoid per-draw cbuffer
+	// updates for repeating values.
+	static float s_lastEnable    = -1.0f;
+	static float s_lastReference = -1.0f;
+	float const newEnable = enabled ? 1.0f : 0.0f;
+	if (s_lastEnable == newEnable && s_lastReference == reference)
+		return;
+	s_lastEnable    = newEnable;
+	s_lastReference = reference;
+
+	Direct3d11_PSAlphaTestCB cb = {};
+	cb.alphaTest.x = newEnable;
+	cb.alphaTest.y = reference;
+	cb.alphaTest.z = 0.0f;
+	cb.alphaTest.w = 0.0f;
+	Direct3d11_ConstantBuffer::updatePS(1, &cb, sizeof(cb));
+	Direct3d11_ConstantBuffer::bindPS(1);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setColorWriteEnable(uint8 writeMask)
+{
+	// Plan 11-09.15 Iter-44A: per-pass color-write mask. Mirrors D3D9
+	// RSB-equivalent push of D3DRS_COLORWRITEENABLE. Engine m_writeEnable
+	// bits are bitwise-identical to D3D11 D3D11_COLOR_WRITE_ENABLE_* so we
+	// pass through unchanged. Mask is per-RT in D3D11; we write RT[0] only
+	// (single-RT engine model).
+	D3D11_BLEND_DESC &desc = Direct3d11_StateCacheNamespace::ms_bsDesc;
+	UINT8 const newMask = static_cast<UINT8>(writeMask & 0x0F);
+	if (desc.RenderTarget[0].RenderTargetWriteMask != newMask)
+	{
+		desc.RenderTarget[0].RenderTargetWriteMask = newMask;
+		Direct3d11_StateCacheNamespace::ms_bsDirty = true;
+	}
+}
+
+// ----------------------------------------------------------------------
+
 void Direct3d11_StateCache::setAlphaBlendFactors(D3D11_BLEND srcBlend,
                                                  D3D11_BLEND destBlend,
                                                  D3D11_BLEND_OP blendOp)
