@@ -308,7 +308,7 @@ Direct3d11_StaticShaderData::Direct3d11_StaticShaderData(StaticShader const &sha
 	m_implementation(shader.getStaticShaderTemplate().m_effect->m_implementation),
 	m_passVS(),
 	m_passPS(),
-	m_passStage0()  // Plan 11-09.14
+	m_passStages()  // Plan 11-09.14 (slot 0) / Plan 11-09.15 Iter-44E (all 8 stages)
 {
 	construct(shader);
 }
@@ -345,7 +345,7 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	//   - ShaderImplementation.h  (Direct3d11_StaticShaderData for m_pass)
 	m_passVS.clear();
 	m_passPS.clear();
-	m_passStage0.clear();
+	m_passStages.clear();
 
 	if (!m_implementation)
 		return;
@@ -354,7 +354,12 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	size_t const passCount = passes.size();
 	m_passVS.assign(passCount, nullptr);
 	m_passPS.assign(passCount, nullptr);
-	m_passStage0.assign(passCount, Stage0{ false, nullptr, {} });
+	{
+		PerPassStages emptyStages;
+		for (auto &s : emptyStages)
+			s = Stage{ false, nullptr, {} };
+		m_passStages.assign(passCount, emptyStages);
+	}
 
 	size_t passIndex = 0;
 	for (ShaderImplementation::Passes::const_iterator i = passes.begin(); i != passes.end(); ++i, ++passIndex)
@@ -387,10 +392,14 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 				pass->m_pixelShader->m_program->m_graphicsData);
 		}
 
-		// Plan 11-09.14 (CODEX Bucket A): walk pass->m_pixelShader->m_textureSamplers,
-		// find the entry whose m_textureIndex == 0 (D3D9 indexes m_stage by
-		// destination texture index, not by iteration order -- CODEX correction #1).
-		// Break after first match because Bucket A scope is slot 0 only.
+		// Plan 11-09.14 (CODEX Bucket A): walk pass->m_pixelShader->m_textureSamplers
+		// to resolve per-stage textures + samplers. Plan 11-09.15 Iter-44E extends
+		// from slot-0-only to all 8 stages: D3D9 character/multi-texture shaders
+		// (skeletal eye pass, terrain detail blends, etc.) bind textures at
+		// m_textureIndex 1..7 and pre-Iter-44E those bindings were silently
+		// dropped, leaving the slot at whatever-the-last-draw-set-it-to or
+		// nullptr -> gray/black sample. Kenny's 2026-05-23 "gray eyes" smoke
+		// finding pinpointed the gap.
 		++s_passesTotal;
 		if (pass->m_pixelShader && pass->m_pixelShader->m_textureSamplers)
 		{
@@ -399,12 +408,16 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 			for (TexSamplers::const_iterator si = samplers.begin(); si != samplers.end(); ++si)
 			{
 				ShaderImplementation::Pass::PixelShader::TextureSampler const *ts = *si;
-				if (!ts || ts->m_textureIndex != 0)
+				if (!ts)
+					continue;
+				int const stageIndex = ts->m_textureIndex;
+				if (stageIndex < 0 || stageIndex >= kMaxStages)
 					continue;
 
-				Stage0 &stage = m_passStage0[passIndex];
+				Stage &stage = m_passStages[passIndex][stageIndex];
 				stage.m_present = true;
-				++s_passesWithSampler0;
+				if (stageIndex == 0)
+					++s_passesWithSampler0;
 
 				// Resolve the texture via the D3D9 sibling pattern
 				// (Direct3d9_StaticShaderData.cpp:297-352): getTextureData
@@ -511,12 +524,15 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 					}
 				}
 
-				if (stage.m_texture)
+				if (stageIndex == 0 && stage.m_texture)
 					++s_passesWithSampler0TextureResolved;
 
 				stage.m_samplerDesc = buildSamplerDescForStage0(textureData, *ts);
 
-				break;  // Bucket A: slot 0 only
+				// Plan 11-09.15 Iter-44E: no break -- iterate every sampler
+				// in the pass, not just the m_textureIndex==0 entry. The
+				// loop's iteration order is the engine's authoring order,
+				// and each entry is stored at its own m_textureIndex slot.
 			}
 		}
 	}
@@ -675,44 +691,100 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 				}
 			}
 
-			// Plan 11-09.14: slot-0 SRV/sampler binding via the public
+			// Plan 11-09.14: slot-N SRV/sampler binding via the public
 			// StateCache setters (CODEX Q1 -- never call PSSet* directly
 			// from StaticShaderData; preserve the lazy-bind model). The
-			// shadow write here is flushed at the next applyPreDrawState's
+			// shadow writes here are flushed at the next applyPreDrawState's
 			// PSSetShaderResources/PSSetSamplers full-array flush.
-			Stage0 const &stage = m_passStage0[idx];
-			if (!stage.m_present)
+			//
+			// Plan 11-09.15 Iter-44E: extended from slot-0-only to all 8
+			// stages. Always unbind absent stages to avoid sticky cross-
+			// shader SRV bleed (CODEX Q4 model). Per-shader logging on
+			// first apply lets us cross-reference multi-stage hits with
+			// the visual symptoms (gray-eye / head-clipping diagnostic
+			// from 2026-05-23).
+			PerPassStages const &stages = m_passStages[idx];
+			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
 			{
-				// Pass has no m_textureIndex==0 sampler. CODEX Q4 says
-				// unbind SRV0 to avoid sticky cross-shader bleed; sampler0
-				// can keep the default (no functional issue per spec).
-				Direct3d11_StateCache::setPixelShaderResource(0, nullptr);
+				Stage const &stage = stages[slotIdx];
+				if (!stage.m_present)
+				{
+					Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
+				}
+				else if (!stage.m_texture || !*stage.m_texture)
+				{
+					Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
+					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
+				}
+				else
+				{
+					Direct3d11_StateCache::setPixelShaderResource(slotIdx,
+						(*stage.m_texture)->getShaderResourceView());
+					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
+				}
 			}
-			else if (!stage.m_texture || !*stage.m_texture)
+
+			// Iter-44E one-shot log: first 50 apply() calls that have at
+			// least one present stage with index > 0 (the new territory
+			// this iter opens up). Tells us which assets actually exercise
+			// multi-stage binding so we can correlate against the visual
+			// symptoms.
 			{
-				// Sampler exists in the pass but texture didn't resolve
-				// (tag missing from TextureDataMap, or m_graphicsData null,
-				// or global-texture lookup returned null). Apply the
-				// resolved sampler so the slot still has defined state, but
-				// unbind SRV0. Fallback-PS will read 0 -> magenta/black.
-				Direct3d11_StateCache::setPixelShaderResource(0, nullptr);
-				Direct3d11_StateCache::setPixelShaderSampler(0, stage.m_samplerDesc);
-			}
-			else
-			{
-				Direct3d11_StateCache::setPixelShaderResource(0,
-					(*stage.m_texture)->getShaderResourceView());
-				Direct3d11_StateCache::setPixelShaderSampler(0, stage.m_samplerDesc);
+				static int s_iter44eLogged = 0;
+				if (s_iter44eLogged < 50)
+				{
+					int maxSlot = -1;
+					for (int s = 0; s < kMaxStages; ++s)
+						if (stages[s].m_present) maxSlot = s;
+					if (maxSlot > 0)
+					{
+						++s_iter44eLogged;
+						if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+						{
+							char templateName[256] = "<unknown>";
+							if (m_shader)
+							{
+								CrcString const &name = m_shader->getStaticShaderTemplate().getName();
+								char const *fn = name.getString();
+								if (fn && *fn)
+								{
+									_snprintf_s(templateName, sizeof(templateName), _TRUNCATE, "%s", fn);
+								}
+							}
+							char stageMap[64] = {};
+							for (int s = 0; s < kMaxStages; ++s)
+							{
+								char piece[8];
+								_snprintf_s(piece, sizeof(piece), _TRUNCATE,
+									"%s%d=%c", (s == 0 ? "" : ","), s,
+									stages[s].m_present
+										? ((stages[s].m_texture && *stages[s].m_texture) ? 'T' : '_')
+										: '.');
+								strncat_s(stageMap, sizeof(stageMap), piece,
+									sizeof(stageMap) - strlen(stageMap) - 1);
+							}
+							char buf[512];
+							_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+								"Plan 11-09.15 Iter-44E multi-stage#%d sht='%s' pass=%d maxSlot=%d stages=[%s] "
+								"(T=tex bound, _=present but unresolved, .=absent)",
+								s_iter44eLogged, templateName, passNumber, maxSlot, stageMap);
+							iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+						}
+					}
+				}
 			}
 		}
 		else
 		{
 			// Out-of-bounds pass index. Clear the slot so
 			// applyPreDrawState's null-VS guard skips the draw rather than
-			// re-using stale state from another shader.
+			// re-using stale state from another shader. Plan 11-09.15
+			// Iter-44E: clear all 8 PS SRV slots (multi-stage extension)
+			// rather than only slot 0.
 			Direct3d11_StateCache::setCurrentVSData(nullptr);
 			Direct3d11_StateCache::setCurrentPSData(nullptr);
-			Direct3d11_StateCache::setPixelShaderResource(0, nullptr);
+			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
+				Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
 		}
 	}
 

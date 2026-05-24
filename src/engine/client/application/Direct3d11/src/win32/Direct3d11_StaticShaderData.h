@@ -57,6 +57,7 @@ class StaticShader;
 #include "clientGraphics/StaticShader.h"
 
 #include <d3d11.h>
+#include <array>
 #include <vector>
 
 // ======================================================================
@@ -139,13 +140,23 @@ private:
 	// (engine swaps *m_graphicsData) automatically reflect at apply time
 	// via the double-indirection deref. Mirrors D3D9 sibling Stage::m_texture
 	// (Direct3d9_StaticShaderData.cpp:327).
-	struct Stage0
+	struct Stage
 	{
-		bool                                   m_present;       // false if pass has no m_textureIndex==0 sampler -> apply unbinds SRV0
+		bool                                   m_present;       // false if pass has no sampler at this textureIndex -> apply unbinds SRV
 		Direct3d11_TextureData const * const * m_texture;       // null when global-texture short-circuit returned null OR textureData.texture was null
 		D3D11_SAMPLER_DESC                     m_samplerDesc;   // zero-init + filled by build helper
 	};
-	std::vector<Stage0>                                       m_passStage0;
+
+	// Plan 11-09.15 Iter-44E: multi-stage texture binding. D3D9 had 8 texture
+	// stages; D3D11 supports 128 SRV slots but the engine's shader assets all
+	// stay within the D3D9 limit. Plan 11-09.14 (Iter-39C era) wired only
+	// stage 0; Iter-44E extends to all 8. Kenny's "gray eyes" diagnostic
+	// 2026-05-23 surfaced the gap -- character passes whose eye texture is
+	// on stage 1+ were getting no SRV bound on that stage, so the PS read
+	// whatever was sticky from the previous draw (default gray).
+	static constexpr int kMaxStages = 8;
+	typedef std::array<Stage, kMaxStages> PerPassStages;
+	std::vector<PerPassStages>                                m_passStages;
 };
 
 // ======================================================================
