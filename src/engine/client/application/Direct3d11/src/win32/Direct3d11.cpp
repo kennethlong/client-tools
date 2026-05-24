@@ -678,6 +678,19 @@ namespace Direct3d11Namespace
 				("Direct3d11::setPixelShaderUserConstants: count=%d > userConstants[] slots=%d; truncated\n",
 				count, slots));
 		}
+
+		// Plan 11-09.15 Iter-45: flush the PerMaterialCB shadow to PS slot 2.
+		// Pre-Iter-45 this stored userConstants into a function-local static
+		// that NOTHING uploaded -- a pure dead-write (Cursor caught it in the
+		// Iter-44 pipeline deep-dive; mirror of the VS-side dead-write fixed in
+		// Plan 11-09 Iter-2.7 Fix C). PS slot 2 is the PerMaterialCB binding
+		// (Direct3d11_HlslRewrite.cpp:797; 11-05-SUMMARY). Immediate upload
+		// matches D3D9's setPixelShaderConstants semantics and the existing
+		// slot-0/1 flush pattern (fog/fade/alpha-test). Material diffuse/specular/
+		// emissive remain zero here (Pass::apply uploads none -- Phase 12 scope),
+		// which matches the primeDefaults zero-fill, so this writes only the
+		// engine-supplied PSCR_userConstant values without regressing slot 2.
+		Direct3d11_ConstantBuffer::updatePS(2, &s_perMaterialShadow, sizeof(s_perMaterialShadow));
 	}
 
 	// ------------------------------------------------------------------
