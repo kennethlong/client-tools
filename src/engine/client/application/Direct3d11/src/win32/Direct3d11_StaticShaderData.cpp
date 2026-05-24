@@ -683,11 +683,22 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// value passes through unchanged.
 					Direct3d11_StateCache::setColorWriteEnable(engPass->m_writeEnable);
 
-					// Plan 11-09.15 Iter-43 (reverted, deferred to Iter-44C):
-					// per-pass blend FACTOR wiring. Re-land after Iter-44A
-					// (depth) + Iter-44B (alpha test) close prerequisite
-					// gaps. The CODEX + Cursor consult agreed the wiring is
-					// correct but ran ahead of the rest of the pass pipeline.
+					// Plan 11-09.15 Iter-44C REVERTED 2026-05-23: re-attempt
+					// of per-pass blend factors with 44A+B+E prerequisites in
+					// place. Smoke STILL regressed (screenShot0007.jpg vs
+					// 0006.jpg) -- snow patches on mountain, larger white
+					// square particle, brighter washed-out scene. The
+					// consult-44 deep-dive (both CODEX and Cursor) confirmed
+					// the diagnosis: blend factors are technically correct
+					// but they AMPLIFY the underlying PS-gen problem (multi-
+					// stage textures bound to slots 1+ that the dynamic PS
+					// at Direct3d11_PixelShaderProgramData.cpp:407-472 does
+					// not sample). State-only iters have exhausted their
+					// useful work; Phase 12 needs the asset PS pipeline +
+					// Pass::apply constant uploads. Keeping the
+					// setAlphaBlendFactors infrastructure in StateCache for
+					// the eventual re-land in Phase 12 once PS gen is
+					// correct.
 				}
 			}
 
