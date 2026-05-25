@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: roadmapped
-last_updated: "2026-05-25T04:00:00.000Z"
-last_activity: 2026-05-25
+status: executing
+last_updated: "2026-05-25T04:05:04.572Z"
+last_activity: 2026-05-25 -- Phase 12 planning complete
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -41,8 +41,8 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 Phase: 12 — Orphaned Directory & Project Deletes (not started)
 Plan: —
-Status: Roadmapped — awaiting `/gsd-plan-phase 12`
-Last activity: 2026-05-25 — v2.1 Decruft roadmap created (Phases 12–15; DECRUFT-01..07 mapped, 100% coverage)
+Status: Ready to execute
+Last activity: 2026-05-25 -- Phase 12 planning complete
 
 **v2.1 Decruft phase plan:**
 
@@ -125,6 +125,7 @@ Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-0
 
 **v2.1 Decruft — the plan:**
 Re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree, ordered low-risk-first:
+
 1. **Phase 12** (DECRUFT-01/-02/-03) — delete trackIR/stationapi dirs + drop SwgClientSetup.vcxproj + lcdui.vcxproj from swg.sln + purge lcdui `.rsp` refs. Re-establishes the dual-renderer boot baseline.
 2. **Phase 13** (DECRUFT-04) — unlink `VideoCapture_debug.lib` from SwgClient `libraries_d.rsp` (+ release `.rsp`); purge source/include residue.
 3. **Phase 14** (DECRUFT-05) — remove Vivox: unlink `vivoxSharedWrapper_debug.lib`; delete `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler`; strip voice keys from `CuiPreferences`.

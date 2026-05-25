@@ -66,9 +66,17 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 12-01-PLAN.md — Baseline build + stationapi & trackIR orphan deletes (DECRUFT-01); dual-renderer boot gate
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 12-02-PLAN.md — SwgClientSetup project removed from swg.sln + dir deleted (DECRUFT-02); dual-renderer boot gate
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 12-03-PLAN.md — lcdui de-wire (live UI source + swg.sln 7 deps + .rsp purge) + both dirs deleted (DECRUFT-03); dual-renderer boot gate
+
+**Cross-cutting constraints:**
+- Client boots to character select under rasterMajor=5 AND rasterMajor=11
 
 ### Phase 13: VideoCapture Library Unlink
 **Goal**: Unlink the dormant VideoCapture middleware so the client no longer links `VideoCapture_debug.lib`, with no source/include residue.
