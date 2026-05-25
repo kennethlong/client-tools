@@ -254,12 +254,6 @@ public:
 	static void responseCollectionServerFirstList(const std::string & collectionServerFirstListVersion, const stdset<std::pair<std::pair<int32, std::string>, std::pair<NetworkId, Unicode::String> > >::fwd & collectionServerFirst);
 	static void handleCollectionShowServerFirstOptionChanged(bool enabled);
 
-#if PRODUCTION == 0
-	static void videoCaptureConfig(int resolution, int seconds, int quality, const char* filename);
-	static void videoCaptureStart();
-	static void videoCaptureStop();
-#endif // PRODUCTION
-
 private:
 
 	Game();

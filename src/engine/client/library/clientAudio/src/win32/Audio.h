@@ -19,11 +19,6 @@ class SampleId;
 class Vector;
 class Plane;
 
-namespace AudioCapture
-{
-class ICallback;
-}
-
 // ============================================================================
 //
 // Audio
@@ -317,14 +312,6 @@ public:
 
 	static void                   setDebugEnabled(bool const enabled);
 	static bool                   isDebugEnabled();
-
-	// AudioCapture
-	//----------------------------------
-#if PRODUCTION == 0
-	static bool                   getAudioCaptureConfig(int& samplesPerSec, int& bitsPerSample, int& channels);
-	static bool                   startAudioCapture(AudioCapture::ICallback* pCallback);
-	static void                   stopAudioCapture();
-#endif // PRODUCTION
 
 protected:
 

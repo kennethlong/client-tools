@@ -40,10 +40,6 @@
 #include <list>
 #include <map>
 
-#if 0
-#include "clientAudio/SwgAudioCapture.h"
-#endif // PRODUCTION
-
 // ============================================================================
 
 namespace AudioNamespace
@@ -5401,72 +5397,5 @@ void Audio::silenceNonBufferedMusic(bool silence)
 {
 	s_silenceNonBufferedMusic = silence;
 }
-
-//-----------------------------------------------------------------------------
-#if 0
-bool Audio::getAudioCaptureConfig(int& samplesPerSec, int& bitsPerSample, int& channels)
-{
-	if(!s_digitalDevice2d)
-	{
-		samplesPerSec = 0;
-		bitsPerSample = 0;
-		channels = 0;
-		return false;
-	}
-	int rate = 0;
-	int format = 0;
-	AIL_digital_configuration(s_digitalDevice2d, &rate, &format, 0);
-	samplesPerSec = rate;
-	bitsPerSample = ((format & DIG_F_16BITS_MASK) ? 16 : 8);
-	channels = ((format & (DIG_F_STEREO_MASK | DIG_F_MULTICHANNEL_MASK)) ? 2 : 1);
-	return true;
-}
-#endif // PRODUCTION
-
-//-----------------------------------------------------------------------------
-#if 0
-bool Audio::startAudioCapture(AudioCapture::ICallback* pCallback)
-{
-	if(!s_audioFilterProvider)
-	{
-		HPROVIDER provider = 0;
-		if(!AIL_find_filter("AudioCapture Filter", &provider))
-		{
-			return false;
-		}
-		s_audioFilterProvider = provider;
-	}
-	if(!AIL_filter_property(s_audioFilterProvider, AudioCapture::Prop2String(AudioCapture::cPropCallback), 0, pCallback, 0))
-	{
-		return false;
-	}
-	if(!s_audioFilter)
-	{
-		HDRIVERSTATE driverState = AIL_open_filter(s_audioFilterProvider, s_digitalDevice2d);
-		if(driverState <= 0)
-		{
-			return false;
-		}
-		s_audioFilter = driverState;
-	}
-	return true;
-}
-#endif // PRODUCTION
-
-//-----------------------------------------------------------------------------
-#if 0
-void Audio::stopAudioCapture()
-{
-	// NOTE: s_audioFilterProvider is just an index and need not be reset
-	// Also, s_audioFilter is automatically cleaned up when Miles is shutdown
-	if(!s_audioFilter)
-	{
-		return;
-	}
-	AIL_close_filter(s_audioFilter);
-	s_audioFilter = 0;
-	AIL_filter_property(s_audioFilterProvider, AudioCapture::Prop2String(AudioCapture::cPropCallback), 0, 0, 0);
-}
-#endif // PRODUCTION
 
 // ============================================================================

@@ -262,11 +262,6 @@ namespace
 
 	const char * const ms_listGcwRegionsData            = "listGcwRegionsData";
 	const char * const ms_listGcwGroupsData             = "listGcwGroupsData";
-#if 0
-	const char * const ms_videoCaptureConfig             = "videoCaptureConfig";
-	const char * const ms_videoCaptureStart             = "videoCaptureStart";
-	const char * const ms_videoCaptureStop              = "videoCaptureStop";
-#endif // PRODUCTION
 
 	void performSceneChange (const void * context)
 	{
@@ -533,9 +528,6 @@ static const CommandParser::CmdInfo cmds[] =
 	{ms_listLfgData,                    0, "",                                       "List all possible LFG search criteria"},
 	{ms_listGcwRegionsData,             0, "",                                       "List the GCW score categories region data"},
 	{ms_listGcwGroupsData,              0, "",                                       "List the GCW score categories group data"},
-	/*{ms_videoCaptureConfig,             4, "<resolution (1-21)> <max seconds> <quality (1-100)> <filename>", "Configure video capture"},
-	{ms_videoCaptureStart,              0, "",                                       "Start video capture"},
-	{ms_videoCaptureStop,               0, "",                                       "Stop video capture"},*/
 #endif // PRODUCTION
 #ifdef _DEBUG
 	{"setMovementPercent",              1, "<value (like 1.5)>",                     "/setSpeed client side only"},
@@ -4889,41 +4881,6 @@ bool SwgCuiCommandParserScene::performParsing (const NetworkId & , const StringV
 			result += Unicode::narrowToWide("\n");
 		}
 	}
-
-	//-----------------------------------------------------------------
-
-#if 0
-	else if (isCommand (argv [0], ms_videoCaptureConfig))
-	{
-		if(5 <= argv.size())
-		{
-			int i = 1;
-			const int res = atoi(Unicode::wideToNarrow(argv[i++]).c_str());
-			const int sec = atoi(Unicode::wideToNarrow(argv[i++]).c_str());
-			const int qual = atoi(Unicode::wideToNarrow(argv[i++]).c_str());
-			const std::string filename(Unicode::wideToNarrow(argv[i++]));
-			Game::videoCaptureConfig(res, sec, qual, filename.c_str());
-		}
-	}
-#endif // PRODUCTION
-
-	//-----------------------------------------------------------------
-
-#if 0
-	else if (isCommand (argv [0], ms_videoCaptureStart))
-	{
-		Game::videoCaptureStart();
-	}
-#endif // PRODUCTION
-
-	//-----------------------------------------------------------------
-
-#if 0
-	else if (isCommand (argv [0], ms_videoCaptureStop))
-	{
-		Game::videoCaptureStop();
-	}
-#endif // PRODUCTION
 
 	//-----------------------------------------------------------------
 
