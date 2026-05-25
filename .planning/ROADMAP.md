@@ -63,7 +63,12 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
   3. `lcdui.vcxproj` is absent from `swg.sln` and all lcdui include/lib references are purged from the `.rsp` files (G15 LCD was already `disableG15Lcd=true`).
   4. `swg.sln` builds clean with the four modules gone (no missing-project or unresolved-reference errors).
   5. Client boots to character select against the SWGSource VM under **both** `rasterMajor=5` (D3D9) and `rasterMajor=11` (D3D11) after the deletes.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — Baseline build + stationapi & trackIR orphan deletes (DECRUFT-01); dual-renderer boot gate
+- [ ] 12-02-PLAN.md — SwgClientSetup project removed from swg.sln + dir deleted (DECRUFT-02); dual-renderer boot gate
+- [ ] 12-03-PLAN.md — lcdui de-wire (live UI source + swg.sln 7 deps + .rsp purge) + both dirs deleted (DECRUFT-03); dual-renderer boot gate
 
 ### Phase 13: VideoCapture Library Unlink
 **Goal**: Unlink the dormant VideoCapture middleware so the client no longer links `VideoCapture_debug.lib`, with no source/include residue.
@@ -119,7 +124,7 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 9. STLPort → MSVC STL | v2.0 | — | Complete (Option D) | 2026-05-10 |
 | 10. DPVS Experiment | v2.0 | — | Complete (Option α) | 2026-05 |
 | 11. D3D11 Renderer | v2.0 | — | Complete (PASS-WITH-DEFERRALS) | 2026-05-24 |
-| 12. Orphaned Deletes | v2.1 | 0/TBD | Not started | - |
+| 12. Orphaned Deletes | v2.1 | 0/3 | Not started | - |
 | 13. VideoCapture Unlink | v2.1 | 0/TBD | Not started | - |
 | 14. Vivox Removal | v2.1 | 0/TBD | Not started | - |
 | 15. XPCOM Removal + Gate | v2.1 | 0/TBD | Not started | - |
