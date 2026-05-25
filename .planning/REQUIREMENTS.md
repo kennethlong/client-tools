@@ -12,9 +12,9 @@ to MSBuild (`src/build/win32/swg.sln` + `.rsp` response files).
 
 ### Dead-Code Removal
 
-- [ ] **DECRUFT-01**: `trackIR/` + `stationapi/` orphaned directories deleted from the MSBuild tree — no project or `.rsp` file references them; none are linked or built; client builds + boots to character select (both renderers)
-- [ ] **DECRUFT-02**: SwgClientSetup removed — `SwgClientSetup.vcxproj` dropped from `swg.sln` + `src/game/client/application/SwgClientSetup/` directory deleted; client builds + boots
-- [ ] **DECRUFT-03**: lcdui (G15 LCD, `disableG15Lcd=true`) removed — `lcdui.vcxproj` dropped from `swg.sln` + lcdui include/lib references purged from `.rsp` files; client builds + boots
+- [x] **DECRUFT-01**: `trackIR/` + `stationapi/` orphaned directories deleted from the MSBuild tree — no project or `.rsp` file references them; none are linked or built; client builds + boots to character select (both renderers)
+- [x] **DECRUFT-02**: SwgClientSetup removed — `SwgClientSetup.vcxproj` dropped from `swg.sln` + `src/game/client/application/SwgClientSetup/` directory deleted; client builds + boots
+- [x] **DECRUFT-03**: lcdui (G15 LCD, `disableG15Lcd=true`) removed — `lcdui.vcxproj` dropped from `swg.sln` + lcdui include/lib references purged from `.rsp` files; client builds + boots
 - [ ] **DECRUFT-04**: VideoCapture removed — `VideoCapture_debug.lib` unlinked from SwgClient `libraries_d.rsp` (+ release `.rsp`) + any source/include references purged; client builds + boots
 - [ ] **DECRUFT-05**: Voice chat (Vivox) fully removed from source and build — `vivoxSharedWrapper_debug.lib` unlinked; `CuiVoiceChatManager.cpp/.h`, `SwgCuiVoiceFlyBar.cpp/.h`, `CuiVoiceChatEventHandler` deleted; voice-related preference keys stripped from `CuiPreferences`; client builds + boots
 - [ ] **DECRUFT-06**: In-game browser (XPCOM/Mozilla) fully removed from source and build — `libMozilla.vcxproj` dropped from `swg.sln`; `libMozilla/include/public` removed from `includePaths.rsp`; `CuiWebBrowser*`, `UIWebBrowserWidget`, XPCOM bridge code deleted; Mozilla DLLs removed from any POST_BUILD/stage copy list; client builds + boots
@@ -48,9 +48,9 @@ Which phases cover which requirements. Updated during roadmap creation (2026-05-
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DECRUFT-01 | Phase 12 | Pending |
-| DECRUFT-02 | Phase 12 | Pending |
-| DECRUFT-03 | Phase 12 | Pending |
+| DECRUFT-01 | Phase 12 | Complete |
+| DECRUFT-02 | Phase 12 | Complete |
+| DECRUFT-03 | Phase 12 | Complete |
 | DECRUFT-04 | Phase 13 | Pending |
 | DECRUFT-05 | Phase 14 | Pending |
 | DECRUFT-06 | Phase 15 | Pending |
