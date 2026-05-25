@@ -1211,10 +1211,6 @@
       <Project>{ecbdfcff-f4ae-475a-aa90-729eb96430a0}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\..\..\..\external\3rd\library\lcdui_src\build\win32\lcdui.vcxproj">
-      <Project>{20d2aee7-b60a-4ec9-b187-fa76062a6c39}</Project>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
     <ProjectReference Include="..\..\..\..\..\..\external\3rd\library\libEverQuestTCG\build\win32\libEverQuestTCG.vcxproj">
       <Project>{03f3c054-f380-4618-be46-6e25061a3587}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
