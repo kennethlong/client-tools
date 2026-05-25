@@ -96,9 +96,9 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>VideoCapture_debug.lib;ImageCapture_debug.lib;Smart_debug.lib;SoeUtil_debug.lib;ZlibUtil_debug.lib;picn20md.lib;dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName)_d.exe</OutputFile>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;..\..\..\..\..\..\external\3rd\library\videocapture\VideoCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ImageCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\Smart\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ZlibUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\SoeUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\PICTools\Lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libcmt;libc;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_d.pdb</ProgramDatabaseFile>
@@ -138,9 +138,9 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>VideoCapture_release.lib;ImageCapture_release.lib;Smart_release.lib;SoeUtil_release.lib;ZlibUtil_release.lib;picn20m.lib;dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName)_o.exe</OutputFile>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;..\..\..\..\..\..\external\3rd\library\videocapture\VideoCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ImageCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\Smart\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ZlibUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\SoeUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\PICTools\Lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libcmt;libc;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_o.pdb</ProgramDatabaseFile>
@@ -180,9 +180,9 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>VideoCapture_release.lib;ImageCapture_release.lib;Smart_release.lib;SoeUtil_release.lib;ZlibUtil_release.lib;picn20m.lib;dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dxguid.lib;dsound.lib;dpvs.lib;ws2_32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName)_r.exe</OutputFile>
-      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;..\..\..\..\..\..\external\3rd\library\videocapture\VideoCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ImageCapture\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\Smart\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\ZlibUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\SoeUtil\lib\win32;..\..\..\..\..\..\external\3rd\library\videocapture\PICTools\Lib\win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\atlmfc\lib\INTEL;..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\dpvs\lib\win32-x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>libc;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_r.pdb</ProgramDatabaseFile>
