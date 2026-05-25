@@ -10,7 +10,6 @@ libpcre.a
 qt-mt334.lib
 qtmain.lib
 mswsock.lib
-lgLcd.lib
 nspr4.lib
 plc4.lib
 profdirserviceprovider_s.lib

@@ -14,7 +14,6 @@ librpc.lib
 libxml2-win32-release.lib
 winmm.lib
 mswsock.lib
-lgLcd.lib
 nspr4.lib
 plc4.lib
 profdirserviceprovider_s.lib

@@ -51,6 +51,3 @@
 ../../include/private
 ../../include/public
 ../../../../../../external/3rd/library/dimm
-../../../../../../external/3rd/library/lcdui
-../../../../../../external/3rd/library/lcdui_src/src/win32
-../../../../../../external/3rd/library/lcdui_src/src/win32/LCDUI
