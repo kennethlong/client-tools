@@ -4,7 +4,6 @@
 ../../../../../../external/3rd/library/stlport453/stlport
 ../../../../../../external/3rd/library/bink/include
 ../../../../../../external/3rd/library/directx9/include
-../../../../../../external/3rd/library/videocapture
 ../../../../../../external/ours/library/archive/include
 ../../../../../../external/ours/library/localization/include
 ../../../../../../external/ours/library/fileInterface/include/public
