@@ -1,15 +1,14 @@
 # whitengold — SWG Client Modernisation Port
 
-## Current Milestone: v2.0 — Modernisation
+## Current State: v2.0 Modernisation SHIPPED (2026-05-25)
 
-**Goal:** Remove dead/disabled features from the CMake graph, migrate from STLPort 4.5.3 to MSVC STL, profile DPVS occlusion culling, and begin a D3D11 renderer plugin.
+v2.0 delivered a modern **MSVC / C++20 / MSBuild** SWG client that boots to character select and renders a ground scene under **both** a D3D9 and a new **D3D11** renderer, selectable at runtime via `rasterMajor`. Audit: `tech_debt` (functional PASS; documented deferrals). See `MILESTONES.md` + `milestones/v2.0-*`.
 
-**Target features:**
-- Phase 7: Dead code removal Track A (directory deletes → CMake unlinks → voice chat + XPCOM removal)
-- Phase 8: Dead code removal Track B (~40 orphaned tools wired into CMake)
-- Phase 9: STLPort → MSVC STL migration (hash_map sweep, wchar_t, compat shim removal)
-- Phase 10: DPVS culling experiment (profile then decide)
-- Phase 11: D3D11 renderer plugin (new Direct3d11.dll satisfying Gl_api table)
+**Key pivot (Phase 9, "Option D"):** the original CMake/whitengold build was *replaced* by adopting Koogie's already-MSVC/C++20-migrated **MSBuild** tree wholesale (merge `479d35df3`). The active build is `src/build/win32/swg.sln`. The CMake build that v1 + early-v2 docs describe is superseded (kept for history).
+
+## Next Milestone: v2.1 — Visual Parity
+
+**Goal:** close the D3D11 visual gaps so it matches the D3D9 baseline. The blocker is **Phase 12: the asset pixel-shader pipeline** — engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects; D3D11 currently falls back to a magenta PS. Then: gamma LUT, multi-stage sampling, load-screen half-texel seam, minimap, particles. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md`.
 
 ---
 
@@ -17,11 +16,19 @@
 
 whitengold is the leaked Star Wars Galaxies source tree (NGE-era ~2010 build, leaked
 Feb 2015). This project takes the **client** — `SwgClient` and its ~70-project
-dependency graph — and ports its build system off Visual Studio 2005 onto a modern
-**CMake + Visual Studio 2022** toolchain so it can be compiled, debugged, and
-eventually launched against a community-run **SWG-Source** server VM. The long-arc
+dependency graph — and modernises it off Visual Studio 2005 onto a current
+**MSVC / C++20 / MSBuild + Visual Studio 2022** toolchain (via Koogie's
+`MSVC-CPP20-Upgrade` base, adopted in Phase 9) so it can be compiled, debugged, and
+launched against a community-run **SWG-Source** server VM. The long-arc
 goal is full feature parity with the live NGE client (ground/space, professions,
-housing, GCW, jukebox); v1 (compile + launch) is complete — v2 modernises the build.
+housing, GCW, jukebox). v1 (compile + launch) and v2.0 (modernisation: dead-code,
+STL swap, DPVS verdict, D3D11 renderer) are complete; v2.1 targets D3D11 visual parity.
+
+> **Build-system note:** v1 + early-v2 sections below describe the original **CMake**
+> port (the "whitengold" tree). Phase 9 "Option D" replaced it with Koogie's
+> **MSBuild** solution (`src/build/win32/swg.sln`) — the active build. CMake-specific
+> requirements/decisions are historical; the engine-level architecture they describe
+> still holds.
 
 ## Core Value
 
@@ -136,12 +143,12 @@ be configured to read its data tree at runtime via `searchPath*` entries.
 
 ## Constraints
 
-- **Tech stack:** Windows-only, VS 2022, CMake, C++17, MSVC toolset — Phase 1
-  Linux work is out of scope (server-side toolchain anyway)
-- **Source-edit budget:** Zero C++ source edits in v1 — keep blast radius small;
-  CMake authoring + headers + config only
-- **STLPort retained:** Don't swap to MSVC STL in v1 — non-trivial refactor that
-  would defeat the "no source edits" principle
+- **Tech stack (current, post-v2):** Windows-only, VS 2022, **MSBuild** (`src/build/win32/swg.sln`),
+  **C++20**, **MSVC STL** — Linux work out of scope (server-side toolchain anyway).
+  *(v1 used CMake + C++17 + STLPort; superseded by Phase 9 Option-D.)*
+- **Source edits expected (v2+):** unlike v1's zero-source-edit rule, v2 modernisation
+  edits engine source freely (STL swap, D3D11 plugin). Keep diffs focused per phase.
+- **Don't modify Koogie's diagnostic patches** without strong reason — fix the caller/data instead.
 - **Static CRT:** `/MT` (Release) / `/MTd` (Debug) per swg-main pattern; matches
   the third-party static libs we link against
 - **Server contract is read-only:** swg-main VM is the runtime target; if a
@@ -164,6 +171,8 @@ be configured to read its data tree at runtime via `searchPath*` entries.
 | **DirectX 9 vendored SDK first** | The repo ships the 2005-era DirectX 9 headers/import libs used by the client; system SDK drift is avoidable | Phase 1 `FindDirectX9.cmake` resolves vendored headers/libs; first real compile remains Phase 3 `clientGraphics` |
 | **Mozilla XPCOM stub strategy** | Modern MSVC cannot safely compile the old XPCOM surface; the in-game browser is not required for v1 launch | Phase 1 `FindMozilla.cmake` resolves headers only; do not link `xul.lib`/`xpcom.lib` in client targets |
 | **/MT static CRT** | Matches third-party static libs (Bink, Miles, DPVS) we link against | Phase 1 root CMake sets `CMAKE_MSVC_RUNTIME_LIBRARY` to `/MT` and `/MTd` |
+| **Phase 9 "Option D": adopt Koogie's MSVC/C++20 MSBuild tree wholesale** (`479d35df3`) instead of hand-migrating STLPort in the CMake tree | Koogie already solved the MSVC migration; collapsed ~30 risky refactor commits into ~3 | ✓ Good — STL swap done, Tatooine zone-in PASS. Side effect: CMake build + Phase 7 dead-code removals orphaned (active tree is MSBuild) |
+| **D3D11 as a second selectable renderer** (`gl11_d.dll`), keep D3D9 (`gl05_d.dll`) buildable (invariant D-05) | De-risks the port; lets D3D9 stay the known-good reference for visual parity | ✓ Good — both selectable via `rasterMajor`; single `Gl_api` loader multiplexes |
 
 ## Evolution
 
@@ -183,4 +192,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-07 — v2 milestone started; v1 archived to MILESTONES.md; v2 ROADMAP.md + REQUIREMENTS.md written (Phases 7–11)*
+*Last updated: 2026-05-25 — after v2.0 Modernisation milestone close. Re-anchored to the MSBuild/Koogie reality (Phase 9 Option-D); v2.0 requirements archived to milestones/v2.0-REQUIREMENTS.md; next milestone v2.1 Visual Parity (Phase 12 asset PS pipeline).*
