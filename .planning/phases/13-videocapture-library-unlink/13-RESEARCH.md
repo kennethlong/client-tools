@@ -443,9 +443,15 @@ exist; an incremental build may relink the stale `.obj` even after the source is
 | A2 | The editors (AnimationEditor et al.) are pre-broken on Qt and not part of the SwgClient build gate, so purging their `.rsp`/`.vcxproj` refs is grep-gate-only and cannot break the gated build. | Build Graph / Inventory B | LOW — consistent with Decruft memory + STATE; if an editor unexpectedly builds, removing a lib it links could surface a different error, but they don't compile today. |
 | A3 | Deleting the vendored `videocapture/` tree (D-03) breaks nothing else, because only SwgClient's now-removed inline paths and the vestigial `.rsp`/editor refs point at it. | Edit Order step 6 | LOW — grep confirms no other consumers; verified the 14 `.vcxproj` + `.rsp` set. |
 
-## Open Questions
+## Open Questions (RESOLVED during planning, 2026-05-25)
+
+> Both questions were operationally answered by the Phase 13 plan set (commit `66ca59479`).
+> Resolutions are annotated inline below.
 
 1. **Criterion #1 grep scope vs. D-04 "repo-wide" intent — editor `.vcxproj` inline refs.**
+   - **RESOLVED:** Plan 13-02 Task 3 purges the editor `.vcxproj` inline refs (satisfying D-04's
+     repo-wide intent), and Plan 13-03 Task 1's full-repo grep gate covers `.vcxproj` alongside the
+     `.rsp`/source/include scope. The `.rsp` + source + include grep remains the hard criterion-#1 gate.
    - What we know: Criterion #1 literally scopes the zero-reference grep to `.rsp`, source, and
      include paths. D-04 says "purge every reference repo-wide." The editor `.vcxproj` files carry
      inline `<AdditionalDependencies>` capture tokens that are NOT in criterion #1's literal scope but
@@ -459,8 +465,10 @@ exist; an incremental build may relink the stale `.obj` even after the source is
      the verification command.
 
 2. **`Optimized|Win32` config gating.** Criterion #2 names "Debug and Release." `Optimized` also
-   carries capture refs. Recommend cleaning + optionally gating it; flag for the planner to decide
-   whether the Optimized link is part of the gate.
+   carries capture refs.
+   - **RESOLVED:** Plan 13-01 Task 3 purges capture tokens/paths from all 3 `<Link>` configs
+     (Debug @103, Optimized @158, Release @204), so `Optimized` is cleaned for coherence; the
+     link-grep gate (Plan 13-01 Task 3 / Plan 13-03 Task 2) runs on Debug + Release per criterion #2.
 
 ## Sources
 
