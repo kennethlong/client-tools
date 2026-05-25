@@ -41,16 +41,18 @@ D3D11 shows **stretched/shard geometry** absent in D3D9:
 D3D11 radar renders **square**; D3D9 renders **round**. Known deferral (`project-phase11-minimap-never-round`); grouped with the PS-gen / 2D-texturing family.
 - Evidence: 0009 (square) vs 0010 (round); visible in all pairs.
 
-### 5. Loading-screen centerline seam — clean 2D repro, half-texel candidate
-The Tatooine load screen (0012, D3D11) has a **faint vertical seam dead-center** (x≈512); D3D9 (0016) has none. This is a **2D fullscreen image** — no 3D geometry, skinning, or lighting involved — so it isolates a **texture-sampling / fullscreen-blit bug** away from all in-world noise. Most likely cause: the splash art is drawn as **two side-by-side halves** (large splash exceeds max texture width) and the sample at the shared edge is off by a **half-texel** — the canonical D3D9→D3D11 porting bug (D3D9's -0.5 texel offset rule, removed in D3D10+). Deterministic repro: just zone and watch the load screen.
-- **Best first target for Phase 12's 2D/blit work** — small, isolated, deterministic.
+### 5. Loading-screen centerline seam — clean 2D repro, half-texel candidate (image-independent, CONFIRMED)
+The Tatooine load screen (0012, D3D11) has a **faint vertical seam dead-center** (x≈512). **Image-independent and renderer-specific (Kenny, 2026-05-25): the seam appears on MANY different D3D11 load screens, and has NEVER been seen across ~20 D3D9 load-ins on various splash images.** Because it tracks the renderer rather than the image, it is a **path-level** artifact, not a quirk of one splash texture — stronger evidence than a same-image A/B.
+
+This is a **2D fullscreen image** — no 3D geometry, skinning, or lighting involved — so it isolates a **texture-sampling / fullscreen-blit bug** away from all in-world noise. Most likely cause: the splash is drawn as **two side-by-side halves** (large splash exceeds max texture width) and the sample at the shared edge is off by a **half-texel** — the canonical D3D9→D3D11 porting bug (D3D9's -0.5 texel offset rule, removed in D3D10+). Deterministic repro: just zone and watch any load screen.
+- **Best first target for Phase 12's 2D/blit work** — small, isolated, deterministic, and now confirmed image-independent.
 
 ---
 
 ## Caveats
 - **Interior pair (A)** is approximate framing only (logout repositions you indoors). Differences shown are gross enough to read qualitatively; do not use for pixel alignment.
 - **0013 / 0014** were captured mid-load; treat their geometry smear as suspect (LOD streaming) until re-captured settled.
-- **Load-screen pair** uses two different splash variants (random rotation); the seam is blit-path-level so this is corroboration, not a same-image A/B. A same-image A/B would be stronger if a fixed splash can be forced.
+- **Load-screen seam** is confirmed image-independent: many D3D11 screens show it, ~20 D3D9 load-ins across various splashes never did (Kenny, 2026-05-25). The 0012/0016 files happen to be different splash variants, but the conclusion rests on the multi-sample observation, not that single pair.
 
 ## Suggested Phase 12 entry order
 1. **Asset PS pipeline** (bucket 1) — unblocks textures + magenta + likely lighting (bucket 2) and minimap (bucket 4) at once.
