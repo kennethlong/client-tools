@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Runtime Middleware — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Runtime middleware inventory</h1>
+  <div class="sub">Per-middleware: where it lives, surface area, link mode, integration depth.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<p><a href="research.html">← back to Research</a> · markdown source: <code>docs/research/runtime-middleware.md</code></p>
+
+<h1>TL;DR — replaceability scoreboard</h1>
+
+<table>
+  <thead><tr><th>#</th><th>Middleware</th><th>Side</th><th>Link mode</th><th>Surface area</th><th>Replaceable?</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>DirectX 9</strong></td><td>Client</td><td>DLL plug-in (<code>gl0X_*.dll</code>)</td><td>Whole renderer</td><td><span class="tag ok">Contained</span> — single plug-in</td></tr>
+    <tr><td>2</td><td><strong>Bink Video</strong></td><td>Client</td><td>DLL via <code>LoadLibrary</code> (delayed-bound)</td><td>One file (<code>BinkVideo.cpp</code>) behind <code>Video</code> interface</td><td><span class="tag ok">Contained</span> — drop-in</td></tr>
+    <tr><td>3</td><td><strong>Miles Sound System</strong></td><td>Client</td><td>Static <code>mss32.lib</code> + <code>Mss32.dll</code> runtime</td><td>All of <code>clientAudio/</code> calls Miles directly</td><td><span class="tag ok">Contained</span> but not facaded</td></tr>
+    <tr><td>4</td><td><strong>DPVS (Umbra)</strong></td><td>Client</td><td>Static <code>.lib</code> (full source vendored)</td><td><code>clientGraphics/RenderWorld*</code> (~10 files)</td><td><span class="tag ok">Contained</span> to one library</td></tr>
+    <tr><td>5</td><td><strong>Vivox</strong></td><td>Client</td><td>Static via <code>vivoxSharedWrapper</code> + 6 DLLs</td><td>5 files in <code>clientUserInterface/CuiVoiceChat*</code></td><td><span class="tag ok">Contained</span> — easiest to rip out</td></tr>
+    <tr><td>6</td><td><strong>libMozilla / XPCOM</strong></td><td>Client</td><td>Static (<code>xul.lib</code>, <code>xpcom.lib</code> …) + 12 DLLs</td><td>4 files (<code>SwgCuiWebBrowser*</code> + <code>ClientMain.cpp</code>)</td><td><span class="tag ok">Contained</span> — already a thin facade</td></tr>
+    <tr><td>7</td><td><strong>Logitech LCD (lgLcd)</strong></td><td>Client</td><td>Static <code>lgLcd.lib</code> (full source vendored)</td><td>3 files in <code>SwgCuiG15Lcd*</code></td><td><span class="tag ok">Contained</span> — single feature</td></tr>
+    <tr><td>8</td><td><strong>TrackIR</strong></td><td>Client</td><td>Header-only / non-existent at runtime</td><td><strong>Effectively absent</strong> — 1 dev file + launcher detection</td><td><span class="tag warn">Vestigial</span></td></tr>
+    <tr><td>9</td><td><strong>PCRE</strong></td><td>Both</td><td>Static <code>libpcre.a</code> (<code>PCRE_STATIC</code>)</td><td>5 call sites; raw <code>pcre_*</code> calls leak</td><td><span class="tag ok">Contained-ish</span> — small swap, no facade</td></tr>
+    <tr><td>10</td><td><strong>libxml2</strong></td><td>Both</td><td>Static (Win32) / shared <code>.so.2</code> (Linux)</td><td>3 files in <code>sharedXml/</code> only</td><td><span class="tag ok">Contained</span> — strict facade</td></tr>
+    <tr><td>11</td><td><strong>zlib</strong></td><td>Both</td><td>Static <code>zlib.lib</code></td><td>1 file (<code>ZlibCompressor.cpp</code>) behind <code>Compressor</code></td><td><span class="tag ok">Contained</span> — clean facade</td></tr>
+    <tr><td>12</td><td><strong>STLPort 4.5.3</strong></td><td>Both</td><td>Static <code>.lib</code></td><td><strong>Every</strong> <code>.cpp</code> includes it via STL headers</td><td><span class="tag warn">Pervasive</span> (build-time, mostly invisible)</td></tr>
+    <tr><td>13</td><td><strong>boost</strong></td><td>Both</td><td>Header-only</td><td>Only <code>config.hpp / smart_ptr.hpp / static_assert.hpp / utility.hpp</code></td><td><span class="tag ok">Trivial</span> — basically removable</td></tr>
+    <tr><td>14</td><td><strong>Pegasus PICTools</strong></td><td>Client</td><td>Static (<code>picn20m.lib</code>)</td><td>Only via <code>videocapture</code> in non-PROD</td><td><span class="tag ok">Contained</span> — dev feature only</td></tr>
+    <tr><td>15</td><td><strong>Oracle OCI</strong></td><td>Server</td><td>Dynamic OCI client</td><td>All of <code>sharedDatabaseInterface/src_oci/</code></td><td><span class="tag ok">Contained</span> — explicit ports/adapters</td></tr>
+    <tr><td>16</td><td><strong>IBM Java 1.3 JVM</strong></td><td>Server</td><td>DLL via JNI (<code>jni.h</code>)</td><td>380+ JNI sites across 80 <code>ScriptMethods*.cpp</code></td><td><span class="tag warn">Pervasive</span> — load-bearing for <em>all</em> gameplay</td></tr>
+    <tr><td>17</td><td><strong>soePlatform suite</strong> (Session/Chat/CS/CT/VChat)</td><td>Server</td><td>Static <code>.libs</code> per API</td><td>Each subsystem in its corresponding server</td><td><span class="tag ok">Contained per-server</span> — large total surface</td></tr>
+    <tr><td>18</td><td><strong>stationapi</strong></td><td>Server</td><td>Static + DLL fallback</td><td>Auth handshake in <code>LoginServer/SessionApiClient.*</code></td><td><span class="tag ok">Contained</span> to LoginServer</td></tr>
+  </tbody>
+</table>
+
+<p>Total contained: <strong>14</strong>. Pervasive: <strong>2</strong> (STLPort, JVM). Effectively dead: <strong>1</strong> (TrackIR).</p>
+
+<h2>Replaceability map</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef contained fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef pervasive fill:#231720,stroke:#ff7676,color:#d6e1ee
+  classDef vestigial fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+
+  subgraph Client["Client-side runtime middleware"]
+    DX9[DirectX 9<br/>plug-in DLL]:::contained
+    Bink[Bink<br/>late-bound DLL]:::contained
+    Miles[Miles<br/>contained in clientAudio]:::contained
+    DPVS[DPVS Umbra<br/>contained in clientGraphics]:::contained
+    Vivox[Vivox<br/>5 files]:::contained
+    Mozilla[libMozilla / XPCOM<br/>4 files]:::contained
+    LCD[Logitech LCD<br/>3 files]:::contained
+    TrackIR[TrackIR<br/>vestigial]:::vestigial
+    PIC[PICTools<br/>dev only]:::contained
+  end
+
+  subgraph Server["Server-side runtime middleware"]
+    Oracle[Oracle OCI<br/>ports/adapters]:::contained
+    JVM[IBM Java JVM<br/>JNI everywhere]:::pervasive
+    SoePlat[soePlatform suite<br/>per-server]:::contained
+    Station[stationapi<br/>LoginServer only]:::contained
+  end
+
+  subgraph Both["Cross-cutting"]
+    PCRE[PCRE<br/>5 sites, no facade]:::contained
+    XML[libxml2<br/>3 files in sharedXml]:::contained
+    Zlib[zlib<br/>1 file]:::contained
+    STL[STLPort 4.5.3<br/>build-pervasive]:::pervasive
+    Boost[boost<br/>4 headers]:::contained
+  end
+</div>
+
+<hr />
+
+<h1>Client-side runtime middleware</h1>
+
+<h2>1. DirectX 9 — graphics API</h2>
+
+<ul>
+  <li><strong>Where:</strong> includes <code>src/external/3rd/library/directx9/{include,lib}</code>. Render-side call sites: <strong>only inside the <code>Direct3d9</code> plug-in</strong> (<code>src/engine/client/application/Direct3d9/</code>, ~22 .cpp / 26 .h, ~450 KB).</li>
+  <li><strong>Source files</strong> (selected): <code>Direct3d9.cpp</code>, <code>Direct3d9_DynamicIndexBufferData.cpp</code>, <code>Direct3d9_DynamicVertexBufferData.cpp</code>, <code>Direct3d9_LightManager.cpp</code>, <code>Direct3d9_Metrics.cpp</code>, <code>Direct3d9_PixelShaderProgramData.cpp</code>, <code>Direct3d9_RenderTarget.cpp</code>, <code>Direct3d9_ShaderImplementationData.cpp</code>, <code>Direct3d9_StateCache.cpp</code>, <code>Direct3d9_StaticIndexBufferData.cpp</code>, <code>Direct3d9_StaticShaderData.cpp</code>, <code>Direct3d9_StaticVertexBufferData.cpp</code>, <code>Direct3d9_TextureData.cpp</code>, <code>Direct3d9_VertexBufferDescriptorMap.cpp</code>, <code>Direct3d9_VertexBufferVectorData.cpp</code>, <code>Direct3d9_VertexDeclarationMap.cpp</code>, <code>Direct3d9_VertexShaderData.cpp</code>, plus <code>MemoryManagerHook.cpp</code>, <code>SetupDll.cpp</code>, <code>WriteTga.cpp</code>, <code>ConfigDirect3d9.cpp</code>, <code>FirstDirect3d9.cpp</code>.</li>
+  <li><strong>API surface:</strong> <code>IDirect3D9</code>, <code>IDirect3DDevice9</code>, <code>D3DPRESENT_PARAMETERS</code>, <code>D3DPOOL</code>, <code>D3DXMatrix*</code>, vertex/pixel-shader constant tables, <code>dinput8</code> (input), <code>dsound</code> (sound stub), <code>ddraw</code> (legacy fallback).</li>
+  <li><strong>Linking:</strong> <code>Direct3d9.vcproj</code> is <code>ConfigurationType="2"</code> — builds as <code>gl05_d.dll</code> / <code>gl05_o.dll</code> / <code>gl05_r.dll</code> / <code>gl06_*.dll</code> / <code>gl07_*.dll</code>. Statically linked against <code>libjpeg.lib odbc32.lib odbccp32.lib winmm.lib delayimp.lib dxguid.lib d3d9.lib d3dx9.lib ddraw.lib dxerr9.lib</code>.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> The rest of the engine talks to <code>Graphics::</code>; the only direct DX9 type leak outside the plug-in is in the launcher (<code>SwgClientSetup/ClientMachine.cpp</code>).</li>
+  <li><strong>Replacement cost:</strong> rewrite one DLL against a current API (D3D11, Vulkan).</li>
+  <li><strong>Search evidence:</strong> <code>IDirect3D9|IDirect3DDevice9|D3DPRESENT|D3DPOOL|D3DXMatrix</code> appears in 10 files — 8 are the DX9 SDK headers themselves, 1 is the launcher, 1 is a sample under <code>DejaInsight/Demos/TinyEngine/</code>.</li>
+</ul>
+
+<h2>2. Bink Video — RAD intro/cinematic codec</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/bink/{include,lib/win32}</code> (3 headers: <code>bink.h</code>, <code>rad3d.h</code>, <code>radbase.h</code>; <code>binkw32.lib</code>, <code>binkw32.dll</code>, <code>binkw32.pdb</code>). Call sites: <strong>6 files</strong> in <code>src/engine/client/library/clientGraphics/src/Bink/</code>.</li>
+  <li><strong>API surface:</strong> ~25 <code>Bink::Bink*</code> functions wrapped as inline forwarders in <code>BinkVideo.h</code> — <code>BinkOpen</code>, <code>BinkPause</code>, <code>BinkGoto</code>, <code>BinkDoFrame</code>, <code>BinkCopyToBuffer</code>, <code>BinkCopyToBufferRect</code>, <code>BinkRegisterFrameBuffers</code>, <code>BinkDX9SurfaceType</code>, <code>BinkSetVideoOnOff</code>, <code>BinkSetSoundOnOff</code>, <code>BinkSetVolume</code>, <code>BinkSetPan</code>, <code>BinkGetKeyFrame</code>, <code>BinkNextFrame</code>, <code>BinkWait</code>, <code>BinkShouldSkip</code>, <code>BinkGetRects</code>, <code>BinkGetSummary</code>, <code>BinkGetRealtime</code>, <code>BinkControlBackgroundIO</code>, <code>BinkGetTrackID</code>, <code>BinkClose</code>.</li>
+  <li><strong>Linking:</strong> <strong>Late-bound.</strong> <code>BinkDLL.h</code>:
+<pre><code>namespace Bink {
+    bool bindBink(const char *i_dllname);
+    void unbindBink();
+    bool isBinkReady();
+
+    namespace RAD { #include "bink.h" }
+    using RAD::HBINK; using RAD::BINKFRAMEBUFFERS; ...
+
+    BINK_STORAGE HBINK (BINK_CALL *BinkOpen)(const char *file_name,
+                                             BINK_OPEN_FLAGS open_flags);
+    BINK_STORAGE void (BINK_CALL *BinkClose)(HBINK bink);
+    // ... all functions are pointer typedefs
+}</code></pre>
+    Bink is loaded via <code>LoadLibrary</code> and resolved through function pointers — <em>not</em> statically linked. <code>SwgClient.vcproj</code> does not list <code>binkw32.lib</code>.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Behind the abstract <code>clientGraphics/Video</code> interface.</li>
+</ul>
+
+<h2>3. Miles Sound System — RAD audio middleware</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/miles/{include,lib/win}</code> (one big <code>Mss.h</code>, 224 KB; <code>Mss32.lib</code>). A second copy at <code>miles-7.2e/</code> exists but isn't linked. Runtime DLL: <code>exe/win32/Mss32.dll</code>.</li>
+  <li><strong>API surface:</strong> 188 raw API tokens (<code>HSAMPLE</code>, <code>H3DSAMPLE</code>, <code>HDIGDRIVER</code>, <code>HPROVIDER</code>, <code>HSTREAM</code>, <code>MSS_MC_SPEC</code>) inside <code>clientAudio</code>. Call-site files:
+    <ul>
+      <li><code>clientAudio/src/win32/Audio.cpp</code> — the manager (182 token occurrences)</li>
+      <li><code>clientAudio/src/win32/Sample2d.h</code></li>
+      <li><code>clientAudio/src/win32/Sample3d.h</code></li>
+      <li><code>clientAudio/src/win32/SoundObject3d.h</code>, <code>SoundObject3d.cpp</code></li>
+      <li><code>clientAudio/src/win32/SampleStream.h</code></li>
+    </ul>
+  </li>
+  <li><strong>Linking:</strong> Statically linked (<code>mss32.lib</code> in <code>SwgClient.vcproj</code>), runtime work in <code>Mss32.dll</code>. Exposes a Miles digital driver to clientGame:
+<pre><code>VideoList::install(Audio::getMilesDigitalDriver());</code></pre></li>
+  <li><strong>Integration depth:</strong> <strong>Contained but not strictly facaded.</strong> Miles types do leak into a few public <code>clientAudio</code> headers (<code>Sample2d.h</code>, <code>Sample3d.h</code>), so a swap requires a small header refactor.</li>
+  <li><strong>Search evidence:</strong> <code>HSAMPLE|H3DSAMPLE|HDIGDRIVER|HPROVIDER|HSTREAM</code> appears in 7 files — 2 are Miles headers, 5 are inside <code>clientAudio</code>. Zero leakage outside.</li>
+</ul>
+
+<h2>4. DPVS — Umbra occlusion culling</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/dpvs/{interface,implementation,lib/win32-x86}</code>. Full source vendored (163 files), plus prebuilt <code>dpvs.lib</code> / <code>dpvsd.lib</code>.</li>
+  <li><strong>API surface:</strong> <code>Dpvs::Cell</code>, <code>Dpvs::Object</code>, <code>Dpvs::Camera</code>, <code>Dpvs::Visibility</code>. Used in:
+<pre><code>clientGraphics/RenderWorld.cpp / .h
+clientGraphics/RenderWorldCommander.cpp / .h
+clientGraphics/RenderWorldServices.cpp / .h
+clientGraphics/RenderWorld_CellNotification.cpp
+clientGraphics/RenderWorld_OcclusionNotification.cpp
+clientGraphics/Light.cpp / .h
+clientGraphics/SimpleAppearance.h
+clientGraphics/IndexedTriangleListAppearance.cpp / .h
+clientGame/test/WaterTestAppearance.cpp / .h</code></pre>
+    ~15 files.</li>
+  <li><strong>Linking:</strong> Static. <code>dpvsd.lib</code> debug, <code>dpvs.lib</code> elsewhere.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained</strong> to <code>clientGraphics</code>. DPVS types appear in <code>RenderWorld.h</code> (leaky) but call sites are all in one library.</li>
+  <li><strong>Replacement cost:</strong> medium-high — cell/portal model mirrors DPVS's data model.</li>
+</ul>
+
+<h2>5. Vivox — voice chat</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/vivox/{include,lib}</code> (vendored SDK: <code>vivoxsdk.dll</code>, <code>vivoxplatform.dll</code>, <code>ortp.dll</code>, <code>alut.dll</code>, <code>libsndfile-1.dll</code>, <code>wrap_oal.dll</code>, <code>VivoxVoiceService.exe</code>). Wrapped by <code>src/external/3rd/library/vivoxSharedWrapper/</code>.</li>
+  <li><strong>Vendored Vivox SDK headers:</strong> <code>Vxc.h</code>, <code>VxcErrors.h</code>, <code>VxcEvents.h</code>, <code>VxcExports.h</code>, <code>VxcRequests.h</code>, <code>VxcResponses.h</code>, <code>vivox-config.h</code>, <code>vxplatform/VxcPlatform.h</code>, <code>vxcplatformmain.h</code>.</li>
+  <li><strong>API surface:</strong> All calls go through <code>vivoxSharedWrapper::Vivox</code> from exactly <strong>5 client files</strong>:
+    <ul>
+      <li><code>clientUserInterface/src/shared/core/CuiVoiceChatGlue.h</code></li>
+      <li><code>clientUserInterface/src/shared/core/CuiVoiceChatManager.{cpp,h}</code></li>
+      <li><code>clientUserInterface/src/shared/core/CuiVoiceChatEventHandler.{cpp,h}</code></li>
+    </ul>
+    Vivox SDK type names (<code>Vxc*</code>, <code>vivoxsdk</code>) appear nowhere outside the wrapper itself.</li>
+  <li><strong>Linking:</strong> Static link to <code>vivoxSharedWrapper_Debug.lib</code> / <code>_Release.lib</code>.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained</strong> by design. The wrapper was originally for <em>EverQuest 2</em> (<code>Eq2Vivox.h</code>).</li>
+  <li><strong>Replacement cost:</strong> low — gut the wrapper and 5 client files.</li>
+</ul>
+
+<h2>6. libMozilla / Mozilla XPCOM — in-game web browser</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/libMozilla/</code>. Wrapper is full SOE source. Browser runtime is vendored Mozilla 1.x XPCOM under <code>libMozilla/include/private/</code>: <code>xul.dll</code>, <code>xpcom.dll</code>, <code>nspr4.dll</code>, <code>plc4.dll</code>, <code>nss3.dll</code>, <code>js3250.dll</code>, <code>softokn3.dll</code>, <code>ssl3.dll</code>, <code>nssckbi.dll</code>, <code>gksvggdiplus.dll</code> + <code>chrome/</code> tree.</li>
+  <li><strong>Public header is a redirect:</strong> <code>libMozilla/include/public/libMozilla/libMozilla.h</code> is 41 bytes:
+<pre><code>#include "../../src/win32/libMozilla.h"</code></pre></li>
+  <li><strong>API surface:</strong> <code>libMozilla::init(hwnd, path)</code>, <code>libMozilla::release()</code>, page-render and event hooks. Call sites: <strong>only 4</strong>:
+    <ul>
+      <li><code>ClientMain.cpp</code> (init/release)</li>
+      <li><code>swgClientUserInterface/src/shared/page/SwgCuiWebBrowserWidget.{cpp,h}</code></li>
+      <li><code>swgClientUserInterface/src/shared/core/SwgCuiWebBrowserManager.cpp</code></li>
+    </ul>
+  </li>
+  <li><strong>Init code in <code>ClientMain.cpp</code>:</strong>
+<pre><code>// We want to use the Mozilla that's shipped with the game, not whatever's on the system
+char szCWD[_MAX_PATH + 1];
+GetCurrentDirectory(_MAX_PATH, szCWD);
+std::string sPath(szCWD);
+sPath += "\\mozilla";
+if (!libMozilla::init(Os::getWindow(), sPath.c_str())) {
+    DEBUG_FATAL(true, ("Mozilla init failed.\n"));
+}</code></pre></li>
+  <li><strong>Linking:</strong> Static against XPCOM <code>.libs</code> (<code>nspr4.lib plc4.lib xpcom.lib xul.lib profdirserviceprovider_s.lib</code>).</li>
+  <li><strong>Integration depth:</strong> <strong>Contained</strong> — already a thin facade.</li>
+  <li><strong>Replacement cost:</strong> low — replace with CEF / a stub / nothing.</li>
+</ul>
+
+<h2>7. Logitech LCD UI (lgLcd) — G15 keyboard LCD</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/lcdui/lib/lgLcd.lib</code> + headers. Full Logitech sample source vendored at <code>src/external/3rd/library/lcdui_src/</code> (LCDOutput, LCDManager, LCDGfx, EZ_LCD).</li>
+  <li><strong>API surface:</strong> <code>lgLcd*</code> C API wrapped behind <code>EZ_LCD</code>. Game-side: <strong>3 files</strong> — <code>swgClientUserInterface/SwgCuiG15Lcd.{cpp,h}</code> + a config flag in <code>clientUserInterface/ConfigClientUserInterface.{cpp,h}</code>.</li>
+  <li><strong>Linking:</strong> Static <code>lgLcd.lib</code>.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Single feature, gated by <code>enableG15Lcd</code> config switch.</li>
+  <li><strong>Replacement cost:</strong> trivial.</li>
+</ul>
+
+<h2>8. TrackIR — head tracking</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/trackIR/include/NPClient.h</code> (header only; no .lib referenced).</li>
+  <li><strong>API surface:</strong> <strong>Effectively zero in the runtime client.</strong> The only file that references TrackIR is <code>src/engine/client/library/clientGame/src/shared/core/ClientHeadTracking.cpp</code>. Other matches (3 files in <code>SwgClientSetup</code>) are launcher-side hardware detection.</li>
+  <li><strong>Linking:</strong> Not in <code>SwgClient.vcproj</code>'s linker list at all.</li>
+  <li><strong>Integration depth:</strong> <strong>Vestigial.</strong> Likely a feature that was prototyped (since SOE shipped JTL-era space combat that benefited from head tracking) and shelved.</li>
+  <li><strong>Replacement cost:</strong> nothing to do.</li>
+</ul>
+
+<h2>14. Pegasus PICTools / SOE videocapture — JPEG2000 + screen capture</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/videocapture/{AudioCapture,VideoCapture,ImageCapture,Smart,SoeUtil,ZlibUtil,PICTools}/lib/win32</code>. Debug + Release variants.</li>
+  <li><strong>API surface:</strong> SOE in-house screencapture stack. Pegasus PICTools is the JPEG2000 codec underneath (<code>picn20m.lib</code> / <code>picn20md.lib</code>).</li>
+  <li><strong>Linking:</strong> Static. Linked unconditionally, but only used in non-PRODUCTION builds (gated by <code>#if PRODUCTION == 0</code>).</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Effectively a development feature.</li>
+</ul>
+
+<hr />
+
+<h1>Server-side runtime middleware</h1>
+
+<h2>15. Oracle OCI — database client</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/oracle/</code>, <code>oracle_win32/ora90/oci/</code>. Call sites: <strong>all of <code>src/engine/shared/library/sharedDatabaseInterface/src_oci/</code></strong> — <code>OciQueryImplementation.{cpp,h}</code>, <code>OciSession.{cpp,h}</code>, <code>OciServer.h</code>.</li>
+  <li><strong>API surface:</strong> <code>OCIEnv</code>, <code>OCILogon</code>, <code>OCIStmtPrepare</code>, <code>OCIDefineByPos</code>, <code>OCIBindByName</code>, <code>OCIError</code>.</li>
+  <li><strong>Linking:</strong> Dynamic OCI client.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained</strong> by deliberate ports-and-adapters split:
+    <ul>
+      <li><code>sharedDatabaseInterface/src/</code> — vendor-neutral abstraction (<code>Bindable</code>, <code>Query</code>, <code>Session</code>)</li>
+      <li><code>sharedDatabaseInterface/src_oci/</code> — Oracle implementation</li>
+    </ul>
+  </li>
+  <li><strong>Configuration:</strong> <code>databaseProtocol=OCI</code>, <code>DSN=...</code>, <code>databaseUID=...</code>, <code>databasePWD=...</code>, <code>databaseThreads=4</code>.</li>
+  <li><strong>Replacement cost:</strong> medium — implement a parallel <code>src_pgsql/</code> or <code>src_mysql/</code>. The abstraction was clearly designed for it.</li>
+</ul>
+
+<h2>16. IBM Java 1.3 JVM — gameplay scripting host</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/java/</code> (header stubs). The actual JRE has to be installed at <code>/usr/java</code> per <code>src/BUILDING</code>. Call sites: <code>src/engine/server/library/serverScript/</code> — <code>JavaLibrary.{cpp,h}</code>, <code>JNIWrappers.{cpp,h}</code>, plus <strong>80 <code>ScriptMethods*.cpp</code> files</strong>.</li>
+  <li><strong>API surface:</strong> full JNI — <code>jni.h</code>, <code>JavaVM</code>, <code>JNIEnv</code>, <code>jclass</code>, <code>jmethodID</code>, <code>JNI_CreateJavaVM</code>. <strong>382 occurrences across 15 surveyed files alone.</strong></li>
+  <li><strong>JavaLibrary.h excerpt:</strong>
+<pre><code>//========================================================================
+//
+// JavaLibrary.h - interface to the JVM via JNI.
+//
+// copyright 2001 Sony Online Entertainment
+//
+//========================================================================
+
+#include &lt;jni.h&gt;
+#include "serverScript/JNIWrappers.h"
+#include "serverScript/ScriptDictionary.h"</code></pre></li>
+  <li><strong>Linking:</strong> JVM loaded as a DLL/<code>.so</code> at server startup.</li>
+  <li><strong>Integration depth:</strong> <strong>Pervasive.</strong> Most load-bearing middleware in the entire tree. Every gameplay subsystem dispatches into the JVM via these JNI binders.</li>
+  <li><strong>Replacement cost:</strong> very high but doable for IBM Java 1.3 → OpenJDK. Replacing the JVM with a different scripting host (Lua/JS) means rewriting <code>dsrc/.../script/</code> — many tens of thousands of lines. Don't.</li>
+</ul>
+
+<h2>17. soePlatform suite — SOE service APIs</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/soePlatform/</code> — 8 sub-libraries. Total: 267 headers / 190 .cpp / 24 prebuilt libs.</li>
+  <li><strong>Per-server breakdown:</strong>
+    <table>
+      <thead><tr><th>Sub-library</th><th>Used by</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>ChatAPI2</code></td><td><code>ChatServer</code> only</td><td>Persistent rooms, mail, friends list</td></tr>
+        <tr><td><code>VChatAPI</code></td><td><code>ChatServer</code></td><td>Voice-chat coordination (Vivox bridge)</td></tr>
+        <tr><td><code>CSAssist</code></td><td><code>CustomerServiceServer</code></td><td>GM petitions / appeals</td></tr>
+        <tr><td><code>CTServiceGameAPI</code></td><td><code>TransferServer</code></td><td>Paid character transfers</td></tr>
+        <tr><td><code>MonAPI</code></td><td><code>MetricsServer</code> / <code>LogServer</code></td><td>SOE-internal monitoring</td></tr>
+        <tr><td><code>Base</code>, <code>Singleton</code>, <code>libs</code></td><td>Everyone</td><td>Shared util</td></tr>
+      </tbody>
+    </table>
+  </li>
+  <li>Plus the <strong><code>Session/CommonAPI</code></strong> side referenced by <code>SessionApiClient.cpp</code> — auth handshake, used <strong>only by <code>LoginServer</code></strong>.</li>
+  <li><strong>Concrete include sites:</strong>
+<pre><code>TransferServer/src/shared/CTSAPIClient.h
+ChatServer/src/shared/VChatInterface.h
+ChatServer/src/shared/FirstChatServer.h
+ChatServer/src/shared/ChatServerRoomOwner.h
+ChatServer/src/shared/ChatServerAvatarOwner.h
+ChatServer/src/shared/ChatServer.{h,cpp}
+ChatServer/src/shared/ChatInterface.{h,cpp}</code></pre></li>
+  <li><strong>API surface:</strong> Each sub-library has its own dozens-of-classes API.</li>
+  <li><strong>Linking:</strong> Static <code>.lib</code> per sub-library; some leverage <code>Mss32</code> (VChat), <code>989crypt</code>, <code>rdp</code> (stationapi).</li>
+  <li><strong>Integration depth:</strong> <strong>Contained per-server.</strong> Each server's coupling is bounded.</li>
+</ul>
+
+<h2>18. stationapi — SOE Station authentication client</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/stationapi/</code>:
+    <ul>
+      <li>8 headers (<code>stationapi.h</code>, <code>stationrequest.h</code>, <code>stationmsg.h</code>, <code>StationAPISession.h</code>, <code>extend_rdp.h</code>, <code>PackClass.h</code>, <code>order.h</code>)</li>
+      <li>8 <code>.cpp</code> (<code>stationapi.cpp</code>, <code>stationrequest.cpp</code>, <code>stationapilist.cpp</code>, <code>StationAPISession.cpp</code>, <code>extend_rdp.c</code>, <code>PackClass.cpp</code>, <code>order.cpp</code>)</li>
+      <li>3 prebuilt <code>.lib</code>: <code>989crypt.lib</code>, <code>rdp.lib</code>, <code>dbgutil.lib</code></li>
+      <li>Old VS6 project files (<code>stationapi.dsp</code>, <code>stationapi.dsw</code>)</li>
+      <li>Demo (<code>stationapidemo/</code>)</li>
+      <li>HTML documentation (<code>html/</code>)</li>
+    </ul>
+  </li>
+  <li><strong>API surface:</strong> <code>StationAPISession</code>, <code>StationAPIRequest</code>, <code>StationAPIResult</code>, <code>StationAPIProtocol</code>.</li>
+  <li><strong>Linking:</strong> Static. Used <strong>only</strong> by <code>LoginServer</code> (via <code>SessionApiClient</code>).</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Gated by <code>validateStationKey=1</code> in <code>loginServer.cfg</code> — set to <code>0</code> short-circuits everything (which is what every private-server project does).</li>
+</ul>
+
+<hr />
+
+<h1>Both-side / cross-cutting middleware</h1>
+
+<h2>9. PCRE — Perl-compatible regex</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/pcre/4.1/win32/{include,lib}</code> (<code>libpcre.a</code>).</li>
+  <li><strong>API surface:</strong> raw <code>pcre_compile</code> / <code>pcre_exec</code> + a memory-allocator hook. Call sites: <strong>5 files</strong>:
+    <ul>
+      <li><code>sharedRegex/src/shared/SetupSharedRegex.cpp</code> — installs the malloc hook</li>
+      <li><code>serverGame/src/shared/core/RegexList.cpp</code> — server-side chat/word filtering</li>
+      <li><code>sharedTemplateDefinition/src/shared/core/TemplateDefinitionFile.h</code> — template compiler</li>
+      <li><code>swgClientUserInterface/src/shared/parser/SwgCuiCommandParserScene.cpp</code></li>
+      <li><code>swgClientUserInterface/src/shared/parser/SwgCuiCommandParserMount.cpp</code></li>
+    </ul>
+  </li>
+  <li><strong>Linking:</strong> Static, with <code>PCRE_STATIC</code> define.</li>
+  <li><strong><code>SetupSharedRegex.cpp</code> install:</strong>
+<pre><code>void SetupSharedRegex::install() {
+    InstallTimer const installTimer("SetupSharedRegex::install");
+    DEBUG_FATAL(s_installed, ("SetupSharedRegex already installed."));
+
+    ConfigSharedRegex::install();
+
+    // Save old malloc and free functions.
+    s_oldMalloc = pcre_malloc;
+    s_oldFree   = pcre_free;
+
+    // Hook up PCRE malloc and free to our memory manager.
+    pcre_malloc = &amp;RegexServices::allocateMemory;
+    pcre_free   = &amp;RegexServices::freeMemory;
+
+    s_installed = true;
+    ExitChain::add(remove, "SetupSharedRegex");
+}</code></pre></li>
+  <li><strong>Integration depth:</strong> <strong>Contained-ish.</strong> Only 5 callers, but no facade — they <code>#include "pcre/pcre.h"</code> directly.</li>
+  <li><strong>Replacement cost:</strong> low. Swap to <code>std::regex</code> or <code>re2</code>.</li>
+</ul>
+
+<h2>10. libxml2 — XML parsing</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/libxml2-2.6.7.win32/{include,lib}</code> on Windows; system <code>libxml2.so.2</code> on Linux.</li>
+  <li><strong>API surface:</strong> <code>xmlParseFile</code>, <code>xmlNewDoc</code>, <code>xmlDocPtr</code>, <code>xmlNodePtr</code>. <strong>3 files only</strong>:
+    <ul>
+      <li><code>sharedXml/src/shared/tree/XmlTreeDocument.cpp</code></li>
+      <li><code>sharedXml/src/shared/tree/XmlTreeDocumentList.cpp</code></li>
+      <li><code>sharedXml/src/shared/tree/XmlTreeNode.cpp</code></li>
+    </ul>
+  </li>
+  <li><strong>Linking:</strong> Static (Win32) / shared (Linux).</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Cleanest external integration in the tree — consumers see only <code>XmlTreeDocument</code> / <code>XmlTreeNode</code>.</li>
+</ul>
+
+<h2>11. zlib — compression</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/zlib/{include,lib}</code> (<code>zlib.lib</code>); also full source at <code>zlib-1.2.3/</code>.</li>
+  <li><strong>API surface:</strong> <code>deflateInit2_</code>, <code>inflate</code>, <code>z_stream</code>. <strong>1 file:</strong> <code>sharedCompression/src/shared/ZlibCompressor.cpp</code>.</li>
+  <li><strong>Linking:</strong> Static.</li>
+  <li><strong>Integration depth:</strong> <strong>Contained.</strong> Behind <code>Compressor</code> interface. Used heavily by <code>TreeFile</code> and <code>sharedNetwork</code>, but always through abstraction.</li>
+</ul>
+
+<h2>12. STLPort 4.5.3 — STL replacement</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/stlport453/{stlport,lib/win32}</code>. Six prebuilt variants:
+<pre><code>stlport_vc6_static.lib                 stlport_vc6_static.pdb
+stlport_vc6_stldebug_static.lib        stlport_vc6_stldebug_static.pdb
+stlport_vc7_static.lib                 stlport_vc7_static.pdb
+stlport_vc7_stldebug_static.lib        stlport_vc7_stldebug_static.pdb
+stlport_vc71_static.lib                stlport_vc71_static.pdb
+stlport_vc71_stldebug_static.lib       stlport_vc71_stldebug_static.pdb</code></pre>
+    Notable: <strong>no vc8 / VS-2005 binary</strong> — original team built with VC++ 7.1.</li>
+  <li><strong>API surface:</strong> replaces every STL include. <code>_USE_32BIT_TIME_T=1</code> set globally.</li>
+  <li><strong>Linking:</strong> Static <code>stlport_vc71_static.lib</code>.</li>
+  <li><strong>Integration depth:</strong> <strong>Pervasive at the build level, invisible at the semantic level.</strong> Code uses ordinary STL syntax.</li>
+  <li><strong>Replacement cost:</strong> low conceptually, fiddly in practice — edge-case incompatibilities (allocators, hash containers, iostreams).</li>
+</ul>
+
+<h2>13. boost — partial header use</h2>
+
+<ul>
+  <li><strong>Where:</strong> <code>src/external/3rd/library/boost/boost/</code> — only <strong>4 files</strong>:
+<pre><code>config.hpp        — 27,605 bytes
+smart_ptr.hpp     — 15,905 bytes
+static_assert.hpp —  3,583 bytes
+utility.hpp       —  3,999 bytes</code></pre></li>
+  <li><strong>API surface:</strong> a tiny subset — <code>boost::shared_ptr</code> / <code>boost::scoped_ptr</code> + utility macros.</li>
+  <li><strong>Linking:</strong> Header-only.</li>
+  <li><strong>Integration depth:</strong> <strong>Trivial.</strong></li>
+</ul>
+
+<hr />
+
+<h2>What about <code>udplibrary</code>?</h2>
+
+<p>
+  <code>src/external/3rd/library/udplibrary/</code> is technically in the
+  third-party tree, but it's <strong>SOE in-house source</strong>, not licensed
+  middleware. It's the reliable-UDP transport layer the wire protocol
+  depends on. You cannot replace it without breaking compatibility with
+  retail clients. Counts: 7 headers, 3 .cpp.
+</p>
+
+<h2>What about Maya, Alienbrain, NvTriStrip, atiDxtc, DejaInsight, VTune, meshifier, debugHelp, blat?</h2>
+
+<p>These are <strong>build-time / authoring-tool</strong> dependencies, not runtime — they don't touch the running game.</p>
+
+<table>
+  <thead><tr><th>Library</th><th>Used by</th><th>Why excluded</th></tr></thead>
+  <tbody>
+    <tr><td>Maya 4–8 SDK</td><td>MayaExporter, content tools</td><td>Authoring time only</td></tr>
+    <tr><td>Alienbrain XDK</td><td>TerrainEditor, GodClient</td><td>Asset-management integration in editor</td></tr>
+    <tr><td>NvTriStrip</td><td><code>meshifier</code></td><td>Mesh strip optimisation at export time</td></tr>
+    <tr><td>atiDxtc / ati_compress</td><td>TextureBuilder</td><td>DXT compression at bake time</td></tr>
+    <tr><td>DejaInsight, VTune</td><td>dev profiler hooks</td><td>Profiling — not in retail</td></tr>
+    <tr><td>debugHelp</td><td>crash reporter</td><td>Stack walking on dev workstations</td></tr>
+    <tr><td>blat194</td><td>build email scripts</td><td>CI-only</td></tr>
+    <tr><td>videocapture (apart from PICTools)</td><td>dev capture</td><td>Non-PRODUCTION builds only</td></tr>
+  </tbody>
+</table>
+
+<h2>Bottom line: where rewriting hurts</h2>
+
+<div class="callout warn">
+  If anything in this tree ever needs to be modernised aggressively, the cost lives in just two places:
+  <ol>
+    <li><strong>The IBM Java 1.3 JVM dependency</strong> — pervasive, unfixable without porting the JNI bridge, unavoidable because all gameplay rules live in the JVM. Plan for this.</li>
+    <li><strong>The Sony Station / soePlatform / stationapi suite</strong> — not pervasive in any single server, but in <em>aggregate</em> it cuts across LoginServer, ChatServer, CustomerServiceServer, TransferServer, MetricsServer. Replacing it means writing community equivalents of five separate services.</li>
+  </ol>
+  Everything else — DirectX, Bink, Miles, DPVS, Vivox, libMozilla, Logitech LCD, Oracle OCI, PCRE, libxml2, zlib, boost, STLPort — is contained behind a facade or behind a single library boundary, and can be swapped or stubbed without touching gameplay code.
+</div>
+
+</main>
+<footer>whitengold docs · <a href="research.html">All research</a> · <a href="index.html">Overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Glossary — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Glossary</h1>
+  <div class="sub">SWG-specific terminology, acronyms, and codenames.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html" class="active">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Glossary</h1>
+
+<dl>
+  <dt><strong>SWG</strong></dt>
+  <dd>Star Wars Galaxies. Sandbox MMO by Sony Online Entertainment, launched 2003, sunset 2011.</dd>
+
+  <dt><strong>SOE</strong></dt>
+  <dd>Sony Online Entertainment, the developer/publisher (later renamed Daybreak).</dd>
+
+  <dt><strong>NGE</strong></dt>
+  <dd>"New Game Enhancements", the November 2005 redesign of SWG. The codebase in this repo is the late-NGE era. Most "NGE" emulators target this design.</dd>
+
+  <dt><strong>CU</strong></dt>
+  <dd>"Combat Upgrade", an April 2005 redesign that came between launch and NGE.</dd>
+
+  <dt><strong>Pre-CU</strong></dt>
+  <dd>The original 2003 design before either redesign — what SWGEmu chose to recreate.</dd>
+
+  <dt><strong>JTL</strong></dt>
+  <dd>Jump to Lightspeed, the 2004 space-flight expansion (<code>sku.1</code>).</dd>
+
+  <dt><strong>RotW</strong></dt>
+  <dd>Rage of the Wookiees, the Kashyyyk expansion (<code>sku.2</code>).</dd>
+
+  <dt><strong>ToOW</strong></dt>
+  <dd>Trials of Obi-Wan, the Mustafar adventure pack (<code>sku.3</code>).</dd>
+
+  <dt><strong>sku</strong></dt>
+  <dd>Stock-keeping unit — used here as the directory split between base content and expansions in <code>dsrc/sku.0/</code>, <code>sku.1/</code>, <code>sku.2/</code>, <code>sku.3/</code>, <code>sku.ja/</code> (Japanese release).</dd>
+
+  <dt><strong>dsrc</strong></dt>
+  <dd>"Data source" — the authoring side of game content (scripts, datatables, templates) before it gets compiled and packed.</dd>
+
+  <dt><strong>data</strong></dt>
+  <dd>The compiled output of <code>dsrc</code> — what the runtime reads. Not in the repo (only the manifests describing it are).</dd>
+
+  <dt><strong>IFF</strong></dt>
+  <dd>Interchange File Format. Chunked binary format used for nearly every authored asset (meshes, datatables, templates, world snapshots). Originating from the Electronic Arts EA-IFF spec.</dd>
+
+  <dt><strong>TRE</strong></dt>
+  <dd>SWG's archive format. A <code>.tre</code> bundles many <code>.iff</code> files plus textures, sounds, etc., with an index and per-entry MD5.</dd>
+
+  <dt><strong>STF</strong></dt>
+  <dd>String Table Format — localisation entries.</dd>
+
+  <dt><strong>tab</strong></dt>
+  <dd>Tab-separated spreadsheet with a typed header row. The authoring form of a datatable; compiled to an <code>.iff</code> at build time.</dd>
+
+  <dt><strong>tpf</strong></dt>
+  <dd>Template source — declarative description of an object template, compiled to <code>.iff</code> by <code>TemplateCompiler</code>.</dd>
+
+  <dt><strong>script / scriptlib</strong></dt>
+  <dd>SWG's scripting language. <code>.script</code> = handlers for one object kind. <code>.scriptlib</code> = shared library code. <code>.java</code> next to them is the SWG dialect, not vanilla Java.</dd>
+
+  <dt><strong>scriptbin</strong></dt>
+  <dd>Compiled script bytecode loaded by the JVM embedded in <code>SwgGameServer</code>.</dd>
+
+  <dt><strong>WS / world snapshot</strong></dt>
+  <dd>Static-object placement data for a planet shard. Edited with <code>TerrainEditor</code> / <code>WorldSnapshotViewer</code>.</dd>
+
+  <dt><strong>God client</strong></dt>
+  <dd>The in-game admin/edit client (<code>SwgGodClient</code>). Designers used it to place objects in the world live.</dd>
+
+  <dt><strong>obj_id</strong></dt>
+  <dd>The 64-bit network identifier for any game object. Persistent across sessions.</dd>
+
+  <dt><strong>TaskManager</strong></dt>
+  <dd>Per-host process supervisor. Reads <code>_taskmanager.cfg/.rc</code> and spawns/respawns the cluster's processes locally.</dd>
+
+  <dt><strong>StationKey</strong></dt>
+  <dd>The session token from Sony's Station authentication. Validated by <code>LoginServer</code> in production. Set <code>validateStationKey=0</code> to bypass on private servers.</dd>
+
+  <dt><strong>OCI</strong></dt>
+  <dd>Oracle Call Interface — the C library used by the C++ servers to talk to Oracle. <code>databaseProtocol=OCI</code> appears in every server cfg.</dd>
+
+  <dt><strong>DSN</strong></dt>
+  <dd>Data Source Name — the Oracle TNS alias the server connects to.</dd>
+
+  <dt><strong>SWGEmu</strong></dt>
+  <dd>The longest-running independent SWG emulator. Clean-room C++ codebase targeting Pre-CU. Not based on this leak.</dd>
+
+  <dt><strong>ProjectSWG / NGECore</strong></dt>
+  <dd>An NGE-era emulator implemented in Java. Independent of the C++ codebase here.</dd>
+
+  <dt><strong>SWG-Source / StellaBellum</strong></dt>
+  <dd>The community fork that <em>is</em> built on the leaked code (this repo's descendant). StellaBellum is their dev VM and an active server.</dd>
+
+  <dt><strong>whitengold</strong></dt>
+  <dd>The name of this archival repository on GitHub (<code>AconiteX/whitengold</code>) — preserved as the unmodified Feb 28, 2015 snapshot. The name is just the repo name; it doesn't denote a particular branch within SOE's depot. The Perforce paths in <code>publish/source_revisions.txt</code> show this came from the <code>//depot/swg/test/</code> branch.</dd>
+
+  <dt><strong>SOE Station / soePlatform / stationapi</strong></dt>
+  <dd>SOE's internal account management, friend list, and entitlement platform — gone since Sony divested SOE in 2015.</dd>
+
+  <dt><strong>Vivox</strong></dt>
+  <dd>Third-party voice chat SDK. <code>SWGVoiceService.exe</code> is the local helper.</dd>
+
+  <dt><strong>DPVS</strong></dt>
+  <dd>Database of Potentially Visible Sets — Umbra's occlusion culling library. Used by <code>clientGraphics</code>.</dd>
+
+  <dt><strong>Bink / Miles</strong></dt>
+  <dd>RAD Game Tools' video and audio middleware. Bink for cinematics, Miles for in-game audio (<code>Mss32.dll</code>).</dd>
+
+  <dt><strong>Alienbrain</strong></dt>
+  <dd>NxN's asset-management system used in SOE's content pipeline. The XDK headers are here for editor integration.</dd>
+</dl>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

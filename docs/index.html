@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>whitengold — SWG Source (2015) Codebase Guide</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Star Wars Galaxies source archive (2015-02-28)</h1>
+  <div class="sub">A traversable guide to what's in this repo and what would be required to run it locally.</div>
+</header>
+<nav class="top">
+  <a href="index.html" class="active">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Overview</h1>
+
+<p>
+  This repository (<code>whitengold</code>) is a backup of the <strong>February 28, 2015 leak of the Star Wars Galaxies source code</strong>.
+  The leak originated from a former SOE employee in 2013 and represents the
+  ~2010 production codebase used to operate the live game until shutdown in 2011.
+  The README inside the repo confirms this provenance.
+</p>
+
+<p>
+  It is <strong>not</strong> a finished, runnable build. It is one piece of a sprawling
+  multi-process system that depended on assets, an Oracle database schema,
+  Sony's authentication infrastructure, and a Linux/MSVC toolchain that no
+  longer exists in working form. The community-maintained continuation of this
+  tree is <a href="https://github.com/SWG-Source">SWG-Source</a> — that is where
+  practical "run a server" work happens today.
+</p>
+
+<div class="callout info">
+  <strong>How to use these docs:</strong> start with <a href="architecture.html">Architecture</a> to see how the
+  pieces fit, then visit <a href="servers.html">Servers</a> and <a href="client.html">Client</a> for the C++ side,
+  <a href="scripting.html">Scripting</a> for the gameplay rules, and finally
+  <a href="gaps.html">Gaps</a> + <a href="run-locally.html">Run Locally</a> to understand
+  what stops you from booting it.
+</div>
+
+<h2>Repository at a glance</h2>
+
+<table>
+  <thead>
+    <tr><th>Top-level path</th><th>What it is</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>src/engine/</code></td><td>Reusable C++ engine (client, server, shared subsystems).</td></tr>
+    <tr><td><code>src/game/</code></td><td>SWG-specific C++ — <code>SwgClient</code>, <code>SwgGameServer</code>, in-game tools.</td></tr>
+    <tr><td><code>src/external/3rd/</code></td><td>Third-party libraries (DirectX9, Bink, Miles, Boost, Oracle OCI, Java, Vivox, etc.).</td></tr>
+    <tr><td><code>src/external/ours/</code></td><td>SOE in-house libs (archive, crypto, unicode, localization).</td></tr>
+    <tr><td><code>dsrc/</code></td><td>Game-design data sources: server scripts, object templates, data tables.</td></tr>
+    <tr><td><code>exe/win32/</code></td><td>Pre-built Windows tool/editor binaries + runtime DLLs.</td></tr>
+    <tr><td><code>exe/linux/</code></td><td>Linux server config files and shell start/stop scripts.</td></tr>
+    <tr><td><code>exe/shared/</code></td><td>Shared cluster config (<code>servercommon.cfg</code>, <code>servertreefiles.cfg</code>).</td></tr>
+    <tr><td><code>publish/</code></td><td>Patcher manifests describing the live <code>.tre</code> tree (assets themselves are NOT in the repo).</td></tr>
+    <tr><td><code>plugin/win32/</code></td><td>Maya / 3ds Max exporter plug-ins.</td></tr>
+    <tr><td><code>tools/</code></td><td>Build automation Perl/btm scripts, <code>TreeFileBuilder</code>, lint tools.</td></tr>
+    <tr><td><code>src/build/win32/swg.sln</code></td><td>Visual Studio 2005 solution that wires every project together.</td></tr>
+    <tr><td><code>src/configure.in</code>, <code>src/bootstrap</code>, <code>src/Makefile.am</code></td><td>GNU autotools entry point for the Linux server build (see <code>src/BUILDING</code>).</td></tr>
+  </tbody>
+</table>
+
+<h2>The 30-second mental model</h2>
+
+<div class="mermaid">
+graph LR
+  subgraph Player["Player machine"]
+    Client[SwgClient.exe<br/>DirectX 9 native]
+    TRE[(SWG .tre archives<br/>not in repo)]
+    Client -- reads --> TRE
+  end
+
+  subgraph Cloud["Cluster (Linux)"]
+    Login[LoginServer]
+    Central[CentralServer]
+    Conn[ConnectionServer]
+    Game[SwgGameServer<br/>per-zone gameplay]
+    Planet[PlanetServer]
+    DB[SwgDatabaseServer]
+    Chat[ChatServer]
+    Task[TaskManager]
+    Oracle[(Oracle 9i / 12c<br/>not in repo)]
+    Scripts[(dsrc/ Java scripts<br/>compiled to .scriptbin)]
+  end
+
+  Client -- TCP login --> Login
+  Login -- selects galaxy --> Central
+  Client -- UDP (proprietary) --> Conn
+  Conn --> Central
+  Central --> Planet
+  Planet --> Game
+  Game --> Scripts
+  Game --> Chat
+  DB <--> Oracle
+  Game --> DB
+  Task -. spawns/restarts .-> Login
+  Task -. spawns/restarts .-> Central
+  Task -. spawns/restarts .-> Game
+</div>
+
+<p>
+  Two big halves: a heavyweight <strong>DirectX 9 client</strong> talking custom UDP
+  to a <strong>fleet of cooperating Linux servers</strong>. Gameplay rules live in
+  Java-derived scripts under <code>dsrc/</code>, hosted by an embedded JVM inside
+  <code>SwgGameServer</code>. Persistence is Oracle. Authentication was Sony's Station
+  service.
+</p>
+
+<h2>Where to dig in</h2>
+
+<div class="cards">
+  <a class="card" href="architecture.html">
+    <h3>Architecture</h3>
+    <p>Cluster diagram, message flow, what each process owns.</p>
+  </a>
+  <a class="card" href="servers.html">
+    <h3>Servers</h3>
+    <p>Per-process roles — Login, Central, Connection, Planet, Game, DB, Chat, Task.</p>
+  </a>
+  <a class="card" href="client.html">
+    <h3>Client</h3>
+    <p>SwgClient subsystems, render path, asset loading, voice chat.</p>
+  </a>
+  <a class="card" href="scripting.html">
+    <h3>Scripting</h3>
+    <p>The Java-flavoured gameplay scripting layer in <code>dsrc/</code>.</p>
+  </a>
+  <a class="card" href="data-pipeline.html">
+    <h3>Data Pipeline</h3>
+    <p>How <code>.iff</code>, <code>.tab</code>, <code>.tre</code>, manifests, and the patcher fit together.</p>
+  </a>
+  <a class="card" href="dependencies.html">
+    <h3>Dependencies</h3>
+    <p>3rd-party and in-house libraries, what's licensed-only, what's open.</p>
+  </a>
+  <a class="card" href="build.html">
+    <h3>Build System</h3>
+    <p>Visual Studio 2005 + GNU autotools, the era-specific toolchain.</p>
+  </a>
+  <a class="card" href="gaps.html">
+    <h3>Gaps</h3>
+    <p>Everything that is missing from this repo and how the community fills the holes.</p>
+  </a>
+  <a class="card" href="run-locally.html">
+    <h3>Run Locally</h3>
+    <p>The realistic paths to standing this up — and why the unmodified tree won't.</p>
+  </a>
+  <a class="card" href="glossary.html">
+    <h3>Glossary</h3>
+    <p>SWG-specific terminology: NGE, sku, IFF, TRE, dsrc, holocore, etc.</p>
+  </a>
+</div>
+
+<h2>Research deep-dives</h2>
+
+<p>
+  Long-form, evidence-grounded investigations into specific aspects of the
+  codebase. The same content is also available as markdown under
+  <code>docs/research/*.md</code>. Start at <a href="research.html">Research</a>
+  for the index.
+</p>
+
+<div class="cards">
+  <a class="card" href="swgclient-build.html">
+    <h3>SwgClient build chain</h3>
+    <p>What does <code>SwgClient.vcproj</code> build, what does it depend on, what blocks a build today?</p>
+  </a>
+  <a class="card" href="animation.html">
+    <h3>Animation system</h3>
+    <p>Granny middleware or in-house? Verdict, evidence, full <code>clientSkeletalAnimation</code> tour.</p>
+  </a>
+  <a class="card" href="foliage.html">
+    <h3>Foliage / vegetation</h3>
+    <p>SpeedTree or in-house? The "Flora" system — static meshes plus billboard quads with <code>sin()</code> sway.</p>
+  </a>
+  <a class="card" href="middleware.html">
+    <h3>Runtime middleware</h3>
+    <p>Inventory of every external runtime dependency, link mode, surface area, replaceability.</p>
+  </a>
+  <a class="card" href="boot-sequence.html">
+    <h3>Client boot sequence</h3>
+    <p>17 phases from <code>WinMain()</code> to first frame; MVB milestones and SOE-stub map for build planning.</p>
+  </a>
+</div>
+
+<h2>Sources</h2>
+
+<ul>
+  <li><a href="https://github.com/AconiteX/whitengold">AconiteX/whitengold</a> — GitHub mirror of this archive.</li>
+  <li><a href="https://github.com/SWG-Source">SWG-Source</a> — community fork that maintains a buildable descendant.</li>
+  <li><a href="https://github.com/SWG-Source/swg-main/wiki/Building-SWG-with-ANT">Building SWG with Ant</a> — modern fork's build flow.</li>
+  <li><a href="https://github.com/SWG-Source/swg-main/wiki/StellaBellum-Development-VM-Setup">StellaBellum Dev VM</a> — the practical "run it" path.</li>
+  <li><a href="http://wiki.swganh.org/index.php/TRE:TRE_Breakdown">TRE format breakdown</a> — SWGANH wiki reference.</li>
+  <li><a href="https://aconitedocs.readthedocs.io/">Aconite docs</a> — current SWG Source docs site.</li>
+  <li><a href="https://en.wikipedia.org/wiki/Star_Wars_Galaxies">Star Wars Galaxies — Wikipedia</a></li>
+</ul>
+
+</main>
+<footer>
+  whitengold (Star Wars Galaxies source archive, 2015-02-28). Documentation generated for local navigation only.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SwgClient Build — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — SwgClient build chain</h1>
+  <div class="sub">Deep-dive: what <code>SwgClient.vcproj</code> builds, depends on, and what's missing.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<p><a href="research.html">← back to Research</a> · markdown source: <code>docs/research/swgclient-build.md</code></p>
+
+<h1>SwgClient.vcproj — what it actually is</h1>
+
+<p>
+  <code>src/game/client/application/SwgClient/build/win32/SwgClient.vcproj</code>
+  (Visual Studio 2005, project format 8.00) is a <strong>wrapper shell</strong>, not the
+  client. It compiles only <strong>three C++ source files</strong> and inherits the entire
+  engine through linker dependencies in <code>swg.sln</code>.
+</p>
+
+<h2>Source layout</h2>
+
+<pre><code>src/game/client/application/SwgClient/
+├── build/
+│   └── win32/
+│       ├── SwgClient.vcproj          ← VS 2005, format 8.00
+│       ├── settings.rsp              ← compile-flag flags
+│       ├── includePaths.rsp          ← include directories
+│       ├── libraryPaths.rsp          ← linker library directories
+│       ├── libraries.rsp             ← always-linked libs
+│       ├── libraries_d.rsp           ← Debug-only libs
+│       ├── libraries_o.rsp           ← Optimized-only libs
+│       ├── libraries_r.rsp           ← Release-only libs
+│       ├── ignoreLibraries.rsp       ← libs to exclude (always)
+│       ├── ignoreLibraries_d.rsp     ← Debug ignore list
+│       └── ignoreLibraries_o.rsp     ← Optimized ignore list
+└── src/
+    ├── shared/
+    │   └── FirstSwgClient.h          ← precompiled-header umbrella
+    └── win32/
+        ├── WinMain.cpp               ← Win32 entry point (~135 lines)
+        ├── ClientMain.cpp            ← engine bootstrap (~405 lines)
+        ├── ClientMain.h
+        ├── FirstSwgClient.cpp        ← precompiled-header source
+        ├── SwgClient.rc              ← Windows resources
+        ├── icon1.ico, icon2.ico
+        └── resource.h
+</code></pre>
+
+<h2>Three configurations</h2>
+
+<table>
+  <thead>
+    <tr><th>Configuration</th><th>Output</th><th>/Optimization</th><th>Defines</th><th>Runtime library</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>Debug|Win32</code></td><td><code>SwgClient_d.exe</code></td><td>0 (<code>/Od</code>)</td><td><code>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_WINDOWS</code></td><td>1 = MTd-DLL <code>/MDd</code></td></tr>
+    <tr><td><code>Optimized|Win32</code></td><td><code>SwgClient_o.exe</code></td><td>3 (<code>/Ox</code>)</td><td><code>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;...;_WINDOWS</code></td><td>1 = MTd-DLL</td></tr>
+    <tr><td><code>Release|Win32</code></td><td><code>SwgClient_r.exe</code></td><td>2 (<code>/O2</code>)</td><td><code>WIN32;NDEBUG;_MBCS;DEBUG_LEVEL=0;...;_WINDOWS</code></td><td>0 = MT-static <code>/MT</code></td></tr>
+  </tbody>
+</table>
+
+<p>
+  All three are 32-bit Win32 (<code>&lt;Platform Name="Win32"/&gt;</code>),
+  <code>SubSystem="2"</code> (Windows GUI). The two prebuilt artefacts that
+  ship in the repo are <code>exe/win32/SwgClient_o.exe</code> and
+  <code>exe/win32/SwgClient_r.exe</code>.
+</p>
+
+<h2>Compiler settings worth noting</h2>
+
+<ul>
+  <li><code>CharacterSet="2"</code> — MBCS, <strong>not Unicode</strong>.</li>
+  <li><code>TreatWChar_tAsBuiltInType="FALSE"</code> — <code>wchar_t</code> is treated as <code>unsigned short</code> for XPCOM ABI compatibility. Modern VS defaults TRUE — flipping it breaks the link.</li>
+  <li><code>WarningLevel="4"</code> + <code>WarnAsError="TRUE"</code> — strict gate. Modern compilers add new warnings → instant build failure.</li>
+  <li><code>UsePrecompiledHeader="3"</code> through <code>FirstSwgClient.h</code>:
+<pre><code>#ifndef INCLUDED_FirstSwgClient_H
+#define INCLUDED_FirstSwgClient_H
+#include "sharedFoundation/FirstSharedFoundation.h"
+#include "_precompile.h"
+#endif</code></pre></li>
+  <li><code>RuntimeTypeInfo="TRUE"</code> — RTTI enabled.</li>
+  <li><code>Detect64BitPortabilityProblems="FALSE"</code> — explicitly off; client is always 32-bit.</li>
+  <li><code>_USE_32BIT_TIME_T=1</code> — pinned for STLPort 4.5.3 compatibility.</li>
+  <li><code>settings.rsp</code> contents:
+<pre><code>windows
+noPchDirectory
+incremental_o_no
+dbgInfo_r_pdb
+debugInline</code></pre></li>
+</ul>
+
+<h2>Source files actually compiled</h2>
+
+<pre><code>src/win32/WinMain.cpp          — 135 lines
+src/win32/ClientMain.cpp       — 405 lines
+src/win32/FirstSwgClient.cpp   — pch source
+src/win32/SwgClient.rc         — Windows resources
+</code></pre>
+
+<p>
+  No engine code is in this <code>.vcproj</code>. All of it comes in via
+  sibling <code>.vcproj</code> projects linked through <code>swg.sln</code>.
+</p>
+
+<h3>WinMain.cpp — the entry shim</h3>
+
+<p>From <code>src/game/client/application/SwgClient/src/win32/WinMain.cpp:124</code>:</p>
+
+<pre><code>int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nCmdShow) {
+  if (!SetUserSelectedMemoryManagerTarget())
+    SetDefaultMemoryManagerTargetSize();
+  return ClientMain(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+}</code></pre>
+
+<p>
+  <code>SetUserSelectedMemoryManagerTarget</code> reads the env var
+  <code>SWGCLIENT_MEMORY_SIZE_MB</code>. The default size is 3/4 of total
+  physical RAM, clamped to <code>[250 MB, 750 MB]</code> in dev or
+  <code>[250 MB, 2000 MB]</code> in production.
+</p>
+
+<h3>ClientMain.cpp — the boot order</h3>
+
+<div class="mermaid">
+flowchart TB
+  Start[WinMain] --> Mem[SetUserSelectedMemoryManagerTarget /<br/>SetDefaultMemoryManagerTargetSize]
+  Mem --> CM[ClientMain]
+
+  CM --> Thread[SetupSharedThread]
+  Thread --> Debug[SetupSharedDebug 4096]
+  Debug --> Foundation["SetupSharedFoundation<br/>configFile=client.cfg, 60fps"]
+  Foundation --> Sema["CreateSemaphore SwgClientInstanceRunning"]
+
+  Sema --> Compress[SetupSharedCompression]
+  Compress --> Regex[SetupSharedRegex]
+  Regex --> File["SetupSharedFile (true, skuBits)"]
+  File --> Override["installConfigFileOverride<br/>misc/override.cfg"]
+  Override --> Math[SetupSharedMath]
+  Math --> Util[SetupSharedUtility]
+  Util --> Random[SetupSharedRandom]
+  Random --> Log[SetupSharedLog]
+  Log --> Image[SetupSharedImage]
+  Image --> Net[SetupSharedNetwork]
+  Net --> Msg[SetupSharedNetworkMessages +<br/>SetupSwgSharedNetworkMessages]
+  Msg --> Obj[SetupSharedObject]
+  Obj --> Game[SetupSharedGame]
+  Game --> Terr[SetupSharedTerrain]
+  Terr --> Xml[SetupSharedXml]
+  Xml --> Path[SetupSharedPathfinding]
+
+  Path --> Audio[SetupClientAudio]
+  Audio --> Gfx[SetupClientGraphics]
+  Gfx --> Mozilla["libMozilla::init"]
+  Mozilla --> VideoList["VideoList::install +<br/>Bink uses Miles audio"]
+  VideoList --> Input[SetupClientDirectInput]
+  Input --> ClientObj[SetupClientObject]
+  ClientObj --> Anim[SetupClientAnimation +<br/>SetupClientSkeletalAnimation]
+  Anim --> TexRen[SetupClientTextureRenderer]
+  TexRen --> ClientTerrain[SetupClientTerrain]
+  ClientTerrain --> Particle[SetupClientParticle]
+  Particle --> ClientGame[SetupClientGame]
+  ClientGame --> Cui["SwgCuiManager wiring"]
+  Cui --> Bug[SetupClientBugReporting]
+  Bug --> IoWin[SetupSharedIoWin]
+  IoWin --> CuiUi[SetupSwgClientUserInterface]
+  CuiUi --> Lcd["SwgCuiG15Lcd::initializeLcd"]
+  Lcd --> Run["Game::run via callbackWithExceptionHandling"]
+  Run --> Save["Save options & settings"]
+  Save --> Npe["NPE conversion URL if trial"]
+  Npe --> Tear[teardown remove install]
+</div>
+
+<h3>installConfigFileOverride</h3>
+
+<pre><code>AbstractFile * const abstractFile = TreeFile::open("misc/override.cfg",
+    AbstractFile::PriorityData, true);
+if (abstractFile) {
+  const int length = abstractFile-&gt;length();
+  byte * const data = abstractFile-&gt;readEntireFileAndClose();
+  IGNORE_RETURN(ConfigFile::loadFromBuffer(reinterpret_cast&lt;char const *&gt;(data), length));
+  delete[] data;
+  delete abstractFile;
+}</code></pre>
+
+<p>The client looks for <code>misc/override.cfg</code> <em>inside</em> the TRE search path — i.e. servers can ship config overrides via the patcher.</p>
+
+<h2>Internal SOE library dependencies</h2>
+
+<p>
+  The <code>.vcproj</code> itself names only the external-link side. Internal
+  SOE libraries are pulled in by the GUID dependency list in
+  <code>src/build/win32/swg.sln</code>, which lists ~70
+  <code>ProjectDependencies</code> for <code>SwgClient</code>.
+</p>
+
+<h3>From <code>includePaths.rsp</code></h3>
+
+<table>
+  <thead><tr><th>Group</th><th>Libraries</th></tr></thead>
+  <tbody>
+    <tr><td>Engine — client (12)</td><td>clientAnimation, clientAudio, clientBugReporting, clientDirectInput, clientGame, clientGraphics, clientObject, clientParticle, clientSkeletalAnimation, clientTerrain, clientTextureRenderer, clientUserInterface</td></tr>
+    <tr><td>Engine — shared (22)</td><td>sharedCompression, sharedDebug, sharedFile, sharedFoundation, sharedFoundationTypes, sharedGame, sharedImage, sharedIoWin, sharedLog, sharedMath, sharedMemoryManager, sharedMessageDispatch, sharedNetwork, sharedNetworkMessages, sharedObject, sharedPathfinding, sharedRandom, sharedRegex, sharedTerrain, sharedThread, sharedUtility, sharedXml</td></tr>
+    <tr><td>Game-side (2)</td><td>swgClientUserInterface, swgSharedNetworkMessages</td></tr>
+    <tr><td>SOE in-house ours (6)</td><td>archive, fileInterface, localization, localizationArchive, unicode, unicodeArchive</td></tr>
+  </tbody>
+</table>
+
+<p>Notable scale references (from filesystem counts):</p>
+
+<ul>
+  <li><code>clientGame</code>: 343 .cpp / 683 .h</li>
+  <li><code>clientGraphics</code>: 68 .cpp / 144 .h</li>
+  <li><code>clientAudio</code>: 20 .cpp / 40 .h</li>
+  <li><code>sharedNetwork</code>: 30 .cpp / 43 .h</li>
+  <li><code>sharedFoundation</code>: 52 .cpp / 146 .h</li>
+</ul>
+
+<h2>External libraries — the linked surface</h2>
+
+<div class="mermaid">
+flowchart LR
+  Sln["swg.sln (VS 2005)"]
+  SwgC["SwgClient.vcproj<br/>3 .cpp + 1 .rc"]
+  Sln --> SwgC
+
+  subgraph Internal["~70 sister .vcproj projects"]
+    direction TB
+    Engines[clientGame, clientGraphics,<br/>clientAudio, clientAnimation,<br/>clientSkeletalAnimation, clientTerrain,<br/>clientObject, clientParticle, ...]
+    Shared[sharedFoundation, sharedFile,<br/>sharedMath, sharedNetwork,<br/>sharedTerrain, sharedXml, ...]
+    Ours[archive, unicode,<br/>fileInterface, localization, ...]
+    GameUi[swgClientUserInterface,<br/>swgSharedNetworkMessages]
+  end
+
+  SwgC --> Internal
+
+  subgraph External["external/3rd/library/"]
+    DX9["directx9 (d3d9, d3dx9, dinput8, dsound, dxguid)"]
+    Miles["miles (mss32)"]
+    DPVS["dpvs (dpvs/dpvsd)"]
+    XML2["libxml2-2.6.7.win32"]
+    PCRE["pcre/4.1 (libpcre.a)"]
+    STLPort["stlport453"]
+    Zlib["zlib"]
+    LCD["lcdui (lgLcd)"]
+    Mozilla["libMozilla XPCOM<br/>nspr4, plc4, xpcom, xul,<br/>profdirserviceprovider_s"]
+    Vivox["vivoxSharedWrapper"]
+    VidCap["videocapture stack<br/>VideoCapture, ImageCapture, Smart,<br/>SoeUtil, ZlibUtil, PICTools (picn20m)"]
+    BoostHdr["boost (4 hdrs only)"]
+    UI["ui (SOE custom)"]
+  end
+
+  SwgC --> External
+
+  subgraph Runtime["loaded at runtime via DLL"]
+    Bink["binkw32.dll<br/>LoadLibrary, function pointers"]
+    MozillaDlls["xul.dll, xpcom.dll, nspr4.dll,<br/>plc4.dll, plds4.dll, nss3.dll,<br/>nssckbi.dll, smime3.dll, softokn3.dll,<br/>ssl3.dll, js3250.dll, gksvggdiplus.dll"]
+    VivoxDlls["vivoxsdk.dll, vivoxplatform.dll,<br/>ortp.dll, alut.dll, libsndfile-1.dll,<br/>wrap_oal.dll, VivoxVoiceService.exe"]
+    Mss32Dll["Mss32.dll"]
+    Crt71["msvcr71.dll (mismatch!)"]
+  end
+
+  SwgC -. runtime .-> Runtime
+</div>
+
+<h3>Linker response files (verified on disk)</h3>
+
+<p>From <code>libraries.rsp</code> (always linked):</p>
+<pre><code>ws2_32.lib       — Windows Sockets
+winmm.lib        — Windows multimedia
+dinput8.lib      — DirectInput 8
+dsound.lib       — DirectSound
+dxguid.lib       — DirectX GUIDs
+libpcre.a        — Perl-Compatible Regex (static)
+libxml2-win32-release.lib
+mss32.lib        — Miles Sound System
+mswsock.lib      — Microsoft Sockets
+lgLcd.lib        — Logitech LCD UI
+nspr4.lib        — Mozilla NSPR
+plc4.lib         — Mozilla PLC
+profdirserviceprovider_s.lib  — Mozilla profile dir
+xpcom.lib        — Mozilla XPCOM
+xul.lib          — Mozilla XUL</code></pre>
+
+<p>From <code>libraries_d.rsp</code> (Debug-only):</p>
+<pre><code>dpvsd.lib                       — DPVS occlusion (debug)
+vivoxSharedWrapper_debug.lib
+VideoCapture_debug.lib
+ImageCapture_debug.lib
+Smart_debug.lib
+SoeUtil_debug.lib
+ZlibUtil_debug.lib
+picn20md.lib                    — PICTools (debug)</code></pre>
+
+<p>From <code>libraries_o.rsp</code> (Optimized) and <code>libraries_r.rsp</code> (Release):</p>
+<pre><code>dpvs.lib
+vivoxSharedWrapper_(debug|release).lib
+VideoCapture_release.lib
+ImageCapture_release.lib
+Smart_release.lib
+SoeUtil_release.lib
+ZlibUtil_release.lib
+picn20m.lib</code></pre>
+
+<p>From <code>ignoreLibraries.rsp</code> / <code>ignoreLibraries_d.rsp</code> / <code>ignoreLibraries_o.rsp</code>:</p>
+<pre><code>libc, MSVCRT
+LIBCMT, MSVCRTD</code></pre>
+
+<h3>Library file existence verification</h3>
+
+<table>
+  <thead><tr><th>Library directory</th><th>Files present</th></tr></thead>
+  <tbody>
+    <tr><td><code>external/3rd/library/directx9/lib</code></td><td><code>d3d9.lib, d3dx9.lib, d3dx9d.dll, d3dx9dt.lib, ddraw.lib, dinput8.lib, dsetup.lib, dsound.lib, DxErr9.lib, dxguid.lib</code> (plus <code>d3dx.lib</code>)</td></tr>
+    <tr><td><code>external/3rd/library/dpvs/lib/win32-x86</code></td><td><code>dpvs.lib, dpvsd.lib, dpvsd.pdb</code></td></tr>
+    <tr><td><code>external/3rd/library/libxml2-2.6.7.win32/lib</code></td><td><code>libxml2-win32-debug.lib, libxml2-win32-release.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/miles/lib/win</code></td><td><code>Mss32.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/pcre/4.1/win32/lib</code></td><td><code>libpcre.a</code></td></tr>
+    <tr><td><code>external/3rd/library/stlport453/lib/win32</code></td><td>12 <code>.lib</code> variants — <code>vc6/vc7/vc71</code> × release/debug × static/stldebug. <strong>Not VS 2005 (vc8).</strong></td></tr>
+    <tr><td><code>external/3rd/library/zlib/lib/win32</code></td><td><code>zlib.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/lcdui/lib</code></td><td><code>lgLcd.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/libMozilla/include/private/lib/release</code></td><td><code>nspr4.lib, plc4.lib, profdirserviceprovider_s.lib, xpcom.lib, xul.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/vivoxSharedWrapper/lib</code></td><td><code>vivoxSharedWrapper_Debug.lib, vivoxSharedWrapper_Release.lib</code></td></tr>
+    <tr><td><code>external/3rd/library/videocapture/{AudioCapture,VideoCapture,ImageCapture,Smart,ZlibUtil,SoeUtil}/lib/win32</code></td><td>Debug + Release variants</td></tr>
+    <tr><td><code>external/3rd/library/videocapture/PICTools/Lib/win32</code></td><td><code>picn20m.lib, picn20md.lib</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Header-only / sibling-built includes</h3>
+
+<table>
+  <thead><tr><th>Path</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td><code>external/3rd/library/boost</code></td><td>Only 4 headers: <code>config.hpp</code>, <code>smart_ptr.hpp</code>, <code>static_assert.hpp</code>, <code>utility.hpp</code></td></tr>
+    <tr><td><code>external/3rd/library/directx9/include</code></td><td>24 headers</td></tr>
+    <tr><td><code>external/3rd/library/libMozilla/include/public</code></td><td>1 file — 41-byte forward to <code>src/win32/libMozilla.h</code></td></tr>
+    <tr><td><code>external/3rd/library/ui/include</code></td><td>SOE custom UI engine — 145 files (full source under <code>src/</code>)</td></tr>
+    <tr><td><code>external/3rd/library/stlport453/stlport</code></td><td>332 STL files</td></tr>
+  </tbody>
+</table>
+
+<h2>Indirect / runtime-loaded dependencies</h2>
+
+<p>The <code>.vcproj</code> doesn't link these — they're loaded via <code>LoadLibrary</code> (or required by the linked DLLs). All ship as DLLs in <code>exe/win32/</code>:</p>
+
+<ul>
+  <li><strong>Bink</strong> — <code>bink/lib/win32/binkw32.dll</code>, <code>binkw32.lib</code>. Loaded via <code>Bink::bindBink()</code> in <code>BinkDLL.h</code> — function pointers, not static link.</li>
+  <li><strong>Vivox runtime</strong> — <code>vivox/lib/{vivoxsdk,vivoxplatform,ortp,alut,libsndfile-1,wrap_oal}.dll</code>, plus <code>VivoxVoiceService.exe</code>.</li>
+  <li><strong>Mozilla XPCOM runtime</strong> — <code>xpcom.dll, xul.dll, nspr4.dll, plc4.dll, plds4.dll, nss3.dll, nssckbi.dll, smime3.dll, softokn3.dll, ssl3.dll, js3250.dll, gksvggdiplus.dll</code> + <code>exe/win32/mozilla/</code> chrome tree.</li>
+  <li><strong>MSVC 7.1 CRT</strong> — <code>exe/win32/msvcr71.dll</code>. <strong>Mismatch:</strong> the <code>.vcproj</code> targets VS 2005 (would emit <code>msvcr80</code>-bound binaries), but the prebuilt EXEs use VS 2003's CRT. The original team built with VC++ 7.1; the VS 2005 settings are a later port.</li>
+</ul>
+
+<h2>What's missing — what would actually block a build today</h2>
+
+<table>
+  <thead><tr><th>#</th><th>Blocker</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Visual Studio 2005 itself, or a clean upgrade path</td><td>Format <code>Version="8.00"</code> is VS 2005-specific. VS 2022 upgrade routinely fails on sister libs (changed flags, deprecated CRT, removed headers, MFC/ATL relocation).</td></tr>
+    <tr><td>2</td><td>Pre-2010 Windows Platform SDK</td><td>The DX9 headers reference <code>wtypes.h</code>/<code>unknwn.h</code> from the era's SDK. Newer SDKs break on <code>dinputd.h</code> / <code>ddraw.h</code>.</td></tr>
+    <tr><td>3</td><td>The <code>swg.sln</code> project graph must build in order</td><td><code>SwgClient.vcproj</code> has no inline <code>&lt;References&gt;</code> — it relies on the ~70 GUID dependencies in <code>swg.sln</code>. Standalone build = wall of <code>LNK2019</code>.</td></tr>
+    <tr><td>4</td><td>STLPort 4.5.3 library naming</td><td><code>lib/</code> has six variants (vc6/vc7/vc71 × release/debug). VS 2005 (vc8) <strong>isn't there</strong>. Original team built VC++ 7.1.</td></tr>
+    <tr><td>5</td><td><code>TreatWChar_tAsBuiltInType="FALSE"</code> non-default</td><td>Flipping it to TRUE (modern VS default) gives unresolved externals against XPCOM, which was built with <code>wchar_t = unsigned short</code>.</td></tr>
+    <tr><td>6</td><td><code>WarnAsError="TRUE"</code> + level 4 + 2026-era compiler</td><td>Newer MSVCs add warnings → instant errors. Standard fix is global <code>/wd</code> suppression — meaningful porting effort.</td></tr>
+    <tr><td>7</td><td>Sony Station / soePlatform integration</td><td>Linkable, but phones home at runtime to dead SOE endpoints.</td></tr>
+    <tr><td>8</td><td><code>client.cfg</code> with valid LoginServer</td><td>Shipped <code>client.cfg</code> targets retired SOE hosts.</td></tr>
+    <tr><td>9</td><td><code>.tre</code> asset archives</td><td><code>SetupSharedFile</code> + <code>TreeFile::open("misc/override.cfg")</code> crashes the boot if no archives exist on the search path.</td></tr>
+    <tr><td>10</td><td>Working <code>data/</code> tree on the search path</td><td>Beyond <code>.tre</code>, the engine wants <code>data/sku.0/...</code> paths from a retail install or community asset rebuild.</td></tr>
+  </tbody>
+</table>
+
+<h2>What is NOT actually missing</h2>
+
+<div class="callout info">
+  Surprisingly, almost every external dependency is physically present. The leak is more complete on the client than on the server:
+  <ul>
+    <li>DirectX 9 SDK headers + import libs are in-tree.</li>
+    <li>DPVS (Umbra) source + libs are in-tree.</li>
+    <li>Bink, Miles, Vivox, Logitech LCD, libxml2, PCRE, zlib — all linkable.</li>
+    <li><code>libMozilla</code> wrapper + XPCOM <code>.lib</code> + DLLs all present.</li>
+    <li>Custom UI engine (<code>external/3rd/library/ui</code>) is full source.</li>
+    <li>SOE UDP library (<code>udplibrary</code>) is full source — has to be, for client/server protocol symmetry.</li>
+  </ul>
+</div>
+
+<h2>TL;DR</h2>
+
+<p>
+  <code>SwgClient.vcproj</code> is a <strong>3-file Win32 shell</strong> that, through
+  the <code>swg.sln</code> graph, links the entire SOE engine plus a stack of
+  vendored 3rd-party SDKs. Realistic blockers:
+</p>
+
+<ol>
+  <li>2005-era toolchain (VS 2005 + matching Platform SDK + MSVC 7.1 CRT mismatch).</li>
+  <li>Strict warning gates (<code>WarnAsError</code>, <code>wchar_t</code> ABI).</li>
+  <li>Building <code>swg.sln</code> as a whole, not just this one project.</li>
+  <li>Runtime: missing <code>.tre</code> archives, dead SOE auth, no working <code>client.cfg</code>.</li>
+</ol>
+
+</main>
+<footer>whitengold docs · <a href="research.html">All research</a> · <a href="index.html">Overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

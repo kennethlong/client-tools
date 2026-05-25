@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dependencies — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Dependencies</h1>
+  <div class="sub">Third-party SDKs and in-house libraries the build expects.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html" class="active">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Dependencies</h1>
+
+<p>
+  Everything under <code>src/external/</code>. Some libs are vendored (full source);
+  others are headers + import libs only and require you to source the real SDK.
+  A few are licensed-only and effectively impossible to redistribute legitimately.
+</p>
+
+<h2>Where they live</h2>
+
+<table>
+  <thead><tr><th>Path</th><th>Lib</th><th>Status</th><th>Used by</th></tr></thead>
+  <tbody>
+    <tr><td><code>3rd/library/directx9</code></td><td>DirectX 9 SDK</td><td><span class="tag warn">SDK required</span></td><td>Client renderer</td></tr>
+    <tr><td><code>3rd/library/bink</code></td><td>RAD Bink Video</td><td><span class="tag warn">License</span></td><td>Cinematics</td></tr>
+    <tr><td><code>3rd/library/miles</code> / <code>miles-7.2e</code></td><td>RAD Miles Sound System</td><td><span class="tag warn">License</span></td><td>clientAudio</td></tr>
+    <tr><td><code>3rd/library/dpvs</code></td><td>Umbra DPVS occlusion</td><td><span class="tag warn">License</span></td><td>Renderer culling</td></tr>
+    <tr><td><code>3rd/library/vivox</code> / <code>vivoxSharedWrapper</code></td><td>Vivox VoIP SDK</td><td><span class="tag warn">License</span></td><td>In-game voice</td></tr>
+    <tr><td><code>3rd/library/trackIR</code></td><td>NaturalPoint TrackIR SDK</td><td><span class="tag warn">License</span></td><td>JTL space view</td></tr>
+    <tr><td><code>3rd/library/atiDxtc</code> / <code>ati_compress</code></td><td>ATI DXT compression</td><td>Vendored</td><td>TextureBuilder</td></tr>
+    <tr><td><code>3rd/library/maya4..maya8</code></td><td>Autodesk Maya SDK</td><td><span class="tag warn">SDK required</span></td><td>MayaExporter / plugin/win32</td></tr>
+    <tr><td><code>3rd/library/oracle</code> / <code>oracle_win32</code></td><td>Oracle OCI client</td><td><span class="tag warn">SDK required</span></td><td>LoginServer / SwgDatabaseServer</td></tr>
+    <tr><td><code>3rd/library/java</code></td><td>IBM JDK 1.3.1 headers</td><td><span class="tag warn">JRE required</span></td><td>serverScript JNI bridge</td></tr>
+    <tr><td><code>3rd/library/boost</code></td><td>Boost (older snapshot)</td><td>Vendored</td><td>Engine + servers</td></tr>
+    <tr><td><code>3rd/library/stlport453</code></td><td>STLPort 4.5.3</td><td>Vendored</td><td>Whole codebase used STLPort instead of MSVC STL</td></tr>
+    <tr><td><code>3rd/library/zlib</code> / <code>zlib-1.2.3</code></td><td>zlib</td><td>Vendored</td><td>TreeFile / network compression</td></tr>
+    <tr><td><code>3rd/library/libjpeg</code></td><td>libjpeg</td><td>Vendored</td><td>Texture pipeline</td></tr>
+    <tr><td><code>3rd/library/libxml</code> / <code>libxml2-2.6.7.win32</code></td><td>libxml(2)</td><td>Vendored</td><td>Tools, configs</td></tr>
+    <tr><td><code>3rd/library/tinyxml</code></td><td>TinyXML</td><td>Vendored</td><td>Editors</td></tr>
+    <tr><td><code>3rd/library/pcre</code></td><td>PCRE</td><td>Vendored</td><td>sharedRegex</td></tr>
+    <tr><td><code>3rd/library/qt</code> + <code>exe/win32/qt-mt334.dll</code></td><td>Qt 3.3.4</td><td>Vendored / DLL shipped</td><td>Editor tools (TerrainEditor, GodClient, P4Qt)</td></tr>
+    <tr><td><code>3rd/library/atlmfc</code></td><td>Microsoft ATL/MFC</td><td><span class="tag warn">VS-bound</span></td><td>Editor tools</td></tr>
+    <tr><td><code>3rd/library/dimm</code></td><td>DirectInput IME</td><td>Vendored headers</td><td>clientDirectInput</td></tr>
+    <tr><td><code>3rd/library/perforce</code></td><td>Perforce P4 API</td><td>Vendored</td><td>P4Qt and editors with check-in support</td></tr>
+    <tr><td><code>3rd/library/alienbrain110/122/123</code></td><td>NxN Alienbrain XDK</td><td><span class="tag warn">License</span></td><td>Asset-management integration in editors</td></tr>
+    <tr><td><code>3rd/library/libMozilla</code></td><td>Mozilla 1.x XPCOM</td><td>Vendored</td><td>In-game web browser</td></tr>
+    <tr><td><code>3rd/library/lcdui</code> / <code>lcdui_src</code></td><td>Logitech LCD UI SDK</td><td><span class="tag warn">License</span></td><td>Logitech G-series keyboards</td></tr>
+    <tr><td><code>3rd/library/nvtristrip</code></td><td>NVIDIA NvTriStrip</td><td>Vendored</td><td>Mesh stripification</td></tr>
+    <tr><td><code>3rd/library/meshifier</code></td><td>SOE meshifier</td><td>Vendored</td><td>Mesh asset processing</td></tr>
+    <tr><td><code>3rd/library/udplibrary</code></td><td>SOE custom UDP networking</td><td>Vendored (this is the protocol!)</td><td>Client ↔ server</td></tr>
+    <tr><td><code>3rd/library/soePlatform</code> / <code>stationapi</code></td><td>SOE Station Platform</td><td><span class="tag warn">SOE-only</span></td><td>LoginServer auth, character transfer</td></tr>
+    <tr><td><code>3rd/library/libEverQuestTCG</code></td><td>EverQuest TCG SDK</td><td><span class="tag warn">SOE-only</span></td><td>Trading Card Game integration</td></tr>
+    <tr><td><code>3rd/library/blat194</code></td><td>Blat (Windows mailer)</td><td>Vendored binary</td><td>Build email scripts</td></tr>
+    <tr><td><code>3rd/library/debugHelp</code> + <code>vtune</code> + <code>DejaInsight</code></td><td>Debug / profiling</td><td>Tooling</td><td>Dev builds</td></tr>
+    <tr><td><code>3rd/library/videocapture</code></td><td>In-house screen capture</td><td>Vendored</td><td>/screenshot, video record</td></tr>
+    <tr><td><code>3rd/library/ms_unicode</code></td><td>Microsoft unicode (mlang)</td><td>Vendored</td><td>localization</td></tr>
+    <tr><td><code>ours/library/archive</code></td><td>Object serialisation</td><td>Vendored</td><td>Network messages</td></tr>
+    <tr><td><code>ours/library/crypto</code></td><td>Crypto helpers</td><td>Vendored</td><td>Auth / save data</td></tr>
+    <tr><td><code>ours/library/unicode</code> / <code>unicodeArchive</code></td><td>UTF wide-string lib</td><td>Vendored</td><td>All text</td></tr>
+    <tr><td><code>ours/library/localization</code> / <code>localizationArchive</code></td><td>STF runtime</td><td>Vendored</td><td>UI text, names</td></tr>
+    <tr><td><code>ours/library/fileInterface</code></td><td>File-IO abstraction</td><td>Vendored</td><td>sharedFile</td></tr>
+    <tr><td><code>ours/library/singleton</code></td><td>Singleton helper</td><td>Vendored</td><td>Engine globals</td></tr>
+  </tbody>
+</table>
+
+<h2>Build-toolchain expectations</h2>
+
+<p>The repo's <code>src/BUILDING</code> file lists what was on the dev workstations:</p>
+
+<ul>
+  <li><code>automake &gt;= 1.6 &lt; 1.7</code></li>
+  <li><code>autoconf &gt;= 2.57</code></li>
+  <li><code>libtool-1.4x</code></li>
+  <li><code>gcc-2.95-3</code> or <code>gcc-3.2.x</code></li>
+  <li><code>IBM Java 1.3.1</code> in <code>/usr/java</code></li>
+  <li><code>STLPort 4.5.3</code> sources</li>
+  <li><code>Oracle 9.2.0</code> in <code>/opt/app/oracle/product/9.2.0</code></li>
+</ul>
+
+<div class="callout warn">
+  Most of those are end-of-life. A from-scratch build of the unmodified tree
+  on a current Linux distro will not succeed without porting. Community efforts
+  (SWG-Source) maintain a patched fork that does build on more recent
+  toolchains, paired with an Oracle 12c instead of 9i.
+</div>
+
+<h2>Windows build expects</h2>
+<ul>
+  <li>Visual Studio 2005 (<code>swg.sln</code> is format 9.00).</li>
+  <li>DirectX 9 SDK (early 2005-era headers).</li>
+  <li>Maya SDK for the relevant version (4 / 5 / 7 / 8).</li>
+  <li>Oracle Instant Client / OCI for Windows.</li>
+  <li>The MSVC 7.1 runtime (<code>msvcr71.dll</code>) — already in <code>exe/win32/</code>.</li>
+</ul>
+
+<p>Continue to <a href="build.html">Build System</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

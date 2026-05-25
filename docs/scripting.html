@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Scripting — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Scripting layer</h1>
+  <div class="sub">The Java-flavoured gameplay scripts under <code>dsrc/</code> that drive the live game.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html" class="active">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>The scripting layer</h1>
+
+<p>
+  SWG separates the engine (C++) from the gameplay rules (scripts).
+  Scripts under <code>dsrc/sku.0/sys.server/compiled/game/script/</code> describe how
+  every interaction works: combat dispatch, NPC AI, faction reactions, quest
+  progression, crafting, structure placement, social systems. Script content
+  is what designers and live-team engineers touched daily.
+</p>
+
+<h2>The scripting language is "scriptlib + script", not vanilla Java</h2>
+
+<p>
+  Files come in two flavours:
+</p>
+
+<ul>
+  <li><code>*.script</code> — gameplay handlers attached to a specific object kind. They
+      look like Java with extra primitives (<code>obj_id</code>, <code>location</code>) and a
+      handler-style entry-point convention.</li>
+  <li><code>*.scriptlib</code> / <code>*.java</code> — shared library code consumed by scripts.
+      <code>*.java</code> here are <em>not</em> ordinary Java — they are the SWG dialect
+      with engine-only types — but they go through a build step that converts
+      them to bytecode the embedded JVM can run.</li>
+</ul>
+
+<p>The first lines of a real script (<code>script/base/remote_object.script</code>) look like:</p>
+
+<pre><code>// =====================================================================
+//
+// remote_object.script
+// copyright, Sony Online Entertainment
+//
+// =====================================================================
+
+//-- cluster wide data object manager
+const String REMOTE_OBJECT_MANAGER = "remote_object_manager";
+
+//-- parameter prefix
+const String BASE_NAME = "remote_object";
+...
+</code></pre>
+
+<p>
+  The familiar <code>const String</code>, <code>String</code>, package-style organisation, and
+  message-handler patterns (<code>OnAttach</code>, <code>OnTrigger</code>) are why this is
+  often described as "Java-like".
+</p>
+
+<h2>How scripts run</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph Build["Build / publish step"]
+    SrcS[".script files"]
+    SrcJ[".java / .scriptlib"]
+    Compiler["scriptlint + custom compiler<br/>(tools/scriptlint, swglint.sh)"]
+    Bin[".scriptbin bytecode"]
+  end
+
+  subgraph Runtime["SwgGameServer at runtime"]
+    JVM["Embedded IBM Java 1.3 JVM"]
+    Bridge["serverScript bridge<br/>(JNI: C++ ↔ JVM)"]
+    Object["Game object trigger<br/>OnAttack / OnLook / OnTrigger"]
+  end
+
+  SrcS --> Compiler
+  SrcJ --> Compiler
+  Compiler --> Bin
+  Bin --> JVM
+  Object --> Bridge --> JVM
+  JVM -- "result / actions" --> Bridge --> Object
+</div>
+
+<h2>What's in <code>dsrc/sku.0/sys.server/compiled/game/script/</code></h2>
+
+<p>The script directory mirrors the game's feature areas. Highlights:</p>
+
+<table>
+  <thead><tr><th>Subdir</th><th>What lives there</th></tr></thead>
+  <tbody>
+    <tr><td><code>base/</code></td><td>Foundational scripts loaded by every game server (<code>remote_object</code>, etc.).</td></tr>
+    <tr><td><code>library/</code></td><td>Shared <code>.scriptlib</code>/<code>.java</code> reused by everything else (<code>combat.scriptlib</code>, <code>ai_lib.java</code>, <code>attrib.scriptlib</code>).</td></tr>
+    <tr><td><code>creature/</code></td><td>Creature behaviours, beast handling, mob templates.</td></tr>
+    <tr><td><code>conversation/</code></td><td>NPC dialogue trees emitted from <code>SwgConversationEditor</code>.</td></tr>
+    <tr><td><code>quest/</code></td><td>Quest content driven by <code>QuestEditor</code>.</td></tr>
+    <tr><td><code>space/</code> / <code>space_mining/</code></td><td>JTL space-side gameplay, mining, waypoints.</td></tr>
+    <tr><td><code>npc/</code>, <code>npe/</code></td><td>NPCs and the New Player Experience flow.</td></tr>
+    <tr><td><code>player/</code></td><td>Player object scripts (titles, badges, expertise).</td></tr>
+    <tr><td><code>structure/</code>, <code>city/</code>, <code>guild/</code></td><td>Player structures, mayoral cities, guild systems.</td></tr>
+    <tr><td><code>theme_park/</code></td><td>Themepark (Jabba's, Imperial, Rebel) quest hubs.</td></tr>
+    <tr><td><code>terminal/</code></td><td>Mission terminals, travel terminals, etc.</td></tr>
+    <tr><td><code>gm/</code> / <code>csr/</code></td><td>GM and customer-service commands.</td></tr>
+    <tr><td><code>fishing/</code>, <code>gambling/</code>, <code>holocron/</code>, <code>fs_quests/</code></td><td>Various live-team minigames and event content.</td></tr>
+    <tr><td><code>test/</code>, <code>qa/</code>, <code>debug/</code>, <code>simulator/</code></td><td>Internal test scripts; useful as examples but not required.</td></tr>
+  </tbody>
+</table>
+
+<h2>How a script is hooked to an object</h2>
+
+<p>
+  Server <em>object templates</em> in <code>dsrc/sku.0/sys.server/compiled/game/object/</code>
+  list which scripts attach to a given object type. When the engine spawns an
+  object (e.g. a Tusken Raider creature), it consults that template, instantiates
+  the C++ object, then attaches each named script to it. From then on, engine
+  events on that object (movement, combat, conversation) trigger the corresponding
+  <code>OnX</code> handler in the script.
+</p>
+
+<h2>Datatables: the "tabs"</h2>
+
+<p>
+  Side-by-side with scripts is a huge body of <code>.tab</code> spreadsheets in
+  <code>dsrc/sku.0/sys.server/compiled/game/datatables/</code> — flat tables that
+  scripts and engine code read at runtime:
+</p>
+
+<ul>
+  <li><code>ai/ai_combat_profiles.tab</code> — AI combat behaviour matrices.</li>
+  <li><code>loot/</code> — drop tables.</li>
+  <li><code>combat/</code> — special-attack tables, crit tables.</li>
+  <li><code>creature_resource/</code>, <code>resource/</code> — harvestable resource tables.</li>
+  <li><code>quest/</code>, <code>missions/</code> — content side data.</li>
+  <li><code>jedi/</code>, <code>jedi_trials/</code> — Force / Jedi unlock data.</li>
+</ul>
+
+<p>
+  The <code>.tab</code> format is a tab-separated text spreadsheet plus a header
+  row with column types. The engine compiles them to <code>.iff</code> for runtime, but the
+  authoritative source-of-truth is the <code>.tab</code>. Many tools in <code>tools/</code>
+  exist to round-trip <code>.tab</code> ↔ <code>.iff</code>.
+</p>
+
+<h2>Compilation / linting</h2>
+
+<p>The pipeline is run via <code>tools/swglint.sh</code> + <code>tools/swg-lint.bat</code> /
+<code>tools/scriptlint/</code>, which:</p>
+<ol>
+  <li>parses <code>.java</code> / <code>.scriptlib</code> with a SWG-flavoured front-end (uses <code>flex</code>/<code>bison</code> binaries shipped under <code>tools/</code>),</li>
+  <li>resolves references and engine-bound types,</li>
+  <li>emits class files / <code>.scriptbin</code> bundles loaded by the embedded JVM.</li>
+</ol>
+
+<div class="callout warn">
+  <strong>This pipeline assumes IBM Java 1.3.1.</strong> See <code>src/BUILDING</code>:
+  <em>"ibm java2 1.3.1 installed in /usr/java"</em>. That JRE is not on
+  modern Linux distros. The SWG-Source fork either ships a vendored binary or
+  has been ported to a more recent Java — that is one of the bigger porting
+  efforts the community has done on top of this code.
+</div>
+
+<p>Continue to <a href="data-pipeline.html">Data Pipeline</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

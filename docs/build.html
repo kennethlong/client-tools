@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Build System — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Build system</h1>
+  <div class="sub">How the source compiles, on Windows and on Linux.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html" class="active">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Build system</h1>
+
+<p>
+  Two parallel build systems live in the tree, and they are not interchangeable:
+  Windows uses Visual Studio 2005 projects; Linux uses GNU autotools. Each subsystem
+  has both a <code>build/win32/*.vcproj</code> and a Linux <code>Makefile.am</code>.
+</p>
+
+<h2>The Windows side</h2>
+
+<div class="mermaid">
+flowchart TB
+  Sln["src/build/win32/swg.sln<br/>(VS 2005, format 9.00)"]
+  AllClient[_all_client.vcproj]
+  AllServer[_all_server.vcproj]
+  AllShared[_all_shared_libraries.vcproj]
+  AllTools[_all_tools.vcproj]
+  AllClientLibs[_all_client_libraries.vcproj]
+  AllServerLibs[_all_server_libraries.vcproj]
+  Sln --> AllClient
+  Sln --> AllServer
+  Sln --> AllShared
+  Sln --> AllTools
+  Sln --> AllClientLibs
+  Sln --> AllServerLibs
+  AllClient --> SwgClient[SwgClient.vcproj]
+  AllServer --> SwgGameServer[SwgGameServer.vcproj]
+  AllTools --> Editors[AnimationEditor / ParticleEditor / ...]
+</div>
+
+<ul>
+  <li>Top-level solution: <code>src/build/win32/swg.sln</code>.</li>
+  <li>Roll-up project files (<code>_all_*.vcproj</code>) batch-build whole categories.</li>
+  <li>Each application or library has its own <code>build/win32/&lt;Name&gt;.vcproj</code>
+      next to its source.</li>
+  <li>Old-style <code>.dsp</code> Visual C++ 6 projects also exist as a parallel set —
+      maintained automatically by Perl scripts in <code>tools/</code> (e.g. <code>BuildVcprojs.btm</code>,
+      <code>BuildAllDsps.btm</code>).</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Reality check:</strong> opening <code>swg.sln</code> in Visual Studio 2022 will
+  prompt you to "upgrade" the projects. The upgrade often succeeds for tools but
+  fails for the heavyweight client/server projects because of changed compiler
+  flag semantics, MFC ATL paths, removed headers, and the missing DirectX 9
+  SDK / Maya SDK / Oracle OCI libs. SWG-Source carries a patched VS solution
+  that has been incrementally fixed; this leak does not.
+</div>
+
+<h2>The Linux side</h2>
+
+<p>
+  Linux builds use GNU autotools, driven by <code>src/configure.in</code> and a per-directory
+  <code>Makefile.am</code> tree. The full bootstrap from <code>src/BUILDING</code> is:
+</p>
+
+<pre><code>./siteSetup    # creates Makefile.in's and runs configure
+make install   # builds &amp; installs into --prefix
+</code></pre>
+
+<p>
+  For the servers specifically, the top-level <code>src/servers.mak</code> recurses into
+  six application <code>build/linux</code> directories:
+</p>
+
+<pre><code>all:
+    +@make -C engine/server/application/LoginServer/build/linux
+    +@make -C engine/server/application/CentralServer/build/linux
+    +@make -C game/server/application/SwgGameServer/build/linux
+    +@make -C game/server/application/SwgDatabaseServer/build/linux
+    +@make -C engine/server/application/ConnectionServer/build/linux
+    +@make -C engine/server/application/PlanetServer/build/linux
+</code></pre>
+
+<p>(<code>TaskManager</code> is commented out — usually built separately.)</p>
+
+<div class="mermaid">
+flowchart LR
+  Bootstrap["./bootstrap (autotools)"]
+  ConfIn["configure.in"]
+  AmFiles["Makefile.am (each subdir)"]
+  Configure["./configure --prefix=…"]
+  Make["make install"]
+  Bootstrap --> ConfIn
+  Bootstrap --> AmFiles
+  ConfIn --> Configure
+  AmFiles --> Configure
+  Configure --> Make
+  Make --> Out[("$PREFIX/bin/*<br/>$PREFIX/lib/*")]
+</div>
+
+<h2>What runs where</h2>
+
+<table>
+  <thead><tr><th>Target</th><th>Windows</th><th>Linux</th></tr></thead>
+  <tbody>
+    <tr><td>Game client</td><td>Yes (<code>SwgClient.vcproj</code>)</td><td>No</td></tr>
+    <tr><td>Editor / authoring tools</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Login / Central / Connection / Planet</td><td>Yes (debug builds)</td><td>Yes (production target)</td></tr>
+    <tr><td>SwgGameServer</td><td>Yes (debug builds — see <code>SwgGameServer_o.exe</code>)</td><td>Yes (production)</td></tr>
+    <tr><td>SwgDatabaseServer</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>TaskManager</td><td>No</td><td>Yes</td></tr>
+  </tbody>
+</table>
+
+<h2>Other build-time tools</h2>
+
+<ul>
+  <li><code>tools/BuildVcprojs.btm</code> — regenerates Windows project files from per-directory <code>additionalFiles.rsp</code> response files.</li>
+  <li><code>tools/BuildIncludeHeaderFiles.btm</code> — generates the unity-style "<code>FirstX.h</code>" precompiled headers seen throughout the tree.</li>
+  <li><code>tools/buildtre.btm</code> — packs <code>.tre</code> archives for the patcher.</li>
+  <li><code>tools/configFileBuilder.pl</code> — generates per-machine <code>cfg</code> files from templates (see <code>exe/win32/template_*.cfg</code>).</li>
+  <li><code>tools/recompileAllScripts.pl</code> — driver for the <code>dsrc/</code> compile.</li>
+  <li><code>tools/swglint.sh</code> + <code>tools/scriptlint/</code> — script linter / compiler entry points.</li>
+  <li><code>tools/AutomatedDailyBuild.pl</code>, <code>AutomatedDailyServerBuild.pl</code> — the original CI orchestration.</li>
+</ul>
+
+<h2>Modern build alternative (SWG-Source)</h2>
+
+<p>
+  The community-maintained <code>SWG-Source/swg-main</code> repository wraps the same
+  C++ tree in an <strong>Apache Ant</strong> meta-build. Targets like <code>ant swg</code>,
+  <code>ant create_database</code>, <code>ant update_database</code>, <code>ant update_configs</code> drive
+  the underlying autotools, the Oracle migrations, and the cfg generation in one
+  command. This is the path you want if "running locally" matters more to you
+  than "build with the original 2010 toolchain". See
+  <a href="run-locally.html">Run Locally</a> for the practical walkthrough.
+</p>
+
+<h2>Build artifact layout</h2>
+
+<p>After install (Linux), <code>$PREFIX/bin/</code> contains the server executables and
+<code>$PREFIX/lib/</code> the shared libraries. Configs and shell scripts live one
+level up under <code>exe/linux/</code> and <code>exe/shared/</code>. Servers are launched
+indirectly through <code>start_cluster.pl</code> and <code>TaskManager</code>; never run a
+single binary directly in production.</p>
+
+<p>Continue to <a href="gaps.html">Gaps</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Animation System — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Animation system</h1>
+  <div class="sub">Deep-dive: Granny middleware or in-house? (Spoiler: in-house.)</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<p><a href="research.html">← back to Research</a> · markdown source: <code>docs/research/animation-system.md</code></p>
+
+<h1>Verdict: 100% in-house</h1>
+
+<p>
+  The runtime animation system is bespoke SOE code. There is no Granny SDK in
+  the tree, no Granny library is linked, no Granny header is included by the
+  runtime. The naming, file layout, and <code>.iff</code> format are all SOE
+  conventions.
+</p>
+
+<p>The only mentions of "Granny" in the entire <code>src/</code> tree are two <strong>dead references inside the Viewer tool</strong>:</p>
+
+<ul>
+  <li><code>src/engine/client/application/Viewer/src/win32/AnimationDialog.cpp:303</code> — a <code>//-- -TRF- fix, removed granny</code> comment followed by an <code>#if 0</code> block:
+<pre><code>//-- -TRF- fix, removed granny
+#if 0
+if (GetMainFrame () && GetMainFrame ()-&gt;GetActiveFrame () && ...
+#endif</code></pre></li>
+  <li><code>src/engine/client/application/Viewer/src/win32/ViewerDoc.cpp:2225</code> — a <code>CFileDialog</code> titled <code>"Select Granny File"</code> with a <code>.grn</code> filter, used to load a wearable item for preview in the Viewer:
+<pre><code>CFileDialog dlg (true, "*.grn", 0, (OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR));
+dlg.m_ofn.lpstrInitialDir = "";
+dlg.m_ofn.lpstrTitle      = "Select Granny File";</code></pre></li>
+</ul>
+
+<p>
+  Both live in a desktop preview tool, both look like leftovers from an
+  early experiment that was removed. The note <code>-TRF-</code> is the initials of
+  the engineer who made the fix.
+</p>
+
+<h2>Search evidence</h2>
+
+<table>
+  <thead><tr><th>Search target</th><th>Pattern</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Vendored 3rd-party tree</td><td>grep <code>granny|Granny|GRANNY</code> in <code>src/external/</code></td><td>0 matches</td></tr>
+    <tr><td>Engine</td><td>grep <code>granny|Granny</code> in <code>src/engine/client/</code></td><td>2 matches — both in <code>Viewer</code> tool, both dead</td></tr>
+    <tr><td>Engine (shared, game)</td><td>grep <code>granny|Granny</code> in <code>src/engine/shared/</code>, <code>src/game/</code></td><td>0 matches</td></tr>
+    <tr><td>Tools</td><td>grep <code>granny|Granny</code> in <code>tools/</code></td><td>0 matches</td></tr>
+    <tr><td>Plugins</td><td>grep <code>granny|Granny</code> in <code>plugin/</code></td><td>0 matches</td></tr>
+    <tr><td>Animation lib include paths</td><td>scan <code>clientSkeletalAnimation/build/win32/includePaths.rsp</code></td><td>only <code>boost, dpvs, libxml2, miles, stlport453, archive, fileInterface, unicode, unicodeArchive</code> — <strong>no Granny</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>What the system actually is — two libraries</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef inhouse fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef tool fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+
+  subgraph CA["clientAnimation (~14 .cpp)<br/>generic playback engine"]
+    direction TB
+    PA[PlaybackAction +<br/>PlaybackActionTemplate]:::inhouse
+    PSc[PlaybackScript +<br/>PlaybackScriptTemplate]:::inhouse
+    PSM[PlaybackScriptManager]:::inhouse
+    Helpers[TimerPlaybackAction<br/>WatcherAction<br/>PriorityPlaybackScript<br/>StopActionTemplate]:::inhouse
+  end
+
+  subgraph CSA["clientSkeletalAnimation (~94 .cpp)<br/>character rig system"]
+    direction TB
+    Appearance["appearance/<br/>Skeleton, SkeletalAppearance2,<br/>SkeletalMeshGenerator, CompositeMesh,<br/>OcclusionZoneSet, OwnerProxyShader"]:::inhouse
+    Animation["animation/<br/>KeyframeSkeletalAnimation,<br/>CompressedKeyframeAnimation,<br/>PriorityBlendAnimation,<br/>DirectionSkeletalAnimation,<br/>SpeedSkeletalAnimation,<br/>TimeScaleSkeletalAnimation,<br/>YawSkeletalAnimationTemplate,<br/>TransformMaskList"]:::inhouse
+    Controller["controller/<br/>TrackAnimationController,<br/>StateHierarchyAnimationController,<br/>LogicalAnimationTableTemplate,<br/>AnimationStateHierarchyTemplate"]:::inhouse
+    Modifier["modifier/<br/>LookAtTransformModifier,<br/>TargetPitchTransformModifier,<br/>AlignmentTransformModifier"]:::inhouse
+    Playback["playback/<br/>AnimationMessageActionTemplate,<br/>ShowAttachedObjectAction"]:::inhouse
+    Batch["batch/<br/>FullGeometrySkeletalAppearanceBatchRenderer"]:::inhouse
+  end
+
+  Maya[Maya 4-8 scene]:::tool --> Exporter["MayaExporter<br/>(in-house plug-in)"]:::tool
+  Exporter --> IFF["SOE .iff files<br/>skeleton + keyframe animation"]:::tool
+  IFF --> CSA
+  CSA --> Frame[Per-frame<br/>skinned-mesh draw]
+  CA --> Frame
+</div>
+
+<h3><code>clientAnimation</code> — generic "playback script" engine</h3>
+
+<p>
+  Small, retained-mode library at
+  <code>src/engine/client/library/clientAnimation/src/shared/playback/</code>.
+  Job: schedule <strong>timed actions</strong> during gameplay events (not just
+  bone animation — also sound triggers, attached object spawns, message
+  events).
+</p>
+
+<p>Key types (source files in <code>clientAnimation/src/shared/playback/</code>):</p>
+<ul>
+  <li><code>PlaybackScript</code>, <code>PlaybackScriptTemplate</code> — sequence of timed actions with priorities.</li>
+  <li><code>PlaybackAction</code>, <code>PlaybackActionTemplate</code> — base action class.</li>
+  <li><code>PassthroughPlaybackAction</code>, <code>PassthroughPlaybackActionTemplate</code></li>
+  <li><code>TimerPlaybackAction</code>, <code>TimerPlaybackActionTemplate</code></li>
+  <li><code>WatcherAction</code>, <code>WatcherActionTemplate</code></li>
+  <li><code>StopActionTemplate</code></li>
+  <li><code>PriorityPlaybackScript</code></li>
+  <li><code>PlaybackScriptManager</code> — runs them.</li>
+</ul>
+
+<h3><code>clientSkeletalAnimation</code> — character rig system</h3>
+
+<p>Five conceptual sub-folders under <code>src/engine/client/library/clientSkeletalAnimation/src/shared/</code>:</p>
+
+<table>
+  <thead><tr><th>Folder</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>appearance/</code></td><td>Bind pose, bones, skinning. <code>Skeleton</code>, <code>BasicSkeletonTemplate</code>, <code>LodSkeletonTemplate</code>, <code>SkeletalAppearance2</code>, <code>SkeletalAppearanceTemplate</code>, <code>SkeletalMeshGenerator</code>, <code>CompositeMesh</code>, <code>OcclusionZoneSet</code>, <code>OwnerProxyShader</code>, <code>SoftwareBlendSkeletalShaderPrimitive</code>.</td></tr>
+    <tr><td><code>animation/</code></td><td>Clips, blenders, time-warpers, masks. <code>KeyframeSkeletalAnimation</code>, <code>CompressedKeyframeAnimation</code>, <code>PriorityBlendAnimation</code>, <code>MaskedPrioritySkeletalAnimation</code>, <code>DirectionSkeletalAnimation</code>, <code>SpeedSkeletalAnimation</code>, <code>TimeScaleSkeletalAnimation</code>, <code>YawSkeletalAnimationTemplate</code>, <code>TransformMaskList</code>, <code>TransformAnimationResolver</code>.</td></tr>
+    <tr><td><code>controller/</code></td><td>State machine: pick which clip to play. <code>TrackAnimationController</code>, <code>StateHierarchyAnimationController</code>, <code>LogicalAnimationTableTemplate</code>, <code>AnimationStateHierarchyTemplate</code>, <code>AnimationStateNameIdManager</code>, <code>AnimationEnvironment</code>, <code>EditableAnimationState*</code> (Editor versions).</td></tr>
+    <tr><td><code>modifier/</code></td><td>Per-bone runtime overrides (IK-lite). <code>LookAtTransformModifier</code>, <code>TargetPitchTransformModifier</code>, <code>AlignmentTransformModifier</code>, <code>ZeroTransformModifier</code>.</td></tr>
+    <tr><td><code>playback/</code></td><td>Bridges to <code>clientAnimation</code>. <code>AnimationMessageActionTemplate</code>, <code>ShowAttachedObjectAction</code>.</td></tr>
+    <tr><td><code>core/</code></td><td><code>SetupClientSkeletalAnimation</code>, <code>ConfigClientSkeletalAnimation</code>, <code>CharacterLodManager</code>, <code>FirstClientSkeletalAnimation.h</code>.</td></tr>
+    <tr><td><code>debug/</code></td><td><code>SkeletalAnimationDebugging</code>.</td></tr>
+    <tr><td><code>batch/</code></td><td><code>FullGeometrySkeletalAppearanceBatchRenderer</code> (batched draw of many skinned characters).</td></tr>
+  </tbody>
+</table>
+
+<h2>The subsystem registry — <code>SetupClientSkeletalAnimation::install()</code></h2>
+
+<p>
+  <code>src/engine/client/library/clientSkeletalAnimation/src/shared/core/SetupClientSkeletalAnimation.cpp</code>
+  calls 50+ <code>Foo::install()</code> functions. Highlights:
+</p>
+
+<pre><code>ConfigClientSkeletalAnimation::install();
+SkeletalAnimationDebugging::install();
+AnimationPriorityMap::install(cms_defaultPriorityMapFileName);
+TrackAnimationController::install();
+StateHierarchyAnimationController::install();
+AnimationStateHierarchyTemplateList::install();
+LogicalAnimationTableTemplate::install();
+LogicalAnimationTableTemplateList::install();
+AnimationEnvironment::install();
+
+Skeleton::install();
+SkeletonTemplateList::install();
+BasicSkeletonTemplate::install();
+LodSkeletonTemplate::install(data.allowLod0Skipping);
+
+TransformMaskList::install();
+
+AnimationNotification::install();
+CallbackAnimationNotification::install();
+SkeletalAnimationTemplateList::install();
+SkeletalAnimationTemplate::install();
+SkeletalAnimation::install();
+BasePriorityBlendAnimation::install();
+SpeedSkeletalAnimation::install();
+CompressedKeyframeAnimationTemplate::install();
+CompressedKeyframeAnimation::install();
+KeyframeSkeletalAnimationTemplate::install();
+KeyframeSkeletalAnimation::install();
+ProxySkeletalAnimationTemplate::install();
+DirectionSkeletalAnimationTemplate::install();
+DirectionSkeletalAnimation::install();
+PriorityBlendAnimationTemplate::install();
+PriorityBlendAnimation::install();
+SinglePrioritySkeletalAnimation::install();
+SpeedSkeletalAnimationTemplate::install();
+StringSelectorSkeletalAnimationTemplate::install();
+TimeScaleSkeletalAnimationTemplate::install();
+TimeScaleSkeletalAnimation::install();
+ActionGeneratorSkeletalAnimationTemplate::install();
+YawSkeletalAnimationTemplate::install();
+
+OcclusionZoneSet::install();
+CompositeMesh::install();
+SkeletalAppearanceTemplate::install();
+SkeletalAppearance2::install();
+SoftwareBlendSkeletalShaderPrimitive::install();
+
+MeshGeneratorTemplateList::install();
+SkeletalMeshGenerator::install();
+SkeletalMeshGeneratorTemplate::install();
+LodMeshGeneratorTemplate::install(data.allowLod0Skipping);
+
+AnimationMessageActionTemplate::install();
+ShowAttachedObjectAction::install();
+ShowAttachedObjectActionTemplate::install();
+
+AnimationStateNameIdManager::install();
+
+// @todo -TRF- Someday make non-editable, more efficient versions and only
+//             use these editable ones in the AnimationEditor.
+EditableBasicAnimationAction::install();
+EditableMovementAnimationAction::install();
+EditableAnimationState::install();
+EditableAnimationStateHierarchyTemplate::install();
+
+AnimationHeldItemMapper::install("animation/held_item_map.iff");
+AnimationPostureMapper::install("animation/posture_map.iff");
+
+OwnerProxyShaderTemplate::install();
+OwnerProxyShader::install(data.stitchedSkinInheritsFromSelf);
+
+FullGeometrySkeletalAppearanceBatchRenderer::install();
+
+LookAtTransformModifier::install();
+TargetPitchTransformModifier::install();
+
+CharacterLodManager::install();</code></pre>
+
+<p>All <code>Foo::install()</code> — no third-party <code>GrFoo_initialize()</code> / <code>GrnRuntime_Init()</code> style calls. Fully owned subsystem.</p>
+
+<h3>Three "setup data" presets</h3>
+
+<pre><code>SetupClientSkeletalAnimation::setupGameData(Data &amp;data);    // shipping client
+SetupClientSkeletalAnimation::setupToolData(Data &amp;data);    // editor tools
+SetupClientSkeletalAnimation::setupViewerData(Data &amp;data);  // Viewer tool</code></pre>
+
+<p>The viewer is the only one that sets <code>stitchedSkinInheritsFromSelf=true</code>.</p>
+
+<h2>Data formats — also in-house</h2>
+
+<p>
+  <code>src/engine/client/library/clientSkeletalAnimation/src/shared/animation/KeyframeSkeletalAnimationTemplate.h</code>
+  declares the on-disk record types directly:
+</p>
+
+<pre><code>struct RealKeyData {
+public:
+    RealKeyData();
+    RealKeyData(float frameNumber, float keyValue);
+
+public:
+    float  m_frameNumber;
+    float  m_keyValue;
+    float  m_oneOverDistanceToNextKeyframe;
+};
+
+struct QuaternionKeyData {
+public:
+    QuaternionKeyData();
+    QuaternionKeyData(float frameNumber, const Quaternion &amp;rotation);
+
+public:
+    float       m_frameNumber;
+    Quaternion  m_rotation;
+    float       m_oneOverDistanceToNextKeyframe;
+};
+
+struct VectorKeyData {
+    // ...
+};</code></pre>
+
+<p>
+  Animation clips are SOE's own keyframe records (per-channel
+  real / quaternion / vector tracks), serialised through SOE's own IFF reader
+  and writer. The compressed variant (<code>CompressedKeyframeAnimation</code>)
+  is a separate SOE compression scheme.
+</p>
+
+<p>Three lookup files referenced by <code>SetupClientSkeletalAnimation</code>:</p>
+
+<ul>
+  <li><code>animation/priority_map.iff</code> — defines layer priorities</li>
+  <li><code>animation/held_item_map.iff</code> — maps weapon types to grip animations</li>
+  <li><code>animation/posture_map.iff</code> — maps player postures (stand/crouch/prone) to animation sets</li>
+</ul>
+
+<h2>Maya is the authoring tool — confirmation</h2>
+
+<p><code>src/engine/client/application/MayaExporter/src/</code> writes the SOE-format files directly out of Maya:</p>
+
+<pre><code>ExportSkeleton.{cpp,h}
+ExportKeyframeSkeletalAnimation.{cpp,h}
+SkeletonTemplateWriter.{cpp,h}
+LodSkeletonTemplateWriter.{cpp,h}
+KeyframeSkeletalAnimationTemplateWriter.{cpp,h}
+MayaAnimationList.{cpp,h}
+AddAnimationCommand.{cpp,h}
+DeleteAnimationCommand.{cpp,h}
+VisitAnimationCommand.{cpp,h}
+AnimationMessageCollector.{cpp,h}
+MayaAnimatingTextureShaderTemplateWriter.{cpp,h}</code></pre>
+
+<div class="mermaid">
+flowchart LR
+  Maya[Maya 4-8 scene<br/>artist-authored] --> Plugin["MayaExporter plug-in<br/>(SOE in-house)"]
+  Plugin --> Skel[".iff skeleton<br/>SkeletonTemplate"]
+  Plugin --> Anim[".iff keyframe<br/>animation"]
+  Skel --> Treepack[TreeFileBuilder]
+  Anim --> Treepack
+  Treepack --> Tre[".tre archive"]
+  Tre --> Runtime["clientSkeletalAnimation<br/>at runtime"]
+  Runtime --> Render[Rendered character]
+</div>
+
+<h2>Why it matters</h2>
+
+<ul>
+  <li><strong>No Granny licence problem.</strong> The whole skeletal/animation stack can be modified freely because SOE wrote it.</li>
+  <li><strong>You need Maya 4–8 with the SOE exporter</strong> to author new animations from scratch. The exporter source is in <code>MayaExporter/</code>; its build pulls in real Maya SDK headers from <code>external/3rd/library/maya4..maya8</code>. For modern Maya you'd port the exporter.</li>
+  <li><strong>Existing community emulators target the same .iff formats</strong>, so any custom content emitted by the SOE Maya exporter still loads in retail clients and emulator clients alike.</li>
+  <li><strong>There's no third-party DLL for the runtime to chase down.</strong> Unlike Bink / Miles / Vivox / DPVS, the animation system requires no external SDK to be linked or distributed.</li>
+</ul>
+
+<h2>The one Granny artefact left over</h2>
+
+<p>
+  The <code>.grn</code> file dialog in <code>Viewer</code> looks like an early
+  development experiment (probably circa 2001–2002) where someone tried using
+  Granny as an import path during pre-production prototyping, and it was
+  abandoned. The dead <code>#if 0</code> block and the <code>-TRF- removed
+  granny</code> comment confirm a deliberate rip-out. It would only resurface if
+  you tried to use Viewer's "Wear Item" preview menu — and even then, since no
+  Granny runtime is linked, it would just fail to open the file.
+</p>
+
+<h2>TL;DR</h2>
+
+<table>
+  <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+  <tbody>
+    <tr><td>Granny at runtime?</td><td>No.</td></tr>
+    <tr><td>Granny anywhere?</td><td>Two dead refs in the Viewer tool.</td></tr>
+    <tr><td>What's the animation system?</td><td>Two in-house C++ libs — <code>clientAnimation</code> (~14 .cpp) and <code>clientSkeletalAnimation</code> (~94 .cpp).</td></tr>
+    <tr><td>Animation file format?</td><td>SOE <code>.iff</code> with per-channel keyframes (<code>RealKeyData</code>, <code>QuaternionKeyData</code>, <code>VectorKeyData</code>).</td></tr>
+    <tr><td>Authoring path?</td><td>Maya → SOE MayaExporter → <code>.iff</code> → <code>.tre</code>.</td></tr>
+    <tr><td>Licensing?</td><td>None. Fully SOE-owned.</td></tr>
+  </tbody>
+</table>
+
+</main>
+<footer>whitengold docs · <a href="research.html">All research</a> · <a href="index.html">Overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

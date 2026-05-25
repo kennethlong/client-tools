@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Client — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Client (SwgClient)</h1>
+  <div class="sub">DirectX 9 native game client and the in-house tool clients.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html" class="active">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Client architecture</h1>
+
+<p>
+  The shipping product (<code>SwgClient.exe</code>) is a single 32-bit Windows DirectX 9
+  application that pulls every asset out of <code>.tre</code> archives via the same
+  TreeFile layer the server uses. Source: <code>src/game/client/application/SwgClient/</code>.
+</p>
+
+<h2>Subsystem map</h2>
+
+<div class="mermaid">
+flowchart TB
+  subgraph App["SwgClient (Win32)"]
+    SF[SharedFoundation tick loop]
+    UI["clientUserInterface<br/>(custom UI scripting)"]
+    Game["clientGame"]
+    Anim["clientAnimation /<br/>clientSkeletalAnimation"]
+    GFX["clientGraphics → Direct3d9 plug-in"]
+    Audio["clientAudio (Miles)"]
+    Particle[clientParticle]
+    Terrain[clientTerrain]
+    DI["clientDirectInput<br/>(keyboard/mouse/joystick)"]
+    Bug[clientBugReporting]
+    Remote[clientRemoteDebug]
+    Net["sharedNetwork (UDP)"]
+    Lcl[clientObject]
+    Tre["sharedFile / TreeFile<br/>(.tre, .iff, .stf, .tab)"]
+    SF --> UI
+    SF --> Game
+    Game --> Anim
+    Game --> Terrain
+    Game --> Particle
+    Game --> Lcl
+    Game --> Audio
+    UI --> GFX
+    Game --> GFX
+    Game --> Net
+    GFX -- "loads from" --> Tre
+    Audio -- "loads from" --> Tre
+    Anim -- "loads from" --> Tre
+  end
+
+  Mozilla["libMozilla<br/>(in-game web)"]
+  Vivox["Vivox SDK<br/>(voice chat)"]
+  Bink["Bink<br/>(intro / cutscenes)"]
+  Mss["Miles MSS<br/>(audio decode)"]
+  TrackIR["TrackIR<br/>(head tracking, optional)"]
+  DPVS["DPVS<br/>(occlusion culling)"]
+
+  GFX --> DPVS
+  Audio --> Mss
+  Game --> Bink
+  Game --> Mozilla
+  Game --> Vivox
+  Game --> TrackIR
+</div>
+
+<h2>Client libraries</h2>
+
+<table>
+  <thead><tr><th>Library</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>clientGame</code></td><td>Top-level gameplay shell — UI screens, world state, command dispatch.</td></tr>
+    <tr><td><code>clientGraphics</code></td><td>Render API abstraction; hides Direct3D 9 plug-in.</td></tr>
+    <tr><td><code>clientAudio</code></td><td>Miles wrapper; positional audio, ambience, music.</td></tr>
+    <tr><td><code>clientAnimation</code></td><td>Generic animation framework.</td></tr>
+    <tr><td><code>clientSkeletalAnimation</code></td><td>Skeletal mesh playback / blending — characters, creatures.</td></tr>
+    <tr><td><code>clientObject</code></td><td>Client-side mirror of game-object hierarchy.</td></tr>
+    <tr><td><code>clientParticle</code></td><td>Effects system fed by the ParticleEditor data.</td></tr>
+    <tr><td><code>clientTerrain</code></td><td>Procedural-terrain renderer; reads terrain shaders.</td></tr>
+    <tr><td><code>clientUserInterface</code></td><td>Bespoke UI engine driven by data files (<code>ui.log</code>, <code>UIBuilder.exe</code>).</td></tr>
+    <tr><td><code>clientDirectInput</code></td><td>Wraps DirectInput8.</td></tr>
+    <tr><td><code>clientBugReporting</code></td><td>Hooks into <code>CrashReporter_r.exe</code>.</td></tr>
+    <tr><td><code>clientRemoteDebug</code></td><td>In-house dev console, debug hooks.</td></tr>
+    <tr><td><code>clientTextureRenderer</code></td><td>Render-to-texture (mirrors, holograms, scopes).</td></tr>
+  </tbody>
+</table>
+
+<h2>Game-side client code</h2>
+
+<table>
+  <thead><tr><th>Library</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>swgClientUserInterface</code></td><td>SWG-specific UI screens, HUDs, panels.</td></tr>
+    <tr><td><code>swgClientQtWidgets</code></td><td>Qt-based widgets used by the editor tools (TerrainEditor, GodClient, etc.).</td></tr>
+    <tr><td><code>swgClientAutomation</code></td><td>Automation hooks for in-game testing.</td></tr>
+  </tbody>
+</table>
+
+<h2>The "client" applications in this repo</h2>
+
+<table>
+  <thead><tr><th>Application</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>SwgClient</code></td><td>The shipping retail game client.</td></tr>
+    <tr><td><code>SwgClientSetup</code></td><td>The launcher/installer/patcher.</td></tr>
+    <tr><td><code>SwgGodClient</code></td><td>GM client — admin commands, world editing in-game.</td></tr>
+    <tr><td><code>SwgHeadlessClient</code></td><td>Stripped client for load testing and bots.</td></tr>
+    <tr><td><code>SwgCsTool</code></td><td>Customer-service interface to the live cluster.</td></tr>
+    <tr><td><code>LaunchMeFirst</code></td><td>Pre-launch shim (likely DRM / patch checker).</td></tr>
+  </tbody>
+</table>
+
+<h2>How rendering binds</h2>
+
+<p>
+  <code>clientGraphics</code> is decoupled from the API; the backend lives in
+  <code>src/engine/client/application/Direct3d9/</code> and is loaded as a DLL
+  (<code>gl06_o.dll</code> / <code>gl07_o.dll</code> etc. in <code>exe/win32/</code>). That's why
+  there are multiple <code>gl0X_*.dll</code> variants — they're alternate renderer builds.
+</p>
+
+<h2>Asset loading</h2>
+
+<p>
+  The client opens <code>.tre</code> archives via <code>sharedFile/TreeFile</code>. Inside a
+  <code>.tre</code> are <code>.iff</code> (chunk-based binary, EA Interchange Format),
+  <code>.stf</code> (string tables), <code>.tab</code> (datatables), <code>.dds</code>
+  textures, animations, etc. None of these are in this repo — see
+  <a href="data-pipeline.html">Data Pipeline</a>.
+</p>
+
+<h2>The editor / tool clients</h2>
+
+<p>
+  Many of the prebuilt <code>*.exe</code> in <code>exe/win32/</code> are content-creation tools
+  shipped with their own configs (<code>template_*.cfg</code>):
+</p>
+
+<ul>
+  <li><code>AnimationEditor</code> — edit anim graphs.</li>
+  <li><code>ParticleEditor</code> — VFX authoring.</li>
+  <li><code>QuestEditor</code> — quest scripting front-end.</li>
+  <li><code>SwgConversationEditor</code> — branching NPC dialogue.</li>
+  <li><code>SwgDraftSchematicEditor</code> — crafting schematics.</li>
+  <li><code>SwgSpaceQuestEditor</code> / <code>SwgSpaceZoneEditor</code> — JTL space content.</li>
+  <li><code>TerrainEditor</code> — procedural-terrain authoring.</li>
+  <li><code>TextureBuilder</code>, <code>ShaderBuilder</code>, <code>SoundEditor</code>, <code>NpcEditor</code>, <code>LightningEditor</code>, <code>ClientEffectEditor</code>, <code>ShipComponentEditor</code>, <code>SwooshEditor</code>.</li>
+  <li><code>Viewer</code> — the in-house model viewer.</li>
+  <li><code>ViewIff</code> — inspect <code>.iff</code> files (handy if you want to read templates by hand).</li>
+  <li><code>WorldSnapshotViewer</code> — inspect a <code>.ws</code> world snapshot.</li>
+  <li><code>SwgGodClient</code> — the in-game admin tool, also runnable standalone.</li>
+</ul>
+
+<div class="callout tip">
+  <strong>Useful trick:</strong> some of these editors will launch on modern Windows
+  if you copy them next to a real SWG client install (so the <code>.tre</code> files are
+  on the search path). They were the only way SOE designers worked with the
+  data, and many community modders still use them.
+</div>
+
+<p>Continue to <a href="scripting.html">Scripting</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Run Locally — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Running it locally</h1>
+  <div class="sub">Realistic paths to actually launch the game from this code.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html" class="active">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Running it locally</h1>
+
+<div class="callout warn">
+  <strong>Bottom line:</strong> the unmodified February 2015 tree will not build,
+  let alone run, on a current machine. To actually <em>play</em> SWG locally you
+  pick one of three established paths below — none of which is "make this repo
+  go". This document is here to set expectations and route you to the right
+  next step.
+</div>
+
+<h2>Decision flow</h2>
+
+<div class="mermaid">
+flowchart TB
+  Start{"What's your goal?"}
+  Read["Read / understand the code"]
+  RunTools["Run an editor tool only"]
+  RunServer["Run a private server + play"]
+  ModernFork["SWG-Source / StellaBellum"]
+  RetailClient["Existing emulator (SWGEmu / ProjectSWG)"]
+
+  Start --> Read
+  Start --> RunTools
+  Start --> RunServer
+
+  Read --> StayHere["Stay on this repo + these docs"]
+  RunTools --> WinClient["Place a retail SWG install next to exe/win32/<br/>then run e.g. ParticleEditor.exe"]
+  RunServer --> ModernFork
+  RunServer --> RetailClient
+</div>
+
+<h2>Path A — Read / explore the codebase</h2>
+
+<p>
+  This is what these docs are for. Open <a href="index.html">index.html</a>
+  and walk through architecture → servers → scripting → data-pipeline. To
+  navigate the C++ specifically, point your editor at <code>src/</code> and start
+  from <code>SwgGameServer</code>'s <code>main.cpp</code>.
+</p>
+
+<h2>Path B — Run an editor / tool from <code>exe/win32/</code></h2>
+
+<p>
+  Most of the <code>*.exe</code> files in <code>exe/win32/</code> are content-creation tools
+  built against the same engine. They do load on a recent 64-bit Windows
+  (32-bit-compatible). The trick is that they expect to read game assets via the
+  <code>TreeFile</code> system, which means they need <code>.tre</code> archives nearby.
+</p>
+
+<ol>
+  <li>Get a legitimate retail SWG install (CD media or community archive).</li>
+  <li>Copy its <code>data/</code>, <code>patch/</code>, and <code>profile/</code> directories
+      into a working folder.</li>
+  <li>Drop the contents of <code>exe/win32/</code> from this repo on top.</li>
+  <li>Edit the matching <code>template_&lt;Tool&gt;.cfg</code> if needed (search paths).</li>
+  <li>Launch the tool — it should read assets out of the retail tree.</li>
+</ol>
+
+<p>
+  Tools worth playing with first: <code>ViewIff_o.exe</code> (inspect any .iff file),
+  <code>WorldSnapshotViewer_o.exe</code>, <code>ParticleEditor_o.exe</code>,
+  <code>SwgConversationEditor_o.exe</code>. They make few network calls and degrade
+  gracefully when SOE backends are unreachable.
+</p>
+
+<div class="callout info">
+  <strong>Note:</strong> some tools (<code>SwgGodClient_o.exe</code>, the editor mode) want
+  to attach to a running <code>SwgGameServer</code>; they're not standalone.
+</div>
+
+<h2>Path C — Stand up a private server and play</h2>
+
+<p>
+  Three serious projects exist; pick by what you actually want to play:
+</p>
+
+<table>
+  <thead><tr><th>Project</th><th>Era</th><th>Codebase</th><th>Where to start</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>SWG-Source / StellaBellum</strong></td>
+      <td>NGE (this leak's era)</td>
+      <td>Direct descendant of <em>this</em> source</td>
+      <td><a href="https://github.com/SWG-Source/swg-main/wiki">swg-main wiki</a> — covers VM install, Oracle setup, Ant build, server admin.</td>
+    </tr>
+    <tr>
+      <td><strong>SWGEmu</strong></td>
+      <td>Pre-CU (original 2003 design)</td>
+      <td>Independent clean-room C++ rewrite</td>
+      <td><a href="https://www.swgemu.com/">swgemu.com</a></td>
+    </tr>
+    <tr>
+      <td><strong>ProjectSWG / NGECore2</strong></td>
+      <td>CU/NGE era</td>
+      <td>Java rewrite</td>
+      <td><a href="https://github.com/ProjectSWGCore/NGECore2">NGECore2</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  If you want to run the actual code in this repo (or its modern descendant),
+  the only practical route is <strong>SWG-Source's StellaBellum dev VM</strong>:
+</p>
+
+<ol>
+  <li>Install <strong>Oracle VirtualBox</strong>.</li>
+  <li>Download the StellaBellum dev VM from the SWG-Source wiki.</li>
+  <li>Import the <code>.vbox</code> file. Default 2 cores / 8 GB RAM is fine; bump if you can.</li>
+  <li>Inside the VM, clone <code>SWG-Source/swg-main</code> and run:
+    <pre><code>ant update_configs    # one-off site setup
+ant create_database   # bootstrap Oracle schemas
+ant swg               # full build (C++ + scripts)
+./start_cluster.pl    # bring up the cluster</code></pre>
+  </li>
+  <li>On your Windows host, point a retail SWG client at the VM's IP via a
+      modified <code>login.cfg</code>.</li>
+</ol>
+
+<div class="callout tip">
+  <strong>Why not just port this repo?</strong> You can — and SWG-Source has been doing it
+  since 2015. Their fork is the result of years of incremental work to get the
+  same code building on current toolchains. Reproducing that effort from the
+  unmodified February 2015 snapshot is multiple months of work, and the
+  finished product is a reimplementation of what already exists publicly. If
+  your goal is a running server, fork SWG-Source. If your goal is to study
+  the original SOE code, this archive plus these docs is the right starting
+  point.
+</div>
+
+<h2>What to <em>not</em> do</h2>
+
+<ul>
+  <li>Don't try to run the linux configs in <code>exe/linux/</code> against current Sony domains — they're long dead.</li>
+  <li>Don't expect <code>swg.sln</code> to upgrade cleanly in VS 2022. It won't, without significant patching.</li>
+  <li>Don't run <code>start_cluster.pl</code> as-is on a stock Linux VM — it expects production paths under <code>/swg/swg/current/</code> and an Oracle install at fixed locations.</li>
+  <li>Don't trust the credentials/DSNs in <code>loginServer.cfg</code> — they're SOE production values that no longer point to anything reachable.</li>
+</ul>
+
+<h2>Reference — files you'll edit when bringing it up</h2>
+
+<table>
+  <thead><tr><th>File</th><th>What you change</th></tr></thead>
+  <tbody>
+    <tr><td><code>exe/linux/loginServer.cfg</code></td><td>DSN/UID/PWD; <code>validateStationKey=0</code>; strip <code>privateIpMask</code>; replace <code>sessionServer</code> with stub.</td></tr>
+    <tr><td><code>exe/shared/servercommon.cfg</code></td><td><code>SharedFile</code> search paths (point at your local data tree); <code>SharedLog</code> log target.</td></tr>
+    <tr><td><code>exe/linux/serverNetwork.cfg</code></td><td>Cluster IPs and ports.</td></tr>
+    <tr><td><code>exe/win32/template_*.cfg</code></td><td>Per-machine paths for content tools.</td></tr>
+    <tr><td><code>exe/win32/client.cfg</code></td><td>LoginServer host/port the retail client points at.</td></tr>
+  </tbody>
+</table>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

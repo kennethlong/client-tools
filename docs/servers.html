@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Servers — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Server processes</h1>
+  <div class="sub">Each binary in the cluster, what it owns, what it talks to.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html" class="active">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Server processes</h1>
+
+<p>
+  All servers share the same <em>SharedFoundation</em> stack: <code>SetupSharedFoundation</code>,
+  <code>SetupSharedNetwork</code>, <code>SetupSharedFile</code>, etc. Each <code>main()</code> wires up
+  the subsystems it needs and enters a tick loop. Configuration is layered: each
+  process reads its own <code>*.cfg</code> plus <code>servercommon.cfg</code> via the
+  <code>.include</code> directive.
+</p>
+
+<div class="callout info">
+  Look at <code>src/game/server/application/SwgGameServer/src/linux/main.cpp</code> for the
+  canonical example of how a SWG server boots — every other server follows the same shape.
+</div>
+
+<h2>The six core servers (built by <code>servers.mak</code>)</h2>
+
+<table>
+  <thead>
+    <tr><th>Server</th><th>Source</th><th>Role</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>LoginServer</code></td>
+      <td><code>src/engine/server/application/LoginServer/</code></td>
+      <td>Front-of-house TCP service. Validates account credentials against
+          Sony Station API + login Oracle schema. Returns the list of galaxies
+          and characters and a session token.</td>
+    </tr>
+    <tr>
+      <td><code>CentralServer</code></td>
+      <td><code>src/engine/server/application/CentralServer/</code></td>
+      <td>Per-galaxy coordinator. Maintains the cluster map, places players on
+          planet servers, brokers chat/commodity routing.</td>
+    </tr>
+    <tr>
+      <td><code>ConnectionServer</code></td>
+      <td><code>src/engine/server/application/ConnectionServer/</code></td>
+      <td>Holds the player's UDP session. All gameplay UDP packets flow through
+          this process; it forwards them to the correct game server.</td>
+    </tr>
+    <tr>
+      <td><code>PlanetServer</code></td>
+      <td><code>src/engine/server/application/PlanetServer/</code></td>
+      <td>Owns one shard (a planet or a space zone). Hosts the planetary world
+          snapshot, brokers handoff between game-server children, and routes
+          objects across zone boundaries.</td>
+    </tr>
+    <tr>
+      <td><code>SwgGameServer</code></td>
+      <td><code>src/game/server/application/SwgGameServer/</code></td>
+      <td>The big one. Runs the game tick: AI, combat, movement, scripting.
+          Hosts the embedded JVM that runs <code>dsrc/</code> scripts. There are usually
+          multiple per planet, partitioned by region.</td>
+    </tr>
+    <tr>
+      <td><code>SwgDatabaseServer</code></td>
+      <td><code>src/game/server/application/SwgDatabaseServer/</code></td>
+      <td>Writes object/character state back to Oracle on a fixed cadence.
+          Designed so game servers never block on the DB.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Supporting processes</h2>
+
+<table>
+  <thead><tr><th>Server</th><th>What it provides</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>ChatServer</code></td>
+      <td>Persistent chat rooms, in-game mail, friends list. Cross-galaxy via the
+        same backbone. Source: <code>src/engine/server/application/ChatServer/</code>.</td>
+    </tr>
+    <tr>
+      <td><code>CommoditiesServer</code> / <code>CommodityServer</code></td>
+      <td>The galactic auction house / bazaar. Two implementations exist in the tree —
+        the older <code>CommodityServer</code> and the newer <code>CommoditiesServer</code>.</td>
+    </tr>
+    <tr>
+      <td><code>CustomerServiceServer</code></td>
+      <td>GM tools / petitions / appeals routing. Talks to <code>SwgCsTool</code>.</td>
+    </tr>
+    <tr>
+      <td><code>TransferServer</code></td>
+      <td>Character transfer between galaxies. The "paid character transfer" feature.</td>
+    </tr>
+    <tr>
+      <td><code>MetricsServer</code> / <code>LogServer</code></td>
+      <td>Telemetry sinks. <code>servercommon.cfg</code> shows <code>SharedLog</code> shipping to
+        a network log target on port 44467.</td>
+    </tr>
+    <tr>
+      <td><code>StationPlayersCollector</code></td>
+      <td>Reports concurrent player counts back to SOE Station infrastructure.</td>
+    </tr>
+    <tr>
+      <td><code>TaskManager</code></td>
+      <td>Per-host supervisor. Reads <code>_taskmanager.cfg</code> / <code>.rc</code> and spawns,
+        monitors, and restarts the other servers on its host.</td>
+    </tr>
+    <tr>
+      <td><code>LoginPing</code></td>
+      <td>Lightweight health-check responder used by load balancers.</td>
+    </tr>
+    <tr>
+      <td><code>PhonyApp</code></td>
+      <td>Stub harness used to bring up just the foundation framework — handy for
+        testing shared libs in isolation.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Inside SwgGameServer</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph SGS["SwgGameServer"]
+    Foundation["SharedFoundation tick loop"]
+    Net["SharedNetwork<br/>(UDP/TCP)"]
+    Obj["sharedObject<br/>controllers / world"]
+    Combat["CombatEngine<br/>(SwgGameServer/combat)"]
+    Path["serverPathfinding<br/>(navmesh)"]
+    Script["serverScript<br/>+ embedded JVM"]
+    DBClient["serverGame<br/>DB client"]
+  end
+
+  Foundation --> Net
+  Foundation --> Obj
+  Obj --> Combat
+  Obj --> Path
+  Obj --> Script
+  Script -. JNI .-> JVM[(IBM Java 1.3<br/>runs dsrc/.scriptbin)]
+  DBClient --> DBProc[(SwgDatabaseServer)]
+  Net --> Player[(player UDP via ConnectionServer)]
+</div>
+
+<p>
+  The combat-engine glue specifically is in
+  <code>src/game/server/application/SwgGameServer/src/shared/combat/CombatEngine.cpp</code>.
+  It dispatches into scripts so designers can override damage formulas, hit
+  rolls, special-attack effects from <code>dsrc/.../script/combat</code> without recompiling
+  C++.
+</p>
+
+<h2>Configuration model</h2>
+
+<p>Every server reads a stack of cfg files. For example, <code>exe/linux/loginServer.cfg</code> opens with:</p>
+
+<pre><code>.include "../../exe/shared/servercommon.cfg"
+
+[LoginServer]
+databaseProtocol=OCI
+DSN=sdswgp5b
+databaseUID=login
+databasePWD=login_prod8
+databaseThreads=4
+validateStationKey=1
+sessionServer=sdt-session1.station.sony.com:3000
+...
+</code></pre>
+
+<div class="callout warn">
+  These cfg files <strong>still contain the original SOE production hostnames,
+  Oracle DSNs, and session servers</strong>. They are reference, not runnable.
+  On any local revival you must:
+  <ul>
+    <li>set <code>validateStationKey=0</code> (or replace with custom auth)</li>
+    <li>point <code>DSN</code> at your own Oracle instance</li>
+    <li>strip <code>privateIpMask</code> entries that match SOE's old ranges</li>
+    <li>retarget <code>SharedLog</code> away from SOE log endpoints</li>
+  </ul>
+</div>
+
+<h2>Search paths and TreeFile</h2>
+
+<p>
+  Each server resolves its content under <code>[SharedFile]</code> via stacked
+  <code>searchPath0/1/2</code> entries (numbered low-to-high priority).
+  <code>servercommon.cfg</code> wires this to <code>data/sku.0/sys.shared/compiled/game</code>,
+  <code>sys.server/compiled/game</code>, and a number of <code>exported</code> trees. The same
+  abstraction transparently reads from a <code>.tre</code> archive if one is configured —
+  see <a href="data-pipeline.html">Data Pipeline</a>.
+</p>
+
+<p>Continue to <a href="client.html">Client</a> or <a href="scripting.html">Scripting</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

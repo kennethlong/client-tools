@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Data Pipeline — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Data pipeline</h1>
+  <div class="sub">From spreadsheets and Maya scenes to .tre archives and the patcher tree.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html" class="active">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Data pipeline</h1>
+
+<p>
+  Most of SWG's "weight" isn't code, it's content: Maya assets, terrain shaders,
+  schematics, conversation graphs, world snapshots. The whole pipeline ends in
+  <code>.tre</code> archives that ship to the player. The repo includes:
+</p>
+
+<ul>
+  <li>Authoring source under <code>dsrc/</code> (datatables, server scripts, shared object templates).</li>
+  <li>Authoring tool binaries in <code>exe/win32/</code> + Maya plug-ins in <code>plugin/win32/</code>.</li>
+  <li><code>publish/*.mft</code> manifests describing the live <code>.tre</code> tree at the time of leak.</li>
+</ul>
+
+<p>It does <strong>not</strong> include the actual <code>.tre</code> archives.</p>
+
+<h2>End-to-end flow</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph Authoring["Content authoring"]
+    Maya[Maya 4-8 scenes] -- "MayaExporter plug-in<br/>(plugin/win32)" --> IFFmesh[.iff mesh / skeleton]
+    Tabs[".tab spreadsheets<br/>(dsrc/.../datatables)"] --> IFFtab[.iff datatable]
+    Conv["SwgConversationEditor"] --> IFFconv[".convo .iff"]
+    Quest["QuestEditor"] --> IFFquest[".quest .iff"]
+    Particle["ParticleEditor"] --> IFFp[".prt .iff"]
+    Script["dsrc/.../script *.script,*.java"] --> Bin[.scriptbin]
+    Templates["dsrc/.../object *.tpf"] --> IFFt[.iff template]
+    Terrain["TerrainEditor"] --> IFFter[.trn / .iff]
+  end
+
+  subgraph Pack["Pack &amp; publish"]
+    Builder["TreeFileBuilder.exe"]
+    RspBuild["TreeFileRspBuilder.exe"]
+    Manifest["publish/*.mft<br/>per-tree manifest"]
+    Patch["patch_NN.txt entries"]
+    Tre[(.tre archive)]
+  end
+
+  subgraph Runtime
+    Reader["sharedFile / TreeFile<br/>(client + server)"]
+  end
+
+  IFFmesh --> Builder
+  IFFtab --> Builder
+  IFFconv --> Builder
+  IFFquest --> Builder
+  IFFp --> Builder
+  IFFt --> Builder
+  IFFter --> Builder
+  Bin --> Builder
+  RspBuild --> Builder
+  Builder --> Tre
+  Builder --> Manifest
+  Manifest --> Patch
+  Tre --> Reader
+</div>
+
+<h2>The file formats</h2>
+
+<table>
+  <thead><tr><th>Extension</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>.tre</code></td><td>EA-style chunk archive: container of many small files. Compressed, MD5-hashed, indexed. The runtime opens many of them in priority order — see TRE format breakdown linked below.</td></tr>
+    <tr><td><code>.iff</code></td><td>Interchange File Format: nested chunk binary. Used for almost every authored asset (meshes, animations, datatables, templates, world snapshots). <code>ViewIff.exe</code> opens any of them.</td></tr>
+    <tr><td><code>.tab</code></td><td>Tab-separated text spreadsheets with a typed header row. Compiled into <code>.iff</code> datatables.</td></tr>
+    <tr><td><code>.tpf</code></td><td>Template source — the human-readable form of an object template. Compiled to <code>.iff</code> by <code>TemplateCompiler.exe</code>.</td></tr>
+    <tr><td><code>.stf</code></td><td>String tables — localisation. <code>UpdateLocalizedStrings</code> tool round-trips them.</td></tr>
+    <tr><td><code>.dds</code></td><td>DirectDraw Surface textures (DXT-compressed).</td></tr>
+    <tr><td><code>.script</code></td><td>SWG scripting source (see <a href="scripting.html">Scripting</a>).</td></tr>
+    <tr><td><code>.scriptbin</code></td><td>Compiled script bytecode for the embedded JVM.</td></tr>
+    <tr><td><code>.ws</code></td><td>World snapshot — placement of static objects in a planet shard.</td></tr>
+    <tr><td><code>.mp</code> / <code>.mpb</code></td><td>Mesh / mesh bone files.</td></tr>
+    <tr><td><code>.cfg</code></td><td>Plain-text key=value config; supports <code>.include</code> directives.</td></tr>
+  </tbody>
+</table>
+
+<h2>TreeFile resolution</h2>
+
+<p>
+  Both client and server access content through the same <code>sharedFile/TreeFile</code>
+  abstraction (<code>src/engine/shared/library/sharedFile/src/shared/file/TreeFile.cpp</code>).
+  At startup the engine reads <code>servertreefiles.cfg</code> (in
+  <code>exe/shared/servertreefiles.cfg</code> — the server side) or the client's
+  patch tree (<code>data_*.txt</code>, <code>patch_*.txt</code> in <code>publish/</code>) and
+  layers them. When you ask for <code>texture/foo.dds</code>, it walks through the
+  archives in priority order and serves the first hit — which is exactly how
+  the <em>patch</em> tree overrides base content.
+</p>
+
+<h2>The <code>publish/</code> directory</h2>
+
+<p>
+  Files here are not assets, they are <strong>manifests</strong> of what's in each
+  <code>.tre</code>. A representative line from <code>publish/client_data_tree_files.mft</code>:
+</p>
+
+<pre><code>other  0  same  unpatched  47  47  0ff469dc1658dd740ecf6f05cd108dfe
+       //depot/swg/test/data/sku.0/sys.shared/compiled/game/abstract/slot/arrangement/arrangement_ammo_cartridge.iff#1
+       abstract/slot/arrangement/arrangement_ammo_cartridge.iff
+</code></pre>
+
+<p>
+  Columns: <em>category</em>, <em>flags</em>, <em>state</em>, <em>which patch tree</em>,
+  <em>compressed size</em>, <em>raw size</em>, <em>md5</em>, <em>perforce
+  depot path</em>, <em>tre-relative path</em>. This is enough to confirm what
+  the live tree looked like. It is <strong>not</strong> enough to recreate the bytes —
+  for that you need the assets themselves.
+</p>
+
+<h2>Sku layout</h2>
+
+<p>
+  "sku" = sales SKU. The <code>dsrc/</code> tree (and the <code>data/</code> tree it
+  generates) is split:
+</p>
+
+<ul>
+  <li><code>sku.0</code> — base game content.</li>
+  <li><code>sku.1</code> — Jump to Lightspeed (space) expansion.</li>
+  <li><code>sku.2</code> — Rage of the Wookiees.</li>
+  <li><code>sku.3</code> — Trials of Obi-Wan.</li>
+  <li><code>sku.ja</code> — Japanese release.</li>
+</ul>
+
+<p>
+  See <code>servercommon.cfg</code> — the search paths walk all four:
+</p>
+
+<pre><code>searchPath0=../../data/sku.0/sys.shared/exported/architecture
+searchPath0=../../data/sku.2/sys.shared/exported/architecture
+searchPath0=../../data/sku.0/sys.shared/exported/item
+searchPath0=../../data/sku.1/sys.shared/exported/space
+searchPath0=../../data/sku.0/sys.shared/exported/vehicle
+searchPath0=../../data/sku.0/sys.shared/exported/world
+...
+</code></pre>
+
+<h2>Tools that work the pipeline</h2>
+
+<table>
+  <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>tools/TreeFileBuilder.exe</code></td><td>Pack a directory tree into a <code>.tre</code>.</td></tr>
+    <tr><td><code>tools/TreeFileExtractor.exe</code></td><td>Extract a <code>.tre</code>.</td></tr>
+    <tr><td><code>tools/TreeFileRspBuilder.exe</code></td><td>Build a "response file" describing what to pack.</td></tr>
+    <tr><td><code>tools/buildTreeFileLookupTable.pl</code></td><td>Build the per-tree lookup index.</td></tr>
+    <tr><td><code>tools/BuildLivePatchTreeFromChangelists.pl</code></td><td>Roll a Perforce changelist into a live patch tree.</td></tr>
+    <tr><td><code>exe/win32/TemplateCompiler.exe</code></td><td>Compile <code>.tpf</code> object templates to <code>.iff</code>.</td></tr>
+    <tr><td><code>exe/win32/TemplateDefinitionCompiler.exe</code></td><td>Compile the <em>schemas</em> the template compiler uses.</td></tr>
+    <tr><td><code>exe/win32/SwgSchematicXmlParser.exe</code></td><td>Convert XML schematics into the binary form.</td></tr>
+    <tr><td><code>exe/win32/ViewIff_o.exe</code></td><td>Inspect any <code>.iff</code> file.</td></tr>
+    <tr><td><code>exe/win32/WorldSnapshotViewer_o.exe</code></td><td>Inspect a <code>.ws</code> world snapshot.</td></tr>
+  </tbody>
+</table>
+
+<h2>External references</h2>
+
+<ul>
+  <li><a href="http://wiki.swganh.org/index.php/TRE:TRE_Breakdown">SWGANH wiki — TRE format breakdown</a></li>
+  <li><a href="https://github.com/wverkley/Swg.Explorer">Swg.Explorer</a> — modern .tre browser</li>
+  <li><a href="https://github.com/jdswebb/swb-repo-cli">swb-repo-cli</a> — CLI .tre tooling</li>
+</ul>
+
+<p>Continue to <a href="dependencies.html">Dependencies</a> or <a href="gaps.html">Gaps</a>.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

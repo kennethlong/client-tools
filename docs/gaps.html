@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Gaps — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Gaps</h1>
+  <div class="sub">Everything missing from this leak that you'd need to actually run the game.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html" class="active">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Gaps in this archive</h1>
+
+<p>
+  This is a <strong>source archive</strong>, not a distribution. The leak
+  intentionally (or as a side-effect of how it was extracted) does not include
+  most of the things a player or operator needs. Below is the practical gap
+  inventory and how the public community has worked around each one.
+</p>
+
+<div class="mermaid">
+flowchart TB
+  subgraph Have["Have ✅"]
+    SrcCpp[C++ source for client + servers]
+    Scripts["Server scripts &amp; datatables (dsrc/)"]
+    Tools["Tool binaries + Maya plugins"]
+    Manifests["Patcher manifests (publish/)"]
+    Configs["Production config files (with SOE values)"]
+    BinTools[Pre-built editor .exe's]
+  end
+
+  subgraph Missing["Missing ❌"]
+    TRE[(.tre asset archives)]
+    DBSchema[(Oracle DB schema + seed)]
+    Auth[(Sony Station auth)]
+    SDKs[(Proprietary SDKs<br/>DirectX9, Maya, Bink, Miles, Vivox, OCI)]
+    JRE[(IBM Java 1.3 JRE)]
+    Toolchain[(gcc 2.95 / 3.2 + STLPort + automake 1.6)]
+    Keys[(Patcher keys / signing material)]
+    SoeInfra[(soePlatform, stationapi, MetricsServer endpoints)]
+  end
+
+  subgraph Reconstructed["Public reconstructions"]
+    SrcMod["SWG-Source/src — modernised C++"]
+    SwgMain["SWG-Source/swg-main — Ant meta-build + DB migrations"]
+    Assets["client-assets — rebuilt asset tree"]
+    Auth2["swg-site (node.js auth replacement)"]
+    StellaVM["StellaBellum dev VM"]
+  end
+
+  Missing -. backfilled by .-> Reconstructed
+</div>
+
+<h2>1. Asset archives (the <code>.tre</code> files)</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  Models, textures, animations, sounds, terrain, UI XML, music, world snapshots —
+  none ship in the repo. <code>publish/*.mft</code> describes the live tree and
+  <code>publish/data_*.txt</code> + <code>publish/patch_*.txt</code> describe the patch tree, but
+  the archives themselves are not here.
+</p>
+<p>
+  <strong>Workaround:</strong> use a real retail SWG client install (still
+  obtainable from old install media or community archives) and copy its
+  <code>data/</code> + <code>patch/</code> trees alongside. SWG-Source maintains a
+  <code>client-assets</code> repo that is the closest thing to a public asset baseline.
+</p>
+
+<h2>2. Database schema and seed data</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  Server expects an Oracle 9i database with login + cluster schemas. Configs name
+  the user (<code>databaseUID=login</code>) and password (<code>login_prod8</code>) but no
+  schema dumps are included. The C++ uses native OCI through
+  <code>sharedDatabaseInterface</code> and <code>serverDatabase</code>.
+</p>
+<p>
+  <strong>Workaround:</strong> SWG-Source's <code>swg-main/build.xml</code> includes
+  <code>create_database</code> and <code>update_database</code> targets that bring an Oracle
+  instance to a known state from migration scripts. Modern installs use Oracle
+  12c rather than 9i.
+</p>
+
+<h2>3. Authentication infrastructure</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  <code>LoginServer</code> talks to <code>sdt-session1.station.sony.com:3000</code>. The
+  Station service was retired with the game in 2011. The whole
+  <code>3rd/library/stationapi</code> + <code>soePlatform</code> tree expects working SOE backends.
+</p>
+<p>
+  <strong>Workaround:</strong> set <code>validateStationKey=0</code> in
+  <code>loginServer.cfg</code>. Replace SOE Station with a community auth service —
+  <a href="https://github.com/swg-ostrich/site">swg-ostrich/site</a> and
+  <a href="https://github.com/rohvani/swg-site">rohvani/swg-site</a> are
+  node.js / Vue community implementations.
+</p>
+
+<h2>4. Proprietary SDKs</h2>
+
+<p>
+  <span class="tag miss">licensed</span>
+  Required to build but cannot be redistributed legitimately:
+</p>
+<ul>
+  <li>DirectX 9 SDK</li>
+  <li>Autodesk Maya SDK (4 / 5 / 7 / 8)</li>
+  <li>Oracle OCI client</li>
+  <li>RAD Bink + Miles</li>
+  <li>Umbra DPVS</li>
+  <li>Vivox VoIP SDK</li>
+  <li>NaturalPoint TrackIR SDK</li>
+  <li>NxN Alienbrain XDK</li>
+  <li>Logitech LCD UI SDK</li>
+</ul>
+<p>
+  Some of these are <em>discoverable</em> in old archives; some are not. The
+  modern fork has been progressively decoupled — e.g. Bink replaced with
+  alternative video, voice often disabled.
+</p>
+
+<h2>5. Java runtime</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  <code>src/BUILDING</code> demands IBM Java 1.3.1 in <code>/usr/java</code>. That JRE is
+  not on any current Linux distro. SWG-Source's port targets a more recent JVM,
+  with corresponding adjustments to the JNI bridge in <code>serverScript</code>.
+</p>
+
+<h2>6. Build toolchain</h2>
+
+<p>
+  <span class="tag miss">era-locked</span>
+  <code>gcc 2.95 / 3.2.x</code>, <code>automake 1.6</code>, <code>libtool 1.4</code>, <code>STLPort 4.5.3</code>
+  are no longer present on modern systems and the codebase relies on quirks of
+  those versions. Modern GCC will reject huge swaths of the code without porting.
+</p>
+<p>
+  <strong>Workaround:</strong> use a CentOS / RHEL 5–6 era VM, or use the
+  <strong>StellaBellum dev VM</strong> from SWG-Source which freezes the right toolchain.
+</p>
+
+<h2>7. Pre-built tool binaries are tied to old infra</h2>
+
+<p>
+  <span class="tag warn">caution</span>
+  The <code>exe/win32/</code> editors run, but several reach for SOE infrastructure
+  on first launch (perforce, alienbrain, internal mail relays, internal log
+  endpoints). Disconnect from a network when first running them, or expect long
+  hangs / failed lookups.
+</p>
+
+<h2>8. Per-machine configs</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  Lots of <code>template_*.cfg</code> files exist but <code>tools/configFileBuilder.pl</code> needs
+  to be run with site values (hostnames, ports, paths) to produce real configs.
+  Without that, you'll see "missing config" errors.
+</p>
+
+<h2>9. Internal libraries with stubs only</h2>
+
+<p>
+  Some directories in <code>src/external/3rd/library/</code> appear to contain only
+  headers or partial source — e.g. <code>perforce</code>, <code>vivox</code>,
+  <code>libEverQuestTCG</code>, <code>soePlatform</code>. Real builds require pairing them with the
+  matching internal artifact, which isn't here.
+</p>
+
+<h2>10. Patcher / signing material</h2>
+
+<p>
+  <span class="tag miss">missing</span>
+  No code-signing certificates, no patcher signing keys, no per-server crash
+  reporter endpoints. Not strictly required to run — only required to ship to
+  end users.
+</p>
+
+<h2>How the community fills the gaps</h2>
+
+<table>
+  <thead><tr><th>Gap</th><th>Public solution</th></tr></thead>
+  <tbody>
+    <tr><td>Asset <code>.tre</code> archives</td><td>Retail client install or <a href="https://github.com/SWG-Source/client-assets">client-assets</a>.</td></tr>
+    <tr><td>Oracle schema</td><td><a href="https://github.com/SWG-Source/swg-main">swg-main</a> migrations + <a href="https://github.com/SWG-Source/swg-main/wiki/StellaBellum-Oracle-Install-and-Setup">StellaBellum Oracle install</a>.</td></tr>
+    <tr><td>Sony Station auth</td><td>swg-site / swg-ostrich node.js stack, plus <code>validateStationKey=0</code>.</td></tr>
+    <tr><td>Build toolchain</td><td><a href="https://github.com/SWG-Source/swg-main/wiki/StellaBellum-Development-VM-Setup">StellaBellum VM</a> with frozen-era Linux + Oracle.</td></tr>
+    <tr><td>JRE</td><td>Modern OpenJDK with port patches.</td></tr>
+    <tr><td>Voice chat</td><td>Disabled or stubbed.</td></tr>
+    <tr><td>SDKs (DirectX9 etc.)</td><td>Vendor old DirectX 9 SDK install; Maya optional (only needed for re-exporting from <code>.ma</code>).</td></tr>
+  </tbody>
+</table>
+
+<p>
+  See <a href="run-locally.html">Run Locally</a> for the concrete walkthrough.
+</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

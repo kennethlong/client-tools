@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Research Deep-Dives — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Research deep-dives</h1>
+  <div class="sub">Long-form investigations: build chain, animation system, foliage, and runtime middleware.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html" class="active">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Research deep-dives</h1>
+
+<p>
+  Each deep-dive captures a single investigation in detail — the question
+  asked, the search evidence, the verdict, with full file paths, line
+  numbers, and code excerpts. The same content lives as markdown under
+  <code>docs/research/*.md</code>.
+</p>
+
+<div class="cards">
+  <a class="card" href="swgclient-build.html">
+    <h3>SwgClient build chain</h3>
+    <p>What does <code>SwgClient.vcproj</code> build, what does it depend on, and what blocks a build today?</p>
+  </a>
+  <a class="card" href="animation.html">
+    <h3>Animation system</h3>
+    <p>Granny middleware or in-house? Verdict, evidence, and the full <code>clientSkeletalAnimation</code> tour.</p>
+  </a>
+  <a class="card" href="foliage.html">
+    <h3>Foliage / vegetation</h3>
+    <p>SpeedTree or in-house? The "Flora" system — static meshes plus billboard quads with sin() sway.</p>
+  </a>
+  <a class="card" href="middleware.html">
+    <h3>Runtime middleware</h3>
+    <p>Inventory of every external runtime dependency, link mode, surface area, and replaceability.</p>
+  </a>
+  <a class="card" href="boot-sequence.html">
+    <h3>Client boot sequence</h3>
+    <p>17 phases from <code>WinMain()</code> to first frame, with MVB milestones and SOE-stub map.</p>
+  </a>
+</div>
+
+<h2>The replaceability map at a glance</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef contained fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef pervasive fill:#231720,stroke:#ff7676,color:#d6e1ee
+  classDef vestigial fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+
+  subgraph Client["Client-side runtime middleware"]
+    DX9[DirectX 9<br/>plug-in DLL]:::contained
+    Bink[Bink<br/>late-bound DLL]:::contained
+    Miles[Miles<br/>contained in clientAudio]:::contained
+    DPVS[DPVS Umbra<br/>contained in clientGraphics]:::contained
+    Vivox[Vivox<br/>5 files]:::contained
+    Mozilla[libMozilla / XPCOM<br/>4 files]:::contained
+    LCD[Logitech LCD<br/>3 files]:::contained
+    TrackIR[TrackIR<br/>vestigial]:::vestigial
+    PIC[PICTools<br/>dev only]:::contained
+  end
+
+  subgraph Server["Server-side runtime middleware"]
+    Oracle[Oracle OCI<br/>ports/adapters]:::contained
+    JVM[IBM Java JVM<br/>JNI everywhere]:::pervasive
+    SoePlat[soePlatform suite<br/>per-server]:::contained
+    Station[stationapi<br/>LoginServer only]:::contained
+  end
+
+  subgraph Both["Cross-cutting"]
+    PCRE[PCRE<br/>5 sites, no facade]:::contained
+    XML[libxml2<br/>3 files in sharedXml]:::contained
+    Zlib[zlib<br/>1 file]:::contained
+    STL[STLPort 4.5.3<br/>build-pervasive]:::pervasive
+    Boost[boost<br/>4 headers]:::contained
+  end
+</div>
+
+<p>
+  Green = contained. Red = pervasive. Amber = effectively absent.
+  Detail per row in <a href="middleware.html">Runtime middleware</a>.
+</p>
+
+<h2>Reading order</h2>
+
+<ol>
+  <li>If you want to know <strong>how to build the client</strong>, start with <a href="swgclient-build.html">SwgClient build chain</a>.</li>
+  <li>If you want to know <strong>what's bespoke vs. licensed</strong>, read the three component deep-dives in order:
+      <a href="animation.html">Animation</a>, <a href="foliage.html">Foliage</a>, <a href="middleware.html">Middleware</a>.</li>
+  <li>For the high-level architecture, the <a href="architecture.html">main docs</a> cover it.</li>
+</ol>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

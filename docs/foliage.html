@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Foliage System — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Foliage / vegetation system</h1>
+  <div class="sub">Deep-dive: SpeedTree dependency or in-house? (Spoiler: in-house "Flora".)</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<p><a href="research.html">← back to Research</a> · markdown source: <code>docs/research/foliage-system.md</code></p>
+
+<h1>Verdict: No SpeedTree. Pure in-house.</h1>
+
+<p>
+  Same kind of result as the Granny investigation — and even cleaner: there
+  isn't a single dead reference to SpeedTree, IDV, <code>.spt</code>,
+  <code>.srt</code>, "Branch Geometry", or any other middleware-foliage tell.
+</p>
+
+<h2>Search evidence</h2>
+
+<table>
+  <thead><tr><th>Search target</th><th>Pattern</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>Vendored SDK directory</td><td>grep <code>SpeedTree|speedtree|IDV</code> in <code>src/external/</code></td><td>0 matches</td></tr>
+    <tr><td>Engine code</td><td>grep <code>SpeedTree|speedtree</code> in <code>src/engine/client/</code>, <code>src/engine/shared/</code>, <code>src/game/</code></td><td>0 matches</td></tr>
+    <tr><td>Tools</td><td>grep <code>SpeedTree|speedtree|IDV</code> in <code>tools/</code></td><td>0 matches</td></tr>
+    <tr><td>Plugins</td><td>grep <code>SpeedTree|speedtree</code> in <code>plugin/</code></td><td>0 matches</td></tr>
+    <tr><td>Patcher manifests (every shipped data file)</td><td>grep <code>\.spt|\.srt|SpeedTree</code> in <code>publish/</code></td><td>0 matches</td></tr>
+    <tr><td>Filenames</td><td>names containing <code>speed</code>, <code>idv</code>, <code>spt</code>, <code>srt</code> in <code>exe/</code>, <code>plugin/</code>, <code>tools/</code></td><td>only <code>TreeFile</code>/<code>xul-tree</code>/<code>patchTree</code> hits — all unrelated</td></tr>
+    <tr><td>Tree-named subdirectories</td><td>scan <code>clientTerrain</code>, <code>sharedTerrain</code>, <code>clientObject</code>, <code>external/3rd/library</code></td><td>0 directories with <code>tree</code>/<code>foliage</code>/<code>flora</code> in <code>external/</code> (note: SOE uses "flora")</td></tr>
+  </tbody>
+</table>
+
+<div class="callout info">
+  <strong>Chronology:</strong> the foliage code is all stamped <em>"copyright 2000, verant interactive"</em>
+  by <code>asommers</code> (Andy Sommers — the studio's terrain engineer). IDV Inc. didn't release
+  SpeedTree until 2003 — <em>after</em> this system was already shipping. SWG was simply too early to
+  ride the SpeedTree wave.
+</div>
+
+<h2>What it actually is — the "Flora" system</h2>
+
+<p>
+  SOE's term for all vegetation (trees, bushes, grass, ground scatter) is
+  <strong>flora</strong>, sometimes "radial flora" because it's evaluated in a
+  sliding radius around the camera. Two libraries:
+</p>
+
+<pre><code>src/engine/shared/library/sharedTerrain/src/shared/   — generator, affectors, FloraGroup
+src/engine/client/library/clientTerrain/src/shared/   — runtime managers, rendering</code></pre>
+
+<h2>End-to-end pipeline</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef inhouse fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef tool fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+  classDef data fill:#2a1d2b,stroke:#cc7be0,color:#d6e1ee
+
+  subgraph Authoring
+    Maya[Maya 4-8 scene]:::tool --> MayaExp[MayaExporter plug-in]:::tool --> MeshIff[".iff mesh / appearance template<br/>.apt / .sat / .prt"]:::data
+    Tile[Bitmap layer<br/>painted by artist]:::tool --> TerrEd[TerrainEditor.exe]:::tool
+    TerrEd --> Trn[".trn (planet)<br/>FloraGroup + RadialGroup +<br/>Affector* records"]:::data
+  end
+
+  subgraph Bake["Bake / sample"]
+    Trn --> Generator[TerrainGenerator]:::inhouse
+    Generator --> AffStat[AffectorFloraStaticCollidableConstant /<br/>AffectorFloraStaticNonCollidableConstant]:::inhouse
+    Generator --> AffDyn[AffectorFloraDynamic]:::inhouse
+    AffStat --> StaticMap[Array2d&lt;FloraGroup::Info&gt;<br/>per terrain chunk]:::data
+    AffDyn --> DynMap[Array2d&lt;FloraGroup::Info&gt;<br/>per terrain chunk]:::data
+  end
+
+  subgraph Runtime["clientTerrain at runtime"]
+    Camera[Camera position]
+    StaticMgr[ClientStaticRadialFloraManager]:::inhouse
+    DynMgr[ClientDynamicRadialFloraManager]:::inhouse
+
+    StaticMap --> StaticMgr
+    DynMap --> DynMgr
+    Camera --> StaticMgr
+    Camera --> DynMgr
+    StaticMgr --> AppFetch["AppearanceTemplateList::fetch<br/>real .apt/.sat/.prt mesh"]
+    DynMgr --> Quads["Vertex-buffer quads<br/>(camera-facing billboards)"]
+    AppFetch --> Render
+    Quads --> Render
+    Render[Rendered foliage<br/>with sin sway]
+  end
+
+  MeshIff -. fetched at runtime .-> AppFetch
+</div>
+
+<h2>Static flora — real meshes</h2>
+
+<p>
+  <code>src/engine/client/library/clientTerrain/src/shared/flora/ClientStaticRadialFloraManager.cpp</code>
+  (~23 KB).
+</p>
+
+<pre><code>//===================================================================
+//
+// ClientStaticRadialFloraManager.cpp
+// asommers 9-11-2000
+//
+// copyright 2000, verant interactive
+//
+//===================================================================</code></pre>
+
+<p>Core path:</p>
+
+<pre><code>FileName aptName(FileName::P_appearance, baseName, "apt");
+if (TreeFile::exists(aptName))
+    m_appearanceTemplate = AppearanceTemplateList::fetch(aptName);
+else {
+    FileName satName(FileName::P_appearance, baseName, "sat");
+    if (TreeFile::exists(satName))
+        m_appearanceTemplate = AppearanceTemplateList::fetch(satName);
+    else {
+        FileName prtName(FileName::P_appearance, baseName, "prt");
+        if (TreeFile::exists(prtName))
+            m_appearanceTemplate = AppearanceTemplateList::fetch(prtName);
+        else {
+            DEBUG_WARNING(true, ("ClientStaticRadialFloraManager: could not "
+                                 "open appearance template %s",
+                                 staticFloraData.familyChildData-&gt;appearanceTemplateName));
+            m_appearanceTemplate = AppearanceTemplateList::fetch(
+                "appearance/defaultappearance.apt");
+        }
+    }
+}</code></pre>
+
+<p>
+  Static flora is just an ordinary SWG <code>Appearance</code> loaded from an
+  <code>.apt</code>/<code>.sat</code>/<code>.prt</code> template — same kind of
+  mesh resource a building or vehicle uses. Trees are static meshes authored
+  in <strong>Maya</strong>, exported through the in-house
+  <code>MayaExporter</code>. <strong>No special "tree" appearance type.</strong>
+</p>
+
+<p>Two affector subclasses partition collision behaviour:</p>
+
+<ul>
+  <li><code>AffectorFloraStaticCollidableConstant</code> — collidable trees (you can collide with them).</li>
+  <li><code>AffectorFloraStaticNonCollidableConstant</code> — non-collidable scatter (you walk through them).</li>
+</ul>
+
+<h2>Dynamic flora — billboard quads</h2>
+
+<p>
+  <code>src/engine/client/library/clientTerrain/src/shared/flora/ClientDynamicRadialFloraManager.cpp</code>
+  (~35 KB). Grass / small bushes / scatter detail. Not a mesh — vertex-buffer quads built fresh each frame:
+</p>
+
+<pre><code>const Vector wvec(matrix[0][0]*width,  matrix[1][0]*width,  matrix[2][0]*width);
+const Vector hvec(matrix[0][1]*height, matrix[1][1]*height, matrix[2][1]*height);
+
+q.v0.pos = offset       - wvec;          // bottom-left
+q.v1.pos = offset + hvec - wvec + sway;  // top-left  (swayed)
+q.v2.pos = offset + hvec + wvec + sway;  // top-right (swayed)
+q.v3.pos = offset       + wvec;          // bottom-right</code></pre>
+
+<p>One batched draw call per render bucket:</p>
+
+<pre><code>m_vertexBuffer.unlock();
+Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+Graphics::setVertexBuffer(m_vertexBuffer);
+Graphics::setIndexBuffer(*ms_indexBuffer);</code></pre>
+
+<h2>Wind animation — <code>sin()</code></h2>
+
+<p>That's it. No multi-axis wind, no per-branch motion, no leaf-card flutter. The whole "wind" system is one global angle the manager updates each frame, multiplied by per-flora-child <code>period</code> and <code>displacement</code>:</p>
+
+<pre><code>const double swayAngle = m_owner.getFloraSwayAngle();
+// ...
+Vector sway;
+if (floraData.familyChildData-&gt;shouldSway) {
+    double angle = double(floraData.familyChildData-&gt;period) *
+                   (swayAngle + double(radialNode-&gt;getDeltaDirection()));
+    sway = floraData.familyChildData-&gt;displacement *
+           float(sin(angle)) * Vector::unitX;
+} else {
+    sway = Vector::zero;
+}</code></pre>
+
+<p>For static flora, the same idea but rotating the J basis vector (the model's up axis), so the whole tree leans:</p>
+
+<pre><code>const Vector vi = m_object-&gt;getObjectFrameI_w();
+const Vector vj = m_oldJ +
+    (fcd.shouldSway
+       ? fcd.displacement *
+         m_object-&gt;rotate_w2o(vi) *
+         sinf(fcd.period * deltaDirection)
+       : Vector::zero);
+const Vector vk = m_object-&gt;getObjectFrameK_w();</code></pre>
+
+<p>This is the "tree wobble" you remember from SWG. None of SpeedTree's signature features (per-branch wind, leaf-card flutter, dynamic LOD billboards, level-of-detail morph) exist here.</p>
+
+<h2>Where rendering and placement actually live</h2>
+
+<div class="mermaid">
+flowchart LR
+  subgraph SharedTerrain["sharedTerrain (generator side)"]
+    TG[TerrainGenerator]
+    FG[FloraGroup<br/>family registry]
+    RG[RadialGroup<br/>radial flora rules]
+    SG[ShaderGroup, EnvironmentGroup,<br/>BitmapGroup, FractalGroup]
+
+    AffSC[AffectorFloraStaticCollidableConstant]
+    AffSNC[AffectorFloraStaticNonCollidableConstant]
+    AffD[AffectorFloraDynamic]
+
+    TG --> FG
+    TG --> RG
+    TG --> SG
+    TG --> AffSC
+    TG --> AffSNC
+    TG --> AffD
+  end
+
+  subgraph ClientTerrain["clientTerrain (runtime)"]
+    CPTA[ClientProceduralTerrainAppearance]
+    CRFM[ClientRadialFloraManager<br/>base class]
+    CSFM[ClientStaticRadialFloraManager]
+    CDFM[ClientDynamicRadialFloraManager]
+
+    CPTA --&gt; CRFM
+    CRFM --&gt; CSFM
+    CRFM --&gt; CDFM
+  end
+
+  AffSC --&gt; CSFM
+  AffSNC --&gt; CSFM
+  AffD --&gt; CDFM
+
+  subgraph ObjLayer["sharedObject / clientObject"]
+    AT[Appearance + AppearanceTemplate]
+  end
+
+  CSFM --&gt; AT
+</div>
+
+<h2>Affector / generator file listing</h2>
+
+<p>Files in <code>src/engine/shared/library/sharedTerrain/src/shared/generator/</code>:</p>
+
+<pre><code>Affector.{cpp,h}                        AffectorColor.{cpp,h}
+AffectorEnvironment.{cpp,h}             AffectorExclude.{cpp,h}
+AffectorFloraDynamic.{cpp,h}            AffectorFloraStatic.{cpp,h}
+AffectorHeight.{cpp,h}                  AffectorPassable.{cpp,h}
+AffectorRibbon.{cpp,h}                  AffectorRiver.{cpp,h}
+AffectorRoad.{cpp,h}                    AffectorShader.{cpp,h}
+
+Array2d.h            BitmapGroup.{cpp,h}        Boundary.{cpp,h}
+ColorRamp256.{cpp,h} CoordinateHash.{cpp,h}     EnvironmentGroup.{cpp,h}
+FastKeyList.h        FastList.h                 Feather.h
+Filter.{cpp,h}       FloraGroup.{cpp,h}         FractalGroup.{cpp,h}
+HeightData.{cpp,h}   RadialGroup.{cpp,h}        ShaderGroup.{cpp,h}
+
+TerrainGenerator.{cpp,h}                TerrainGeneratorLoader.{cpp,h}
+TerrainGeneratorType.def                TerrainGeneratorType.h
+TerrainModificationHelper.{cpp,h}</code></pre>
+
+<h2>FloraGroup — the family registry</h2>
+
+<p><code>src/engine/shared/library/sharedTerrain/src/shared/generator/FloraGroup.h</code>:</p>
+
+<pre><code>//===================================================================
+//
+// FloraGroup.h
+// asommers 9-17-2000
+//
+// copyright 2000, verant interactive
+//
+//--
+//
+// A FloraGroup contains lists of families of meshes organized by id.
+// A flora family is a list of valid appearances for a specified id. ...
+//
+//===================================================================
+
+class FloraGroup {
+public:
+    struct Info {
+        Info();
+        ~Info();
+        int   getFamilyId() const;
+        void  setFamilyId(int familyId);
+        float getChildChoice() const;
+        void  setChildChoice(float childChoice);
+    private:
+        uint8 m_familyId;
+        uint8 m_childChoice;
+    };
+
+    struct FamilyChildData {
+    public:
+        int          familyId;
+        float        weight;
+        const char*  appearanceTemplateName;
+        bool         shouldSway;
+        float        period;
+        float        displacement;
+        bool         alignToTerrain;
+        bool         shouldScale;
+        float        minimumScale;
+        float        maximumScale;
+    public:
+        FamilyChildData();
+        ~FamilyChildData();
+    };
+
+private:
+    void load_0001(Iff&amp; iff);
+    void load_0002(Iff&amp; iff);
+    void load_0003(Iff&amp; iff);
+    void load_0004(Iff&amp; iff);
+    void load_0005(Iff&amp; iff);
+    void load_0006(Iff&amp; iff);
+    void load_0007(Iff&amp; iff);
+    void load_0008(Iff&amp; iff);
+    // ...
+};</code></pre>
+
+<p>
+  Versioned loaders inside a single class (<code>load_0001</code> …
+  <code>load_0008</code>) is a giveaway that the format was hand-rolled and
+  evolved across patches — not adopted from a vendor's SDK.
+</p>
+
+<h2>Data formats</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td><code>*.trn</code> (planet terrain)</td><td>An <code>.iff</code> whose chunks include <code>ShaderGroup</code>, <code>FloraGroup</code>, <code>RadialGroup</code>, <code>EnvironmentGroup</code>, <code>FractalGroup</code>, <code>BitmapGroup</code>, plus a list of <code>Affector</code> records.</td></tr>
+    <tr><td><code>FloraGroup</code> chunk</td><td>Family id → name, color, list of <code>FamilyChildData { appearanceTemplateName, shouldSway, period, displacement, alignToTerrain, shouldScale, minimumScale, maximumScale }</code>.</td></tr>
+    <tr><td>Tree mesh</td><td><code>.apt</code> (appearance template) → resolves to <code>.msh</code> / <code>.mgn</code> / similar SWG mesh <code>.iff</code>. Authored in Maya via <code>MayaExporter</code>.</td></tr>
+    <tr><td>Tree texture</td><td><code>.dds</code> referenced by the appearance's shader template.</td></tr>
+    <tr><td>Tree placement</td><td>Encoded as flora-family ids in <code>Array2d&lt;FloraGroup::Info&gt;</code> per terrain chunk — derived at terrain-bake from the painted bitmap layers.</td></tr>
+  </tbody>
+</table>
+
+<h2>Authoring tools (all in-house)</h2>
+
+<table>
+  <thead><tr><th>Tool</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>TerrainEditor</code> (<code>src/engine/client/application/TerrainEditor</code>)</td><td>The artists' planet-authoring app. <code>TerrainGeneratorHelperFlora.cpp</code> and <code>TerrainGeneratorHelperRadial.cpp</code> are the dialogs for editing FloraGroup families and RadialGroup rules. Outputs <code>.trn</code>.</td></tr>
+    <tr><td><code>MayaExporter</code> (<code>src/engine/client/application/MayaExporter</code>)</td><td>Exports the actual tree/bush meshes from Maya 4–8 to SWG <code>.iff</code> mesh templates. No SpeedTree intermediate.</td></tr>
+    <tr><td><code>Viewer</code> (<code>src/engine/client/application/Viewer</code>)</td><td>Previews any appearance template, including trees.</td></tr>
+  </tbody>
+</table>
+
+<h2>TL;DR</h2>
+
+<table>
+  <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+  <tbody>
+    <tr><td>Is there a SpeedTree dependency?</td><td><strong>No.</strong> Zero references anywhere in source, tools, plugins, or patcher manifests.</td></tr>
+    <tr><td>Where does tree rendering live?</td><td><code>src/engine/client/library/clientTerrain/src/shared/flora/</code> (Client{Static,Dynamic}RadialFloraManager).</td></tr>
+    <tr><td>Where does placement live?</td><td><code>src/engine/shared/library/sharedTerrain/src/shared/generator/</code> (FloraGroup, AffectorFloraStatic*, AffectorFloraDynamic, RadialGroup), driven by <strong>TerrainEditor</strong>.</td></tr>
+    <tr><td>Data formats?</td><td>Standard SWG <code>.iff</code> chunks. No <code>.spt</code>/<code>.srt</code>. Trees are normal <code>.apt</code>/<code>.sat</code>/<code>.prt</code> appearance templates. Planet data is <code>.trn</code>.</td></tr>
+    <tr><td>Static vs dynamic foliage</td><td>Static = real meshes via <code>AppearanceTemplate</code>. Dynamic = camera-facing billboard quads in a streamed VB.</td></tr>
+    <tr><td>Wind</td><td>Single global <code>sin(angle)</code> "sway" applied to billboard tops or to the model's up-axis. No per-branch wind.</td></tr>
+    <tr><td>Why no SpeedTree?</td><td>The flora system was written in <strong>September 2000</strong>. SpeedTree wasn't released until ~2003. SWG predates the middleware.</td></tr>
+  </tbody>
+</table>
+
+</main>
+<footer>whitengold docs · <a href="research.html">All research</a> · <a href="index.html">Overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

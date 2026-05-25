@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reverse Engineering Resources — SWG Project</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-hover: #1c2129;
+    --border: #30363d;
+    --border-strong: #484f58;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --text-dim: #6e7681;
+    --accent: #58a6ff;
+    --accent-hover: #79b8ff;
+    --warn: #d29922;
+    --danger: #f85149;
+    --success: #3fb950;
+    --quote: #a371f7;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  .container {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    margin: 0 0 0.3rem;
+    font-size: 28px;
+    font-weight: 500;
+    color: #f0f6fc;
+  }
+
+  header .subtitle {
+    color: var(--text-muted);
+    font-size: 15px;
+    margin: 0;
+  }
+
+  header .meta {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 0.8rem;
+  }
+
+  nav.toc {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0 2.5rem;
+  }
+
+  nav.toc h2 {
+    margin: 0 0 0.6rem;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  nav.toc ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    columns: 2;
+    gap: 1rem;
+  }
+
+  nav.toc li {
+    padding: 0.15rem 0;
+    break-inside: avoid;
+  }
+
+  nav.toc a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+  }
+
+  nav.toc a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+  section {
+    margin-bottom: 2.5rem;
+  }
+
+  section > h2 {
+    font-size: 22px;
+    font-weight: 500;
+    color: #f0f6fc;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+    margin: 0 0 1rem;
+  }
+
+  section > p.lead {
+    color: var(--text-muted);
+    margin: 0 0 1.2rem;
+    font-size: 14px;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 500;
+    color: #f0f6fc;
+    margin: 1.5rem 0 0.7rem;
+  }
+
+  .resource-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .resource-list li {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.6rem;
+    transition: border-color 0.15s;
+  }
+
+  .resource-list li:hover {
+    border-color: var(--border-strong);
+  }
+
+  .resource-list a.title {
+    color: var(--accent);
+    font-weight: 500;
+    text-decoration: none;
+    font-size: 15px;
+  }
+
+  .resource-list a.title:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+  }
+
+  .resource-list .desc {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-top: 0.25rem;
+  }
+
+  .resource-list .url {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-top: 0.25rem;
+    word-break: break-all;
+  }
+
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 0.4rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    vertical-align: 1px;
+  }
+
+  .tag.free { background: #1c4429; color: #56d364; border: 1px solid #2ea04333; }
+  .tag.paid { background: #4d2818; color: #e8a87c; border: 1px solid #d2992233; }
+  .tag.book { background: #1f2d4d; color: #79b8ff; border: 1px solid #58a6ff33; }
+  .tag.essential { background: #4d1f3a; color: #f778ba; border: 1px solid #db61a233; }
+  .tag.legal { background: #3d2d1f; color: #d29922; border: 1px solid #d2992233; }
+
+  .callout {
+    background: rgba(210, 153, 34, 0.08);
+    border-left: 3px solid var(--warn);
+    padding: 0.85rem 1.1rem;
+    margin: 1.2rem 0;
+    border-radius: 0 4px 4px 0;
+    font-size: 14px;
+  }
+
+  .callout.legal {
+    background: rgba(248, 81, 73, 0.06);
+    border-left-color: var(--danger);
+  }
+
+  .callout.note {
+    background: rgba(88, 166, 255, 0.06);
+    border-left-color: var(--accent);
+  }
+
+  .callout strong {
+    color: #f0f6fc;
+  }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    nav.toc ul { columns: 1; }
+    .container { padding: 1.5rem 1rem 3rem; }
+    header h1 { font-size: 24px; }
+  }
+
+  @media print {
+    body { background: white; color: black; }
+    .container { max-width: 100%; }
+    a { color: #0066cc; }
+    .resource-list li { break-inside: avoid; background: white; border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<header>
+  <h1>Reverse Engineering Resources</h1>
+  <p class="subtitle">Reference index for the SWG memorial server &amp; SWGSE clean-room mod framework</p>
+  <p class="meta">Last updated: May 2026 · Personal project reference document</p>
+</header>
+
+<div class="callout legal">
+  <strong>Clean-room discipline:</strong> Resources marked <span class="tag legal">legal</span> are particularly relevant to maintaining clean-room separation between the private memorial project (leak-derived, never published) and the public SWGSE project (clean-room, derived from binary analysis and public docs only). Don't read leaked source while writing public code.
+</div>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+    <li><a href="#methodology">Clean-room methodology &amp; legal foundations</a></li>
+    <li><a href="#disassemblers">Disassemblers &amp; static analysis</a></li>
+    <li><a href="#debuggers">Debuggers &amp; dynamic analysis</a></li>
+    <li><a href="#binary-tools">Hex editors &amp; binary tools</a></li>
+    <li><a href="#hooking">DLL injection &amp; function hooking</a></li>
+    <li><a href="#network">Network protocol RE</a></li>
+    <li><a href="#script-extenders">Script extenders &amp; mod frameworks</a></li>
+    <li><a href="#preservation">Game preservation projects</a></li>
+    <li><a href="#swg-docs">SWG protocol &amp; format docs</a></li>
+    <li><a href="#swg-emulators">SWG emulator implementations</a></li>
+    <li><a href="#swg-modding">SWG modding community</a></li>
+    <li><a href="#swg-tools">SWG-specific tools</a></li>
+    <li><a href="#books">Books</a></li>
+    <li><a href="#learning">Learning resources</a></li>
+    <li><a href="#communities">Communities</a></li>
+  </ul>
+</nav>
+
+<section id="methodology">
+  <h2>Clean-room methodology &amp; legal foundations</h2>
+  <p class="lead">Foundational reading for the discipline of building a public mod framework that doesn't legally entangle with leaked source code.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://en.wikipedia.org/wiki/Clean_room_design" class="title">Clean room design <span class="tag essential">essential</span></a>
+      <div class="desc">Wikipedia overview of the technique. The strict legal version (Chinese wall with separate teams) vs. the practical solo-developer version. Read this first.</div>
+      <div class="url">en.wikipedia.org/wiki/Clean_room_design</div>
+    </li>
+    <li>
+      <a href="https://en.wikipedia.org/wiki/Chinese_wall" class="title">Chinese wall</a>
+      <div class="desc">The information-barrier technique that makes clean-room defensible. Hard for solo developers but the principles still apply.</div>
+      <div class="url">en.wikipedia.org/wiki/Chinese_wall</div>
+    </li>
+    <li>
+      <a href="https://en.wikipedia.org/wiki/Sega_v._Accolade" class="title">Sega v. Accolade (1992) <span class="tag legal">legal</span></a>
+      <div class="desc">9th Circuit ruling that established intermediate copying for reverse engineering as fair use when needed for interoperability. Foundational case for the entire mod framework legal theory.</div>
+      <div class="url">en.wikipedia.org/wiki/Sega_v._Accolade</div>
+    </li>
+    <li>
+      <a href="https://en.wikipedia.org/wiki/Sony_Computer_Entertainment,_Inc._v._Connectix_Corp." class="title">Sony v. Connectix (2000) <span class="tag legal">legal</span></a>
+      <div class="desc">9th Circuit affirmed clean-room reverse engineering of the PlayStation BIOS for the Bleem!/Virtual Game Station emulators. Direct precedent for game console/client emulation.</div>
+      <div class="url">en.wikipedia.org/wiki/Sony_v._Connectix</div>
+    </li>
+    <li>
+      <a href="https://en.wikipedia.org/wiki/Phoenix_Technologies" class="title">Phoenix Technologies BIOS reimplementation</a>
+      <div class="desc">The original clean-room reverse engineering case study. Phoenix recreated IBM's PC BIOS with separate "dirty" and "clean" teams; the technique they invented is what you're applying.</div>
+      <div class="url">en.wikipedia.org/wiki/Phoenix_Technologies</div>
+    </li>
+    <li>
+      <a href="https://www.law.cornell.edu/uscode/text/17/1201" class="title">17 U.S. Code § 1201 — DMCA anti-circumvention <span class="tag legal">legal</span></a>
+      <div class="desc">The DMCA section that <em>could</em> apply to client mods. The interoperability exception (1201(f)) is what most modding frameworks rely on.</div>
+      <div class="url">law.cornell.edu/uscode/text/17/1201</div>
+    </li>
+    <li>
+      <a href="https://www.eff.org/issues/coders/reverse-engineering-faq" class="title">EFF Reverse Engineering FAQ <span class="tag essential">essential</span></a>
+      <div class="desc">Electronic Frontier Foundation's plain-English guide to what's legal and what isn't in reverse engineering. The single best non-lawyer overview.</div>
+      <div class="url">eff.org/issues/coders/reverse-engineering-faq</div>
+    </li>
+  </ul>
+</section>
+
+<section id="disassemblers">
+  <h2>Disassemblers &amp; static analysis</h2>
+  <p class="lead">For reading the SWG client binary directly to understand its internal structure without referencing leaked source.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://ghidra-sre.org/" class="title">Ghidra <span class="tag free">free</span> <span class="tag essential">essential</span></a>
+      <div class="desc">NSA's reverse engineering suite, released as open source in 2019. Full decompiler, scriptable, multi-architecture. The free tool that closed the gap with IDA Pro for most use cases.</div>
+      <div class="url">ghidra-sre.org</div>
+    </li>
+    <li>
+      <a href="https://hex-rays.com/ida-free/" class="title">IDA Free <span class="tag free">free</span></a>
+      <div class="desc">The free version of IDA Pro. Industry standard for two decades. Free version supports x86/x64 with cloud decompiler. The commercial version has historically been the gold standard but Ghidra is now genuinely competitive.</div>
+      <div class="url">hex-rays.com/ida-free</div>
+    </li>
+    <li>
+      <a href="https://binary.ninja/" class="title">Binary Ninja <span class="tag paid">$300+</span></a>
+      <div class="desc">Modern alternative with excellent UX and a powerful intermediate language. Personal license is reasonably priced; many RE professionals prefer it now.</div>
+      <div class="url">binary.ninja</div>
+    </li>
+    <li>
+      <a href="https://rada.re/n/" class="title">radare2 / Cutter <span class="tag free">free</span></a>
+      <div class="desc">Open-source disassembler/debugger framework. Cutter is the GUI frontend. Steep learning curve but extremely scriptable.</div>
+      <div class="url">rada.re — cutter.re</div>
+    </li>
+  </ul>
+</section>
+
+<section id="debuggers">
+  <h2>Debuggers &amp; dynamic analysis</h2>
+  <p class="lead">For attaching to a running SWG client and observing actual behavior — the core of clean-room binary RE.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://x64dbg.com/" class="title">x64dbg <span class="tag free">free</span> <span class="tag essential">essential</span></a>
+      <div class="desc">Open-source Windows debugger. Successor to OllyDbg. Active development, plugin ecosystem, scriptable. The right primary tool for reversing the SWG client binary.</div>
+      <div class="url">x64dbg.com</div>
+    </li>
+    <li>
+      <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/" class="title">WinDbg <span class="tag free">free</span></a>
+      <div class="desc">Microsoft's debugger. More powerful than x64dbg for kernel work but harder to learn. The new "WinDbg Preview" UI is much more pleasant than classic WinDbg.</div>
+      <div class="url">learn.microsoft.com/windows-hardware/drivers/debugger</div>
+    </li>
+    <li>
+      <a href="http://www.ollydbg.de/" class="title">OllyDbg <span class="tag free">free</span></a>
+      <div class="desc">The classic 32-bit Windows debugger. SWG client is 32-bit, so OllyDbg works. Largely superseded by x64dbg, but historic SWG modding work used it and you'll find tutorials referencing it.</div>
+      <div class="url">ollydbg.de</div>
+    </li>
+    <li>
+      <a href="https://www.cheatengine.org/" class="title">Cheat Engine <span class="tag free">free</span></a>
+      <div class="desc">Game-focused memory scanner and debugger. Excellent for finding game state in memory (HAM bars, position, inventory). Used by every game modder for 25 years.</div>
+      <div class="url">cheatengine.org</div>
+    </li>
+    <li>
+      <a href="https://frida.re/" class="title">Frida <span class="tag free">free</span></a>
+      <div class="desc">Dynamic instrumentation toolkit. JavaScript-based scripting that attaches to any process and lets you hook functions, read memory, intercept calls. Modern, powerful, much friendlier than traditional debuggers for prototyping hooks.</div>
+      <div class="url">frida.re</div>
+    </li>
+    <li>
+      <a href="https://www.apimonitor.com/" class="title">API Monitor <span class="tag free">free</span></a>
+      <div class="desc">Logs all Windows API calls a process makes. Excellent for understanding what files, registry keys, and network endpoints the client touches at startup.</div>
+      <div class="url">rohitab.com/apimonitor</div>
+    </li>
+    <li>
+      <a href="https://learn.microsoft.com/en-us/sysinternals/downloads/procmon" class="title">Process Monitor <span class="tag free">free</span></a>
+      <div class="desc">Sysinternals tool. Shows every file, registry, and network operation by every process. The first tool to reach for when something fails at startup and you don't know why.</div>
+      <div class="url">learn.microsoft.com/sysinternals/downloads/procmon</div>
+    </li>
+  </ul>
+</section>
+
+<section id="binary-tools">
+  <h2>Hex editors &amp; binary tools</h2>
+  <p class="lead">For inspecting and modifying TRE files, IFF chunks, and binary data structures.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://mh-nexus.de/en/hxd/" class="title">HxD <span class="tag free">free</span></a>
+      <div class="desc">The default Windows hex editor. Fast, clean, reliable. Use this 80% of the time.</div>
+      <div class="url">mh-nexus.de/en/hxd</div>
+    </li>
+    <li>
+      <a href="https://www.sweetscape.com/010editor/" class="title">010 Editor <span class="tag paid">$50</span></a>
+      <div class="desc">Hex editor with binary template support — you write a template describing a file format and it parses files into structured trees. Worth the price if you're working with custom binary formats like IFF/TRE.</div>
+      <div class="url">sweetscape.com/010editor</div>
+    </li>
+    <li>
+      <a href="https://imhex.werwolv.net/" class="title">ImHex <span class="tag free">free</span></a>
+      <div class="desc">Modern open-source hex editor with pattern language similar to 010 Editor templates. Good free alternative.</div>
+      <div class="url">imhex.werwolv.net</div>
+    </li>
+    <li>
+      <a href="https://github.com/horsicq/DIE-engine" class="title">Detect It Easy (DIE) <span class="tag free">free</span></a>
+      <div class="desc">Identifies what compiler, packer, or protector was used on a binary. Useful for understanding the SWG client's build environment.</div>
+      <div class="url">github.com/horsicq/DIE-engine</div>
+    </li>
+  </ul>
+</section>
+
+<section id="hooking">
+  <h2>DLL injection &amp; function hooking</h2>
+  <p class="lead">The core technique behind every script extender. Inject a DLL into the target process, hook key functions, expose an API for mods.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://github.com/microsoft/Detours" class="title">Microsoft Detours <span class="tag free">free</span> <span class="tag essential">essential</span></a>
+      <div class="desc">Microsoft's library for instrumenting Win32 functions on x86/x64. The original and most battle-tested function hooking library. Used by everything from games to anti-cheat to enterprise software.</div>
+      <div class="url">github.com/microsoft/Detours</div>
+    </li>
+    <li>
+      <a href="https://github.com/TsudaKageyu/minhook" class="title">MinHook <span class="tag free">free</span></a>
+      <div class="desc">Minimalist function hooking library, BSD-licensed. Simpler API than Detours, often easier for first-time hook code. Popular in the game modding community specifically.</div>
+      <div class="url">github.com/TsudaKageyu/minhook</div>
+    </li>
+    <li>
+      <a href="https://easyhook.github.io/" class="title">EasyHook <span class="tag free">free</span></a>
+      <div class="desc">Hooking library with managed (.NET) and unmanaged APIs. Useful if you want to write hooks in C#.</div>
+      <div class="url">easyhook.github.io</div>
+    </li>
+    <li>
+      <a href="https://github.com/stevemk14ebr/PolyHook_2_0" class="title">PolyHook 2 <span class="tag free">free</span></a>
+      <div class="desc">More aggressive hooking library that handles cases the others struggle with (instructions in the prologue, anti-cheat scenarios). Worth knowing about for difficult targets.</div>
+      <div class="url">github.com/stevemk14ebr/PolyHook_2_0</div>
+    </li>
+    <li>
+      <a href="https://github.com/DarthTon/Blackbone" class="title">Blackbone</a>
+      <div class="desc">Windows memory hacking library. DLL injection, manual mapping, syscall hooking. Lower-level than Detours but more capable.</div>
+      <div class="url">github.com/DarthTon/Blackbone</div>
+    </li>
+    <li>
+      <a href="https://www.codeproject.com/Articles/2082/API-hooking-revealed" class="title">"API hooking revealed" — CodeProject</a>
+      <div class="desc">Older tutorial but still the clearest explanation of how function hooking actually works at the assembly level. Read this once.</div>
+      <div class="url">codeproject.com/Articles/2082/API-hooking-revealed</div>
+    </li>
+  </ul>
+</section>
+
+<section id="network">
+  <h2>Network protocol reverse engineering</h2>
+  <p class="lead">For understanding the SOE UDP protocol and SWG application layer by observing live traffic.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://www.wireshark.org/" class="title">Wireshark <span class="tag free">free</span> <span class="tag essential">essential</span></a>
+      <div class="desc">The packet capture and analysis tool. Capture SWG client/server traffic, dissect protocol layers, write custom dissectors for SWG's protocol. Foundational.</div>
+      <div class="url">wireshark.org</div>
+    </li>
+    <li>
+      <a href="https://www.wireshark.org/docs/wsdg_html_chunked/ChDissectAdd.html" class="title">Writing Wireshark dissectors</a>
+      <div class="desc">Wireshark Developer's Guide chapter on adding custom protocol dissectors. SOE protocol dissectors exist for some games — writing one for SWG would be a worthy project.</div>
+      <div class="url">wireshark.org/docs/wsdg_html_chunked</div>
+    </li>
+    <li>
+      <a href="https://mitmproxy.org/" class="title">mitmproxy <span class="tag free">free</span></a>
+      <div class="desc">Interactive HTTPS proxy. Less relevant for SWG's UDP protocol but useful if you ever look at the launcher/auth flows that use HTTP.</div>
+      <div class="url">mitmproxy.org</div>
+    </li>
+    <li>
+      <a href="https://nmap.org/" class="title">Nmap <span class="tag free">free</span></a>
+      <div class="desc">Port scanning and service identification. Useful for mapping what ports a server cluster opens.</div>
+      <div class="url">nmap.org</div>
+    </li>
+  </ul>
+</section>
+
+<section id="script-extenders">
+  <h2>Script extenders &amp; mod frameworks (reference implementations)</h2>
+  <p class="lead">The pattern you're building SWGSE on. Read these implementations to understand the architecture, hook patterns, and API design choices that have proven durable.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://skse.silverlock.org/" class="title">Skyrim Script Extender (SKSE) <span class="tag essential">essential</span></a>
+      <div class="desc">The reference implementation. 15+ years of public development against a Bethesda binary. Bethesda has never enforced. The architectural and legal template you're following.</div>
+      <div class="url">skse.silverlock.org</div>
+    </li>
+    <li>
+      <a href="https://github.com/ianpatt/skse64" class="title">SKSE64 source on GitHub <span class="tag essential">essential</span></a>
+      <div class="desc">SKSE source code. Read this to understand how a mature script extender is structured — DLL injection, hook table, plugin loader, scripting host integration.</div>
+      <div class="url">github.com/ianpatt/skse64</div>
+    </li>
+    <li>
+      <a href="https://f4se.silverlock.org/" class="title">Fallout 4 Script Extender (F4SE)</a>
+      <div class="desc">Same team as SKSE, similar architecture, more recent codebase. Useful comparison.</div>
+      <div class="url">f4se.silverlock.org</div>
+    </li>
+    <li>
+      <a href="https://github.com/MWSE/MWSE" class="title">Morrowind Script Extender (MWSE)</a>
+      <div class="desc">The oldest of the xSE family, dating to 2003. Has Lua scripting integration that's worth studying for SWGSE — same era as SWG, similar constraints.</div>
+      <div class="url">github.com/MWSE/MWSE</div>
+    </li>
+    <li>
+      <a href="https://obse.silverlock.org/" class="title">Oblivion Script Extender (OBSE)</a>
+      <div class="desc">2006-era, also worth comparing. Smaller scope than SKSE, easier to read end-to-end.</div>
+      <div class="url">obse.silverlock.org</div>
+    </li>
+    <li>
+      <a href="https://github.com/CommunityScriptHook/CommunityScriptHookV-LUA" class="title">Script Hook V (GTA V)</a>
+      <div class="desc">Community fork of Alexander Blade's Script Hook V. Different code style than the xSE family but proves the pattern works for non-Bethesda games. GTA V is also a much more aggressively-policed IP than Skyrim, which makes its survival significant.</div>
+      <div class="url">github.com/CommunityScriptHook</div>
+    </li>
+  </ul>
+</section>
+
+<section id="preservation">
+  <h2>Game preservation projects (clean-room examples)</h2>
+  <p class="lead">Projects that have successfully reimplemented commercial game engines using clean-room methodology. Useful both as architectural reference and as legal precedent.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://www.scummvm.org/" class="title">ScummVM <span class="tag essential">essential</span></a>
+      <div class="desc">Reimplements the engines for hundreds of classic adventure games. 25 years of public development, never sued. The "bring your own data files" model that protects them legally is exactly the SWGSE model.</div>
+      <div class="url">scummvm.org — github.com/scummvm/scummvm</div>
+    </li>
+    <li>
+      <a href="https://openmw.org/" class="title">OpenMW</a>
+      <div class="desc">Open-source reimplementation of Morrowind's engine. Bethesda is aware and has not enforced. Players supply their own Morrowind data files.</div>
+      <div class="url">openmw.org — gitlab.com/OpenMW/openmw</div>
+    </li>
+    <li>
+      <a href="https://www.openra.net/" class="title">OpenRA</a>
+      <div class="desc">Open-source reimplementation of Westwood's RTS engine (Command &amp; Conquer, Red Alert, Dune 2000). Active community, EA has not enforced. Excellent reference for an MMO-adjacent multiplayer reimplementation.</div>
+      <div class="url">openra.net — github.com/OpenRA/OpenRA</div>
+    </li>
+    <li>
+      <a href="https://github.com/doitsujin/dxvk" class="title">DXVK</a>
+      <div class="desc">DirectX 9/10/11 to Vulkan translation layer. Powers Steam's Proton. Worth reading if you ever consider modernizing the SWG client's renderer — proves the technique is mature.</div>
+      <div class="url">github.com/doitsujin/dxvk</div>
+    </li>
+    <li>
+      <a href="https://github.com/ValveSoftware/Proton" class="title">Proton</a>
+      <div class="desc">Valve's compatibility layer for running Windows games on Linux. The infrastructure that proves you can run 20-year-old DX9 games on modern hardware.</div>
+      <div class="url">github.com/ValveSoftware/Proton</div>
+    </li>
+    <li>
+      <a href="https://www.dolphin-emu.org/" class="title">Dolphin (GameCube/Wii emulator)</a>
+      <div class="desc">Console emulator with extensive write-ups on their reverse engineering process. Their progress reports are some of the best technical writing in the RE space.</div>
+      <div class="url">dolphin-emu.org</div>
+    </li>
+  </ul>
+</section>
+
+<section id="swg-docs">
+  <h2>SWG protocol &amp; format documentation</h2>
+  <p class="lead">Public documentation of SWG's protocols, file formats, and game systems. These docs predate the leak and represent independently reverse-engineered knowledge — citing them keeps clean-room work clean.</p>
+
+  <div class="callout note">
+    <strong>The SWGANH wiki is the protocol bible.</strong> If you're trying to understand how a packet works or what a system does, there's almost certainly a wiki page. Always cite the wiki rather than leaked source for SWGSE work.
+  </div>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://wiki.swganh.org/" class="title">SWGANH Wiki <span class="tag essential">essential</span></a>
+      <div class="desc">The reverse-engineering bible. Documents the SOE network protocol byte-by-byte, packet guides, TRE sub-file formats, client command tables, object controllers, protocol baselines, and protocol deltas. Was the working wiki for the SWGANH dev team. Pre-dates the leak — clean-room safe to reference.</div>
+      <div class="url">wiki.swganh.org</div>
+    </li>
+    <li>
+      <a href="http://wiki.swganh.org/index.php/SOE_Protocol_Breakdown" class="title">SOE Protocol Breakdown</a>
+      <div class="desc">Detailed packet-level documentation of the SOE UDP protocol. Session establishment, reliable data, ACKs, fragmentation, sequence numbers, the works.</div>
+      <div class="url">wiki.swganh.org/index.php/SOE_Protocol_Breakdown</div>
+    </li>
+    <li>
+      <a href="http://wiki.swganh.org/index.php/TRE:TRE_Breakdown" class="title">TRE file format breakdown</a>
+      <div class="desc">Documents the IFF-based TRE archive format with hex examples. Useful for any tool that needs to read or generate TRE files.</div>
+      <div class="url">wiki.swganh.org/index.php/TRE:TRE_Breakdown</div>
+    </li>
+    <li>
+      <a href="http://wiki.swganh.org/index.php/Portal:SWG_Client_Documentation" class="title">SWG Client Documentation portal</a>
+      <div class="desc">Index of client-side documentation: command tables, UI structure, asset organization.</div>
+      <div class="url">wiki.swganh.org/index.php/Portal:SWG_Client_Documentation</div>
+    </li>
+    <li>
+      <a href="https://www.swgemu.com/archive/scrapbookv51/" class="title">SWG official manual archive</a>
+      <div class="desc">The original SOE-published Star Wars Galaxies manual, archived. ~200 pages, explains every game system clearly. Pre-dates the leak by years; clean-room safe to reference for game design intent.</div>
+      <div class="url">swgemu.com/archive/scrapbookv51</div>
+    </li>
+  </ul>
+</section>
+
+<section id="swg-emulators">
+  <h2>SWG emulator implementations</h2>
+  <p class="lead">Existing implementations to reference architecturally. SWGEmu Core3 is clean-room and the gold standard for "how to do this without touching the leak."</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://github.com/swgemu/Core3" class="title">SWGEmu Core3 <span class="tag essential">essential</span></a>
+      <div class="desc">The clean-room Pre-CU server implementation. 20+ years of development, AGPL-3.0. Reading this teaches you how SWG works without touching leaked code. Lua scripting layer is particularly accessible.</div>
+      <div class="url">github.com/swgemu/Core3</div>
+    </li>
+    <li>
+      <a href="https://github.com/swgemu/engine3" class="title">SWGEmu Engine3</a>
+      <div class="desc">SWGEmu's underlying engine library. Open-sourced 2019. C++ MMO server framework.</div>
+      <div class="url">github.com/swgemu/engine3</div>
+    </li>
+    <li>
+      <a href="https://github.com/ProjectSWGCore/Holocore" class="title">Holocore (Project SWG)</a>
+      <div class="desc">Modern Kotlin/Java reimplementation targeting the Combat Upgrade era. Cleaner codebase than Core3 due to age. Different architectural choices — useful comparison.</div>
+      <div class="url">github.com/ProjectSWGCore/Holocore</div>
+    </li>
+    <li>
+      <a href="https://github.com/ProjectSWGCore/NGECore2" class="title">NGECore2</a>
+      <div class="desc">Project SWG's earlier Java-based NGE-era implementation. Largely superseded by Holocore but still present for reference.</div>
+      <div class="url">github.com/ProjectSWGCore/NGECore2</div>
+    </li>
+    <li>
+      <a href="https://github.com/swgopenge/openge" class="title">SWG OpenGE</a>
+      <div class="desc">Open-source emulator targeting the final NGE shutdown state.</div>
+      <div class="url">github.com/swgopenge/openge</div>
+    </li>
+  </ul>
+
+  <h3>Active community servers (Core3-based)</h3>
+  <p class="lead">Useful as reference for how Core3 forks add custom content cleanly.</p>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://www.swginfinity.com/" class="title">SWG Infinity</a>
+      <div class="desc">Largest active Pre-CU server. Closest to vanilla SWGEmu — they polish and extend rather than overhaul. Good reference for "what does a well-run Core3 fork look like."</div>
+      <div class="url">swginfinity.com</div>
+    </li>
+    <li>
+      <a href="https://www.empireinflames.net/" class="title">SWG Empire in Flames</a>
+      <div class="desc">Pre-CU server that separated skills from professions — significant design departure from vanilla. Code is openly developed and worth studying for "how to make substantial changes to Core3."</div>
+      <div class="url">empireinflames.net</div>
+    </li>
+    <li>
+      <a href="https://swgr.org/" class="title">SWG Restoration</a>
+      <div class="desc">Runs CU mechanics on the SWG Source codebase. Hybrid project, useful reference if curious about the CU era.</div>
+      <div class="url">swgr.org</div>
+    </li>
+  </ul>
+</section>
+
+<section id="swg-modding">
+  <h2>SWG modding community</h2>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://modthegalaxy.com/" class="title">ModTheGalaxy <span class="tag essential">essential</span></a>
+      <div class="desc">SWG modding community hub. UI mods, texture replacements, model swaps, format reverse-engineering discussions, mod releases. The audience for SWGSE — they've been hex-editing the client for 15 years and would benefit most from a real framework.</div>
+      <div class="url">modthegalaxy.com</div>
+    </li>
+    <li>
+      <a href="https://modthegalaxy.com/index.php?threads%2Fa-tre-tour-a-brief-guide-to-the-directories-in-swg.1612%2F" class="title">A TRE Tour: brief guide to SWG directories</a>
+      <div class="desc">Walkthrough of what lives in each TRE archive directory. Useful orientation for new modders.</div>
+      <div class="url">modthegalaxy.com/index.php?threads/a-tre-tour</div>
+    </li>
+    <li>
+      <a href="https://www.swgemu.com/forums/" class="title">SWGEmu Forums</a>
+      <div class="desc">Official SWGEmu community forum. Development discussions, server admin guides, bug reports.</div>
+      <div class="url">swgemu.com/forums</div>
+    </li>
+  </ul>
+</section>
+
+<section id="swg-tools">
+  <h2>SWG-specific tools</h2>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://github.com/wverkley/Swg.Explorer" class="title">Swg.Explorer <span class="tag free">free</span></a>
+      <div class="desc">Simple TRE archive viewer/explorer. Open multiple TRE archives in a combined view. Good first tool for inspecting what's in your client install.</div>
+      <div class="url">github.com/wverkley/Swg.Explorer</div>
+    </li>
+    <li>
+      <a href="http://wverkley.github.io/Swg.Explorer/" class="title">Swg.Explorer landing page</a>
+      <div class="desc">Project page with downloads.</div>
+      <div class="url">wverkley.github.io/Swg.Explorer</div>
+    </li>
+    <li>
+      <a href="https://modthegalaxy.com/index.php?resources/" class="title">SIE (SWG IFF Editor)</a>
+      <div class="desc">Hosted on ModTheGalaxy resources section. Edits IFF files inside TREs — object templates, animations, mesh metadata. Required for any serious modding work.</div>
+      <div class="url">modthegalaxy.com/index.php?resources</div>
+    </li>
+    <li>
+      <a href="https://swgcraft.org/" class="title">SWGCraft</a>
+      <div class="desc">Resource tracking site dating back to live SWG. Crafting calculators, schematic browsers. Useful reference for crafting math.</div>
+      <div class="url">swgcraft.org</div>
+    </li>
+  </ul>
+</section>
+
+<section id="books">
+  <h2>Books</h2>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://nostarch.com/practicalreverseengineering" class="title">Practical Reverse Engineering — Bruce Dang et al. <span class="tag book">book</span></a>
+      <div class="desc">x86/x64, kernel debugging, obfuscation. Practitioner-focused, lots of hands-on examples. The most current general RE book.</div>
+      <div class="url">nostarch.com/practicalreverseengineering</div>
+    </li>
+    <li>
+      <a href="https://www.wiley.com/en-us/Reversing%3A+Secrets+of+Reverse+Engineering-p-9780764574818" class="title">Reversing: Secrets of Reverse Engineering — Eldad Eilam <span class="tag book">book</span></a>
+      <div class="desc">Older (2005) but foundational. Covers techniques, tools, and the mindset of RE. Many practitioners learned from this book.</div>
+      <div class="url">wiley.com/en-us/Reversing</div>
+    </li>
+    <li>
+      <a href="https://nostarch.com/idapro2" class="title">The IDA Pro Book — Chris Eagle <span class="tag book">book</span></a>
+      <div class="desc">If you end up using IDA seriously, this is the reference. Even if you don't, the chapters on RE methodology are universally applicable.</div>
+      <div class="url">nostarch.com/idapro2</div>
+    </li>
+    <li>
+      <a href="https://nostarch.com/GhidraBook" class="title">The Ghidra Book — Chris Eagle &amp; Kara Nance <span class="tag book">book</span></a>
+      <div class="desc">Definitive Ghidra reference from one of the same authors as the IDA book. Essential if you're committing to Ghidra as your primary disassembler.</div>
+      <div class="url">nostarch.com/GhidraBook</div>
+    </li>
+    <li>
+      <a href="https://nostarch.com/gamehacking" class="title">Game Hacking — Nick Cano <span class="tag book">book</span></a>
+      <div class="desc">Specifically about hacking and modding games. Memory scanning, packet analysis, bot development, anti-cheat evasion. Directly relevant to SWGSE.</div>
+      <div class="url">nostarch.com/gamehacking</div>
+    </li>
+    <li>
+      <a href="https://nostarch.com/hacking2.htm" class="title">Hacking: The Art of Exploitation — Jon Erickson <span class="tag book">book</span></a>
+      <div class="desc">Lower-level than RE-focused books, but the chapters on assembly, memory, and program execution are essential prerequisites for serious RE work.</div>
+      <div class="url">nostarch.com/hacking2.htm</div>
+    </li>
+  </ul>
+</section>
+
+<section id="learning">
+  <h2>Learning resources &amp; tutorials</h2>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://beginners.re/" class="title">Reverse Engineering for Beginners — Dennis Yurichev <span class="tag free">free</span> <span class="tag essential">essential</span></a>
+      <div class="desc">Free 1500+ page book on RE. Comprehensive, well-maintained, used as a textbook in university courses. Probably the best free RE learning resource that exists.</div>
+      <div class="url">beginners.re</div>
+    </li>
+    <li>
+      <a href="https://opensecuritytraining.info/" class="title">OpenSecurityTraining <span class="tag free">free</span></a>
+      <div class="desc">Free university-level courses on RE, x86 assembly, malware analysis. Slides and recorded lectures.</div>
+      <div class="url">opensecuritytraining.info</div>
+    </li>
+    <li>
+      <a href="https://github.com/wtsxDev/reverse-engineering" class="title">Awesome Reverse Engineering</a>
+      <div class="desc">Curated list of RE resources. Tools, books, courses, CTFs. Good index for finding specific things.</div>
+      <div class="url">github.com/wtsxDev/reverse-engineering</div>
+    </li>
+    <li>
+      <a href="https://crackmes.one/" class="title">crackmes.one</a>
+      <div class="desc">Practice RE challenges. Build skills on simple targets before tackling SWG.</div>
+      <div class="url">crackmes.one</div>
+    </li>
+    <li>
+      <a href="https://www.malwareunicorn.org/workshops/re101.html" class="title">Malware Unicorn — RE 101/102 <span class="tag free">free</span></a>
+      <div class="desc">Free workshops on Windows RE. Practical, hands-on, well-structured. Same techniques apply to game client RE.</div>
+      <div class="url">malwareunicorn.org/workshops</div>
+    </li>
+    <li>
+      <a href="https://guidedhacking.com/" class="title">Guided Hacking</a>
+      <div class="desc">Game hacking community with tutorials specifically focused on game internals, hooking, and bot development. Some content is paywalled but a lot is free.</div>
+      <div class="url">guidedhacking.com</div>
+    </li>
+  </ul>
+</section>
+
+<section id="communities">
+  <h2>Communities</h2>
+
+  <ul class="resource-list">
+    <li>
+      <a href="https://reddit.com/r/ReverseEngineering" class="title">/r/ReverseEngineering</a>
+      <div class="desc">General RE discussion. Higher signal than most subreddits. Good for keeping up with new tools and techniques.</div>
+      <div class="url">reddit.com/r/ReverseEngineering</div>
+    </li>
+    <li>
+      <a href="https://reddit.com/r/swgemu" class="title">/r/swgemu</a>
+      <div class="desc">SWGEmu community subreddit. Server discussion, modding questions, news.</div>
+      <div class="url">reddit.com/r/swgemu</div>
+    </li>
+    <li>
+      <a href="https://reddit.com/r/SWGalaxies" class="title">/r/SWGalaxies</a>
+      <div class="desc">General Star Wars Galaxies subreddit. More nostalgic than technical, but cross-server community.</div>
+      <div class="url">reddit.com/r/SWGalaxies</div>
+    </li>
+    <li>
+      <a href="https://reddit.com/r/REGames" class="title">/r/REGames</a>
+      <div class="desc">Game-specific reverse engineering subreddit. Smaller but focused.</div>
+      <div class="url">reddit.com/r/REGames</div>
+    </li>
+    <li>
+      <a href="https://reddit.com/r/skyrimmods" class="title">/r/skyrimmods</a>
+      <div class="desc">Worth lurking for SKSE-related discussion patterns. The community SWGSE would model itself on.</div>
+      <div class="url">reddit.com/r/skyrimmods</div>
+    </li>
+  </ul>
+</section>
+
+<footer>
+  Personal reference document for SWG memorial server &amp; SWGSE clean-room mod framework projects.<br>
+  Star Wars, Star Wars Galaxies, and all related assets are © Lucasfilm Ltd. / Disney. Project unaffiliated and unauthorized.
+</footer>
+
+</div>
+
+</body>
+</html>

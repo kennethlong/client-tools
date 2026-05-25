@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Architecture — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Architecture</h1>
+  <div class="sub">How the SWG cluster is wired together at runtime.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html" class="active">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<h1>Cluster architecture</h1>
+
+<p>
+  SWG is not one server — it's a <em>galaxy</em> made up of cooperating Linux
+  processes. A single planet (Tatooine) has its own <code>PlanetServer</code> with
+  one or more <code>SwgGameServer</code> children running gameplay. A single
+  customer connection rides custom UDP to a <code>ConnectionServer</code>, which acts as
+  the front door. <code>CentralServer</code> coordinates the rest. <code>TaskManager</code>
+  is the per-host supervisor that respawns processes if they die.
+</p>
+
+<h2>High-level topology</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef client fill:#28344a,stroke:#57c1ff,color:#d6e1ee
+  classDef edge fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+  classDef game fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef data fill:#2a1d2b,stroke:#cc7be0,color:#d6e1ee
+  classDef ext  fill:#231720,stroke:#ff7676,color:#d6e1ee
+
+  Player["SwgClient.exe<br/>(DirectX 9, Win32)"]:::client
+
+  subgraph Auth["Auth tier"]
+    Login["LoginServer"]:::edge
+    StationAPI["Sony Station API<br/>(external, gone)"]:::ext
+  end
+
+  subgraph Galaxy["A single galaxy / cluster"]
+    direction TB
+    Central["CentralServer"]:::edge
+    Conn["ConnectionServer (N)"]:::edge
+    Chat["ChatServer"]:::edge
+    Comm["CommoditiesServer"]:::edge
+    CS["CustomerServiceServer"]:::edge
+    Trans["TransferServer"]:::edge
+    Metrics["MetricsServer / LogServer"]:::edge
+
+    subgraph PlanetCluster["Per-planet (one shard per planet/space zone)"]
+      Planet["PlanetServer"]:::game
+      Game1["SwgGameServer A"]:::game
+      Game2["SwgGameServer B"]:::game
+      Planet --> Game1
+      Planet --> Game2
+    end
+
+    DB["SwgDatabaseServer"]:::data
+  end
+
+  Oracle[(Oracle 9i/12c<br/>cluster + login schemas)]:::data
+  Vivox["Vivox voice service<br/>(external)"]:::ext
+
+  Player -- "TCP login" --> Login
+  Login -- "validate" --> StationAPI
+  Login -- "directs to galaxy" --> Central
+  Player -- "UDP (SOE custom)" --> Conn
+  Conn --> Central
+  Central --> Planet
+  Central --> Chat
+  Central --> Comm
+  Central --> CS
+  Central --> DB
+  Game1 --> DB
+  Game2 --> DB
+  Game1 --> Chat
+  DB <--> Oracle
+  Login <--> Oracle
+  Player -. RTP voice .-> Vivox
+</div>
+
+<h2>Process startup order</h2>
+
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant TM as TaskManager
+  participant L  as LoginServer
+  participant C  as CentralServer
+  participant CS as ConnectionServer
+  participant CH as ChatServer
+  participant DB as SwgDatabaseServer
+  participant P  as PlanetServer (per planet)
+  participant G  as SwgGameServer
+
+  TM->>L: spawn LoginServer
+  TM->>C: spawn CentralServer
+  C->>DB: spawn SwgDatabaseServer
+  C->>CH: spawn ChatServer
+  C->>CS: spawn ConnectionServer(s)
+  C->>P: spawn PlanetServer per planet
+  P->>G: spawn SwgGameServer(s) per zone
+  Note over G: loads dsrc/ scripts via embedded JVM
+  G-->>DB: persist character / world state
+</div>
+
+<h2>A login round-trip</h2>
+
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Cli as SwgClient
+  participant L   as LoginServer
+  participant ST  as Station API (external)
+  participant C   as CentralServer
+  participant CS  as ConnectionServer
+  participant G   as SwgGameServer
+
+  Cli->>L: TCP: username + stationKey
+  L->>ST: validateStationKey
+  ST-->>L: ok / fail
+  L-->>Cli: list of galaxies + character list
+  Cli->>L: pick galaxy + character
+  L-->>Cli: session token + ConnectionServer addr
+  Cli->>CS: UDP CONNECT (custom SOE UDP)
+  CS->>C: hand off session
+  C->>G: route to correct zone server
+  G-->>Cli: world state, object updates
+  Note over Cli,G: From here, all gameplay is UDP between client and SwgGameServer<br/>via ConnectionServer.
+</div>
+
+<h2>Where each capability lives</h2>
+
+<table>
+  <thead>
+    <tr><th>Capability</th><th>Process</th><th>Source path</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Account auth, character list</td><td>LoginServer</td><td><code>src/engine/server/application/LoginServer/</code></td></tr>
+    <tr><td>Cluster orchestration</td><td>CentralServer</td><td><code>src/engine/server/application/CentralServer/</code></td></tr>
+    <tr><td>Client UDP front door</td><td>ConnectionServer</td><td><code>src/engine/server/application/ConnectionServer/</code></td></tr>
+    <tr><td>Per-planet shard</td><td>PlanetServer</td><td><code>src/engine/server/application/PlanetServer/</code></td></tr>
+    <tr><td>Gameplay tick / AI / scripts</td><td>SwgGameServer</td><td><code>src/game/server/application/SwgGameServer/</code></td></tr>
+    <tr><td>Persistence write-back</td><td>SwgDatabaseServer</td><td><code>src/game/server/application/SwgDatabaseServer/</code></td></tr>
+    <tr><td>Cross-galaxy chat / mail</td><td>ChatServer</td><td><code>src/engine/server/application/ChatServer/</code></td></tr>
+    <tr><td>Auction / bazaar</td><td>CommoditiesServer</td><td><code>src/engine/server/application/CommoditiesServer/</code></td></tr>
+    <tr><td>GM / customer service</td><td>CustomerServiceServer</td><td><code>src/engine/server/application/CustomerServiceServer/</code></td></tr>
+    <tr><td>Telemetry</td><td>MetricsServer / LogServer</td><td><code>src/engine/server/application/MetricsServer/</code>, <code>.../LogServer/</code></td></tr>
+    <tr><td>Per-host process supervisor</td><td>TaskManager</td><td><code>src/engine/server/application/TaskManager/</code></td></tr>
+    <tr><td>Character transfer between galaxies</td><td>TransferServer</td><td><code>src/engine/server/application/TransferServer/</code></td></tr>
+    <tr><td>Voice chat (Vivox bridge)</td><td>SWGVoiceService.exe (Windows-side helper)</td><td>only as binary in <code>exe/win32/</code></td></tr>
+  </tbody>
+</table>
+
+<h2>The networking layer</h2>
+
+<p>
+  Client ↔ server uses a <strong>proprietary SOE UDP library</strong> at
+  <code>src/external/3rd/library/udplibrary</code> — a reliable, ordered
+  protocol on top of UDP with custom acks and fragmentation. This is wrapped
+  by <code>src/engine/shared/library/sharedNetwork</code> on both sides. Inter-server
+  traffic uses TCP through the same <code>sharedNetwork</code> abstraction.
+</p>
+
+<p>
+  Network <em>messages</em> are typed structures defined under
+  <code>src/engine/shared/library/sharedNetworkMessages</code> and
+  <code>src/game/shared/library/swgSharedNetworkMessages</code> (game-specific). Each
+  message is a class with serialise/deserialise methods. Look at <code>messageTypes.def</code>
+  files for the registry of message IDs.
+</p>
+
+<div class="callout warn">
+  <strong>Heads-up:</strong> the <em>UDP library</em> (<code>udplibrary</code>) appears in this
+  repo as headers and source — but the wire protocol is what makes a
+  community client/server pair compatible. If you swap clients (e.g. retail SWG
+  client vs. SWGEmu client), you have to match the UDP protocol bit-for-bit.
+</div>
+
+<h2>Message bus &amp; "object IDs"</h2>
+
+<p>
+  Internally, the world is modelled as a big set of <strong>game objects</strong> (creatures,
+  items, buildings, etc.) each with a <strong>64-bit network id</strong>. Servers move
+  these objects around the cluster by <em>controllers</em> in
+  <code>src/engine/shared/library/sharedObject</code>, with messages like
+  <code>CMSG_*</code> / <code>SMSG_*</code> defined in <code>sharedNetworkMessages</code>. The same id
+  identifies an object on the client.
+</p>
+
+<p>
+  When a player crosses a zone boundary, the object handoff goes:
+  <code>SwgGameServer (source) → PlanetServer → SwgGameServer (target)</code>, with
+  database write-back via <code>SwgDatabaseServer</code>. This is one of the trickiest
+  paths in the engine.
+</p>
+
+<p>Continue to <a href="servers.html">Servers</a> for per-process detail.</p>
+
+</main>
+<footer>whitengold docs · <a href="index.html">Back to overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Client Boot Sequence — whitengold</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="site">
+  <h1><span class="accent">whitengold</span> — Client boot sequence</h1>
+  <div class="sub">Phased reference from <code>WinMain()</code> to first rendered frame.</div>
+</header>
+<nav class="top">
+  <a href="index.html">Overview</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="servers.html">Servers</a>
+  <a href="client.html">Client</a>
+  <a href="scripting.html">Scripting</a>
+  <a href="data-pipeline.html">Data Pipeline</a>
+  <a href="dependencies.html">Dependencies</a>
+  <a href="build.html">Build System</a>
+  <a href="gaps.html">Gaps</a>
+  <a href="run-locally.html">Run Locally</a>
+  <a href="research.html">Research</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+
+<main>
+
+<p><a href="research.html">← back to Research</a> · markdown source: <code>docs/recon/05-client-boot-sequence.md</code></p>
+
+<div class="callout info">
+  <strong>Use this document during build work</strong>, not as a one-time read.
+  It's structured as 17 phases, each with: entry point, what it does, subsystems
+  initialised, external dependencies, failure modes, and stub potential. The
+  three milestone lines indicate where you can pause incremental builds —
+  most importantly, "login screen renders" is the natural <strong>minimum
+  viable boot</strong> target.
+</div>
+
+<h2>At-a-glance phase map</h2>
+
+<div class="mermaid">
+flowchart TB
+  classDef foundation fill:#1d2a23,stroke:#6dd58c,color:#d6e1ee
+  classDef ui fill:#28344a,stroke:#57c1ff,color:#d6e1ee
+  classDef net fill:#2b231a,stroke:#ffb338,color:#d6e1ee
+  classDef milestone fill:#231720,stroke:#ff7676,color:#d6e1ee
+
+  P1[Phase 1<br/>Process entry +<br/>memory cap]:::foundation
+  P2[Phase 2<br/>Thread + Debug]:::foundation
+  P3[Phase 3<br/>Foundation: config + window]:::foundation
+  P4[Phase 4<br/>Foundational subsystems]:::foundation
+  P5[Phase 5<br/>TreeFile + SKU bits]:::foundation
+  P6[Phase 6<br/>Override config from TRE]:::foundation
+  P7[Phase 7<br/>Audio / Graphics / libMozilla / Input]:::foundation
+  P8[Phase 8<br/>Game::install client managers]:::foundation
+  P9[Phase 9<br/>Splash + login backdrop]:::ui
+
+  M1[★ MVB-1: login screen renders]:::milestone
+
+  P10[Phase 10<br/>Login form submission]:::net
+  P11[Phase 11<br/>LoginConnection handshake<br/>SOE Station auth fork]:::net
+  P12[Phase 12<br/>Cluster + character lists]:::net
+
+  M2[★ MVB-3: cluster + char select]:::milestone
+
+  P13[Phase 13<br/>Cluster connect]:::net
+  P14[Phase 14<br/>Character selected]:::net
+  P15[Phase 15<br/>CmdStartScene]:::net
+  P16[Phase 16<br/>GroundScene load]:::ui
+  P17[Phase 17<br/>First rendered frame]:::ui
+
+  M3[★ MVB-4: walking in world]:::milestone
+
+  P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> M1
+  M1 --> P10 --> P11 --> P12 --> M2
+  M2 --> P13 --> P14 --> P15 --> P16 --> P17 --> M3
+</div>
+
+<h2>Source-of-truth files</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>SwgClient/src/win32/WinMain.cpp</code></td><td>OS entry, memory cap</td></tr>
+    <tr><td><code>SwgClient/src/win32/ClientMain.cpp</code></td><td>Subsystem install order</td></tr>
+    <tr><td><code>sharedFoundation/src/win32/SetupSharedFoundation.cpp</code></td><td>Window + config + registry</td></tr>
+    <tr><td><code>sharedFoundation/src/win32/Os.cpp</code></td><td><code>CreateWindowEx</code></td></tr>
+    <tr><td><code>sharedFoundation/src/win32/RegistryKey.cpp</code></td><td>Product registry path</td></tr>
+    <tr><td><code>clientGame/src/shared/core/Game.cpp</code></td><td><code>Game::install</code>, <code>Game::run</code>, scene state machine</td></tr>
+    <tr><td><code>clientGame/src/shared/network/GameNetwork.cpp</code></td><td>All network wiring</td></tr>
+    <tr><td><code>clientGame/src/shared/network/LoginConnection.cpp</code></td><td>Login handshake</td></tr>
+    <tr><td><code>clientUserInterface/src/shared/core/CuiLoginManager.cpp</code></td><td>Cluster/character selection</td></tr>
+    <tr><td><code>swgClientUserInterface/src/shared/page/SwgCuiLoginScreen.cpp</code></td><td>Login form</td></tr>
+    <tr><td><code>swgClientUserInterface/src/shared/page/SwgCuiAvatarSelection.cpp</code></td><td>Character select</td></tr>
+  </tbody>
+</table>
+
+<h2>Network handshake sequence</h2>
+
+<div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Cli as SwgClient
+  participant LS  as LoginServer (your private)
+  participant ST  as Station API (DEAD)
+  participant CS  as ConnectionServer
+  participant GS  as SwgGameServer
+
+  Note over Cli: Phase 10
+  Cli-&gt;&gt;LS: UDP open + LoginClientId(user, pass)
+  alt [Station] sessionId set
+    Note over Cli,LS: Station auth path<br/>(client sends session token only)
+    LS-&gt;&gt;ST: validateStationKey
+    ST--&gt;&gt;LS: dead — fails
+    LS--&gt;&gt;Cli: LoginIncorrectClientId (rejected)
+  else plain user/pass
+    Note over Cli,LS: Set validateStationKey=0 in loginServer.cfg
+    LS-&gt;&gt;LS: lookup in Oracle login schema
+    LS--&gt;&gt;Cli: LoginEnumCluster + EnumerateCharacterId
+  end
+
+  Note over Cli: Phase 12 — char select renders
+  Cli-&gt;&gt;CS: connectConnectionServer(host, port)<br/>(UDP)
+  CS--&gt;&gt;Cli: ConnectionServerConnectionChanged
+
+  Cli-&gt;&gt;CS: SelectCharacter(NetworkId)
+  CS-&gt;&gt;GS: route session
+  GS--&gt;&gt;Cli: CmdStartScene(sceneName, templateName, startPos, startYaw)
+  Note over Cli: Phase 15 — scene transition begins
+  Cli-&gt;&gt;Cli: Game::setScene → MultiPlayerSceneCreator → GroundScene
+  GS--&gt;&gt;Cli: BaselinesMessage / UpdateContainmentMessage
+  Note over Cli: Phase 17 — first frame rendered
+</div>
+
+<h2>Phases 1–9 — process to login screen</h2>
+
+<h3>Phase 1 — Process entry &amp; memory cap</h3>
+<ul>
+  <li><strong>Entry:</strong> <code>SwgClient/src/win32/WinMain.cpp:124</code></li>
+  <li><strong>Reads env var:</strong> <code>SWGCLIENT_MEMORY_SIZE_MB</code> (optional integer).</li>
+  <li><strong>Default:</strong> 75% of physical RAM, clamped to <code>[250, 750]</code> MB in dev or <code>[250, 2000]</code> MB in production.</li>
+  <li><strong>Failure modes:</strong> none significant.</li>
+  <li><strong>Stub potential:</strong> N/A.</li>
+</ul>
+
+<h3>Phase 2 — Thread + debug bootstrap</h3>
+<ul>
+  <li><strong>Entry:</strong> <code>ClientMain.cpp:137</code> — <code>SetupSharedThread::install()</code> + <code>SetupSharedDebug::install(4096)</code>.</li>
+  <li><strong>Initialises:</strong> <code>sharedThread</code>, <code>sharedDebug</code> (4096-entry ring buffer).</li>
+  <li><strong>Failure modes:</strong> <code>TlsAlloc</code> failure → FATAL.</li>
+  <li><strong>Stub potential:</strong> none required.</li>
+</ul>
+
+<h3>Phase 3 — Foundation: config, window, registry</h3>
+<ul>
+  <li><strong>Entry:</strong> <code>SetupSharedFoundation::install(data)</code> in <code>SetupSharedFoundation.cpp:180</code>, called from <code>ClientMain.cpp:152-167</code>.</li>
+  <li><strong>Sets up SEH handler</strong> (writes <code>*-&lt;ver&gt;-&lt;timestamp&gt;.{txt,mdmp,log}</code> minidumps if <code>data.writeMiniDumps</code>).</li>
+  <li><strong>Subsystems (in order):</strong>
+    <ol>
+      <li><code>CommandLine::install</code> + absorbs <code>lpCmdLine</code>.</li>
+      <li><code>ConfigFile::install</code> + <code>ConfigFile::loadFile("client.cfg")</code>.</li>
+      <li><code>FatalInstall</code> + (non-PROD) <code>DebugMonitor::install</code>.</li>
+      <li><code>ConfigSharedFoundation::install</code> (frame-rate limit, demo mode, verbose warnings).</li>
+      <li><code>MemoryBlockManager::install</code>, <code>ExitChain::install</code>, <code>Report::install</code>, <code>Clock::install</code>, <code>CrashReportInformation::install</code>.</li>
+      <li><strong><code>RegistryKey::install</code></strong> — opens / creates <code>HKCU\Software\Sony Online Entertainment\Default</code> and <code>HKLM\...\Default</code>. Cfg key <code>[ConfigSharedFoundation] ProductRegistryPath=...</code> overrides.</li>
+      <li><code>PersistentCrcString::install</code>, <code>CrcLowerString::install</code>, <code>WatchedByList::install</code>.</li>
+      <li><strong><code>Os::install(hInstance, windowName, normalIcon, smallIcon)</code></strong> — <code>RegisterClassEx</code> + <code>CreateWindow(WS_POPUP, 640×480)</code>. Resized later in <code>SetupClientGraphics</code>.</li>
+      <li><code>StaticCallbackEntry::install</code>, <code>setFatalVersionString</code>.</li>
+    </ol>
+  </li>
+  <li><strong>External deps:</strong>
+    <ul>
+      <li><strong>File:</strong> <code>client.cfg</code> in cwd. If empty / missing → <code>FATAL("Config file not specified")</code>.</li>
+      <li><strong>Registry:</strong> <code>HKCU\Software\Sony Online Entertainment\Default</code> (created if absent), <code>HKLM\...\Default</code> (read).</li>
+      <li><strong>WinAPI:</strong> <code>RegOpenKeyEx</code>, <code>RegCreateKeyEx</code>, <code>RegisterClassEx</code>, <code>CreateWindow</code>, <code>SetUnhandledExceptionFilter</code>.</li>
+    </ul>
+  </li>
+  <li><strong>Failure modes:</strong> missing/empty <code>client.cfg</code> → fatal dialog. Restrictive HKLM policies could fatal on key creation.</li>
+  <li><strong>Stub potential:</strong> override registry path via <code>ProductRegistryPath</code> in <code>client.cfg</code>. No SOE infrastructure touched.</li>
+</ul>
+
+<h3>Phase 4 — Foundational subsystem installs</h3>
+<p><code>ClientMain.cpp:208–292</code> — sequence of <code>SetupX::install(...)</code>:</p>
+<ol>
+  <li><code>SetupSharedCompression::install(numberOfThreadsAccessingZlib=3)</code></li>
+  <li><code>SetupSharedRegex::install</code> (PCRE malloc hook)</li>
+  <li><code>SetupSharedFile::install(true, skuBits)</code> — see Phase 5</li>
+  <li><code>installConfigFileOverride()</code> — see Phase 6</li>
+  <li><code>SetupSharedMath::install</code></li>
+  <li><code>SetupSharedUtility::install</code> (<code>m_allowFileCaching=true</code>)</li>
+  <li><code>SetupSharedRandom::install(time(NULL))</code> — non-deterministic seed</li>
+  <li><code>SetupSharedLog::install("SwgClient")</code></li>
+  <li><code>SetupSharedImage::install</code></li>
+  <li><code>SetupSharedNetwork::install</code> — opens UDP ports, no connect yet</li>
+  <li><code>SetupSharedNetworkMessages::install</code> + <code>SetupSwgSharedNetworkMessages::install</code></li>
+  <li><code>SetupSharedObject::install</code> (slot-id, customisation, movement table)</li>
+  <li><code>SetupSharedGame::install</code> (game scheduler, mount-valid scale ranges)</li>
+  <li><code>CommoditiesAdvancedSearchAttribute::install</code></li>
+  <li><code>SwgCuiAuctionFilter::buildAttributeFilterDisplayString</code></li>
+  <li><code>SetupSharedTerrain::install</code> (game data variant)</li>
+  <li><code>SetupSharedXml::install</code></li>
+  <li><code>SetupSharedPathfinding::install</code></li>
+</ol>
+
+<h3>Phase 5 — TreeFile + SKU detection</h3>
+<pre><code>uint32 skuBits = 0;
+if ((Game::getGameFeatureBits() &amp; ClientGameFeature::Base) != 0)              skuBits |= BINARY1(0001);
+if ((Game::getGameFeatureBits() &amp; ClientGameFeature::SpaceExpansionRetail) != 0) skuBits |= BINARY1(0010);
+if ((Game::getGameFeatureBits() &amp; ClientGameFeature::Episode3ExpansionRetail) != 0) skuBits |= BINARY1(0100);
+if ((Game::getGameFeatureBits() &amp; ClientGameFeature::TrialsOfObiwanRetail) != 0)   skuBits |= BINARY1(1000);
+SetupSharedFile::install(true, skuBits);</code></pre>
+<ul>
+  <li><strong>Cfg keys read:</strong> <code>[Station] gameFeatures</code>, <code>[Station] subscriptionFeatures</code>, <code>[ClientGame] gameBitsToClear</code>, <code>[ClientGame] setJtlRetailIfBetaIsSet</code>.</li>
+  <li><strong>Files:</strong> every <code>.tre</code> on the configured search path (<code>[SharedFile] searchPath0/1/2</code>, <code>[Tre]</code>).</li>
+  <li><strong>Failure modes:</strong> missing <code>.tre</code> files don't FATAL here — first asset miss is in Phase 6 (<code>misc/override.cfg</code>) or Phase 8 (<code>misc/asynchronous_loader_data_*.iff</code>).</li>
+  <li><strong>Stub potential:</strong> ship a tiny private <code>.tre</code> with the bare-minimum boot files. Set <code>[Station] gameFeatures=15</code> to enable all four SKUs.</li>
+</ul>
+
+<h3>Phase 6 — Override config from TRE</h3>
+<pre><code>AbstractFile * abstractFile = TreeFile::open("misc/override.cfg",
+    AbstractFile::PriorityData, true);
+if (abstractFile) {
+    byte * data = abstractFile-&gt;readEntireFileAndClose();
+    ConfigFile::loadFromBuffer(reinterpret_cast&lt;char const *&gt;(data),
+                               abstractFile-&gt;length());
+    delete[] data;
+    delete abstractFile;
+}</code></pre>
+<p>Optional file inside any mounted <code>.tre</code>; layered over <code>client.cfg</code>. No-op if missing.</p>
+
+<h3>Phase 7 — Audio / Graphics / libMozilla / Input</h3>
+<ol>
+  <li><code>SetupClientAudio::install</code> — boots Miles via <code>Mss32.dll</code>.</li>
+  <li><code>SetupClientGraphics::install({ screenWidth=1024, screenHeight=768, alphaBufferBitDepth=0 })</code> — resizes window, creates D3D9 device through the <code>gl0X_*.dll</code> plug-in.</li>
+  <li><strong><code>libMozilla::init(Os::getWindow(), "&lt;cwd&gt;\\mozilla")</code></strong> — loads XPCOM DLLs. <code>DEBUG_FATAL</code> on failure (DEBUG builds only).</li>
+  <li><code>VideoList::install(Audio::getMilesDigitalDriver())</code> — registers Bink (loaded via <code>LoadLibrary("binkw32.dll")</code>).</li>
+  <li><code>SetupClientDirectInput::install(hInstance, Os::getWindow(), DIK_LCONTROL, Graphics::isWindowed)</code>.</li>
+  <li><code>SetupClientObject</code>, <code>SetupClientAnimation</code>, <code>SetupClientSkeletalAnimation</code>, <code>SetupClientTextureRenderer</code>, <code>SetupClientTerrain</code>, <code>SetupClientParticle</code>.</li>
+</ol>
+<p><strong>Required DLLs in cwd:</strong> <code>Mss32.dll</code>, <code>binkw32.dll</code>, <code>gl0X_*.dll</code>, <code>dpvs.dll</code>/<code>dpvsd.dll</code>.</p>
+<p><strong>Required DLLs in <code>cwd\mozilla\</code>:</strong> <code>xul.dll, xpcom.dll, nspr4.dll, plc4.dll, plds4.dll, nss3.dll, nssckbi.dll, smime3.dll, softokn3.dll, ssl3.dll, js3250.dll, gksvggdiplus.dll</code> + <code>chrome\</code> tree.</p>
+<p><strong>Stub potential:</strong> libMozilla/Bink/Vivox can each be stubbed cleanly (see <a href="middleware.html">middleware inventory</a>).</p>
+
+<h3>Phase 8 — <code>Game::install</code></h3>
+<p><code>Game.cpp:777–833</code> — installs <code>MoodManagerClient</code>, <code>ObjectAttributeManager</code>, <code>DraftSchematicManager</code>, <code>AuctionManagerClient</code>, <code>PlanetMapManagerClient</code>, <code>ResourceIconManager</code>, <code>ClientRegionManager</code>, <code>QuestJournalManager</code>, <code>RoadmapManager</code>, <code>QuestManager</code>, <code>ClientCommandQueue</code>, <code>ClientCombatPlaybackManager</code> (reads <code>combat/combat_manager.iff</code>), <code>GameNetwork</code>, <code>CutScene</code>.</p>
+
+<h3>Phase 9 — Splash + login backdrop renders</h3>
+<pre><code>IGNORE_RETURN(CuiMediatorFactory::activate(CuiMediatorTypes::Splash));
+IGNORE_RETURN(CuiMediatorFactory::activate(CuiMediatorTypes::Backdrop));
+preloadAssets();</code></pre>
+<p>Activates Splash mediator, then Backdrop. <code>preloadAssets()</code> warms templates/textures/shaders. <strong>This is the MVB target.</strong></p>
+
+<div class="callout tip">
+  <strong>★ MVB-1 milestone reached:</strong> at the end of Phase 9 the user sees a login screen.
+</div>
+
+<h2>Phases 10–12 — login flow</h2>
+
+<h3>Phase 10 — User submits login form</h3>
+<pre><code>// SwgCuiLoginScreen.cpp:230+
+GameNetwork::setUserName(Unicode::wideToNarrow(name));
+GameNetwork::setUserPassword(Unicode::wideToNarrow(passwd));
+
+std::vector&lt;std::pair&lt;std::string, uint16&gt; &gt; loginServerList;
+int i = 0;
+do {
+    sprintf(buffer, "loginServerAddress%i", i);
+    address = ConfigFile::getKeyString("ClientGame", buffer, 0, 0);
+    if (address) {
+        sprintf(buffer, "loginServerPort%i", i);
+        const uint16 port = static_cast&lt;uint16&gt;(ConfigFile::getKeyInt("ClientGame", buffer, 0, 0));
+        if (port != 0)
+            loginServerList.push_back(std::make_pair(std::string(address), port));
+        ++i;
+    }
+} while (address);
+
+const int choice = Random::random(loginServerList.size() - 1);
+GameNetwork::connectLoginServer(loginServerList[choice].first,
+                                loginServerList[choice].second);</code></pre>
+<ul>
+  <li><strong>Cfg keys:</strong> <code>[ClientGame] loginServerAddress0..N</code>, <code>loginServerPort0..N</code>.</li>
+  <li><strong>Network:</strong> outbound UDP to chosen <code>(addr, port)</code>. Note: <code>setupData.useTcp = false</code> — login is UDP, not TCP.</li>
+  <li><strong>Stub action:</strong> set <code>loginServerAddress0=127.0.0.1</code> + <code>loginServerPort0=44453</code> in your private <code>client.cfg</code>.</li>
+</ul>
+
+<h3>Phase 11 — LoginConnection handshake (Station auth divergence)</h3>
+<p><code>LoginConnection.cpp:53</code>:</p>
+<pre><code>void LoginConnection::onConnectionOpened() {
+    GameNetworkConnection::onConnectionOpened();
+    CuiLoginManager::setOverrideSessionIdKey(std::string());
+
+    bool sendUserName = true;
+    if (CuiLoginManager::getSessionIdKey() &amp;&amp; !ConfigClientGame::getEnableAdminLogin())
+        sendUserName = false;
+
+    LoginClientId id(sendUserName ? GameNetwork::getUserName() : "",
+                     GameNetwork::getUserPassword());
+    send(id, true);
+
+#if PRODUCTION != 1
+    GenericValueTypeMessage&lt; int &gt; msg("RequestExtendedClusterInfo", 0);
+    send(msg, true);
+#endif
+
+    static MessageConnectionCallback m("LoginConnectionOpened");
+    emitMessage(m);
+}</code></pre>
+<p><code>CuiLoginManager::getSessionIdKey()</code> reads <code>[Station] sessionId</code> from <code>client.cfg</code>:</p>
+<pre><code>// CuiLoginManager.cpp:1187
+const char * CuiLoginManager::getSessionIdKey(bool useOverride) {
+    static const char * const SessionIdSection = "Station";
+    static const char * const SessionIdKey     = "sessionId";
+    const char * sessionIdKey = ConfigFile::getKeyString(SessionIdSection,
+                                                        SessionIdKey, NULL);
+    if (!sessionIdKey &amp;&amp; useOverride &amp;&amp; !s_overrideSessionIdKey.empty())
+        sessionIdKey = s_overrideSessionIdKey.c_str();
+    return sessionIdKey;
+}</code></pre>
+
+<div class="callout warn">
+  <strong>SOE-specific assumption:</strong> if <code>[Station] sessionId</code> is set, the
+  client expects the LoginServer to validate the session against
+  <code>sdt-session*.station.sony.com</code> (dead). For private servers, leave
+  <code>[Station] sessionId</code> unset and rely on plain user/pass. The
+  LoginServer must be configured with <code>validateStationKey=0</code>.
+</div>
+
+<h3>Phase 12 — Cluster + character lists</h3>
+<p>Server replies with <code>LoginEnumCluster</code>, <code>EnumerateCharacterId</code>, <code>LoginClusterStatus</code>. Populates <code>CuiLoginManager</code> and emits <code>Messages::AvatarListChanged</code>, <code>Messages::ClusterListChanged</code>.</p>
+
+<div class="callout tip">
+  <strong>★ MVB-3 milestone reached:</strong> at the end of Phase 12 the user sees the character/cluster select screen.
+</div>
+
+<h2>Phases 13–17 — entering the world</h2>
+
+<h3>Phase 13 — Cluster connect</h3>
+<p><code>CuiLoginManager.cpp:1029</code>:</p>
+<pre><code>void CuiLoginManager::connectToCluster(const ClusterInfo &amp; cinfo) {
+    GameNetwork::connectConnectionServer(cinfo.getHost(), cinfo.getPort(), cinfo.name);
+    s_connectedCluster     = cinfo.id;
+    s_lastConnectedCluster = cinfo.id;
+}</code></pre>
+<p>Opens a second SOE-UDP connection to the chosen cluster's ConnectionServer. Pings drive cluster-status UI via a separate UDP socket (<code>[ClientUserInterface] connectionServerPingPeriodMs</code>).</p>
+
+<h3>Phase 14 — Character selected</h3>
+<p>From <code>SwgCuiAvatarSelection</code>'s "Play" button: sends <code>SelectCharacter(NetworkId)</code> to the ConnectionServer.</p>
+
+<h3>Phase 15 — <code>CmdStartScene</code></h3>
+<p><code>GameNetwork.cpp:165</code> handles the message:</p>
+<pre><code>else if (message.isType("CmdStartScene")) {
+    Archive::ReadIterator ri = NON_NULL(safe_cast&lt;const GameNetworkMessage *&gt;(&amp;message))-&gt;getByteStream().begin();
+    const CmdStartScene s(ri);
+    setServerEpochTimeDifference(static_cast&lt;time_t&gt;(s.getServerEpoch()));
+    s_instance-&gt;receiveCmdStartScene(s);
+}</code></pre>
+<p>→ <code>GameNetwork::receiveCmdStartScene</code> → <code>Game::setScene(false, sceneName, objectId, templateName, startPos, startYaw, time, disableSnapshot)</code> → constructs <code>MultiPlayerSceneCreator</code> (<code>Game.cpp:241</code>) → may play a cut-scene Bink keyed off the terrain filename → <code>_startScene()</code> → <code>sc->create()</code> builds a <code>GroundScene</code>.</p>
+
+<h3>Phase 16 — GroundScene load</h3>
+<p><code>GroundScene::GroundScene(...)</code>: loads <code>&lt;sceneName&gt;.trn</code>, registers cells/portals with DPVS via <code>RenderWorld</code>, kicks off async loads for meshes, instantiates the player creature, hooks up cameras and HUD. Receives subsequent <code>UpdateContainmentMessage</code>, <code>BaselinesMessage</code>, etc.</p>
+
+<h3>Phase 17 — First rendered frame</h3>
+<p><code>Game::runGameLoopOnce(...)</code> in <code>Game.cpp:1065</code>:</p>
+<pre><code>Os::update();                    // pump Win32 messages
+VideoPlaybackManager::service();
+GameScheduler::alter(elapsedTime);
+DirectInput::update();
+GameNetwork::update();           // network tick
+IoWinManager::processEvents();
+CuiManager::update();
+Audio::alter(elapsedTime, sound);
+TextureRendererManager::alter();
+
+Graphics::beginScene();
+Appearance::beginNewFrame();
+IoWinManager::draw();            // scene draw
+Graphics::endScene();
+VideoPlaybackManager::performBlitting();
+Graphics::present();</code></pre>
+
+<div class="callout tip">
+  <strong>★ MVB-4 milestone reached:</strong> at the end of Phase 17 the player is walking around in the world.
+</div>
+
+<hr />
+
+<h2>SOE-specific assumptions — what to redirect / stub</h2>
+
+<table>
+  <thead><tr><th>Phase</th><th>Assumption</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>3</td><td><code>HKCU\Software\Sony Online Entertainment\Default</code> registry</td><td>Override via <code>[ConfigSharedFoundation] ProductRegistryPath=Software\YourProject\YourBranch</code> in <code>client.cfg</code>.</td></tr>
+    <tr><td>5</td><td><code>[Station] gameFeatures</code> controls SKU bits</td><td>Set to <code>15</code> (all bits).</td></tr>
+    <tr><td>7</td><td><code>cwd\mozilla\</code> XPCOM runtime</td><td>Ship the DLLs intact (already in <code>exe/win32/mozilla/</code>) or stub <code>libMozilla::init</code>.</td></tr>
+    <tr><td>7</td><td><code>binkw32.dll</code> via <code>LoadLibrary</code></td><td>Ship it (already in <code>exe/win32/</code>) or stub the bind.</td></tr>
+    <tr><td>10</td><td><code>[ClientGame] loginServerAddress0..N</code></td><td>Set to your private LoginServer IP.</td></tr>
+    <tr><td>11</td><td><strong><code>[Station] sessionId</code> triggers Station SSO</strong></td><td><strong>Leave unset.</strong> Use plain user/pass.</td></tr>
+    <tr><td>11</td><td>LoginServer expected to validate Station sessions</td><td>Server-side: <code>loginServer.cfg</code> <code>validateStationKey=0</code>.</td></tr>
+    <tr><td>12</td><td>Cluster list comes from LoginServer's Oracle DB</td><td>Server-side; populate cluster table.</td></tr>
+    <tr><td>13</td><td>ConnectionServer ping addresses come from cluster list</td><td>Server-side.</td></tr>
+    <tr><td>7 (Vivox)</td><td>External Vivox server expected</td><td>Disable in config.</td></tr>
+    <tr><td>3 (Crash)</td><td>Some configs ship minidumps via SMTP/HTTP</td><td>Inspect <code>commonLiveOptions.cfg</code>; unset crash-report endpoints.</td></tr>
+  </tbody>
+</table>
+
+<h2>Minimum viable boot — first build milestone</h2>
+
+<table>
+  <thead><tr><th>Milestone</th><th>Reaches</th><th>Required phases</th><th>Required components</th><th>Stubbable</th></tr></thead>
+  <tbody>
+    <tr><td><strong>MVB-0</strong> Window appears, exits cleanly</td><td>End of Phase 3</td><td>1, 2, 3</td><td><code>sharedThread</code>, <code>sharedDebug</code>, <code>sharedFoundation</code>, <code>sharedMath</code>, STLPort, registry write to HKCU</td><td>Everything else; provide a stub <code>Game::run</code></td></tr>
+    <tr><td><strong>MVB-1</strong> Splash + login backdrop renders</td><td>End of Phase 9</td><td>1–9</td><td>+ <code>sharedCompression</code>, <code>sharedRegex</code>, <code>sharedNetwork</code> foundation, <code>sharedObject</code>, <code>sharedGame</code>, <code>sharedTerrain</code>, <code>sharedXml</code>, <code>sharedPathfinding</code>, <code>clientAudio</code>, <code>clientGraphics</code> (real DX9 + DPVS), <code>clientObject</code>, <code>clientAnimation</code>, <code>clientSkeletalAnimation</code>, <code>clientTerrain</code>, <code>clientParticle</code>, <code>clientUserInterface</code>, <code>swgClientUserInterface</code>, libMozilla wrapper</td><td>Vivox (disable), Bink (no cinematics), TrackIR (vestigial), G15 LCD</td></tr>
+    <tr><td><strong>MVB-2</strong> Login form submits to a real server</td><td>End of Phase 12</td><td>1–12</td><td>+ <code>clientGame</code> networking + SOE UDP library + a working private LoginServer</td><td>Station auth (use plain user/pass), CommodityAPI, Vivox</td></tr>
+    <tr><td><strong>MVB-3</strong> Cluster + character select</td><td>End of Phase 12 + UI</td><td>1–12 + char-select page</td><td>+ <code>SwgCuiAvatarSelection</code>. Avatar 3D preview can fall back to generic mesh.</td><td>—</td></tr>
+    <tr><td><strong>MVB-4</strong> Walking around in the world</td><td>End of Phase 17</td><td>1–17</td><td>+ <code>clientGame</code> scene + <code>GroundScene</code> + retail-class TRE assets + <code>SwgGameServer</code> + <code>ConnectionServer</code></td><td>Voice, in-game web browser</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>The realistic first sprint targets MVB-1.</strong>
+  <ul>
+    <li>Compile ~12 client libraries + ~22 shared libraries (<a href="research/swgclient-build.md">swgclient-build.md</a>).</li>
+    <li>Stub the four most painful dependencies: libMozilla, Vivox, Bink, Logitech LCD.</li>
+    <li>Private <code>client.cfg</code> with no <code>[Station] sessionId</code> and a local <code>loginServerAddress0</code>.</li>
+    <li>TRE archive with bare-minimum boot content: <code>ui/</code>, <code>texture/ui/</code>, <code>string/en/login.stf</code>, <code>font/</code>, <code>misc/asynchronous_loader_data_&lt;n&gt;.iff</code>.</li>
+  </ul>
+  <strong>If MVB-1 takes more than four weeks, re-evaluate the project shape.</strong> A community fork (SWG-Source) may be a better starting point than a from-scratch build of this tree.
+</div>
+
+<h2>PRODUCTION vs non-PRODUCTION boot differences</h2>
+
+<table>
+  <thead><tr><th>Concern</th><th><code>PRODUCTION == 0</code> (dev)</th><th><code>PRODUCTION == 1</code> (retail)</th></tr></thead>
+  <tbody>
+    <tr><td>Window title</td><td><code>SwgClient (&lt;branch&gt;.&lt;version&gt;)</code></td><td><code>Star Wars Galaxies</code></td></tr>
+    <tr><td>Memory cap</td><td>clamped to 750 MB</td><td>clamped to 2000 MB</td></tr>
+    <tr><td><code>data.demoMode</code></td><td>false</td><td>true (changes warning summary)</td></tr>
+    <tr><td><code>DebugMonitor::install</code></td><td>yes</td><td>no</td></tr>
+    <tr><td><code>Profiler::registerDebugFlags</code></td><td>yes</td><td>no</td></tr>
+    <tr><td><code>VTune::beginFrame</code> per frame</td><td>yes</td><td>no</td></tr>
+    <tr><td><code>RequestExtendedClusterInfo</code> ping</td><td>yes</td><td>no</td></tr>
+    <tr><td>Editor entry paths (Particle, Animation, NPC, TestIoWin)</td><td>available</td><td>compiled out</td></tr>
+    <tr><td>Menu viewer / single-player ground scene</td><td>available</td><td>compiled out</td></tr>
+    <tr><td>DataLint mode</td><td>available</td><td>compiled out</td></tr>
+    <tr><td><code>SwgVideoCapture</code> / <code>SwgAudioCapture</code></td><td>available</td><td>compiled out</td></tr>
+    <tr><td><code>Graphics::pixSetMarker</code> calls</td><td>yes</td><td>no</td></tr>
+    <tr><td>PIX counters</td><td>enabled</td><td>disabled</td></tr>
+    <tr><td><code>setJtlRetailIfBetaIsSet</code> shim</td><td>active</td><td>active (unconditional)</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Implication:</strong> keep <code>PRODUCTION == 0</code> while developing — you get
+the editor entry paths, debug menu, DataLint, video capture, and the
+<code>RequestExtendedClusterInfo</code> ping. The dev build is not less secure than retail
+in any meaningful way; there's no anti-cheat in either path.</p>
+
+<h2>Closing notes for the build engineer</h2>
+
+<ul>
+  <li>The boot is <strong>deeply linear and well-instrumented</strong>. Almost every install function calls <code>InstallTimer const installTimer("...")</code>, so with <code>[SharedDebug] installTimer=true</code> in <code>client.cfg</code> you get a profile of every phase by name. Use this religiously during MVB work to find which phase is hanging.</li>
+  <li><code>client.cfg</code> is the most important file in the project. Treat it as a build artefact: keep it under version control, parametrise hostnames, never check the SOE-shipped one in.</li>
+  <li>The login phase is the only place the client makes assumptions about <em>who</em> the server is. Once a <code>LoginConnection</code> is open, every message is opaque-payload-with-name; matching wire-protocol versions is what makes a private server compatible.</li>
+  <li>"Login screen renders but submit hangs" is almost always: (a) wrong <code>loginServerAddress</code> cfg, (b) firewalled UDP, (c) version mismatch on <code>LoginClientId</code> — in that order.</li>
+</ul>
+
+</main>
+<footer>whitengold docs · <a href="research.html">All research</a> · <a href="index.html">Overview</a></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>
