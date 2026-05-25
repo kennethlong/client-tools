@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-25T18:37:41.756Z"
-last_activity: 2026-05-25 -- Phase 13 execution started
+last_updated: "2026-05-25T20:45:59.267Z"
+last_activity: 2026-05-25
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -40,9 +40,9 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 ## Current Position
 
 Phase: 13 (videocapture-library-unlink) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 13
-Last activity: 2026-05-25 -- Phase 13 execution started
+Plan: 13-01 ✓ + 13-02 ✓ complete (Wave 1); 13-03 next (Wave 2 — vendored-tree delete + Debug/Release link gate + dual-renderer boot)
+Status: Wave 1 done; ready for 13-03
+Last activity: 2026-05-25 -- Plan 13-02 complete (INERT capture residue purged: dead source + include paths + 42 .rsp + 10 editor/aux .vcxproj)
 
 **v2.1 Decruft phase plan:**
 
@@ -94,6 +94,8 @@ Decisions carried forward from v1:
 **Phase 11:**
 
 - [Phase 11 — 2026-05-24 CLOSED (PASS-WITH-DEFERRALS)]: D3D11 renderer plugin operational. 17-plan / ~45-iteration cascade. gl11_d.dll (1,889,280 bytes) satisfies the Gl_api table; D3D11 + D3D9 both buildable+selectable via rasterMajor. Visible-textured-Tatooine + visual parity achieved at Plan 11-09.15 Iter-39C (Iter-38B matrix-transpose [col-vec engine vs row-vec bytecode → XMMatrixTranspose] + Iter-39C per-pass blend wiring). SPEC R6 verdict PASS-WITH-DEFERRALS (docs/recon/11-d3d11-screenshots/comparison-notes.md); SPEC R7 DPVS remeasure (Plan 11-10) DEFERRED to post-Phase-11 (needs clean draw surface). CORRECTION: the "mini-map circular (Iter-44B win)" claim was FALSE — D3D11 radar never round (Phase 12-family PS-gen work, now v2.2); see memory project-phase11-minimap-never-round. **8 visual-parity entry points catalogued in 11-SUMMARY.md** — chief blocker is the asset PS pipeline (engine PEXE bytecode rejected by CreatePixelShader → dynamic PS samples slot 0 only → eyes/head/mini-map/particles wrong); then Pass::apply constant uploads, stencil state mapping, gamma LUT pass. (Full per-plan Phase 11 detail archived in milestones/v2.0-ROADMAP.md + 11-SUMMARY.md; trimmed from this STATE revision for context budget.)
+- [Phase 13]: [2026-05-25] Plan 13-02 (DECRUFT-04 crit #1): purged all INERT VideoCapture/AudioCapture residue (#if 0 dead source x5, clientGame/clientAudio include paths + 3 includePaths.rsp, 42 .rsp, 10 editor/aux .vcxproj). D-02a held: live Miles AIL_start_sample untouched. Vendored tree + cross-cutting grep are Plan 03.
+- [Phase 13]: [2026-05-25] MSYS sed gotcha (Phases 13-15): Windows .vcxproj path purges must match segments by substring+delimiter ([^;<>]*TOKEN[^;<>]*;), NOT by escaping literal backslashes — a path like ...3rd... mis-parses the backslash+digit as a back-reference.
 
 ### Pending Todos
 
@@ -121,7 +123,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-25T15:07:37.540Z
+Last session: 2026-05-25T20:42:21.518Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**

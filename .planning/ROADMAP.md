@@ -91,7 +91,7 @@ Plans:
 Plans:
 **Wave 1** *(parallel — zero file overlap)*
 - [x] 13-01-PLAN.md — Atomic link-unit removal: CuiIoWin live caller + SwgVideoCapture wrapper + SwgClient.vcxproj lib tokens/paths (3 configs); Debug+Release link-grep gate (DECRUFT-04 crit #2)
-- [ ] 13-02-PLAN.md — Dead `#if 0` source residue + clientGame/clientAudio include-path purge + all `.rsp` + 10 editor `.vcxproj` reference purge (DECRUFT-04 crit #1)
+- [x] 13-02-PLAN.md — Dead `#if 0` source residue + clientGame/clientAudio include-path purge + all `.rsp` + 10 editor `.vcxproj` reference purge (DECRUFT-04 crit #1)
 
 **Wave 2** *(blocked on Wave 1 — vendored-tree delete sequenced last)*
 - [ ] 13-03-PLAN.md — Delete vendored `videocapture/` tree (D-03) + full-repo zero-ref grep + Debug+Release link gate + dual-renderer boot gate (DECRUFT-04 crit #1/#2/#3)
@@ -141,6 +141,6 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 10. DPVS Experiment | v2.0 | — | Complete (Option α) | 2026-05 |
 | 11. D3D11 Renderer | v2.0 | — | Complete (PASS-WITH-DEFERRALS) | 2026-05-24 |
 | 12. Orphaned Deletes | v2.1 | 3/3 | Complete    | 2026-05-25 |
-| 13. VideoCapture Unlink | v2.1 | 1/3 | In Progress|  |
+| 13. VideoCapture Unlink | v2.1 | 2/3 | In Progress|  |
 | 14. Vivox Removal | v2.1 | 0/TBD | Not started | - |
 | 15. XPCOM Removal + Gate | v2.1 | 0/TBD | Not started | - |
