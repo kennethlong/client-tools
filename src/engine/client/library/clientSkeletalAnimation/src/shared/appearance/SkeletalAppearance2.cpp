@@ -1310,6 +1310,17 @@ bool SkeletalAppearance2::collide(const Vector& start_o, const Vector& end_o, Co
 		//-- Only test against character if display LOD is available (async loaded).  Ensure it's built.
 		if ((m_maxAvailableDetailLevelIndex >= 0) && const_cast<SkeletalAppearance2*>(this)->rebuildIfDirtyAndAvailable())
 		{
+			//-- Touch the display LOD's most-recently-used frame so that the periodic
+			//   unloadUnusedResources() eviction pass (driven from alter() on this same
+			//   main thread) cannot select the LOD we are about to traverse as a stale
+			//   eviction candidate.  This closes the cross-frame free/collide ordering
+			//   window that frees a display-LOD shader primitive (and its
+			//   SystemVertexBuffer) out from under collide() -- the root cause of debug
+			//   session c0000005-async-mgn-crash, exposed only on the D3D11
+			//   single-stream branch.
+			if ((m_displayLodIndex >= 0) && (m_displayLodIndex < static_cast<int>(m_perLodMruFrameVector.size())))
+				m_perLodMruFrameVector[static_cast<IntVector::size_type>(m_displayLodIndex)] = Os::getNumberOfUpdates();
+
 			const ShaderPrimitiveVector &shaderPrimitives = getDisplayLodShaderPrimitives();
 			const ShaderPrimitiveVector::const_iterator itEnd = shaderPrimitives.end();
 			for (ShaderPrimitiveVector::const_iterator it = shaderPrimitives.begin(); it != itEnd; ++it)

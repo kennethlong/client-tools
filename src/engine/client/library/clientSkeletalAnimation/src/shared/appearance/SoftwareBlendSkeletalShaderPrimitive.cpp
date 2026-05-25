@@ -792,6 +792,21 @@ bool SoftwareBlendSkeletalShaderPrimitive::collide(const Vector &start_o, const 
 		if (!m_systemStream)
 			return false;
 
+		//-- Defensive guard against a freed/reused system stream (debug session
+		//   c0000005-async-mgn-crash).  Under the D3D11 single-stream branch
+		//   (ms_useMultiStreamVertexBuffers == false), an intervening
+		//   SkeletalAppearance2::unloadUnusedResources / rebuildMesh on the same
+		//   main thread can free this primitive's SystemVertexBuffer between an
+		//   alter() pass and this HUD targeting collide().  When that happens the
+		//   VertexBufferReadIterator copied from begin() holds garbage backing
+		//   pointers and getPosition() dereferences an unmapped address.  The
+		//   primitive's own m_vertexCount is fixed at build time and never mutated,
+		//   so a live, matching stream must report the same vertex count; a
+		//   mismatch means the stream is no longer the one we built.  Bail the
+		//   collide cleanly (report no-hit) rather than dereferencing freed memory.
+		if (m_systemStream->getNumberOfVertices() != m_vertexCount)
+			return false;
+
 		NOT_NULL(m_indexBuffer);
 		m_indexBuffer->lock();
 
@@ -809,9 +824,21 @@ bool SoftwareBlendSkeletalShaderPrimitive::collide(const Vector &start_o, const 
 			int i;
 			for (i = 0; i < numberOfFaces; i++)
 			{
-				const Vector &v0 = (readIt + *indices++).getPosition();
-				const Vector &v1 = (readIt + *indices++).getPosition();
-				const Vector &v2 = (readIt + *indices++).getPosition();
+				//-- Bound every index against the trusted vertex count so a stale or
+				//   corrupt index buffer can never advance the iterator past the
+				//   system stream's allocation (defense-in-depth for the
+				//   c0000005-async-mgn-crash use-after-free window).
+				const int i0 = *indices++;
+				const int i1 = *indices++;
+				const int i2 = *indices++;
+				if ((i0 < 0) || (i0 >= m_vertexCount) ||
+					(i1 < 0) || (i1 >= m_vertexCount) ||
+					(i2 < 0) || (i2 >= m_vertexCount))
+					continue;
+
+				const Vector &v0 = (readIt + i0).getPosition();
+				const Vector &v1 = (readIt + i1).getPosition();
+				const Vector &v2 = (readIt + i2).getPosition();
 
 				//-- compute normal
 				normal = (v0 - v2).cross(v1 - v0);
