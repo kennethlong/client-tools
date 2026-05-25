@@ -1,0 +1,2 @@
+boost-smoke-test.cpp
+exitCode=0 

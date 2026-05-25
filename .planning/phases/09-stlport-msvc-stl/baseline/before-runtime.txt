@@ -1,0 +1,73 @@
+# Phase 9 Wave 0 — pre-migration runtime baseline.
+# Captured against STLPort 4.5.3 build of SwgClient_d.exe.
+# VM: SWGSource StellaBellum (per project_vm_server_setup.md)
+
+build_config:        Debug
+build_target:        SwgClient_d.exe
+build_timestamp:     2026-05-07 23:33  (mtime of build/bin/Debug/SwgClient_d.exe)
+git_commit:          3bbbc4e34b8664cb14380408dfecc8c91d12cfb4
+capture_date:        2026-05-08
+session_window:      15:18:51 -> 15:20:17 (~86 s of Clock samples, 98 s wall)
+total_clock_samples: 3476
+
+# --- frame rate ---
+# Captured via [SharedFoundation] reportClock=true + logClock=true; routed to
+# fps-baseline.log via [SharedLog] logTarget=file:fps-baseline.log{reportLog}.
+# Pre/post split is the Tatooine GroundScene start at 20260508151906.
+
+character_select_fps: 59.45 fps  (median of 775 pre-Tatooine samples; mean 58.47, p10 57.51, p90 59.94, min 1.00, max 59.96)
+busy_zone_name:       Tatooine ground (GroundScene loaded 15:19:05; WorldSnapshot 1173 templates / 11239 root / 18478 total objects)
+busy_zone_fps:        58.06 fps  (median of 2701 in-zone samples; mean 54.22, p10 43.49, p90 59.95, min 1.00, max 59.98)
+
+# --- counts ---
+# DEBUG_WARNING entries on the "warning" log channel during the 98 s session.
+# Top categories: 776 "5b5f6d91: Unable to create a valid sample id" (audio),
+# 296 "32121d83: AppearanceTemplateList::fetch", 43 commodities, 40 ShipHitEffectsManagerClient,
+# 30 ShipComponentPowerEffects, 29 ClientEffectTemplate, 24 ShipHitEffectsManagerClient.
+exit_warning_count:   1378
+                      # Confirmed by the runtime warnings popup ("1378 warnings logged") on
+                      # the demoMode=false re-capture run. First run logged 1380 to file —
+                      # tiny variance is expected per-session (audio sample-id init order).
+
+exit_leak_count:      0
+                      # Captured by re-running with demoMode=false in client.cfg
+                      # [SharedFoundation] (overrides SwgClient/ClientMain.cpp:162's
+                      # data.demoMode=true default). With demoMode disabled, the
+                      # MemoryManager::~MemoryManager gate at MemoryManager.cpp:681 runs:
+                      #   if (!getDemoMode() && ms_allocations && ms_reportAllocations) {
+                      #     int leaks = MemoryManagerNamespace::report(true);
+                      #     if (leaks) REPORT(RF_log|RF_dialog, "%d memory leaks", leaks);
+                      #   }
+                      # The warnings popup fired ("1378 warnings logged" — confirming
+                      # demoMode=false was honoured) but the leak popup did NOT.
+                      # This means MemoryManagerNamespace::report(true) returned 0:
+                      # either ms_allocations==0 or every remaining allocation was
+                      # marked notALeak via AllocatedBlock::setCheckForLeaks(false).
+                      # Effectively zero "real" leaks under the codebase's own definition.
+                      # STATE.md's earlier ~8152 figure must have been from a different
+                      # build state or notALeak markup era; not reproducible against
+                      # the post-Phase-7 codebase at commit 3bbbc4e34.
+
+# --- notes ---
+notes:
+  - 60 fps soft cap kicks in for both phases — engine clearly running well above the
+    plotter's hard-coded 30 fps graph ceiling, which clipped the visual overlay so
+    the user perceived "stayed pretty much on 30 fps". Actual data shows median 58-59 fps.
+  - busy_zone p10 = 43.49 fps — occasional drops during in-zone rendering (terrain
+    streaming, lighting, NPCs). Long tail to 1 fps reflects per-frame outliers during
+    initial scene loading — not steady-state.
+  - Mos Eisley plaza was not reached; user spawned/teleported into Tatooine ground
+    and stayed there. Counts as "busy outdoor zone" for D-04 baseline purposes.
+  - Leak baseline = 0 under the codebase's own notALeak definition. The MM::remove
+    debug line (DEBUG_REPORT_LOG_PRINT in MemoryManager.cpp:677) DOES fire at exit
+    and would carry the raw `<current>/<max>=bytes <current>/<max>=allocs` counts,
+    but it routes through Report's logCallback which is torn down before MemoryManager's
+    static destructor runs — so it lands only on OutputDebugString. Capture via
+    Sysinternals DebugView or VS Output panel if the raw bytes-allocated number
+    is wanted as a secondary witness for Wave 3.
+  - cfg edits applied (build/bin/Debug/client.cfg only — staged copy, not template):
+      [SharedFoundation]   reportClock=true, logClock=true, demoMode=false
+      [ClientGame/Plotter] 1_fps=true
+      [SharedLog]          logReportLogs=true, logTarget=file:fps-baseline.log{reportLog}
+    Revert these or regenerate from template before normal play. demoMode=false in
+    particular flips on warning + leak popups at exit; leave it off for normal use.

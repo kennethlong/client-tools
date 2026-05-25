@@ -1,0 +1,67 @@
+# Wave 1 audit -- ours/library public-API STL surface
+# Captured: 2026-05-08
+#
+# Risk model: these libs are statically linked into client + tools. If any
+# PUBLIC header exposes std::string / std::vector / std::map / std::set /
+# std::list / std::deque in a function signature or class/struct member,
+# the container layout becomes part of the link-time ABI even though the
+# final link is static -- STLPort layout differs from MSVC for all of these
+# (std::string COW vs SSO; std::vector pointer-triple-vs-other; node alloc
+# patterns). Phase 9 changes the layout; if a public header commits to a
+# layout, every consumer must be rebuilt against the new layout -- which is
+# exactly what Phase 9 does, but only if the surface is documented + audited.
+#
+# Categories per finding:
+#   [OK-tpl]  -- header-only template (template defs are not load-bearing for ABI)
+#   [OK-int]  -- internal use (use in .cpp not exposed via header)
+#   [OK-ptr]  -- std::string& / std::vector* / std::map<K,V>* -- pointer/reference (no layout crossing)
+#   [RISK]    -- exposed in a public header signature; needs Wave 2-3 attention or doc
+
+## archive  (D:\Code\swg-client\src\external\ours\library\archive\include  -- 16 headers)
+  (no STL container references in any of 16 public headers)
+
+## crypto  (D:\Code\swg-client\src\external\ours\library\crypto\include  -- 18 headers)
+  (no STL container references in any of 18 public headers)
+
+## unicode  (D:\Code\swg-client\src\external\ours\library\unicode\include  -- 7 headers)
+  (no STL container references in any of 7 public headers)
+
+## localization  (D:\Code\swg-client\src\external\ours\library\localization\include  -- 6 headers)
+  (no STL container references in any of 6 public headers)
+
+## fileInterface  (D:\Code\swg-client\src\external\ours\library\fileInterface\include  -- 3 headers)
+  (no STL container references in any of 3 public headers)
+
+## fileInterface  (D:\Code\swg-client\src\external\ours\library\fileInterface\include\public  -- 3 headers)
+  (no STL container references in any of 3 public headers)
+
+## singleton  (D:\Code\swg-client\src\external\ours\library\singleton\include  -- 2 headers)
+  (no STL container references in any of 2 public headers)
+
+# ===== SUMMARY =====
+#
+# Total public headers scanned:  55  (6 libs)
+# Categories:
+#   [OK-tpl]      :  0
+#   [OK-int]      :  0
+#   [OK-ptr]      :  0
+#   [RISK]        :  0
+#   no-references : 55
+#
+# Conclusion: all 6 ours/library public-header surfaces are STL-container-FREE.
+# These libs use SOE-internal types (Archive::ByteStream, Unicode::String,
+# Localization::StringId, AbstractFile, Singleton<T>, etc.) at the public-API
+# level. Phase 9's STL ABI shift cannot reach these libs through their public
+# headers, so consumers do not need to be rebuilt for ABI reasons specific to
+# ours/library.
+#
+# Caveat: each lib's IMPLEMENTATION (.cpp under src/shared/) does use STL
+# containers internally -- e.g., crypto's Crypto++ subset uses std::string and
+# std::vector heavily inside cryptlib.cpp + filters.cpp; localization uses
+# std::map in LocalizationManager.cpp. This is fine for Phase 9 because (a)
+# the implementations recompile against MSVC STL, and (b) the public headers
+# don't expose those containers across the static-link boundary, so consumer
+# code never sees a layout mismatch.
+#
+# RISK_FOLLOWUP: NONE. Wave 2/3 may freely rebuild all six ours/library libs
+# under MSVC STL without any public-API surface caveats.
