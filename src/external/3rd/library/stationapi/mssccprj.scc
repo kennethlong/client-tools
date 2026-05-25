@@ -1,9 +1,0 @@
-SCC = This is a Source Code Control file
-
-[stationapi.dsp]
-SCC_Aux_Path = "\\arch\projects\new_vss"
-SCC_Project_Name = "$/Dev/Lib/stationapi", CSAAAAAA
-
-[stationapi.mak]
-SCC_Aux_Path = "\\arch\projects\new_vss"
-SCC_Project_Name = "$/Dev/Lib/stationapi", CSAAAAAA
