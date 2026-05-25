@@ -110,8 +110,6 @@
 #include "UITextbox.h"
 #include "UIUtils.h"
 
-#include "EZ_LCD.h"
-
 #include <list>
 #include <map>
 #include <set>

@@ -23,10 +23,10 @@
 #include "swgClientUserInterface/SwgCuiHud.h"
 #include "swgClientUserInterface/SwgCuiHudFactory.h"
 
-#include "EZ_LCD.h"
-
-//#undef this if the LCD causes problems
-#define USE_LCD
+// lcdui (Logitech G15 LCD) support removed in DECRUFT-03 (v2.1 Decruft, Phase 12).
+// EZ_LCD.h and the USE_LCD define are gone; all CEzLcd/s_lcd usage below stays
+// #ifdef USE_LCD-guarded, so it compiles out to no-op stubs — initializeLcd/
+// updateLcd/remove remain valid (empty) methods so their callers keep linking.
 
 // ======================================================================
 
