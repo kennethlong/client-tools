@@ -44,23 +44,29 @@ Deferred to **v2.2 Visual Parity** (reordered after v2.1 — cleanup-first shrin
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
+Which phases cover which requirements. Updated during roadmap creation (2026-05-25).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DECRUFT-01 | TBD | Pending |
-| DECRUFT-02 | TBD | Pending |
-| DECRUFT-03 | TBD | Pending |
-| DECRUFT-04 | TBD | Pending |
-| DECRUFT-05 | TBD | Pending |
-| DECRUFT-06 | TBD | Pending |
-| DECRUFT-07 | TBD | Pending |
+| DECRUFT-01 | Phase 12 | Pending |
+| DECRUFT-02 | Phase 12 | Pending |
+| DECRUFT-03 | Phase 12 | Pending |
+| DECRUFT-04 | Phase 13 | Pending |
+| DECRUFT-05 | Phase 14 | Pending |
+| DECRUFT-06 | Phase 15 | Pending |
+| DECRUFT-07 | Phase 15 | Pending (cross-cutting gate; verified incrementally after every removal in Phases 12–15) |
 
 **Coverage:**
 - v2.1 requirements: 7 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7 (100%) ✓
+- Unmapped: 0
+
+**Phase mapping rationale (risk gradient, low → high):**
+- Phase 12 — pure directory/project deletes (trackIR, stationapi, SwgClientSetup, lcdui): lowest risk; re-establishes the dual-renderer boot baseline.
+- Phase 13 — VideoCapture lib unlink: low/medium risk; `.rsp` edit + residue purge.
+- Phase 14 — Vivox source removal: higher risk; touches live UI + `CuiPreferences`.
+- Phase 15 — XPCOM/Mozilla browser removal: highest risk (live UI + project + include path + stage copy list), and owns the DECRUFT-07 milestone-wide gate as the final phase. The `/Zc:wchar_t` interlock that historically blocked XPCOM removal is already resolved (Phase 9 went `char16_t`), so this is a clean unlink.
 
 ---
 *Requirements defined: 2026-05-25 — milestone v2.1 "Decruft"*
-*Last updated: 2026-05-25 after initial definition*
+*Last updated: 2026-05-25 — roadmap created; 7/7 requirements mapped to Phases 12–15 (100% coverage)*
