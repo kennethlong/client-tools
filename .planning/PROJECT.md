@@ -6,9 +6,23 @@ v2.0 delivered a modern **MSVC / C++20 / MSBuild** SWG client that boots to char
 
 **Key pivot (Phase 9, "Option D"):** the original CMake/whitengold build was *replaced* by adopting Koogie's already-MSVC/C++20-migrated **MSBuild** tree wholesale (merge `479d35df3`). The active build is `src/build/win32/swg.sln`. The CMake build that v1 + early-v2 docs describe is superseded (kept for history).
 
-## Next Milestone: v2.1 — Visual Parity
+## Current Milestone: v2.1 — Decruft
 
-**Goal:** close the D3D11 visual gaps so it matches the D3D9 baseline. The blocker is **Phase 12: the asset pixel-shader pipeline** — engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects; D3D11 currently falls back to a magenta PS. Then: gamma LUT, multi-stage sampling, load-screen half-texel seam, minimap, particles. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md`.
+**Goal:** Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work.
+
+**Target removals (each its own boot-gated step):**
+- Vivox voice chat — `vivoxSharedWrapper_debug.lib` (SwgClient `libraries_d.rsp`) + `CuiVoiceChatManager` source
+- VideoCapture — `VideoCapture_debug.lib`
+- XPCOM/Mozilla in-game browser — `libMozilla.vcxproj` (swg.sln) + `libMozilla/include/public` (`includePaths.rsp`)
+- lcdui (G15 LCD) — `lcdui.vcxproj`
+- SwgClientSetup — `SwgClientSetup.vcxproj`
+- trackIR/ + stationapi/ orphaned directories
+
+**Key context:** These removals were done once on the original whitengold **CMake** tree (Phase 7, CLEAN-01..05) but the Phase 9 "Option D" base swap to Koogie's MSBuild tree orphaned them — the dead code is dormant-but-present in the active build. Reference diff template: the whitengold (swg-client) Phase 07 removal commits. The Mozilla↔`/Zc:wchar_t` interlock is already resolved (Phase 9 went `char16_t`), so XPCOM removal is a clean unlink. **Invariant:** every step leaves the client bootable to character select under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
+
+## Next Milestone: v2.2 — Visual Parity
+
+**Goal:** close the D3D11 visual gaps so it matches the D3D9 baseline. The blocker is **the asset pixel-shader pipeline** — engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects; D3D11 currently falls back to a magenta PS. Then: gamma LUT, multi-stage sampling, load-screen half-texel seam, minimap, particles. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md`. *(Reordered after v2.1: cleanup-first shrinks the surface area before visual work + upstream imports.)*
 
 ---
 
@@ -22,7 +36,8 @@ dependency graph — and modernises it off Visual Studio 2005 onto a current
 launched against a community-run **SWG-Source** server VM. The long-arc
 goal is full feature parity with the live NGE client (ground/space, professions,
 housing, GCW, jukebox). v1 (compile + launch) and v2.0 (modernisation: dead-code,
-STL swap, DPVS verdict, D3D11 renderer) are complete; v2.1 targets D3D11 visual parity.
+STL swap, DPVS verdict, D3D11 renderer) are complete; v2.1 (Decruft) re-applies the
+orphaned dead-code removals to the active MSBuild tree; v2.2 targets D3D11 visual parity.
 
 > **Build-system note:** v1 + early-v2 sections below describe the original **CMake**
 > port (the "whitengold" tree). Phase 9 "Option D" replaced it with Koogie's
@@ -192,4 +207,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-25 — after v2.0 Modernisation milestone close. Re-anchored to the MSBuild/Koogie reality (Phase 9 Option-D); v2.0 requirements archived to milestones/v2.0-REQUIREMENTS.md; next milestone v2.1 Visual Parity (Phase 12 asset PS pipeline).*
+*Last updated: 2026-05-25 — opened milestone v2.1 "Decruft" (re-apply CLEAN-01..04 dead-code removals against the active MSBuild tree). Visual Parity reordered to v2.2 (cleanup-first shrinks surface area before upstream imports). v2.0 requirements archived to milestones/v2.0-REQUIREMENTS.md.*

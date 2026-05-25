@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: milestone
-status: "PHASE 11 CLOSED 2026-05-24 (PASS-WITH-DEFERRALS) — visible-textured-Tatooine + visual parity; SPEC R6 verdict in comparison-notes.md; 11-SUMMARY.md authored (true 17-plan reality); Phase 12 scope catalogued (asset PS pipeline = THE blocker, Pass::apply constants, gamma LUT, stencil). [Historical] Plan 11-07 CLOSED at the visible-dark-blue-clear milestone (Iter-17 outcome; 11-07-SUMMARY.md c06029e8a). 18-iteration arc across 3 days (2026-05-17..05-19): Iter-1 wired createShaderImplementationGraphicsData + createStaticShaderGraphicsData factory slots (2 new wrapper classes). Iter-2..13 lived inside a single shader-compile FATAL chain on vertex_program/2d.vsh (X1507 missing TreeFile include resolver -> X3000 SM4+ lexer-level keyword reservation -> X3202 struct-member binding -> X3116 STRICTNESS vs BACKWARDS_COMPATIBILITY entry-validation conflict -> X3202 redux -> X4016 register collision). Iter-14 cleared X4016 via CODEX-diagnosed Rule E #pragma def(vs, c95, ...) line-anchored stripper (REWRITE_VERSION 12->13). Iter-15 cleared BC-format USAGE_STAGING dim pad (E_INVALIDARG for W/H<4 on BC formats; helper covers BOTH BC1..BC5 + BC6H..BC7 ranges). Iter-16 cleared Bloom STUB via config-disable (no code change). Iter-17 routed setRenderTarget(NULL) to setRenderTargetToPrimary (the engine's documented "restore back buffer" idiom from PostProcessingEffectsManager). Renderer end-to-end functional, MVP dark-blue clear visible, frame loop iterating, no FATAL. Iter-18 minimum-viable WVP composition + 128-byte slot-0 push BSOD'd OS via GPU TDR escalation ~2 min after launch (no minidump, no usermode dump); working-tree reverted via git restore, NEVER committed. Five Iter-18 hypotheses + CODEX sixth (Map WRITE_DISCARD = ARBITRARY GARBAGE not zero) + two retrofits (D3DCOMPILE_PACK_MATRIX_ROW_MAJOR flag + cbuffer slot capacity 1024 -> ≥1088B) captured in 11-08-PLAN.md. STUB count: Plan 11-06 ended at 29; Plan 11-07 ends at 27 (-2 = Iter-1 factory wires). gl11_d.dll 1,418,240 bytes at close (+26 KB vs Plan 11-06 baseline). D-13 / D-05 / D-04a invariants maintained across all 18 iterations. Original SPEC R5 ≥5-min Tatooine/cantina playable acceptance criteria moved to PENDING and inherited by Plan 11-08+ chain. Plan 11-08 (cbuffer wiring; autonomous:false) is unblocked; design pre-ratified by CODEX peer review."
-stopped_at: Phase 11 Plan 06 closed (D3D11 state cache + draw-call dispatch + input-layout cache + light manager + metrics; 8 new source files + 1 helper extension; 43 Gl_api scaffold_fatal_stub bindings replaced with real implementations -- 25 draw* + drawIndexed* + drawPartial* + drawPartialIndexed* dispatch slot bodies + 3 state setters + 9 transform/viewport/scissor/global-texture + 1 alpha + 1 lighting + 2 shader binding + 2 stream binding; Plan 11-05 72 STUBs -> Plan 11-06 29 STUBs; Pitfall 4 SRV/sampler split + Pitfall 6 input-layout cache key by VS bytecode hash + PS NULL fallback honored per Plan 11-05 caveat; D-04a + D-05 + D-13 + cbuffer-migration invariants intact; gl11_d.dll grew from 1,240,064 to 1,392,128 bytes; Plan 11-07 unblocked)
-last_updated: "2026-05-25T02:51:05.893Z"
+milestone: v2.1
+milestone_name: Decruft
+status: planning
+last_updated: "2026-05-25T03:23:03.605Z"
 last_activity: 2026-05-25
 progress:
-  total_phases: 5
-  completed_phases: 1
-  total_plans: 29
-  completed_plans: 17
-  percent: 59
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -40,18 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 11 (d3d11-renderer-plugin) — ✓ COMPLETE (PASS-WITH-DEFERRALS)
-Plan: 16/17 ✓ (Plan 11-10 DPVS DEFERRED to post-Phase-11). PHASE CLOSED 2026-05-24.
-Status: PHASE 11 CLOSED 2026-05-24 (PASS-WITH-DEFERRALS) — visible-textured-Tatooine + visual parity; SPEC R6 verdict in comparison-notes.md; 11-SUMMARY.md authored (true 17-plan reality); Phase 12 scope catalogued (asset PS pipeline = THE blocker, Pass::apply constants, gamma LUT, stencil). [Historical] Plan 11-07 CLOSED at the visible-dark-blue-clear milestone (Iter-17 outcome; 11-07-SUMMARY.md c06029e8a). 18-iteration arc across 3 days (2026-05-17..05-19): Iter-1 wired createShaderImplementationGraphicsData + createStaticShaderGraphicsData factory slots (2 new wrapper classes). Iter-2..13 lived inside a single shader-compile FATAL chain on vertex_program/2d.vsh (X1507 missing TreeFile include resolver -> X3000 SM4+ lexer-level keyword reservation -> X3202 struct-member binding -> X3116 STRICTNESS vs BACKWARDS_COMPATIBILITY entry-validation conflict -> X3202 redux -> X4016 register collision). Iter-14 cleared X4016 via CODEX-diagnosed Rule E #pragma def(vs, c95, ...) line-anchored stripper (REWRITE_VERSION 12->13). Iter-15 cleared BC-format USAGE_STAGING dim pad (E_INVALIDARG for W/H<4 on BC formats; helper covers BOTH BC1..BC5 + BC6H..BC7 ranges). Iter-16 cleared Bloom STUB via config-disable (no code change). Iter-17 routed setRenderTarget(NULL) to setRenderTargetToPrimary (the engine's documented "restore back buffer" idiom from PostProcessingEffectsManager). Renderer end-to-end functional, MVP dark-blue clear visible, frame loop iterating, no FATAL. Iter-18 minimum-viable WVP composition + 128-byte slot-0 push BSOD'd OS via GPU TDR escalation ~2 min after launch (no minidump, no usermode dump); working-tree reverted via git restore, NEVER committed. Five Iter-18 hypotheses + CODEX sixth (Map WRITE_DISCARD = ARBITRARY GARBAGE not zero) + two retrofits (D3DCOMPILE_PACK_MATRIX_ROW_MAJOR flag + cbuffer slot capacity 1024 -> ≥1088B) captured in 11-08-PLAN.md. STUB count: Plan 11-06 ended at 29; Plan 11-07 ends at 27 (-2 = Iter-1 factory wires). gl11_d.dll 1,418,240 bytes at close (+26 KB vs Plan 11-06 baseline). D-13 / D-05 / D-04a invariants maintained across all 18 iterations. Original SPEC R5 ≥5-min Tatooine/cantina playable acceptance criteria moved to PENDING and inherited by Plan 11-08+ chain. Plan 11-08 (cbuffer wiring; autonomous:false) is unblocked; design pre-ratified by CODEX peer review.
-Last activity: 2026-05-25
-Phase 10 verdict (carried forward): `remove` globally per Option α. Long-form record: docs/recon/10-dpvs-profiling.md. Phase 11 reconsideration: ROADMAP criterion #6.
-Phase 11 Plan 01 verdict (carried forward): DESCOPE Direct3d11_FfpGenerator. Plan 05 (Wave 5) MUST OMIT Direct3d11_FfpGenerator.{h,cpp} from Direct3d11.vcxproj source list. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-01-ffp-spike-finding.md.
-Phase 11 Plan 02 verdict (carried forward): end-to-end plumbing PROVED. gl11_d.dll loads, GetApi resolves, Direct3d11::install runs, FATALs on first stubbed slot at Direct3d11.cpp:62 reached from Graphics::install via Graphics.cpp:320 (first slot call) + Graphics.cpp:554 (further into install). Crash dump at stage/SwgClient_d.exe-unknown.0-20260516220506.{txt,mdmp}. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-02-SUMMARY.md.
-Phase 11 Plan 03 verdict: D3D11 device + DXGI flip-model swap chain + clear-to-color MVP. FATAL boundary advanced from Graphics::install:320 (setBrightnessContrastGamma — Plan 11-02 baseline) to TextureList::install -> createTextureData (Plan 11-04 target). Direct3d11::install completed successfully; the device + swap chain + RTV/DSV + clear+present cycle + setBrightnessContrastGamma no-op + update no-op all worked. Crash dump at stage/SwgClient_d.exe-unknown.0-20260517005210.txt. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-03-SUMMARY.md.
-Phase 11 Plan 04 verdict: D3D11 resource layer landed. 8 Gl_api factory / re-target slots replaced (Plan 11-03 had 84 STUB() lines; Plan 11-04 ends at 76 -- 8 wired matches accounting). Per autonomous-mode framing no Kenny smoke this plan; visible-window evidence deferred to Plan 11-05's checkpoint. 2 deviations: (1) Rule-3 friend Direct3d11_TextureData on TextureGraphicsData::LockData mirrors existing D3D8/D3D9 friend pattern (one-line engine header edit; zero impact on D3D9 plugin behaviour); (2) Rule-1 fix static_assert off-by-one on translationTable length (TF_Count + 2 covers TF_Native sentinel). Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-04-SUMMARY.md.
-Phase 11 Plan 05 verdict: D3D11 shader layer landed. 4 Gl_api shader slots replaced (Plan 11-04 had 76 STUB() lines; Plan 11-05 ends at 72 -- 4 wired matches accounting). D-04a OMISSION executed -- Direct3d11_FfpGenerator.{h,cpp} INTENTIONALLY ABSENT per Plan 11-01 verdict (commits 200cc7694 / 82f068a4a / c4a0b3fcc); verified by Glob (0 results) + Grep (0 files referencing FfpGenerator) + vcxproj source list inspection (no FFP entries). Asset-pipeline mismatch surfaced: engine ships pre-compiled D3D9 PEXE pixel-shader bytecode (DWORD * m_exe); D3D11 CreatePixelShader rejects this. Plan 11-05 contract: wrapper constructs successfully so engine boots past createPixelShaderProgramData factory slot; m_d3dPS stays NULL; Plan 11-06 draw dispatch must skip PSSetShader when null (D3D11 default pass-through); real PS rendering blocks on asset re-author follow-up (future Phase 12 candidate). The compilePixelShaderFromHlsl helper in Direct3d11_PixelShaderProgramData.cpp serves as ps_5_0 SPEC R3 compile-time proof. Per autonomous-mode framing no Kenny smoke this plan; new FATAL boundary predicted at createShaderImplementationGraphicsData (Plan 11-06 territory). 1 deviation: Rule-1 missing #include "sharedMath/VectorRgba.h" surfaced during Task 4 build. Long-form record: .planning/phases/11-d3d11-renderer-plugin/11-05-SUMMARY.md.
-
-Progress: [█████████████░░░] 8/11 (Phase 11; Plans 11-07 + 11-08 closed at structural milestones, Plan 11-09 shader binding next)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-25 — Milestone v2.1 started
 
 ## Accumulated Context
 
@@ -145,6 +136,7 @@ Last session: 2026-05-25
 Resume (2026-05-25): **v2.0 Modernisation SHIPPED + tagged `v2.0`** (commit 61c195444). Repo consolidated — swg-client-v2 (MSBuild/Koogie) is the single source of truth; whitengold (swg-client) docs + phase 01-09 history imported; PROJECT/ROADMAP/STATE re-anchored to MSBuild reality. c0000005 collide crash FIXED (905fb5d64) + validated. Phase 12 visual baseline captured at `docs/research/phase12-baseline/COMPARISON.md`.
 
 **Two CONFIRMED forward threads (Kenny wants both):**
+
 1. **Remove dead code** (DEFINITE) — re-apply CLEAN-01..04 against the active MSBuild tree: Vivox (`vivoxSharedWrapper_debug.lib` in SwgClient `libraries_d.rsp`), VideoCapture (`VideoCapture_debug.lib`), XPCOM/Mozilla (`libMozilla.vcxproj` in swg.sln + `libMozilla/include/public` in `includePaths.rsp`), lcdui (`lcdui.vcxproj`), SwgClientSetup (`SwgClientSetup.vcxproj`), trackIR/stationapi dirs. These were removed on the OLD CMake tree but the Option-D base swap orphaned that work — still present+dormant here. Reference: the original whitengold removals in swg-client repo phases 07 + `milestones/v2.0-MILESTONE-AUDIT.md` integration findings.
 2. **Phase 12 visual parity** — asset PS pipeline (THE blocker: D3D9 PEXE bytecode rejected by CreatePixelShader) → gamma LUT → multi-stage sampling → load-screen half-texel seam → minimap. Read `COMPARISON.md` first.
 
