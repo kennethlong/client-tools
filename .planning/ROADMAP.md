@@ -46,7 +46,7 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
 
 **Milestone Goal:** Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work. Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits (CLEAN-01..05), retargeted from CMake to MSBuild (`src/build/win32/swg.sln` + `.rsp` response files). Phases are ordered low-risk-first (pure deletes → lib unlinks → live-source surgery) so the boot baseline is re-established before the riskier source removals. **Invariant:** every removal step leaves the client bootable to character select under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
 
-- [ ] **Phase 12: Orphaned Directory & Project Deletes** — Delete trackIR/stationapi/SwgClientSetup/lcdui from the MSBuild tree (low-risk deletes + `swg.sln`/`.rsp` drops); re-establish the boot baseline.
+- [x] **Phase 12: Orphaned Directory & Project Deletes** — Delete trackIR/stationapi/SwgClientSetup/lcdui from the MSBuild tree (low-risk deletes + `swg.sln`/`.rsp` drops); re-establish the boot baseline. (completed 2026-05-25)
 - [ ] **Phase 13: VideoCapture Library Unlink** — Drop `VideoCapture_debug.lib` from the SwgClient `.rsp` files and purge any source/include references (low/medium-risk lib unlink).
 - [ ] **Phase 14: Voice Chat (Vivox) Source Removal** — Remove `vivoxSharedWrapper` link + `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler` source + voice preference keys (higher-risk live-UI surgery).
 - [ ] **Phase 15: In-Game Browser (XPCOM/Mozilla) Removal & Milestone Gate** — Drop `libMozilla.vcxproj`, purge the XPCOM include path + browser source + staged Mozilla DLLs, then run the full cross-cutting dual-renderer boot gate (highest-risk surgery + milestone close).
@@ -73,7 +73,7 @@ Plans:
 - [x] 12-02-PLAN.md — SwgClientSetup project removed from swg.sln + dir deleted (DECRUFT-02); dual-renderer boot gate
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 12-03-PLAN.md — lcdui de-wire (live UI source + swg.sln 7 deps + .rsp purge) + both dirs deleted (DECRUFT-03); dual-renderer boot gate
+- [x] 12-03-PLAN.md — lcdui de-wire (live UI source + swg.sln 7 deps + .rsp purge) + both dirs deleted (DECRUFT-03); dual-renderer boot gate
 
 **Cross-cutting constraints:**
 - Client boots to character select under rasterMajor=5 AND rasterMajor=11
@@ -132,7 +132,7 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 9. STLPort → MSVC STL | v2.0 | — | Complete (Option D) | 2026-05-10 |
 | 10. DPVS Experiment | v2.0 | — | Complete (Option α) | 2026-05 |
 | 11. D3D11 Renderer | v2.0 | — | Complete (PASS-WITH-DEFERRALS) | 2026-05-24 |
-| 12. Orphaned Deletes | v2.1 | 2/3 | In Progress|  |
+| 12. Orphaned Deletes | v2.1 | 3/3 | Complete   | 2026-05-25 |
 | 13. VideoCapture Unlink | v2.1 | 0/TBD | Not started | - |
 | 14. Vivox Removal | v2.1 | 0/TBD | Not started | - |
 | 15. XPCOM Removal + Gate | v2.1 | 0/TBD | Not started | - |
