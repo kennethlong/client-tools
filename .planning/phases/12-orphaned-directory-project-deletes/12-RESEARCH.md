@@ -332,20 +332,25 @@ No NEW external dependencies introduced (this is removal). Build/runtime toolcha
 
 All other claims are VERIFIED against the active tree (grep/read) or CITED from the whitengold Phase 07 reference commits (`405cfe9f2`, `fd8f9cff8`, `5a43fc4fe`, `700a90466`).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved during planning and threaded into `12-03-PLAN.md` `<scope_decisions>` (A1/A2/Q3).
 
 1. **Full-solution build vs SwgClient-target build as the validation bar?**
    - What we know: established boot-gate uses `/t:SwgClient`; the 6 editors + SwgGodClient are out of that closure but DO have `Debug|Win32.Build.0` (would compile in a full-solution build).
    - What's unclear: whether the planner wants `swg.sln` (all projects) to build clean, or just SwgClient + renderers.
    - Recommendation: **Remove all 7 lcdui ProjectDependency lines + all 7 `.rsp` lcdui entries regardless.** Cost is trivial, it keeps a full-solution build clean, and it matches the "no dangling references" CLEAN intent. Treat the SwgClient ones as mandatory and the other 6 as part of the same lcdui task.
+   - **RESOLVED:** A1 — remove all 7 lcdui ProjectDependency lines + all editor `.rsp` lcdui entries; 12-03 Task 2 uses a full-solution `swg.sln` build as its verify gate.
 
 2. **Delete the `lcdui/` (Logitech SDK) directory, or only `lcdui_src/`?**
-   - What we know: DECRUFT-03 text names `lcdui.vcxproj` (which lives in `lcdui_src/`) + ".rsp lcdui refs." The `lcdui/` SDK dir (`lglcd.h` + `lgLcd.lib`) is what `lgLcd.lib` resolves to.
+   - What we know: DECRUFT-03 text names `lcdui.vcxproj` (which lives in `lcdui_src/`) + ".rsp lcdui refs." The `lcdui/` SDK dir (`lglcd.h` + `lib/lgLcd.lib`) is what `lgLcd.lib` resolves to.
    - What's unclear: whether the SDK dir should also be deleted. Phase 07 (CMake) removed the LogitechLCD find/link entirely.
    - Recommendation: Delete BOTH for a complete removal (no project references either after the unwire). If the planner prefers minimal blast radius, deleting only `lcdui_src/` + purging refs satisfies the literal requirement; `lcdui/` then sits as an inert orphan.
+   - **RESOLVED:** A2 — delete BOTH `lcdui_src/` and `lcdui/` (12-03 Task 2 step 8) for a complete removal.
 
 3. **Strip `disableG15Lcd` from active cfg / `CuiPreferences`?**
    - Recommendation: OUT of scope for Phase 12 (it's inert and harmless; `CuiPreferences`/`ConfigClientUserInterface` reads it without effect). Voice-key stripping precedent is Phase 14. Leave it.
+   - **RESOLVED:** Q3 — OUT of scope; leave `disableG15Lcd` inert.
 
 ## Sources
 
