@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-25T04:05:04.572Z"
-last_activity: 2026-05-25 -- Phase 12 planning complete
+last_updated: "2026-05-25T12:55:23.556Z"
+last_activity: 2026-05-25 -- Phase 12 execution started
 progress:
   total_phases: 4
   completed_phases: 0
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** 🚧 v2.1 **Decruft** roadmapped 2026-05-25 — re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree (`src/build/win32/swg.sln` + `.rsp`). 4 phases (12–15), 7 requirements (DECRUFT-01..07), ordered low-risk-first (pure deletes → lib unlink → live-source surgery). Boot-to-character-select is the per-removal gate under both `rasterMajor=5` (D3D9) and `=11` (D3D11). Visual Parity reordered to v2.2. Next: `/gsd-plan-phase 12`.
+**Current focus:** Phase 12 — orphaned-directory-project-deletes
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -39,10 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 12 — Orphaned Directory & Project Deletes (not started)
-Plan: —
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 12 planning complete
+Phase: 12 (orphaned-directory-project-deletes) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 12
+Last activity: 2026-05-25 -- Phase 12 execution started
 
 **v2.1 Decruft phase plan:**
 
@@ -106,6 +106,7 @@ Decisions carried forward from v1:
 - v2.1 Phase ordering is intentional: Phase 12 (low-risk deletes) MUST boot-verify before the riskier Phase 14/15 source surgery — re-establishes the dual-renderer baseline first.
 - Every v2.1 removal step is boot-gated under BOTH `rasterMajor=5` (D3D9) and `=11` (D3D11). Debug exe reads `client_d.cfg` (not `client.cfg`) — set rasterMajor there for each smoke (memory note feedback_debug_exe_reads_client_d_cfg).
 - Vivox (Phase 14) touches live `CuiPreferences` — strip voice keys carefully so no remaining caller references a removed key.
+- **[Phase 12 — /FORCE false-pass]** SwgClient links under `/FORCE`, which downgrades unresolved externals (LNK2019) to WARNINGS and still emits a binary with exit 0. So `MSBuild exit 0` is NOT proof of a clean link — every removal-step build gate MUST grep the link output for `unresolved external symbol` (must be 0). 12-01 caught two plan defects this way: stationapi's `989crypt.lib` was a live dep (not stale); and dropping `ClientHeadTracking.cpp` orphaned its callers' symbols (fixed by stubbing the .cpp in-build, not dropping it). Apply the same scrutiny to 12-02/12-03 build gates.
 
 ## Deferred Items
 
