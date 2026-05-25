@@ -79,7 +79,11 @@ src/external/3rd/library/udplibrary/UdpLibrary.cpp~RF869406.TMP
 src/external/3rd/library/wolfssl/
 src/build/win32/.vs/*
 *.unrealvs
-stage/shader-cache/
+# Entire runtime staging dir: build outputs, CMake-generated machine-specific
+# cfgs, crash dumps, profiling CSVs, screenshots, runtime state. None of it is
+# a source of truth (the cfg template lives in src/cmake/config/). Supersedes
+# the old stage/shader-cache/ rule.
+stage/
 
 # ============================================================
 # Phase 11+ runtime / harness / tooling cruft (added 2026-05-21)
