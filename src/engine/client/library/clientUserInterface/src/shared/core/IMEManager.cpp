@@ -350,7 +350,7 @@ int handleProc(HWND /*hwnd*/, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		const UIWidget * const focused = UIManager::gUIManager ().GetFocusedLeafWidget ();
 		if (!focused ||
-			!(focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable) || focused->IsA(TUIWebBrowser)))
+			!(focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable)))
 		{
 			return 0;
 		}

@@ -90,7 +90,7 @@ inline UIImage * SwgCuiTcgControl::getImage() const
 
 inline bool SwgCuiTcgControl::IsA(const UITypeID Type) const
 {
-	return Type == TUIWebBrowser || UIWidget::IsA(Type);
+	return UIWidget::IsA(Type);
 }
 
 // ======================================================================

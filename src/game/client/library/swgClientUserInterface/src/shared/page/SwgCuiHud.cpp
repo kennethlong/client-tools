@@ -95,7 +95,6 @@
 #include "swgClientUserInterface/SwgCuiHudWindowManager.h"
 #include "swgClientUserInterface/SwgCuiInventory.h"
 #include "swgClientUserInterface/SwgCuiToolbar.h"
-#include "swgClientUserInterface/SwgCuiWebBrowserManager.h"
 #include "swgSharedUtility/Postures.h"
 #include "swgSharedUtility/States.def"
 
@@ -1023,7 +1022,7 @@ bool SwgCuiHud::OnMessage( UIWidget * const context, const UIMessage & msg)
 			if (CuiManager::getPointerInputActive ())
 			{
 				const UIWidget * const focused = UIManager::gUIManager ().GetRootPage ()->GetFocusedLeafWidget ();
-				if (focused && (focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable) || focused->IsA(TUIWebBrowser) ))
+				if (focused && (focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable) ))
 					return true;
 			}
 

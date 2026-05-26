@@ -106,7 +106,6 @@
 #include "swgClientUserInterface/SwgCuiTcgManager.h"
 #include "swgClientUserInterface/SwgCuiTcgWindow.h"
 #include "swgClientUserInterface/SwgCuiToolbar.h"
-#include "swgClientUserInterface/SwgCuiWebBrowserManager.h"
 
 
 #if PRODUCTION != 0
@@ -1188,8 +1187,6 @@ bool  SwgCuiHudAction::performAction (const std::string & id, const Unicode::Str
 			}
 		}
 		//ShellExecute(NULL, "open", finalUrl.c_str(), NULL, "", SW_SHOW);
-		SwgCuiWebBrowserManager::createWebBrowserPage(false);
-		SwgCuiWebBrowserManager::setURL(finalUrl.c_str(), true);
 	}
 
 	//else if (id == CuiActions::ticketSubmission) // Ticket Submission tabbed form

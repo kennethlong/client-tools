@@ -16,7 +16,6 @@
 #include "sharedFoundation/Os.h"
 #include "swgClientUserInterface/SwgCuiTcgControl.h"
 #include "swgClientUserInterface/SwgCuiTcgWindow.h"
-#include "swgClientUserInterface/SwgCuiWebBrowserManager.h"
 
 #include "UIImage.h"
 #include "UIManager.h"
@@ -30,8 +29,6 @@ namespace SwgCuiTcgManagerNamespace
 {
 	bool s_installed;
 
-	void __stdcall navigateProc(const char * url);
-	void __stdcall navigateWithPostDataProc(const char * url, const char * postData);
 	void __stdcall playSound(char *buffer, unsigned bufferLenInBytes, libEverQuestTCG::AudioFormatType type);
 	void __stdcall playMusic(char *buffer, unsigned bufferLenInBytes, libEverQuestTCG::AudioFormatType type);
 	void __stdcall setSoundVolume(float zeroToOne);
@@ -65,8 +62,6 @@ void SwgCuiTcgManager::install()
 	libEverQuestTCG::init(startupDirectory.c_str(), libEverQuestTCG::HPT_StarWarsGalaxies, realmType);
 	libEverQuestTCG::setDesktopWindow(Os::getWindow());
 
-	libEverQuestTCG::setNavigateCallback(navigateProc);
-	libEverQuestTCG::setNavigateWithPostDataCallback(navigateWithPostDataProc);
 	libEverQuestTCG::setPlaySoundCallback(playSound);
 	libEverQuestTCG::setPlayMusicCallback(playMusic);
 	libEverQuestTCG::setSetSoundVolumeCallback(setSoundVolume);
@@ -117,36 +112,6 @@ void SwgCuiTcgManager::setLoginInfo(char const * const username, char const * co
 
 	libEverQuestTCG::setUserName(u);
 	libEverQuestTCG::setSessionID(s);
-}
-
-// ======================================================================
-
-void __stdcall SwgCuiTcgManagerNamespace::navigateProc(const char * url)
-{
-	if (url)
-	{
-		DEBUG_REPORT_LOG(true, ("SwgCuiTcgManagerNamespace::navigateProc() - %s\n", url));
-
-		SwgCuiWebBrowserManager::createWebBrowserPage(false);
-		SwgCuiWebBrowserManager::setURL(url, true);
-	}
-}
-
-// ----------------------------------------------------------------------
-
-void __stdcall SwgCuiTcgManagerNamespace::navigateWithPostDataProc(const char * url, const char * postData)
-{
-	if (url)
-	{
-		DEBUG_REPORT_LOG(true, ("SwgCuiTcgManagerNamespace::navigateWithPostDataProc() - %s\n", url));
-
-		SwgCuiWebBrowserManager::createWebBrowserPage(false);
-
-		if (postData)
-			SwgCuiWebBrowserManager::setURL(url, true, postData, strlen(postData));
-		else
-			SwgCuiWebBrowserManager::setURL(url, true);
-	}
 }
 
 // ----------------------------------------------------------------------

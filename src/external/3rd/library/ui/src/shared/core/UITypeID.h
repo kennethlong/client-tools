@@ -61,7 +61,6 @@ enum UITypeID
 			TUIVolumePage,
 			TUIPie,
 			TUIRunner,
-			TUIWebBrowser,
 
 		TUIStyle,
 			TUIButtonStyle,

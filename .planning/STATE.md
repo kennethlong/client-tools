@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-26T22:25:18.967Z"
-last_activity: 2026-05-26 -- Phase 15 planning complete
+last_updated: "2026-05-26T23:02:55.200Z"
+last_activity: 2026-05-26 -- Phase 15 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 14 — voice-chat-vivox-source-removal
+**Current focus:** Phase 15 — in-game-browser-xpcom-mozilla-removal-milestone-gate
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -39,10 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-26 -- Phase 15 planning complete
+Phase: 15 (in-game-browser-xpcom-mozilla-removal-milestone-gate) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 15
+Last activity: 2026-05-26 -- Phase 15 execution started
 
 **v2.1 Decruft phase plan:**
 

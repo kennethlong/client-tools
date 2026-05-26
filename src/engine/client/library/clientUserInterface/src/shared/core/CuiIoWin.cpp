@@ -510,7 +510,7 @@ bool CuiIoWin::parseMessage (const int message, const real value, UIMessage & ms
 		if (isTextMessage)
 		{
 			const UIWidget * const focused = UIManager::gUIManager ().GetFocusedLeafWidget ();
-			if (focused && (focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable) || focused->IsA(TUIWebBrowser)))
+			if (focused && (focused->IsA (TUITextbox) || focused->IsA (TUIText) || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable)))
 			{
 				Unicode::String dummy;
 				static const UILowerString prop_cuiIoWinNoArrow ("CuiIoWinNoArrow");
@@ -644,7 +644,7 @@ IoResult CuiIoWin::processEvent (IoEvent * event)
 		const UIWidget * const focused = UIManager::gUIManager ().GetFocusedLeafWidget ();
 		if (focused)
 		{
-			textIsFocused       = focused->IsA (TUITextbox) || focused->IsA (TUIText)|| focused->IsA(TUIWebBrowser);
+			textIsFocused       = focused->IsA (TUITextbox) || focused->IsA (TUIText);
 			navigationIsFocused = textIsFocused || focused->IsA (TUIComboBox) || focused->IsA (TUIList) || focused->IsA (TUITable) ;
 			
 			Unicode::String dummy;
