@@ -27,7 +27,8 @@ findings:
   warning: 1
   info: 2
   total: 4
-status: issues_found
+status: resolved
+resolution: "CR-01 (blocker) fixed in 1bfeff6b3 via ordinal-preserving placeholders; WR-01 + IN-01/IN-02 dispositioned — see Resolution section"
 ---
 
 # Phase 14: Code Review Report
@@ -35,7 +36,14 @@ status: issues_found
 **Reviewed:** 2026-05-26T19:23:06Z
 **Depth:** standard
 **Files Reviewed:** 18
-**Status:** issues_found
+**Status:** resolved (CR-01 fixed; see Resolution)
+
+## Resolution (2026-05-26)
+
+- **CR-01 (Blocker) — FIXED** in commit `1bfeff6b3`. Confirmed real via `RadialMenuManager` (`s_ranges` keyed by datatable row index, `getCommandForMenuType(menuType)` finds by enum ordinal — so enum ordinal *is* the `radial_menu.iff` row index). Fixed by reintroducing 3 reserved placeholder enumerators (`RESERVED_RADIAL_SLOT_103..105`, no voice tokens) so `ITEM_EQUIP_APPEARANCE`(106)..`GOD_TELEPORT`(109) keep their original ordinals. Validated: SwgClient Debug + Release link clean (0 unresolved externals). Corrects locked decision D-06a (see 14-CONTEXT.md).
+- **WR-01 (Warning) — accepted (no-op).** Stale `voiceChatEnabled=false` lives in `stage/client_d.cfg`, which is an **untracked** local test config (not in git). A config key with no registration is silently ignored by the engine — harmless. Left as-is (cleaning an untracked local file is not a source change).
+- **IN-01 (Info) — accepted.** Dead `speakerVolume`/`micVolume` pref pair: pre-existing, non-voice-subsystem, out of DECRUFT-05 scope.
+- **IN-02 (Info) — accepted.** `.rsp` edits clean-but-vestigial — matches project memory (inline `.vcxproj` is the live build input); intentional per the plan.
 
 ## Summary
 

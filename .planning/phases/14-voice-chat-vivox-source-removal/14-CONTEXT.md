@@ -103,6 +103,17 @@ finds the whole subsystem (see `<code_context>`). All of it is in scope.
   engine no-ops on an orphaned page-path / command-name / radial entry whose handler is gone.
   Researcher verifies graceful no-op; the boot gate is the backstop. "Chase the data" resolves
   to D-06's source-level registrations — there is no in-repo datatable file to scrub.
+  - **CORRECTION (2026-05-26, code-review CR-01):** D-06a is true ONLY for *orphaned* rows — but
+    it missed that `CuiMenuInfoTypes::Type` is a **positional enum whose ordinal is used directly
+    as the `datatables/player/radial_menu.iff` ROW INDEX** by `RadialMenuManager` (`s_ranges` keyed
+    by row index; `getCommandForMenuType(menuType)` does `s_ranges.find(menuType)`). Deleting the 3
+    voice enum values mid-enum shifted the SURVIVING members (`ITEM_EQUIP_APPEARANCE`(106→103) ..
+    `GOD_TELEPORT`(109→106)) down onto the voice rows — a silent radial-menu regression the link
+    gate and char-select boot gate cannot catch. Fixed in commit `1bfeff6b3` by reintroducing 3
+    reserved placeholder enumerators (no voice tokens) so survivors keep their original ordinals;
+    the voice rows are then correctly orphaned-and-ignored exactly as D-06a intended. Lesson for
+    Phase 15: deletions from positional enums/tables that mirror retail-TRE row indices MUST use
+    ordinal-preserving placeholders, never mid-sequence deletes.
 - **D-07:** **Purge the 8 editor `.rsp` vivox references** (D-04 carry-forward from Phase 13).
   `vivoxSharedWrapper_release.lib` / `vivoxSharedWrapper/lib` paths appear in
   AnimationEditor, ClientEffectEditor, LightningEditor, NpcEditor, ParticleEditor, SwooshEditor,
