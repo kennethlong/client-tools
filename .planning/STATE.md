@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: ready_to_plan
-last_updated: "2026-05-25T20:45:59.267Z"
-last_activity: 2026-05-25
+status: planning
+last_updated: "2026-05-26T02:45:44.687Z"
+last_activity: 2026-05-26
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 50
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -123,7 +123,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-25T20:42:21.518Z
+Last session: 2026-05-26T02:45:44.577Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**
