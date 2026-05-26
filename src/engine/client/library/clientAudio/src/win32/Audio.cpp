@@ -167,9 +167,6 @@ namespace AudioNamespace
 
 	bool s_silenceNonBufferedMusic = false;
 
-	HPROVIDER s_audioFilterProvider = 0;
-	HDRIVERSTATE s_audioFilter = 0;
-
 	int         getMaxStreamSampleCount();
 	char const *getAttenuationMethodString(Audio::AttenuationMethod const attenuationMethod);
 

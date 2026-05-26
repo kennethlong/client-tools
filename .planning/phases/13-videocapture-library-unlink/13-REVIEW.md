@@ -15,8 +15,13 @@ findings:
   warning: 1
   info: 0
   total: 1
-status: issues_found
+  resolved: 1
+status: resolved
 ---
+
+> **Resolution (post-review):** WR-01 fixed — the two orphaned file-statics deleted from
+> Audio.cpp; incremental Debug rebuild re-confirmed the link gate (2138 Searching / 0 unresolved
+> / 0 LNK1181). No other findings. Committed alongside this report.
 
 # Phase 13: Code Review Report
 
@@ -62,7 +67,9 @@ dead state. See WR-01.
 
 ## Warnings
 
-### WR-01: Orphaned file-static variables left after AudioCapture function removal
+### WR-01: Orphaned file-static variables left after AudioCapture function removal  — ✅ RESOLVED
+
+**Resolution:** Both file-statics deleted from `Audio.cpp` (the Miles include kept — `HPROVIDER` still used at Audio.cpp:57). Incremental Debug rebuild: 0 errors, link gate 2138/0/0.
 
 **File:** `src/engine/client/library/clientAudio/src/win32/Audio.cpp:170-171`
 
