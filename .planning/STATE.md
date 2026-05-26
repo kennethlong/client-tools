@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: verifying
+status: ready_to_plan
 last_updated: "2026-05-26T19:15:33.285Z"
 last_activity: 2026-05-26
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
   completed_plans: 9
   percent: 100
@@ -39,9 +39,9 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 14 (voice-chat-vivox-source-removal) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 15
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-26
 
 **v2.1 Decruft phase plan:**
