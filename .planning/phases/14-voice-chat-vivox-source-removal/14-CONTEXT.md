@@ -108,6 +108,20 @@ finds the whole subsystem (see `<code_context>`). All of it is in scope.
   AnimationEditor, ClientEffectEditor, LightningEditor, NpcEditor, ParticleEditor, SwooshEditor,
   Viewer, and SwgGodClient `.rsp` files. Required to satisfy criterion #1's grep-zero literally.
   Editors are out-of-scope as *build targets* (pre-broken), but their stale refs must still go.
+- **D-10:** **Extend D-04 — also delete `src/external/3rd/library/soePlatform/VChatAPI/`**
+  (plan-time checkpoint resolution, 2026-05-26 — Option A). The scouting grep that fed D-04
+  missed this third voice-only vendored tree: `soePlatform/VChatAPI/` carries ~115 live
+  `vivox`/`Vivox` **source** literals (`common.cpp:134` `VIV0X_DOT_COM=".vivox.com"`,
+  `EncodeVivoxString()`/`DecodeVivoxString()`, `RESULT_VIVOX_*` enum values), so leaving it
+  on disk fails criterion #1's grep-zero-across-source. Verified during planning to be:
+  voice-only (V=Voice), **NOT** a `swg.sln` project (never compiled here — `grep -c VChatAPI
+  swg.sln` == 0), **NOT** `#include`d by any client source, and **NOT** on any include path —
+  i.e. functionally identical in disposition to the `vivox/` + `vivoxSharedWrapper/` trees
+  D-04 already deletes; it was simply missed by the scout. **Keep** `soePlatform/libs/` (holds
+  the live non-voice `Base.lib`/`ChatAPI.lib` **and** the prebuilt `VChatAPI.lib`/`Base_vchat.lib`)
+  and the sibling `ChatAPI2/` (community chat, zero vivox refs). The prebuilt voice `.lib` tokens
+  are unlinked at the `.vcxproj` link line per D-09 — deleting the *source* tree neither removes
+  those prebuilt libs nor breaks the link.
 
 ### Verification (carried forward — LOCKED by the v2.1 milestone invariant)
 - **D-08:** **Dual-renderer boot gate** after removal — boots to character select under
