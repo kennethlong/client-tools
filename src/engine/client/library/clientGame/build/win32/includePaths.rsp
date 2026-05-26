@@ -51,6 +51,4 @@
 ../../../clientTextureRenderer/include/public
 ../../include/private
 ../../include/public
-../../../../../../external/3rd/library/vivox/include
-../../../../../../game/client/library/swgClientVivox/include/public
 
