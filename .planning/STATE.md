@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: executing
-last_updated: "2026-05-26T18:30:49.550Z"
+status: verifying
+last_updated: "2026-05-26T19:15:33.285Z"
 last_activity: 2026-05-26
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -41,7 +41,7 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 Phase: 14 (voice-chat-vivox-source-removal) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-26
 
 **v2.1 Decruft phase plan:**
@@ -99,6 +99,8 @@ Decisions carried forward from v1:
 - [Phase 14]: Plan 14-01: Vivox voice subsystem removed atomically (eb9b68987) — ~24 source files + 3 voicechat messages deleted, 10 callers + 5 registrations de-wired, 6 CuiPreferences keys stripped, vivox/VChat/libsndfile unlinked from SwgClient (3 configs). Debug+Release link clean (0 unresolved); D-01/-02/-02a/-03/-03a/-06/-09 satisfied.
 - [Phase 14]: DEF-14-01: SwgClient Optimized config fails LNK1281 SAFESEH (pre-existing, voice-unrelated; 0 unresolved externals, 0 voice symbols in error log) — Optimized <Link> lacks the /SAFESEH:NO Debug has + ImageHasSafeExceptionHandlers=false Release has. Deferred (deferred-items.md), not a Decruft regression.
 - [Phase 14]: Plan 14-02 (DECRUFT-05 crit #1 residue): purged all vestigial + editor vivox residue — SwgClient .rsp lib/path tokens, dangling swgClientVivox + vivox in clientUserInterface/clientGame includePaths.rsp (D-05), 16 editor .rsp refs + INLINE vivox in all 7 editor .vcxproj + SwgGodClient.vcxproj fuller token set across 3 configs (D-07). 30 files, deletions only, ZERO build (vestigial .rsp + pre-broken editors). soePlatform libs + xpcom/xul/qt/libMozilla preserved. Full plan-scope grep-zero PASS. Closes the inline-.vcxproj gap for 14-03's repo-wide gate. Commits 0b9c78f0e + 4bc512b45.
+- [Phase 14]: Plan 14-03 (DECRUFT-05 crit #1 + DECRUFT-07 boot gate): deleted the 3 vendored voice trees (vivox/, vivoxSharedWrapper/, soePlatform/VChatAPI/ — 138 files, 47,201 lines, commit 0d15c8433) after a Wave-1 merge gate confirmed Wave 1 complete; cleaned copy-libs.bat (0 VChatAPI refs); PRESERVED soePlatform/libs/ (Base.lib + prebuilt VChatAPI.lib/Base_vchat.lib in Win32-Debug/Win32-Release) + ChatAPI2/. Repo-wide GATE-1 vivox grep-zero; Debug 0 unresolved (69.9 MB) / Release 0 (28.7 MB) / Optimized 0 unresolved (DEF-14-01 SAFESEH only). **DUAL-RENDERER BOOT GATE PASS** (user-confirmed): char-select under rasterMajor=5 (D3D9) AND =11 (D3D11), no crash/assert, no voice surfaces; client_d.cfg left at rasterMajor=11. D-04/D-06a/D-08/D-09/D-10 satisfied.
+- [Phase 14]: DEF-14-02: GATE-2's over-broad getVoice/setVoice substrings collide with 3 SOE community-chat methods (ChatRoom::getVoiceCount/getVoiceCore/getVoice) in the PRESERVED soePlatform/ChatAPI2/ tree (ZERO vivox literals; D-10 KEEP-listed). Benign false-positive, NOT a Vivox-subsystem holdout — rg -i vivox over ChatAPI2/ == 0; GATE-2 over src EXCLUDING ChatAPI2/ == 0. Out of scope (SCOPE BOUNDARY), documented in deferred-items.md, not fixed.
 
 ### Pending Todos
 
@@ -126,7 +128,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-26T18:30:03.321Z
+Last session: 2026-05-26T19:14:48.840Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**

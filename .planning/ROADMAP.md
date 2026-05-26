@@ -48,7 +48,7 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
 
 - [x] **Phase 12: Orphaned Directory & Project Deletes** — Delete trackIR/stationapi/SwgClientSetup/lcdui from the MSBuild tree (low-risk deletes + `swg.sln`/`.rsp` drops); re-establish the boot baseline. (completed 2026-05-25)
 - [x] **Phase 13: VideoCapture Library Unlink** — Drop `VideoCapture_debug.lib` from the SwgClient `.rsp` files and purge any source/include references (low/medium-risk lib unlink). (completed 2026-05-26)
-- [ ] **Phase 14: Voice Chat (Vivox) Source Removal** — Remove `vivoxSharedWrapper` link + `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler` source + voice preference keys (higher-risk live-UI surgery).
+- [ ] **Phase 14: Voice Chat (Vivox) Source Removal** — Remove `vivoxSharedWrapper` link + `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler` source + voice preference keys (higher-risk live-UI surgery). (3/3 plans executed; awaiting orchestrator phase verification)
 - [ ] **Phase 15: In-Game Browser (XPCOM/Mozilla) Removal & Milestone Gate** — Drop `libMozilla.vcxproj`, purge the XPCOM include path + browser source + staged Mozilla DLLs, then run the full cross-cutting dual-renderer boot gate (highest-risk surgery + milestone close).
 
 ## Phase Details
@@ -142,5 +142,5 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 11. D3D11 Renderer | v2.0 | — | Complete (PASS-WITH-DEFERRALS) | 2026-05-24 |
 | 12. Orphaned Deletes | v2.1 | 3/3 | Complete    | 2026-05-25 |
 | 13. VideoCapture Unlink | v2.1 | 3/3 | Complete    | 2026-05-26 |
-| 14. Vivox Removal | v2.1 | 2/3 | In Progress|  |
+| 14. Vivox Removal | v2.1 | 3/3 | Plans done — verifying | - |
 | 15. XPCOM Removal + Gate | v2.1 | 0/TBD | Not started | - |

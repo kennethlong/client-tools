@@ -35,3 +35,29 @@ not SAFESEH-compatible, so the Optimized link cannot generate a SAFESEH image.
 Optimized `<Link>`/`<AdditionalOptions>` (mirror Debug line 110) or set
 `<ImageHasSafeExceptionHandlers>false</...>` (mirror Release line 211) in the
 Optimized ItemDefinitionGroup. This is a build-config fix, not a voice-removal task.
+
+## DEF-14-02: GATE-2 `getVoice` token collides with preserved soePlatform/ChatAPI2 community-chat methods
+
+**Discovered during:** Plan 14-03 Task 1 GATE-2 repo-wide voice-symbol grep (2026-05-26)
+**Status:** Benign false-positive in a deliberately-PRESERVED tree; NOT a voice-subsystem holdout.
+
+The canonical GATE-2 symbol set includes the broad substrings `getVoice` and `setVoice`
+(intended to catch `CuiPreferences::getVoiceChatEnabled`-style accessors). These substrings
+also match four SOE **community-chat** (non-Vivox) methods in the KEEP-listed
+`src/external/3rd/library/soePlatform/ChatAPI2/` tree (D-10 explicitly preserves ChatAPI2):
+
+- `ChatRoom.h:386` / `ChatRoom.cpp:683,685` — `ChatRoom::getVoiceCount()`
+- `ChatRoomCore.h:55,78,79` / `ChatRoomCore.cpp:858` — `getVoiceCount()`, `getVoiceCore()`, `getVoice()`
+
+These are SOE ChatAPI room-membership accessors, **not** the Vivox voice subsystem.
+Verification confirming benign:
+- `rg -i "vivox|Vivox"` over `ChatAPI2/` == 0 (the tree carries ZERO vivox literals).
+- The 4 files are untouched by Phase 14 (`git status` clean for ChatAPI2/).
+- GATE-2 over `src` **excluding** `ChatAPI2/` == 0 (the Vivox voice subsystem itself is fully grep-clean).
+- The voice-subsystem-specific tokens (`CuiVoiceChat`, `SwgCuiVoice`, `WS_VoiceFlyBar`,
+  `VOICE_INVITE`, `VOICE_KICK`, `CommandParserVoice`, etc.) are ALL zero across all of `src`.
+
+**Disposition:** Out-of-scope per SCOPE BOUNDARY (pre-existing, in a preserved tree, not caused
+by this plan). DECRUFT-05 criterion #2 targets the Vivox voice subsystem; the SOE community
+ChatAPI is not in scope. No action — documented so the verifier reads the literal
+GATE-2-over-all-of-src as PASS-with-4-known-ChatAPI2-collisions.
