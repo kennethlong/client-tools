@@ -119,11 +119,21 @@ separate live middleware — only its browser *tie* is severed.
   `{C6C1E14A-DEDB-48C6-B028-0C9E4EFF5DC4}`) — remove the `Project(...)` block, its
   `GlobalSection(ProjectConfigurationPlatforms)` entries, and any `ProjectDependencies` on it.
   Mirrors the Phase 12 `SwgClientSetup.vcxproj` / `lcdui.vcxproj` sln-drop.
-- **D-08:** **Unlink `libMozilla.lib` from `SwgClient.vcxproj`** — it is an **inline**
-  `<AdditionalDependencies>` token at lines **158 (Debug)** and **204 (Release)**; it is **NOT**
-  in any `libraries*.rsp` (the `.rsp` is vestigial — recurring gotcha
-  `project_decruft_removal_build_graph_gotchas`). Edit the inline `.vcxproj`. `libMozilla` is a
-  **StaticLibrary** (confirmed `ConfigurationType`), so there is no runtime DLL to unstage.
+- **D-08:** **Unlink the whole Mozilla-family link-token set from `SwgClient.vcxproj`** — all
+  **inline** `<Link>` edits (NOT in any `libraries*.rsp`; the `.rsp` is vestigial — recurring
+  gotcha `project_decruft_removal_build_graph_gotchas`). The tokens differ **per config**
+  (verified — researcher confirms exact set per D-01):
+  - `libMozilla.lib` — present in **Optimized** (`AdditionalDependencies` line 158) and
+    **Release** (line 204) only; **Debug does NOT link `libMozilla.lib`**.
+  - The underlying XPCOM SDK libs that `libMozilla` wraps — `xpcom.lib`, `xul.lib`, `nspr4.lib`,
+    `plc4.lib`, `profdirserviceprovider_s.lib` — are linked in **all three** configs (Debug, Optimized,
+    Release), so they must be stripped from each `<Link>` `AdditionalDependencies`. (Optimized
+    additionally has some of these tokens duplicated — remove all occurrences.)
+  - `<AdditionalLibraryDirectories>` entries pointing at `libMozilla\include\private\lib\{release,Optimized}`
+    and `libMozilla\Optimized` — remove from all three configs.
+  `libMozilla` is a **StaticLibrary** (confirmed `ConfigurationType`), so there is no runtime DLL to
+  unstage. **Note:** the **Optimized** config will still fail to link regardless (DEF-14-01 SAFESEH,
+  pre-existing) — so the link gate is **Debug + Release** per D-13, not Optimized.
 - **D-09:** **Delete the vendored `src/external/3rd/library/libMozilla/` tree entirely**
   (build/, include/, src/). It holds the XPCOM SDK (`nsIWebBrowser*.h`, `.xpt` components in
   `include/private/bin/{debug,release}/components/`) whose headers contain `xpcom`/`xul`/`Mozilla`
@@ -242,7 +252,7 @@ separate live middleware — only its browser *tie* is severed.
 **Build / project / link:**
 - `src/build/win32/swg.sln:1587` → `libMozilla` project, GUID `{C6C1E14A-DEDB-48C6-B028-0C9E4EFF5DC4}` (D-07)
 - `src/external/3rd/library/libMozilla/build/win32/libMozilla.vcxproj` — `ConfigurationType = StaticLibrary` (no runtime DLL)
-- `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj:158,204` → inline `libMozilla.lib` (Debug+Release `AdditionalDependencies`) — NOT in `libraries*.rsp` (D-08)
+- `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj` → inline `<Link>` Mozilla-family tokens (D-08), NOT in `libraries*.rsp`. **`libMozilla.lib`** at line 158 (**Optimized**) + line 204 (**Release**) — **Debug does NOT link it**. The wrapped XPCOM libs **`xpcom.lib`/`xul.lib`/`nspr4.lib`/`plc4.lib`/`profdirserviceprovider_s.lib`** are in **all three** configs' `AdditionalDependencies`; `libMozilla\include\private\lib\{release,Optimized}` + `libMozilla\Optimized` in `AdditionalLibraryDirectories`. SAFESEH disable: Debug `/SAFESEH:NO` (line 110), Release `ImageHasSafeExceptionHandlers=false` (line 211), **Optimized has neither → pre-existing LNK1281 DEF-14-01** (gate is Debug+Release per D-13)
 
 **Vendored tree (delete — D-09):**
 - `src/external/3rd/library/libMozilla/` — `include/public/libMozilla/libMozilla.h` (→ `src/win32/libMozilla.h`, the real `namespace libMozilla` API: `init/update/release/createWindow/destroyWindow/setUserAgent/enableMemoryCache/enableDiskCache` + `Window`/`ICallback`/`IBlitter`), `include/private/sdk/include/nsIWebBrowser*.h`, `include/private/bin/{debug,release}/components/*.xpt`, `src/win32/libMozilla.cpp`.
