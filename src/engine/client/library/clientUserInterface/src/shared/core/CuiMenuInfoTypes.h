@@ -161,7 +161,21 @@ namespace Cui
 			GROUP_CREATE_PICKUP_POINT, // 100
 			GROUP_USE_PICKUP_POINT,
 			GROUP_USE_PICKUP_POINT_NOCAMP,
-			ITEM_EQUIP_APPEARANCE,
+
+			// --- Reserved ordinal slots 103-105 (Phase 14 dead-code removal, CR-01 fix).
+			// The CuiMenuInfoTypes::Type ordinal is used DIRECTLY as the retail datatable
+			// (datatables/player/radial_menu.iff) ROW INDEX: RadialMenuManager keys s_ranges by
+			// row index == menuType in getCommandForMenuType/getRangeForMenuType. These three
+			// placeholders hold ordinals 103-105 so the surviving members below keep their
+			// original ordinals (ITEM_EQUIP_APPEARANCE=106 .. GOD_TELEPORT=109). Deleting them
+			// would silently remap equip-appearance/unequip-appearance/storyteller-recipe/
+			// god-teleport onto the wrong datatable rows. Do NOT remove without re-indexing the
+			// datatable. See 14-REVIEW.md CR-01.
+			RESERVED_RADIAL_SLOT_103,
+			RESERVED_RADIAL_SLOT_104,
+			RESERVED_RADIAL_SLOT_105,
+
+			ITEM_EQUIP_APPEARANCE, // 106
 			ITEM_UNEQUIP_APPEARANCE,
 			OPEN_STORYTELLER_RECIPE,
 			GOD_TELEPORT,
