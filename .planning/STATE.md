@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-26T18:20:29.738Z"
+last_updated: "2026-05-26T18:30:49.550Z"
 last_activity: 2026-05-26
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -40,7 +40,7 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 ## Current Position
 
 Phase: 14 (voice-chat-vivox-source-removal) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-05-26
 
@@ -98,6 +98,7 @@ Decisions carried forward from v1:
 - [Phase 13]: [2026-05-25] MSYS sed gotcha (Phases 13-15): Windows .vcxproj path purges must match segments by substring+delimiter ([^;<>]*TOKEN[^;<>]*;), NOT by escaping literal backslashes — a path like ...3rd... mis-parses the backslash+digit as a back-reference.
 - [Phase 14]: Plan 14-01: Vivox voice subsystem removed atomically (eb9b68987) — ~24 source files + 3 voicechat messages deleted, 10 callers + 5 registrations de-wired, 6 CuiPreferences keys stripped, vivox/VChat/libsndfile unlinked from SwgClient (3 configs). Debug+Release link clean (0 unresolved); D-01/-02/-02a/-03/-03a/-06/-09 satisfied.
 - [Phase 14]: DEF-14-01: SwgClient Optimized config fails LNK1281 SAFESEH (pre-existing, voice-unrelated; 0 unresolved externals, 0 voice symbols in error log) — Optimized <Link> lacks the /SAFESEH:NO Debug has + ImageHasSafeExceptionHandlers=false Release has. Deferred (deferred-items.md), not a Decruft regression.
+- [Phase 14]: Plan 14-02 (DECRUFT-05 crit #1 residue): purged all vestigial + editor vivox residue — SwgClient .rsp lib/path tokens, dangling swgClientVivox + vivox in clientUserInterface/clientGame includePaths.rsp (D-05), 16 editor .rsp refs + INLINE vivox in all 7 editor .vcxproj + SwgGodClient.vcxproj fuller token set across 3 configs (D-07). 30 files, deletions only, ZERO build (vestigial .rsp + pre-broken editors). soePlatform libs + xpcom/xul/qt/libMozilla preserved. Full plan-scope grep-zero PASS. Closes the inline-.vcxproj gap for 14-03's repo-wide gate. Commits 0b9c78f0e + 4bc512b45.
 
 ### Pending Todos
 
@@ -125,7 +126,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-26T18:20:29.724Z
+Last session: 2026-05-26T18:30:03.321Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**
