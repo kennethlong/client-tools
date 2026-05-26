@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: executing
+status: ready_to_plan
 last_updated: "2026-05-25T20:45:59.267Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
   completed_plans: 5
-  percent: 83
+  percent: 50
 ---
 
 # Project State
@@ -39,10 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 13 (videocapture-library-unlink) — EXECUTING
-Plan: 13-01 ✓ + 13-02 ✓ complete (Wave 1); 13-03 next (Wave 2 — vendored-tree delete + Debug/Release link gate + dual-renderer boot)
-Status: Wave 1 done; ready for 13-03
-Last activity: 2026-05-25 -- Plan 13-02 complete (INERT capture residue purged: dead source + include paths + 42 .rsp + 10 editor/aux .vcxproj)
+Phase: 14
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-26
 
 **v2.1 Decruft phase plan:**
 
