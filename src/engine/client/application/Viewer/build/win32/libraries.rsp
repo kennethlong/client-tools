@@ -12,4 +12,3 @@ plc4.lib
 profdirserviceprovider_s.lib
 xpcom.lib
 xul.lib
-vivoxSharedWrapper_release.lib
