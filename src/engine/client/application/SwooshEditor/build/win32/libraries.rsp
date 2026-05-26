@@ -14,8 +14,3 @@ librpc.lib
 libxml2-win32-release.lib
 winmm.lib
 mswsock.lib
-nspr4.lib
-plc4.lib
-profdirserviceprovider_s.lib
-xpcom.lib
-xul.lib

@@ -6,7 +6,6 @@
 ../../../../../../external/3rd/library/qt/3.3.4/include
 ../../../../../../external/3rd/library/stlport453/stlport
 ../../../../../../external/3rd/library/ui/include
-../../../../../../external/3rd/library/libMozilla/include/public
 ../../../../../../external/ours/library/archive/include
 ../../../../../../external/ours/library/fileInterface/include/public
 ../../../../../../external/ours/library/localization/include
