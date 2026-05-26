@@ -238,3 +238,17 @@ The two HIGH defects are real and would fail the Wave 2 (grep-zero) and Wave 3 (
 (targeted: add `SwgClient/libraries.rsp` to 15-02; rescope 15-04 A1 to lcdui-path-only + drop the
 `G15` sweep token + handle the `SwgClientSetup` launcher string; add the D-04a caveat + broaden the
 boot-gate UI exercise). Strategy, waves, D-02/D-04 verdicts, and the gate design stand.
+
+---
+
+## Resolution (applied directly 2026-05-26 — user chose direct-fix over `--reviews` replan)
+
+All findings folded into the plans by hand (verified against the live tree first); decision-coverage gate re-passed 14/14:
+
+- **HIGH #1 (libraries.rsp)** → `15-02`: added `SwgClient/build/win32/libraries.rsp` to files_modified, the `<interfaces>` .rsp block, the D-06 truth, and Task 1 (files/read_first/action/acceptance/verify/done — now purges the 5 XPCOM lib lines + the grep covers `nspr4|plc4|profdirserviceprovider`).
+- **HIGH #2 (A1 ClCompile link break)** → `15-04`: A1 RESCOPED to the lcdui **include-path strings only**; the `SwgCuiG15Lcd` ClCompile :450 / ClInclude :1004 entries are now explicitly **KEPT** (the stub must keep compiling for live callers `ClientMain.cpp:361` + `SwgCuiHud.cpp:678/686/1140`). Updated A1 truth, interfaces A1 block, Task 1 action.
+- **MEDIUM (G15 / SwgClientSetup sweep)** → `15-04`: dropped `G15` as an independent grep-zero token; added KEEP-list entries for the benign `SwgCuiG15Lcd` stub and the `SwgClientSetup_*.exe` LaunchMeFirst launcher orphan (flagged pre-existing P12 cleanup, not a Phase-15 regression). Updated D-12.1 truth, sweep tokens, KEEP-list, and the P12/P13 acceptance assertion.
+- **MEDIUM (D-04a deployment-scoped)** → `15-01`: added the environment-specific caveat to threat T-15-02 (safe because `SWGTCG.dll` absent; prefer logging-no-op fallback if TCG ever revived).
+- **MEDIUM (boot-gate UI coverage)** → `15-04`: broadened the D-02 ordinal-shift backstop — the boot gate now also opens style-heavy pages (inventory, options, character sheet, chat, datapad/journal), since the shifted ordinals are mostly `*Style` IDs.
+
+Strategy, waves, D-02/D-04 verdicts, and the gate design were unchanged. Plans are execute-ready.
