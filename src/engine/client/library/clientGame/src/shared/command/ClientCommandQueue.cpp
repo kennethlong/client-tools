@@ -41,7 +41,6 @@
 #include "clientUserInterface/CuiSkillManager.h"
 #include "clientUserInterface/CuiStringVariablesManager.h"
 #include "clientUserInterface/CuiSystemMessageManager.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "clientGame/ProsePackageManagerClient.h"
 #include <queue>
 
@@ -276,10 +275,6 @@ uint32 ClientCommandQueue::enqueueCommand(Command const &command, NetworkId cons
 
 	NetworkId processedTarget;
 	Unicode::String processedParams;
-
-	// for Vivox integration phase 1 we need to do special handling of
-	// report to send the client connection info across
-	static uint32 const hash_report = Crc::normalizeAndCalculate("report");
 
 	// need to do custom handling for the some group commands
 	static uint32 const hash_groupInvite = Crc::normalizeAndCalculate("invite");
@@ -690,10 +685,6 @@ uint32 ClientCommandQueue::enqueueCommand(Command const &command, NetworkId cons
 					return 0;
 			}
 		}
-	}
-	else if (command.m_commandHash == hash_report)
-	{
-		processedParams.append(Unicode::narrowToWide("|" + CuiVoiceChatManager::getCsReportString()));
 	}
 
 	const Entry * entryPtr = 0;

@@ -74,7 +74,6 @@
 #include "swgClientUserInterface/SwgCuiCommandParserShip.h"
 #include "swgClientUserInterface/SwgCuiHud.h"
 #include "swgClientUserInterface/SwgCuiHudFactory.h"
-#include "swgClientUserInterface/SwgCuiCommandParserVoice.h"
 #include "swgClientUserInterface/SwgCuiMediatorTypes.h"
 #include "UnicodeUtils.h"
 
@@ -439,7 +438,6 @@ m_aliasHandler  (0)
 	addSubCommand (new SwgCuiCommandParserChatRoom ());
 	addSubCommand(new SwgCuiCommandParserShip);
 	addSubCommand(new SwgCuiCommandParserNebula);
-	//addSubCommand(new SwgCuiCommandParserVoice);
 
 	loadAliases(m_aliasFilename.c_str ());
 

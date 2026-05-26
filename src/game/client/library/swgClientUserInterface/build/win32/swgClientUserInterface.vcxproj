@@ -647,7 +647,6 @@
     <ClCompile Include="..\..\src\shared\page\SwgCuiOptUi.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\page\SwgCuiOptVoice.cpp" />
     <ClCompile Include="..\..\src\shared\page\SwgCuiPermissionList.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -839,10 +838,6 @@
     <ClCompile Include="..\..\src\shared\page\SwgCuiVendorSetPrice.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\page\SwgCuiVoiceActiveSpeakers.cpp" />
-    <ClCompile Include="..\..\src\shared\page\SwgCuiVoiceActiveSpeakers_TableModel.cpp" />
-    <ClCompile Include="..\..\src\shared\page\SwgCuiVoiceFlyBar.cpp" />
-    <ClCompile Include="..\..\src\shared\page\SwgCuiVoiceFlyBarMessageQueue.cpp" />
     <ClCompile Include="..\..\src\shared\page\SwgCuiWaypointMonitor.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
@@ -902,7 +897,6 @@
     <ClCompile Include="..\..\src\shared\parser\SwgCuiCommandParserVideo.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\parser\SwgCuiCommandParserVoice.cpp" />
     <ClCompile Include="..\..\src\win32\FirstSwgClientUserInterface.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
@@ -1079,7 +1073,6 @@
     <ClInclude Include="..\..\src\shared\page\SwgCuiOptSound.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiOptTerrain.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiOptUi.h" />
-    <ClInclude Include="..\..\src\shared\page\SwgCuiOptVoice.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiPermissionList.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiPersistentMessageBrowser.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiPersistentMessageComposer.h" />
@@ -1147,10 +1140,6 @@
     <ClInclude Include="..\..\src\shared\page\SwgCuiTrade_Panel.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiVendor.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiVendorSetPrice.h" />
-    <ClInclude Include="..\..\src\shared\page\SwgCuiVoiceActiveSpeakers.h" />
-    <ClInclude Include="..\..\src\shared\page\SwgCuiVoiceActiveSpeakers_TableModel.h" />
-    <ClInclude Include="..\..\src\shared\page\SwgCuiVoiceFlyBar.h" />
-    <ClInclude Include="..\..\src\shared\page\SwgCuiVoiceFlyBarMessageQueue.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiWaypointMonitor.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiWaypointMonitorBox.h" />
     <ClInclude Include="..\..\src\shared\page\SwgCuiWeaponGroupAssignment.h" />
@@ -1172,7 +1161,6 @@
     <ClInclude Include="..\..\src\shared\parser\SwgCuiCommandParserShipWeaponGroup.h" />
     <ClInclude Include="..\..\src\shared\parser\SwgCuiCommandParserUI.h" />
     <ClInclude Include="..\..\src\shared\parser\SwgCuiCommandParserVideo.h" />
-    <ClInclude Include="..\..\src\shared\parser\SwgCuiCommandParserVoice.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

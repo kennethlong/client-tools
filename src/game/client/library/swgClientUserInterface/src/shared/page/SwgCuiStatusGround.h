@@ -151,8 +151,6 @@ private:
 
 	void onNewTarget();
 
-	void updateVoiceChatIcon(TangibleObject const & tangibleObject);
-
 private:
 	
 	void setRoleIconInternal(int roleIconChoice);

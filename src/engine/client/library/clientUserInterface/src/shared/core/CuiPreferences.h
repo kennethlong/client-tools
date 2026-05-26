@@ -535,24 +535,6 @@ public:
 
 	static Callback& getBuffIconSettingsChangedCallback();
 
-	static bool getVoiceChatEnabled();
-	static void setVoiceChatEnabled(bool enabled);
-
-	static bool getVoiceUsePushToTalk();
-	static void setVoiceUsePushToTalk(bool useit);
-
-	static bool getVoiceShowFlybar();
-	static void setVoiceShowFlybar(bool showit);
-
-	static bool getVoiceUseAdvancedChannelSelection();
-	static void setVoiceUseAdvancedChannelSelection(bool useit);
-
-	static bool getVoiceAutoDeclineInvites();
-	static void setVoiceAutoDeclineInvites(bool declineThemAll);
-
-	static bool getVoiceAutoJoinChannels();
-	static void setVoiceAutoJoinChannels(bool joinAway);
-
 	static bool getDefaultExamineHideAppearance();
 	static void setDefaultExamineHideAppearance(bool hide);
 

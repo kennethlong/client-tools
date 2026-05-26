@@ -129,8 +129,6 @@
 #include "swgClientUserInterface/SwgCuiTrade.h"
 #include "swgClientUserInterface/SwgCuiVendor.h"
 #include "swgClientUserInterface/SwgCuiVendorSetPrice.h"
-#include "swgClientUserInterface/SwgCuiVoiceActiveSpeakers.h"
-#include "swgClientUserInterface/SwgCuiVoiceFlyBar.h"
 #include "swgClientUserInterface/SwgCuiWaypointMonitorBox.h"
 #include "swgClientUserInterface/SwgCuiWeaponGroupAssignment.h"
 
@@ -255,8 +253,6 @@ void SwgCuiMediatorFactorySetup::install ()
 	MAKE_SWG_CTOR_WS (BuffBuilderBuffee,              "/pda.BuffBuilder.buffee");
 	MAKE_SWG_CTOR_WS (Incubator,                      "/pda.Incubator");
 	MAKE_SWG_CTOR_WS (Collections,                    "/pda.Collections");
-	MAKE_SWG_CTOR_WS (VoiceFlyBar,                    "/Voice.VoiceFlyBar");
-	MAKE_SWG_CTOR_WS (VoiceActiveSpeakers,            "/Voice.VoiceActiveSpeakers");
 	MAKE_SWG_CTOR_WS (TcgWindow,                      "/pda.Tcg");
 	MAKE_SWG_CTOR_WS (Mahjong,                        "/pda.Mahjong");
 	MAKE_SWG_CTOR_WS (AppearanceTab,                  "/pda.AppearanceTab");

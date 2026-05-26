@@ -304,9 +304,6 @@ namespace Cui
 			MAKE_ID(GROUP_USE_PICKUP_POINT, none,                     group_use_pickup_point,               0);
 			MAKE_ID(GROUP_USE_PICKUP_POINT_NOCAMP, none,              group_use_pickup_point_nocamp,        0);
 
-			MAKE_ID(VOICE_SHORTLIST_REMOVE, none,                     voice_shortlist_remove,               0);
-			MAKE_ID(VOICE_INVITE,           none,                     voice_invite,                         0);
-			MAKE_ID(VOICE_KICK,             none,                     voice_kick,                           0);
 			MAKE_ID(ITEM_EQUIP_APPEARANCE,  none,                     item_equip_appearance,                CursorPaths::equip);
 			MAKE_ID(ITEM_UNEQUIP_APPEARANCE,none,                     item_unequip_appearance,              CursorPaths::unequip);
 			MAKE_ID(OPEN_STORYTELLER_RECIPE,none,					  open_storyteller_recipe,              0);

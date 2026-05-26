@@ -33,7 +33,6 @@
 #include "clientUserInterface/CuiStringIdsGroup.h"
 #include "clientUserInterface/CuiStringIdsWho.h"
 #include "clientUserInterface/CuiTextManager.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "clientUserInterface/CuiWorkspace.h"
 #include "clientUserInterface/CuiWorkspaceIcon.h"
 #include "sharedFoundation/CalendarTime.h"
@@ -1193,7 +1192,6 @@ void SwgCuiStatusGround::update(float deltaTimeSecs)
 				updateDirectionArrow(player, *tangible);
 				updateDistance(player, player->getDistanceBetweenCollisionSpheres_w(*tangible));
 				updateFaction(*tangible);
-				updateVoiceChatIcon(*tangible);
 
 				CreatureObject const * const creature = tangible->asCreatureObject();
 				if(creature)
@@ -2033,28 +2031,6 @@ void SwgCuiStatusGround::updateDirectionArrow(Object const * const source, Vecto
 	{
 		IGNORE_RETURN(pageSetVisible(m_directionArrow, false));
 	}
-}
-
-// ----------------------------------------------------------------------
-
-void SwgCuiStatusGround::updateVoiceChatIcon(TangibleObject const & tangibleObject)
-{
-	if(m_speakingIcon)
-	{
-		CreatureObject const * const pcreature = tangibleObject.asCreatureObject();
-		if(pcreature)
-		{
-			//at this point isThisObjectSpeaking is quite expensive so we want to eliminate as many
-			//object that can't speak as possible.
-			if(pcreature->getPlayerObject())
-			{
-				IGNORE_RETURN(pageSetVisible(m_speakingIcon, CuiVoiceChatManager::isThisObjectSpeaking(m_objectId)));
-				return;
-			}
-		}
-	}
-
-	IGNORE_RETURN(pageSetVisible(m_speakingIcon, false));
 }
 
 //------------------------------------------------------------------------

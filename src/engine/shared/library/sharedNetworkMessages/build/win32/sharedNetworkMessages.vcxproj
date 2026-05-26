@@ -1175,9 +1175,6 @@
     <ClCompile Include="..\..\src\shared\RevokeSkill.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\shared\voicechat\VoiceChatChannelInfo.cpp" />
-    <ClCompile Include="..\..\src\shared\voicechat\VoiceChatMiscMessages.cpp" />
-    <ClCompile Include="..\..\src\shared\voicechat\VoiceChatOnGetAccount.cpp" />
     <ClCompile Include="..\..\src\win32\FirstSharedNetworkMessages.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
@@ -1542,9 +1539,6 @@
     <ClInclude Include="..\..\src\shared\planetWatch\ServerInfoArchive.h" />
     <ClInclude Include="..\..\src\shared\RevokeCommand.h" />
     <ClInclude Include="..\..\src\shared\RevokeSkill.h" />
-    <ClInclude Include="..\..\src\shared\voicechat\VoiceChatChannelInfo.h" />
-    <ClInclude Include="..\..\src\shared\voicechat\VoiceChatMiscMessages.h" />
-    <ClInclude Include="..\..\src\shared\voicechat\VoiceChatOnGetAccount.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

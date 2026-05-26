@@ -54,7 +54,6 @@
 #include "clientUserInterface/CuiSurveyManager.h"
 #include "clientUserInterface/CuiSystemMessageManager.h"
 #include "clientUserInterface/CuiTextManager.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "sharedDebug/DebugFlags.h"
 #include "sharedDebug/InstallTimer.h"
 #include "sharedGame/SpatialChatManager.h"
@@ -102,7 +101,6 @@ void CuiManagerManager::install (UIPage & rootPage)
 	CuiChatManager::install              ();
 	CuiChatRoomManager::install          ();
 	CuiInstantMessageManager::install    ();
-	CuiVoiceChatManager::install         ();
 	CuiMissionManager::install           ();
 	CuiObjectTextManager::install        ();
 	CuiPersistentMessageManager::install ();
@@ -153,7 +151,6 @@ void CuiManagerManager::remove  ()
 	CuiPersistentMessageManager::remove ();
 	CuiObjectTextManager::remove        ();
 	CuiMissionManager::remove           ();
-	CuiVoiceChatManager::remove         ();
 	CuiInstantMessageManager::remove    ();
 	CuiChatRoomManager::remove          ();
 	CuiResourceManager::remove          ();
@@ -207,7 +204,6 @@ void CuiManagerManager::remove  ()
 
 void CuiManagerManager::update (float deltaTimeSecs)
 {
-	CuiVoiceChatManager::update           (deltaTimeSecs);
 	CuiObjectTextManager::update          ();
 	CuiIconManager::update                (deltaTimeSecs);
 	AuctionManagerClient::update          (deltaTimeSecs);

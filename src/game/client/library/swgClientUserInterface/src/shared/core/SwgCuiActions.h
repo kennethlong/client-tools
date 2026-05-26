@@ -66,8 +66,6 @@ namespace SwgCuiActions
 	MAKE_ACTION(editBiography);
 	MAKE_ACTION(questAcceptance);
 	MAKE_ACTION(toggleButtonBar);
-	MAKE_ACTION(toggleVoiceFlyBar);
-	MAKE_ACTION(toggleVoiceActiveSpeakers);
 }
 
 #undef MAKE_ACTION

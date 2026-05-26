@@ -107,7 +107,6 @@
 #include "swgClientUserInterface/SwgCuiTcgWindow.h"
 #include "swgClientUserInterface/SwgCuiToolbar.h"
 #include "swgClientUserInterface/SwgCuiWebBrowserManager.h"
-#include "swgClientUserInterface/SwgCuiVoiceFlyBar.h"
 
 
 #if PRODUCTION != 0
@@ -283,7 +282,6 @@ m_toggleDownTimeNames          (0.0f)
 	CuiActionManager::addAction (CuiActions::myCollections, this, false);
 
 	CuiActionManager::addAction(CuiActions::sendSavedPlayerInterestsToServer, this, false);
-	CuiActionManager::addAction (SwgCuiActions::toggleVoiceFlyBar, this, false);
 
 	//CuiActionManager::addAction (CuiActions::tcg, this, false);
 
@@ -1595,15 +1593,6 @@ bool  SwgCuiHudAction::performAction (const std::string & id, const Unicode::Str
 		SwgCuiLfg::sendSavedInterests();
 	}
 
-	//else if (id == SwgCuiActions::toggleVoiceFlyBar)
-	//{
-	//	CuiMediatorFactory::toggleInWorkspace(CuiMediatorTypes::WS_VoiceFlyBar);
-	//}
-
-	//else if (id == SwgCuiActions::toggleVoiceActiveSpeakers)
-	//{
-	//	CuiMediatorFactory::toggleInWorkspace(CuiMediatorTypes::WS_VoiceActiveSpeakers);
-	//}
 	//else if (id == CuiActions::tcg)
 	//{
 		//SwgCuiTcgWindow * tcgWindow = safe_cast<SwgCuiTcgWindow * >(CuiMediatorFactory::getInWorkspace(CuiMediatorTypes::WS_TcgWindow, false, false, false));

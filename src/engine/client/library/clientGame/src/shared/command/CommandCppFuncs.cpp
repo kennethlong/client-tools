@@ -54,7 +54,6 @@
 #include "clientUserInterface/CuiStringVariablesData.h"
 #include "clientUserInterface/CuiStringVariablesManager.h"
 #include "clientUserInterface/CuiSystemMessageManager.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "sharedCollision/CollisionProperty.h"
 #include "sharedCollision/Footprint.h"
 #include "sharedDebug/InstallTimer.h"
@@ -263,9 +262,6 @@ namespace CommandCppFuncsNamespace
 
 	void commandFuncExternalCommand(Command const & command, NetworkId const & actor, NetworkId const & target, Unicode::String const & params);
 	void commandFuncCollections(Command const & command, NetworkId const & , NetworkId const & target, Unicode::String const &);
-
-	void commandFuncVoiceInvite(Command const & command, NetworkId const & actor, NetworkId const & target, Unicode::String const & params);
-	void commandFuncVoiceKick(Command const & command, NetworkId const & actor, NetworkId const & target, Unicode::String const & params);
 
 	//void commandFuncTcg(Command const & command, NetworkId const & , NetworkId const & target, Unicode::String const &);
 
@@ -2419,58 +2415,6 @@ void CommandCppFuncsNamespace::commandFuncCollections(Command const & , NetworkI
 
 //----------------------------------------------------------------------
 
-void CommandCppFuncsNamespace::commandFuncVoiceInvite(Command const &, NetworkId const & , NetworkId const & target, Unicode::String const &)
-{
-	if(target.isValid() && CuiVoiceChatManager::isLoggedIn())
-	{
-		Object const * const o = NetworkIdManager::getObjectById(target);
-		if(o)
-		{
-			ClientObject const * const co = o->asClientObject();
-			if(co)
-			{
-				CreatureObject const * const creature = co->asCreatureObject();
-				if(creature)
-				{
-					PlayerObject const * const player = creature->getPlayerObject();
-					if(player)
-					{
-						CuiVoiceChatManager::channelInvite(target, Unicode::wideToNarrow(creature->getLocalizedFirstName()), CuiVoiceChatManager::getMyPrivateChannelName());
-					}
-				}
-			}
-		}
-	}
-}
-
-//----------------------------------------------------------------------
-
-void CommandCppFuncsNamespace::commandFuncVoiceKick(Command const &, NetworkId const & , NetworkId const & target, Unicode::String const &)
-{
-	if(target.isValid() && CuiVoiceChatManager::isLoggedIn())
-	{
-		Object const * const o = NetworkIdManager::getObjectById(target);
-		if(o)
-		{
-			ClientObject const * const co = o->asClientObject();
-			if(co)
-			{
-				CreatureObject const * const creature = co->asCreatureObject();
-				if(creature)
-				{
-					PlayerObject const * const player = creature->getPlayerObject();
-					if(player)
-					{
-						CuiVoiceChatManager::channelKick(target, Unicode::wideToNarrow(creature->getLocalizedFirstName()), CuiVoiceChatManager::getMyPrivateChannelName());
-					}
-				}
-			}
-		}
-	}
-}
-
-//----------------------------------------------------------------------
-
 //void CommandCppFuncsNamespace::commandFuncTcg(Command const & , NetworkId const & , NetworkId const & , Unicode::String const & params)
 //{
 //	CuiActionManager::performAction(CuiActions::tcg, params);
@@ -2655,9 +2599,6 @@ void CommandCppFuncs::install()
 	CommandTable::addCppFunction("externalCommand", commandFuncExternalCommand);
 	CommandTable::addCppFunction("collections", commandFuncCollections);
 	//endspace
-
-	CommandTable::addCppFunction("voiceInvite", commandFuncVoiceInvite);
-	CommandTable::addCppFunction("voiceKick", commandFuncVoiceKick);
 
 	//CommandTable::addCppFunction("tcg", commandFuncTcg);
 

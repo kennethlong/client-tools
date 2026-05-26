@@ -101,8 +101,6 @@ namespace CuiMediatorTypes
 	MAKE_MEDIATOR_TYPE (WS_BuffBuilderBuffee);
 	MAKE_MEDIATOR_TYPE (WS_Incubator);
 	MAKE_MEDIATOR_TYPE (WS_Collections);
-	MAKE_MEDIATOR_TYPE (WS_VoiceFlyBar);
-	MAKE_MEDIATOR_TYPE (WS_VoiceActiveSpeakers);
 	MAKE_MEDIATOR_TYPE (WS_TcgWindow);
 	MAKE_MEDIATOR_TYPE (WS_Mahjong);
 	MAKE_MEDIATOR_TYPE (WS_AppearanceTab);

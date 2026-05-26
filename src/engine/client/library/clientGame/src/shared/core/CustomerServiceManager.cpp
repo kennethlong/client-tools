@@ -19,7 +19,6 @@
 #include "clientUserInterface/CuiStringVariablesData.h"
 #include "clientUserInterface/CuiStringVariablesManager.h"
 #include "clientUserInterface/CuiUtils.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "sharedDebug/InstallTimer.h"
 #include "sharedFile/Iff.h"
 #include "sharedFoundation/ApplicationVersion.h"
@@ -861,9 +860,6 @@ std::string CustomerServiceManager::getPlayerInformation()
 		snprintf(buf, sizeof(buf), "Date/Time: %s\n", Unicode::wideToNarrow(timeStamp).c_str());
 		buf[sizeof(buf) - 1] = '\0';
 		result += buf;
-
-		//get voice chat information
-		result += CuiVoiceChatManager::getCsReportString();
 	}
 
 	//DEBUG_REPORT_LOG(true, ("CustomerServiceManager::getPlayerInformation()\n%s", result.c_str()));

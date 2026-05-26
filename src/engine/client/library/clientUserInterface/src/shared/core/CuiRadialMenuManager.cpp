@@ -57,7 +57,6 @@
 #include "clientUserInterface/CuiStringIds.h"
 #include "clientUserInterface/CuiStringVariablesManager.h"
 #include "clientUserInterface/CuiSystemMessageManager.h"
-#include "clientUserInterface/CuiVoiceChatManager.h"
 #include "sharedCollision/CollideParameters.h"
 #include "sharedCollision/CollisionInfo.h"
 #include "sharedFoundation/Clock.h"
@@ -1177,11 +1176,6 @@ bool CuiRadialMenuManager::populateMenu (CuiMenuInfoHelper & helper, const Objec
 						helper.addRootMenu (GROUP_INVITE, got);
 					}
 				}
-			}
-
-			if(creature->isPlayer() && CuiVoiceChatManager::isLoggedIn())
-			{
-				helper.addRootMenu(VOICE_INVITE, got);
 			}
 
 			if (Game::getSinglePlayer ())
