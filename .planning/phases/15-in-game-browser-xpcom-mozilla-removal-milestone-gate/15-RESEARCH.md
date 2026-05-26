@@ -335,9 +335,9 @@ All 7 editors + SwgGodClient carry both `.rsp` AND inline `.vcxproj` Mozilla tok
 | A2 | The 5 `IsA(TUIWebBrowser)` disjuncts can be dropped without changing focus-routing behavior for the surviving widget types | D-02 / section B | LOW — `TUIWebBrowser` widgets never instantiate (no loader, stubbed browser), so the disjunct was always false at runtime; dropping it is behavior-preserving. Backstopped by the boot gate. |
 | A3 | No game-server tree in this repo consumes any browser symbol | Symbol-Resolution | LOW — confirmed the active tree is client-only (swg.sln is the client sln); the WebBrowser symbols are client-UI-only. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **lcdui residue scope in the D-12 milestone sweep (A1).**
+1. **lcdui residue scope in the D-12 milestone sweep (A1).** — RESOLVED at plan-time: folded into 15-04's D-12 sweep as a tightly-scoped, deletions-only cleanup of the inert lcdui config strings.
    - What we know: P12 (DECRUFT-03) removed lcdui as a build/feature, but `swgClientUserInterface.vcxproj` include paths + `SwgCuiG15Lcd.cpp/.h` ClCompile entries + SwgGodClient editor lib dirs still carry `lcdui` strings (inert). The body of `SwgCuiG15Lcd.cpp` is already gutted to a removal comment.
    - What's unclear: Whether D-12's "re-grep ALL removed subsystems == 0" requires literal lcdui-zero (forcing cleanup of the P12 residue in Phase 15) or accepts the established P12-close baseline.
    - Recommendation: Since Phase 15 OWNS the milestone-closing gate, fold the lcdui-residue cleanup into the D-12 sweep wave (opportunistic, deletions-only, vestigial `.vcxproj` edits — no build risk). Confirm with the user at plan/discuss time if scope-strictness matters.
