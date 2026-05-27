@@ -3,14 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: planning
-last_updated: "2026-05-27T20:15:00.000Z"
-last_activity: 2026-05-27
+last_updated: "2026-05-27T20:59:44.003Z"
+last_activity: 2026-05-27 — v2.2 ROADMAP.md created (Phases 17–23)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -110,7 +109,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-27T20:15:00.000Z
+Last session: 2026-05-27T20:59:43.979Z
 Resume (2026-05-27): **v2.2 Visual Parity ROADMAP CREATED** (Phases 17–23; 13/13 requirements mapped 100%). v2.1 Decruft shipped + tagged `v2.1`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.2 Visual Parity — the plan (7 phases):**
