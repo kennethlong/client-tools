@@ -18,7 +18,7 @@
 |---------------|-------------|---------------|----------------------------|-------------------|---------------|
 | `SwgGodClient.vcxproj:99` (Debug `<AdditionalDependencies>`) | build-config dead-token | (SwgGodClient.exe — **never built**, Qt MSB8066) | NO — out of `/t:SwgClient` closure | `4bc512b45` (14-02 vivox/VChat token purge, **same file**) | exact (same file + same construct) |
 | `SwgCuiHudAction.cpp:1170-1189` (dead `finalUrl` block) | dead source block | `swgClientUserInterface.lib` | **YES** | `e5a76be9f` (13-02 delete dead `#if 0` capture source residue) | exact (dead-block deletion in UI lib) |
-| `CuiPreferences.cpp:397-398 / :3460-3484` + `.h:553-557` (voice-volume API) | full dead API (statics + accessors + decls, 0 callers) | `clientUserInterface.lib` | **YES** | `78d7373ff` (13 remove orphaned AudioCapture file-statics, WR-01) | exact (orphaned-state-after-feature-delete) |
+| `CuiPreferences.cpp:397-398 / :841-842 / :3460-3484` + `.h:553-557` (voice-volume API) | full dead API (statics + 2 REGISTER_OPTION persistence lines + accessors + decls, 0 callers) | `clientUserInterface.lib` | **YES** | `78d7373ff` (13 remove orphaned AudioCapture file-statics, WR-01) | exact (orphaned-state-after-feature-delete) |
 
 **Verify-only (no edit — D-04):** 4 editor vcxproj (`AnimationEditor`, `ClientEffectEditor`, `LightningEditor`, `ParticleEditor`) — already 0 `lcdui` hits (swept by `d1dcb8447` / 15-04). Precedent for the *verify-only* posture: `1d6b80242` (12-03 lcdui ProjectReference removal) was the original lcdui-in-editor-vcxproj fix; 15-04 finished the LIBPATH residue. This phase only re-asserts `lcdui-editor-LIBPATH == 0`.
 
@@ -87,11 +87,17 @@ Then the shared link-grep gate (below) — covered because `swgClientUserInterfa
 
 **Precedent commit:** `78d7373ff` — *"refactor(13): remove orphaned AudioCapture file-statics (code-review WR-01)"* — **near-identical structural analog.** Its commit body describes Target 3b's exact situation: *"s_audioFilterProvider + s_audioFilter were read/written exclusively by the #if 0 AudioCapture functions removed in 13-02; now dead unguarded namespace state. Deleted both."* — orphaned statics whose only readers/writers were removed by a prior feature delete (there: VideoCapture; here: Phase 14 Vivox voice-UI delete). It even names the verification verbatim: *"Incremental Debug rebuild re-confirmed the link gate: 2138 Searching / 0 unresolved external / 0 LNK1181."*
 
-**Removal pattern (delete statics + their entire accessor API + their decls — all in one atomic commit):**
+**Removal pattern (delete statics + their 2 REGISTER_OPTION persistence lines + their entire accessor API + their decls — all in one atomic commit):**
 ```cpp
 // CuiPreferences.cpp:397-398  — statics (delete)
 float ms_speakerVolume = 0.5f;
 float ms_micVolume = 0.5f;
+
+// CuiPreferences.cpp:841-842  — LocalMachine persistence registration (delete; macro :415
+//   REGISTER_OPTION(a) → LocalMachineOptionManager::registerOption(ms_##a,...) references
+//   the statics above, so leaving these would break the clientUserInterface compile)
+REGISTER_OPTION(speakerVolume);
+REGISTER_OPTION(micVolume);
 
 // CuiPreferences.cpp:3460-3484 — 4 accessor bodies + surrounding //--- dividers (delete)
 void  CuiPreferences::setSpeakerVolume(float volume) { ms_speakerVolume = volume; }
@@ -106,12 +112,12 @@ static float getMicVolume();
 static void  setMicVolume(float volume);
 ```
 
-**Zero-caller / no-placeholder discipline:** RESEARCH.md confirmed **0 external callers** repo-wide and **no save/load hook** — clean full-API removal. D-07: these are plain `float` statics + flat get/set, NOT a positional enum/datatable row → the Phase 14 CR-01 ordinal-placeholder rule does **NOT** apply. Delete outright; no placeholders.
+**Zero-caller / no-placeholder discipline:** RESEARCH.md confirmed **0 external callers** repo-wide. **CORRECTED** (was "no save/load hook"): the statics ARE registered for LocalMachine persistence via the 2 `REGISTER_OPTION(speakerVolume)` / `REGISTER_OPTION(micVolume)` lines at `:841-842` — those MUST be deleted in the same atomic edit (they reference `ms_speakerVolume`/`ms_micVolume`, so leaving them breaks compilation). Dropping them is a benign persistence-surface reduction (the Vivox UI that read/wrote those keys is gone). D-07: these are plain `float` statics + flat get/set, NOT a positional enum/datatable row → the Phase 14 CR-01 ordinal-placeholder rule does **NOT** apply. Delete outright; no placeholders.
 
 **Verification gate:**
 ```text
-rg "ms_speakerVolume|ms_micVolume|[gs]etSpeakerVolume|[gs]etMicVolume" src                              → 0
-rg "speakerVolume|micVolume|SpeakerVolume|MicVolume" src  (outside CuiPreferences — save/load-hook check) → 0
+rg "speakerVolume|micVolume|SpeakerVolume|MicVolume" src   → 0  (repo-wide, incl. CuiPreferences — catches statics + 2 REGISTER_OPTION keys + 4 accessors + 4 decls in one shot)
+rg "REGISTER_OPTION\(speakerVolume\)|REGISTER_OPTION\(micVolume\)" src   → 0  (explicit: the 2 persistence lines are gone)
 ```
 Then the shared link-grep gate — covered because `clientUserInterface.lib` is in the SwgClient closure.
 
