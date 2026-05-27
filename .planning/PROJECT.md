@@ -1,14 +1,14 @@
 # whitengold — SWG Client Modernisation Port
 
-## Current State: v2.0 Modernisation SHIPPED (2026-05-25)
+## Current State: v2.1 Decruft SHIPPED (2026-05-27)
 
-v2.0 delivered a modern **MSVC / C++20 / MSBuild** SWG client that boots to character select and renders a ground scene under **both** a D3D9 and a new **D3D11** renderer, selectable at runtime via `rasterMajor`. Audit: `tech_debt` (functional PASS; documented deferrals). See `MILESTONES.md` + `milestones/v2.0-*`.
+v2.1 re-applied the orphaned v2.0 dead-code removals (CLEAN-01..04) against the active Koogie/MSBuild tree: five dormant subsystems — trackIR/stationapi/SwgClientSetup/lcdui (Phase 12), VideoCapture (13), Vivox voice chat (14), and the XPCOM/Mozilla in-game browser (15) — were fully unlinked and deleted, plus a final tech-debt cleanup pass (Phase 16). The client stays bootable to character-select under **both** D3D9 (`rasterMajor=5`) and D3D11 (`=11`) after every removal. Audit: `tech_debt` (7/7 DECRUFT satisfied, 0 blockers, 28/28 integration). See `MILESTONES.md` + `milestones/v2.1-*`.
 
-**Key pivot (Phase 9, "Option D"):** the original CMake/whitengold build was *replaced* by adopting Koogie's already-MSVC/C++20-migrated **MSBuild** tree wholesale (merge `479d35df3`). The active build is `src/build/win32/swg.sln`. The CMake build that v1 + early-v2 docs describe is superseded (kept for history).
+**Prior:** v2.0 (shipped 2026-05-25) delivered the modern MSVC/C++20/MSBuild client with selectable D3D9 + D3D11 renderers. **Key pivot (Phase 9, "Option D"):** the original CMake/whitengold build was *replaced* by adopting Koogie's already-MSVC/C++20-migrated **MSBuild** tree wholesale (merge `479d35df3`). The active build is `src/build/win32/swg.sln`; the CMake build that v1 + early-v2 docs describe is superseded (kept for history).
 
-## Current Milestone: v2.1 — Decruft
+## Shipped Milestone: v2.1 — Decruft (closed 2026-05-27)
 
-**Goal:** Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work.
+**Goal (MET):** Re-applied the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work. All 7 DECRUFT requirements satisfied across Phases 12–16; per-phase detail archived in `milestones/v2.1-ROADMAP.md`.
 
 **Target removals (each its own boot-gated step):**
 - Vivox voice chat — `vivoxSharedWrapper_debug.lib` (SwgClient `libraries_d.rsp`) + `CuiVoiceChatManager` source
@@ -26,7 +26,7 @@ v2.0 delivered a modern **MSVC / C++20 / MSBuild** SWG client that boots to char
 ✓ Phase 15 complete (2026-05-27) — DECRUFT-06/-07 done: XPCOM/Mozilla in-game browser fully removed + v2.1 milestone gate PASS. The 3 `SwgCuiWebBrowser*` units (the only `libMozilla::` consumers) deleted, all live callers + 5 `IsA(TUIWebBrowser)` focus sites de-wired, `TUIWebBrowser` deleted outright from `UITypeID.h` (ordinal never serialized — no placeholder, unlike CR-01), TCG browser tie severed (libEverQuestTCG kept), Mozilla-family link tokens stripped from `SwgClient.vcxproj` + `.rsp` + 7 editors + SwgGodClient, `libMozilla.vcxproj` dropped from `swg.sln` (11 GUID locations), and the vendored `libMozilla/` tree (1,866 files: XPCOM/Gecko SDK) deleted. Milestone-wide P12–P15 residue sweep == 0 / KEEP-listed (incl. lcdui A1 cleanup); Debug+Release link gate clean (0 unresolved; Optimized EXEMPT per DEF-14-01); dual-renderer boot (rasterMajor=5 D3D9 + =11 D3D11) human-confirmed to character-select with correct HUD/radial/IME focus. Verified 9/9 must-haves; code review 0 blockers (3 advisory warnings, all the deliberate T-15-02/D-04a TCG-tie severance — TCG revival out of scope). **v2.1 Decruft COMPLETE (Phases 12–15; DECRUFT-01..07 all done).** Next: v2.2 Visual Parity.
 ✓ Phase 16 complete (2026-05-27) — v2.1 tech-debt cleanup (post-milestone-audit closure, no new product reqs): unlinked the dead SwgGodClient `989crypt.lib` latent-LNK1181 token (soePlatform KEEP-list + the separate live `crypto.lib` preserved), confirmed the 4 editor vcxproj lcdui-clean (verify-only), and removed the cosmetic P12–P15 source residue — the dead `finalUrl` browser-CS URL block (+ now-dead `shellapi.h`/`ConfigClientGame.h` includes) in `SwgCuiHudAction.cpp` and the orphaned voice-volume API (2 statics + 2 REGISTER_OPTION persistence lines + 4 accessors + 4 decls) in `CuiPreferences.cpp/.h`. All grep-zero gates green; SwgClient Debug+Release relink clean (0 unresolved externals, Optimized EXEMPT per DEF-14-01); single rasterMajor=11 (D3D11) boot to character-select human-confirmed (no-behavior-change phase → single boot replaces the dual-renderer matrix). Verified 8/8 must-haves (D-01..D-08); code review 0 blocker/0 warning/1 INFO (the `httpParams` builder is now write-only — 16-02's intentional narrow scope, follow-up-pass candidate). Discovered + ruled out a pre-existing Options-window crash (`checkShowToolbarCommandCooldownTimer` `.ui`-data mismatch from feature commit `d1b3c0eaf` — NOT a Decruft regression; captured as a pending todo). **v2.1 Decruft milestone-audit tech-debt fully closed.**
 
-## Next Milestone: v2.2 — Visual Parity
+## Current Milestone: v2.2 — Visual Parity (next)
 
 **Goal:** close the D3D11 visual gaps so it matches the D3D9 baseline. The blocker is **the asset pixel-shader pipeline** — engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects; D3D11 currently falls back to a magenta PS. Then: gamma LUT, multi-stage sampling, load-screen half-texel seam, minimap, particles. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md`. *(Reordered after v2.1: cleanup-first shrinks the surface area before visual work + upstream imports.)*
 
@@ -72,6 +72,16 @@ orphaned dead-code removals to the active MSBuild tree; v2.2 targets D3D11 visua
   `animation-system.md`, `foliage-system.md`)
 - ✓ **SWG-Source diff** — confirmed server-only fork, no client patches to adopt;
   build patterns are transferable (`docs/recon/07-swg-source-diff-findings.md`)
+
+**v2.1 Decruft (shipped 2026-05-27) — dead-code removals re-applied to the MSBuild tree:**
+
+- ✓ **DECRUFT-01** — trackIR + stationapi orphan dirs deleted; ClientHeadTracking de-wired to no-op stubs — v2.1 (Phase 12)
+- ✓ **DECRUFT-02** — SwgClientSetup dropped from `swg.sln` + dir deleted — v2.1 (Phase 12)
+- ✓ **DECRUFT-03** — lcdui (G15 LCD) fully removed (live UI stubbed + 7 sln deps + `.rsp` purge) — v2.1 (Phase 12)
+- ✓ **DECRUFT-04** — VideoCapture unlinked + vendored tree deleted; Debug+Release link clean — v2.1 (Phase 13)
+- ✓ **DECRUFT-05** — Vivox voice chat fully removed (source + build + 3 vendored trees); CR-01 radial-ordinal regression fixed — v2.1 (Phase 14)
+- ✓ **DECRUFT-06** — XPCOM/Mozilla in-game browser fully removed (`libMozilla.vcxproj` + 1,866-file tree) — v2.1 (Phase 15)
+- ✓ **DECRUFT-07** — full-removal-set dual-renderer boot to character-select human-confirmed (D3D9 + D3D11) — v2.1 (Phase 15, re-confirmed Phase 16)
 
 ### Active
 
@@ -194,6 +204,9 @@ be configured to read its data tree at runtime via `searchPath*` entries.
 | **/MT static CRT** | Matches third-party static libs (Bink, Miles, DPVS) we link against | Phase 1 root CMake sets `CMAKE_MSVC_RUNTIME_LIBRARY` to `/MT` and `/MTd` |
 | **Phase 9 "Option D": adopt Koogie's MSVC/C++20 MSBuild tree wholesale** (`479d35df3`) instead of hand-migrating STLPort in the CMake tree | Koogie already solved the MSVC migration; collapsed ~30 risky refactor commits into ~3 | ✓ Good — STL swap done, Tatooine zone-in PASS. Side effect: CMake build + Phase 7 dead-code removals orphaned (active tree is MSBuild) |
 | **D3D11 as a second selectable renderer** (`gl11_d.dll`), keep D3D9 (`gl05_d.dll`) buildable (invariant D-05) | De-risks the port; lets D3D9 stay the known-good reference for visual parity | ✓ Good — both selectable via `rasterMajor`; single `Gl_api` loader multiplexes |
+| **v2.1 cleanup-first, risk-gradient ordering** (pure deletes → lib unlinks → live-source surgery) before v2.2 visual work | Re-establish the dual-renderer boot baseline on the low-risk deletes before the riskier Vivox/XPCOM source surgery; shrink surface area before upstream imports | ✓ Good — every removal step boot-verified; v2.1 closed clean (7/7 DECRUFT) |
+| **`/FORCE` link-grep gate** — grep link output for `unresolved external symbol` (==0), not just MSBuild exit 0 | SwgClient links under `/FORCE`, which downgrades unresolved externals to warnings and still emits a binary with exit 0 — exit 0 is NOT proof of a clean link | ✓ Good — caught 2 real Phase 12 defects (live `989crypt.lib` dep, orphaned ClientHeadTracking callers) |
+| **Ordinal-preserving placeholders** for deletions from positional enums/tables that mirror retail-TRE row indices | Mid-sequence enum deletes silently shift surviving ordinals off their datatable rows — a regression the link + boot gate cannot catch | ✓ Good — CR-01 (radial-menu ordinal shift from voice-enum delete) caught in code review + fixed with `RESERVED_*` placeholders (Phase 14) |
 
 ## Evolution
 
@@ -213,4 +226,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-27 — Phase 16 (v2.1 tech-debt cleanup) complete: SwgGodClient `989crypt.lib` dead token unlinked; dead `finalUrl` block + orphaned voice-volume API removed; SwgClient link+boot gate clean. Verified 8/8 (D-01..D-08); code review 0 blocker/0 warning/1 INFO. **v2.1 Decruft fully COMPLETE — all 7 Decruft requirements (Phases 12–15) plus the milestone-audit tech-debt (Phase 16) closed.** Ready for milestone close (`/gsd:complete-milestone`). Next milestone: v2.2 Visual Parity (asset PS pipeline blocker; see docs/research/phase12-baseline/COMPARISON.md). v2.0 requirements archived to milestones/v2.0-REQUIREMENTS.md.*
+*Last updated: 2026-05-27 after v2.1 Decruft milestone close. **v2.1 SHIPPED + tagged `v2.1`** — Phases 12–16, all 7 DECRUFT requirements satisfied (5 dormant subsystems unlinked + deleted; tech-debt closed). Roadmap + requirements archived to `milestones/v2.1-*`; `REQUIREMENTS.md` reset for the next milestone. Nyquist validation finalised for Phases 12/13/16 (all phases compliant). Next milestone: v2.2 Visual Parity (asset PS pipeline blocker; derive requirements from `docs/research/phase12-baseline/COMPARISON.md` via `/gsd-new-milestone`).*

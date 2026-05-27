@@ -2,25 +2,25 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: milestone_complete
-last_updated: "2026-05-27T14:39:36.008Z"
+status: completed
+last_updated: "2026-05-27T18:30:35.386Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 4
-  completed_phases: 5
+  completed_phases: 4
   total_plans: 13
   completed_plans: 13
-  percent: 125
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-25)
+See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 16 — v2-1-tech-debt-cleanup
+**Current focus:** v2.1 Decruft SHIPPED + tagged `v2.1`; planning next milestone — v2.2 Visual Parity (asset PS pipeline blocker).
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -36,6 +36,20 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 | todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational, post-Phase-11 |
 | backlog | Dead-code re-removal (CLEAN-01..04) vs MSBuild tree | **PROMOTED to active milestone v2.1 Decruft (Phases 12–15)** |
 | backlog | DPVS D3D11 remeasure (SPEC R7); CLEAN-06 ~30 tools | carried to backlog |
+
+## Deferred Items (acknowledged at v2.1 close)
+
+5 open artifacts acknowledged and deferred at v2.1 Decruft milestone close (2026-05-27). All non-blocking — none are v2.1 regressions:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | closed (pre-existing SOE engine quirk; not a regression) |
+| debug | safecast-null-cast | closed (resolved 2026-05-15, ContrailData D-18 guard) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low — annoying, workaround available |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational, post-Phase-11 |
+| todo | 2026-05-27-options-toolbar-cooldown-ui-data-mismatch-crash | medium — pre-existing Options-window FATAL (`checkShowToolbarCommandCooldownTimer` `.ui`-data mismatch from feature commit `d1b3c0eaf`); OUTSIDE the v2.1 diff, NOT a Decruft regression |
+
+Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` accumulated test-settings cleanup (after v2.2 visual parity); AR-15-01 future-TCG-revival re-evaluation (future v2.x). See `milestones/v2.1-MILESTONE-AUDIT.md`.
 
 ## Current Position
 
@@ -149,6 +163,6 @@ Re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree, ordered 
 
 Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits (CLEAN-01..05), retargeted CMake → MSBuild. **Invariant:** every step boots to character select under both `rasterMajor=5` and `=11`.
 
-**Next action:** `/gsd-plan-phase 12` to decompose Phase 12 into executable plans.
+**Next action:** v2.1 Decruft CLOSED + tagged `v2.1` (2026-05-27). `/clear` then `/gsd-new-milestone` to open **v2.2 Visual Parity** — derive requirements from `docs/research/phase12-baseline/COMPARISON.md` (asset PS pipeline is the blocker).
 
 Known unrelated long-tail (deferred): 0x087a armor_marauder async crash (cross-client, retry works); ~11-min ExceptionHandler crash; first-launch login flakiness. Koogie's uncommitted Direct3d9.cpp Utinni vtable probe in the working tree is a separate sidequest — leave untouched. v2.2 Visual Parity (asset PS pipeline blocker) is the next milestone after Decruft; read `docs/research/phase12-baseline/COMPARISON.md` when it opens.

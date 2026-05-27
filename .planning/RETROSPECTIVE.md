@@ -2,6 +2,42 @@
 
 Living retrospective across milestones. Newest milestone first.
 
+## Milestone: v2.1 — Decruft
+
+**Shipped:** 2026-05-27
+**Phases:** 12–16 (5, incl. inserted Phase 16) | **Plans:** 16 | **Audit:** tech_debt (functional PASS, 7/7 DECRUFT, 0 blockers)
+
+### What Was Built
+Re-applied the orphaned v2.0 dead-code removals (CLEAN-01..04) against the active Koogie/MSBuild tree: five dormant subsystems fully unlinked + deleted — trackIR/stationapi/SwgClientSetup/lcdui (Phase 12), VideoCapture (13), Vivox voice chat (14), XPCOM/Mozilla in-game browser (15) — followed by a tech-debt cleanup pass (16: SwgGodClient 989crypt token, dead finalUrl block, orphaned voice-volume API). ~2,000+ files deleted (incl. the 1,866-file libMozilla tree + 138-file vivox trees); client kept bootable to character-select under both renderers after every removal.
+
+### What Worked
+- **Risk-gradient phase ordering** (pure deletes → lib unlinks → live-source surgery). Re-establishing the dual-renderer boot baseline on the cheap Phase 12 deletes before the riskier Vivox/XPCOM source surgery meant any regression had an unambiguous origin.
+- **The `/FORCE` link-grep gate.** Grepping link output for `unresolved external symbol` (==0) rather than trusting MSBuild exit 0 caught two real Phase 12 defects (the live `989crypt.lib` dep; orphaned ClientHeadTracking callers). Became the standard removal-validation primitive for the whole milestone.
+- **Code review catching what gates can't.** CR-01 — the voice-enum deletion silently shifting surviving radial-menu ordinals off their retail-datatable rows — is invisible to both the link gate and the boot gate. Code review caught it; ordinal-preserving placeholders fixed it; the lesson propagated forward to Phase 15's TUIWebBrowser enum delete.
+- **Incremental boot gates.** DECRUFT-07 was a cross-cutting gate owned by Phase 15 but verified after every removal, so the milestone-end gate was a confirmation, not a discovery.
+- **The milestone audit earned its keep.** It surfaced real residue (989crypt latent LNK1181, dead source) that became Phase 16, rather than shipping it as silent debt.
+
+### What Was Inefficient
+- **Validation docs lagged reality.** Phases 12/13/16 VALIDATION.md were authored as strategy drafts and never flipped after execution — `draft`/`nyquist_compliant: false` while the phases were verified-passed. Finalised retroactively at milestone close (this session). Cheap to fix, but recurring drift.
+- **MSYS `sed` backslash/back-reference gotcha** on Windows `.vcxproj` path purges cost time across Phases 13–15 (a path like `...\3rd\...` mis-parses `\3` as a back-reference). Resolved by matching segments by substring+delimiter, not escaping literal backslashes.
+- **CLI count drift.** `milestone.complete` reported 4 phases/13 plans (it doesn't see the inserted Phase 16); the MILESTONES.md entry needed hand-correction to 5 phases/16 plans, and the auto-extracted accomplishments included noise lines that needed curating.
+
+### Patterns Established
+- **Removal-validation triad:** per-token `rg` grep-zero (seconds) → MSBuild Debug+Release link-grep `unresolved external symbol`==0 (minutes) → manual dual-renderer boot to character-select. The project's standard dead-code-removal verification (no unit-test harness exists in this C++ tree).
+- **Ordinal-preserving placeholders** (`RESERVED_*`) for any deletion from a positional enum/table that mirrors a retail-TRE row index — never mid-sequence deletes.
+- **KEEP-list discipline** during broad token sweeps (soePlatform libs, crypto.lib, binkw32, Miles) to avoid the adjacency trap of deleting a live dep next to a dead one.
+
+### Key Lessons
+1. On a `/FORCE`-linked target, exit 0 is not proof of a clean link — grep the link log.
+2. Deletions from positional enums/tables that mirror retail-TRE row indices are a regression class that build + boot gates cannot catch; only review or a placeholder convention catches them.
+3. Finalise validation/Nyquist docs at phase close, not at milestone close — the drift is cheap individually but compounds into a retroactive sweep.
+
+### Cost Observations
+- Model: Opus (quality profile). Cross-AI consults available but less needed than v2.0's D3D11 work — removal is more mechanical than renderer bring-up.
+- Solo hobby cadence; 2026-05-25 → 05-27 (3 days wall-clock for the removal phases + audit + tech-debt close).
+
+---
+
 ## Milestone: v2.0 — Modernisation
 
 **Shipped:** 2026-05-25
@@ -43,3 +79,4 @@ A modern MSVC/C++20/MSBuild SWG client booting to character select and rendering
 | Milestone | Phases | Audit | Headline |
 |-----------|--------|-------|----------|
 | v2.0 Modernisation | 7–11 | tech_debt | MSVC/C++20/MSBuild client; D3D9+D3D11 selectable |
+| v2.1 Decruft | 12–16 | tech_debt | 5 dormant subsystems unlinked + deleted; client stays bootable both renderers |
