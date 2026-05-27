@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: executing
+status: milestone_complete
 last_updated: "2026-05-27T14:39:36.008Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 13
   completed_plans: 13
-  percent: 100
+  percent: 125
 ---
 
 # Project State
@@ -39,9 +39,9 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 16 (v2-1-tech-debt-cleanup) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
+Phase: 16
+Plan: Not started
+Status: Milestone complete
 Last activity: 2026-05-27
 
 **v2.1 Decruft phase plan:**
