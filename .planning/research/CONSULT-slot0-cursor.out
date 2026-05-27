@@ -1,0 +1,286 @@
+# Independent review: slot-0 / TAG_PSRC reframe
+
+I read the cited engine paths and cross-checked against your Phase 11 consult notes. Below is a code-grounded verdict, not a rubber stamp of `.planning/research/SUMMARY.md`.
+
+---
+
+## Claim-by-claim verification
+
+### Claim 1 — “Single root cause: slot-0-only fallback PS”
+
+**Mostly true as the dominant shading blocker; oversimplified as “one bug explains every symptom.”**
+
+**Verified in tree:**
+
+1. **D3D9 PEXE is rejected; `m_d3dPS` stays null**
+
+```748:756:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp
+	// Current pre-compiled D3D9 bytecode case. We CANNOT pass this to
+	// CreatePixelShader -- it would E_INVALIDARG. Log the version for
+	// the asset-audit trail.
+	int const verMajor = static_cast<int>((exe[0] >> 8) & 0xff);
+	int const verMinor = static_cast<int>((exe[0] >> 0) & 0xff);
+	DEBUG_REPORT_LOG_PRINT(true,
+		("Direct3d11_PixelShaderProgramData: '%s' is pre-compiled D3D9 PS %d.%d bytecode -- not consumable by D3D11; m_d3dPS NULL (asset re-author follow-up; Plan 11-06 draw skip)\n",
+		pixelShaderProgram.getFileName(), verMajor, verMinor));
+```
+
+D3D9 does the opposite — it consumes the same `m_exe`:
+
+```34:35:src/engine/client/application/Direct3d9/src/win32/Direct3d9_PixelShaderProgramData.cpp
+			HRESULT const hresult = Direct3d9::getDevice()->CreatePixelShader(pixelShaderProgram.m_exe, &m_pixelShader);
+			FATAL_DX_HR("CreatePixelShader failed %s", hresult);
+```
+
+2. **Draw path binds dynamic PS when asset PS is null**
+
+```1107:1122:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+		if (ms_currentPSData && ms_currentPSData->getPixelShader())
+		{
+			ctx->PSSetShader(ms_currentPSData->getPixelShader(), nullptr, 0);
+		}
+		else if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
+		{
+			// ... reflection-driven fallback-variant selection ...
+			ctx->PSSetShader(fallback, nullptr, 0);
+		}
+```
+
+3. **Fallback generator samples only `t0` / TEXCOORD0 (plus optional COLOR0), not slots 1–7**
+
+```405:472:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp
+		if (texcoord0Index >= 0)
+		{
+			hlsl += "Texture2D    t : register(t0);\n";
+			hlsl += "SamplerState s : register(s0);\n";
+            // ...
+			hlsl += "    float4 col = t.Sample(s, input.";
+			// ...
+			hlsl += ";\n";
+```
+
+4. **SRVs 1–7 are bound but explicitly not consumed by that PS** (Iter-44E)
+
+```601:605:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+	// Still deferred to Phase 12 (real per-asset PS compile): material /
+	// textureFactor / textureScroll / alpha-test / stencil / fog / multi-slot
+	// SRV/sampler binding (slots 1..7). CODEX Q5 -- the dynamic fallback PS
+	// reads only t.Sample(s, input._v0.xy) from register(t0)/register(s0),
+```
+
+```711:728:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+			// Plan 11-09.15 Iter-44E: extended from slot-0-only to all 8
+			// stages. Always unbind absent stages to avoid sticky cross-
+			// shader SRV bleed ...
+			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
+			{
+				// ... setPixelShaderResource / setPixelShaderSampler ...
+```
+
+5. **`TextureOperation` enum exists** (~26 ops) at `ShaderImplementation.h:498–526`, but see architectural caveat below.
+
+**Symptom mapping (Q1):**
+
+| Symptom | Explained by slot-0 PS + missing Pass constants? | Second bug? |
+|--------|---------------------------------------------------|-------------|
+| Untextured / wrong diffuse | **Yes** (primary) | Wrong SRV0 routing on some UI paths was a separate iter; mostly addressed |
+| Gray eyes | **Yes** (multi-stage in asset PS, only t0 sampled) | Pre-44E sticky SRV was a bind bug; bind is fixed, sample is not |
+| Minimap square | **Yes** if radar pass is multi-stage PS | Not geometry/scissor alone per your own radar research |
+| Missing specular/glow | **Partly** — needs real PS **and** material/textureFactor constants | `Direct3d11_LightManager` is also simplified vs D3D9 |
+| Magenta slivers | **Yes** — no TEXCOORD0 → magenta branch (`:506–509`) | — |
+| **Eyes through back of head** | **Oversold as same root cause** | **Iter-44A depth wiring is a separate fix already landed** |
+
+The codebase itself disagrees with bundling “eyes through skull” purely into the PS gap:
+
+```665:677:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+					// Plan 11-09.15 Iter-44A: per-pass DEPTH state. Mirrors
+					// D3D9's RSB/RSM writes for ZENABLE/ZWRITEENABLE/ZFUNC
+					// ...
+					// causing the "eyes through back-of-head" symptom: the
+					// eye/decal pass on the skeletal character expected
+					// either Z-disabled or Always-compare to render last over
+					// the back-of-head opaque pass, but got LESS_EQUAL with
+					// write-all so it depth-failed in the wrong direction.
+					Direct3d11_StateCache::setDepthEnable(engPass->m_zEnable);
+					Direct3d11_StateCache::setDepthWriteEnable(engPass->m_zWrite);
+					Direct3d11_StateCache::setDepthCompareFunc(translateCompare(engPass->m_zCompare));
+```
+
+Your later consult (`11-09.15-CODEX-CONSULT-iter44-pipeline-deepdive-RESPONSES.md`) then says depth is correct and gray eyes are PS multi-stage — both can be true: **depth may be fixed while color/compositing is still broken.**
+
+**Verdict on Claim 1:** Treat “null asset PS → slot-0 dynamic PS + no Pass::apply material uploads” as the **primary shading architecture gap**, not a mathematically single bug. Claim 4 items (gamma, half-texel) are genuinely independent. Depth (44A), skeletal stream math, and simplified lighting are **satellite gaps** that can still show up after PS lands.
+
+---
+
+### Claim 2 — PSRC recompile vs PEXE translation
+
+**PSRC discard: verified. PSRC-as-primary-path: sound for HLSL assets; “TextureOperation generator for asm” is wrong for char-select VSPS shaders.**
+
+**Verified discard:**
+
+```2899:2908:src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
+		// load the source code
+		iff.enterChunk(TAG_PSRC);
+		iff.exitChunk(TAG_PSRC, true);
+
+		// load the d3d8 executable data
+		iff.enterChunk(TAG_PEXE);
+			const int exeLength = iff.getChunkLengthLeft(sizeof(DWORD));
+			m_exe = new DWORD[exeLength];
+			iff.read_uint32(exeLength, m_exe);
+```
+
+**VS asymmetry is real but slightly mis-stated:** VS source is kept via **whole-file load** of `.vsh` (`ShaderImplementation.cpp:2309–2313`), not via a retained IFF `VSRC` chunk in the path I read. PS keeps only `m_exe` from IFF; PSRC is skipped.
+
+**Critical architecture correction your summary underplays:**
+
+For VSPS passes, the engine chooses **pixel shader program OR FFP stages, not both**:
+
+```1592:1602:src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
+		if (numberOfStages == 0 && !iff.atEndOfForm() && iff.getCurrentName() == TAG_PPSH)
+		{
+			m_pixelShader = new PixelShader(iff);
+		}
+		else
+		{
+			m_stage = new Stages;
+			// ... TextureOperation stages ...
+		}
+```
+
+`sul_eye.sht`-style materials use `TAG_PPSH` with `numberOfStages == 0`. Texture **bindings** come from `PixelShader::m_textureSamplers`; **compositing** lives in the `.psh` program (PSRC → PEXE), **not** in `Pass::m_stage` `TextureOperation` fields.
+
+D3D9 applies `TextureOperation` at runtime only on the **FFP** path (`Direct3d9_ShaderImplementationData.cpp` under `#ifdef FFP`). VSPS passes use compiled `.psh` (`Direct3d9_ShaderImplementationData.cpp:314–320`).
+
+So for the char-select beachhead, **lane “generate from TextureOperation stage model” does not replace asset PS** — it only helps FFP-only passes, which D3D11 explicitly descoped (`Direct3d11_StaticShaderData.h` D-04a / comments).
+
+**PSRC usability (ShaderBuilder ground truth):**
+
+- `//hlsl` → `D3DXCompileShader` (`PixelShaderProgramView.cpp:308–328`)
+- Otherwise → `D3DXAssembleShader` on **asm** (`CompileAsm`, `Compile()` at `:461–468`)
+
+**Landmine:** assembling PSRC asm with `D3DXAssembleShader` reproduces **D3D9-era bytecode** — the same class D3D11 rejects. Asm PSRC must become **HLSL + `D3DCompile` → `ps_4_0`**, not “assemble to PEXE again.”
+
+**`compilePixelShaderFromHlsl` is ready** (`Direct3d11_PixelShaderProgramData.cpp:86–171`) but unused for assets today.
+
+**Verdict on Claim 2:**  
+- **Right:** Keep PSRC; don’t decompile PEXE; mirror VS compile stack for `//hlsl` PSRC.  
+- **Wrong / dangerous for roadmap spine:** “For asm PSRC, generate from pass `TextureOperation`” — **not applicable to VSPS char-select shaders.** For asm-heavy `.psh`, you need **asm→HLSL port**, a maintained translator, or measured subset reauthored as HLSL — census is mandatory.
+
+---
+
+### Claim 3 — Per-pass constants
+
+**Verified missing on D3D11; D3D9 reference is accurate; “cbuffer slots exist but aren’t written per-pass” is mostly true.**
+
+D3D9 `Pass::apply` uploads material, textureFactor (VS+PS), textureScroll, stencil ref, fog color (`Direct3d9_StaticShaderData.cpp:835–955`).
+
+D3D11 `StaticShaderData::apply` explicitly defers the same (`:601–602`). PerMaterialCB exists (`Direct3d11_ConstantBuffer.h:58–64`) but material fields are **not** filled from Pass::apply — only `setPixelShaderUserConstants_impl` writes `userConstants[]` to PS slot 2 (`Direct3d11.cpp:660–693`), with a comment that diffuse/specular stay zero until Phase 12.
+
+Alpha-test ref **is** wired (44B) into PS cbuffer slot 1 for the **dynamic** PS only (`Direct3d11_ConstantBuffer.h:68–75`).
+
+**Verdict:** Claim 3 is **correct**. Real asset PS will still look wrong without Pass::apply parity even after PSRC compile.
+
+---
+
+### Claim 4 — Independent gamma + half-texel
+
+**Verified independent of PS pipeline.**
+
+- Gamma stub: `Direct3d11.cpp:253–256` (no-op); D3D9 ramp at `Direct3d9.cpp:2198–2216`.
+- `getOneToOneUVMapping`: still `STUB` in D3D11 (`Direct3d11.cpp:995`); D3D9 implements +0.5 texel inset (`Direct3d9.cpp:3676–3681`).
+- D3D9 `D3DSAMP_SRGBTEXTURE = 0` (`Direct3d9_StateCache.cpp:193`) — supports “don’t flip SRVs to _SRGB” guidance.
+
+**Verdict:** Claim 4 is **correct** and should stay parallel work, with gamma scheduled after PS so you tune LUT on real shading.
+
+---
+
+## Answers to your five questions
+
+### 1) Does Claim 1 hold?
+
+**Hold as the spine, not as a literal single bug.**
+
+One **architecture gap** (no SM4 asset PS + slot-0 fallback + no Pass::apply material/fog/stencil uploads) explains most of the list. Exceptions:
+
+- **Eyes through head:** likely **partially addressed by Iter-44A depth**; do not fold residual cases into “only PS” without a fresh A/B screenshot.
+- **Gamma / load seam:** independent (Claim 4).
+- **Specular / interiors “flat white”:** PS + constants **plus** missing gamma LUT **plus** simplified `Direct3d11_LightManager`.
+- **Skeletal shard distortion:** separate from texturing (your research already flags this).
+
+### 2) Is PSRC recompile the right primary path?
+
+**Yes for the VSPS population that drives char-select and world materials.**
+
+**No** for “TextureOperation evaluator as primary for those passes” — wrong data model.
+
+**Risks on PSRC itself (must census):**
+
+| Risk | Why |
+|------|-----|
+| Asm vs `//hlsl` ratio | Asm cannot ride `D3DCompile` unchanged |
+| Includes / `#pragma` | VS path has `CompileIncludeHandler`; PS path must mirror |
+| Register layout after `HlslRewrite` | Rules B/C can strip bindings; D3DCompile reallocates — engine `Set*ShaderConstants` must match **reflected** layout, not D3D9 register folklore |
+| Stripped PSRC in some shipped assets | ShaderBuilder writes both tags (`Node.cpp:5843–5845`), but retail TRE must be measured — **census on real install tree**, not repo-only |
+| PS vs VS signature linkage | Already a proven pitfall (id=342/343); any real PS must stay reflection-driven |
+
+### 3) Generated TextureOperation evaluator vs two-lane vs census-first?
+
+**Recommendation:**
+
+1. **Gating first task:** PSRC language census on **char-select + top N multi-sampler shaders from Iter-44E logs** (not whole TRE day one). Measure: PSRC present, `//hlsl` vs asm, compile success with current rewrite, constant-table divergence vs D3D9 registers.
+
+2. **Primary lane:** **PSRC → `compilePixelShaderFromHlsl` → bind `m_d3dPS`** for HLSL (and ported HLSL).
+
+3. **Secondary lane:** **Asm PSRC → HLSL port** (tool-assisted or template), **not** pass-level `TextureOperation` generator for VSPS.
+
+4. **Tertiary / narrow:** FFP `TextureOperation` generator only for **FFP-only** passes (no `TAG_PPSH`) if you still hit those under D3D11 — likely small after D-04a.
+
+5. **Do not** lead with “modulate all stages” dynamic PS — your own Iter-44C revert documents amplification when slots 1+ are bound but not semantically sampled.
+
+A **minimal** dynamic multi-sampler combiner can be a **diagnostic bridge**, not parity strategy.
+
+### 4) Char-select-first beachhead?
+
+**Sound and deterministic**, with two constraints:
+
+- Use **`sul_eye.sht` + `sul_m_head.sht` (or your `sul_*_head` naming)** plus one single-stage control (body/clothing) to separate “pipeline works” from “multi-sampler works.”
+- Success criteria should be **screenshot diff vs `rasterMajor=5`**, not “no magenta.”
+- Confirm **single-stream vs multi-stream** skinning before blaming remaining head weirdness on PS.
+
+### 5) Landmines (especially shared `clientGraphics` / D3D9 regression)
+
+| Landmine | Detail |
+|----------|--------|
+| **Shared PSRC load change** | Keep `load_0000` behavior identical for D3D9 plugin; store PSRC only in graphics-agnostic struct or behind `Graphics::getImplementation()` branch |
+| **HlslRewrite register stripping** | Recompiled PS may not use c11/c44/c45/c47 where D3D9 shaders did — need **D3DReflect-driven constant upload**, not copy-paste register indices |
+| **D3D9 Compare[] swap** | Intentional parity (`C_GreaterOrEqual` ↔ `C_NotEqual`); do not “fix” when porting stencil/depth |
+| **Matrix transpose** | Every new cbuffer matrix must use `XMMatrixTranspose` |
+| **Re-enable blend factors early** | Iter-44C regression — wait until real PS samples all bound SRVs |
+| **sRGB formats** | Double-correction trap |
+| **Boot gate** | Any `ShaderImplementation.cpp` change: boot **both** `rasterMajor=5` and `11` |
+| **Asm → PEXE rebuild mistake** | Re-assembling asm with D3DX still yields unusable bytecode on D3D11 |
+| **Assuming TextureOperation in `.sht` drives VSPS** | Will waste a phase on data that isn’t there for `TAG_PPSH` passes |
+| **UTF-16 on `.py` handoffs** | Per `AGENTS.md` if tooling touches Blender paths (orthogonal but real in this repo) |
+
+---
+
+## Plain verdict on claims
+
+| Claim | Verdict |
+|-------|---------|
+| **1 Single root cause** | **Directionally right, oversimplified.** Spine = asset PS pipeline absent + slot-0 fallback. Not one bug for every symptom; depth (eyes), gamma, lighting, skinning are separable. |
+| **2 PSRC reframe** | **Right to reject PEXE on D3D11; right to keep PSRC; wrong to lean on pass `TextureOperation` for VSPS char-select.** Census + HLSL recompile is the correct primary path. |
+| **3 Per-pass constants** | **Correct and required** in parallel with real PS. |
+| **4 Gamma + half-texel** | **Correct and independent.** |
+
+---
+
+## What I would lock for the roadmap
+
+1. **Phase A (measure):** PSRC census on char-select + Iter-44E multi-stage set.  
+2. **Phase B (fix):** Retain PSRC + wire `compilePixelShaderFromHlsl` in `Direct3d11_PixelShaderProgramData` ctor/reload + Pass::apply constant uploads in `Direct3d11_StaticShaderData::apply`.  
+3. **Phase C (parallel):** `getOneToOneUVMapping` + gamma LUT.  
+4. **Explicitly descope for VSPS beachhead:** “FFP TextureOperation generator as primary.”
+
+If you want, I can turn this into a short “consult response” block you can paste into `.planning/research/CONSULT-slot0-cursor.out` — in Ask mode I can only advise, not write the file. Switch to Agent mode for that.
