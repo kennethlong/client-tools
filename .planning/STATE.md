@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-27T13:46:12.470Z"
-last_activity: 2026-05-27 -- Phase 16 planning complete
+last_updated: "2026-05-27T14:33:47.195Z"
+last_activity: 2026-05-27
 progress:
   total_phases: 4
   completed_phases: 4
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** Every change must leave the client bootable to character select.
-**Current focus:** Phase 15 — in-game-browser-xpcom-mozilla-removal-milestone-gate
+**Current focus:** Phase 16 — v2-1-tech-debt-cleanup
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -39,10 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 16 (v2-1-tech-debt-cleanup) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-05-27 -- Phase 16 planning complete
+Last activity: 2026-05-27
 
 **v2.1 Decruft phase plan:**
 
@@ -106,6 +106,7 @@ Decisions carried forward from v1:
 - [Phase 14]: Plan 14-03 (DECRUFT-05 crit #1 + DECRUFT-07 boot gate): deleted the 3 vendored voice trees (vivox/, vivoxSharedWrapper/, soePlatform/VChatAPI/ — 138 files, 47,201 lines, commit 0d15c8433) after a Wave-1 merge gate confirmed Wave 1 complete; cleaned copy-libs.bat (0 VChatAPI refs); PRESERVED soePlatform/libs/ (Base.lib + prebuilt VChatAPI.lib/Base_vchat.lib in Win32-Debug/Win32-Release) + ChatAPI2/. Repo-wide GATE-1 vivox grep-zero; Debug 0 unresolved (69.9 MB) / Release 0 (28.7 MB) / Optimized 0 unresolved (DEF-14-01 SAFESEH only). **DUAL-RENDERER BOOT GATE PASS** (user-confirmed): char-select under rasterMajor=5 (D3D9) AND =11 (D3D11), no crash/assert, no voice surfaces; client_d.cfg left at rasterMajor=11. D-04/D-06a/D-08/D-09/D-10 satisfied.
 - [Phase 14]: DEF-14-02: GATE-2's over-broad getVoice/setVoice substrings collide with 3 SOE community-chat methods (ChatRoom::getVoiceCount/getVoiceCore/getVoice) in the PRESERVED soePlatform/ChatAPI2/ tree (ZERO vivox literals; D-10 KEEP-listed). Benign false-positive, NOT a Vivox-subsystem holdout — rg -i vivox over ChatAPI2/ == 0; GATE-2 over src EXCLUDING ChatAPI2/ == 0. Out of scope (SCOPE BOUNDARY), documented in deferred-items.md, not fixed.
 - [Phase 14]: CR-01 (code-review BLOCKER, FIXED commit 1bfeff6b3): the voice-enum deletion in 14-01 shifted surviving CuiMenuInfoTypes::Type ordinals (ITEM_EQUIP_APPEARANCE 106→103 .. GOD_TELEPORT) — and that ordinal is used DIRECTLY as the retail datatables/player/radial_menu.iff ROW INDEX by RadialMenuManager (s_ranges keyed by row index; getCommandForMenuType does s_ranges.find(menuType)). So equip-appearance/unequip-appearance/storyteller-recipe/god-teleport silently resolved to wrong rows — a regression the link gate + char-select boot gate cannot catch. Fixed by 3 ordinal-preserving placeholders (RESERVED_RADIAL_SLOT_103..105, no voice tokens); Debug+Release re-built clean (0 unresolved). Corrects locked D-06a (see 14-CONTEXT.md). **LESSON for Phase 15: deletions from positional enums/tables that mirror retail-TRE row indices MUST use ordinal-preserving placeholders, never mid-sequence deletes.**
+- [Phase ?]: [Phase 16] Plan 16-01: removed dead 989crypt.lib token from SwgGodClient.vcxproj Debug (577f68def); soePlatform 9-token KEEP-list + live crypto.lib preserved (adjacency trap); D-02 sweep confirm-zero; D-04 editor lcdui 0 (no edit, 15-04 swept); D-03 grep-only never built; D-05 doc-staleness out of scope.
 
 ### Pending Todos
 
@@ -133,7 +134,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-27T02:09:19.826Z
+Last session: 2026-05-27T14:33:25.230Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**

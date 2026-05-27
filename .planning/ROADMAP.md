@@ -163,11 +163,11 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 **Out of scope (deferred, NOT this phase):** AR-15-01 future-TCG-revival re-evaluation (future v2.x); `stage/client_d.cfg` accumulated-test-settings cleanup (coupled to v2.2 visual-parity close); Nyquist-coverage finalisation for Phases 12 & 13 (do via `/gsd:validate-phase 12` + `13`, not a code phase).
 **Requirements**: None (post-hoc tech-debt closure — no new product requirements; traces to `v2.1-MILESTONE-AUDIT.md` tech_debt)
 **Depends on:** Phase 15
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 16-01-PLAN.md — SwgGodClient 989crypt.lib dead-dep sweep (D-01/02/03) + editor lcdui verify-only (D-04) + D-05 scope fence
+- [x] 16-01-PLAN.md — SwgGodClient 989crypt.lib dead-dep sweep (D-01/02/03) + editor lcdui verify-only (D-04) + D-05 scope fence
 - [ ] 16-02-PLAN.md — Source-residue removal: dead finalUrl block + voice-volume API (D-06/D-07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
