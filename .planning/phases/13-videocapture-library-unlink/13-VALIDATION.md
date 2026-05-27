@@ -1,10 +1,11 @@
 ---
 phase: 13
 slug: videocapture-library-unlink
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-25
+validated: 2026-05-27
 ---
 
 # Phase 13 — Validation Strategy
@@ -74,14 +75,14 @@ with an incomplete Debug removal). Bash cross-ref: `grep -c "unresolved external
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 13-01-T1 | 13-01 | 1 (W0) | DECRUFT-04 (crit #2) | T-13-01 | Lock the /FORCE-guard link-log capture before relying on it | build smoke + log-capture | `(Select-String -Path link-debug.log -Pattern 'Searching .*\.lib').Count -gt 0` (proves /VERBOSE captured) | ❌ W0 (link-log capture step — this task authors it) | ⬜ pending |
-| 13-01-T2 | 13-01 | 1 | DECRUFT-04 (crit #2) | T-13-01, T-13-02 | Atomic caller+wrapper+lib removal; no silent unresolved-external/LNK1181 under `/FORCE` | source grep + build + 3-condition link-grep | Debug (primary): `'Searching .*\.lib'>0 -and 'unresolved external symbol'==0 -and 'LNK1181\|cannot open input file'==0` on link-debug.log; same on link-release.log (confirmation) | ✅ (Select-String available) | ⬜ pending |
-| 13-02-T1 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02, T-13-03 | Remove dead recorder source residue; live AIL_* playback untouched | source grep + targeted controls | `(Select-String <3 source areas> -Pattern 'videoCapture\|VideoCapture\|AudioCapture\|SwgAudioCapture').Count -eq 0`; removed fn names == 0; a known live `AIL_*` call present | ✅ | ⬜ pending |
-| 13-02-T2 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02 | Drop videocapture include path (build-inert) | grep gate | `(Select-String -Path clientGame.vcxproj,clientAudio.vcxproj,<3 includePaths.rsp> -Pattern 'videocapture').Count -eq 0` | ✅ | ⬜ pending |
-| 13-02-T3 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02 | Purge vestigial .rsp + editor/aux .vcxproj refs (LOCAL acceptance; enumerated + reconciled) | enumerate + grep gate (excl. vendored tree) | LOCAL: `rg -li "videocapture\|VideoCapture\|AudioCapture" --glob "*.rsp" --glob "!src/external/3rd/library/videocapture/**" src` → 0; same over this plan's 12 owned .vcxproj → 0 | ✅ (rg + Select-String available) | ⬜ pending |
-| 13-03-T1 | 13-03 | 2 | DECRUFT-04 (crit #1, D-04) | T-13-01, T-13-04 | Delete vendored tree last; post-Wave-1-merge full-repo grep INCLUDING .vcxproj | dir-delete + repo-wide grep (incl .vcxproj) | `(Test-Path src\external\3rd\library\videocapture) -eq $false -and (Get-ChildItem -Recurse -Include *.rsp,*.cpp,*.h,*.inl,*.vcxproj src \| Select-String -Pattern 'videocapture\|VideoCapture\|videoCapture\|AudioCapture').Count -eq 0`; + the 4 build-path .vcxproj clean | ✅ | ⬜ pending |
-| 13-03-T2 | 13-03 | 2 | DECRUFT-04 (crit #2) | T-13-01 | Re-run Debug (primary) + Release (confirmation) link gate after tree delete | build + 3-condition link-grep | Debug + Release each: `'Searching .*\.lib'>0 -and 'unresolved external symbol'==0 -and 'LNK1181\|cannot open input file'==0` on link-<cfg>.log | ✅ | ⬜ pending |
-| 13-03-T3 | 13-03 | 2 | DECRUFT-04 (crit #3, D-05) | — | Client boots clean post-removal under both renderers | manual boot gate | Launch `SwgClient_d.exe` (reads `client_d.cfg`) with `rasterMajor=5` then `=11` against the VM; record per-renderer evidence | ❌ manual | ⬜ pending |
+| 13-01-T1 | 13-01 | 1 (W0) | DECRUFT-04 (crit #2) | T-13-01 | Lock the /FORCE-guard link-log capture before relying on it | build smoke + log-capture | `(Select-String -Path link-debug.log -Pattern 'Searching .*\.lib').Count -gt 0` (proves /VERBOSE captured) | ❌ W0 (link-log capture step — this task authors it) | ✅ green (VERIFIED) |
+| 13-01-T2 | 13-01 | 1 | DECRUFT-04 (crit #2) | T-13-01, T-13-02 | Atomic caller+wrapper+lib removal; no silent unresolved-external/LNK1181 under `/FORCE` | source grep + build + 3-condition link-grep | Debug (primary): `'Searching .*\.lib'>0 -and 'unresolved external symbol'==0 -and 'LNK1181\|cannot open input file'==0` on link-debug.log; same on link-release.log (confirmation) | ✅ (Select-String available) | ✅ green (VERIFIED) |
+| 13-02-T1 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02, T-13-03 | Remove dead recorder source residue; live AIL_* playback untouched | source grep + targeted controls | `(Select-String <3 source areas> -Pattern 'videoCapture\|VideoCapture\|AudioCapture\|SwgAudioCapture').Count -eq 0`; removed fn names == 0; a known live `AIL_*` call present | ✅ | ✅ green (VERIFIED) |
+| 13-02-T2 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02 | Drop videocapture include path (build-inert) | grep gate | `(Select-String -Path clientGame.vcxproj,clientAudio.vcxproj,<3 includePaths.rsp> -Pattern 'videocapture').Count -eq 0` | ✅ | ✅ green (VERIFIED) |
+| 13-02-T3 | 13-02 | 1 | DECRUFT-04 (crit #1) | T-13-02 | Purge vestigial .rsp + editor/aux .vcxproj refs (LOCAL acceptance; enumerated + reconciled) | enumerate + grep gate (excl. vendored tree) | LOCAL: `rg -li "videocapture\|VideoCapture\|AudioCapture" --glob "*.rsp" --glob "!src/external/3rd/library/videocapture/**" src` → 0; same over this plan's 12 owned .vcxproj → 0 | ✅ (rg + Select-String available) | ✅ green (VERIFIED) |
+| 13-03-T1 | 13-03 | 2 | DECRUFT-04 (crit #1, D-04) | T-13-01, T-13-04 | Delete vendored tree last; post-Wave-1-merge full-repo grep INCLUDING .vcxproj | dir-delete + repo-wide grep (incl .vcxproj) | `(Test-Path src\external\3rd\library\videocapture) -eq $false -and (Get-ChildItem -Recurse -Include *.rsp,*.cpp,*.h,*.inl,*.vcxproj src \| Select-String -Pattern 'videocapture\|VideoCapture\|videoCapture\|AudioCapture').Count -eq 0`; + the 4 build-path .vcxproj clean | ✅ | ✅ green (VERIFIED) |
+| 13-03-T2 | 13-03 | 2 | DECRUFT-04 (crit #2) | T-13-01 | Re-run Debug (primary) + Release (confirmation) link gate after tree delete | build + 3-condition link-grep | Debug + Release each: `'Searching .*\.lib'>0 -and 'unresolved external symbol'==0 -and 'LNK1181\|cannot open input file'==0` on link-<cfg>.log | ✅ | ✅ green (VERIFIED) |
+| 13-03-T3 | 13-03 | 2 | DECRUFT-04 (crit #3, D-05) | — | Client boots clean post-removal under both renderers | manual boot gate | Launch `SwgClient_d.exe` (reads `client_d.cfg`) with `rasterMajor=5` then `=11` against the VM; record per-renderer evidence | ❌ manual | ✅ PASS — manual, both renderers (operator-confirmed; D3D9+D3D11 → Tatooine, 13-03-SUMMARY) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -89,7 +90,7 @@ with an incomplete Debug removal). Bash cross-ref: `grep -c "unresolved external
 
 ## Wave 0 Requirements
 
-- [ ] **Link-log capture step (LOCKED in Plan 13-01 Task 1)** — build SwgClient with link output
+- [x] **Link-log capture step (LOCKED in Plan 13-01 Task 1)** — build SwgClient with link output
   redirected so the `/VERBOSE` link text can be grepped for `unresolved external symbol` AND `LNK1181`
   (the `/FORCE` false-pass guard from D-06). Authored for **both** Debug and Release using the LOCKED
   PowerShell command in §"Locked Link-Log Capture + Gate" above; recorded verbatim in 13-01-SUMMARY.md
@@ -98,9 +99,9 @@ with an incomplete Debug removal). Bash cross-ref: `grep -c "unresolved external
   repo-wide INCLUDING `.vcxproj` (D-04 "repo-wide" intent), owned by Plan 13-03 Task 1. Wave-1 plans
   carry LOCAL acceptance over their own files only; the cross-cutting all-`.vcxproj`/`.rsp` check is the
   post-Wave-1-merge gate in Plan 13-03.
-- [ ] No test files / framework install needed — this is a build+boot validated phase.
+- [x] No test files / framework install needed — this is a build+boot validated phase.
 
-*(`wave_0_complete` flag stays `false` here; flip it at execution time when 13-01 Task 1 lands.)*
+*(`wave_0_complete` flipped to `true` 2026-05-27 — 13-01 Task 1 landed the link-log capture step during execution; verified in 13-VERIFICATION.md truth 2.)*
 
 ---
 
@@ -117,11 +118,28 @@ with an incomplete Debug removal). Bash cross-ref: `grep -c "unresolved external
 
 ## Validation Sign-Off
 
-- [ ] All tasks have an automated grep/build verify or a documented manual boot gate
-- [ ] Sampling continuity: every removal task has a same-commit grep verify; no 3 consecutive tasks without an automated check
-- [ ] Wave 0 covers the link-log capture step (the `/FORCE` guard) — LOCKED in 13-01 Task 1
-- [ ] No watch-mode flags
-- [ ] Link-grep gate runs on Debug (blocking-primary) AND Release (confirmation) link logs, with the /VERBOSE marker + unresolved-external + LNK1181 checks
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have an automated grep/build verify or a documented manual boot gate
+- [x] Sampling continuity: every removal task has a same-commit grep verify; no 3 consecutive tasks without an automated check
+- [x] Wave 0 covers the link-log capture step (the `/FORCE` guard) — LOCKED in 13-01 Task 1
+- [x] No watch-mode flags
+- [x] Link-grep gate runs on Debug (blocking-primary) AND Release (confirmation) link logs, with the /VERBOSE marker + unresolved-external + LNK1181 checks
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ✅ validated 2026-05-27 (retroactive audit-only flip; phase verified `passed` 2026-05-25, see 13-VERIFICATION.md 3/3).
+
+---
+
+## Validation Audit 2026-05-27
+
+Retroactive Nyquist audit (State A). No code/test changes — the phase was executed and verified `passed` (3/3 criteria) before this audit. This pass confirms the locked link-log-capture gate (the /FORCE false-pass guard) and the grep-zero gates were exercised green during execution, and flips the doc state to match reality.
+
+| Metric | Count |
+|--------|-------|
+| Task rows | 8 |
+| COVERED (automated grep + Debug/Release link-grep gates, verified green) | 7 |
+| Manual-only (GPU dual-renderer boot — inherently un-automatable, operator-confirmed PASS) | 1 |
+| MISSING (automatable, unfilled) | 0 |
+| Tests generated | 0 (no unit-test harness in this C++ tree) |
+| Escalated | 0 |
+
+**Result:** NYQUIST-COMPLIANT (PARTIAL by nature) — the link gate ran green on both Debug (2138 Searching / 0 unresolved / 0 LNK1181) and Release (2104 / 0 / 0) per 13-VERIFICATION.md; repo-wide capture-token grep == 0; the sole manual item is the documented dual-renderer boot gate (D3D9+D3D11 → Tatooine, operator-confirmed).
