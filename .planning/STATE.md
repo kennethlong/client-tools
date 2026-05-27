@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-27T14:33:47.195Z"
+last_updated: "2026-05-27T14:39:36.008Z"
 last_activity: 2026-05-27
 progress:
   total_phases: 4
@@ -40,7 +40,7 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 ## Current Position
 
 Phase: 16 (v2-1-tech-debt-cleanup) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-05-27
 
@@ -107,6 +107,8 @@ Decisions carried forward from v1:
 - [Phase 14]: DEF-14-02: GATE-2's over-broad getVoice/setVoice substrings collide with 3 SOE community-chat methods (ChatRoom::getVoiceCount/getVoiceCore/getVoice) in the PRESERVED soePlatform/ChatAPI2/ tree (ZERO vivox literals; D-10 KEEP-listed). Benign false-positive, NOT a Vivox-subsystem holdout — rg -i vivox over ChatAPI2/ == 0; GATE-2 over src EXCLUDING ChatAPI2/ == 0. Out of scope (SCOPE BOUNDARY), documented in deferred-items.md, not fixed.
 - [Phase 14]: CR-01 (code-review BLOCKER, FIXED commit 1bfeff6b3): the voice-enum deletion in 14-01 shifted surviving CuiMenuInfoTypes::Type ordinals (ITEM_EQUIP_APPEARANCE 106→103 .. GOD_TELEPORT) — and that ordinal is used DIRECTLY as the retail datatables/player/radial_menu.iff ROW INDEX by RadialMenuManager (s_ranges keyed by row index; getCommandForMenuType does s_ranges.find(menuType)). So equip-appearance/unequip-appearance/storyteller-recipe/god-teleport silently resolved to wrong rows — a regression the link gate + char-select boot gate cannot catch. Fixed by 3 ordinal-preserving placeholders (RESERVED_RADIAL_SLOT_103..105, no voice tokens); Debug+Release re-built clean (0 unresolved). Corrects locked D-06a (see 14-CONTEXT.md). **LESSON for Phase 15: deletions from positional enums/tables that mirror retail-TRE row indices MUST use ordinal-preserving placeholders, never mid-sequence deletes.**
 - [Phase ?]: [Phase 16] Plan 16-01: removed dead 989crypt.lib token from SwgGodClient.vcxproj Debug (577f68def); soePlatform 9-token KEEP-list + live crypto.lib preserved (adjacency trap); D-02 sweep confirm-zero; D-04 editor lcdui 0 (no edit, 15-04 swept); D-03 grep-only never built; D-05 doc-staleness out of scope.
+- [Phase 16] Plan 16-02: removed dead finalUrl URL-construction block (~:1170-1189) + now-dead shellapi.h/ConfigClientGame.h includes in SwgCuiHudAction.cpp (9ffd140b7); narrow D-06 scope honored (httpParams accumulation ~:1081-1169 + confirm-box retained); removes a latent untrusted-URL ShellExecute path (T-16-03). rg finalUrl/ConfigClientGame/shellapi == 0 in file.
+- [Phase 16] Plan 16-02: removed full orphaned voice-volume API from CuiPreferences (842b44989) — 2 statics + 2 REGISTER_OPTION LocalMachine persistence lines + 4 accessors + 4 decls, atomically (REGISTER_OPTION refs the statics → must go together or clientUserInterface won't compile). D-07: deleted outright, no placeholders. Benign LocalMachine persistence-surface reduction (Vivox consumer gone since P14). rg speaker/micVolume == 0 repo-wide. Link+boot gate is Plan 16-03.
 
 ### Pending Todos
 
@@ -134,7 +136,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-27T14:33:25.230Z
+Last session: 2026-05-27T14:39:01.202Z
 Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.1 Decruft — the plan:**
