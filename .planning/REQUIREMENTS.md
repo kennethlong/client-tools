@@ -54,7 +54,7 @@ Which phases cover which requirements. Updated during roadmap creation (2026-05-
 | DECRUFT-04 | Phase 13 | Complete |
 | DECRUFT-05 | Phase 14 | Complete |
 | DECRUFT-06 | Phase 15 | Complete |
-| DECRUFT-07 | Phase 15 | Pending (cross-cutting gate; verified incrementally after every removal in Phases 12–15) |
+| DECRUFT-07 | Phase 15 | Complete (cross-cutting gate; verified incrementally in Phases 12–15, full-removal-set dual-renderer boot human-confirmed PASS at commit 16fd3ac4c) |
 
 **Coverage:**
 - v2.1 requirements: 7 total
