@@ -8,8 +8,6 @@
 #include "swgClientUserInterface/FirstSwgClientUserInterface.h"
 #include "swgClientUserInterface/SwgCuiHudAction.h"
 
-#include "shellapi.h"
-
 #include "UIButton.h"
 #include "UIClipboard.h"
 #include "UIManager.h"
@@ -21,7 +19,6 @@
 #include "clientGame/ClientCommandQueue.h"
 #include "clientGame/ClientExpertiseManager.h"
 #include "clientGame/CreatureObject.h"
-#include "clientGame/ConfigClientGame.h"
 #include "clientGame/Game.h"
 #include "clientGame/GameNetwork.h"
 #include "clientGame/ObjectAttributeManager.h"
@@ -1167,26 +1164,6 @@ bool  SwgCuiHudAction::performAction (const std::string & id, const Unicode::Str
 
 		httpParams["Character_Class"] = RoadmapManager::getPlayerSkillTemplate();
 		httpParams["Character_Client"] = ApplicationVersion::getInternalVersion();
-		// create the final URL
-
-		std::string baseUrl = ConfigClientGame::getCsTrackingBaseUrl();
-		std::string finalUrl = HttpGetEncoder::getUrl(baseUrl, httpParams);
-
-		if (finalUrl.length() > 2048)
-		{
-			unsigned diff = finalUrl.length() - 2048;
-
-			if (httpParams["Charchat"].length() > diff)
-			{
-				httpParams["Charchat"] = httpParams["Charchat"].substr(diff);
-				finalUrl = HttpGetEncoder::getUrl(baseUrl, httpParams);
-			}
-			else
-			{
-				return false;
-			}
-		}
-		//ShellExecute(NULL, "open", finalUrl.c_str(), NULL, "", SW_SHOW);
 	}
 
 	//else if (id == CuiActions::ticketSubmission) // Ticket Submission tabbed form
