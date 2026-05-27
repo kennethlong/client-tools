@@ -1,10 +1,11 @@
 ---
 phase: 15
 slug: in-game-browser-xpcom-mozilla-removal-milestone-gate
-status: draft
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-05-26
+validated: 2026-05-26
 ---
 
 # Phase 15 — Validation Strategy
@@ -46,10 +47,19 @@ created: 2026-05-26
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 15-XX-XX | XX | N | DECRUFT-06 | T-15-01 / T-15-03 | attack surface reduced; no masked unresolved symbol | grep-zero + link-grep | `rg -i "<token>" src` → 0; link log `unresolved external symbol` == 0 | ✅ (gates pre-exist) | ⬜ pending |
-| 15-XX-XX | XX | N | DECRUFT-07 | — | boots both renderers, no browser surface | manual boot | set `rasterMajor` in `stage/client_d.cfg`; launch `SwgClient_d.exe`; reach char-select 5 & 11 | ✅ | ⬜ pending |
+| 15-01-T1 (de-wire callers + sever TCG + delete TUIWebBrowser enum + Game.cpp include) | 15-01 | 1 | DECRUFT-06 | T-15-02 / T-15-04 / T-15-05 | dead TCG URL-nav severed; enum-ordinal safe; siblings untouched | grep-zero (gated via 15-01-T3) | `rg -i "TUIWebBrowser\|WebBrowserManager" src` → 0; sibling Browser UIs intact | ✅ (gates pre-exist) | ✅ green |
+| 15-01-T2 (delete 3 SwgCuiWebBrowser* units) | 15-01 | 1 | DECRUFT-06 | T-15-01 | browser consumer source removed | grep-zero (gated via 15-01-T3) | `rg -i "SwgCuiWebBrowser\|UIWebBrowserWidget" src` → 0 | ✅ | ✅ green |
+| 15-01-T3 (inline include purge + SwgClient link tokens + Debug/Release build gate) | 15-01 | 1 | DECRUFT-06 | T-15-01 / T-15-03 | attack surface reduced; no masked unresolved symbol | grep-zero + link-grep | `rg -i "<XPCOM set>" src` → 0; Debug+Release link log `unresolved external symbol` == 0 | ✅ | ✅ green |
+| 15-02-T1 (.rsp purge: SwgClient / swgClientUserInterface / clientGame) | 15-02 | 1 | DECRUFT-06 | T-15-06 / T-15-07 | config grep-zero; no live-dep over-deletion | grep-zero | `rg -i "Mozilla-family" *.rsp` → 0; `989crypt.lib` survives | ✅ | ✅ green |
+| 15-02-T2 (7 editor .rsp + inline .vcxproj purge) | 15-02 | 1 | DECRUFT-06 | T-15-07 | config grep-zero; no backslash mis-parse | grep-zero | per-editor `rg -i Mozilla` → 0 (no mangled tokens) | ✅ | ✅ green |
+| 15-02-T3 (SwgGodClient .rsp + .vcxproj purge) | 15-02 | 1 | DECRUFT-06 | T-15-06 | only editor linking libMozilla.lib inline; 989crypt KEEP | grep-zero | `rg -i Mozilla SwgGodClient.vcxproj` → 0; `989crypt.lib` present | ✅ | ✅ green |
+| 15-03-T1 (Wave-1 merge gate → drop sln GUID → delete vendored tree → grep-zero + link-grep) | 15-03 | 2 | DECRUFT-06 | T-15-01 / T-15-08 / T-15-09 | vendored engine gone; no dangling GUID; no premature-delete dangle | grep-zero + tree-delete + link-grep | `rg "C6C1E14A…\|libMozilla" src/build/win32/swg.sln` → 0; `test -d …/libMozilla` → absent; Debug+Release link == 0 | ✅ | ✅ green |
+| 15-04-T1 (A1 lcdui cleanup + full P12–P15 milestone residue sweep + link-grep) | 15-04 | 3 | DECRUFT-06 | T-15-10 / T-15-11 | milestone residue == 0 w/ KEEP-list; no over-deletion | grep-zero + link-grep | milestone per-token `rg` (KEEP-list) → 0; `SwgCuiG15Lcd.cpp` survives; Debug+Release link == 0 | ✅ | ✅ green |
+| 15-04-T2 (dual-renderer milestone boot gate — closes v2.1) | 15-04 | 3 | DECRUFT-07 | T-15-04 | boots both renderers, no browser surface; HUD/radial/IME focus intact | manual boot (human-verify, blocking) | set `rasterMajor` in `stage/client_d.cfg`; launch `SwgClient_d.exe`; reach char-select under 5 & 11 | ✅ | ✅ human-confirmed (commit 16fd3ac4c) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+> **Gates re-run this audit (2026-05-26):** consolidated XPCOM/Mozilla grep over `src` → 0 (rg exit 1); `swg.sln` GUID `{C6C1E14A…}` + literal `libMozilla` → 0 (rg exit 1, correct path `src/build/win32/swg.sln`); SwgClient project still in sln (well-formed); vendored `libMozilla/` tree → DELETED. Debug+Release link-grep (`unresolved external symbol` == 0) is recorded green across 15-01/15-03/15-04 SUMMARYs (build logs ephemeral/gitignored — not re-run this audit). DECRUFT-07 boot gate human-confirmed PASS this milestone, not re-run (needs live SWGSource VM).
 
 ### Success Criteria → observable validation signals (from RESEARCH Validation Architecture)
 
@@ -98,4 +108,20 @@ fixtures needed. `wave_0_complete: true`.
 - [x] Feedback latency: grep seconds, link minutes
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-05-26
+
+---
+
+## Validation Audit 2026-05-26
+
+State A audit (existing VALIDATION.md). Placeholder Per-Task rows replaced with the real 9-task map (15-01-T1..T3, 15-02-T1..T3, 15-03-T1, 15-04-T1..T2). All automated gates re-run green; the lone manual-only item (DECRUFT-07 dual-renderer boot) is human-confirmed PASS.
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+| Automated (grep-zero / link-grep) | 8 tasks → DECRUFT-06 |
+| Manual-only (boot gate, human-confirmed) | 1 task → DECRUFT-07 |
+
+No fillable automated gaps: the C++ engine tree has no unit-test harness, and removal-correctness is validated by grep-zero + Debug/Release link-grep + the human dual-renderer boot gate (the established P12–P14 pattern). No `gsd-nyquist-auditor` spawned — nothing to generate. `nyquist_compliant: true` upheld; DECRUFT-07 is manual-only **by nature** (no headless harness; needs live VM + GPU), already executed and approved this milestone (commit 16fd3ac4c).

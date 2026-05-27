@@ -1,35 +1,33 @@
 # Handoff: SWG Blender IFF pipeline
 
-**Updated:** 2026-05-26 (Phase 10 complete — CSHD/SWTS/OPST + PPL/light mesh)
+**Updated:** 2026-05-26 (Phase 11 — CMPA/DTLA + hierarchy lint)
 **Branch:** `koogie-msvc-cpp20-base`
 **Worktree:** `D:\Code\swg-client-v2`
-**Status:** Phases 0–6 done · Phase 7 pytest done (client spawn: user) · Phase 8 done · Phase 9 done · **Phase 10 done**. **Next:** Phase 7 in-game validation or Phase 11+.
+**Status:** Phases 0–6, 8–11 done · Phase 7 client spawn user gate · **Next:** Phase 12 or Phase 7 validation.
 
 ---
 
 ## Pick up here
 
-1. Read `AGENTS.md` (session startup + **UTF-16 gotcha**).
+1. Read `AGENTS.md` (UTF-16 gotcha).
 2. Read this file.
-3. Verify: `cd D:\Code\swg-client-v2\tools\swg_blender; python -m pytest tests/ -q` — expect **146+ passed** (3 bpy skeletal tests may skip/fail without Blender).
-4. Read plan: `docs/research/blender-iff-interchange-PLAN.md` (Phase 11 = CMPA/DTLA).
-5. CLI / workflow: `tools/swg_blender/PIPELINE.md`.
-
-Pipeline code lives under `tools/swg_blender/` (**untracked in git** as of this handoff).
+3. `cd tools/swg_blender; python -m pytest tests/ -q` — **150 passed** (ignore `test_skeletal_bpy_export` without bpy).
+4. Plan: Phase 12 = collision/floor/extents.
 
 ---
 
-## Phase 10 (done)
+## Phase 11 (done)
 
-| Task | Module | Tests |
-| --- | --- | --- |
-| P10.1 SSHT slots | `shader_effects.py`, `shader_import.py`, `materials.py` | `test_shader_effects.py`, `test_shader_import.py` |
-| P10.2 CSHD | `shader_extended.py` | retail `abyssin_body.sht` roundtrip |
-| P10.3 SWTS | `shader_extended.py` | `anim_bank_side_screen.sht` roundtrip |
-| P10.4 OPST | `shader_extended.py` | `arms.sht` roundtrip |
-| P10.5 PPL | `per_pixel_lighting.py`, `export_static.py` | `test_per_pixel_lighting.py` |
-| P10.6 light mesh | `light_mesh.py` | `test_per_pixel_lighting.py` |
-| P10.7 textures | `texture_bundle.py` | `test_texture_bundle.py` |
+| Task | Module |
+| --- | --- |
+| P11.1–P11.2 CMPA load/write + parts | `swg_scene/component_appearance.py` |
+| P11.3 RADR placeholder on write | same (preserve `radar_raw` on roundtrip) |
+| P11.4–P11.7 DTLA load/write + PIVT/LOD bands | `swg_scene/detail_appearance.py` |
+| P11.8 Hierarchy decode/lint | `swg_scene/hierarchy.py` |
+| P11.9 Golden tests | `test_phase11_appearances.py` (swg-main) |
+| P11.10 Add-on validator | `swg.validate_hierarchy` operator |
+
+Retail roundtrips: `appearance/component/barc_speeder_destroyed_l0.cmp`, `appearance/lod/abyssin_m_arms.lod`.
 
 ---
 
@@ -37,28 +35,27 @@ Pipeline code lives under `tools/swg_blender/` (**untracked in git** as of this 
 
 | Phase | Status |
 | --- | --- |
-| 0–6, 8–10 | Done |
-| 7 | pytest done; client spawn user gate |
-| 11–15 | Not started |
+| 0–11 | Done (7 = user client gate) |
+| 12–15 | Not started |
 
 ---
 
 ## Test status
 
-146 passed (`pytest tests/`); 3 `test_skeletal_bpy_export` failures when bpy mock incomplete.
+150 passed (`pytest tests/`)
 
 ---
 
 ## Next work
 
-**A.** Phase 7 in-game validation (`export_bundle phase7`)
+**A.** Phase 12 collision/floor/extents
 
-**B.** Phase 11 CMPA/DTLA wearables
+**B.** Phase 7 in-game validation
 
-**C.** Phase 12+ collision/floor/building
+**C.** Phase 13 POB/building
 
 ---
 
 ## Gotchas
 
-See `AGENTS.md` (UTF-16, VTXA, import rotation).
+See `AGENTS.md`.
