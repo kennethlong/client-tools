@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: milestone_complete
-last_updated: "2026-05-26T23:02:55.200Z"
-last_activity: 2026-05-26 -- Phase 15 execution started
+status: completed
+last_updated: "2026-05-27T01:58:05.972Z"
+last_activity: 2026-05-27
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 13
   percent: 100
 ---
 
@@ -54,6 +54,10 @@ Last activity: 2026-05-27
 | 15 | XPCOM/Mozilla browser removal + cross-cutting boot gate | DECRUFT-06, -07 | highest — live UI + project + include path + stage copy; owns milestone gate |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 16 added: v2.1 tech-debt cleanup (SwgGodClient 989crypt.lib + P12-P15 residue) — from milestone audit
 
 ### Decisions
 

@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Compile + Launch** — Phases 1–6 (CMake foundations → launch/login handshake). Authored in the original whitengold CMake repo; imported here 2026-05-25 for the record.
 - ✅ **v2.0 Modernisation** — Phases 7–11 (shipped 2026-05-25). Dead-code removal, STLPort→MSVC STL (via Koogie MSBuild adoption), DPVS verdict, D3D11 renderer plugin. Full detail: `milestones/v2.0-ROADMAP.md`.
-- 🚧 **v2.1 Decruft** *(opened 2026-05-25)* — Phases 12–15. Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree (`src/build/win32/swg.sln` + `.rsp` files). Cleanup-only; shrinks surface area before upstream-import work. Boot-to-character-select is verified after every removal under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
+- 🚧 **v2.1 Decruft** *(opened 2026-05-25)* — Phases 12–16. Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree (`src/build/win32/swg.sln` + `.rsp` files). Cleanup-only; shrinks surface area before upstream-import work. Boot-to-character-select is verified after every removal under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
 - 📋 **v2.2 Visual Parity** *(planned, not yet opened)* — close the D3D11 visual gaps catalogued in `docs/research/phase12-baseline/COMPARISON.md`. First phase = asset PS pipeline (the blocker: D3D9 PEXE bytecode rejected by `CreatePixelShader`). *(Reordered after v2.1: cleanup-first shrinks the surface area before visual work + SWG-Source upstream imports.)*
 
 ## Phases
@@ -42,7 +42,7 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
 
 </details>
 
-### 🚧 v2.1 Decruft (Phases 12–15) — In Progress
+### 🚧 v2.1 Decruft (Phases 12–16) — In Progress
 
 **Milestone Goal:** Re-apply the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work. Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits (CLEAN-01..05), retargeted from CMake to MSBuild (`src/build/win32/swg.sln` + `.rsp` response files). Phases are ordered low-risk-first (pure deletes → lib unlinks → live-source surgery) so the boot baseline is re-established before the riskier source removals. **Invariant:** every removal step leaves the client bootable to character select under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
 
@@ -156,3 +156,14 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 13. VideoCapture Unlink | v2.1 | 3/3 | Complete    | 2026-05-26 |
 | 14. Vivox Removal | v2.1 | 3/3 | Complete    | 2026-05-26 |
 | 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete    | 2026-05-27 |
+
+### Phase 16: v2.1 Tech-Debt Cleanup
+
+**Goal:** Close the non-blocking tech debt surfaced by the v2.1 milestone audit (`.planning/v2.1-MILESTONE-AUDIT.md`) so v2.1 completes clean. Three in-closure targets: (1) fix the **SwgGodClient `989crypt.lib` latent LNK1181** — the token lingers in Debug `AdditionalDependencies` but the file was deleted with `stationapi/` in Phase 12 (SwgGodClient is out of the `/t:SwgClient` closure + pre-broken on Qt, so this never blocked a DECRUFT gate, but it should be unlinked or the dep restored); (2) **purge the inert `lcdui\lib` `/LIBPATH` segments** from the 4 editor vcxproj (AnimationEditor/ClientEffectEditor/LightningEditor/ParticleEditor — the lcdui ProjectReferences were already removed in 1d6b80242; only the dead search-paths remain); (3) **remove cosmetic P12-P15 source residue** — the dead-store `finalUrl` in `SwgCuiHudAction.cpp` (~:1170-1189, browser CS-action de-wire leftover) and the dead `ms_speakerVolume`/`ms_micVolume` statics in `CuiPreferences.cpp` (orphaned by the Vivox voice-UI delete). **Invariant preserved:** SwgClient still builds clean (Debug+Release link-grep == 0) and boots to character select under both renderers after the cleanup.
+**Out of scope (deferred, NOT this phase):** AR-15-01 future-TCG-revival re-evaluation (future v2.x); `stage/client_d.cfg` accumulated-test-settings cleanup (coupled to v2.2 visual-parity close); Nyquist-coverage finalisation for Phases 12 & 13 (do via `/gsd:validate-phase 12` + `13`, not a code phase).
+**Requirements**: None (post-hoc tech-debt closure — no new product requirements; traces to `v2.1-MILESTONE-AUDIT.md` tech_debt)
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
