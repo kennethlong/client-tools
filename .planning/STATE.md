@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: executing
+status: milestone_complete
 last_updated: "2026-05-26T23:02:55.200Z"
 last_activity: 2026-05-26 -- Phase 15 execution started
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
   completed_plans: 9
-  percent: 69
+  percent: 100
 ---
 
 # Project State
@@ -39,10 +39,10 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 ## Current Position
 
-Phase: 15 (in-game-browser-xpcom-mozilla-removal-milestone-gate) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 15
-Last activity: 2026-05-26 -- Phase 15 execution started
+Phase: 15
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-05-27
 
 **v2.1 Decruft phase plan:**
 

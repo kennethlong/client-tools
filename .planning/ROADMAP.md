@@ -155,4 +155,4 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 12. Orphaned Deletes | v2.1 | 3/3 | Complete    | 2026-05-25 |
 | 13. VideoCapture Unlink | v2.1 | 3/3 | Complete    | 2026-05-26 |
 | 14. Vivox Removal | v2.1 | 3/3 | Complete    | 2026-05-26 |
-| 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete   | 2026-05-27 |
+| 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete    | 2026-05-27 |
