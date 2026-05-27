@@ -111,10 +111,10 @@ Plans:
 Plans:
 **Wave 1** *(parallel — zero file overlap)*
 - [x] 15-01-PLAN.md — Atomic source/symbol unit: de-wire all callers + sever TCG ties + delete TUIWebBrowser enum (D-02 outright) + delete 3 SwgCuiWebBrowser* units + Game.cpp dead include + SwgClient.vcxproj inline Mozilla link tokens/dirs (3 cfgs); Debug+Release link-grep gate (DECRUFT-06)
-- [ ] 15-02-PLAN.md — Residue/path/editor purge (deletions-only, no build): vestigial/live-lib .rsp Mozilla paths + 7 editor .rsp/.vcxproj + SwgGodClient inline libMozilla.lib (DECRUFT-06)
+- [x] 15-02-PLAN.md — Residue/path/editor purge (deletions-only, no build): vestigial/live-lib .rsp Mozilla paths + 7 editor .rsp/.vcxproj + SwgGodClient inline libMozilla.lib (DECRUFT-06)
 
 **Wave 2** *(blocked on Wave 1 — sln-drop + vendored-tree delete sequenced last)*
-- [ ] 15-03-PLAN.md — Wave-1 merge gate + drop libMozilla.vcxproj from swg.sln (11 locations) + delete vendored libMozilla/ tree (1,866 files) + repo-wide XPCOM grep-zero + Debug+Release link gate (DECRUFT-06)
+- [x] 15-03-PLAN.md — Wave-1 merge gate + drop libMozilla.vcxproj from swg.sln (11 locations) + delete vendored libMozilla/ tree (1,866 files) + repo-wide XPCOM grep-zero + Debug+Release link gate (DECRUFT-06)
 
 **Wave 3** *(blocked on Wave 2 — milestone close)*
 - [ ] 15-04-PLAN.md — A1 lcdui P12-residue cleanup + full milestone residue sweep (P12-P15, KEEP-list) + Debug+Release link-grep + dual-renderer boot gate with HUD/radial/IME focus backstop (DECRUFT-06 final corner + DECRUFT-07)
@@ -155,4 +155,4 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 12. Orphaned Deletes | v2.1 | 3/3 | Complete    | 2026-05-25 |
 | 13. VideoCapture Unlink | v2.1 | 3/3 | Complete    | 2026-05-26 |
 | 14. Vivox Removal | v2.1 | 3/3 | Complete    | 2026-05-26 |
-| 15. XPCOM Removal + Gate | v2.1 | 1/4 | In Progress|  |
+| 15. XPCOM Removal + Gate | v2.1 | 3/4 | In Progress|  |
