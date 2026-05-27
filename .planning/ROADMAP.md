@@ -49,7 +49,7 @@ Full detail + per-plan history: `milestones/v2.0-ROADMAP.md`. Audit: `milestones
 - [x] **Phase 12: Orphaned Directory & Project Deletes** — Delete trackIR/stationapi/SwgClientSetup/lcdui from the MSBuild tree (low-risk deletes + `swg.sln`/`.rsp` drops); re-establish the boot baseline. (completed 2026-05-25)
 - [x] **Phase 13: VideoCapture Library Unlink** — Drop `VideoCapture_debug.lib` from the SwgClient `.rsp` files and purge any source/include references (low/medium-risk lib unlink). (completed 2026-05-26)
 - [x] **Phase 14: Voice Chat (Vivox) Source Removal** — Remove `vivoxSharedWrapper` link + `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler` source + voice preference keys (higher-risk live-UI surgery). (3/3 plans executed; awaiting orchestrator phase verification) (completed 2026-05-26)
-- [ ] **Phase 15: In-Game Browser (XPCOM/Mozilla) Removal & Milestone Gate** — Drop `libMozilla.vcxproj`, purge the XPCOM include path + browser source + staged Mozilla DLLs, then run the full cross-cutting dual-renderer boot gate (highest-risk surgery + milestone close).
+- [x] **Phase 15: In-Game Browser (XPCOM/Mozilla) Removal & Milestone Gate** — Drop `libMozilla.vcxproj`, purge the XPCOM include path + browser source + staged Mozilla DLLs, then run the full cross-cutting dual-renderer boot gate (highest-risk surgery + milestone close). (completed 2026-05-27)
 
 ## Phase Details
 
@@ -117,7 +117,7 @@ Plans:
 - [x] 15-03-PLAN.md — Wave-1 merge gate + drop libMozilla.vcxproj from swg.sln (11 locations) + delete vendored libMozilla/ tree (1,866 files) + repo-wide XPCOM grep-zero + Debug+Release link gate (DECRUFT-06)
 
 **Wave 3** *(blocked on Wave 2 — milestone close)*
-- [ ] 15-04-PLAN.md — A1 lcdui P12-residue cleanup + full milestone residue sweep (P12-P15, KEEP-list) + Debug+Release link-grep + dual-renderer boot gate with HUD/radial/IME focus backstop (DECRUFT-06 final corner + DECRUFT-07)
+- [x] 15-04-PLAN.md — A1 lcdui P12-residue cleanup + full milestone residue sweep (P12-P15, KEEP-list) + Debug+Release link-grep + dual-renderer boot gate with HUD/radial/IME focus backstop (DECRUFT-06 final corner + DECRUFT-07)
 
 **UI hint**: yes
 
@@ -155,4 +155,4 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 | 12. Orphaned Deletes | v2.1 | 3/3 | Complete    | 2026-05-25 |
 | 13. VideoCapture Unlink | v2.1 | 3/3 | Complete    | 2026-05-26 |
 | 14. Vivox Removal | v2.1 | 3/3 | Complete    | 2026-05-26 |
-| 15. XPCOM Removal + Gate | v2.1 | 3/4 | In Progress|  |
+| 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete   | 2026-05-27 |
