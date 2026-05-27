@@ -78,13 +78,29 @@ after the cleanup.
     block — it's dead because the trailing `ShellExecute(...)` at :1189 is
     commented out, so `finalUrl` is computed (incl. the `if (finalUrl.length()
     > 2048)` truncation branch) and never consumed. Remove the whole dead
-    computation, not just the assignment.
-  - **`CuiPreferences`**: remove the **full** speaker/mic volume API — the 2
-    statics `ms_speakerVolume`/`ms_micVolume` (`.cpp:397-398`) **plus** all 4
-    accessor methods `get/setSpeakerVolume`, `get/setMicVolume`
-    (`.cpp:3460-3484`) **plus** their 4 header declarations (`.h:553-557`).
+    URL-construction computation (the `:1170-1189` block ONLY — NOT the upstream
+    `httpParams` accumulation at ~:1081-1169, which is intentionally left in
+    place per the narrow scope). The now-dead `#include
+    "clientGame/ConfigClientGame.h"` (only used by `getCsTrackingBaseUrl()`
+    inside the deleted block) is removed too.
+  - **`CuiPreferences`**: remove the **full** speaker/mic volume API. The full
+    API = **2 statics + 4 accessor defs + 4 header decls + 2 REGISTER_OPTION
+    persistence-registration lines**:
+    - the 2 statics `ms_speakerVolume`/`ms_micVolume` (`.cpp:397-398`),
+    - all 4 accessor methods `get/setSpeakerVolume`, `get/setMicVolume`
+      (`.cpp:3460-3484`),
+    - their 4 header declarations (`.h:553-557`),
+    - **and the 2 `REGISTER_OPTION(speakerVolume)` / `REGISTER_OPTION(micVolume)`
+      lines at `.cpp:841-842`** — these register the statics for LocalMachine
+      persistence (macro `:415` →
+      `LocalMachineOptionManager::registerOption(ms_ ## a, ...)`), so they
+      reference the deleted statics and MUST be removed in the same edit or
+      `clientUserInterface` will not compile.
     Scout confirmed **zero external callers** of these accessors — clean
-    full-API removal.
+    full-API removal. (Dropping the 2 `REGISTER_OPTION` lines stops persisting/
+    loading these two LocalMachine option keys — harmless because the Vivox
+    voice UI that consumed them was deleted in Phase 14, but acknowledged as a
+    benign persistence-surface change, not literally zero runtime delta.)
 - **D-07:** **CR-01 ordinal lesson does NOT apply here.** The Phase 14 CR-01
   rule (deletions from positional enums/tables mirroring retail-TRE rows need
   ordinal-preserving placeholders) is **irrelevant** to D-06 — these are plain
@@ -131,10 +147,11 @@ after the cleanup.
   `989crypt.lib` token at `<AdditionalDependencies>` (line ~99, Debug `<Link>`);
   sweep all 3 configs (Target 1).
 - `src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHudAction.cpp`
-  — dead `finalUrl` block ~:1170-1189 (Target 3a).
+  — dead `finalUrl` block ~:1170-1189 + now-dead `ConfigClientGame.h` include
+  (~:24) (Target 3a).
 - `src/engine/client/library/clientUserInterface/src/shared/core/CuiPreferences.cpp`
-  — `ms_speakerVolume`/`ms_micVolume` statics (:397-398) + accessor defs
-  (:3460-3484) (Target 3b).
+  — `ms_speakerVolume`/`ms_micVolume` statics (:397-398) + `REGISTER_OPTION`
+  persistence lines (:841-842) + accessor defs (:3460-3484) (Target 3b).
 - `src/engine/client/library/clientUserInterface/src/shared/core/CuiPreferences.h`
   — accessor declarations (:553-557) (Target 3b).
 - 4 editor vcxproj under `src/engine/client/application/{AnimationEditor,
@@ -187,7 +204,10 @@ after the cleanup.
   Phase 15 XPCOM removal. Removing the block is removing now-unreachable
   computation, not changing any live behavior.
 - The volume API has zero callers because the Phase 14 Vivox voice-UI delete
-  removed every consumer; the accessors + statics were left orphaned.
+  removed every consumer; the accessors + statics were left orphaned. They are,
+  however, still wired into LocalMachine persistence via the 2 `REGISTER_OPTION`
+  lines at CuiPreferences.cpp:841-842 — those reference the statics and are part
+  of the "full API" that D-06 removes.
 
 </specifics>
 
@@ -201,6 +221,7 @@ after the cleanup.
   flip via `/gsd:validate-phase 12` + `13` (doc pass, not a code phase).
 - **`stage/client_d.cfg` accumulated-test-settings cleanup** — coupled to the
   v2.2 visual-parity close (memory `project_stage_client_d_cfg_cleanup_todo`).
+  Includes the stale `voiceChatEnabled=false` key — deferred, not folded here.
 - **AR-15-01 future-TCG-revival re-evaluation** — accepted risk; a future TCG
   phase must re-evaluate the navigate-callback severance before relinking.
 
@@ -217,3 +238,4 @@ after the cleanup.
 
 *Phase: 16-v2-1-tech-debt-cleanup*
 *Context gathered: 2026-05-26*
+*D-06 REGISTER_OPTION line set corrected: 2026-05-27 (cross-AI review)*

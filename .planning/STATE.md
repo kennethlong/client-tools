@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
 status: executing
-last_updated: "2026-05-27T02:38:14.680Z"
+last_updated: "2026-05-27T13:46:12.470Z"
 last_activity: 2026-05-27 -- Phase 16 planning complete
 progress:
   total_phases: 4

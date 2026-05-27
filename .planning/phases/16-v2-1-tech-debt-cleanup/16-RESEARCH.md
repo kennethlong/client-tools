@@ -8,8 +8,8 @@
 
 This is a small, deterministic, no-behavior-change cleanup. The job of this research was NOT to
 re-decide scope (CONTEXT.md D-01..D-08 already lock it) but to **confirm or correct each dead-code /
-dead-token claim against the live tree**. **All eight decisions are CONFIRMED correct** — every
-CONTEXT.md claim held up under verification. There are zero "WRONG claim" surprises; the highest-value
+dead-token claim against the live tree**. Seven of the eight decisions are CONFIRMED correct; D-06's
+Target-3b "no save/load hook" claim was found WRONG (CORRECTED below — see §"Target 3b"). The highest-value
 nuance is a *scoping* observation on Target 3a (the dead block is actually wider than the literal
 `~:1170-1189` range, but D-06 deliberately scopes the removal narrowly — keep the diff small and honor
 the lock).
@@ -18,8 +18,8 @@ The three edit targets reduce to: (1) remove **one** token `989crypt.lib` from a
 `<AdditionalDependencies>` line in `SwgGodClient.vcxproj:99` (Debug config only); (2) Target 2 is a
 verified **no-op** (all 4 editor vcxproj already 0 `lcdui`); (3) two source edits in SwgClient-linked
 libs — the dead `finalUrl` block (`SwgCuiHudAction.cpp:1170-1189`) and the orphaned voice-volume API
-(`CuiPreferences.cpp:397-398` + `:3460-3484`, `CuiPreferences.h:553-557`), the latter with
-**ZERO external callers and no save/load hook** confirmed repo-wide.
+(`CuiPreferences.cpp:397-398` + `:3460-3484` + the 2 `REGISTER_OPTION` persistence lines `:841-842`,
+`CuiPreferences.h:553-557`), the latter with **ZERO external callers** confirmed repo-wide.
 
 **Primary recommendation:** Plan three independent atomic-commit tasks (SwgGodClient vcxproj token /
 HudAction.cpp / CuiPreferences.cpp+.h) plus one folded Target-2 verify step, all gated by the proven
@@ -46,7 +46,7 @@ Win32 client.
 - **D-03:** Grep-only verification for SwgGodClient — cannot be built (Qt MSB8066, out of `/t:SwgClient`); verify via `grep == 0`. Do NOT attempt to build SwgGodClient.
 - **D-04:** Target 2 is a verify-only no-op — all 4 editor vcxproj already contain 0 `lcdui` refs (swept by 15-04). Record `lcdui-editor-LIBPATH == 0`; no edit required.
 - **D-05:** No doc-staleness work — leave 12-VERIFICATION.md stale score line + 13-SUMMARY.md empty frontmatter out of scope.
-- **D-06:** Full removal, both files. `SwgCuiHudAction.cpp` (~:1170-1189): delete entire dead `finalUrl` block (incl. `if (finalUrl.length() > 2048)` truncation branch) — dead because trailing `ShellExecute(...)` at :1189 is commented out. `CuiPreferences`: remove full speaker/mic volume API — 2 statics (`.cpp:397-398`) + 4 accessors (`.cpp:3460-3484`) + 4 header decls (`.h:553-557`). Zero external callers confirmed.
+- **D-06:** Full removal, both files. `SwgCuiHudAction.cpp` (~:1170-1189): delete entire dead `finalUrl` block (incl. `if (finalUrl.length() > 2048)` truncation branch) — dead because trailing `ShellExecute(...)` at :1189 is commented out. `CuiPreferences`: remove full speaker/mic volume API — 2 statics (`.cpp:397-398`) + 4 accessors (`.cpp:3460-3484`) + 2 `REGISTER_OPTION` persistence-registration lines (`.cpp:841-842`) + 4 header decls (`.h:553-557`). Zero external callers confirmed.
 - **D-07:** CR-01 ordinal lesson does NOT apply — these are plain `float` statics + accessors, not positional enum/datatable rows. Delete outright; no placeholders.
 - **D-08:** Link-grep + single char-select smoke. SwgClient Debug+Release link-grep `unresolved external symbol` == 0 (Optimized EXEMPT — DEF-14-01 SAFESEH LNK1281). Boot once to char-select under rasterMajor=11 (D3D11). No-behavior-change phase — one boot, not the full dual-renderer matrix.
 
@@ -71,7 +71,7 @@ No formal REQ-IDs — this is post-hoc tech-debt closure. Traces to `.planning/v
 |-------------------------------|--------------|------------------|
 | Phase 12: "SwgGodClient Debug AdditionalDependencies still lists 989crypt.lib but the file was deleted with stationapi/ — would LNK1181 if built" | Target 1 (D-01/02/03) | CONFIRMED: token at `SwgGodClient.vcxproj:99` (Debug only, count=1); `stationapi/` dir ABSENT; `989crypt.lib` ABSENT on disk; soePlatform KEEP-list all PRESENT |
 | Phase 12: "Inert lcdui\lib /LIBPATH segments remain in 4 editor vcxproj" | Target 2 (D-04) | CONFIRMED no-op: all 4 editor vcxproj `lcdui` count = 0 (swept by 15-04) |
-| Phase 14: "Dead statics ms_speakerVolume/ms_micVolume remain in CuiPreferences.cpp after voice-UI deletion" | Target 3b (D-06) | CONFIRMED: statics `.cpp:397-398`, accessors `.cpp:3460-3484`, decls `.h:553-557`; ZERO external callers repo-wide; no save/load hook |
+| Phase 14: "Dead statics ms_speakerVolume/ms_micVolume remain in CuiPreferences.cpp after voice-UI deletion" | Target 3b (D-06) | CONFIRMED locations: statics `.cpp:397-398`, accessors `.cpp:3460-3484`, decls `.h:553-557`; ZERO external callers repo-wide. CORRECTED: the statics ARE registered for LocalMachine persistence via `REGISTER_OPTION(speakerVolume)`/`REGISTER_OPTION(micVolume)` at `.cpp:841-842` — full removal MUST also delete those 2 lines (see §"Target 3b") |
 | Phase 15: "Dead-store finalUrl in SwgCuiHudAction.cpp (~:1170-1189)" | Target 3a (D-06) | CONFIRMED dead: `finalUrl` consumed only by commented-out `//ShellExecute(...)` at :1189; no other consumer |
 </phase_requirements>
 
@@ -86,12 +86,14 @@ No formal REQ-IDs — this is post-hoc tech-debt closure. Traces to `.planning/v
 | **D-03** grep-only verify | ✅ CONFIRMED | `989crypt` is in vcxproj only (no `.rsp`, no `.filters`); single inline edit point; build-impossible tool → grep==0 is the correct gate. |
 | **D-04** Target 2 no-op | ✅ CONFIRMED | All 4 editor vcxproj: `lcdui` count = **0** each. No edit required. |
 | **D-05** no doc work | ✅ N/A | Out of scope; not researched per decision. |
-| **D-06** full removal both files | ✅ CONFIRMED (one scoping nuance — see Pitfall 1) | finalUrl: 5 occurrences (:1173/1175/1177/1182/1189), only consumer is commented `//ShellExecute` at :1189. Voice API: statics + 4 accessors + 4 decls exactly where stated; ZERO external callers; no save/load hook. |
+| **D-06** full removal both files | ⚠️ CONFIRMED w/ ONE CORRECTION (+ scoping nuance — see Pitfall 1) | finalUrl: 5 occurrences (:1173/1175/1177/1182/1189), only consumer is commented `//ShellExecute` at :1189. Voice API: statics + 4 accessors + 4 decls exactly where stated; ZERO external callers. **CORRECTED:** the voice statics ARE registered via `REGISTER_OPTION(speakerVolume)`/`REGISTER_OPTION(micVolume)` at `.cpp:841-842` (LocalMachine persistence) — full removal MUST include those 2 lines. The earlier "no save/load hook" claim was WRONG. |
 | **D-07** no ordinal placeholders | ✅ CONFIRMED | `ms_speakerVolume`/`ms_micVolume` are plain `float` statics (`.cpp:397-398`, init `0.5f`); accessors are flat get/set. Not a positional enum/datatable. CR-01 irrelevant. |
 | **D-08** link-grep + 1 boot | ✅ CONFIRMED feasible | SwgClient.vcxproj links BOTH `clientUserInterface.lib` and `swgClientUserInterface.lib` → D-06 edits are in-closure. `stage/client_d.cfg:37` already has `rasterMajor=11` → boot smoke ready. |
 
-**No CONTEXT.md claim was found WRONG.** The only thing the planner must decide consciously is the
-Target-3a removal *scope* (Pitfall 1 below) — and the locked D-06 text already points to the narrow choice.
+**One CONTEXT.md claim was found WRONG and CORRECTED:** D-06's Target-3b "no save/load hook" — the
+`REGISTER_OPTION` LocalMachine-persistence registration at `.cpp:841-842` was missed (see §"Target 3b").
+The other thing the planner must decide consciously is the Target-3a removal *scope* (Pitfall 1 below) —
+and the locked D-06 text already points to the narrow choice.
 
 ## Target-by-Target Evidence
 
@@ -113,7 +115,7 @@ Three configs exist (Debug / Optimized / Release). Their `<Link><AdditionalDepen
 **Backing-file disk truth (verified):**
 - `src/external/3rd/library/stationapi/` → **ABSENT**
 - `989crypt.lib` anywhere under `src/external/` → **ABSENT**
-- `soePlatform/libs/Win32-Debug/` → present; contains `Base.lib, ChatAPI.lib, ChatMono.lib, CommodityAPI.lib, Network.lib, TcpLibrary.lib, dbgutil.lib, monapi.lib, rdp.lib` — **all 9 KEEP-list tokens backed.** (Also present but unreferenced: `Base_vchat.lib, NetworkSupport.lib, VChatAPI.lib` — irrelevant, no token references them.)
+- `soePlatform/libs/Win32-Debug/` → backed on disk in built workspaces (may be gitignored in this snapshot); the 9 KEEP-list tokens `Base.lib, ChatAPI.lib, ChatMono.lib, CommodityAPI.lib, Network.lib, TcpLibrary.lib, dbgutil.lib, monapi.lib, rdp.lib` are the live soePlatform set. (Also present in built workspaces but unreferenced: `Base_vchat.lib, NetworkSupport.lib, VChatAPI.lib` — irrelevant, no token references them.) Irrelevant to 16-01 execution regardless: it is grep-only, SwgGodClient is never built.
 - LIBPATH: Debug config references `soePlatform\libs\Win32-Debug` (intact). Optimized/Release do NOT reference soePlatform at all.
 
 **`.rsp` note (build-graph gotcha):** SwgGodClient has 16 `.rsp` files including `libraries_d.rsp`, but
@@ -153,6 +155,11 @@ contains the `if (finalUrl.length() > 2048)` truncation branch (`:1175-1188`) in
 `return false;` at `:1186` (also dead once the block goes). The closing `}` at `:1190` belongs to the
 enclosing `CuiActions::service` branch — keep it.
 
+**Dead include side-effect:** `baseUrl` is built from `ConfigClientGame::getCsTrackingBaseUrl()` (`:1172`),
+which is the **only** use of `clientGame/ConfigClientGame.h` (included at `:24`) in this file. Once the
+`:1170-1189` block is removed, that include becomes dead and should also be removed (executor must
+re-confirm `rg "ConfigClientGame" <file>` shows only the include line before deleting it).
+
 ### Target 3b — CuiPreferences voice-volume API (D-06)
 
 **Statics** (`CuiPreferences.cpp:397-398`):
@@ -163,17 +170,29 @@ float ms_micVolume = 0.5f;
 **Accessors** (`CuiPreferences.cpp:3460-3484`): `setSpeakerVolume` (:3460), `getSpeakerVolume` (:3467),
 `setMicVolume` (:3474), `getMicVolume` (:3481) — four flat get/set bodies, each separated by `//---`
 comment dividers.
+**Persistence registration** (`CuiPreferences.cpp:841-842`): `REGISTER_OPTION(speakerVolume);` and
+`REGISTER_OPTION(micVolume);`. The macro at `:415` is
+`#define REGISTER_OPTION(a) (LocalMachineOptionManager::registerOption(ms_ ## a, KeyName, #a))`, so these
+two lines expand to `LocalMachineOptionManager::registerOption(ms_speakerVolume, ...)` and
+`...(ms_micVolume, ...)` — i.e. they reference the statics directly.
 **Declarations** (`CuiPreferences.h:553-557`): the 4 `static` declarations.
 
 **Caller audit (repo-wide, `src/**`, `*.cpp/*.h/*.hpp/*.inl`):** every single hit for
 `getSpeakerVolume`, `setSpeakerVolume`, `getMicVolume`, `setMicVolume`, `ms_speakerVolume`,
 `ms_micVolume` resolves to **CuiPreferences.cpp / CuiPreferences.h itself** (the def/decl/body lines
-above). **ZERO external callers.** D-06's "zero callers" claim CONFIRMED.
+above, plus the 2 `REGISTER_OPTION` lines that name the statics). **ZERO external callers.** D-06's
+"zero callers" claim CONFIRMED.
 
-**Save/load/register hook check:** repo-wide grep for `speakerVolume`/`micVolume`/`SpeakerVolume`/
-`MicVolume` outside CuiPreferences → **0 hits.** No UserSettings persistence, no config-table loader, no
-`register`/`fetch` of these prefs. The statics are pure default-initialized orphans → clean full-API
-removal with no orphaned load/save hook to chase.
+**Save/load/register hook check — CORRECTED:** the earlier research claim "no save/load/register hook"
+was **WRONG**. The voice statics ARE registered for LocalMachine persistence via
+`REGISTER_OPTION(speakerVolume)` / `REGISTER_OPTION(micVolume)` at `CuiPreferences.cpp:841-842`
+(`LocalMachineOptionManager::registerOption`), so they DO participate in save/load of the
+`ClientUserInterface` LocalMachine option set. **Full removal MUST delete those 2 registration lines along
+with the statics, accessors, and decls** — deleting `ms_speakerVolume`/`ms_micVolume` without removing the
+two `REGISTER_OPTION` lines leaves dangling references to the just-deleted statics and **fails to compile
+`clientUserInterface`**. After removal these two LocalMachine option keys are no longer persisted/loaded —
+harmless because the Vivox voice UI that consumed them was deleted in Phase 14, but a (benign)
+persistence-surface change, not literally zero runtime delta.
 
 ## Build-Graph Constraints (carry into every task)
 
@@ -184,7 +203,7 @@ removal with no orphaned load/save hook to chase.
 | Debug exe reads `stage/client_d.cfg` (NOT `client.cfg`) | memory `feedback_debug_exe_reads_client_d_cfg` | rasterMajor=11 already set at `client_d.cfg:37` — boot smoke ready |
 | Optimized config LNK1281 SAFESEH pre-existing (DEF-14-01) | memory `project_optimized_config_safeseh_pre_existing` | EXEMPT from link gate; validate via Debug+Release link-grep only |
 | SwgGodClient pre-broken on Qt (MSB8066), out of `/t:SwgClient` closure | CONTEXT D-03 + audit | NEVER build SwgGodClient; grep-only verify its vcxproj edit |
-| Both edited libs are in SwgClient link closure | `SwgClient.vcxproj` links `clientUserInterface.lib` + `swgClientUserInterface.lib` (verified) | D-06 source edits ARE covered by the link-grep + boot gate |
+| Both edited libs are in SwgClient link closure | `SwgClient.vcxproj` links `clientUserInterface.lib` + `swgClientUserInterface.lib` (verified); `swg.sln` `ProjectDependencies` rebuild both under `/t:SwgClient` | D-06 source edits ARE covered by the link-grep + boot gate; build via `swg.sln /t:SwgClient` so the solution deps rebuild the edited libs |
 
 ## Don't Hand-Roll
 
@@ -203,10 +222,11 @@ removal with no orphaned load/save hook to chase.
 **What goes wrong:** A literal-minded executor notices that the *entire* `httpParams` accumulation in the
 `CuiActions::service` branch (`SwgCuiHudAction.cpp:1081-1189`) exists only to feed the dead `finalUrl`, and
 deletes all ~108 lines (the `httpParams[...]` writes, the `Game::getPlayerPath` call, etc.).
-**Why it happens:** D-06 says "remove the whole dead computation, not just the assignment" — which *can* be
-read maximally. But the live `if (params.length() == 0)` confirm-box logic at `:1074-1079` is still live UI,
-and the broader `httpParams` block, while technically also dead-store, is OUTSIDE the locked
-`~:1170-1189` range CONTEXT.md names.
+**Why it happens:** D-06 says "remove the whole dead computation, not just the assignment" — which here means
+ONLY the URL-construction block (`~:1170-1189`), NOT the upstream `httpParams` accumulation (`~:1081-1169`),
+which is intentionally left in place per the narrow-scope decision. The live `if (params.length() == 0)`
+confirm-box logic at `:1074-1079` is still live UI, and the broader `httpParams` block, while technically
+also a dead store, is OUTSIDE the locked `~:1170-1189` range CONTEXT.md names.
 **How to avoid:** Honor the locked narrow scope — delete **only lines 1170–1189** (the `// create the final
 URL` comment through the commented `//ShellExecute`). Leave the `httpParams` accumulation (1081-1169) and
 the confirm-box logic intact. Minimal diff; matches the literal D-06 bounds; avoids touching live code.
@@ -218,9 +238,9 @@ message-box lines — STOP, that's out of scope.
 along with `989crypt.lib` because they're adjacent in the same Debug dep run.
 **Why it happens:** The 9 KEEP tokens sit immediately before `989crypt.lib` on line 99 (`...rdp.lib;
 TcpLibrary.lib;989crypt.lib;...`).
-**How to avoid:** Remove the single token `989crypt.lib;` ONLY. All 9 soePlatform libs are backed on disk
-(verified) — removing them would create real LNK1181s if the tool were ever fixed. Post-edit grep must show
-the KEEP tokens still present.
+**How to avoid:** Remove the single token `989crypt.lib;` ONLY. All 9 soePlatform libs are KEEP-list-protected —
+removing them would create real LNK1181s if the tool were ever fixed. Post-edit grep must show the KEEP
+tokens still present.
 **Warning signs:** `rg "Base.lib|ChatAPI.lib|TcpLibrary.lib" SwgGodClient.vcxproj` returns fewer hits than before.
 
 ### Pitfall 3: Editing the wrong cfg / wrong renderer for the boot smoke
@@ -270,12 +290,18 @@ Optimized (line 143) and Release (line 185) dep lists do NOT contain `989crypt.l
 		//ShellExecute(NULL, "open", finalUrl.c_str(), NULL, "", SW_SHOW);  // :1189  ← delete to here
 	}                                                                       // :1190  ← KEEP (branch close)
 ```
+After the block goes, also remove the now-dead `#include "clientGame/ConfigClientGame.h"` at `:24` (it was
+only used by `ConfigClientGame::getCsTrackingBaseUrl()` inside the deleted block).
 
 ### Target 3b — the voice-volume API to delete
 ```cpp
 // CuiPreferences.cpp:397-398  — statics
 float ms_speakerVolume = 0.5f;
 float ms_micVolume = 0.5f;
+
+// CuiPreferences.cpp:841-842  — LocalMachine persistence registration (REFERENCE the statics → MUST delete)
+REGISTER_OPTION(speakerVolume);
+REGISTER_OPTION(micVolume);
 
 // CuiPreferences.cpp:3460-3484 — 4 accessor bodies (+ surrounding //--- dividers)
 void  CuiPreferences::setSpeakerVolume(float volume) { ms_speakerVolume = volume; }
@@ -298,7 +324,7 @@ static void  setMicVolume(float volume);
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | None — voice-volume statics (`ms_speakerVolume`/`ms_micVolume`) are NOT persisted (repo-wide grep for save/load hook == 0). No DB/datastore in scope. | none |
+| Stored data | `ms_speakerVolume`/`ms_micVolume` ARE registered for LocalMachine persistence via `REGISTER_OPTION` at `.cpp:841-842` (CORRECTED — see §"Target 3b"). With the Vivox voice UI gone (Phase 14) nothing reads/writes them, so dropping the registration is a benign persistence-surface change. No DB/datastore in scope. | delete the 2 `REGISTER_OPTION` lines as part of the voice-API removal |
 | Live service config | None — no external service references `989crypt`, `finalUrl`, or voice-volume. `stage/client_d.cfg` has a stale `voiceChatEnabled=false` key (audit item) but that is OUT of scope per D-05/deferred. | none (cfg cleanup deferred) |
 | OS-registered state | None — no Task Scheduler / service registration touches these symbols. | none |
 | Secrets/env vars | None — no secret key or env var references the removed tokens/symbols. | none |
@@ -327,17 +353,17 @@ same proven set used through Phase 15.
 |----------|-------|
 | Framework | None (C++ engine cleanup; no unit-test harness in tree) |
 | Config file | none — validation is `rg` grep-zero + MSBuild link-log grep + one manual boot |
-| Quick run command | per-token `rg`: `rg -i "989crypt" src` → 0; `rg "finalUrl" .../SwgCuiHudAction.cpp` → 0; `rg "ms_speakerVolume\|ms_micVolume\|getSpeakerVolume\|setSpeakerVolume\|getMicVolume\|setMicVolume" src` → 0; per-editor `rg -i lcdui` → 0 |
-| Full suite command | MSBuild SwgClient **Debug + Release** (full VS path, `/nodeReuse:false`, from PowerShell; delete `SwgClient_d.exe`/`SwgClient_r.exe` first), then grep each link log for `unresolved external symbol` (== 0). **Optimized EXEMPT** (DEF-14-01). |
+| Quick run command | per-token `rg`: `rg -i "989crypt" src` → 0; `rg "finalUrl" .../SwgCuiHudAction.cpp` → 0; `rg "speakerVolume\|micVolume\|SpeakerVolume\|MicVolume" src` → 0 (repo-wide, incl. CuiPreferences — catches statics, accessors, decls, AND the `REGISTER_OPTION` keys); per-editor `rg -i lcdui` → 0 |
+| Full suite command | MSBuild SwgClient **Debug + Release** via `swg.sln /t:SwgClient` (full VS path, `/nodeReuse:false`, from PowerShell; delete `SwgClient_d.exe`/`SwgClient_r.exe` first), then grep each link log for `unresolved external symbol` (== 0). **Optimized EXEMPT** (DEF-14-01). |
 
 ### Phase Requirements → Test Map
 | Target | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
 | T1 (989crypt) | dead token gone, KEEP-list survives | grep-zero | `rg -i "989crypt" src` → 0; `rg "Base.lib\|ChatAPI.lib\|TcpLibrary.lib" SwgGodClient.vcxproj` still present | ✅ (rg) |
 | T2 (lcdui editors) | LIBPATH residue == 0 | grep-zero | per-editor `rg -i lcdui *.vcxproj` → 0 (already 0) | ✅ (rg) |
-| T3a (finalUrl) | dead block gone | grep-zero | `rg "finalUrl" .../SwgCuiHudAction.cpp` → 0 | ✅ (rg) |
-| T3b (voice API) | full API gone, no callers | grep-zero | `rg "ms_speakerVolume\|ms_micVolume\|[gs]etSpeakerVolume\|[gs]etMicVolume" src` → 0 | ✅ (rg) |
-| T3a+T3b (link) | SwgClient links clean | link-grep | MSBuild Debug+Release; link log `unresolved external symbol` == 0 (Optimized EXEMPT) | ✅ (msbuild) |
+| T3a (finalUrl) | dead block + dead include gone | grep-zero | `rg "finalUrl" .../SwgCuiHudAction.cpp` → 0; `rg "ConfigClientGame" .../SwgCuiHudAction.cpp` → 0 | ✅ (rg) |
+| T3b (voice API) | full API + registration gone, no callers | grep-zero | `rg "speakerVolume\|micVolume\|SpeakerVolume\|MicVolume" src` → 0 repo-wide; `rg "REGISTER_OPTION\(speakerVolume\)\|REGISTER_OPTION\(micVolume\)" src` → 0 | ✅ (rg) |
+| T3a+T3b (link) | SwgClient links clean | link-grep | MSBuild `swg.sln /t:SwgClient` Debug+Release; link log `unresolved external symbol` == 0 (Optimized EXEMPT) | ✅ (msbuild) |
 | All | no init regression | manual boot | `stage/client_d.cfg` rasterMajor=11 (already set); launch `SwgClient_d.exe`; reach char-select | ✅ (manual) |
 
 ### Sampling Rate
@@ -367,9 +393,9 @@ same proven set used through Phase 15.
 ### Known Threat Patterns for this change
 | Pattern | STRIDE | Standard Mitigation |
 |---------|--------|---------------------|
-| Latent untrusted-URL `ShellExecute` launch (the dead `finalUrl` → already-commented sink) | Elevation/Tampering | Already neutralized (sink commented); this phase deletes the dead computation entirely — surface reduced to zero |
+| Latent untrusted-URL `ShellExecute` launch (the dead `finalUrl` → already-commented sink) | Elevation/Tampering | Already neutralized (sink commented); this phase deletes the dead URL-construction computation (only the `:1170-1189` block) entirely — surface reduced to zero |
 | `/FORCE`-masked unresolved symbol shipping a broken binary | Tampering (integrity) | Link-grep `unresolved external symbol` == 0 (not exit 0) — the D-08 gate |
-| Over-removal of a live KEEP-list dep (would break SwgClient or SwgGodClient if rebuilt) | Denial of Service (build) | KEEP-list guard verified backed on disk; remove only `989crypt.lib` |
+| Over-removal of a live KEEP-list dep (would break SwgClient or SwgGodClient if rebuilt) | Denial of Service (build) | KEEP-list guard; remove only `989crypt.lib` |
 
 No threats opened. Net effect on security posture: neutral-to-positive (removes a dead untrusted-URL path).
 
@@ -389,18 +415,19 @@ Everything else in this research is `[VERIFIED: codebase grep/Read]` — file:li
      dead `finalUrl`). The live confirm-box logic (1074-1079) is separate and must stay.
    - What's unclear: D-06 names `~:1170-1189` but also says "remove the whole dead computation."
    - Recommendation: Honor the **narrow** locked bounds (1170-1189). It is the literal D-06 range, keeps the
-     diff minimal, and avoids touching `Game::getPlayerPath`/`CuiLoginManager` live calls. If the planner
-     wants the wider sweep, that should be an explicit decision — not an executor judgment call.
+     diff minimal, and avoids touching `Game::getPlayerPath`/`CuiLoginManager` live calls. The upstream
+     `httpParams` accumulation (`:1081-1169`) is intentionally left in place. If the planner wants the wider
+     sweep, that should be an explicit decision — not an executor judgment call.
 
 ## Sources
 
 ### Primary (HIGH confidence — all VERIFIED this session via Read/Grep/Bash on the live tree)
 - `src/game/client/application/SwgGodClient/build/win32/SwgGodClient.vcxproj` — dep-list lines 99/143/185; soePlatform LIBPATH; `.rsp` vestigial check
-- `src/external/3rd/library/` — `stationapi/` absent, `989crypt.lib` absent, `soePlatform/libs/Win32-Debug/` KEEP-list present
+- `src/external/3rd/library/` — `stationapi/` absent, `989crypt.lib` absent, `soePlatform/libs/Win32-Debug/` KEEP-list (built workspaces)
 - `src/engine/client/application/{AnimationEditor,ClientEffectEditor,LightningEditor,ParticleEditor}/build/win32/*.vcxproj` — lcdui count 0×4
-- `src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHudAction.cpp` — finalUrl block :1170-1189
-- `src/engine/client/library/clientUserInterface/src/shared/core/CuiPreferences.{cpp,h}` — statics/accessors/decls + repo-wide caller audit (0 external)
-- `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj` — links clientUserInterface + swgClientUserInterface (in-closure)
+- `src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHudAction.cpp` — finalUrl block :1170-1189; `ConfigClientGame.h` include :24
+- `src/engine/client/library/clientUserInterface/src/shared/core/CuiPreferences.{cpp,h}` — statics/accessors/decls + `REGISTER_OPTION` persistence lines :841-842 (macro :415) + repo-wide caller audit (0 external)
+- `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj` — links clientUserInterface + swgClientUserInterface (in-closure); `swg.sln` ProjectDependencies rebuild both under /t:SwgClient
 - `stage/client_d.cfg:37` — rasterMajor=11 set
 - `.planning/v2.1-MILESTONE-AUDIT.md`, `.planning/phases/16-.../16-CONTEXT.md`, `.planning/phases/15-.../15-VALIDATION.md`
 
@@ -413,9 +440,9 @@ Everything else in this research is `[VERIFIED: codebase grep/Read]` — file:li
 **Confidence breakdown:**
 - Target 1 (989crypt + sweep + KEEP-list): HIGH — token count, disk presence/absence, and LIBPATH all directly verified
 - Target 2 (lcdui editors): HIGH — 0 count confirmed on all 4 files
-- Target 3a (finalUrl): HIGH — symbol map + sole-consumer-is-commented confirmed; scope nuance flagged
-- Target 3b (voice API): HIGH — locations confirmed; ZERO external callers + no save/load hook confirmed repo-wide
+- Target 3a (finalUrl): HIGH — symbol map + sole-consumer-is-commented confirmed; scope nuance flagged; dead `ConfigClientGame.h` include noted
+- Target 3b (voice API): HIGH — locations + ZERO external callers confirmed repo-wide; the prior "no save/load hook" claim CORRECTED — statics ARE LocalMachine-registered via `REGISTER_OPTION` at :841-842, which MUST be deleted with the rest of the API
 - Build graph / validation: HIGH — link closure + cfg state verified; gates reuse proven Phase 15 pattern
 
-**Research date:** 2026-05-26
+**Research date:** 2026-05-26 (Target-3b `REGISTER_OPTION` correction applied 2026-05-27 via cross-AI review)
 **Valid until:** 2026-06-25 (stable; the only volatility is the live tree, which won't drift unless another branch edits these exact files before planning)
