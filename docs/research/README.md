@@ -19,6 +19,14 @@ in `docs/*.html`.
 | [../recon/05-client-boot-sequence.md](../recon/05-client-boot-sequence.md) | 17-phase boot from `WinMain()` to first frame; MVB milestones and SOE-stub map. |
 | [code-conventions.md](code-conventions.md) | Extended conventions: logging macros, function/module design patterns, compiler flags. |
 | [architecture-layers.md](architecture-layers.md) | Engine/library layer details, data flow, key abstractions, entry points, anti-patterns. |
+| [blender-asset-agent-foundations.md](blender-asset-agent-foundations.md) | IFF/TRE formats, mesh/shader/animation pipelines, and foundational requirements for a Blender MCP asset agent. |
+| [blender-mcp-vs-addon.md](blender-mcp-vs-addon.md) | maya-usd / MayaExporter comparison — MCP+skills vs thin Blender add-on decision. |
+| [blender-iff-interchange.md](blender-iff-interchange.md) | IFF ↔ Scene IR ↔ Blender plan, tool layout, and Cursor skills for import/export. |
+| [blender-iff-interchange-PLAN.md](blender-iff-interchange-PLAN.md) | Phased execution plan — Phases 0–6 done; **7–15 remaining** (incl. world/building). |
+| [iff-tre-codebase-map.md](iff-tre-codebase-map.md) | Index of existing C++ Iff/TreeFile tools, loaders, writers, and reuse strategy for Blender pipeline. |
+| [maya-exporter-reference.md](maya-exporter-reference.md) | MayaExporter plug-in source map — authoritative IFF **export** reference for Blender porting. |
+| [maya-exporter-parity-checklist.md](maya-exporter-parity-checklist.md) | Row-by-row MayaExporter feature inventory with Blender phase + parity status. |
+| [sample-tre-files.md](sample-tre-files.md) | **COT2000** master `.toc` + **TRE v6000** format spec for `D:\\Sample-TRE-Files` fixture. |
 
 ## Methodology
 
