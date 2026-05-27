@@ -166,6 +166,9 @@ Phases execute in numeric order: 12 → 13 → 14 → 15
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 16-01-PLAN.md — SwgGodClient 989crypt.lib dead-dep sweep (D-01/02/03) + editor lcdui verify-only (D-04) + D-05 scope fence
 - [ ] 16-02-PLAN.md — Source-residue removal: dead finalUrl block + voice-volume API (D-06/D-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 16-03-PLAN.md — Verification gate: SwgClient Debug+Release link-grep + one rasterMajor=11 boot (D-08)

@@ -382,9 +382,9 @@ No threats opened. Net effect on security posture: neutral-to-positive (removes 
 
 Everything else in this research is `[VERIFIED: codebase grep/Read]` — file:line and counts cited inline.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Target-3a removal scope — narrow (1170-1189) vs. wide (1081-1189)?**
+1. **Target-3a removal scope — narrow (1170-1189) vs. wide (1081-1189)?** — **RESOLVED: narrow bounds (1170-1189) per D-06; implemented in 16-02 Task 1.**
    - What we know: The whole `httpParams` accumulation (1081-1189) is technically dead-store (feeds only the
      dead `finalUrl`). The live confirm-box logic (1074-1079) is separate and must stay.
    - What's unclear: D-06 names `~:1170-1189` but also says "remove the whole dead computation."

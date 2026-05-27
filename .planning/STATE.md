@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Decruft
-status: completed
-last_updated: "2026-05-27T02:09:19.839Z"
-last_activity: 2026-05-27
+status: executing
+last_updated: "2026-05-27T02:38:14.680Z"
+last_activity: 2026-05-27 -- Phase 16 planning complete
 progress:
   total_phases: 4
   completed_phases: 4
@@ -41,8 +41,8 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 Phase: 15
 Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-27
+Status: Ready to execute
+Last activity: 2026-05-27 -- Phase 16 planning complete
 
 **v2.1 Decruft phase plan:**
 
