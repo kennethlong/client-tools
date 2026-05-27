@@ -550,12 +550,6 @@ public:
 	static bool getAutoLootCorpses();
 	static void setAutoLootCorpses(bool loot);
 
-	static float getSpeakerVolume();
-	static void  setSpeakerVolume(float volume);
-
-	static float getMicVolume();
-	static void  setMicVolume(float volume);
-
 	static float getOverheadMapOpacity();
 	static void  setOverheadMapOpacity(float opacity);
 

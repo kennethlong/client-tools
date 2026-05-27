@@ -394,9 +394,6 @@ namespace
 
 	bool ms_autoLootCorpses = false;
 
-	float ms_speakerVolume = 0.5f;
-	float ms_micVolume = 0.5f;
-
 	float ms_overheadMapOpacity = 1.0f;
 	bool  ms_overheadMapShowWaypoints = true;
 	bool  ms_overheadMapShowCreatures = true;
@@ -837,9 +834,6 @@ void CuiPreferences::install ()
 	REGISTER_OPTION(playerCameraHeight);
 
 	REGISTER_OPTION(autoLootCorpses);
-
-	REGISTER_OPTION(speakerVolume);
-	REGISTER_OPTION(micVolume);
 
 	REGISTER_OPTION(overheadMapOpacity);
 	REGISTER_OPTION(overheadMapShowWaypoints);
@@ -3453,34 +3447,6 @@ void CuiPreferences::setAutoLootCorpses(bool loot)
 bool CuiPreferences::getAutoLootCorpses()
 {
 	return ms_autoLootCorpses;
-}
-
-//----------------------------------------------------------------------
-
-void CuiPreferences::setSpeakerVolume(float volume)
-{
-	ms_speakerVolume = volume;
-}
-
-//----------------------------------------------------------------------
-
-float CuiPreferences::getSpeakerVolume()
-{
-	return ms_speakerVolume;
-}
-
-//----------------------------------------------------------------------
-
-void CuiPreferences::setMicVolume(float volume)
-{
-	ms_micVolume = volume;
-}
-
-//----------------------------------------------------------------------
-
-float CuiPreferences::getMicVolume()
-{
-	return ms_micVolume;
 }
 
 //----------------------------------------------------------------------
