@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Decruft
-status: completed
-last_updated: "2026-05-27T18:30:35.386Z"
+milestone: v2.2
+milestone_name: Visual Parity
+status: planning
+last_updated: "2026-05-27T19:30:50.935Z"
 last_activity: 2026-05-27
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -53,19 +53,10 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-27
-
-**v2.1 Decruft phase plan:**
-
-| Phase | Goal | Requirements | Risk |
-|-------|------|--------------|------|
-| 12 | Orphaned directory & project deletes (trackIR, stationapi, SwgClientSetup, lcdui) | DECRUFT-01, -02, -03 | low — re-establishes boot baseline |
-| 13 | VideoCapture library unlink | DECRUFT-04 | low/medium |
-| 14 | Voice chat (Vivox) source removal | DECRUFT-05 | higher — touches live UI + CuiPreferences |
-| 15 | XPCOM/Mozilla browser removal + cross-cutting boot gate | DECRUFT-06, -07 | highest — live UI + project + include path + stage copy; owns milestone gate |
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-27 — Milestone v2.2 started
 
 ## Accumulated Context
 
