@@ -54,6 +54,8 @@ Explicitly excluded for v2.2. Documented to prevent scope creep.
 |---------|--------|
 | Decompiling/translating the rejected D3D9 PEXE bytecode | The original PS source (`TAG_PSRC`) is still in the asset and can be recompiled — bytecode archaeology is unnecessary (research-confirmed). |
 | A runtime D3D9-bytecode interpreter | Higher cost than recompiling source / generating from the stage model; no parity benefit. |
+| Re-assembling asm `PSRC` back to bytecode (`D3DXAssembleShader`) | Reproduces the exact D3D9 bytecode `CreatePixelShader` already rejects — a named landmine; the asm lane ports asm → HLSL → `ps_4_0` instead (consult correction A). |
+| FFP `TextureOperation` generator as the **primary** VSPS lane | For VSPS passes the engine picks pixel-shader-program OR FFP stages, not both; `sul_eye.sht`-style compositing lives in the `.psh` program, not in `Pass::m_stage` — the FFP generator is tertiary/narrow only (consult correction A). |
 | Flipping the backbuffer/SRVs to `_SRGB` formats | Double-correction trap — D3D9 uses a scanout gamma ramp with sRGB sampling OFF; parity = replicate the ramp, not sRGB encode. |
 | Improving visuals beyond the D3D9 baseline | v2.2 is parity, not enhancement. |
 | Render-state-only iteration as a fix strategy | Proven (Phase 11) to amplify, not close, the asset-PS gap. |
@@ -61,29 +63,31 @@ Explicitly excluded for v2.2. Documented to prevent scope creep.
 
 ## Traceability
 
-*(Populated by the roadmapper — each requirement maps to exactly one phase. Phases continue from 16 → start at 17.)*
+*(Each requirement maps to exactly one phase. Phases continue from 16 → start at 17.)*
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAR-01 | TBD | Pending |
-| CHAR-02 | TBD | Pending |
-| CHAR-03 | TBD | Pending |
-| WORLD-01 | TBD | Pending |
-| WORLD-02 | TBD | Pending |
-| WORLD-03 | TBD | Pending |
-| GAMMA-01 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| FX-01 | TBD | Pending |
-| FX-02 | TBD | Pending |
-| GEO-01 | TBD | Pending |
-| DPVS-01 | TBD | Pending |
+| CHAR-01 | Phase 17 | Pending |
+| CHAR-02 | Phase 17 | Pending |
+| CHAR-03 | Phase 17 | Pending |
+| WORLD-01 | Phase 20 | Pending |
+| WORLD-02 | Phase 20 | Pending |
+| WORLD-03 | Phase 19 | Pending |
+| GAMMA-01 | Phase 19 | Pending |
+| UI-01 | Phase 18 | Pending |
+| UI-02 | Phase 20 | Pending |
+| FX-01 | Phase 21 | Pending |
+| FX-02 | Phase 21 | Pending |
+| GEO-01 | Phase 22 | Pending |
+| DPVS-01 | Phase 23 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 13 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13 ✓
+- Unmapped: 0 ✓
+
+**Phase distribution:** Phase 17 (CHAR-01/02/03) · Phase 18 (UI-01) · Phase 19 (GAMMA-01, WORLD-03) · Phase 20 (WORLD-01, WORLD-02, UI-02) · Phase 21 (FX-01, FX-02) · Phase 22 (GEO-01) · Phase 23 (DPVS-01)
 
 ---
-*Requirements defined: 2026-05-27 — milestone v2.2 Visual Parity. Source: `docs/research/phase12-baseline/COMPARISON.md` + `.planning/research/SUMMARY.md`.*
-*Last updated: 2026-05-27 after initial definition.*
+*Requirements defined: 2026-05-27 — milestone v2.2 Visual Parity. Source: `docs/research/phase12-baseline/COMPARISON.md` + `.planning/research/SUMMARY.md` + `.planning/research/CONSULT-slot0-SYNTHESIS.md`.*
+*Last updated: 2026-05-27 — roadmap created; all 13 requirements mapped to Phases 17–23 (100% coverage).*

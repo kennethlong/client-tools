@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: planning
-last_updated: "2026-05-27T19:30:50.935Z"
+last_updated: "2026-05-27T20:15:00.000Z"
 last_activity: 2026-05-27
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,12 +19,12 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
 
-**Core value:** Every change must leave the client bootable to character select.
-**Current focus:** v2.1 Decruft SHIPPED + tagged `v2.1`; planning next milestone — v2.2 Visual Parity (asset PS pipeline blocker).
+**Core value:** Every change must leave the client bootable to character select — and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
+**Current focus:** v2.2 Visual Parity ROADMAP CREATED (Phases 17–23; CHAR/WORLD/GAMMA/UI/FX/GEO/DPVS — 13/13 requirements mapped 100%). Next: plan Phase 17 (PSRC census + char-select beachhead).
 
 ## Deferred Items (acknowledged at v2.0 close)
 
-NOTE: "Remove dead code (CLEAN-01..04 vs MSBuild)" is now the ACTIVE v2.1 Decruft milestone (Phases 12–15) — no longer merely a backlog item.
+NOTE: "Remove dead code (CLEAN-01..04 vs MSBuild)" is now CLOSED — it was the v2.1 Decruft milestone (Phases 12–16, shipped 2026-05-27).
 
 Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
@@ -34,8 +34,8 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 | debug | safecast-null-cast | closed (resolved 2026-05-15) |
 | todo | 2026-05-15-cantina-corner-snap-engine-improvement | low — workaround exists |
 | todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational, post-Phase-11 |
-| backlog | Dead-code re-removal (CLEAN-01..04) vs MSBuild tree | **PROMOTED to active milestone v2.1 Decruft (Phases 12–15)** |
-| backlog | DPVS D3D11 remeasure (SPEC R7); CLEAN-06 ~30 tools | carried to backlog |
+| backlog | Dead-code re-removal (CLEAN-01..04) vs MSBuild tree | **CLOSED — shipped as v2.1 Decruft (Phases 12–16)** |
+| backlog | DPVS D3D11 remeasure (SPEC R7); CLEAN-06 ~30 tools | DPVS-01 now scheduled as v2.2 Phase 23; CLEAN-06 tools carried to backlog |
 
 ## Deferred Items (acknowledged at v2.1 close)
 
@@ -53,80 +53,49 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 17 — PSRC Census + Char-Select Beachhead (not yet planned)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-27 — Milestone v2.2 started
+Status: Roadmap created; ready to plan Phase 17
+Last activity: 2026-05-27 — v2.2 ROADMAP.md created (Phases 17–23)
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- [2026-05-27] **v2.2 Visual Parity ROADMAP CREATED** — 7 phases (17–23), 13/13 requirements mapped (CHAR/WORLD/GAMMA/UI/FX/GEO/DPVS). Standard granularity. Phases continue from 16 → start at 17.
 - Phase 16 added: v2.1 tech-debt cleanup (SwgGodClient 989crypt.lib + P12-P15 residue) — from milestone audit
 
 ### Decisions
+
+**v2.2 Visual Parity (roadmap):**
+
+- [2026-05-27] **Char-select beachhead FIRST (Phase 17).** Prove the asset-PS pipeline on the deterministic, isolated character-select screen (textures + eyes + head) before any open-world work. Use `sul_eye.sht` + `sul_*_head.sht` PLUS one single-stage control (body/clothing) to separate "pipeline works" from "multi-sampler works."
+- [2026-05-27] **Phase 17's gating first task = PSRC language census on the REAL asset tree** (retail-TRE extraction; the repo checkout has no extracted `.psh`/`.sht`). Classify `//hlsl` vs asm — the HLSL:asm ratio decides the lane mix and gates the rest of the phase.
+- [2026-05-27] **Asset-PS approach (per CODEX+Cursor consult, SUPERSEDES SUMMARY.md on the asm lane):** primary lane = recompile discarded `TAG_PSRC` `//hlsl` via existing `compilePixelShaderFromHlsl` (mirror the VS compile stack); secondary lane = port asm `PSRC` → HLSL → `ps_4_0` (re-assembling asm just reproduces the rejected D3D9 bytecode — named landmine); FFP `TextureOperation` generator is tertiary/narrow ONLY for genuine FFP-only passes. Per-pass `Pass::apply` constants upload **reflection-driven (D3DReflect)**, NOT via copied D3D9 register indices.
+- [2026-05-27] **Independent/parallel gaps:** load-screen half-texel seam (Phase 18, UI-01) is small/early/standalone (`getOneToOneUVMapping` stub), independent of the PS pipeline. Gamma LUT (Phase 19) scheduled AFTER the PS pipeline so it's tuned on correctly-shaded content; NO sRGB-view gamma (double-correction trap — keep SRVs `_UNORM`).
+- [2026-05-27] **Satellite gaps are SEPARATE from the PS pipeline, not assumed to fall out of it:** interior flat-white (Phase 19, WORLD-03) also needs the simplified `Direct3d11_LightManager` + gamma, not just PS; "eyes through back of head" was already fixed by Iter-44A depth wiring (verify by screenshot in Phase 17, don't re-fold into PS scope); stencil is its own state-parity item; exterior/skeletal shard distortion (Phase 22, GEO-01) gated on a fully-settled re-capture (0013/0014 were mid-load LOD smear) with a single-stream-fix vs flip-to-multistream decision.
+- [2026-05-27] **DPVS D3D11 remeasure (Phase 23, DPVS-01) is STRICTLY LAST** — meaningless until geometry renders cleanly.
+- [2026-05-27] **Validation = D3D9-vs-D3D11 screenshot diff** against the `docs/research/phase12-baseline/COMPARISON.md` matched pairs. Success = "matches `rasterMajor=5`", NOT "no magenta". Every parity claim needs a matched pair (Iter-44B minimap over-claim lesson). Do NOT mark UI-02 minimap done without a diff.
+- [2026-05-27] **Cross-cutting landmines for executors:** boot-gate BOTH `rasterMajor=5` and `=11` on any `ShaderImplementation.cpp` edit; keep D3D9 `load_0000` PSRC behavior byte-for-byte identical except storing text; mirror the intentional D3D9 `Compare[]` swap (`C_GreaterOrEqual`↔`C_NotEqual`), don't "fix" it; every new cbuffer matrix needs `XMMatrixTranspose`; persistent baked RT stays `B8G8R8A8_UNORM`; do NOT re-enable per-pass blend factors early (Iter-44C amplification regression); feed generator/rewrite/profile changes into the `.cso` cache key/version.
 
 **v2.1 Decruft (roadmap):**
 
 - [2026-05-25] v2.1 framed as **cleanup-only**: re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree. Visual Parity reordered to v2.2 (cleanup-first shrinks surface area before upstream imports). Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits, retargeted CMake → MSBuild.
 - [2026-05-25] Phase ordering is **risk-gradient, low-first**: pure deletes (Phase 12) → lib unlink (Phase 13) → live-source surgery (Phases 14 Vivox, 15 XPCOM). Re-establishes the boot baseline before the riskier source removals.
 - [2026-05-25] DECRUFT-07 (dual-renderer boot gate) is a cross-cutting milestone gate owned by the final phase (15) but **verified incrementally** after every removal in Phases 12–15 — mirrors v2.0 CLEAN-05.
-- [2026-05-25] XPCOM removal is a **clean unlink**: the Mozilla↔`/Zc:wchar_t` interlock was already resolved in Phase 9 (Option D went `char16_t`), so no ABI-boundary blocker remains.
-- [2026-05-25] Bink video codec removal explicitly OUT of scope (active cutscene codec, higher blast radius than the dormant modules); v2.1 is dead-code-only.
-
-**Phase 8:**
-
-- Plan 08-02 finding: this leaked tree's tool source code is **mid-NGE-refactor**. Many tool sources reference engine APIs that have since been removed/renamed in the engine itself. CMake authoring alone cannot complete CLEAN-06; targeted source-modernization plans are needed.
-- Plan 08-02 partition: 1 building (DebugWindow), 10 MFC-blocked (Phase 9 unblocks), 4 NGE-source-mismatch, 1 missing-SDK (PIX), 2 build-system-gap (Miff/CrashReporter), 1 needs-link-wire (DllExport), 12 Qt batch. (commit eb549831d)
-- Plan 08-01: 5 MFC tools (Turf, WordCountTool, StringFileTool, DataLintRspBuilder, TreeFileRspBuilder) DEFERRED to Phase 9 — STLPort 4.5.3 cannot coexist with `<afxwin.h>` on the same translation unit under MSVC 14.44. Per-tool CMakeLists.txt authored and committed; commented out in tier parent until Phase 9 swaps STLPort for MSVC STL. (commit c4fe90f84)
-- Plan 08-01: New `perforce_tzname_compat` OBJECT lib provides `__tzname` data symbol for pre-UCRT Perforce libsupp.lib, isolated from STLPort's time.h shim that redefines it as a function. (commit c4fe90f84)
-- VS 2022 component "C++ MFC for v143 build tools (x86 & x64)" installed as one-time tooling install — required for any future MFC tool builds, even though MFC tools currently deferred.
-- TreeFileBuilder source patched: `borrowCompressor`/`returnCompressor` API removed in NGE refactor; replaced with direct `ZlibCompressor` instantiation. (deviation, commit c4fe90f84)
-
-Decisions carried forward from v1:
-
-- v1 complete: CMake + VS 2022 build, SwgClient_d.exe, boots to character select + ground scene against SWGSource StellaBellum VM at 192.168.1.200
-- STLPort vc71/MSVC 2022 ABI compat shims in place (stlport_vc143_compat.cpp, /FORCE:MULTIPLE) — these are the primary removal target in Phase 9
-- Voice chat (Vivox) disabled via config + ~20 ms_voiceChatManagerInstalled guards — full source removal is v2.1 Phase 14 (DECRUFT-05)
-- In-game browser (XPCOM/Mozilla) stubbed (libMozilla::init returns true) — full removal is v2.1 Phase 15 (DECRUFT-06); the /Zc:wchar_t interlock is already gone (Phase 9 char16_t)
-- allowTearing=true (prevents D3D9 vsync hang on WDDM/Win11) — stays in client.cfg
-- lookUpCallStackNames=false (prevents DbgHelp stall) — stays in client.cfg
-- SWGSource TRE mismatches handled with graceful guards (POB missing files, ContrailData cast, NebulaManagerClient null)
-- [Phase 9]: Phase-9 Wave 1 (replan-2): runtime contract locked to v145 toolchain + 2016 SWGSource v3.0 DLLs + Tatooine zone-in (CONTEXT D-08/D-10); 8 task commits 898bc9a89..28d0281ce on 35b872357 base; zero src/ edits; boot gate STAGED-PENDING awaits user-run re-validation
-- [Phase 9]: Phase-9 phase-wide DLL-restage protocol: SwgClient/src/CMakeLists.txt POST_BUILD copies 2010 leak DLLs from exe/win32/ over staged 2016 DLLs every build. Every wave's boot gate must re-stage 2016 DLLs after final build, or fix the root cause via a CMake source edit (Wave 2/3 candidate)
-- [Phase 9 — 2026-05-09 boot gate REGRESSION]: CONTEXT D-08 ("v145 + 2016 DLL runtime contract") invalidated by Probe E + Probe G. v145 EXE + 2016 SWGSource v3.0 DLLs FATALs during graphics setup with "format arg out of range: value/max 1793887061/16" (callstack alternating EXE / DLL-at-`~0x6BE90000`); v145 EXE + 2010 leak DLLs runs cleanly. The user's working `build/bin/Debug/` (v143 + 2010 leak DLLs per Probe B MD5 verification) is the actually-empirically-validated runtime, NOT v145 + 2016. Replan-3 needed. See `.planning/phases/09-stlport-msvc-stl/.continue-here-replan3.md`. Three architectural options surfaced (Option A: switch to v143 + 2010 leak — recommended; Option B: forensics; Option C: pull Phase 11 forward).
-- [Phase 9 — 2026-05-09 Option D empirically validated]: Koogie tree builds clean via VS 2026/v145 (`swg.sln`), boots to char-select against SWGSource VM, FATALs at world-load on `creation/default_pc_equipment.iff/LOEQ/0000/PTMP/ITEM: exiting chunk but not at the end of it` (same gap whitengold v1 guards with `exitChunk(true)` at `CuiCharacterLoadoutManager.cpp:162`). v2 working tree at `D:/Code/swg-client-v2/` on `koogie-msvc-cpp20-base` with merge anchor `479d35df3` (`--no-ff` merge of `koogie/MSVC-CPP20-Upgrade`). Option D adopted: Koogie supplies modernization; whitengold supplies SWGSource compat guards.
-- [Phase 9 — 2026-05-10 replan-3 CONTEXT captured]: D-08..D-12 REVOKED. D-13..D-19 binding (Option D phase scope, working tree topology at `D:/Code/swg-client-v2/`, `.planning/` migration plan, two-plan structure 09-01 merge-anchor / 09-02 compat-guard-port, bisect-first compat-guard scope, batched upstream PR cadence post-Tatooine-PASS). STL-01..04 mechanically satisfied by Koogie merge `479d35df3`; STL-05 (Tatooine zone-in clean) is the only remaining requirement and is the 09-02 boot gate. `.planning/` stays in whitengold through Phase 9 closeout; top-level files copy to v2 as final 09-02 step.
-- [Phase 9 — 2026-05-10 CLOSED via Option D]: STL-01..STL-05 all satisfied. STL-01..STL-04 mechanically satisfied by Koogie merge anchor `479d35df3` (CONTEXT.md D-14); STL-05 satisfied by IFF compat-guard port (v2 commit `460f4540dfb09acf50b41e37e49038229b18d3bc` on `koogie-msvc-cpp20-base`, port-forwarding whitengold `dd78832c4d5ad116ee049619e8c39a844597bd34`) plus Tatooine zone-in PASS against SWGSource VM 192.168.1.200 (evidence: `evidence/09-02-tatooine.png` 1,089,854 bytes; runtime log `D:/Code/swg-client-v2/stage/log-replan3-02.txt` 7.2 MB, zero FATAL). Task 3 bisect-first NO-OP (D-18): ContrailData / NebulaManager / POB candidates remained unported because the IFF guard alone delivered Tatooine clean. Active working tree: `D:/Code/swg-client-v2/` branch `koogie-msvc-cpp20-base`.
-- [Phase 10 — 2026-05-14 CLOSED]: SCENE-CONDITIONAL verdict `remove for outdoor, keep for indoor` (17 CSVs / 6,072 frames across 4 scenarios). DPVS occlusion culling permanently disabled on the outdoor path at RenderWorld.cpp; portal traversal retained for indoor cells. Verdict doc: docs/recon/10-dpvs-profiling.md. (Full Wave-by-wave detail archived in milestones/v2.0-* and prior STATE revisions.)
-
-**Phase 11:**
-
-- [Phase 11 — 2026-05-24 CLOSED (PASS-WITH-DEFERRALS)]: D3D11 renderer plugin operational. 17-plan / ~45-iteration cascade. gl11_d.dll (1,889,280 bytes) satisfies the Gl_api table; D3D11 + D3D9 both buildable+selectable via rasterMajor. Visible-textured-Tatooine + visual parity achieved at Plan 11-09.15 Iter-39C (Iter-38B matrix-transpose [col-vec engine vs row-vec bytecode → XMMatrixTranspose] + Iter-39C per-pass blend wiring). SPEC R6 verdict PASS-WITH-DEFERRALS (docs/recon/11-d3d11-screenshots/comparison-notes.md); SPEC R7 DPVS remeasure (Plan 11-10) DEFERRED to post-Phase-11 (needs clean draw surface). CORRECTION: the "mini-map circular (Iter-44B win)" claim was FALSE — D3D11 radar never round (Phase 12-family PS-gen work, now v2.2); see memory project-phase11-minimap-never-round. **8 visual-parity entry points catalogued in 11-SUMMARY.md** — chief blocker is the asset PS pipeline (engine PEXE bytecode rejected by CreatePixelShader → dynamic PS samples slot 0 only → eyes/head/mini-map/particles wrong); then Pass::apply constant uploads, stencil state mapping, gamma LUT pass. (Full per-plan Phase 11 detail archived in milestones/v2.0-ROADMAP.md + 11-SUMMARY.md; trimmed from this STATE revision for context budget.)
-- [Phase 13]: [2026-05-25] Plan 13-02 (DECRUFT-04 crit #1): purged all INERT VideoCapture/AudioCapture residue (#if 0 dead source x5, clientGame/clientAudio include paths + 3 includePaths.rsp, 42 .rsp, 10 editor/aux .vcxproj). D-02a held: live Miles AIL_start_sample untouched. Vendored tree + cross-cutting grep are Plan 03.
-- [Phase 13]: [2026-05-25] MSYS sed gotcha (Phases 13-15): Windows .vcxproj path purges must match segments by substring+delimiter ([^;<>]*TOKEN[^;<>]*;), NOT by escaping literal backslashes — a path like ...3rd... mis-parses the backslash+digit as a back-reference.
-- [Phase 14]: Plan 14-01: Vivox voice subsystem removed atomically (eb9b68987) — ~24 source files + 3 voicechat messages deleted, 10 callers + 5 registrations de-wired, 6 CuiPreferences keys stripped, vivox/VChat/libsndfile unlinked from SwgClient (3 configs). Debug+Release link clean (0 unresolved); D-01/-02/-02a/-03/-03a/-06/-09 satisfied.
-- [Phase 14]: DEF-14-01: SwgClient Optimized config fails LNK1281 SAFESEH (pre-existing, voice-unrelated; 0 unresolved externals, 0 voice symbols in error log) — Optimized <Link> lacks the /SAFESEH:NO Debug has + ImageHasSafeExceptionHandlers=false Release has. Deferred (deferred-items.md), not a Decruft regression.
-- [Phase 14]: Plan 14-02 (DECRUFT-05 crit #1 residue): purged all vestigial + editor vivox residue — SwgClient .rsp lib/path tokens, dangling swgClientVivox + vivox in clientUserInterface/clientGame includePaths.rsp (D-05), 16 editor .rsp refs + INLINE vivox in all 7 editor .vcxproj + SwgGodClient.vcxproj fuller token set across 3 configs (D-07). 30 files, deletions only, ZERO build (vestigial .rsp + pre-broken editors). soePlatform libs + xpcom/xul/qt/libMozilla preserved. Full plan-scope grep-zero PASS. Closes the inline-.vcxproj gap for 14-03's repo-wide gate. Commits 0b9c78f0e + 4bc512b45.
-- [Phase 14]: Plan 14-03 (DECRUFT-05 crit #1 + DECRUFT-07 boot gate): deleted the 3 vendored voice trees (vivox/, vivoxSharedWrapper/, soePlatform/VChatAPI/ — 138 files, 47,201 lines, commit 0d15c8433) after a Wave-1 merge gate confirmed Wave 1 complete; cleaned copy-libs.bat (0 VChatAPI refs); PRESERVED soePlatform/libs/ (Base.lib + prebuilt VChatAPI.lib/Base_vchat.lib in Win32-Debug/Win32-Release) + ChatAPI2/. Repo-wide GATE-1 vivox grep-zero; Debug 0 unresolved (69.9 MB) / Release 0 (28.7 MB) / Optimized 0 unresolved (DEF-14-01 SAFESEH only). **DUAL-RENDERER BOOT GATE PASS** (user-confirmed): char-select under rasterMajor=5 (D3D9) AND =11 (D3D11), no crash/assert, no voice surfaces; client_d.cfg left at rasterMajor=11. D-04/D-06a/D-08/D-09/D-10 satisfied.
-- [Phase 14]: DEF-14-02: GATE-2's over-broad getVoice/setVoice substrings collide with 3 SOE community-chat methods (ChatRoom::getVoiceCount/getVoiceCore/getVoice) in the PRESERVED soePlatform/ChatAPI2/ tree (ZERO vivox literals; D-10 KEEP-listed). Benign false-positive, NOT a Vivox-subsystem holdout — rg -i vivox over ChatAPI2/ == 0; GATE-2 over src EXCLUDING ChatAPI2/ == 0. Out of scope (SCOPE BOUNDARY), documented in deferred-items.md, not fixed.
-- [Phase 14]: CR-01 (code-review BLOCKER, FIXED commit 1bfeff6b3): the voice-enum deletion in 14-01 shifted surviving CuiMenuInfoTypes::Type ordinals (ITEM_EQUIP_APPEARANCE 106→103 .. GOD_TELEPORT) — and that ordinal is used DIRECTLY as the retail datatables/player/radial_menu.iff ROW INDEX by RadialMenuManager (s_ranges keyed by row index; getCommandForMenuType does s_ranges.find(menuType)). So equip-appearance/unequip-appearance/storyteller-recipe/god-teleport silently resolved to wrong rows — a regression the link gate + char-select boot gate cannot catch. Fixed by 3 ordinal-preserving placeholders (RESERVED_RADIAL_SLOT_103..105, no voice tokens); Debug+Release re-built clean (0 unresolved). Corrects locked D-06a (see 14-CONTEXT.md). **LESSON for Phase 15: deletions from positional enums/tables that mirror retail-TRE row indices MUST use ordinal-preserving placeholders, never mid-sequence deletes.**
-- [Phase ?]: [Phase 16] Plan 16-01: removed dead 989crypt.lib token from SwgGodClient.vcxproj Debug (577f68def); soePlatform 9-token KEEP-list + live crypto.lib preserved (adjacency trap); D-02 sweep confirm-zero; D-04 editor lcdui 0 (no edit, 15-04 swept); D-03 grep-only never built; D-05 doc-staleness out of scope.
-- [Phase 16] Plan 16-02: removed dead finalUrl URL-construction block (~:1170-1189) + now-dead shellapi.h/ConfigClientGame.h includes in SwgCuiHudAction.cpp (9ffd140b7); narrow D-06 scope honored (httpParams accumulation ~:1081-1169 + confirm-box retained); removes a latent untrusted-URL ShellExecute path (T-16-03). rg finalUrl/ConfigClientGame/shellapi == 0 in file.
-- [Phase 16] Plan 16-02: removed full orphaned voice-volume API from CuiPreferences (842b44989) — 2 statics + 2 REGISTER_OPTION LocalMachine persistence lines + 4 accessors + 4 decls, atomically (REGISTER_OPTION refs the statics → must go together or clientUserInterface won't compile). D-07: deleted outright, no placeholders. Benign LocalMachine persistence-surface reduction (Vivox consumer gone since P14). rg speaker/micVolume == 0 repo-wide. Link+boot gate is Plan 16-03.
 
 ### Pending Todos
 
 1 pending:
 
-- [Sync community compat fixes from SWG-Source/client-tools master](todos/pending/2026-05-08-sync-swg-source-community-compat.md) — future milestone (not v2.1 Decruft)
+- [Sync community compat fixes from SWG-Source/client-tools master](todos/pending/2026-05-08-sync-swg-source-community-compat.md) — future milestone (not v2.2)
 
 ### Blockers/Concerns
 
-- v2.1 Phase ordering is intentional: Phase 12 (low-risk deletes) MUST boot-verify before the riskier Phase 14/15 source surgery — re-establishes the dual-renderer baseline first.
-- Every v2.1 removal step is boot-gated under BOTH `rasterMajor=5` (D3D9) and `=11` (D3D11). Debug exe reads `client_d.cfg` (not `client.cfg`) — set rasterMajor there for each smoke (memory note feedback_debug_exe_reads_client_d_cfg).
-- Vivox (Phase 14) touches live `CuiPreferences` — strip voice keys carefully so no remaining caller references a removed key.
-- **[Phase 12 — /FORCE false-pass]** SwgClient links under `/FORCE`, which downgrades unresolved externals (LNK2019) to WARNINGS and still emits a binary with exit 0. So `MSBuild exit 0` is NOT proof of a clean link — every removal-step build gate MUST grep the link output for `unresolved external symbol` (must be 0). 12-01 caught two plan defects this way: stationapi's `989crypt.lib` was a live dep (not stale); and dropping `ClientHeadTracking.cpp` orphaned its callers' symbols (fixed by stubbing the .cpp in-build, not dropping it). Apply the same scrutiny to 12-02/12-03 build gates.
+- **[v2.2 — census gate]** Phase 17's first deliverable (PSRC census) MUST run against the real retail-TRE asset extraction — this repo checkout has no extracted `.psh`/`.sht`. Neither consult reviewer could verify asset contents from the tree. The HLSL:asm ratio is the single biggest open unknown and gates the lane mix.
+- **[v2.2 — screenshot-diff discipline]** Every parity win requires a matched D3D9/D3D11 pair from the same scene/pose. The Iter-44B minimap over-claim propagated a false win through a full plan cycle. Do NOT mark UI-02 done without a diff.
+- **[v2.2 — boot invariant]** Every shared-`clientGraphics` edit must boot-test BOTH `rasterMajor=5` AND `rasterMajor=11` before being claimed done. Debug exe reads `client_d.cfg` (not `client.cfg`) — set rasterMajor there for each smoke (memory feedback_debug_exe_reads_client_d_cfg).
+- **[Phase 12 — /FORCE false-pass, still applies]** SwgClient links under `/FORCE`, which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. `MSBuild exit 0` is NOT proof of a clean link — grep the link output for `unresolved external symbol` (must be 0).
 
 ## Deferred Items
 
@@ -141,19 +110,21 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-27T14:39:01.202Z
-Resume (2026-05-25): **v2.1 Decruft roadmap CREATED** (Phases 12–15; DECRUFT-01..07 mapped 100%). v2.0 Modernisation shipped + tagged `v2.0`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
+Last session: 2026-05-27T20:15:00.000Z
+Resume (2026-05-27): **v2.2 Visual Parity ROADMAP CREATED** (Phases 17–23; 13/13 requirements mapped 100%). v2.1 Decruft shipped + tagged `v2.1`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
-**v2.1 Decruft — the plan:**
-Re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree, ordered low-risk-first:
+**v2.2 Visual Parity — the plan (7 phases):**
 
-1. **Phase 12** (DECRUFT-01/-02/-03) — delete trackIR/stationapi dirs + drop SwgClientSetup.vcxproj + lcdui.vcxproj from swg.sln + purge lcdui `.rsp` refs. Re-establishes the dual-renderer boot baseline.
-2. **Phase 13** (DECRUFT-04) — unlink `VideoCapture_debug.lib` from SwgClient `libraries_d.rsp` (+ release `.rsp`); purge source/include residue.
-3. **Phase 14** (DECRUFT-05) — remove Vivox: unlink `vivoxSharedWrapper_debug.lib`; delete `CuiVoiceChatManager`/`SwgCuiVoiceFlyBar`/`CuiVoiceChatEventHandler`; strip voice keys from `CuiPreferences`.
-4. **Phase 15** (DECRUFT-06 + DECRUFT-07) — remove XPCOM/Mozilla: drop `libMozilla.vcxproj` from swg.sln; remove `libMozilla/include/public` from `includePaths.rsp`; delete `CuiWebBrowser*`/`UIWebBrowserWidget`/XPCOM bridge; drop staged Mozilla DLLs. Then run the milestone-wide dual-renderer boot gate (DECRUFT-07).
+1. **Phase 17** (CHAR-01/02/03) — PSRC census on the real asset tree (gating first task), then prove the recompile + reflection-driven-constant pipeline on char-select: textures, eyes, multi-stage head. Primary lane = `//hlsl` PSRC recompile; secondary = asm→HLSL port; tertiary/narrow = FFP generator. UI hint.
+2. **Phase 18** (UI-01) — load-screen half-texel centerline-seam fix (`getOneToOneUVMapping` stub). Independent of Phase 17; safe early/parallel canary. UI hint.
+3. **Phase 19** (GAMMA-01, WORLD-03) — gamma LUT post-pass (D3D9 `pow()` ramp, NO sRGB views) + interior lighting via per-pass light constants + simplified `Direct3d11_LightManager` parity. After Phase 17.
+4. **Phase 20** (WORLD-01, WORLD-02, UI-02) — extend the PS pipeline to open-world surfaces + multi-stage `TextureOperation` cascade + round minimap (screenshot-diff verified). After Phase 17.
+5. **Phase 21** (FX-01, FX-02) — particles (blend/additive/alpha) + ribbon/swoosh (instrument the draw path first; stretch is NOT a transform bug). After Phases 17/20.
+6. **Phase 22** (GEO-01) — exterior static-mesh shard distortion, gated on a fully-settled re-capture (0013/0014 were mid-load LOD smear) + single-stream-fix vs multistream-flip decision. After Phase 20.
+7. **Phase 23** (DPVS-01) — DPVS D3D11 remeasure + keep/remove verdict (SPEC R7 deferral). STRICTLY LAST.
 
-Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits (CLEAN-01..05), retargeted CMake → MSBuild. **Invariant:** every step boots to character select under both `rasterMajor=5` and `=11`.
+Validation throughout = D3D9-vs-D3D11 screenshot diff against `docs/research/phase12-baseline/COMPARISON.md` matched pairs. Success = matches `rasterMajor=5`, not "no magenta".
 
-**Next action:** v2.1 Decruft CLOSED + tagged `v2.1` (2026-05-27). `/clear` then `/gsd-new-milestone` to open **v2.2 Visual Parity** — derive requirements from `docs/research/phase12-baseline/COMPARISON.md` (asset PS pipeline is the blocker).
+**Next action:** `/gsd-plan-phase 17` — plan the PSRC census + char-select beachhead. Census tool is the gating first deliverable; needs the real retail-TRE asset extraction.
 
-Known unrelated long-tail (deferred): 0x087a armor_marauder async crash (cross-client, retry works); ~11-min ExceptionHandler crash; first-launch login flakiness. Koogie's uncommitted Direct3d9.cpp Utinni vtable probe in the working tree is a separate sidequest — leave untouched. v2.2 Visual Parity (asset PS pipeline blocker) is the next milestone after Decruft; read `docs/research/phase12-baseline/COMPARISON.md` when it opens.
+Known unrelated long-tail (deferred): 0x087a armor_marauder async crash (cross-client, retry works); pre-existing Options-window cooldown-UI crash (commit `d1b3c0eaf`, NOT a regression). Koogie's uncommitted Direct3d9.cpp Utinni vtable probe in the working tree is a separate sidequest — leave untouched.
