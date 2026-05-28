@@ -43,10 +43,49 @@ class MemoryBlockManager;
 
 #include <cstdint>
 #include <d3d11.h>
+#include <d3d11shader.h>      // Plan 17-02 HIGH-2: D3D_REGISTER_COMPONENT_TYPE for reflected PS input signature
 #include <unordered_map>
+#include <vector>             // Plan 17-02 HIGH-2: std::vector for reflected PS cbuffer layouts + input sig
 #include <wrl/client.h>
 
 class Direct3d11_VertexShaderData;
+
+// ======================================================================
+//
+// Plan 17-02 HIGH-2 reflected-PS-cbuffer descriptors. Captured once per
+// compile via D3DReflect inside the PS-program ctor's recompile-lane
+// branch; consumed by Plan 17-03's Direct3d11_StaticShaderData::apply
+// per-draw upload path. D3DReflect is NEVER called per-draw -- the cache
+// here is the single canonical source.
+//
+// Mirrors the Direct3d11_ReflectedVSInput/Output precedent at
+// Direct3d11_VertexShaderData.h:53-90. Truncation-WARN (R3-02e) fires
+// once if a reflected name doesn't fit; Plan 03 looks up variables by
+// exact name match, so silent truncation -> silent zero upload.
+
+struct Direct3d11_ReflectedPSCbufferVar
+{
+	char    Name[64];        // R3-02e: WARN once on truncation
+	UINT    StartOffset;     // D3D11_SHADER_VARIABLE_DESC.StartOffset
+	UINT    Size;            // D3D11_SHADER_VARIABLE_DESC.Size
+};
+
+struct Direct3d11_ReflectedPSCbufferLayout
+{
+	char                                            Name[64];        // cbuffer name (e.g. "PerMaterial" or rewriter-emitted name); R3-02e WARN once on truncation
+	UINT                                            BindPoint;       // D3D11_SHADER_INPUT_BIND_DESC.BindPoint
+	UINT                                            TotalSize;       // D3D11_SHADER_BUFFER_DESC.Size -- needed by Plan 03 Contract A staging-buffer upload
+	std::vector<Direct3d11_ReflectedPSCbufferVar>   Vars;
+};
+
+struct Direct3d11_ReflectedPSInputSig
+{
+	char                            SemanticName[32];   // R3-02e: WARN once on truncation
+	UINT                            SemanticIndex;
+	UINT                            Register;
+	UINT                            Mask;
+	D3D_REGISTER_COMPONENT_TYPE     ComponentType;
+};
 
 // ======================================================================
 
@@ -68,6 +107,18 @@ public:
 	// May return NULL -- see header preamble. Plan 11-06's draw dispatch
 	// must handle the NULL case (skip PSSetShader -> D3D11 default).
 	ID3D11PixelShader *getPixelShader() const;
+
+	// Plan 17-02 HIGH-2 accessors -- Plan 03 consumes these to drive the
+	// per-draw constant upload. NEVER call D3DReflect at apply() time; the
+	// cache populated in the recompile-lane ctor branch (when m_d3dPS was
+	// bound from a //hlsl PSRC) is the single canonical source.
+	//
+	// All three return empty / null when the recompile lane didn't run
+	// (no PSRC retained / PSRC was asm / PSRC compile failed) -- callers
+	// must handle the empty case by skipping the upload.
+	ID3DBlob *                                                  getPsBytecode() const;
+	std::vector<Direct3d11_ReflectedPSCbufferLayout> const &    getReflectedCbufferLayouts() const;
+	std::vector<Direct3d11_ReflectedPSInputSig> const &         getReflectedPSInputs() const;
 
 	// Plan 11-09 Iter-2: minimal magenta pass-through PS, compiled in
 	// install(). applyPreDrawState binds this when ms_currentPSData has
@@ -127,6 +178,22 @@ private:
 
 	ShaderImplementationPassPixelShaderProgram const * m_program;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>          m_d3dPS;
+
+	// Plan 17-02 HIGH-2: retained DXBC blob from the recompile-lane
+	// success path; empty otherwise. Plan 03 may need GetBufferPointer()
+	// for re-reflection or contracts; the cached layouts below are the
+	// hot-path consumer.
+	Microsoft::WRL::ComPtr<ID3DBlob>                          m_psBytecodeBlob;
+
+	// Plan 17-02 HIGH-2 + HIGH-4: cached reflection of the recompiled PS.
+	// Populated ONCE in the ctor's recompile-lane success path; consumed
+	// per-draw by Plan 03's apply() without ever calling D3DReflect again.
+	// Empty vectors when the recompile lane did not run or reflection
+	// failed (defensive non-fatal -- Plan 03 must skip the upload in that
+	// case, matching the VS m_reflectedInputs/Outputs empty-vector contract
+	// at Direct3d11_VertexShaderData.h:158/:161).
+	std::vector<Direct3d11_ReflectedPSCbufferLayout>          m_reflectedCbufferLayouts;
+	std::vector<Direct3d11_ReflectedPSInputSig>               m_reflectedPSInputs;
 };
 
 // ======================================================================
@@ -141,6 +208,27 @@ inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getPixelShader() co
 inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getFallbackPS()
 {
 	return ms_fallbackPS.Get();
+}
+
+// ----------------------------------------------------------------------
+
+inline ID3DBlob *Direct3d11_PixelShaderProgramData::getPsBytecode() const
+{
+	return m_psBytecodeBlob.Get();
+}
+
+// ----------------------------------------------------------------------
+
+inline std::vector<Direct3d11_ReflectedPSCbufferLayout> const &Direct3d11_PixelShaderProgramData::getReflectedCbufferLayouts() const
+{
+	return m_reflectedCbufferLayouts;
+}
+
+// ----------------------------------------------------------------------
+
+inline std::vector<Direct3d11_ReflectedPSInputSig> const &Direct3d11_PixelShaderProgramData::getReflectedPSInputs() const
+{
+	return m_reflectedPSInputs;
 }
 
 // ======================================================================
