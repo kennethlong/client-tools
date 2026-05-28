@@ -1,98 +1,93 @@
 ---
 phase: 17
-review_round: 2
+review_round: 3
 reviewers: [codex, cursor]
-reviewed_at: 2026-05-27T21:54:00Z
+reviewed_at: 2026-05-28T16:22:00Z
 plans_reviewed: [17-01-PLAN.md, 17-02-PLAN.md, 17-03-PLAN.md]
-prior_round: "Round 1 review at commit 797e9db57 (`docs: cross-AI review for phase 17`); Round 2 replan at commit 6e0eae4e6 (`docs(17): incorporate cross-AI review feedback (codex+cursor)`)"
-verdict: CONVERGENCE NOT ACHIEVED — Round 3 amendments needed
+prior_rounds:
+  - "Round 1 review at commit 797e9db57 (`docs: cross-AI review for phase 17`)"
+  - "Round 2 replan at commit 6e0eae4e6 (`docs(17): incorporate cross-AI review feedback (codex+cursor)`)"
+  - "Round 2 review at commit 85ff0b90b (`docs(17): cross-AI review round 2 (codex+cursor) — convergence NOT achieved`)"
+  - "Round 3 replan at commit 6cfe19a7f (`docs(17): round 3 replan — convergence amendments (SR-2 reflect, HIGH-3 shadow, HIGH-4 routing, SR-3 split, plumbing fixes)`)"
+verdict: CONVERGENCE ACHIEVED — execution-ready with 1 LOW-severity frontmatter-cleanup item
 ---
 
-# Cross-AI Plan Review — Phase 17 (PSRC Census + Char-Select Beachhead) — ROUND 2
+# Cross-AI Plan Review — Phase 17 (PSRC Census + Char-Select Beachhead) — ROUND 3
 
-Same two reviewers as Round 1 (Codex via `codex exec` and Cursor via `cursor-agent -p --mode ask --trust`), both reading the live tree at `D:/Code/swg-client-v2` and the revised plans authored by the Round 2 `--reviews` replan. The Round 1 internal gsd-plan-checker re-verified the revised plans and PASSED; these external reviewers found that ~85% of Round 1 issues are textually closed but **~15% of Round 1 partials + 2-3 new HIGH gaps introduced by the Round 2 expansion** are sufficient to fail the char-select beachhead silently. Both rate execution as not-ready.
+Same two reviewers as Rounds 1 and 2 (Codex via `codex exec --sandbox read-only` and Cursor via `cursor-agent -p --mode ask --trust`), reading the live tree at `D:/Code/swg-client-v2` and the Round-3-amended plans authored by commit `6cfe19a7f`. Round 2 verdict was **CONVERGENCE NOT ACHIEVED** — three blocking items (SR-2 hardcoded `updatePS(2,...)`, HIGH-3 stale-shadow-across-draws, HIGH-4 invisible `DEBUG_REPORT_LOG_PRINT`) plus five MEDIUM amendments and several LOWs. This Round 3 review independently verifies whether each of those items is now closed with grep-targeted, live-tree-aligned amendments — without regressing the Round 1/2 closures.
 
 ## Consensus
 
-Both reviewers **converge sharply** on one new HIGH finding (raised independently with the same file:line evidence), confirm closure on five Round 1 items, and split on the severity of two Round 1 items:
+Both reviewers **converge on closure of all three Round 2 blockers and all five MEDIUM amendments**. Both verdicts read as "ready for execution under normal checkpoint discipline" — exactly the Round 2 forecast: "After that, plans would be MEDIUM risk — suitable for execution with normal checkpoint discipline."
 
-| Item | Codex | Cursor | Consensus |
-|------|-------|--------|-----------|
+| Item | Codex Round 3 | Cursor Round 3 | Consensus |
+|------|---------------|----------------|-----------|
 | HIGH-1 (non-fatal compile) | CLOSED | CLOSED | ✓ Closed |
 | HIGH-2 (DXBC + compile-time reflect) | CLOSED | CLOSED | ✓ Closed |
-| HIGH-3 (centralized slot-b2 shadow) | CLOSED (directionally) + medium getter-plumbing gap | CLOSED (plan text) + NEW HIGH stale-shadow-across-draws | **Partial** — promotion shape right, but invalidation contract missing |
-| HIGH-4 (linkage diag + D-09 contingency) | "mostly closed" — `getOrCompilePSForVS` exists, StateCache already falls back at `:1111-1122` (when `m_d3dPS` is null) | "PARTIALLY NOT CLOSED" — log routing (DEBUG_REPORT_LOG_PRINT invisible under explorer launch); contingency dispatch is documentation-only, fallback NOT wired when `m_d3dPS` is non-null | **Partial** — diagnostic surface exists, but log routing + contingency dispatch when asset PS is bound are open |
+| HIGH-3 (stale shadow across draws) | CLOSED | CLOSED | ✓ Closed |
+| HIGH-4 log routing (`InfoQueue` dual-route) | CLOSED | CLOSED | ✓ Closed |
+| HIGH-4 contingency (Option B downgrade) | CLOSED | CLOSED | ✓ Closed |
 | HIGH-5 (census file sink) | CLOSED | CLOSED | ✓ Closed |
 | SR-1 (D3D9 source-data port) | CLOSED | CLOSED | ✓ Closed |
-| **SR-2 (reflection-by-name)** | **PARTIALLY NOT CLOSED** — `writeVarIfPresent` ignores `StartOffset`; `updatePS(2,...)` hardcodes slot 2 ignoring reflected `BindPoint` | **PARTIALLY NOT CLOSED** — same finding, same files cited | **🔴 CONVERGENT NEW HIGH** — Round 2's headline gap |
-| SR-3 (asm STOP-CONDITION) | CLOSED conceptually + medium task-shape gap | CLOSED + medium task-shape gap | **Partial** — landmines preserved, but stop-condition embedded in a single auto task needs Task 0 separation |
-| LOWs (paths, requirements, ctor init, etc.) | CLOSED | CLOSED | ✓ Closed |
+| **SR-2 (offset-aware reflection upload)** | **CLOSED** | **CLOSED** | **✓ Closed (Round 2 convergent HIGH resolved)** |
+| SR-3 (asm STOP-CONDITION, Task 0 split) | CLOSED | CLOSED | ✓ Closed |
+| LOWs (8 items combined into Round 3) | CLOSED with minor residue | CLOSED | ✓ Closed |
 
-**Verdict:** Round 2 does NOT achieve convergence. Three blocking items remain:
+**Codex verdict:** `CONVERGENCE PARTIAL — minor items, executable with executor discretion.` (One LOW-severity NEW concern — Plan 03 artifact-metadata residue at `17-03-PLAN.md:40-42`.)
 
-1. **🔴 SR-2 implementation gap (Plan 03) — CONVERGENT HIGH.** Both reviewers independently flag the same code in Plan 03 sub-step 1d: the `writeVarIfPresent` lambda only checks variable name PRESENCE in the cached reflection layout, then writes to `Direct3d11_PerMaterialCB` fields by C++ struct field NAME — explicitly marking `var.StartOffset` as `UNREF`. The upload then calls `Direct3d11_ConstantBuffer::updatePS(2, &shadow, sizeof(shadow))` regardless of the reflected `layout.BindPoint`. If the asset PSRC declares constants in `$Globals` (the D3DCompile default for loose `: register(cN)` declarations), or in a cbuffer bound to anything other than slot 2, or with field offsets that don't match `Direct3d11_PerMaterialCB`'s diffuse/specular/emissive/userConstants layout, **the upload passes every grep gate while feeding the GPU wrong bytes**. This contradicts the SR-2 must-have ("use the actual cbuffer name + bind point + variable layout"). Acceptance greps already include `grep -n "updatePS(2" ... returns >=1` — the hardcoding is enshrined as a passing acceptance criterion.
+**Cursor verdict:** `CONVERGENCE ACHIEVED — ready for execution under normal checkpoint discipline.` (Three MEDIUM NEW concerns — `must_haves.truths` wording drift vs R3-03c, empty-reflection-cache skip path, conditional shadow-mirror vs unconditional staging — all classified as checkpoint-foldable, not Round 4 blockers.)
 
-2. **🔴 HIGH-3 stale shadow across draws (Cursor HIGH — Codex implicit).** The Round 2 amendment promoted `s_perMaterialShadow` to file-scope shared state and added a read-modify-write contract — but the upload runs only when `wroteAny == true`. A pass with `!pm.m_materialValid` or empty cached reflection **skips `updatePS` entirely**, leaving the prior draw's material values on slot b2. Multi-pass char-select (body → head → eyes) is exactly where this bites — eyes inherit head material, head inherits body material. D3D9's `Pass::apply` uploads per-pass (`Direct3d9_StaticShaderData.cpp:835-897`); D3D11 must either upload every pass or zero-fill the relevant fields when source data is absent.
+**Convergent NEW finding (both reviewers):** Plan 03's `must_haves.truths` / artifact metadata still carry text from the pre-R3-03c contract (mentions of `updatePS(2,...)` and `getPerMaterialShadow` attributed to `Direct3d11_StaticShaderData.cpp`). Both reviewers note the **action text and acceptance greps are correct** — only the frontmatter wording is stale. Codex calls it LOW; Cursor calls one variant MEDIUM (the `updatePS(2,...)` wording in truths line 22-24) because an executor scanning `must_haves` first could be misled. Neither reviewer treats it as Round-4-blocking; both recommend a one-line frontmatter cleanup OR an explicit Task 1 start-up note "acceptance block `:561-576` is authoritative."
 
-3. **🟡 HIGH-4 log routing + contingency dispatch (Cursor HIGH — Codex partial agreement).** Plan 02 dumps `PS-input-sig` / `PS-cbuffer` via `DEBUG_REPORT_LOG_PRINT`, but acceptance greps `stage/d3d11-debug.log`. The codebase explicitly documents that `DEBUG_REPORT_LOG_PRINT` is invisible under explorer launch (`Direct3d11_PixelShaderProgramData.cpp:516-519`, `Direct3d11_StateCache.cpp:2783-2786`); the established fix is dual-routing through `ID3D11InfoQueue::AddApplicationMessage` (precedent: `emitFirstGeneratorLog` at `:535-538`). On contingency: `getOrCompilePSForVS` exists (`.h:103`, `StateCache.cpp:986`) and StateCache already prefers it when `m_d3dPS` is null (`:1107-1122`), but **once Plan 02 binds a recompiled asset PS, linkage failures produce id=342/343 floods with NO automatic fallback** — StateCache always prefers asset PS at `:1107-1109`. The D-09 fallback is documented as checkpoint guidance, not as a code path.
+Plus a few execution edge cases (Cursor MEDIUMs): empty `layouts` from a reflection failure leaves prior GPU state on slot b2 (mitigated by per-shader skip logging in SUMMARY); shadow mirror is conditional on `writeVarByName` success but staging zero-fills unconditionally (mitigated by R3-02e truncation WARN + R3-03g cross-clobber log).
 
-Plus several MEDIUM/LOW items where the two reviewers either agree (SR-3 task-shape, getter-plumbing, POD truncation) or each found something the other missed (Codex: wrong type name `ShaderImplementationPass` vs live `ShaderImplementation::Pass`; Cursor: `//hlsl` classification uses byte-offset 0..6 instead of first-line scan, BOM/newline causes misclassification).
-
-Both reviewers recommend a **targeted Round 3 amendment pass** (NOT re-architecture). Cursor: "After that, plans would be MEDIUM risk — suitable for execution with normal checkpoint discipline." Codex: "Once bind point and offset handling are made real, I'd downgrade the phase to MEDIUM risk."
+Both reviewers explicitly recommend proceeding to `/gsd-execute-phase 17`, gated on Plan 02 Task 0's `checkpoint:human-verify` census-gate verdict (all-HLSL anchors → continue; asm in anchors → spawn `17-02B-PLAN.md` per SR-3 contract).
 
 ---
 
 ## Codex Review
 
-**Summary**
+### Summary
 
-The revised plans are much closer to execution-ready, and most Round 1 HIGH/SR amendments are genuinely present and grep-verifiable. I would not call convergence complete yet: I found one new HIGH concern in Plan 03 around the reflection contract. The plan says it uses actual reflected cbuffer name/bind point/layout, but the proposed implementation still hardcodes `updatePS(2)` and ignores reflected `StartOffset`, which can silently fail for `$Globals`, non-b2 cbuffers, or different packing. That means SR-2 is only partially closed.
+Round 3 closes the Round 2 blockers in substance: SR-2 is now offset/bind-point driven, HIGH-3 has an unconditional per-pass upload/zero-fill contract, HIGH-4 logging is dual-routed through InfoQueue, and SR-3 is split into a real Task 0 gate. I found no new execution-blocking gaps. One minor metadata residue remains in Plan 03's artifact block: it still lists `getPerMaterialShadow` under `Direct3d11_StaticShaderData.cpp` even though Round 3 says the getter's home is `Direct3d11.cpp`.
 
-**Strengths**
+### Round 2 Disposition Verification
 
-- HIGH-1 looks closed: the live helper is fatal at `Direct3d11_PixelShaderProgramData.cpp:241` and `:259`, and install-time fallback uses it at `:616-623`; the plan adds a sibling non-fatal path only for asset PSRC.
-- HIGH-2 looks substantially closed: Plan 02 adds `m_psBytecodeBlob` plus cached cbuffer/input reflection, matching the VS precedent at `Direct3d11_VertexShaderData.cpp:520` and `:612-673`.
-- HIGH-3 is directionally sound: the live clobber risk exists as a function-local `s_perMaterialShadow` at `Direct3d11.cpp:667`; promoting it and sharing read-modify-write is the right model.
-- HIGH-4 is mostly closed: `getOrCompilePSForVS` exists at `Direct3d11_PixelShaderProgramData.h:103` / `.cpp:647`, and StateCache already falls back through it at `Direct3d11_StateCache.cpp:1111-1122`.
-- HIGH-5 is closed in intent: Plan 01 adds a real `stage/psrc-census.tsv` sink, not just debug printing.
-- SR-1 is valid against live code: D3D9 resolves material/textureFactor at `Direct3d9_StaticShaderData.cpp:593-700`, and `StaticShader` exposes `getMaterial` / `getTextureFactor` at `StaticShader.h:79` and `:84`.
-- SR-3 is explicit enough conceptually: named-anchor asm triggers `17-02B-PLAN.md`, and the "never re-assemble asm" landmine is preserved.
+| ID | Round 3 Verdict | Evidence (file:line) |
+|---|---|---|
+| HIGH-1 | CLOSED | Non-fatal asset path specified in Plan 02 while fatal install helper remains preserved: `17-02-PLAN.md:16-18`, `17-02-PLAN.md:641-644`; live fatal helper at `Direct3d11_PixelShaderProgramData.cpp:86`, `:241`, `:259`, install path at `:616-623`. |
+| HIGH-2 | CLOSED | DXBC blob + cached reflection/accessors specified: `17-02-PLAN.md:18`, `:171-202`; Plan 03 consumes cache and forbids per-draw reflect: `17-03-PLAN.md:21`, `:562-563`; live VS precedent at `Direct3d11_VertexShaderData.cpp:520`, `:612-673`. |
+| HIGH-3 | CLOSED | Shared shadow getter plumbing + stale-shadow fix specified: `17-03-PLAN.md:22-24`, `:85-87`, `:573-590`; live current function-local shadow risk at `Direct3d11.cpp:667`, D3D9 per-pass reference at `Direct3d9_StaticShaderData.cpp:835-896`. |
+| HIGH-4 log + contingency | CLOSED | InfoQueue dual-route specified and grep-gated: `17-02-PLAN.md:19`, `:63`, `:653-656`, `:695-696`; live precedent at `Direct3d11_PixelShaderProgramData.cpp:523-540`. Contingency correctly downgraded to checkpoint guidance: `17-02-PLAN.md:23`, `:725-759`. |
+| HIGH-5 | CLOSED | File sink retained: `17-01-PLAN.md:26-28`, `:195-208`, `:391-403`, `:455-464`. |
+| SR-1 | CLOSED | D3D11 source-data cache uses `getMaterial` / `getTextureFactor`: `17-03-PLAN.md:20`, `:557-558`; live APIs at `StaticShader.cpp:510`, `:582`; D3D9 precedent at `Direct3d9_StaticShaderData.cpp:593-702`. |
+| SR-2 | CLOSED | Contract A now uses `layout.TotalSize`, `var.StartOffset`, and `updatePS(layout.BindPoint, ...)`: `17-03-PLAN.md:25-27`, `:78`, `:401-461`, `:565-570`; hardcoded `updatePS(2,...)` in `StaticShaderData.cpp` is explicitly forbidden. |
+| SR-3 | CLOSED | Task 0 checkpoint owns census gate and STOP/spawn behavior: `17-02-PLAN.md:20-22`, `:62`, `:294-365`, `:808-809`. |
+| LOWs | CLOSED with minor residue | TSV length, IFF terminator, BOM/whitespace classification, truncation WARN, source `strlen`, Plan-01 HEAD sha are present: `17-01-PLAN.md:75-78`, `:324-356`, `:401-403`, `:460-464`; `17-02-PLAN.md:64-68`, `:147-164`, `:638-656`. Minor artifact residue at `17-03-PLAN.md:40-48`. |
 
-**Concerns**
+### Strengths
 
-- **HIGH: Plan 03 does not actually honor reflected cbuffer bind point or variable offsets.** The plan claims SR-2 closure by using the actual cbuffer name + bind point, but the proposed upload still calls `Direct3d11_ConstantBuffer::updatePS(2, &shadow, sizeof(shadow))`. Live StateCache only binds PS cbuffers 0 and 2 during normal pre-draw flush (`Direct3d11_StateCache.cpp:1138-1139`) plus PS slot 1 for alpha-test elsewhere (`:1857`). If reflection reports `$Globals` at b0, or any non-b2 cbuffer, the upload is present but invisible. The proposed `writeVarIfPresent` also ignores `StartOffset`; it only checks presence, then writes C++ fields by assumed `Direct3d11_PerMaterialCB` layout. Live `Direct3d11_PerMaterialCB` is fixed as diffuse/specular/emissive/userConstants at `Direct3d11_ConstantBuffer.h:58-66`, so any different HLSL packing or `$Globals` layout will read wrong bytes. This is a new Round 2 issue, not a Round 1 re-raise.
-- **MEDIUM: Plan 03's getter plumbing is underspecified.** `Direct3d11.cpp` has an internal namespace beginning at `Direct3d11.cpp:74`, followed by `using namespace Direct3d11Namespace` at `:719`. There is no shared plugin header for `Direct3d11Namespace::getPerMaterialShadow()`. A forward declaration in `Direct3d11_StaticShaderData.cpp` can work, but the plan should prescribe it explicitly and include `Direct3d11_ConstantBuffer.h` before declaring the return type.
-- **MEDIUM: Plan 03 action text uses a likely non-existent type name.** The live code uses `ShaderImplementation::Pass const *` (`Direct3d11_StaticShaderData.cpp:367`); the plan snippet says `ShaderImplementationPass const * const engPass`. If copied literally, this will not compile.
-- **MEDIUM: SR-3 stop condition is embedded inside one auto task.** The plan asks the executor to make a task-start decision, complete sub-steps, boot, then stop before Task 2 if asm anchors exist. That is procedurally fragile. It should be a distinct Task 0 decision/checkpoint so the executor cannot accidentally proceed to CHAR-01 validation when an anchor is asm.
-- **LOW: Plan 01 hardcodes an incorrect TSV header byte count.** The literal header string length should be derived with `strlen` or `sizeof(header) - 1`; the plan's `fwrite(..., /*len*/ 61, fp)` risks writing the terminating NUL into the TSV.
-- **LOW: Plan 01's `m_psrcLen = psrcLen` likely includes the IFF string terminator.** `Iff::read_string(void)` copies through the NUL and advances by `sourceLength` including it (`Iff.cpp:1594-1606`). D3DCompile usually tolerates explicit lengths, but for cleaner cache keys and compile inputs, store `strlen(m_psrcText)` as compile length and separately use chunk length for cap/skip.
-- **LOW: Fixed `Name[64]` and `SemanticName[32]` are probably fine for SWG-era assets, but truncation should be observable.** Add a one-time log when `_TRUNCATE` actually truncates, especially for cbuffer/variable names because Plan 03 depends on exact name matching.
+- Round 3 replaced the SR-2 "presence-only" reflection idea with an actual byte-staging contract keyed by reflected offsets and bind points.
+- HIGH-4 is no longer pretending an automatic fallback exists; the plan either logs enough to diagnose linkage or explicitly treats fallback as checkpoint guidance.
+- SR-3 is now procedurally enforceable. The executor cannot proceed into CHAR-01 if named anchors include asm without passing through the Task 0 gate.
+- The `//hlsl` classifier fix is present in both Plan 01 and Plan 02, including BOM and leading whitespace handling.
 
-**Suggestions**
+### Concerns
 
-- Fix Plan 03 by making the cbuffer upload truly reflection-driven:
-  - Allocate a temporary byte buffer sized to the reflected cbuffer size.
-  - Write values at `var.StartOffset` with bounds checks against reflected `Size`.
-  - Upload to `layout.BindPoint`, not always slot 2.
-  - Ensure `Direct3d11_ConstantBuffer::bindPS(layout.BindPoint)` is called in pre-draw, or generalize StateCache's PS cbuffer bind loop beyond hardcoded slots 0/2.
-- If the intended contract is "all Phase 17 asset PSRC must declare the engine PerMaterial layout at b2," make that a hard acceptance gate:
-  - fail/stop if `BindPoint != 2`;
-  - fail/stop if `materialDiffuse/specular/emissive` offsets do not equal `offsetof(Direct3d11_PerMaterialCB, ...)`;
-  - record the reflected offsets in `17-02-SUMMARY.md`.
-- Split Plan 02 SR-3 into explicit tasks:
-  - Task 0: read census and decide lane.
-  - Task 1: implement HLSL lane.
-  - Task 2: boot/log gate.
-  - Task 3: only validate CHAR-01 if named anchors are all HLSL.
-- In Plan 01, replace hardcoded TSV header length with `strlen(header)` and consider `stage/psrc-census.tsv.tmp` + rename for the aggregate artifact if crash robustness matters.
-- Add grep gates for Plan 03:
-  - `rg "updatePS\\(layout\\.BindPoint|updatePS\\(bindPoint" Direct3d11_StaticShaderData.cpp`
-  - `rg "StartOffset" Direct3d11_StaticShaderData.cpp`
-  - `rg "bindPS\\(" Direct3d11_StateCache.cpp` confirming reflected bind points are actually bound.
+- **LOW NEW:** Plan 03's artifact metadata still says `Direct3d11_StaticShaderData.cpp` `contains: "getPerMaterialShadow"` at `17-03-PLAN.md:40-42`, while R3-03h says the getter is defined in `Direct3d11.cpp` and StaticShaderData only calls it at `17-03-PLAN.md:92`. The implementation instructions and verification are clear at `17-03-PLAN.md:85` and `:695`, so this is a cleanup item, not a blocker.
 
-**Risk Assessment**
+### Suggestions
 
-**MEDIUM-HIGH** overall until Plan 03 is corrected. Plans 01 and 02 are execution-ready with small cleanup. Plan 03 has the right data sources and lifetime model, but the current proposed upload can pass grep gates while still not feeding the shader the reflected constants. Once bind point and offset handling are made real, I'd downgrade the phase to MEDIUM risk, mostly due to visual validation and unknown asset PSRC shape.
+- Before execution, adjust the Plan 03 artifact block so `Direct3d11_StaticShaderData.cpp` says it calls `getPerMaterialShadow`, while the definition target remains only `Direct3d11.cpp`.
+- Keep the existing Plan 03 grep gates exactly as written; they are the important protection against reintroducing Round 2's `updatePS(2,...)` / `UNREF(var)` failure mode.
+
+### Risk Assessment
+
+**MEDIUM** overall. The original blockers are closed, but renderer validation still depends on runtime census data, D3D11 debug logs, and matched A/B screenshots rather than automated tests.
+
+### Verdict on Convergence
+
+**CONVERGENCE PARTIAL — minor items, executable with executor discretion.**
 
 ---
 
@@ -100,163 +95,107 @@ The revised plans are much closer to execution-ready, and most Round 1 HIGH/SR a
 
 ### Summary
 
-The Round 1 amendments are **substantially present** in the revised plans: non-fatal compile sibling, DXBC + compile-time reflection cache, shared slot-b2 shadow, census file sink, SR-1 source-data port, SR-3 asm stop condition, and threat-model extensions are all spelled out with grep-verifiable acceptance criteria. Wave order **01 → 02 → 03** still makes architectural sense.
+Round 3 closes all three Round 2 blockers with grep-targeted, live-tree-aligned amendments: SR-2 Contract A (offset-aware staging + `layout.BindPoint`), HIGH-3 unconditional per-pass upload with zero-fill on `!pm.m_materialValid`, HIGH-4 InfoQueue dual-route logging, SR-3 Task 0 census gate, getter plumbing, type-name fix, and BOM/whitespace `//hlsl` parity. Round 1/2 closures (non-fatal compile, DXBC+reflect cache, census file sink, SR-1, wave order) are preserved. No Phase 18–22 scope creep detected. Residual gaps are documentation drift in Plan 03 `must_haves.truths` (still mentions `updatePS(2,...)` for the apply path) and a few execution edge cases foldable into checkpoints — not Round 4 architecture blockers.
 
-However, **convergence is not achieved**. Three Round 1 items are only **partially** closed (HIGH-4 log grepability, SR-2 offset-aware upload, HIGH-4 runtime contingency wiring), and the Plan 03 expansion introduces **new HIGH-severity gaps** around global shadow stale state and a reflection consumer that checks variable names but ignores cached byte offsets/bind points. Plans are **not execution-ready** without targeted fixes; overall risk is **HIGH**.
+### Round 2 Disposition Verification
 
-### Round 1 Disposition Verification
-
-| ID | Verdict | Evidence |
-|----|---------|----------|
-| **HIGH-1** | **CLOSED (plan text)** | Plan 02 adds `tryCompilePixelShaderFromHlslNoFatal`; preserves FATAL `compilePixelShaderFromHlsl` at install path (`Direct3d11_PixelShaderProgramData.cpp:616-622`). Live tree confirms FATAL sites at `:238-243` and `:259`. |
-| **HIGH-2** | **CLOSED (plan text)** | Plan 02 adds `m_psBytecodeBlob`, `m_reflectedCbufferLayouts`, `m_reflectedPSInputs`, accessors; compile-time `D3DReflect` in ctor; Plan 03 greps `D3DReflect` == 0 in `StaticShaderData.cpp`. ComPtr lifetime matches VS `m_bytecode` precedent (`Direct3d11_VertexShaderData.cpp:520`). T-17-10 is sound. |
-| **HIGH-3** | **CLOSED (plan text), NEW GAP** | Plan 03 promotes `s_perMaterialShadow` from `Direct3d11.cpp:667` to file-scope + `getPerMaterialShadow()`. **But** global shadow without per-draw invalidation introduces stale-material bleed (see NEW-3 below). T-17-11 mitigation is incomplete. |
-| **HIGH-4** | **PARTIALLY NOT CLOSED** | PS-input-sig dump specified via `DEBUG_REPORT_LOG_PRINT`, but acceptance greps `stage/d3d11-debug.log`. Codebase explicitly documents that path is **invisible under explorer launch** (`Direct3d11_PixelShaderProgramData.cpp:516-519`, `Direct3d11_StateCache.cpp:2783-2786`); established fix is **dual-route via `ID3D11InfoQueue::AddApplicationMessage`** (`emitFirstGeneratorLog` at `:535-538`). `getOrCompilePSForVS` exists (`.h:103`, `StateCache.cpp:986`) but is **not wired** when `m_d3dPS` is non-null (`StateCache.cpp:1107-1109` always prefers asset PS). |
-| **HIGH-5** | **CLOSED** | Plan 01 adds `stage/psrc-census.tsv` with per-record `fopen_s`/`fwrite`/`fclose`, mirroring `Direct3d11_VertexShaderData.cpp:546-575`. |
-| **SR-1** | **CLOSED (plan text)** | `StaticShader.h:79,84` exposes `getMaterial` / `getTextureFactor`. D3D9 precedent at `Direct3d9_StaticShaderData.cpp:593-700`. D3D11 `construct()` already has `shader` + per-pass loop (`Direct3d11_StaticShaderData.cpp:331-393`). Fields exist on `ShaderImplementation.h:288-306`. |
-| **SR-2** | **PARTIALLY NOT CLOSED** | HlslRewrite contract correctly cited (`Direct3d11_HlslRewrite.cpp:761-812` — VS-only `SwgVertexConstants:b0`). **But** Plan 03 `writeVarIfPresent` explicitly ignores `StartOffset` and always writes `PerMaterialCB` field slots; still hardcodes `updatePS(2, ...)`. This does not handle `$Globals` / loose `: register(cN)` PSRC or bind-point mismatches. |
-| **SR-3** | **CLOSED** | Explicit STOP after Task 1 if asm in named anchors; spawn `17-02B-PLAN.md`; never re-assemble. |
-| **LOW-1..4, DIV-1** | **CLOSED** | v2 paths, `enables: [CHAR-01..03]`, ctor init + reload null, empty PSRC skip, `Iff::read_string(void)` at `Iff.h:244` / `Iff.cpp:1581-1609`. Over-cap path is safe: `exitChunk(true)` advances by full chunk length (`Iff.cpp:1296-1306`). `getChunkLengthLeft(sizeof(char))` matches `Iff.h:1345` precedent. |
+| ID | Round 3 Verdict | Evidence (file:line) |
+|----|-----------------|----------------------|
+| **HIGH-1** | **CLOSED** | `17-02-PLAN.md:402-432` — `tryCompilePixelShaderFromHlslNoFatal` with FATAL→log-and-return; `:643-644` acceptance preserves `compilePixelShaderFromHlsl` FATAL sites. Live FATAL at `Direct3d11_PixelShaderProgramData.cpp:238-243`, `:259`. |
+| **HIGH-2** | **CLOSED** | `17-02-PLAN.md:171-202`, `:507-606` — `m_psBytecodeBlob`, `m_reflectedCbufferLayouts` (+ `TotalSize`), `m_reflectedPSInputs`, ctor-time `D3DReflect`. Plan 03 consumes via `getReflectedCbufferLayouts`; `:563` greps `D3DReflect == 0` in StaticShaderData. VS precedent `Direct3d11_VertexShaderData.cpp:520`, `:611-665`. |
+| **HIGH-3** | **CLOSED** | `17-03-PLAN.md:267-282` — file-scope shadow + getter in `Direct3d11.cpp`; `:259-264` — declaration in `Direct3d11_ConstantBuffer.h`. `:392-396` — zero source on `!pm.m_materialValid`; `:461` — unconditional `updatePS(layout.BindPoint, ...)` per layout; `:575` forbids `if (wroteAny)`. Live clobber site `Direct3d11.cpp:667`. **Doc drift:** `must_haves.truths` `:22-24` still say apply flushes via `updatePS(2,...)` — contradicts R3-03c action/acceptance. |
+| **HIGH-4 log** | **CLOSED** | `17-02-PLAN.md:557-600` — dual-route `AddApplicationMessage` + `DEBUG_REPORT_LOG_PRINT` for PS-cbuffer and PS-input-sig. `:653-655` acceptance greps InfoQueue route. Precedent `Direct3d11_PixelShaderProgramData.cpp:535-540`. |
+| **HIGH-4 contingency** | **CLOSED (Option B)** | `17-02-PLAN.md:23`, `:725-738` — automatic fallback removed from `must_haves.truths`; checkpoint guidance in Task 3. Live: asset PS preferred at `Direct3d11_StateCache.cpp:1107-1109`; fallback only when null `:1111-1122`. |
+| **HIGH-5** | **CLOSED** | `17-01-PLAN.md:385-412` — per-record `fopen_s`/`fwrite`/`fclose` to `stage/psrc-census.tsv`; `:403` — `sizeof(header) - 1` (R3-01a). |
+| **SR-1** | **CLOSED** | `17-03-PLAN.md:287-351` — construct-time `shader.getMaterial` / `getTextureFactor` → `m_passMaterial`. D3D9 shape `Direct3d9_StaticShaderData.cpp:593-700`; apply reference `:835-897`. |
+| **SR-2** | **CLOSED** | `17-03-PLAN.md:418-461` — `writeVarByName` uses `var.StartOffset`, staging sized to `layout.TotalSize`, `updatePS(layout.BindPoint, staging, layout.TotalSize)`. `:565-570` — replaces Round 2 `updatePS(2,` grep with `updatePS(layout.BindPoint` + `var.StartOffset`; requires `updatePS(2,` == 0 in StaticShaderData. Round 2 `UNREF(var)` grep forbidden `:568`. |
+| **SR-3** | **CLOSED** | `17-02-PLAN.md:294-366` — Task 0 `checkpoint:human-verify` census gate; asm → spawn `17-02B-PLAN.md` + STOP; Tasks 1–3 downstream. Mid-task stop primitive gone. |
+| **LOWs** | **CLOSED** | R3-01a/b/c/d in `17-01-PLAN.md`; R3-02e/f/g in `17-02-PLAN.md`; R3-03e/h in `17-03-PLAN.md`. Wave `01→02→03` unchanged (`17-01:6-7`, `17-02:6-7`, `17-03:6-7`). |
 
 ### Strengths
 
-- **Amendments are grep-verifiable.** Each Round 1 fix has explicit acceptance patterns (`tryCompilePixelShaderFromHlslNoFatal`, `m_psBytecodeBlob`, `getPerMaterialShadow`, `psrc-census.tsv`, `getReflectedCbufferLayouts`, etc.).
-- **Wave gating is correct.** Census → recompile → reflection-driven constants preserves dependency order; Plan 01 `enables` vs Plan 02/03 `requirements` traceability is clean.
-- **Landmines preserved.** Magenta tombstone kept; Iter-44A depth / Iter-44C blend revert explicitly protected; D3D9 register folklore banned; asm re-assemble blocked.
-- **SR-1 is the right fix.** Without construct-time `getMaterial`/`getTextureFactor`, Plan 03 would upload zeros regardless of reflection plumbing — correctly identified as CHAR-02 blocker.
-- **Threat model extended appropriately.** T-17-10 (DXBC lifetime) and T-17-11 (shadow clobbering) are present; existing T-17-01..09 not weakened.
+- **Convergent HIGH fully addressed:** SR-2 Contract A is spelled out in sub-step 1e with staging buffer, `StartOffset`, `BindPoint`, and acceptance greps that explicitly reverse Round 2's enshrined `updatePS(2,` bug (`17-03-PLAN.md:565-570`).
+- **HIGH-3 semantics match D3D9:** Per-pass zero source values + unconditional upload per reflected layout; `if (wroteAny)` explicitly grep-forbidden (`17-03-PLAN.md:575`).
+- **HIGH-4 grepability fixed at the right layer:** InfoQueue dual-route mirrors verified precedent (`Direct3d11_PixelShaderProgramData.cpp:535-540`); boot acceptance targets `stage/d3d11-debug.log` (`17-02-PLAN.md:695-696`).
+- **Procedural fragility removed:** SR-3 is a discrete Task 0 checkpoint, not embedded control flow (`17-02-PLAN.md:294-366`).
+- **Getter home specified:** `getPerMaterialShadow()` declared in `Direct3d11_ConstantBuffer.h`, defined in `Direct3d11.cpp` (R3-03a `:259-264`, `:267-272`).
+- **Classification parity:** BOM + whitespace skip in both Plan 01 census (`17-01-PLAN.md:327-342`) and Plan 02 recompile lane (`17-02-PLAN.md:465-491`).
+- **Honest contingency scope:** D-09 downgrade to checkpoint guidance avoids grep-verifying unimplemented StateCache hook (`17-02-PLAN.md:23`, `:725-738`).
+- **Landmines preserved:** Iter-44A/44C protected (`17-03-PLAN.md:541-542`, `:579-581`); asm re-assemble blocked; magenta tombstone kept.
 
 ### Concerns
 
-#### Round 1 residuals (partially closed)
+- **MEDIUM — NEW: `must_haves.truths` stale vs R3-03c (`17-03-PLAN.md:22-24, :30`).** Frontmatter still says apply() flushes via `updatePS(2,...)`, while sub-step 1e and acceptance require `updatePS(layout.BindPoint, ...)`. Action/acceptance win, but an executor scanning `must_haves` first could mis-implement. Fold into Task 1 start: treat acceptance block `:561-576` as authoritative.
 
-- **HIGH — HIGH-4 log sink mismatch (Round 1 NOT fully closed):** Plan 02 Task 1 dumps `PS-input-sig` / `PS-cbuffer` via `DEBUG_REPORT_LOG_PRINT` only, but acceptance requires `grep -c "PS-input-sig" stage/d3d11-debug.log`. The plugin's own precedent (`emitFirstGeneratorLog`, `Direct3d11_PixelShaderProgramData.cpp:515-540`) dual-routes through **`ID3D11InfoQueue::AddApplicationMessage`** for explorer-launched smokes. Without that, HIGH-4 acceptance can false-fail even when reflection succeeded.
+- **MEDIUM — NEW: empty reflection cache skips upload (`17-03-PLAN.md:506-510`).** If Plan 02 leaves `layouts` empty (reflection failure), apply makes no `updatePS` call — prior GPU cbuffer state may persist. Acceptable as non-fatal VS-stance defense, but record per-shader skips in `17-03-SUMMARY.md`; if char-select anchors hit this, STOP before CHAR-02/03.
 
-- **HIGH — SR-2 reflection consumer is presence-only (Round 1 NOT fully closed):** Plan 03 sub-step 1d finds variables in cached layout, then writes `shadow.materialDiffuse = pm.m_diffuse` using **engine struct field order**, explicitly marking `StartOffset` as `UNREF`. For D3D9-style PSRC with loose `float4 materialDiffuse : register(c11)` (no named `PerMaterial` cbuffer), D3DCompile typically places constants in a **`$Globals` cbuffer at non-zero offsets**. Presence check passes; GPU reads wrong bytes. The plan's "beachhead assumes PerMaterialCB layout matches asset PSRC" contradicts the must-have claim that upload uses cached **Name + BindPoint**, not hardcoded b2.
+- **MEDIUM — NEW: shadow mirror is conditional, staging is not (`17-03-PLAN.md:451-456`).** `shadow.material*` updates only when `writeVarByName` succeeds; failed name match leaves stale shadow while staging may be zeroed. Mitigated by R3-02e truncation WARN + Plan 02 PS-cbuffer dump cross-check; sub-step 1g cross-clobber log catches slot-2 incoherence at runtime.
 
-- **MEDIUM — HIGH-4 contingency is diagnostic-only, not dispatch:** `getOrCompilePSForVS` exists and works as fallback when `m_d3dPS` is null (`StateCache.cpp:1107-1123`). Once Plan 02 binds a recompiled asset PS, **linkage failures produce id=342/343 floods with no automatic fallback**. D-09 contingency is documented in checkpoints, not in code paths. Acceptable as executor discretion, but must_haves overstate automated contingency.
+- **LOW — NEW: `warnOnceOnTruncation` is process-global one-shot (`17-02-PLAN.md:436-445`).** Only the first truncated symbol is logged; subsequent truncations are silent. Acceptable for char-select; note in SUMMARY if multiple symbols truncate.
 
-#### New gaps from amendments
+- **LOW — NEW: R3-03g HEAD/EYE detection via `strstr(shaderName, "head"/"eye")` (`17-03-PLAN.md:481-485`).** Fragile if anchor filenames differ; executor should key off Plan 02 SUMMARY anchor names, not rely solely on substring heuristic.
 
-- **HIGH — Global `s_perMaterialShadow` stale state across draws (NEW):** D3D9 stores material per pass (`Direct3d9_StaticShaderData` per-pass struct, uploaded every `Pass::apply()` at `:835-897`). Plan 03 uses one file-scope shadow; upload runs only when `wroteAny == true`. Passes with `!pm.m_materialValid` or missing reflection **skip `updatePS`**, leaving prior draw's material on GPU slot b2. Multi-pass char-select (body → head → eyes) is exactly where this bites CHAR-02/03.
-
-- **HIGH — Plan 03 bind point not actually consumed (NEW):** Sub-step 1d logs bind-point mismatches but always calls `Direct3d11_ConstantBuffer::updatePS(2, ...)`. If reflected `BindPoint != 2`, constants never reach the shader. Acceptance greps `updatePS(2` but not bind-point correctness. Conflicts with SR-2 must-have.
-
-- **MEDIUM — `getPerMaterialShadow()` declaration plumbing unspecified (NEW):** `Direct3d11_StaticShaderData.cpp` does not include `Direct3d11_ConstantBuffer.h` today; `Direct3d11.h` only exports `hresultString`. Plan says "pick smallest-diff accessor surface" but gives no header home. Risk: TU linkage error or duplicate static if executor guesses wrong.
-
-- **MEDIUM — Plan 02 SR-3 stop is embedded in a single auto task (NEW):** "Stop plan after Task 1, spawn 17-02B, do not proceed to Task 2" is control-flow inside one `<task type="auto">`. GSD executor has no mid-task stop primitive — needs **Task 0: census gate decision** as separate checkpoint before CHAR-01 work.
-
-- **MEDIUM — `//hlsl` classification uses first 7 bytes, not first line (NEW):** ShaderBuilder classifies the **first line** (`PixelShaderProgramView.cpp:301-308`). Plans 01/02 lowercase `m_psrcText[0..6]` without skipping leading whitespace/blank lines. Leading BOM/newline → misclassified as asm → magenta for HLSL anchors.
-
-- **MEDIUM — Cross-clobber check timing (NEW):** HIGH-3 acceptance requires one-shot logs proving userConstants + material* coexist. Plan does not specify **call order** relative to `applyPreDrawState` / `setPixelShaderUserConstants_impl`. Coexistence in shadow ≠ correct values reaching GPU for the draw if last writer is wrong path.
-
-- **LOW — POD name truncation:** `Direct3d11_ReflectedPSCbufferVar::Name[64]` is probably fine for char-select; HLSL reflection can emit mangled names longer than 64 in edge cases. Truncation → failed name match → silent zero upload.
-
-- **LOW — Plan 03 artifact typo:** `must_haves.artifacts` for `Direct3d11_StaticShaderData.cpp` lists `contains: "getPerMaterialShadow"` but getter lives in `Direct3d11.cpp`.
+- **LOW — D-04 truth still partially aspirational in frontmatter (`17-03-PLAN.md:22`).** Implementation is generic (Contract A), but `must_haves` line 22 wording implies both paths hard-flush slot 2 — cosmetic only given acceptance greps.
 
 ### Suggestions
 
-1. **Fix HIGH-4 grep path (Plan 02):** Mirror `emitFirstGeneratorLog` — for each `PS-input-sig` / `PS-cbuffer` line, call `Direct3d11_Device::getInfoQueue()->AddApplicationMessage(...)` **and** `DEBUG_REPORT_LOG_PRINT`. Alternatively append to `stage/psrc-reflection-dump.tsv` (same rationale as HIGH-5).
+1. **At Plan 03 Task 1 start:** Patch-read `must_haves.truths` lines 22–24 mentally — implement sub-step 1e + acceptance `:561-576`, not the stale `updatePS(2,...)` apply wording. One-line frontmatter fix would eliminate ambiguity but is not execution-blocking.
 
-   ```text
-   grep -c "PS-input-sig" stage/d3d11-debug.log
-   grep -c "AddApplicationMessage.*PS-input-sig"  # if file-sink added instead
-   ```
+2. **Plan 02 Task 2 boot gate:** Capture PS-cbuffer dump lines verbatim into `17-02-SUMMARY.md` with `BindPoint`, `TotalSize`, and `materialDiffuse`/`materialSpecular`/`materialEmissive` offsets — Plan 03 Contract A and R3-03d bind-loop decision depend on this.
 
-2. **Make SR-2 upload offset-aware (Plan 03):** Replace `writeVarIfPresent` → field-name mapping with:
-   - Find layout containing variable by name.
-   - `memcpy` into a **byte staging buffer** sized to `max(layout.Size, sizeof(PerMaterialCB))` at `var.StartOffset`, **or** extend `Direct3d11_ConstantBuffer::updatePS` to accept `(slot, bindPoint, rawBytes, size)` from reflection.
-   - Use `layout.BindPoint` for upload slot; grep acceptance: `updatePS(.*layout.BindPoint` or `bindPS(reflectedBindPoint)`.
+3. **Plan 03 empty-layouts path:** If any char-select anchor has empty `layouts`, document and treat as compile/reflection failure — do not claim CHAR-02/03 from magenta/zero-constant draws.
 
-3. **Fix stale shadow (Plan 03, HIGH-3 extension):** At start of each `apply()` pass handling, when `!pm.m_materialValid`, **zero `materialDiffuse/Specular/Emissive`** (and textureFactor if extended) in shadow and call `updatePS`. Or store per-pass material in `PerPassMaterial` and upload full struct every pass (mirrors D3D9 per-pass upload semantics).
+4. **R3-03g proof:** If HEAD/EYE substring heuristic misses, fall back to logging the two passes with `pm.m_materialValid==1` and divergent `passDiffuse` from construct-time SR-1 data.
 
-4. **Split Plan 02 Task 1 / SR-3 gate:**
-   - **Task 0 (checkpoint):** Read `17-01-SUMMARY.md` + TSV; record asm-in-anchors verdict; spawn or skip `17-02B`.
-   - **Task 1:** Recompile lane only.
-   - **Task 2:** Boot gate.
-   - **Task 3:** CHAR-01 checkpoint.
-
-5. **Classification parity (Plans 01/02):** Skip leading `\r\n\t ` before `//hlsl ` check; or scan first non-empty line like ShaderBuilder. Grep: `skipLeadingWhitespace.*//hlsl`.
-
-6. **`getPerMaterialShadow` declaration:** Add to `Direct3d11_ConstantBuffer.h` (already owns `Direct3d11_PerMaterialCB`):
-
-   ```cpp
-   namespace Direct3d11Namespace { Direct3d11_PerMaterialCB & getPerMaterialShadow(); }
-   ```
-
-   Include that header from `Direct3d11_StaticShaderData.cpp`.
-
-7. **HIGH-4 contingency (optional, Plan 02 or 03):** If post-recompile boot shows id=342/343 > 0 for a shader, document executor step: temporarily null `m_d3dPS` for that program OR add StateCache hook: when debug flag set and linkage errors detected, prefer `selectFallbackPSForVS` over asset PS. At minimum, move contingency from must_have truth to checkpoint guidance so it is not grep-verified as implemented.
-
-8. **Census boot ordering (Plan 01 Task 3):** PS program ctors (Plan 02) run **after** census boot. Confirm Task 3 runs with Plan 01-only binary so TSV reflects census, not recompile side effects.
-
-### Wave Structure
-
-| Wave | Plan | Depends on | Still valid? |
-|------|------|------------|----------------|
-| 1 | 17-01 | — | Yes — gating artifact |
-| 2 | 17-02 | 17-01 | Yes — needs retained PSRC + census anchors |
-| 3 | 17-03 | 17-02 | Yes — needs cached reflection + bound `m_d3dPS` |
-
-No renumbering needed. Plan 03 expansion does not break dependencies; it **tightens** the contract Plan 02 must satisfy.
-
-### Locked Decisions Check (D-01..D-09)
-
-| Decision | Honored? | Notes |
-|----------|----------|-------|
-| D-01 engine census | Yes | Shared `ConfigClientGraphics` flag + load-site instrumentation |
-| D-02 asset tree as-is | Yes | No retail-TRE reconciliation in gating path |
-| D-03 census kept | Yes | Flag-gated, not throwaway |
-| D-04 generic reflect, minimal feeds | **Partial** | Scope correct; SR-2 implementation not truly generic |
-| D-05 hybrid A/B | Yes | COMPARISON dir + naming |
-| D-06 dual boot + id=342/343 | Yes | Hard gates throughout |
-| D-07 committed pairs | Yes | Checkpoints for CHAR-02/03 |
-| D-08 skinning confirm only | Yes | RenderDoc checkpoint, deferred fix |
-| D-09 recompile-first | Yes | Bridge PS as manual contingency only |
-
-No scope creep into Phase 18–22 feature work detected.
+5. **HIGH-4 contingency:** Keep R3-02d as manual checkpoint only; if id=342/343 spike post-recompile, exercise Task 3 guidance (null `m_d3dPS` for affected shader → `selectFallbackPSForVS` at `StateCache.cpp:1111`) before opening a Phase 18 wiring plan.
 
 ### Risk Assessment
 
-**Overall: HIGH**
-
-**Justification:** Round 1 closed the *architecture* (non-fatal compile, reflection cache, shared shadow, census file sink, source-data port). Remaining issues are in **implementation contracts** that directly affect CHAR-02/03: (1) reflection dump may not land in `d3d11-debug.log`, (2) upload ignores reflected offsets/bind points, (3) global shadow can serve stale material across passes. Any one of these can produce "textures work, eyes gray/wrong" false partial wins — the exact failure mode Phase 17 exists to eliminate.
-
-**Path to execution-ready:** Address the four HIGH items above (log routing, offset-aware upload, shadow invalidation, bind-point consumption). After that, plans would be **MEDIUM** risk — suitable for execution with normal checkpoint discipline.
+**MEDIUM** — Round 2's silent-failure modes (hardcoded slot 2, stale shadow skip, invisible reflection dump) are now specified with grep gates and live-tree precedents. Residual risk is execution-time (actual PSRC layout vs assumed variable names, linkage id=342/343, visual A/B) — appropriate for a beachhead phase with checkpoint discipline, not plan-convergence blockers.
 
 ### Verdict on Convergence
 
-**Round 2 does NOT achieve convergence.** Do not execute yet without amending Plan 02 (HIGH-4 log routing) and Plan 03 (SR-2 offset-aware upload, HIGH-3 stale-shadow fix, bind-point consumption, getter declaration). Round 1 dispositions are **~85% closed in plan text**; the remaining ~15% plus new Plan 03 gaps are sufficient to fail the char-select beachhead silently rather than loudly.
+**CONVERGENCE ACHIEVED — ready for execution under normal checkpoint discipline.**
+
+All eight Round 3 checklist items are present, grep-targeted, and aligned with the live tree. The three Round 2 consensus blockers (SR-2, HIGH-3 stale shadow, HIGH-4 log + contingency) are closed in plan action text and acceptance criteria. Remaining concerns are frontmatter wording drift and edge-case observability — address at executor checkpoints, not via Round 4 replan. Do **not** run `/gsd-execute-phase 17` until Task 0 census verdict (`17-02-PLAN.md:294-366`) confirms all-HLSL anchors or accepts the 17-02B spawn path.
 
 ---
 
-## Recommendations (priority order, for Round 3 replan)
+## Consensus Summary
 
-1. **🔴 SR-2 implementation fix (Plan 03 sub-step 1d) — CONVERGENT HIGH.** Replace the `writeVarIfPresent` lambda + hardcoded `updatePS(2, &shadow, sizeof(shadow))` with a truly reflection-driven upload:
-   - For each variable in the cached layout, look up by NAME, copy the source-data value into a **staging byte buffer at `var.StartOffset`** (bounds-checked against `var.Size`); the staging buffer is sized to the cbuffer's reflected total size.
-   - Upload via `Direct3d11_ConstantBuffer::updatePS(layout.BindPoint, &stagingBuffer, layout.totalSize)` — NOT slot 2 hardcoded.
-   - Ensure StateCache's PS cbuffer bind loop covers `layout.BindPoint` (today only slots 0/2 are bound in normal pre-draw flush per `Direct3d11_StateCache.cpp:1138-1139`; slot 1 only for alpha-test at `:1857`).
-   - Acceptance greps: `rg "updatePS\\(layout\\.BindPoint|var\\.StartOffset" Direct3d11_StaticShaderData.cpp` → both present.
-   - **Alternative if Phase 17 wants a narrower contract:** explicitly require all char-select asset PSRC to declare PerMaterial at b2 with the engine struct layout. Then the hardcoded slot 2 is correct but must be a HARD ACCEPTANCE GATE (fail/stop if `BindPoint != 2` or if `materialDiffuse` offset != `offsetof(Direct3d11_PerMaterialCB, materialDiffuse)`). Record reflected offsets in `17-02-SUMMARY.md` so a violation is visible.
+### Agreed Strengths
 
-2. **🔴 HIGH-3 stale-shadow fix (Plan 03) — Cursor HIGH.** When `!pm.m_materialValid` for a pass, either zero `materialDiffuse/Specular/Emissive` (+ textureFactor if extended) in the shadow and call `updatePS`, OR upload the full per-pass struct EVERY pass (mirrors D3D9 per-pass upload). Add a regression test in acceptance: "consecutive passes with different material data produce different cbuffer contents at slot b2 (verified via RenderDoc OR a one-shot debug log of the shadow at flush time for the head and eye passes)."
+- **SR-2 Contract A** is implemented properly in `17-03-PLAN.md` sub-step 1e — staging buffer sized to `layout.TotalSize`, `writeVarByName` keyed off `var.StartOffset`, upload via `updatePS(layout.BindPoint, ...)`. Both reviewers explicitly note the Round 2 acceptance bug (`grep "updatePS(2,"` enshrined as passing) is now inverted: acceptance forbids `updatePS(2,` in StaticShaderData.cpp.
+- **HIGH-3 unconditional per-pass upload** correctly mirrors D3D9 `Pass::apply` per-pass semantics; the Round 2 `if (wroteAny) updatePS(...)` skip pattern is explicitly grep-forbidden.
+- **HIGH-4 dual-route via `ID3D11InfoQueue::AddApplicationMessage`** mirrors the live `emitFirstGeneratorLog` precedent at `Direct3d11_PixelShaderProgramData.cpp:535-540`, making reflection dumps visible under explorer-launched boots.
+- **SR-3 task split** removes the procedural fragility — Task 0 owns the census-gate decision as a discrete `checkpoint:human-verify`, not embedded "stop after Task 1" control flow.
+- **`getPerMaterialShadow()` plumbing** is now explicitly homed in `Direct3d11_ConstantBuffer.h` (declaration) + `Direct3d11.cpp` (definition), with `Direct3d11_StaticShaderData.cpp` including the header to consume.
+- **D-09 contingency Option B downgrade** is honest about what's wired vs what's checkpoint guidance; `must_haves.truths` does not enshrine an unimplemented StateCache hook as a passing acceptance.
+- **`//hlsl` classifier parity** between Plan 01 census (`17-01-PLAN.md:327-342`) and Plan 02 recompile lane (`17-02-PLAN.md:465-491`) — both skip leading whitespace + UTF-8 BOM before the 7-byte lowercase compare.
+- **Landmines preserved:** Iter-44A depth wiring (`Direct3d11_StaticShaderData.cpp:658-677`) untouched; Iter-44C blend revert preserved; asm re-assemble blocked; magenta tombstone kept; D3D9 register folklore banned.
 
-3. **🟡 HIGH-4 log routing fix (Plan 02) — Cursor HIGH.** Dual-route `PS-input-sig` / `PS-cbuffer` lines through `ID3D11InfoQueue::AddApplicationMessage` (mirror `emitFirstGeneratorLog` at `:535-538`) so explorer-launched smokes can grep `stage/d3d11-debug.log`. Alternatively append to a dedicated `stage/psrc-reflection-dump.tsv` (same rationale as HIGH-5).
+### Agreed Concerns (LOW — checkpoint-foldable, not Round 4 blockers)
 
-4. **🟡 SR-3 task-shape fix (Plan 02) — both reviewers MEDIUM.** Split Task 1 into Task 0 (census gate decision: read 17-01-SUMMARY.md + TSV; spawn 17-02B if asm anchors found; stop or proceed) → Task 1 (HLSL recompile lane) → Task 2 (boot gate) → Task 3 (CHAR-01 checkpoint, only runs if all named anchors were HLSL). The GSD executor has no mid-task stop primitive; this is procedurally fragile as written.
+- **`17-03-PLAN.md` frontmatter wording drift.** Both reviewers note that `must_haves.truths` lines 22-24 and the artifact block at `:40-48` still carry text from the pre-R3-03c contract — mentioning `updatePS(2,...)` for the apply path and attributing `getPerMaterialShadow` to `Direct3d11_StaticShaderData.cpp` (the call site) rather than `Direct3d11.cpp` (the definition site). The action text (sub-step 1e) and acceptance greps (`:565-570`) are correct; only the frontmatter prose is stale. Codex grades this LOW; Cursor flags the `updatePS(2,...)` wording in truths as MEDIUM because an executor scanning `must_haves` first could be misled. Both recommend the same fix: one-line frontmatter cleanup, OR explicit Task 1 start-up note "acceptance block `:561-576` is authoritative." Neither treats this as Round-4-blocking.
 
-5. **🟡 `getPerMaterialShadow()` declaration plumbing (Plan 03) — both reviewers MEDIUM.** Add the namespace forward declaration to `Direct3d11_ConstantBuffer.h` (which already owns `Direct3d11_PerMaterialCB`): `namespace Direct3d11Namespace { Direct3d11_PerMaterialCB & getPerMaterialShadow(); }`. Include that header from `Direct3d11_StaticShaderData.cpp`. Specify the home; do not leave it as "pick smallest-diff option."
+### Cursor-Only NEW Concerns (MEDIUM — execution-time observability)
 
-6. **🟡 Type-name correction (Plan 03 sub-step 1b) — Codex MEDIUM.** The plan snippet uses `ShaderImplementationPass const * const engPass`; live code uses `ShaderImplementation::Pass const *` (`Direct3d11_StaticShaderData.cpp:367`). Fix the snippet text so it compiles when copied verbatim.
+- **Empty reflection cache skips upload.** If Plan 02's reflection-cache fill fails for a shader, Plan 03's apply() makes no `updatePS` call for that pass — prior GPU cbuffer state persists on slot b2. Codex didn't flag this; Cursor says it's an acceptable non-fatal stance but anchors the safety net at runtime: log per-shader skips in `17-03-SUMMARY.md`; if char-select anchors hit this, STOP before CHAR-02/03 verification.
 
-7. **🟡 `//hlsl` classification fix (Plans 01/02) — Cursor MEDIUM.** Skip leading `\r\n\t ` (and a possible UTF-8 BOM `EF BB BF`) before the lowercase-first-7 == "//hlsl " check, OR scan the first non-empty line like ShaderBuilder does (`PixelShaderProgramView.cpp:301-308`). A BOM/newline-prefixed HLSL PSRC will misclassify as asm today and land in the magenta tombstone.
+- **Shadow mirror conditional, staging unconditional.** The file-scope `s_perMaterialShadow.material*` fields update only when `writeVarByName` succeeds; failed name matches leave stale shadow values while the staging buffer is zeroed for the upload. Cursor classifies this as MEDIUM because it's a subtle coherence question — mitigated by R3-02e truncation WARN + R3-03g cross-clobber flush-time log catching slot-2 incoherence at runtime.
 
-8. **🟢 LOW items (combine into Round 3):**
-   - Plan 01: `fwrite(..., /*len*/ 61, fp)` → replace with `strlen(header)` or `sizeof(header) - 1` (Codex; the literal byte count is a NUL-write risk).
-   - Plan 01: `m_psrcLen = psrcLen` includes the IFF string terminator; for cleaner compile/cache inputs, store `strlen(m_psrcText)` as the compile length separately from the chunk length used for cap/skip (Codex).
-   - Plan 03: artifact-block typo — `must_haves.artifacts` for `Direct3d11_StaticShaderData.cpp` says `contains: "getPerMaterialShadow"` but the getter lives in `Direct3d11.cpp` (Cursor).
-   - Plan 02/03 POD types: log a one-time WARNING when `_TRUNCATE` actually truncates `Name[64]` / `SemanticName[32]`, especially for cbuffer/variable names since Plan 03 depends on exact name matching (both reviewers).
-   - Plan 02 cross-clobber check: specify call order relative to `applyPreDrawState` / `setPixelShaderUserConstants_impl` (Cursor).
-   - Plan 01 Task 3: confirm the census boot uses a Plan-01-only binary (Plan 02's recompile ctor hasn't shipped yet at that point — verify ordering isn't accidentally muddied) (Cursor).
+### Divergent Views (where the reviewers split)
 
-With these amendments folded in, both reviewers expect the phase to drop to MEDIUM risk and be ready for execution. **Do not run `/gsd-execute-phase 17` yet.**
+- **Final-verdict label:** Codex `CONVERGENCE PARTIAL`; Cursor `CONVERGENCE ACHIEVED`. The substantive conclusion is identical — both judge the plans executable, both call risk MEDIUM, both recommend `/gsd-execute-phase 17` after the Task 0 census gate. The split is about whether a single LOW frontmatter cleanup item is enough to label the overall verdict "partial" or "achieved." Operationally, treat as **CONVERGENCE ACHIEVED — one frontmatter touch-up recommended before execution.**
+
+- **`must_haves.truths` `updatePS(2,...)` wording severity:** Cursor MEDIUM (executor-mislead risk); Codex implicit LOW (artifact metadata, not truths body). The wording lives in two places — Cursor flagged the truths block at `:22-24`; codex flagged the artifact block at `:40-48`. Both should be cleaned up; both reviewers explicitly note this does not gate execution.
+
+### Recommended Next Action
+
+1. **One-line frontmatter cleanup in `17-03-PLAN.md`** (both reviewers concur): adjust `must_haves.truths:22-24` to say `updatePS(layout.BindPoint, staging.data(), layout.TotalSize)` (matching sub-step 1e); adjust artifact-block at `:40-48` so `Direct3d11_StaticShaderData.cpp` says it CALLS `getPerMaterialShadow` while the definition target remains `Direct3d11.cpp`. **This is a docs-only touch — no plan logic change.**
+
+2. **`/gsd-execute-phase 17`** — the Task 0 census-gate `checkpoint:human-verify` (Plan 02 line 294-366) is the first executor interaction point after Plan 01 ships. The asm-in-anchors verdict gates whether `17-02B-PLAN.md` spawns or whether Plan 02 proceeds straight to the HLSL recompile lane.
+
+3. **At Plan 03 execution start** (per Cursor suggestion 1): treat acceptance block `17-03-PLAN.md:561-576` as authoritative over any stale `must_haves.truths` wording.
+
+4. **At Plan 02 Task 2 boot gate** (per Cursor suggestion 2): capture PS-cbuffer dump lines verbatim into `17-02-SUMMARY.md` with `BindPoint`, `TotalSize`, and `materialDiffuse`/`Specular`/`Emissive` offsets — Plan 03's Contract A and the R3-03d StateCache bind-loop decision depend on this real data.
