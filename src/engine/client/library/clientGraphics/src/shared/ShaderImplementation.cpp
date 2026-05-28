@@ -2753,6 +2753,8 @@ ShaderImplementationPassPixelShaderProgram::ShaderImplementationPassPixelShaderP
 	m_referenceCount(1),
 	m_fileName(fileName),
 	m_exe(NULL),
+	m_psrcText(nullptr),       // Phase 17 (Plan 17-01) / LOW-3: init before any early-exit
+	m_psrcLen(0),              // path in load_0000 can read these (defensive)
 	m_graphicsData(NULL)
 {
 	using namespace ShaderImplementationPassPixelShaderProgramNamespace;

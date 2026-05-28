@@ -70,6 +70,12 @@ public:
 
 	static bool           getLoadGpa();
 
+	// Phase 17 (Plan 17-01) / D-01/D-03: gate flag for the PSRC language census
+	// emitted from ShaderImplementationPassPixelShaderProgram::load_0000. KEPT
+	// (not throwaway) so Phase 20 can re-run the census on an open-world boot;
+	// default false so the D3D9 path is behaviorally untouched when off.
+	static bool           getPsrcCensus();
+
 private:
 
 	ConfigClientGraphics();

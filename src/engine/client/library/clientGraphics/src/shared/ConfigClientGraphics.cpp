@@ -55,6 +55,12 @@ namespace ConfigClientGraphicsNamespace
 	bool  ms_loadAllAssetsRegardlessOfShaderCapability;
 
 	bool  ms_loadGpa;
+
+	// Phase 17 (Plan 17-01): gate flag for the PSRC language census emitted from
+	// ShaderImplementationPassPixelShaderProgram::load_0000. [ClientGraphics]
+	// section (NOT [Direct3d11] — clientGraphics cannot link the plugin's
+	// ConfigDirect3d11). Default false; D3D9 behavior unchanged when off.
+	bool  ms_psrcCensus;
 }
 
 using namespace ConfigClientGraphicsNamespace;
@@ -117,6 +123,9 @@ void ConfigClientGraphics::install (const Defaults &defaults)
 	KEY_BOOL(loadAllAssetsRegardlessOfShaderCapability, false);
 
 	KEY_BOOL(loadGpa,                             false);
+
+	// Phase 17 (Plan 17-01): default false so D3D9 behavior is unchanged when off.
+	KEY_BOOL(psrcCensus,                          false);
 }
 
 // ----------------------------------------------------------------------
@@ -332,6 +341,13 @@ bool ConfigClientGraphics::getLoadGpa()
 bool ConfigClientGraphics::getSkipInitialClearViewport()
 {
 	return ms_skipInitialClearViewport;
+}
+
+// ----------------------------------------------------------------------
+
+bool ConfigClientGraphics::getPsrcCensus()
+{
+	return ms_psrcCensus;
 }
 
 // ======================================================================
