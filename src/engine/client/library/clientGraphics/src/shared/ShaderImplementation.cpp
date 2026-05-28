@@ -19,6 +19,7 @@
 #include "clientGraphics/ShaderPrimitiveSorter.h"
 #include "clientGraphics/StaticShaderTemplate.h"
 #include "sharedDebug/DebugFlags.h"
+#include "sharedDebug/Report.h"   // Phase 17 (Plan 17-01): DEBUG_REPORT_LOG_PRINT for PSRC census log sink
 #include "sharedFile/AsynchronousLoader.h"
 #include "sharedFile/Iff.h"
 #include "sharedFile/TreeFile.h"
@@ -29,6 +30,8 @@
 #include "sharedFoundation/TemporaryCrcString.h"
 #include "sharedSynchronization/RecursiveMutex.h"
 #include <algorithm>
+#include <cstdio>     // Phase 17 (Plan 17-01): fopen_s/fwrite/fclose/_snprintf_s for census TSV file sink
+#include <cstring>    // Phase 17 (Plan 17-01): strstr/memcmp/strncpy_s for census classification scan
 #include <map>
 #include <string>
 #include <vector>
@@ -2753,6 +2756,8 @@ ShaderImplementationPassPixelShaderProgram::ShaderImplementationPassPixelShaderP
 	m_referenceCount(1),
 	m_fileName(fileName),
 	m_exe(NULL),
+	m_psrcText(nullptr),       // Phase 17 (Plan 17-01) / LOW-3: init before any early-exit
+	m_psrcLen(0),              // path in load_0000 can read these (defensive)
 	m_graphicsData(NULL)
 {
 	using namespace ShaderImplementationPassPixelShaderProgramNamespace;
@@ -2781,6 +2786,9 @@ ShaderImplementationPassPixelShaderProgram::~ShaderImplementationPassPixelShader
 	ms_programMap.erase(i);
 
 	delete [] m_exe;
+	delete [] m_psrcText;          // Phase 17 (Plan 17-01): mirror m_exe ownership
+	m_psrcText = nullptr;          // defensive symmetry with reload re-null
+	m_psrcLen  = 0;
 	delete m_graphicsData;
 }
 
@@ -2830,9 +2838,12 @@ void ShaderImplementationPassPixelShaderProgram::reload()
 		ms_programMap.erase(i);
 
 		delete [] m_exe;
+		delete [] m_psrcText;       // Phase 17 (Plan 17-01)
 		delete m_graphicsData;
 
 		m_exe = 0;
+		m_psrcText = nullptr;       // LOW-3: re-null AFTER delete[] so a failed
+		m_psrcLen  = 0;             // mid-reload cannot leave a dangling pointer
 		m_graphicsData = 0;
 	}
 
@@ -2897,7 +2908,53 @@ void ShaderImplementationPassPixelShaderProgram::load_0000(Iff &iff)
 	iff.enterForm(TAG_0000);
 
 		// load the source code
+		//
+		// Phase 17 (Plan 17-01): retain TAG_PSRC source text + (when the
+		// psrcCensus flag is on) emit a per-shader census record to BOTH the
+		// debug log AND stage/psrc-census.tsv. Plan 02 reads m_psrcText to
+		// recompile the //hlsl PSRC into a real D3D11 PS via
+		// compilePixelShaderFromHlsl.
+		//
+		// D-06 / D3D9 parity: the only behavioral change here when the census
+		// flag is OFF is that the text is stored on the struct. read_string()
+		// consumes the chunk bytes; exitChunk(...,true) tolerates any residual
+		// (cap-skip path leaves the body unconsumed).
 		iff.enterChunk(TAG_PSRC);
+		{
+			int const psrcLen = iff.getChunkLengthLeft(static_cast<int>(sizeof(char)));
+			if (psrcLen == 0)
+			{
+				// LOW-4: empty PSRC chunk is a valid state (no //hlsl text and no asm
+				// text); leave m_psrcText = nullptr, m_psrcLen = 0. The census skip
+				// path handles this (the census record requires m_psrcText != nullptr).
+			}
+			else if (psrcLen > (1 * 1024 * 1024))
+			{
+				// LOW-3 / T-17-01 (ASVS V5): 1 MiB sanity cap. Bounds worst-case
+				// unbounded alloc from a corrupt asset. Char-select PSRCs are far
+				// below this cap (max observed in the v2.2 research synthesis is
+				// ~30 KB). Over-cap warns + skips retain (no allocation); exitChunk
+				// below tolerates the unconsumed bytes.
+				DEBUG_REPORT_LOG_PRINT(true,
+					("ShaderImplementationPassPixelShaderProgram: '%s' PSRC length %d exceeds 1 MiB cap; skipping retain.\n",
+					 m_fileName.getString(), psrcLen));
+			}
+			else
+			{
+				// DIV-1: Iff::read_string(void) allocates `new char[len+1]`, memcpys
+				// the string + null terminator (insertChunkString writes strlen+1
+				// incl. embedded null), and returns the buffer. Caller owns —
+				// freed in dtor and reload.
+				//
+				// R3-01b: m_psrcLen stores the chunk-bytes-consumed length (which
+				// INCLUDES the IFF trailing NUL — Iff.cpp:1606 advances s.used by
+				// sourceLength). Downstream consumers (Plan 02 compile + cache key)
+				// MUST use strlen(m_psrcText) when they want the source-text length
+				// not counting NUL.
+				m_psrcText = iff.read_string();
+				m_psrcLen  = psrcLen;
+			}
+		}
 		iff.exitChunk(TAG_PSRC, true);
 
 		// load the d3d8 executable data
@@ -2906,6 +2963,125 @@ void ShaderImplementationPassPixelShaderProgram::load_0000(Iff &iff)
 			m_exe = new DWORD[exeLength];
 			iff.read_uint32(exeLength, m_exe);
 		iff.exitChunk(TAG_PEXE);
+
+		// Phase 17 (Plan 17-01) / D-01/D-03 / HIGH-5: flag-gated PSRC language
+		// census emission. KEPT (not throwaway) so Phase 20 can re-run on an
+		// open-world boot. When the flag is OFF, behavior is identical to the
+		// pre-Phase-17 code path except that m_psrcText is stored.
+		if (ConfigClientGraphics::getPsrcCensus() && m_psrcText != nullptr)
+		{
+			// R3-01c CONTRACT — locate the FIRST NON-WHITESPACE BYTE (after a
+			// possible UTF-8 BOM) before lowercasing the next 7 chars. Matches
+			// ShaderBuilder's first-line classification at
+			// PixelShaderProgramView.cpp:301-308 — a BOM/newline-prefixed HLSL
+			// PSRC must NOT misclassify as asm.
+			int hlslStart = 0;
+			if (m_psrcLen >= 3
+				&& static_cast<unsigned char>(m_psrcText[0]) == 0xEF
+				&& static_cast<unsigned char>(m_psrcText[1]) == 0xBB
+				&& static_cast<unsigned char>(m_psrcText[2]) == 0xBF)
+			{
+				hlslStart = 3;
+			}
+			while (hlslStart < m_psrcLen)
+			{
+				char const c = m_psrcText[hlslStart];
+				if (c != ' ' && c != '\t' && c != '\r' && c != '\n') break;
+				++hlslStart;
+			}
+
+			int  isHlsl = 0;
+			char profile[32] = "asm";
+			if (m_psrcLen - hlslStart >= 7)
+			{
+				char prefix[8] = {0};
+				for (int i = 0; i < 7; ++i)
+				{
+					char const c = m_psrcText[hlslStart + i];
+					prefix[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+				}
+				if (std::memcmp(prefix, "//hlsl ", 7) == 0)
+				{
+					isHlsl = 1;
+					// Scan forward from hlslStart + 7 for the profile token (e.g. "ps_2_0").
+					int p = hlslStart + 7;
+					while (p < m_psrcLen
+						   && (m_psrcText[p] == ' ' || m_psrcText[p] == '\t'))
+					{
+						++p;
+					}
+					int q = 0;
+					while (p < m_psrcLen
+						   && q < static_cast<int>(sizeof(profile) - 1)
+						   && m_psrcText[p] != ' '  && m_psrcText[p] != '\t'
+						   && m_psrcText[p] != '\r' && m_psrcText[p] != '\n'
+						   && m_psrcText[p] != '\0')
+					{
+						profile[q++] = m_psrcText[p++];
+					}
+					profile[q] = '\0';
+					if (q == 0)
+						strncpy_s(profile, sizeof(profile), "unknown", _TRUNCATE);
+				}
+			}
+
+			// Light scan of retained PSRC text for additional census fields.
+			// strstr is null-terminator-safe (read_string null-terminates).
+			int includeCount = 0;
+			for (char const *p = std::strstr(m_psrcText, "#include"); p; p = std::strstr(p + 1, "#include"))
+				++includeCount;
+			int samplerSlots = 0;
+			for (char const *p = std::strstr(m_psrcText, "register(s"); p; p = std::strstr(p + 1, "register(s"))
+				++samplerSlots;
+			int constants = 0;
+			for (char const *p = std::strstr(m_psrcText, "register(c"); p; p = std::strstr(p + 1, "register(c"))
+				++constants;
+
+			// (a) Log sink — visible under console/dev launches.
+			DEBUG_REPORT_LOG_PRINT(true,
+				("psrcCensus: %s\tisHlsl=%d\tprofile=%s\tincludes=%d\tsamplerSlots=%d\tconstants=%d\n",
+				 m_fileName.getString(), isHlsl, profile, includeCount, samplerSlots, constants));
+
+			// (b) File sink (HIGH-5) — captures even under an explorer-launched
+			// boot where the debug print sink is invisible. The plugin's
+			// AddApplicationMessage -> stage/d3d11-debug.log path is NOT reachable
+			// from shared clientGraphics; this dedicated TSV file is the gating
+			// artifact for the HLSL:asm ratio (Plan 02/03 lane mix input).
+			//
+			// First-write detection: try fopen("rb") on the file; if it fails
+			// (file does not yet exist), the next write must include the header
+			// row. Mirror precedent: Direct3d11_VertexShaderData.cpp:546-575 uses
+			// fopen_s + fwrite + fclose for stage/vs-disasm-all.txt. Per-record
+			// fopen/fwrite/fclose is intentional (one-shot diagnostic boot; perf
+			// is fine, simpler than tracking a long-lived FILE*).
+			bool needHeader = false;
+			{
+				FILE *probe = nullptr;
+				fopen_s(&probe, "stage/psrc-census.tsv", "rb");
+				if (!probe) needHeader = true;
+				else        fclose(probe);
+			}
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/psrc-census.tsv", "ab");
+			if (fp)
+			{
+				if (needHeader)
+				{
+					// R3-01a: derive byte count from the literal — NEVER hand-count
+					// (e.g. /*len*/ 61). sizeof on a string literal includes the
+					// trailing NUL, so subtract 1.
+					static char const header[] = "fileName\tisHlsl\tprofile\tincludeCount\tsamplerSlots\tconstants\n";
+					fwrite(header, sizeof(header) - 1, 1, fp);
+				}
+				char row[1024];
+				int const rowLen = _snprintf_s(row, sizeof(row), _TRUNCATE,
+					"%s\t%d\t%s\t%d\t%d\t%d\n",
+					m_fileName.getString(), isHlsl, profile, includeCount, samplerSlots, constants);
+				if (rowLen > 0)
+					fwrite(row, 1, static_cast<size_t>(rowLen), fp);
+				fclose(fp);
+			}
+		}
 
 	iff.exitForm(TAG_0000);
 }

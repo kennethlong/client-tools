@@ -678,6 +678,16 @@ public:
 
 	PersistentCrcString                                      m_fileName;
 	DWORD                                                   *m_exe;
+	// Phase 17 (Plan 17-01): retained TAG_PSRC source text + chunk length.
+	// Mirrors the VS m_text / m_textLength shape at :426-428. Public because the
+	// D3D11 plugin ctor reads them directly (same access pattern as m_exe).
+	// m_psrcLen stores the IFF chunk length used for cap/skip and over-cap warn;
+	// the compile/cache-key length used by downstream consumers is derived from
+	// strlen(m_psrcText) — Iff::read_string advances by sourceLength INCLUDING
+	// the trailing NUL, which must NOT be fed to D3DCompile as part of the
+	// source length.
+	char                                                    *m_psrcText;
+	int                                                      m_psrcLen;
 	ShaderImplementationPassPixelShaderProgramGraphicsData  *m_graphicsData;
 };
 
