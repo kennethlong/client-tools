@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: executing
-last_updated: "2026-05-28T12:51:17.420Z"
-last_activity: 2026-05-28 -- Phase 17 planning complete
+last_updated: "2026-05-28T16:41:26.428Z"
+last_activity: 2026-05-28 -- Phase 17 execution started
 progress:
   total_phases: 7
   completed_phases: 0
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
 
 **Core value:** Every change must leave the client bootable to character select — and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
-**Current focus:** v2.2 Visual Parity ROADMAP CREATED (Phases 17–23; CHAR/WORLD/GAMMA/UI/FX/GEO/DPVS — 13/13 requirements mapped 100%). Next: plan Phase 17 (PSRC census + char-select beachhead).
+**Current focus:** Phase 17 — psrc-census-char-select-beachhead
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -53,10 +53,10 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 17 — PSRC Census + Char-Select Beachhead (not yet planned)
-Plan: —
-Status: Ready to execute
-Last activity: 2026-05-28 -- Phase 17 planning complete
+Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 17
+Last activity: 2026-05-28 -- Phase 17 execution started
 
 ## Accumulated Context
 
