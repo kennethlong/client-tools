@@ -5,17 +5,41 @@
 **Worktree:** D:\Code\swg-client-v2
 **Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap `6668b7cac`) · 17-06a **DONE** (`cafbe6111`+`73d15101f`: userConstants = flat float4[17]) · 17-06b **DONE — Case C DEFERRED** (`97d7bbf93`+`c701b229e`: latent `writeVarFloat4AtOffset`, no evidence-backed offset; dual-AI confirmed) · **17-07 NEXT (the only remaining code plan)** · 17-05 T4–5 **deferred to after 17-07**
 
-> **STATUS 2026-05-29 (17-07 Task 1 LANDED):** code committed `f9e5ac569` (PS param-list rewriter
-> `rewritePsMainParameterListForVSOutputs` + struct-bound rare-asset fallback + per-VS rewrite cache
-> keyed on VS* + `computeOutputSignatureHash()` + `isCompatibleWithVS_withExplicitPSInputs` overload +
-> StateCache native>rewritten>fallback bind priority + `asset-PS bound=`/`fallback-PS bound=` attribution
-> + `D3D11_REWRITE_VERSION` 21→22 + VS-output-sig .cso salt). `gl11_d.dll` rebuilt + staged
-> (5/29 14:37); **0 errors / 0 unresolved externals in Direct3d11 + SwgClient projects**. KEY FINDING:
-> the touched headers are **Direct3d11-plugin-internal**, so ONLY `gl11_d.dll` relinked — `SwgClient_d.exe`
-> (5/28) is unchanged and compatible (this is NOT the `ShaderImplementation.h` shared-header ABI trap; the
-> all-plugin-rebuild mandate was over-cautious). Provenance recorded in `evidence/README.md` §6 (`5a1f9c1bf`).
-> **NEXT: 17-07 Task 2 (Kenny boots POST-gap) → then write 17-07-SUMMARY.md → then 17-05 Tasks 4–5.**
+> ## ▶ RESUME HERE (2026-05-29 checkpoint) → implement GAP-4 (asset-PS b0 constant feed)
 >
+> **17-07 / GAP-3 is DONE** (commits `f9e5ac569`→`d8cc1ca99`, SUMMARY `8639c5458`). The asset-PS bind
+> rate went 0/9 → **9/9** (`path=rewritten`) via VS-signature RECONSTRUCTION (axis-b reorder was wrong —
+> the mismatch was a register-BASE offset: VS reserves o0=SV_Position, asset PS starts v0; reorder can't
+> add the +1 base, so we now rebuild the PS input sig to mirror the VS exactly + wrap the asset main).
+> Enabling the lane revealed **GAP-4: char-select body renders BLACK** — the asset PS reads zero lighting
+> constants.
+>
+> **GAP-4 fix is fully designed + dual-AI converged + census-gate UNBLOCKED** (codex+cursor:
+> `.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile*`; full design in memory
+> `project_17_07_ps_register_base_offset`). Root cause: asset PS reads `SwgVertexConstants`@b0 but the
+> light constants (c0-c4) are pushed to b0 by NOBODY (D3D11 LightManager only fills `LightingCB`@b3);
+> `StaticShaderData::apply` zero-inits b0 and clobbers it; engine userConstants go to b2. The c-index map
+> is IN-REPO at `Direct3d9_PixelShaderConstantRegisters.h` (`PSCR_dot3LightDirection=c0 ... userConstant=c8`),
+> matching the reflected b0 offsets — **no TRE .inc extraction needed.**
+>
+> **GAP-4 implementation (the converged plan):** a persistent D3D11 b0 shadow[400] fed by 3 producers:
+> (A) port `Direct3d11_LightManager` to push `pixelDot3Data` (5 float4s) → shadow@c0 (from
+> `Direct3d9_LightManager.cpp:601`/~592-625; specPower packs into `dot3LightDirection.w`); (B)
+> `StaticShaderData::apply` RMW from the shared shadow (STOP the `staging(400,0)` zero-init) + patch
+> textureFactor/materialSpecularColor by reflected offset; (C) `setPixelShaderUserConstants_impl` →
+> shadow@`(PSCR_userConstant+i)*16` (offset 128+, NOT c0); upload merged shadow via `updatePS(0)`; keep
+> b2/fallback untouched. Instrument b0 c0.xyz/c1.rgb/c7/c8 at flush (pass = c0 nonzero + lit character).
+>
+> **Also still PENDING:** D-06 `rasterMajor=5` re-boot (gl11-only change → D3D9 byte-for-byte; needed for
+> 17-05 Task 4's D3D9 re-capture). 17-05 Tasks 4–5 (POST-gap A/B + 17-VERIFICATION.md) best run AFTER
+> GAP-4 so they capture a LIT character, not the black interim → CHAR-01/02/03 verdict.
+>
+> `gl11_d.dll` currently = HEAD `d8cc1ca99` (5/29 17:23, GAP-3). `SwgClient_d.exe` (5/28) unchanged/compatible.
+
+---
+
+_Historical (pre-execution 17-07 plan notes — SUPERSEDED by the GAP-4 resume block above; 17-07 is done):_
+
 > **RESUME HERE → execute 17-07, then 17-05 Tasks 4–5.** 17-07 is the big one: HLSL parameter-list
 > parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
 > pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring
