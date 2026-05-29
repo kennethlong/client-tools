@@ -1,0 +1,79 @@
+# CONSULT — D3D11 modernization port: systemic VS↔PS interpolator-schema mismatch
+
+**Project context.** Star Wars Galaxies (SWG) is a 2003-era MMO client. We are running a long-running modernization port (`swg-client-v2`, MSBuild, MSVC v145 toolset) whose v2.2 milestone is "Visual Parity" — D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline at char-select and beyond. The D3D11 plugin (`gl11_d.dll`) is a Phase 11 work product; the original engine uses a plugin architecture where the renderer plugin (`gl05_d.dll` D3D9, `gl11_d.dll` D3D11) is `LoadLibrary`'d at runtime by `SwgClient_d.exe`. Asset shaders are stored in IFF files with two chunks per pixel program: `TAG_PSRC` (HLSL source) and `TAG_PEXE` (precompiled D3D9 asm). Until Phase 17, the D3D11 plugin discarded `TAG_PSRC` and could not consume the asm `TAG_PEXE` blobs (D3D11 has no asm path), so it fell back to a built-in magenta pixel shader for every asset PS. Result: char-select rendered with "washed-out white / magenta" character.
+
+**Phase 17 plan structure.** Three plans:
+- **Plan 17-01** — retain `TAG_PSRC` source text on the shared `ShaderImplementationPassPixelShaderProgram` struct + flag-gated PSRC census at the load site. **DONE.** Confirmed census: 22 unique HLSL + 10 unique asm pixel programs at char-select (68.75% HLSL). All character-rendering shader families (`h_*` body, `a_*` armor, `e_*` effects, `ui_membrane_color2`) are 100% HLSL ps_2_0. The 10 asm programs are basic primitives only.
+- **Plan 17-02** — wire the primary recompile lane in the D3D11 plugin's `Direct3d11_PixelShaderProgramData` ctor: classify retained PSRC via first-non-whitespace `//hlsl` check, feed `//hlsl` source into a new `tryCompilePixelShaderFromHlslNoFatal` sibling (HIGH-1: must survive PSRC compile failures gracefully), bind the resulting real `m_d3dPS`, retain the compiled DXBC blob, run `D3DReflect` ONCE to cache cbuffer layout + PS input signature, dump both via `ID3D11InfoQueue::AddApplicationMessage` + `DEBUG_REPORT_LOG_PRINT` for verification. **CODE-DONE.** Builds clean (0 unresolved external symbols). Boot confirms: 116 PS input signatures dumped, 26 cbuffer layouts reflected (all PS programs share one cbuffer `SwgVertexConstants` bindPoint=0 totalSize=400 vars=9), 0 compile failures, 0 fallback uses.
+- **Plan 17-03** — wire `StaticShader`/`ConstantBuffer` to feed Plan 17-02's reflected cbuffer layout (material color, texture-factor constants). PENDING.
+
+**The finding.** With Plan 17-02 live, char-select renders **flat-black character silhouette** (clean geometry, perfect z, background visible behind, no see-through, all surfaces shading to zero). `stage/d3d11-debug.log` shows the D3D11 debug runtime firing `id=343` (linkage error: "Signatures between stages are incompatible. Semantic 'X' is defined for mismatched hardware registers between the output stage and input stage") **565,056 times per session**, split:
+
+- `COLOR` semantic: 188,352 mismatches
+- `TEXCOORD` semantic: 376,704 mismatches
+- (`id=342` "missing semantic" fires 0 times — semantic NAMES match, only register POSITIONS mismatch)
+
+**Root-cause diagnosis (please validate or refute).** The recompiled HLSL PS programs declare a rich input struct. Sample (character body shader `h_color2_specmap_bump_aniso_ps20.psh`, captured via D3DReflect):
+
+```
+PS-input-sig: COLOR0    register=0 mask=0x7 componentType=3
+PS-input-sig: COLOR1    register=1 mask=0x7 componentType=3
+PS-input-sig: TEXCOORD0 register=2 mask=0x3 componentType=3
+PS-input-sig: TEXCOORD1 register=2 mask=0xC componentType=3  (note: shares reg 2 with TEXCOORD0 via complementary mask — HLSL packing)
+PS-input-sig: TEXCOORD2 register=3 mask=0x7 componentType=3
+PS-input-sig: TEXCOORD3 register=4 mask=0x7 componentType=3
+```
+
+Simpler PS sample (`h_simple_pp_ps20.psh`):
+```
+COLOR0    register=0 mask=0x7
+TEXCOORD0 register=1 mask=0x3
+TEXCOORD1 register=2 mask=0x7
+```
+
+But the VS programs being bound at draw time output essentially nothing. The ONLY unique `VS-outputs(...)` pattern observed across the entire 153 MB / 589,451-line log:
+
+```
+VS-outputs(1): [TEXCOORD0 r=o1 mask=0x3 rwmask=0xC]
+```
+
+That's it. One interpolator, `TEXCOORD0` at register `o1`, 2 components (mask 0x3), the remaining 2 components (`rwmask=0xC`) unwritten. No `COLOR0`, no `COLOR1`, no `TEXCOORD1+`. So:
+
+- PS expects `COLOR0` at register 0 → VS provides nothing at register 0 → PS reads `(0,0,0,0)` for COLOR0
+- PS expects `TEXCOORD0` at register 1 → VS provides `TEXCOORD0` at o1 (register 1, mask 0x3) → semantic + register slot DO line up here, but `id=343` still fires for `TEXCOORD` — perhaps because additional `TEXCOORDN` (1+) are missing, or because the mask differs
+- PS expects `TEXCOORD1+` at registers 2-4 → VS provides nothing → garbage
+
+In the PS body, the texture sample modulates against `COLOR0` (vertex color × material × diffuse texture). `COLOR0` reads zero → result zero → flat black.
+
+**Historical context.** The minimal VS output makes sense for the pre-Plan-17-02 world where the bound PS was the magenta fallback — that PS ignored its inputs entirely and just output magenta. So Phase 11 work optimized the VS to write only what it strictly needed for position transform + the one UV the magenta fallback PS still consumed (apparently for alpha/clip). With Plan 17-02's "real" HLSL PS programs now bound, the VS schema is inadequate.
+
+**The architectural question.** What is the canonical D3D11 modernization pattern to align VS output schema with HLSL-recompiled PS input schema, given:
+
+- We cannot modify the original .sht/.psh asset files in-tree (they ship in TRE archives).
+- We CAN modify how the D3D11 plugin recompiles them at load time (we already do this for PS via Plan 17-02 — the sibling `Direct3d11_VertexShaderData.cpp` could do the analogous job for VS).
+- Both shaders are HLSL ps_2_0 / vs_2_0 era (no SM5 shader linkage objects available).
+- We want a single canonical pattern for ~50-100+ shader families across the asset library, not per-shader manual fix-ups.
+
+**Candidate approaches to compare (rank, recommend, or propose better):**
+
+1. **VS recompile lane mirroring Plan 17-02's PS lane.** Add a sibling `tryCompileVertexShaderFromHlslNoFatal` to `Direct3d11_VertexShaderData.cpp`. Recompile VS programs from their `TAG_VSRC` (or equivalent HLSL source — verify the IFF tag name; likely exists since PS had it). The HLSL compiler will then assign register positions consistently with the PS recompile (FXC pass on related struct types tends to be deterministic by declaration order in the same compile invocation). Risk: VS and PS are compiled in SEPARATE `D3DCompile()` calls in different .cpp files — separate compile contexts may still produce divergent register allocations even from "compatible" source. Pro: structurally symmetric to PS work; aligns with the v2.2 "recompile, don't decompile" reframe.
+
+2. **D3DCompile2 with `ID3D11Linker` / `ID3D11FunctionLinkingGraph` to compile VS + PS as a linked pair.** Compile each shader to a library blob first, then link VS + PS pair so the linker guarantees register-slot compatibility. Pro: D3D11 sanctioned way to do this. Con: significant API complexity for an SM2-era codebase; not sure if linker supports SM2 targets (linker is SM5+ in most documentation I've read).
+
+3. **Post-compile reflection-based register remapping.** Compile VS and PS independently (as we do today). Use `D3DReflect` on BOTH; build a remapping table; insert a small SHADER FIXUP pass (binary patching of the VS DXBC output declarations, or VS post-pass that emits at the slots the PS expects). Con: binary-patching DXBC is fragile and unsupported; SUPER easy to break. Pro: doesn't require recompiling VS.
+
+4. **Explicit register binding hints in PSRC source on recompile.** Before passing PSRC text to `D3DCompile`, scan for declarations like `float4 col : COLOR0;` and replace with `float4 col : COLOR0 : packoffset(c0.x);` or similar register hints (or insert SV-style semantics that pin slots). Pro: minimal code change. Con: doesn't match how HLSL semantics work in practice — semantics name+index pair selects the slot, not packoffset (which is for cbuffer members, not interpolators); explicit interpolator register hints in SM2 HLSL are uncommon / non-standard. Unlikely to work.
+
+5. **Unify VS output struct AND PS input struct in a shared HLSL header.** Modify both the PS recompile (Plan 17-02) AND a new VS recompile to `#include` a shared `Interpolators.hlsli` that defines a canonical struct. Both compiles see the identical struct type → identical register allocation. Pro: maintainable, clearly correct. Con: requires interfering with both compile calls + supplying the include in-memory.
+
+**Specific asks:**
+
+1. **Validate or refute** the root-cause diagnosis (interpolator schema mismatch as described).
+2. **Rank approaches 1-5** for an SM2 ps_2_0 / vs_2_0 asset base, expressing the tradeoff axes (correctness, structural fit with the existing recompile-lane architecture, fragility, complexity, maintainability for 50-100+ shader families).
+3. **Recommend a primary approach + a fallback** so we can structure Plan 17-04 (or a Phase 18 plan) accordingly.
+4. **Surface any subtle gotchas** with how D3D11 validates VS↔PS linkage that we might miss (e.g., interpolation mode interactions, system-value handling, the `centroid`/`linear`/`nointerpolation` qualifiers, mask-bit handling when VS writes only `mask=0x3` to a register where PS reads `mask=0xF`, FXC's behavior on shared register packing per HLSL component-mask rules).
+5. **Flag if the diagnosis suggests Plan 17-03 (cbuffer wiring) needs design changes** — currently the cbuffer is `SwgVertexConstants bindPoint=0 totalSize=400 vars=9` (single cbuffer at b0, all 26 PS programs share it). Plan 17-03 will populate it from the StaticShader's material parameter map. Anything we should know about how `id=343` resolution might affect the cbuffer story?
+
+**Out of scope for this consult.** The separate `gl05_d.dll` rebuild texture-binding regression (#5) is a build-config drift issue — a focused build-log diff is the right tool, not a consult.
+
+**Operational notes for the consultee.** This is an existing Anthropic Claude Code session running `/gsd-execute-phase 17`. We've completed Wave 1 (Plan 17-01) and Wave 2 (Plan 17-02). Wave 3 (Plan 17-03 cbuffer wiring) will proceed in parallel with this consult; your input shapes the post-Wave-3 work, not Wave 3 itself. Project memory at `~/.claude/projects/D--Code-swg-client-v2/memory/` includes `project_v2.2_slot0_psrc_reframe.md` (the v2.2 strategic reframe) and `project_shared_header_abi_cascade_trap.md` (the related plugin-rebuild gotcha that surfaced in Plan 17-01) — neither is required reading for this consult but they provide additional context if useful.

@@ -753,6 +753,36 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					if (layout.TotalSize == 0)
 						continue;   // Defensive: zero-size means Plan 02 reflection failed for this entry.
 
+					// Plan 17-03 INVESTIGATION (2026-05-28, RESOLVED): an earlier
+					// build of this code path (commit 6777c3328 + post-build link
+					// produced 2026-05-28 20:36) FATAL'd with a ~1 GB allocation
+					// at PPEM init. A diagnostic fopen/fwrite/fclose trace
+					// inserted here masked the crash (Heisenbug — code-layout /
+					// timing sensitive) and captured 4407 apply() invocations
+					// across all char-select shaders, ALL showing layout.TotalSize
+					// == 400 (SwgVertexConstants @ b0). Trace preserved at
+					// .planning/phases/17-psrc-census-char-select-beachhead/
+					// evidence/plan-17-03-apply-trace.txt. Conclusion: the FATAL
+					// was NOT in this staging alloc — somewhere else in the
+					// setStaticShader call chain has an uninitialized-memory or
+					// timing-dependent issue that this build's code layout
+					// doesn't expose. Adding a defensive TotalSize cap here would
+					// be cargo-culting. Re-add the trace if the crash recurs.
+					// Defensive upper bound below is a CHEAP belt-and-braces
+					// guard against the std::vector ctor diverging if a future
+					// reflected layout returns a corrupt TotalSize.
+					static constexpr unsigned int kMaxReasonableCbufferTotalSize = 64 * 1024;   // 64 KiB; SwgVertexConstants is 400 B.
+					if (layout.TotalSize > kMaxReasonableCbufferTotalSize)
+					{
+						DEBUG_WARNING(true,
+							("Direct3d11_StaticShaderData::apply: skipping suspicious layout.TotalSize=%u (cap=%u) for shader '%s' layoutName='%s' bindPoint=%u",
+							 layout.TotalSize, kMaxReasonableCbufferTotalSize,
+							 m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null-m_shader)",
+							 (layout.Name && layout.Name[0]) ? layout.Name : "(empty)",
+							 layout.BindPoint));
+						continue;
+					}
+
 					// Staging buffer sized to the reflected cbuffer total size. Char-select
 					// PS cbuffers are 400 bytes (per Plan 02's PS-cbuffer dump for
 					// SwgVertexConstants @ b0); std::vector is safe for any size up to
