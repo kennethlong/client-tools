@@ -864,17 +864,50 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// across array indices) — otherwise a successful write to a
 					// wrong slot would prevent the right slot from getting hit on
 					// the next attempt and could stomp another channel's data.
+					// Plan 17-04.X (post-boot evidence refinement, 2026-05-28):
+					// The Plan 17-04 cbuffer-vars-discovery dump captured real
+					// names from D3DReflect on SwgVertexConstants @ b0
+					// (.planning/phases/17-.../evidence/...psrc-source-dump.txt):
+					//   var[0..4]: packedRegister0..4  (generic, packed per the
+					//              rewriter — each PS's pixel_shader_constants.inc
+					//              defines what semantically lives in each slot)
+					//   var[5]:    textureFactor                 ← named
+					//   var[6]:    textureFactor2                ← named
+					//   var[7]:    materialSpecularColor         ← named (NOT
+					//              "materialSpecular" — Plan 17-04 Task 2 missed
+					//              the "Color" suffix by one word)
+					//   var[8]:    userConstants[17]   (272 bytes — engine
+					//              setPixelShaderConstants destination)
+					//
+					// Confirmed by PSRC source inspection:
+					//   - h_color2_specmap_cbmp_ps20.psh body uses
+					//     `materialSpecularColor` directly — landing a write to
+					//     it should make specular highlight tint correct on the
+					//     character head.
+					//   - h_simple_pp_ps20.psh body uses textureFactor.rgb as the
+					//     diffuse tint — landing a write to it should color the
+					//     character clothing.
+					//   - The diffuse/emissive material values are NOT directly
+					//     consumed by these PS programs (diffuse comes from the
+					//     texture sampler; emissive lives in packedRegisterN +
+					//     userConstants engine state). So material[N] / material*
+					//     lookups will silently miss for char-select shaders —
+					//     kept as fallback for any future PS that DOES declare
+					//     plain materialDiffuse/etc.
 					bool const wroteDiffuse  =
 						writeVarByName("material[0]",   passDiffuse)
 						|| writeVarByName("materialDiffuse",  passDiffuse);
 					bool const wroteSpecular =
-						writeVarByName("material[1]",   passSpecular)
+						writeVarByName("materialSpecularColor", passSpecular)
+						|| writeVarByName("material[1]",   passSpecular)
 						|| writeVarByName("materialSpecular", passSpecular);
 					bool const wroteEmissive =
 						writeVarByName("material[2]",   passEmissive)
 						|| writeVarByName("materialEmissive", passEmissive);
-					(void)writeVarByName("textureFactor",  passTexFac);
-					(void)writeVarByName("textureFactor2", passTexFac2);
+					bool const wroteTextureFactor  = writeVarByName("textureFactor",  passTexFac);
+					bool const wroteTextureFactor2 = writeVarByName("textureFactor2", passTexFac2);
+					(void)wroteTextureFactor;
+					(void)wroteTextureFactor2;
 
 					// Plan 17-04 Task 2 discovery dump: when at least one of the
 					// wrote* flags lands as zero across the head + eye anchor
