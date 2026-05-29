@@ -403,3 +403,56 @@ use `DEBUG_REPORT_LOG_PRINT` or a dedicated census stream (no InfoQueue access).
 **Pattern extraction date:** 2026-05-27
 **Note:** working tree has uncommitted changes (none in the analog files touched here); line numbers
 were re-verified against the live tree this session, not taken from RESEARCH.md on faith.
+
+---
+
+## Round-4 amendment (2026-05-29 — gap-closure replan)
+
+The Round-4 cross-AI review (Codex + Cursor) corrected three factual claims that were
+load-bearing in the Phase 17 plans pre-revision. These corrections cascade into the
+gap-closure plans 17-05/06a/06b/07 and are folded into 17-VERIFICATION.md's scope-of-fix
+narratives — but the corrections also retroactively scope-down the PATTERN claims above.
+
+### Correction 1 (Round-4 HIGH-3 CONVERGED): "Phase 17 GAP" as written at line 236 is overstated
+
+The §4 pattern callout above (`Direct3d11_ConstantBuffer::updatePS` → `materialDiffuse` zero-fill)
+correctly identifies an instrumentation gap — the reflection-driven upload SHOULD populate the
+material color fields. But char-select PSes (`h_simple_pp_ps20.psh`,
+`h_color2_specmap_cbmp_ps20.psh` per `evidence/plan-17-04x-psrc-source-dump.txt`) consume
+`textureFactor.rgb` + interpolated `COLOR0` (vertexDiffuse), NOT cbuffer `materialDiffuse` /
+`materialEmissive`. Closing the materialDiffuse / materialEmissive write path (Plans 17-06a +
+17-06b) is INSTRUMENTATION COMPLETENESS and lays infrastructure for FUTURE open-world shaders
+that DO consume those cbuffer fields — but it does NOT materially drive char-select visuals.
+
+The PRIMARY char-select visual driver is GAP-3 (asset-PS bind rate flip in Plan 17-07) +
+the already-landed `textureFactor` write path. Plan 17-05 Task 5's per-CHAR-0x verdict
+makes the instrumentation-vs-visual distinction explicit.
+
+### Correction 2 (Round-4 HIGH-5 CONVERGED): `Direct3d11_HlslRewrite.cpp` Rule D source is NOT a c[N] → packedRegister[K].channel mapping table
+
+The pattern-map's implicit assumption — that reading Rule D would reveal a translation table
+from D3D9 c-register positions to packedRegister channels — does NOT hold. Rule D at
+`Direct3d11_HlslRewrite.cpp:747-767` (verified read this session) only wraps `: register(cN)` →
+`: packoffset(cN)` while preserving original declaration names. The `packedRegister0..4`
+names in the reflection are the INPUT (`vertex_shader_constants.inc`) declaration names, not
+a rewriter-emitted alias. Diffuse + emissive material values live INSIDE `userConstants`'s
+opaque 272-byte region, NOT in packedRegisterN channels. Plan 17-06a defaults to Path B
+(extending the discovery dump to walk userConstants's inner reflection); Path A (Rule D
+source-read) is acknowledged as a dead end up-front.
+
+### Correction 3 (Round-4 HIGH-4 CONVERGED): PSRC dominant form is parameter-list, not struct-bound
+
+Plans that rewrite PS HLSL source (Plan 17-07) target `main()` parameter declarations as
+PRIMARY (22/22 char-select PSes per `evidence/plan-17-04x-psrc-source-dump.txt` use
+`float4 main(in TYPE NAME : SEMANTIC, ...)` syntax). The struct-bound form (`struct PSIn {
+... } main(in PSIn inp)`) is a RARE-asset fallback with zero char-select usage. The
+`buildHlslForVSOutputs` analog (§3 of the pattern map above) remains structurally correct
+as a SORT-DISCIPLINE template, but its STRUCT-EMISSION shape is NOT the rewriter's output
+target — the rewriter emits a reordered parameter list, not a struct.
+
+### Net effect on the pattern map
+
+The six pattern assignments (§1–§6) above remain correct as ROLE / DATA-FLOW / ANALOG maps.
+What changes is the EXPECTED VISUAL OUTCOME per plan: 17-06a/06b deliver infrastructure
+completeness; 17-07 delivers the primary char-select visual fix; 17-05 captures the
+matched-pair evidence + verifier-produced verdict with explicit lane attribution.
