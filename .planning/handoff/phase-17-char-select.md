@@ -1,9 +1,19 @@
 # Handoff: Phase 17 — char-select D3D11 beachhead
 
-**Updated:** 2026-05-29 (Wave 5 executed; 17-05 parked at 17-05-task3)
+**Updated:** 2026-05-29 (Waves 5–6 + 17-06b executed; 17-07 is all that remains before 17-05 T4–5)
 **Branch:** koogie-msvc-cpp20-base
 **Worktree:** D:\Code\swg-client-v2
-**Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap committed `6668b7cac`) · 17-06a/06b/07 **next (Waves 6–7)** · 17-05 T4–5 **deferred to after 17-07**
+**Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap `6668b7cac`) · 17-06a **DONE** (`cafbe6111`+`73d15101f`: userConstants = flat float4[17]) · 17-06b **DONE — Case C DEFERRED** (`97d7bbf93`+`c701b229e`: latent `writeVarFloat4AtOffset`, no evidence-backed offset; dual-AI confirmed) · **17-07 NEXT (the only remaining code plan)** · 17-05 T4–5 **deferred to after 17-07**
+
+> **RESUME HERE → execute 17-07, then 17-05 Tasks 4–5.** 17-07 is the big one: HLSL parameter-list
+> parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
+> pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring
+> (native > rewritten > fallback) + `asset-PS bound=` log. Touches PSData.h + VertexShaderData.h →
+> STAGE-1 MUST rebuild ALL plugin .vcxprojs + relink SwgClient_d.exe (ABI cascade trap). Bump
+> D3D11_REWRITE_VERSION 21→22 at BOTH sites (PixelShaderProgramData.cpp:153 + :303). Do the built-in
+> COLOR0/TEXCOORD spike FIRST (de-risk the parser) before the full impl. After 17-07's combined build,
+> APPEND the "POST-gap build provenance" line (HEAD SHA + gl11_d.dll mtime) to evidence/README.md §6,
+> then run 17-05 Task 4 (POST-gap capture) + Task 5 (author real 17-VERIFICATION.md).
 
 > **Execution note (this session):** running inline/sequential (Kenny-in-the-loop), not parallel
 > worktrees — the executor cannot boot the client (no `.tre`), every capture is a host checkpoint.

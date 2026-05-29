@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: executing
-last_updated: "2026-05-29T17:24:11.245Z"
-last_activity: 2026-05-29 -- Phase 17 planning complete
+last_updated: "2026-05-29T19:30:00.000Z"
+last_activity: 2026-05-29 -- Phase 17 gap-closure Waves 5-6 + 17-06b done; 17-07 next (fresh context)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 8
-  completed_plans: 4
-  percent: 50
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -53,10 +53,11 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING
-Plan: 1 of 4
-Status: Ready to execute
-Last activity: 2026-05-29 -- Phase 17 planning complete
+Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING (gap-closure, inline)
+Plan: 6 of 8 complete — 17-07 is the only remaining code plan; 17-05 T4–5 deferred to after it
+Status: Checkpoint — fresh context requested for 17-07 (HLSL parser + per-VS cache + all-plugin ABI rebuild)
+Resume: /gsd-execute-phase 17 --gaps  →  see .planning/handoff/phase-17-char-select.md (RESUME HERE block)
+Last activity: 2026-05-29 -- gap-closure Waves 5–6 + 17-06b done; 17-05 parked at 17-05-task3 (PRE-gap evidence); 17-06b Case C DEFERRED (dual-AI confirmed); 17-07 next
 
 ## Accumulated Context
 
