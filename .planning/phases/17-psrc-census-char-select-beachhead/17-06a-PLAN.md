@@ -6,6 +6,7 @@ wave: 6
 depends_on: ["17-04", "17-05-task3"]
 files_modified:
   - src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+  - .planning/phases/17-psrc-census-char-select-beachhead/17-06a-SUMMARY.md
 autonomous: false
 requirements: [CHAR-02, CHAR-03]
 gap_closure: true
@@ -175,7 +176,7 @@ Build invocation (memory project_decruft_removal_build_graph_gotchas):
   <files>src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp</files>
   <read_first>
     - src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp (the discovery-dump block at lines ~925-985; the cached reflection layout structure passed in via m_reflectedCbufferLayouts; the existing per-var emit loop the extension wraps)
-    - src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp (lines 1040-1090 for the existing D3DReflect / ID3D11ShaderReflectionConstantBuffer call pattern this plan mirrors for the inner walk — the layout cache stores already-reflected metadata; the extension may need direct ID3D11ShaderReflection lookups if the cached struct doesn't carry type descriptors)
+    - src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp (lines 1040-1090 for the existing D3DReflect / ID3D11ShaderReflectionConstantBuffer call pattern this plan mirrors for the inner walk) + Direct3d11_PixelShaderProgramData.h :66-70 (CONFIRM: the cached layout-var struct carries ONLY Name/StartOffset/Size, NO type descriptors — so re-reflect via D3DReflect on the cached PS bytecode is MANDATORY per Round-5 item 6, not optional; locate the cached bytecode accessor, e.g. m_psBytecodeBlob)
     - .planning/phases/17-psrc-census-char-select-beachhead/17-04-SUMMARY.md §"Task 2 cbuffer-vars-discovery dump" + §"patterns-established item 3" (the gated-one-shot-dump pattern)
     - .planning/phases/17-psrc-census-char-select-beachhead/17-VERIFICATION.md §"Per-anchor cbuffer discovery dump" (the falsifying boot evidence — the 9-var top-level layout)
     - .planning/phases/17-psrc-census-char-select-beachhead/17-REVIEWS.md §"Round 4 Verdict" item 2 — Path A dead-end rationale
@@ -183,13 +184,7 @@ Build invocation (memory project_decruft_removal_build_graph_gotchas):
   <action>
     1. **Locate the existing discovery-dump block** in `Direct3d11_StaticShaderData.cpp` at the gated `s_dumpedHeadVars` / `s_dumpedEyeVars` site (around lines 925-985 per 17-04 SUMMARY). Do NOT change the gate (`incomplete-write AND first-encounter`); do NOT change the anchor heuristics; do NOT change the top-level per-var emit. Just ADD the inner-walk after the existing per-var emit.
 
-    2. **Determine the reflection-access strategy.** Two options depending on what the cached layout struct (`m_reflectedCbufferLayouts`) carries:
-
-       - **Option (a) — cached layout already has type info.** If the cached `Direct3d11_ReflectedCbufferVar` (or whatever the layout-var struct is named in the live code — read the cache type in 17-02's PSData) carries type descriptors (Class / Type / Members / Elements), the inner walk reads those directly from cached state. NO new D3DReflect call.
-
-       - **Option (b) — cached layout is offset+size+name only.** If the cache stores only `(Name, StartOffset, Size)` and NOT type info, the dump extension must re-run `D3DReflect` on the bound PS bytecode at dump-time to get the type-descriptor info. This is a ONE-SHOT cost (gated by the same first-encounter flag), not per-frame.
-
-       The executor reads the live cached-struct definition (Plan 17-02 territory in PixelShaderProgramData.cpp) and picks Option (a) if type info is cached, Option (b) otherwise. Document the choice in 17-06a SUMMARY.
+    2. **Reflection-access strategy: RE-REFLECT AT DUMP TIME IS MANDATORY (Round-5 review item 6).** The cached layout-var struct does NOT carry type descriptors — verified this session at Direct3d11_PixelShaderProgramData.h: the cached var struct holds ONLY `char Name[64]` (:68), `UINT StartOffset` (:69), `UINT Size` (:70); there is NO Class / Type / Members / Elements field. So "Option (a) — read type from cached layout" is IMPOSSIBLE; the prior plan's executor-discretion framing was wrong. The inner walk MUST re-run `D3DReflect` on the bound PS bytecode at dump time to obtain the `ID3D11ShaderReflectionType` descriptors. This is a ONE-SHOT cost (gated by the same `s_dumpedHeadVars` / `s_dumpedEyeVars` first-encounter flag), NOT per-frame — call `D3DReflect` once per anchor inside the existing dump gate, walk the cbuffer's variable types via `GetVariableByIndex(i)->GetType()` + `GetMemberTypeByIndex(j)`, then release the reflection interface. The PS bytecode blob is available via the Plan-17-02 cached `m_psBytecodeBlob` (or re-read from the bound PS); the executor confirms the accessor during read_first and documents it in 17-06a SUMMARY.
 
     3. **Implement the inner walk.** For each top-level reflected var, if its type descriptor is a struct (`td.Members > 0`) OR an array (`td.Elements > 0`), iterate the members/elements and emit one log line each. Output format (matches the existing 17-04 dump style):
 
@@ -222,7 +217,7 @@ Build invocation (memory project_decruft_removal_build_graph_gotchas):
   <acceptance_criteria>
     - File `src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp` has been edited (`git status` shows Modified).
     - The new Plan 17-06a log signature is present: `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'Plan 17-06a' -SimpleMatch | Measure-Object | % Count` >= 1.
-    - The inner-walk recursion is present: `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'GetMemberTypeByIndex' -SimpleMatch | Measure-Object | % Count` >= 1 OR `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'D3D11_SHADER_TYPE_DESC' -SimpleMatch | Measure-Object | % Count` >= 1 (whichever API path the executor chose between cached-type-info vs re-reflect).
+    - The inner-walk recursion is present AND uses re-reflection (Round-5 item 6 — re-reflect is mandatory, cached layout has no type info): `((Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'GetMemberTypeByIndex' -SimpleMatch).Count) -ge 1` AND a re-reflect/bytecode token is present: `(((Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'D3DReflect' -SimpleMatch).Count) + ((Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'm_psBytecodeBlob' -SimpleMatch).Count) + ((Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'GetType' -SimpleMatch).Count)) -ge 1`.
     - The existing 17-04 Task 2 dump structure is UNCHANGED: `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 's_dumpedHeadVars' -SimpleMatch | Measure-Object | % Count` >= 1 (the existing gate flag is preserved); `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 's_dumpedEyeVars' -SimpleMatch | Measure-Object | % Count` >= 1.
     - The `wroteDiffuse` candidate chain is UNCHANGED in this plan (17-06b lands the mapping): `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'writeVarByName.*material' -SimpleMatch | Measure-Object | % Count` returns the same count as pre-edit baseline (the executor confirms by `git diff` showing the wroteDiffuse / wroteEmissive lines unchanged).
     - The `materialSpecularColor` recognition is preserved: `Select-String -Path src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp -Pattern 'materialSpecularColor' -SimpleMatch | Measure-Object | % Count` returns exactly 1.
@@ -319,7 +314,9 @@ Build invocation (memory project_decruft_removal_build_graph_gotchas):
 </success_criteria>
 
 <output>
-After Task 2 completes, Plan 17-06a closes with a Plan 17-06a SUMMARY.md mirroring the shape of 17-04-SUMMARY.md (dependency-graph block; tech-tracking key-files; key-decisions including Option (a) vs Option (b) reflection-access strategy; patterns-established; metrics; deviations-from-plan; acceptance-grep table; boot-evidence section populated from Kenny's resume-signal paste — this is the discovery evidence Plan 17-06b reads at its first task).
+After Task 2 completes, Plan 17-06a closes with a Plan 17-06a SUMMARY.md mirroring the shape of 17-04-SUMMARY.md (dependency-graph block; tech-tracking key-files; key-decisions including the MANDATORY re-reflect-at-dump-time strategy (Round-5 item 6 — cached layout has no type info, so D3DReflect on the PS bytecode is required) + the bytecode accessor used; patterns-established; metrics; deviations-from-plan; acceptance-grep table; boot-evidence section populated from Kenny's resume-signal paste — this is the discovery evidence Plan 17-06b reads at its first task).
+
+Acceptance (hard precondition for Plan 17-06b Task 1, which reads this SUMMARY's boot-evidence section): `.planning/phases/17-psrc-census-char-select-beachhead/17-06a-SUMMARY.md` MUST exist AND contain >= 1 line matching `Plan 17-06a cbuffer-vars-discovery .* userConstants` (the pasted inner-field evidence) — `Select-String -Path .planning/phases/17-psrc-census-char-select-beachhead/17-06a-SUMMARY.md -Pattern 'Plan 17-06a cbuffer-vars-discovery .* userConstants' | Measure-Object | % Count` >= 1. A SUMMARY missing the userConstants discovery line does NOT satisfy this gate (17-06b would have no mapping evidence to consume).
 
 Create `.planning/phases/17-psrc-census-char-select-beachhead/17-06a-SUMMARY.md` after the discovery boot evidence is captured. Single closing commit:
   `docs(17-06a): Plan 17-06a SUMMARY — userConstants inner-field discovery captured (mapping handed to 17-06b)`

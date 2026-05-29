@@ -210,7 +210,7 @@ GAP-3 to close on the primary axis (visual lane delivery), not just the secondar
   - Add `isCompatibleWithVS_withExplicitPSInputs` overload (HIGH-6)
   - Extend StateCache.cpp bind decision (HIGH-2): rewritten-PS > native-PS > fallback-PS
   - Add `Plan 17-07 asset-PS bound=` / `Plan 17-07 fallback-PS bound=` attribution log (MEDIUM)
-  - Bump D3D11_REWRITE_VERSION from "20" to "21" (cache invalidation)
+  - Bump D3D11_REWRITE_VERSION from "21" to "22" (cache invalidation) [Round-5 review item 5: the live tree ALREADY carries "21" at Direct3d11_PixelShaderProgramData.cpp:153 + :303 — Plan 17-02 bumped 20->21 — so 17-07 must bump 21->22 at BOTH sites; a 20->21 bump would be a stale no-op]
   - Pre-execution spike (MEDIUM 'targeted COLOR0/TEXCOORD-only spike') in Plan 17-07 Task 0 before full implementation
 
   Keep the existing dynamic-fallback PS as the safety net (do NOT remove `selectFallbackPSForVS`);

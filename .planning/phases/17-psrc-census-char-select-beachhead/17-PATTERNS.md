@@ -142,14 +142,14 @@ bool compilePixelShaderFromHlsl(
     Microsoft::WRL::ComPtr<ID3D11PixelShader> &outComPtr);   // returns true + binds on success
 ```
 
-**It already does everything** — defines (incl. `D3D11_PROFILE`, `D3D11_REWRITE_VERSION="20"`),
+**It already does everything** — defines (incl. `D3D11_PROFILE`, `D3D11_REWRITE_VERSION="21"` in the live tree — Round-5 review item 5: Plan 17-02 already bumped 20->21, verified :153 + :303; a future generator/rewrite change must bump to "22"),
 cache lookup, `HlslRewrite::applyToMainSource`, `D3DCompile` with the proven flag set
 (`ENABLE_BACKWARDS_COMPATIBILITY` + `PACK_MATRIX_ROW_MAJOR`, STRICTNESS dropped),
 `ShaderCache::store`, then `CreatePixelShader` into `outComPtr` (`:147-260`, VERIFIED). Do NOT
 re-implement any of it.
 
 > CACHE-INVALIDATION RULE (Runtime State Inventory): if you change the rewrite rules or the PS
-> compile generator, BUMP `D3D11_REWRITE_VERSION` (`:151`, currently `"20"`) so stale `.cso`
+> compile generator, BUMP `D3D11_REWRITE_VERSION` (`:153` + `:303`, currently `"21"` in the live tree per Round-5 item 5 — Plan 17-02 bumped 20->21; next bump is "22") so stale `.cso`
 > caches invalidate. Otherwise a stale cache masquerades as a success.
 
 **The ctor to wire** (`Direct3d11_PixelShaderProgramData.cpp:716-756`, VERIFIED — currently
