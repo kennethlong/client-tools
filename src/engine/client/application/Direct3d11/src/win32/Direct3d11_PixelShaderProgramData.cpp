@@ -148,7 +148,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "20" });   // Plan 11-09.15 Iter-29B: restore Iter-28 `tex*color` on ui.vsh branch so panels look correct during the drawQuadList-call diagnostic that lands in this iter. PS-shape exploration is suspended -- raw-tex output (Iter-29A3) still showed no fonts, which rules out the PS-shape hypothesis space and points to a routing/binding issue we need data to localize.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "21" });   // Plan 17-02 Task 1 SUB-STEP 1d: bump 20 -> 21 to invalidate stale .cso caches for the new non-fatal PSRC-recompile lane (D3DCompile sourceLen now strlen-derived per R3-02g instead of m_psrcLen-with-trailing-NUL; a stale .cso entry produced under the prior cache contract could otherwise mask a regression). Prior Iter-29B note (Plan 11-09.15) preserved in version history.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -258,6 +258,142 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			outComPtr.GetAddressOf());
 		FATAL_DX_HR("Direct3d11_PixelShaderProgramData::CreatePixelShader failed: %s", hr);
 		return true;
+	}
+
+	// ------------------------------------------------------------------
+	// Plan 17-02 HIGH-1 + HIGH-2 sibling helper: NON-FATAL recompile for
+	// asset PSRC source. Mirrors compilePixelShaderFromHlsl byte-for-byte
+	// EXCEPT:
+	//   (i)  D3DCompile FAILED -> log + return false (no FATAL); outBlob
+	//        left empty; outComPtr left empty.
+	//   (ii) CreatePixelShader FAILED -> log + return false (no FATAL_DX_HR).
+	//   (iii) On success, outBytecodeBlob is assigned the compiled DXBC blob
+	//        so the caller can retain it for downstream reflection (Plan 03
+	//        consumes the cache populated by the ctor reflect-once block).
+	//
+	// The original compilePixelShaderFromHlsl is PRESERVED unchanged for
+	// the install-time magenta fallback PS path (Direct3d11_PixelShaderProgramData::
+	// install at :616) where a compile failure IS a developer bug worth
+	// crashing on (HIGH-1 rationale). Only the asset-PS ctor uses this
+	// non-fatal sibling.
+	//
+	// Inherits the same define list + flag set + cache contract -- the
+	// only behavioral diffs are the two FATAL replacements and the blob
+	// retention. Cache key parity is preserved (same hashSource inputs).
+	bool tryCompilePixelShaderFromHlslNoFatal(
+		char const *sourceText,
+		size_t sourceLen,
+		char const *displayName,
+		Microsoft::WRL::ComPtr<ID3D11PixelShader> &outComPtr,
+		Microsoft::WRL::ComPtr<ID3DBlob>          &outBytecodeBlob)
+	{
+		if (!sourceText || sourceLen == 0)
+			return false;
+
+		// Mirror the FATAL helper's define list verbatim so cache keys agree
+		// for identical (source, define) inputs. The D3D11_REWRITE_VERSION
+		// bump landed in the FATAL helper above (sub-step 1d); we propagate
+		// the same value here for cache coherence.
+		std::vector<D3D_SHADER_MACRO> defines;
+		defines.push_back({ "POSITION",               "SV_POSITION" });
+		defines.push_back({ "D3D11",                  "1" });
+		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "21" });  // Plan 17-02: must match the FATAL helper (above) so the .cso cache hash is shared
+		defines.push_back({ nullptr,                  nullptr });
+
+		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
+			sourceText, sourceLen, defines.data());
+
+		ComPtr<ID3DBlob> blob;
+		if (!Direct3d11_ShaderCache::tryLoad(hash, blob))
+		{
+			std::vector<char> rewrittenSource;
+			Direct3d11_HlslRewrite::applyToMainSource(
+				sourceText, sourceLen, rewrittenSource, displayName);
+
+			ComPtr<ID3DBlob> errors;
+			UINT flags = 0;
+#ifdef _DEBUG
+			flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
+			flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+			flags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
+
+			char const *virtName = (displayName && *displayName) ? displayName : "pixel_shader.psh";
+
+			HRESULT const compileHr = D3DCompile(
+				rewrittenSource.data(),
+				rewrittenSource.size(),
+				virtName,
+				defines.data(),
+				Direct3d11_CompileIncludeHandler::getInstance(),
+				"main",
+				kPixelShaderProfile,
+				flags,
+				0,
+				blob.GetAddressOf(),
+				errors.GetAddressOf());
+
+			if (FAILED(compileHr))
+			{
+				// HIGH-1: NON-FATAL. Log the error blob so the magenta tombstone
+				// for this shader's draws has a diagnostic trail and continue.
+				char const *err = errors ? static_cast<char const *>(errors->GetBufferPointer()) : "no error blob";
+				DEBUG_REPORT_LOG_PRINT(true,
+					("tryCompilePixelShaderFromHlslNoFatal: D3DCompile %s '%s' failed (hr=0x%08lX): %s\n",
+					kPixelShaderProfile, virtName, static_cast<unsigned long>(compileHr), err));
+				return false;
+			}
+			if (errors && errors->GetBufferSize() > 0)
+			{
+				DEBUG_REPORT_LOG_PRINT(true,
+					("tryCompilePixelShaderFromHlslNoFatal: '%s' warnings:\n%s\n",
+					virtName, static_cast<char const *>(errors->GetBufferPointer())));
+			}
+
+			Direct3d11_ShaderCache::store(hash, blob.Get());
+		}
+
+		HRESULT const createHr = Direct3d11_Device::getDevice()->CreatePixelShader(
+			blob->GetBufferPointer(),
+			blob->GetBufferSize(),
+			nullptr,
+			outComPtr.GetAddressOf());
+		if (FAILED(createHr))
+		{
+			// HIGH-1: NON-FATAL. Magenta tombstone owns the draw.
+			DEBUG_REPORT_LOG_PRINT(true,
+				("tryCompilePixelShaderFromHlslNoFatal: CreatePixelShader '%s' failed hr=0x%08lX\n",
+				(displayName && *displayName) ? displayName : "pixel_shader.psh",
+				static_cast<unsigned long>(createHr)));
+			return false;
+		}
+
+		// HIGH-2: hand the compiled DXBC blob to the caller so the program-data
+		// object can retain it for downstream reflection (Plan 03 consumes the
+		// cache populated by the ctor's reflect-once block).
+		outBytecodeBlob = blob;
+		return true;
+	}
+
+	// ------------------------------------------------------------------
+	// Plan 17-02 R3-02e: one-shot WARN when strncpy_s with _TRUNCATE
+	// actually truncated a reflected POD-field name. Plan 03 looks up
+	// variables by EXACT name match -- a silent truncation produces a
+	// silent zero upload. One shot per process keeps the log from
+	// flooding when many shaders share the same long-named cbuffer.
+	void warnOnceOnTruncation(char const *field, char const *originalName)
+	{
+		static bool s_warned = false;
+		if (s_warned) return;
+		s_warned = true;
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11_PixelShaderProgramData: reflected %s truncated (original: '%s'); "
+			 "Plan 03 looks up variables by EXACT name match -- truncation observed.\n",
+			field        ? field        : "?",
+			originalName ? originalName : "?"));
 	}
 
 	// Heuristic check: pre-compiled D3D9 pixel shader bytecode (PEXE
@@ -743,6 +879,196 @@ Direct3d11_PixelShaderProgramData::Direct3d11_PixelShaderProgramData(ShaderImple
 			("Direct3d11_PixelShaderProgramData: '%s' bytecode begins with DXBC magic -- future SM5 asset detected; size field not yet plumbed (Plan 11-06 work), leaving m_d3dPS NULL\n",
 			pixelShaderProgram.getFileName()));
 		return;
+	}
+
+	// ------------------------------------------------------------------
+	// Plan 17-02 (D-09 recompile-first): if Plan 17-01's PSRC retain landed
+	// the original source text on the pixel-shader program AND it's a
+	// //hlsl shader (R3-02c classification: BOM/whitespace-aware first-line
+	// lowercase-first-7 compare), recompile via the NON-FATAL sibling helper
+	// (HIGH-1). On success, m_d3dPS holds a real ID3D11PixelShader,
+	// m_psBytecodeBlob retains the DXBC for downstream reflection, and the
+	// reflected cbuffer layout + PS input signature are cached on this
+	// program-data object for Plan 03 to consume (HIGH-2). Failures fall
+	// through to the existing PEXE-reject log so the magenta tombstone
+	// (Plan 11-09 Iter-2 ms_fallbackPS / Iter-4 per-VS dynamic PS) owns
+	// THIS shader's draws.
+	{
+		char const * const psrcText = pixelShaderProgram.m_psrcText;
+		int          const psrcLen  = pixelShaderProgram.m_psrcLen;
+		if (psrcText && psrcLen >= 7)
+		{
+			// R3-02c (parity with Plan 17-01 R3-01c): skip leading whitespace +
+			// a possible UTF-8 BOM before the lowercase-first-7 compare.
+			// ShaderBuilder PixelShaderProgramView.cpp:301-308 classifies the
+			// FIRST LINE, not byte 0; BOM/newline-prefixed PSRC must NOT
+			// misclassify as asm.
+			int hlslStart = 0;
+			if (psrcLen >= 3
+				&& static_cast<unsigned char>(psrcText[0]) == 0xEF
+				&& static_cast<unsigned char>(psrcText[1]) == 0xBB
+				&& static_cast<unsigned char>(psrcText[2]) == 0xBF)
+			{
+				hlslStart = 3;
+			}
+			while (hlslStart < psrcLen)
+			{
+				char const c = psrcText[hlslStart];
+				if (c != ' ' && c != '\t' && c != '\r' && c != '\n') break;
+				++hlslStart;
+			}
+
+			bool isHlsl = false;
+			if (psrcLen - hlslStart >= 7)
+			{
+				char prefix[8] = {0};
+				for (int i = 0; i < 7; ++i)
+				{
+					char const c = psrcText[hlslStart + i];
+					prefix[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+				}
+				if (std::memcmp(prefix, "//hlsl ", 7) == 0)
+					isHlsl = true;
+			}
+
+			if (isHlsl)
+			{
+				// R3-02g: D3DCompile sourceLen is the SOURCE-TEXT length via
+				// strlen, NOT pixelShaderProgram.m_psrcLen (which per Plan 17-01
+				// R3-01b is the IFF chunk-bytes-consumed length INCLUDING the
+				// trailing NUL). Feeding the chunk length to D3DCompile would
+				// bake an extra NUL byte into the cache key + compile input.
+				size_t const sourceLen = std::strlen(psrcText);
+
+				ComPtr<ID3DBlob> bytecodeBlob;
+				bool const ok = tryCompilePixelShaderFromHlslNoFatal(
+					psrcText, sourceLen,
+					pixelShaderProgram.getFileName(),
+					m_d3dPS, bytecodeBlob);
+				if (ok && bytecodeBlob)
+				{
+					// HIGH-2: retain the DXBC and reflect ONCE here so Plan 03's
+					// per-draw apply() does NOT call D3DReflect.
+					m_psBytecodeBlob = bytecodeBlob;
+
+					ComPtr<ID3D11ShaderReflection> reflector;
+					HRESULT const reflectHr = D3DReflect(
+						bytecodeBlob->GetBufferPointer(),
+						bytecodeBlob->GetBufferSize(),
+						IID_PPV_ARGS(reflector.GetAddressOf()));
+					if (SUCCEEDED(reflectHr) && reflector)
+					{
+						D3D11_SHADER_DESC shaderDesc = {};
+						if (SUCCEEDED(reflector->GetDesc(&shaderDesc)))
+						{
+							ID3D11InfoQueue * const iq = Direct3d11_Device::getInfoQueue();
+
+							// HIGH-2: cache cbuffer layouts (Plan 03 looks up by name).
+							for (UINT i = 0; i < shaderDesc.ConstantBuffers; ++i)
+							{
+								ID3D11ShaderReflectionConstantBuffer *cb = reflector->GetConstantBufferByIndex(i);
+								if (!cb) continue;
+								D3D11_SHADER_BUFFER_DESC cbDesc = {};
+								if (FAILED(cb->GetDesc(&cbDesc))) continue;
+
+								Direct3d11_ReflectedPSCbufferLayout layout = {};
+								// R3-02e: WARN once on truncation.
+								if (cbDesc.Name && std::strlen(cbDesc.Name) >= sizeof(layout.Name))
+									warnOnceOnTruncation("PS-cbuffer.Name", cbDesc.Name);
+								strncpy_s(layout.Name, sizeof(layout.Name),
+								          cbDesc.Name ? cbDesc.Name : "", _TRUNCATE);
+								layout.TotalSize = cbDesc.Size;
+								D3D11_SHADER_INPUT_BIND_DESC bindDesc = {};
+								if (cbDesc.Name
+									&& SUCCEEDED(reflector->GetResourceBindingDescByName(cbDesc.Name, &bindDesc)))
+								{
+									layout.BindPoint = bindDesc.BindPoint;
+								}
+								for (UINT v = 0; v < cbDesc.Variables; ++v)
+								{
+									ID3D11ShaderReflectionVariable *var = cb->GetVariableByIndex(v);
+									if (!var) continue;
+									D3D11_SHADER_VARIABLE_DESC vd = {};
+									if (FAILED(var->GetDesc(&vd))) continue;
+									Direct3d11_ReflectedPSCbufferVar pv = {};
+									if (vd.Name && std::strlen(vd.Name) >= sizeof(pv.Name))
+										warnOnceOnTruncation("PS-cbuffer-var.Name", vd.Name);
+									strncpy_s(pv.Name, sizeof(pv.Name),
+									          vd.Name ? vd.Name : "", _TRUNCATE);
+									pv.StartOffset = vd.StartOffset;
+									pv.Size        = vd.Size;
+									layout.Vars.push_back(pv);
+								}
+								m_reflectedCbufferLayouts.push_back(layout);
+
+								// R3-02b DUAL-ROUTE diagnostic for HIGH-4 + Plan 03 SR-2:
+								// AddApplicationMessage routes via the InfoQueue file sink
+								// (stage/d3d11-debug.log) -- visible under explorer launch
+								// (precedent: emitFirstGeneratorLog :535-540).
+								// DEBUG_REPORT_LOG_PRINT is the live-debug side-channel.
+								char msg[512];
+								_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+									"PS-cbuffer shader='%s' name='%s' bindPoint=%u totalSize=%u vars=%u",
+									pixelShaderProgram.getFileName(),
+									layout.Name, layout.BindPoint, layout.TotalSize,
+									static_cast<unsigned>(layout.Vars.size()));
+								if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+							}
+
+							// HIGH-4: PS input signature dump (cache + R3-02b DUAL-ROUTE log).
+							for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
+							{
+								D3D11_SIGNATURE_PARAMETER_DESC desc = {};
+								if (FAILED(reflector->GetInputParameterDesc(i, &desc))) continue;
+								// Filter SV_* system-value inputs -- they're auto-generated
+								// by the rasterizer, not a VS-output linkage concern.
+								if (desc.SystemValueType != D3D_NAME_UNDEFINED) continue;
+
+								Direct3d11_ReflectedPSInputSig sig = {};
+								if (desc.SemanticName)
+								{
+									if (std::strlen(desc.SemanticName) >= sizeof(sig.SemanticName))
+										warnOnceOnTruncation("PS-input.SemanticName", desc.SemanticName);
+									strncpy_s(sig.SemanticName, sizeof(sig.SemanticName),
+									          desc.SemanticName, _TRUNCATE);
+								}
+								sig.SemanticIndex = desc.SemanticIndex;
+								sig.Register      = desc.Register;
+								sig.Mask          = desc.Mask;
+								sig.ComponentType = desc.ComponentType;
+								m_reflectedPSInputs.push_back(sig);
+
+								// R3-02b DUAL-ROUTE diagnostic for HIGH-4.
+								char msg[256];
+								_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+									"PS-input-sig shader='%s' param='%s%u' register=%u mask=0x%X componentType=%d",
+									pixelShaderProgram.getFileName(),
+									sig.SemanticName, sig.SemanticIndex,
+									sig.Register, sig.Mask, static_cast<int>(sig.ComponentType));
+								if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+							}
+						}
+					}
+					// Reflection failure is NON-FATAL (mirror the VS precedent at
+					// Direct3d11_VertexShaderData.cpp:611-665). Caches stay empty;
+					// Plan 03 must handle the "empty layouts -> skip upload" path.
+					return;   // Recompile success path -- m_d3dPS is bound, caches populated as available.
+				}
+				// HIGH-1: compile failed non-fatally. Log + fall through to the
+				// existing PEXE-reject log so the magenta tombstone path takes
+				// over for THIS shader's draws.
+				DEBUG_REPORT_LOG_PRINT(true,
+					("Direct3d11_PixelShaderProgramData: '%s' //hlsl PSRC recompile FAILED; m_d3dPS left null -> magenta tombstone for this shader's draws\n",
+					pixelShaderProgram.getFileName()));
+			}
+			// else: PSRC is asm or some other prefix. Per SR-3 (handled by
+			// Plan 17-02 Task 0 census-gate decision), asm port is OUT OF SCOPE
+			// for this plan -- 17-02B (placeholder) is the future asm lane.
+			// Fall through to the existing PEXE-reject log so the magenta
+			// tombstone applies for THIS shader.
+		}
 	}
 
 	// Current pre-compiled D3D9 bytecode case. We CANNOT pass this to
