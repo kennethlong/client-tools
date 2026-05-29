@@ -36,6 +36,7 @@
 #include <algorithm>      // Iter-4: std::sort
 #include <cstdio>         // Iter-4: snprintf
 #include <cstring>
+#include <set>            // Plan 17-04.X diagnostic: one-shot-per-fileName PSRC dump
 #include <string>         // Iter-4: HLSL generator builds std::string source
 #include <vector>
 #include <d3d11.h>
@@ -939,6 +940,45 @@ Direct3d11_PixelShaderProgramData::Direct3d11_PixelShaderProgramData(ShaderImple
 				// trailing NUL). Feeding the chunk length to D3DCompile would
 				// bake an extra NUL byte into the cache key + compile input.
 				size_t const sourceLen = std::strlen(psrcText);
+
+				// Plan 17-04.X DIAGNOSTIC: dump retained HLSL PSRC source text to
+				// disk, one-shot per unique fileName. The post-Plan-17-04 boot
+				// surfaced that the reflected SwgVertexConstants cbuffer has
+				// generic packedRegister0-4 variable names instead of the
+				// material[N] / materialDiffuse / materialSpecular / materialEmissive
+				// names Plan 17-04 Task 2 assumed. The actual semantic mapping
+				// (which packedRegisterN corresponds to which D3D9 c-register
+				// content) lives in the asset PSRC source, so we dump it here for
+				// inspection. File sink: stage/plan-17-04x-psrc-source-dump.txt
+				// (resolves to stage/stage/... per cwd convention). Per-fileName
+				// one-shot via static map. Bounded by the 22 unique HLSL PS
+				// programs from Plan 17-01's census. REMOVE this block once the
+				// mapping is decoded into writeVarByName.
+				{
+					static std::set<std::string> s_dumpedFileNames;
+					char const * const fileName = pixelShaderProgram.getFileName();
+					std::string const key = fileName ? fileName : "(null)";
+					if (s_dumpedFileNames.find(key) == s_dumpedFileNames.end())
+					{
+						s_dumpedFileNames.insert(key);
+						FILE *fp = nullptr;
+						fopen_s(&fp, "stage/plan-17-04x-psrc-source-dump.txt", "ab");
+						if (fp)
+						{
+							char header[512];
+							int const headerLen = _snprintf_s(header, sizeof(header), _TRUNCATE,
+								"\n=== PSRC SOURCE FOR '%s' (sourceLen=%zu) ===\n",
+								key.c_str(), sourceLen);
+							if (headerLen > 0)
+								fwrite(header, 1, static_cast<size_t>(headerLen), fp);
+							fwrite(psrcText, 1, sourceLen, fp);
+							static char const footer[] = "\n=== END ===\n";
+							fwrite(footer, 1, sizeof(footer) - 1, fp);
+							fflush(fp);
+							fclose(fp);
+						}
+					}
+				}
 
 				ComPtr<ID3DBlob> bytecodeBlob;
 				bool const ok = tryCompilePixelShaderFromHlslNoFatal(

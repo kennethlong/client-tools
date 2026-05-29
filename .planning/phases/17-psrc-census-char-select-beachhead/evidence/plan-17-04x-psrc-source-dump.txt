@@ -1,0 +1,1136 @@
+
+=== PSRC SOURCE FOR 'pixel_program/a_lava_alpha_ps14.psh' (sourceLen=843) ===
+//hlsl ps_1_4
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap 	: register(s0);
+sampler noiseMap 	: register(s1);
+sampler colorRamp 	: register(s2);
+
+#define time userConstants[0].r
+#define colorScale materialSpecularColor.r
+#define colorBias materialSpecularColor.g
+
+float4 main
+(
+	in float2 tcs_MAIN   	: TEXCOORD0,
+	in float3 noiseTc   	: TEXCOORD1
+)
+: COLOR 
+{
+   	float4 result;
+
+	//Sample alpha map
+	float alphaMask = tex2D(diffuseMap, tcs_MAIN).a;
+
+  	// Sample the base noise
+   	float index = tex3D(noiseMap, noiseTc);
+   	index = (index * colorScale) + colorBias;
+
+	//Sample color ramp
+   	float4 lava = tex1D(colorRamp, index);
+  
+   	result.rgb = lava.rgb;
+	result.a = alphaMask * alphaFadeOpacity;
+
+return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/a_bloom_mask_pass_ps20.psh' (sourceLen=645) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float2 tcs_MAIN	: TEXCOORD0
+)
+: COLOR
+{
+	float4 result;
+		
+
+	//Sample texture with UV
+	float bloomMask = tex2D(diffuseMap, tcs_MAIN).a;
+
+	float bloomStrength = textureFactor.rgb;
+	
+	result.rgb = 0.0f;
+	float totalBloomValue = bloomMask * bloomStrength;
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+		result = saturate(alphaFadeOpacity + (1.0f - alphaFadeOpacityEnabled)) * totalBloomValue;
+	else
+		result = totalBloomValue;	
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/2d_heat_composite.psh' (sourceLen=972) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler heatMap : register(s1);
+
+float4 main
+(
+	in float2 tc: TEXCOORD0
+)
+: COLOR
+{
+	float4 heat = tex2D(heatMap, tc);
+	float heatIntensity = heat.r;
+
+	if (heatIntensity < 0.001)
+		clip(-1.0);
+
+	float4 color = 0.0;
+	
+	float showRectColorFactor = userConstants[0][1];
+
+	float xfactor = heat.g * heatIntensity;
+	float yfactor = heat.b * heatIntensity;
+
+	float2 oldTc = tc;
+
+	tc.y += (yfactor - 0.5f) * 0.01;
+	tc.x += (xfactor - 0.5f) * 0.01;
+
+	//-- make sure we aren't sampling from somewhere inappropriate (non-hot)
+	float heat2 = tex2D(heatMap, tc).r;
+
+	if (heat2 < 0.5)
+	{
+		tc = oldTc;
+	}
+
+	if (showRectColorFactor > 0.0)
+	{
+		color.g = heatIntensity * 0.25;
+		color.b = heatIntensity * 0.25;
+	}		
+
+	float4 base = tex2D(diffuseMap, tc);
+	return base + color;
+}
+
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/a_simple_pp_ps20.psh' (sourceLen=710) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float3 vertexDiffuse        	: COLOR0,
+	in float2 tcs_MAIN	   	: TEXCOORD0,
+	in float3 normal_o	: TEXCOORD1
+)
+: COLOR
+{
+	float4 result;	
+	
+	//Sample texture	
+	float3 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	
+	//Normalize vertex normal
+	normal_o = normalize(normal_o);
+	
+	//light per-pixel
+	float3 light = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+	
+	//Blend lighting and texture
+	result.rgb = diffuseColor * light;
+	result.a = alphaFadeOpacity;
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/zwrite_mask_ps11.psh' (sourceLen=179) ===
+//hlsl ps_1_1
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+float4 main
+(
+
+)
+: COLOR
+{
+	return 0.0f;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/ui_membrane_color2_ps20.psh' (sourceLen=955) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float2 tcs_MAIN	: TEXCOORD0,
+	in float3 normal_w	: TEXCOORD1,
+	in float3 viewer_w	: TEXCOORD2
+)
+: COLOR
+{
+	float4 result;	
+
+	//Sample desaturated texture
+	float desaturatedTexture = intensity(tex2D(diffuseMap, tcs_MAIN));
+	
+	normal_w = normalize(normal_w);
+	viewer_w = normalize(viewer_w);
+
+	float falloff = saturate(dot(normal_w, viewer_w));	
+
+	//Lerp hue/alpha based on falloff - extra color on tf2 help pop the color
+	float4 hue = lerp((textureFactor2 + 0.25f), textureFactor, falloff);
+
+	result.rgb = desaturatedTexture * hue;
+	//Using hard coded value since palette sampling won't provide alpha value to texture factor
+	result.a = 1.375f - falloff;
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+		result.a *= alphaFadeOpacity;
+
+	return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/e_emisadd_masked_vcolor_bloom_ps20.psh' (sourceLen=1294) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float2 tcs_MAIN	: TEXCOORD0,
+	in float4 vertexColor   : COLOR0
+)
+: COLOR
+{
+	float4 result;
+
+	//Fetch the diffuse texture color and color mask
+	float3 diffuseColor;
+	float colorMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		colorMask = sample.a;
+	}
+
+	//Mask vertex colors
+	vertexColor.rgb = lerp(vertexColor.rgb, 1.0f, colorMask);
+
+	//Mix in vertex color, multiply by vertex alpha for additive transparency fading
+	diffuseColor = 	diffuseColor * vertexColor.rgb * vertexColor.a;
+	
+	//Grab bloom strength setting; also bloom needs a mask since this effect alpha blends
+	float bloomStrength = textureFactor.r;
+	float bloomMask = intensity(diffuseColor); 
+
+	//Bloom really blasts an additive pass so scale down the color
+	if (bloomEnabled > 0.0f) 
+		diffuseColor *= (1.0f - bloomStrength*0.4f);
+	
+	//Fading
+	result.rgb = diffuseColor * alphaFadeOpacity;
+	
+	//Bloom fading
+	if (alphaFadeOpacityEnabled > 0.0f)
+		result.a = bloomStrength * bloomMask * alphaFadeOpacity;
+	else
+		result.a = bloomStrength * bloomMask;
+
+	return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/a_specmap_pp_ps20.psh' (sourceLen=1869) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler specularMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float3 normal_o		: TEXCOORD1,
+	in float3 halfAngle_o		: TEXCOORD2
+)
+: COLOR
+{
+	float4 result;
+
+	// fetch the diffuse texture color and specular mask
+	float3 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	float specularMask = tex2D(specularMap, tcs_MAIN).a;
+
+	// normalize all the vectors
+	normal_o = normalize(normal_o);
+	halfAngle_o = normalize(halfAngle_o);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture with the diffuse and specular light
+	result.rgb = (diffuseColor * allDiffuseLight) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/a_alpha_emis_full_ps11.psh' (sourceLen=432) ===
+//hlsl ps_1_1
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float2 tcs_MAIN	: TEXCOORD0
+)
+: COLOR
+{
+	float4 result;	
+
+	//Sample texture with UV
+	float4 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	
+	result.rgb = diffuseColor;
+	result.a = diffuseColor.a * alphaFadeOpacity;
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/e_particle_alpha_emis_full_ps11.psh' (sourceLen=505) ===
+//hlsl ps_1_1
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float4 vertexColor 	: COLOR0,
+	in float2 tcs_MAIN	: TEXCOORD0
+)
+: COLOR
+{
+	float4 result;	
+
+	//Sample texture with UV
+	float4 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	
+	result.rgb = diffuseColor.rgb * vertexColor.rgb;
+	result.a = diffuseColor.a * vertexColor.a * alphaFadeOpacity;
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/e_bloom_mask_pass_vcolor_ps20.psh' (sourceLen=696) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float4 vertexColor 	: COLOR0,
+	in float2 tcs_MAIN	: TEXCOORD0
+)
+: COLOR
+{
+	float4 result;
+		
+
+	//Sample texture with UV
+	float bloomMask = tex2D(diffuseMap, tcs_MAIN).a;
+
+	float bloomStrength = textureFactor.rgb;
+	
+	result.rgb = 0.0f;
+	float totalBloomValue = bloomMask * bloomStrength * vertexColor.a;
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+		result = saturate(alphaFadeOpacity + (1.0f - alphaFadeOpacityEnabled)) * totalBloomValue;
+	else
+		result = totalBloomValue;	
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/a_emismap_ps20.psh' (sourceLen=1087) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float3 vertexDiffuse	: COLOR0,
+	in float2 tcs_MAIN	: TEXCOORD0,
+	in float3 normal_o	: TEXCOORD1
+)
+: COLOR
+{
+	float4 result;	
+
+	//Fetch the diffuse texture color
+	float3 diffuseColor;
+	float emisMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		emisMask = sample.a;
+	}
+
+	//Normalize vertex normal
+	normal_o = normalize(normal_o);
+
+	//light per-pixel
+//	float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+//	float3 light = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 light = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+
+	//Apply lighting
+	float3 litTexture = diffuseColor * light;
+
+	//Lerp unlit texture back on top of lighting with mask
+	result.rgb = lerp(litTexture, diffuseColor, emisMask);
+
+	result.a = alphaFadeOpacity;
+
+	return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_specmap_cbmp_ps20.psh' (sourceLen=2067) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float2 tcs_NRML  		: TEXCOORD1,
+	in float3 lightDirection_t	: TEXCOORD2,
+	in float3 halfAngle_t           : TEXCOORD3
+	
+)
+: COLOR
+{
+	float4 result;
+
+	// sample the normal map
+	float3 normal_t = tex2DDxt5CompressedNormal(normalMap, tcs_NRML);
+
+	// fetch the diffuse texture color
+	float3 diffuseColor;
+	float specularMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		specularMask = sample.a;
+	}
+
+	// normalize all the vectors
+	normal_t = normalize(normal_t);
+	halfAngle_t = normalize(halfAngle_t);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(lightDirection_t, normal_t));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(lightDirection_t, normal_t, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture with the diffuse and specular light
+	result.rgb = (diffuseColor * allDiffuseLight * textureFactor.rgb) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_envmask_specmap_ps20.psh' (sourceLen=2273) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap 	: register(s0);
+sampler specularMap	: register(s1);
+sampler envMap 		: register(s2);
+
+float4 main
+(
+	in float3 vertexDiffuse       	: COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN		: TEXCOORD0,
+	in float3 normal_o		: TEXCOORD1,
+	in float3 viewer_o		: TEXCOORD2,
+	in float3 halfAngle_o  		: TEXCOORD3
+)
+: COLOR
+{
+	float4 result;	
+	
+	// Sample color map and env mask
+	float3 diffuseColor;
+	float envMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		envMask = sample.a;
+	}
+	float specularMask = tex2D(specularMap, tcs_MAIN).a;
+	
+	// normalize interpolated vectors
+	normal_o = normalize(normal_o);
+	viewer_o = normalize(viewer_o);
+	halfAngle_o = normalize(halfAngle_o);
+	
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular)* specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// blend lighting and texture and hue
+	float3 diffuseLitSurface = diffuseColor * allDiffuseLight * textureFactor.rgb;
+	
+	// compute reflection
+	float3 envColor = texCUBE(envMap, reflect(-viewer_o, normal_o));
+
+	// lerp masked environment back on after lighting
+	result.rgb = lerp(diffuseLitSurface, envColor, envMask) + allSpecularLight;
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_color2_specmap_cbmp_ps20.psh' (sourceLen=2203) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+sampler specularMap : register(s2);
+
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float2 tcs_NRML  		: TEXCOORD1,
+	in float3 lightDirection_t	: TEXCOORD2,
+	in float3 halfAngle_t           : TEXCOORD3
+	
+)
+: COLOR
+{
+	float4 result;
+
+	//Sample diffuse and hue mask
+	float3 diffuseColor;
+	float hueMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		hueMask = sample.a;
+	}
+
+	float3 normal_t  = tex2DDxt5CompressedNormal(normalMap, tcs_NRML);
+	float specularMask = tex2D(specularMap, tcs_MAIN).a;	
+
+	// normalize all the vectors
+	normal_t = normalize(normal_t);
+	halfAngle_t = normalize(halfAngle_t);
+
+	//Setup hues
+	float3 hue = lerp(textureFactor.rgb, textureFactor2.rgb, hueMask);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(lightDirection_t, normal_t));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(lightDirection_t, normal_t, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture and hue with the diffuse and specular light
+	result.rgb = (diffuseColor * hue * allDiffuseLight) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_spec_pp_ps20.psh' (sourceLen=1735) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float3 vertexDiffuse   : COLOR0,
+	in float3 vertexSpecular  : COLOR1,
+	in float2 tcs_MAIN        : TEXCOORD0,
+	in float3 normal_o	  : TEXCOORD1,
+	in float3 halfAngle_o	  : TEXCOORD2
+)
+: COLOR
+{
+	float4 result;	
+	
+	//Sample texture	
+	float3 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	
+	//Normalize interpolated vectors
+	normal_o = normalize(normal_o);
+	halfAngle_o = normalize(halfAngle_o);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+		
+	//Blend lighting and texture and hue, add specular
+	result.rgb = diffuseColor * allDiffuseLight * textureFactor + allSpecularLight;
+	
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+	
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_color2_pp_ps20.psh' (sourceLen=1096) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float3 vertexDiffuse : COLOR0,
+	in float2 tcs_MAIN 	: TEXCOORD0,
+	in float3 normal_o	: TEXCOORD1
+)
+: COLOR
+{
+	float4 result;
+	
+	// sample diffuse and hue color MAIN
+	float3 diffuseColor;
+	float hueMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		hueMask = sample.a;
+	}
+
+	// setup hues
+	float3 hue = lerp(textureFactor.rgb, textureFactor2.rgb, hueMask);
+
+	// normalize vertex normal
+	normal_o = normalize(normal_o);
+	
+	// light per-pixel
+	//float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+	//float3 light = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 light = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+	
+	// multiply diffuse texture by hues and lighting
+	result.rgb = diffuseColor * hue * light;
+	result.a = alphaFadeOpacity;
+	
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_simple_pp_ps20.psh' (sourceLen=886) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+
+float4 main
+(
+	in float3 vertexDiffuse	: COLOR0,
+	in float2 tcs_MAIN	: TEXCOORD0,
+	in float3 normal_o	: TEXCOORD1
+)
+: COLOR
+{
+	float4 result;	
+	
+	//Sample texture	
+	float3 diffuseColor = tex2D(diffuseMap, tcs_MAIN);
+	
+	//Normalize vertex normal
+	normal_o = normalize(normal_o);
+	
+	//light per-pixel
+//	float  dot3LightIntensity = saturate(dot(dot3LightDirection, normal_o));
+//	float3 light = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 light = calculateHemisphericLighting(dot3LightDirection, normal_o, vertexDiffuse);
+	
+	//Blend lighting and texture
+	result.rgb = diffuseColor * light * textureFactor.rgb;
+	result.a = alphaFadeOpacity;
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_color2_specmap_bump_ps20.psh' (sourceLen=2202) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float2 tcs_NRML  		: TEXCOORD1,
+	in float3 lightDirection_t	: TEXCOORD2,
+	in float3 halfAngle_t           : TEXCOORD3
+	
+)
+: COLOR
+{
+	float4 result;
+
+	//Sample diffuse and hue mask
+	float3 diffuseColor;
+	float hueMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		hueMask = sample.a;
+	}
+
+	float3 normal_t;
+	float specularMask;
+	{
+		float4 sample = tex2D(normalMap, tcs_NRML);
+		normal_t = signAndBias(sample.rgb);
+		specularMask = sample.a;
+	}
+
+	// normalize all the vectors
+	normal_t = normalize(normal_t);
+	halfAngle_t = normalize(halfAngle_t);
+
+	//Setup hues
+	float3 hue = lerp(textureFactor.rgb, textureFactor2.rgb, hueMask);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(lightDirection_t, normal_t));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(lightDirection_t, normal_t, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture and hue with the diffuse and specular light
+	result.rgb = (diffuseColor * hue * allDiffuseLight) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_color2_bump_ps20.psh' (sourceLen=1173) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float2 tcs_MAIN  		: TEXCOORD0,
+	in float2 tcs_NRML 		: TEXCOORD1,
+	in float3 lightDirection_t	: TEXCOORD2
+)
+: COLOR
+{
+	float4 result;
+	
+	//Sample diffuse and hue color MAIN
+	float3 diffuseColor;
+	float hueMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		hueMask = sample.a;
+	}
+	float3 normal_t  = signAndBias(tex2D(normalMap, tcs_NRML));
+
+	//Setup hues
+	float3 hue = lerp(textureFactor.rgb, textureFactor2.rgb, hueMask);
+
+	//Calculate lighting
+	float  dot3LightIntensity = saturate(dot(lightDirection_t, normal_t));
+//	float3 light = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 light = calculateHemisphericLighting(lightDirection_t, normal_t, vertexDiffuse);
+	
+	//Multiply lighting and diffuse texture and hue
+	result.rgb = diffuseColor * hue * light;
+	result.a = alphaFadeOpacity;
+
+	return result;
+}
+
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_specmap_bump_ps20.psh' (sourceLen=2060) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float2 tcs_NRML  		: TEXCOORD1,
+	in float3 lightDirection_t	: TEXCOORD2,
+	in float3 halfAngle_t           : TEXCOORD3
+	
+)
+: COLOR
+{
+	float4 result;
+
+	// sample the normal map
+	float3 normal_t = signAndBias(tex2D(normalMap, tcs_NRML));
+
+	// fetch the diffuse texture color
+	float3 diffuseColor;
+	float specularMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		specularMask = sample.a;
+	}
+
+	// normalize all the vectors
+	normal_t = normalize(normal_t);
+	halfAngle_t = normalize(halfAngle_t);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(lightDirection_t, normal_t));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(lightDirection_t, normal_t, vertexDiffuse);
+
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower);
+
+	float3 allSpecularLightRaw = (dot3SpecularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture with the diffuse and specular light
+	result.rgb = (diffuseColor * allDiffuseLight * textureFactor.rgb) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+=== END ===
+
+=== PSRC SOURCE FOR 'pixel_program/h_color2_specmap_bump_aniso_ps20.psh' (sourceLen=2482) ===
+//hlsl ps_2_0
+
+#include "pixel_program/include/pixel_shader_constants.inc"
+#include "pixel_program/include/functions.inc"
+
+sampler diffuseMap : register(s0);
+sampler normalMap : register(s1);
+
+float4 main
+(
+	in float3 vertexDiffuse         : COLOR0,
+	in float3 vertexSpecular        : COLOR1,
+	in float2 tcs_MAIN 		: TEXCOORD0,	
+	in float2 tcs_NRML  		: TEXCOORD1,
+	in float3 lightDirection	: TEXCOORD2,
+	in float3 halfAngle_t           : TEXCOORD3
+	
+)
+: COLOR
+{
+	float4 result;
+
+	// sample diffuse and hue color MAIN
+	float3 diffuseColor;
+	float hueMask;
+	{
+		float4 sample = tex2D(diffuseMap, tcs_MAIN);
+		diffuseColor = sample.rgb;
+		hueMask = sample.a;
+	}
+	
+	// sample normal map and specular mask
+	float3 normal_t;
+	float specularMask;
+	{
+		float4 sample = tex2D(normalMap, tcs_NRML);
+		normal_t = signAndBias(sample.rgb);
+		specularMask = sample.a;
+	}
+
+	// normalize all the vectors
+	normal_t = normalize(normal_t);
+	halfAngle_t = normalize(halfAngle_t);
+
+	//Setup hues
+	float3 hue = lerp(textureFactor.rgb, textureFactor2.rgb, hueMask);
+
+	//light per-pixel diffuse -- (L.N)
+	float  dot3LightIntensity = saturate(dot(lightDirection, normal_t));
+//	float3 allDiffuseLight = saturate((dot3LightIntensity * dot3LightDiffuseColor) + vertexDiffuse);
+	float3 allDiffuseLight = calculateHemisphericLighting(lightDirection, normal_t, vertexDiffuse);
+	
+	//light per-pixel specular -- (H.N) - power to calculate later
+	float dot3SpecularNoPower = saturate(dot(halfAngle_t, normal_t));
+
+	//Manipulate (H.N) result to give me an aniso-style brightness ramp 
+	float specularIntensity  = calculateFakeAnisotropicSpecularLighting(dot3SpecularNoPower);	
+	
+	//This gets rid of artifacts and give a sorta fresnel effect to the surface	
+	specularIntensity = specularIntensity * dot3LightIntensity;
+
+	float3 allSpecularLightRaw = (specularIntensity * dot3LightSpecularColor * materialSpecularColor + vertexSpecular) * specularMask;
+	float3 allSpecularLight = allSpecularLightRaw;
+	if (bloomEnabled > 0.0f) 
+		allSpecularLight *= bloomSpecularRgbScale;
+
+	// combine the texture and hue with the diffuse and specular light
+	result.rgb = (diffuseColor * hue * allDiffuseLight) + allSpecularLight;	
+
+	if (alphaFadeOpacityEnabled > 0.0f)
+	{
+		result.a = alphaFadeOpacity;
+	}
+	else
+	{
+		result.a = intensity(allSpecularLightRaw);
+		if (bloomEnabled > 0.0f) 
+			result.a *= bloomSpecularAlphaScale;
+	}
+
+	return result;
+}
+
+=== END ===
