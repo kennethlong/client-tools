@@ -61,7 +61,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 
 **Root cause (research + CODEX/Cursor consult):** the engine ships pre-compiled D3D9 PEXE pixel-shader bytecode (`TAG_PEXE`) that `ID3D11Device::CreatePixelShader` rejects, leaving `m_d3dPS` null and falling back to a slot-0-only dynamic PS (or magenta), with per-pass `Pass::apply` constants never uploaded. The fix recompiles the discarded `TAG_PSRC` source (primary: `//hlsl` → `compilePixelShaderFromHlsl`; secondary: asm `PSRC` ported to HLSL → `ps_4_0`; tertiary/narrow: FFP `TextureOperation` generator only for genuine FFP-only passes) and uploads per-pass constants **reflection-driven (D3DReflect)**, not via copied D3D9 register indices. Re-assembling asm just reproduces the rejected D3D9 bytecode — a named landmine.
 
-- [ ] **Phase 17: PSRC Census + Char-Select Beachhead** - Census the real asset PS source, then prove the recompile + reflection-driven constant pipeline on char-select textures, eyes, and head
+- [ ] **Phase 17: PSRC Census + Char-Select Beachhead** - Census the real asset PS source, then prove the recompile + reflection-driven constant pipeline on char-select textures, eyes, and head (completed 2026-05-29)
 - [ ] **Phase 18: Load-Screen Half-Texel Seam** - Eliminate the load-screen centerline seam via the half-pixel UV-mapping fix (independent 2D canary)
 - [ ] **Phase 19: Gamma LUT + Interior Lighting** - Replicate the D3D9 gamma ramp as a LUT post-pass and fix blown-out flat-white interior lighting
 - [ ] **Phase 20: Open-World PS Extension + Minimap** - Extend the PS pipeline to open-world surfaces, multi-stage compositing, and the round minimap
@@ -81,10 +81,11 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
   3. Character eyes render correctly under D3D11 — correct customization-palette color, seated in the face, occluded by the head (verify "not visible through the back of the head" by fresh A/B screenshot, since Iter-44A depth wiring already addressed it — do not re-fold into PS scope) (CHAR-02).
   4. Character head/face multi-stage materials (`sul_*_head.sht`, `sul_eye.sht`) composite their texture stages correctly under D3D11 via the recompiled PSRC program, matching D3D9 (CHAR-03).
   5. Single-stream vs multi-stream skeletal skinning is confirmed (RenderDoc mesh-viewer A/B) before any residual head/mesh weirdness is attributed to the PS; `id=342==0 && id=343==0` in `stage/d3d11-debug.log`; both `rasterMajor=5` and `=11` boot to char-select without crash.
-**Plans**: 3 plans (3 waves — sequential; census gates recompile gates reflection)
+**Plans**: 4 plans (4 waves — sequential; census gates recompile gates reflection gates activation)
 - [x] 17-01-PLAN.md — PSRC retain + flag-gated census on real char-select boot; record HLSL:asm ratio; COMPARISON dir (gating)
 - [x] 17-02-PLAN.md — recompile lane: //hlsl PSRC -> compilePixelShaderFromHlsl -> bind m_d3dPS; CHAR-01 single-stage control A/B
-- [ ] 17-03-PLAN.md — D3DReflect-driven material/textureFactor upload; CHAR-02 eyes + CHAR-03 head A/B; D-08 skinning confirm
+- [x] 17-03-PLAN.md — D3DReflect-driven material/textureFactor upload; CHAR-02 eyes + CHAR-03 head A/B; D-08 skinning confirm
+- [ ] 17-04-PLAN.md — visual parity activation: VS↔PS signature pair validation (eliminates id=343 × 24K) + writeVarByName for SwgVertexConstants material[N] schema (so cbuffer values actually land); CHAR-01/02/03 textured-character A/B at boot
 **UI hint**: yes
 **Mode:** standard
 **Research:** NEEDS per-phase research — (a) census tool is the gating first deliverable (HLSL:asm ratio); (b) which TextureOperation/FFP passes char-select actually exercises; (c) single-stream-skinning-fix vs multi-stream-flip decision.
@@ -177,7 +178,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 14. Vivox Removal | v2.1 | 3/3 | Complete | 2026-05-26 |
 | 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete | 2026-05-27 |
 | 16. v2.1 Tech-Debt Cleanup | v2.1 | 3/3 | Complete | 2026-05-27 |
-| 17. PSRC Census + Char-Select Beachhead | v2.2 | 2/3 | In Progress|  |
+| 17. PSRC Census + Char-Select Beachhead | v2.2 | 3/3 | Complete   | 2026-05-29 |
 | 18. Load-Screen Half-Texel Seam | v2.2 | 0/TBD | Not started | - |
 | 19. Gamma LUT + Interior Lighting | v2.2 | 0/TBD | Not started | - |
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
