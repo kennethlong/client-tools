@@ -811,11 +811,139 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 						return false;
 					};
 
-					bool const wroteDiffuse  = writeVarByName("materialDiffuse",  passDiffuse);
-					bool const wroteSpecular = writeVarByName("materialSpecular", passSpecular);
-					bool const wroteEmissive = writeVarByName("materialEmissive", passEmissive);
+					// Plan 17-04 Task 2: writeVarByName lookups are now SCHEMA-AWARE.
+					//
+					// Plan 17-03's R3-03g flush log proved wroteDiffuse / wroteSpecular /
+					// wroteEmissive were all ZERO across every char-select shader despite
+					// valid source data — because the reflected cbuffer at b0 is the
+					// rewriter-emitted SwgVertexConstants (Direct3d11_HlslRewrite.cpp:761-812
+					// wraps vertex_shader_constants.inc's globals — see HlslRewrite.cpp
+					// for the source rationale) which declares its material members as
+					// elements of a `material[5]` ARRAY, NOT as 5 named scalars
+					// (materialDiffuse / materialSpecular / materialEmissive).
+					//
+					// D3DReflect surfaces array elements as `material[0]`, `material[1]`,
+					// ... so we extend each lookup to try BOTH the array form AND the
+					// original hardcoded name (so a future shader that DOES declare a
+					// plain `materialDiffuse` — e.g. a PS that doesn't `#include` the VS
+					// rewrite header — still works).
+					//
+					// Array index mapping is best-effort against the documented likely
+					// layout (Plan 17-04 PLAN lines 108-114; Plan 17-03 SUMMARY line 252-258
+					// caveat). The .inc is in TRE archives so the executor can't read it
+					// directly; we write to BOTH candidate slots that are plausible per
+					// the two cited slot guesses. Worst case the wrong-slot writes are
+					// overwritten by the right-slot writes from a subsequent pass / shader,
+					// or land in unused cbuffer space — they cannot corrupt the WVP
+					// matrix at material[0] or the lightData array which lives at higher
+					// offsets per the rewriter's section ordering.
+					//
+					// The diagnostic R3-03g flush log below + the new Task-2 discovery
+					// dump (one-shot per shader-name pattern) surface the actual
+					// reflected variable names + offsets so we can pin the exact mapping
+					// from boot evidence and tighten this in a follow-up if needed.
+
+					// Try the array-element form (SwgVertexConstants exposes
+					// material[N] elements per HlslRewrite Rule D wrap), then fall
+					// back to the original hardcoded scalar names so a PS that
+					// declares plain `materialDiffuse` (i.e. doesn't `#include` the
+					// VS rewrite header) still has its values land.
+					//
+					// Slot mapping: per Plan 17-04 PLAN's "likely mapping" (lines
+					// 108-114) — material[0]=diffuse, material[1]=specular,
+					// material[2]=emissive. This is one of two candidate orderings
+					// surveyed by the planner; the other (per Plan 17-03 SUMMARY
+					// caveat line 258 — material[1]=diffuse, material[3]=specular,
+					// material[2]=emissive) corresponds to the D3D9 FFP
+					// ambient/diffuse/specular/emissive/power ordering. The
+					// discovery dump below pins which is correct from boot
+					// evidence; if the FFP ordering proves right, the index
+					// constants here flip in a tightening commit.
+					//
+					// Deliberately ONE candidate per channel (no fallthrough
+					// across array indices) — otherwise a successful write to a
+					// wrong slot would prevent the right slot from getting hit on
+					// the next attempt and could stomp another channel's data.
+					bool const wroteDiffuse  =
+						writeVarByName("material[0]",   passDiffuse)
+						|| writeVarByName("materialDiffuse",  passDiffuse);
+					bool const wroteSpecular =
+						writeVarByName("material[1]",   passSpecular)
+						|| writeVarByName("materialSpecular", passSpecular);
+					bool const wroteEmissive =
+						writeVarByName("material[2]",   passEmissive)
+						|| writeVarByName("materialEmissive", passEmissive);
 					(void)writeVarByName("textureFactor",  passTexFac);
 					(void)writeVarByName("textureFactor2", passTexFac2);
+
+					// Plan 17-04 Task 2 discovery dump: when at least one of the
+					// wrote* flags lands as zero across the head + eye anchor
+					// passes, the R3-03g log captures the FAILED flags but NOT
+					// the actual reflected variable names available in this
+					// shader's cbuffer. Emit a one-shot per-anchor enumeration
+					// of (var.Name, var.StartOffset, var.Size) so the boot
+					// evidence pins the EXACT names + offsets for the
+					// follow-up cbuffer-mapping refinement.
+					//
+					// Gated on the same head / eye shader-name substring
+					// heuristic as R3-03g — exactly two lines land in the
+					// log per boot anchor (one per head pass, one per eye pass,
+					// per layout when wrote* is incomplete).
+					{
+						static bool s_dumpedHeadVars = false;
+						static bool s_dumpedEyeVars  = false;
+						char const *shaderNameDbg = "?";
+						if (m_shader)
+						{
+							CrcString const &templateNameDbg = m_shader->getStaticShaderTemplate().getName();
+							char const * const snDbg = templateNameDbg.getString();
+							if (snDbg && *snDbg) shaderNameDbg = snDbg;
+						}
+						bool const isHeadDbg = std::strstr(shaderNameDbg, "head") != nullptr;
+						bool const isEyeDbg  = std::strstr(shaderNameDbg, "eye")  != nullptr;
+						bool const incomplete = !(wroteDiffuse && wroteSpecular && wroteEmissive);
+						bool const fire = incomplete
+							&& ((isHeadDbg && !s_dumpedHeadVars) || (isEyeDbg && !s_dumpedEyeVars));
+						if (fire)
+						{
+							if (isHeadDbg) s_dumpedHeadVars = true;
+							if (isEyeDbg)  s_dumpedEyeVars  = true;
+
+							// Header line.
+							{
+								char headerMsg[512];
+								_snprintf_s(headerMsg, sizeof(headerMsg), _TRUNCATE,
+									"Plan 17-04 Task 2 cbuffer-vars-discovery shader='%s' layoutName='%s' bindPoint=%u totalSize=%u varsCount=%u wrote(D,S,E)=(%d,%d,%d) — enumerating reflected variables:",
+									shaderNameDbg,
+									(layout.Name && layout.Name[0]) ? layout.Name : "(empty)",
+									layout.BindPoint, layout.TotalSize,
+									static_cast<unsigned>(layout.Vars.size()),
+									wroteDiffuse  ? 1 : 0,
+									wroteSpecular ? 1 : 0,
+									wroteEmissive ? 1 : 0);
+								if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+									iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, headerMsg);
+								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", headerMsg));
+							}
+
+							// Per-variable enumeration. One line per variable
+							// so long lists don't truncate; the InfoQueue file
+							// sink accepts each as a separate record.
+							for (size_t vi = 0; vi < layout.Vars.size(); ++vi)
+							{
+								auto const &v = layout.Vars[vi];
+								char varMsg[320];
+								_snprintf_s(varMsg, sizeof(varMsg), _TRUNCATE,
+									"Plan 17-04 Task 2 cbuffer-vars-discovery shader='%s' var[%u]: name='%s' startOffset=%u size=%u",
+									shaderNameDbg,
+									static_cast<unsigned>(vi),
+									v.Name, v.StartOffset, v.Size);
+								if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+									iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, varMsg);
+								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", varMsg));
+							}
+						}
+					}
 
 					// Mirror writes into the shared shadow so setPixelShaderUserConstants_impl's
 					// slot-2 flush sees the SAME material values when the bound layout binds

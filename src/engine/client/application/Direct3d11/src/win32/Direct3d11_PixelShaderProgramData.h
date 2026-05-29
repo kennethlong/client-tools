@@ -120,6 +120,54 @@ public:
 	std::vector<Direct3d11_ReflectedPSCbufferLayout> const &    getReflectedCbufferLayouts() const;
 	std::vector<Direct3d11_ReflectedPSInputSig> const &         getReflectedPSInputs() const;
 
+	// Plan 17-04 Task 1: VS<->PS signature pair compatibility gate.
+	//
+	// Plan 17-02 wired the recompile lane so EVERY //hlsl PSRC becomes a
+	// real ID3D11PixelShader. Direct3d11_StateCache::applyPreDrawState
+	// pre-17-04 then ALWAYS chose ms_currentPSData->getPixelShader() over
+	// the VS-matched selectFallbackPSForVS path (Phase 11 Iter-3's
+	// buildHlslForVSOutputs PS). For character-body shaders the
+	// independently compiled VS output signature and asset PS input
+	// signature land at different register positions; D3D11's
+	// register-position-strict stage linkage fires id=343 24K+ per session
+	// and the PS reads zero/garbage for missing interpolators -> flat-black
+	// character silhouette.
+	//
+	// This validator is consulted at bind time. When it returns true the
+	// asset PS is safe to bind; when false the caller falls back to
+	// selectFallbackPSForVS (whose Variant T / per-VS PS is generated to
+	// mirror the VS output signature register-for-register and therefore
+	// IS compatible by construction).
+	//
+	// Validation contract (per cross-AI CONSULT-vs-ps-interpolator-mismatch
+	// SYNTHESIS at .planning/research/):
+	//   * For every reflected PS input (user semantics only -- SV_* are
+	//     already filtered out at Plan 17-02 D3DReflect-once population),
+	//     locate a VS output with the SAME (SemanticName, SemanticIndex)
+	//     AND the same Register slot.
+	//   * Component types must match (PS reading float vs VS writing int
+	//     is incompatible).
+	//   * The PS read mask must be a SUBSET of the VS write mask -- a VS
+	//     writing xy (mask 0x3) is incompatible with a PS reading xyzw
+	//     (mask 0xF) because the upper components are undefined.
+	//   * TEXCOORD packing (two semantics sharing one register via
+	//     complementary masks) is handled by matching each semantic
+	//     independently -- the loop already does this because it walks
+	//     semantics, not registers.
+	//
+	// Logging: per-(VS, PS) pair compatibility result is logged ONCE per
+	// cache entry (not per draw) via DEBUG_REPORT_LOG_PRINT + the
+	// ID3D11InfoQueue file sink (R3-02b dual-route precedent from Plan
+	// 17-02 -- visible in stage/d3d11-debug.log under explorer launch).
+	//
+	// Pass null vs as a defensive convenience -- returns true (i.e. let
+	// the caller bind the asset PS) since there is no VS to validate
+	// against; this matches the pre-17-04 default behavior. Pass null ps
+	// is undefined-behavior territory and is asserted at callsite.
+	static bool isCompatibleWithVS(
+		Direct3d11_VertexShaderData       const *vs,
+		Direct3d11_PixelShaderProgramData const *ps);
+
 	// Plan 11-09 Iter-2: minimal magenta pass-through PS, compiled in
 	// install(). applyPreDrawState binds this when ms_currentPSData has
 	// no real PS (per Plan 11-05 PEXE caveat) AND getOrCompilePSForVS
