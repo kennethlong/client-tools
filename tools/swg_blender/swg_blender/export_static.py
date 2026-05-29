@@ -116,6 +116,8 @@ def export_static_mesh(
     objects: list[Any] | None = None,
     scene: SwgScene | None = None,
     validate_after_write: bool = False,
+    rebuild_appearance: bool = True,
+    optimize_indices: bool = True,
     shader_stub_reference: str | Path | None = None,
     shader_output_dir: str | Path | None = None,
     shader_texture_overrides: dict[str, str] | None = None,
@@ -139,8 +141,8 @@ def export_static_mesh(
         scene = SwgScene(
             meshes=meshes,
             hardpoints=hardpoints,
-            rebuild_appearance=True,
-            optimize_indices=True,
+            rebuild_appearance=rebuild_appearance,
+            optimize_indices=optimize_indices,
         )
 
     mesh_path = Path(filepath)

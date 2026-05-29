@@ -111,9 +111,119 @@ def _build_global_skin_pools(mesh: SwgMesh) -> tuple[
     )
 
 
+def _append_mesh_to_skin_pools(
+    mesh: SwgMesh,
+    *,
+    global_positions: list[Vector3],
+    position_index: dict[tuple[float, float, float], int],
+    position_weights: dict[int, tuple[Weight, ...]],
+    global_normals: list[Vector3],
+    normal_index: dict[tuple[float, float, float], int],
+) -> tuple[list[int], list[int]]:
+    shader_vert_count = len(mesh.positions)
+    if shader_vert_count == 0:
+        raise ValueError("mesh has no vertices to export")
+
+    normals = mesh.normals if mesh.normals else [(0.0, 0.0, 1.0)] * shader_vert_count
+    if len(normals) != shader_vert_count:
+        raise ValueError("normal count must match position count")
+    if len(mesh.bone_weights) != shader_vert_count:
+        raise ValueError("bone weight count must match position count")
+
+    position_indices: list[int] = []
+    normal_indices: list[int] = []
+
+    for vert_idx in range(shader_vert_count):
+        pos = mesh.positions[vert_idx]
+        pos_key = _vec3_key(pos)
+        if pos_key not in position_index:
+            position_index[pos_key] = len(global_positions)
+            global_positions.append(pos)
+            position_weights[position_index[pos_key]] = _weights_key(mesh.bone_weights[vert_idx])
+        else:
+            global_idx = position_index[pos_key]
+            if _weights_key(mesh.bone_weights[vert_idx]) != position_weights[global_idx]:
+                raise ValueError(
+                    f"shader vertices {vert_idx} and pool index {global_idx} share a bind "
+                    "position but have different skin weights"
+                )
+
+        norm = normals[vert_idx]
+        norm_key = _vec3_key(norm)
+        if norm_key not in normal_index:
+            normal_index[norm_key] = len(global_normals)
+            global_normals.append(norm)
+
+        position_indices.append(position_index[pos_key])
+        normal_indices.append(normal_index[norm_key])
+
+    return position_indices, normal_indices
+
+
+def _finalize_skin_pools(
+    *,
+    global_positions: list[Vector3],
+    position_weights: dict[int, tuple[Weight, ...]],
+    global_normals: list[Vector3],
+) -> tuple[list[Vector3], list[Vector3], list[int], list[Weight]]:
+    weight_counts: list[int] = []
+    flat_weights: list[Weight] = []
+    for global_idx in range(len(global_positions)):
+        weights = position_weights[global_idx]
+        weight_counts.append(len(weights))
+        flat_weights.extend(weights)
+    return global_positions, global_normals, weight_counts, flat_weights
+
+
+def _build_multi_shader_skin_pools(
+    meshes: list[SwgMesh],
+) -> tuple[
+    list[Vector3],
+    list[Vector3],
+    list[int],
+    list[Weight],
+    list[tuple[list[int], list[int]]],
+]:
+    global_positions: list[Vector3] = []
+    position_index: dict[tuple[float, float, float], int] = {}
+    position_weights: dict[int, tuple[Weight, ...]] = {}
+    global_normals: list[Vector3] = []
+    normal_index: dict[tuple[float, float, float], int] = {}
+    per_shader: list[tuple[list[int], list[int]]] = []
+
+    for mesh in meshes:
+        per_shader.append(
+            _append_mesh_to_skin_pools(
+                mesh,
+                global_positions=global_positions,
+                position_index=position_index,
+                position_weights=position_weights,
+                global_normals=global_normals,
+                normal_index=normal_index,
+            )
+        )
+
+    gp, gn, wc, fw = _finalize_skin_pools(
+        global_positions=global_positions,
+        position_weights=position_weights,
+        global_normals=global_normals,
+    )
+    return gp, gn, wc, fw, per_shader
+
+
 def build_skmg_bind_pools(mesh: SwgMesh):
     """Return global bind pools and index maps used by SKMG export."""
     return _build_global_skin_pools(mesh)
+
+
+def _psdt_dot3_indices(mesh: SwgMesh, dot3_vectors: list[Vector3]) -> list[int]:
+    shader_dot3 = shader_dot3_from_mesh_uvs(mesh)
+    if not shader_dot3:
+        return []
+    if dot3_vectors:
+        return dot3_indices_for_pool(shader_dot3, dot3_vectors)
+    _, indices = build_dot3_pools(shader_dot3)
+    return indices
 
 
 def write_skeletal_mesh(scene: SwgScene, *, version: str = "0004") -> bytes:
@@ -122,20 +232,31 @@ def write_skeletal_mesh(scene: SwgScene, *, version: str = "0004") -> bytes:
     if version != "0004":
         raise ValueError("only SKMG 0004 export is implemented")
 
-    if len(scene.meshes) != 1:
-        raise ValueError("only single-shader SKMG export is implemented")
-    mesh = scene.meshes[0]
-    (
-        global_positions,
-        global_normals,
-        position_indices,
-        normal_indices,
-        weight_counts,
-        flat_weights,
-    ) = _build_global_skin_pools(mesh)
+    meshes = scene.meshes
+    transform_names = meshes[0].transform_names
+    skeleton_names = meshes[0].skeleton_template_names
+    for mesh in meshes[1:]:
+        if mesh.transform_names != transform_names:
+            raise ValueError("all shader groups must share the same transform names")
 
-    transform_names = mesh.transform_names
-    skeleton_names = mesh.skeleton_template_names
+    if len(meshes) == 1:
+        (
+            global_positions,
+            global_normals,
+            position_indices,
+            normal_indices,
+            weight_counts,
+            flat_weights,
+        ) = _build_global_skin_pools(meshes[0])
+        per_shader = [(meshes[0], position_indices, normal_indices)]
+    else:
+        global_positions, global_normals, weight_counts, flat_weights, index_maps = (
+            _build_multi_shader_skin_pools(meshes)
+        )
+        per_shader = [
+            (mesh, pos_idx, norm_idx)
+            for mesh, (pos_idx, norm_idx) in zip(meshes, index_maps, strict=True)
+        ]
 
     max_per_vertex = max(weight_counts) if weight_counts else 0
 
@@ -148,7 +269,7 @@ def write_skeletal_mesh(scene: SwgScene, *, version: str = "0004") -> bytes:
             make_chunk_int32(len(global_positions)),
             make_chunk_int32(len(flat_weights)),
             make_chunk_int32(len(global_normals)),
-            make_chunk_int32(1),
+            make_chunk_int32(len(meshes)),
             make_chunk_int32(len(scene.blend_targets)),
             *(
                 make_chunk_int16(v)
@@ -178,13 +299,12 @@ def write_skeletal_mesh(scene: SwgScene, *, version: str = "0004") -> bytes:
     )
 
     dot3_vectors = list(scene.dot3_vectors)
-    dot3_indices: list[int] = []
-    shader_dot3 = shader_dot3_from_mesh_uvs(mesh)
-    if shader_dot3:
-        if dot3_vectors:
-            dot3_indices = dot3_indices_for_pool(shader_dot3, dot3_vectors)
-        else:
-            dot3_vectors, dot3_indices = build_dot3_pools(shader_dot3)
+    if not dot3_vectors:
+        for mesh in meshes:
+            shader_dot3 = shader_dot3_from_mesh_uvs(mesh)
+            if shader_dot3:
+                dot3_vectors, _ = build_dot3_pools(shader_dot3)
+                break
     if dot3_vectors:
         body += write_global_dot3_chunk(dot3_vectors)
 
@@ -192,12 +312,14 @@ def write_skeletal_mesh(scene: SwgScene, *, version: str = "0004") -> bytes:
     if scene.occlusion.zone_names:
         body += write_occlusion_chunks(scene.occlusion)
     body += b"".join(scene.skmg_pre_psdt_blocks)
-    body += _write_psdt(
-        mesh,
-        position_indices=position_indices,
-        normal_indices=normal_indices,
-        dot3_indices=dot3_indices,
-    )
+    for mesh, position_indices, normal_indices in per_shader:
+        dot3_indices = _psdt_dot3_indices(mesh, dot3_vectors)
+        body += _write_psdt(
+            mesh,
+            position_indices=position_indices,
+            normal_indices=normal_indices,
+            dot3_indices=dot3_indices or None,
+        )
     body += b"".join(scene.skmg_post_psdt_blocks)
 
     return make_form("SKMG", make_form(version, body))

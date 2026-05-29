@@ -79,4 +79,69 @@ class SWGExportSettings(PropertyGroup):
     )
 
 
-CLASSES = (SWGExportSettings,)
+class SWGCreatureProjectSettings(PropertyGroup):
+    """M16 multi-part creature TRE workspace (SAT -> LMG -> MGN)."""
+
+    workspace_dir: StringProperty(
+        name="Workspace",
+        description="serverdata layout folder (swg_tre_project.json lives here)",
+        subtype="DIR_PATH",
+        default="",
+    )
+    sat_relpath: StringProperty(
+        name="SAT path",
+        description="TreeFile path to root .sat, e.g. appearance/abyssin_m.sat",
+        default="appearance/abyssin_m.sat",
+    )
+    tre_path: StringProperty(
+        name="Source TRE",
+        description="Optional .tre to extract assets from (retail zlib)",
+        subtype="FILE_PATH",
+        default="",
+    )
+    copy_textures: BoolProperty(
+        name="Copy textures on import",
+        description="Copy DDS from shaders when materializing workspace",
+        default=True,
+    )
+    ignore_blend_targets: BoolProperty(
+        name="Ignore blend targets",
+        description="Skip shape keys when exporting .mgn from Blender",
+        default=False,
+    )
+    rebuild_rsp: BoolProperty(
+        name="Rebuild rsp on export",
+        description="Regenerate rsp/*.rsp after export",
+        default=True,
+    )
+    pack_tre: BoolProperty(
+        name="Pack TRE after export",
+        description="Run TreeFileBuilder after export (requires exe)",
+        default=False,
+    )
+
+
+class SWGBuildingProjectSettings(PropertyGroup):
+    """M17 building TRE workspace (POB -> cells -> mesh)."""
+
+    workspace_dir: StringProperty(
+        name="Workspace",
+        subtype="DIR_PATH",
+        default="",
+    )
+    pob_relpath: StringProperty(
+        name="POB path",
+        description="TreeFile path e.g. appearance/echo_base_pob.pob",
+        default="appearance/echo_base_pob.pob",
+    )
+    tre_path: StringProperty(
+        name="Source TRE",
+        subtype="FILE_PATH",
+        default="",
+    )
+    copy_textures: BoolProperty(name="Copy textures on import", default=True)
+    rebuild_rsp: BoolProperty(name="Rebuild rsp on export", default=True)
+    pack_tre: BoolProperty(name="Pack TRE after export", default=False)
+
+
+CLASSES = (SWGExportSettings, SWGCreatureProjectSettings, SWGBuildingProjectSettings)

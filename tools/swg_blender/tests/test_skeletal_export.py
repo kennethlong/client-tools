@@ -48,6 +48,35 @@ def test_mgn_roundtrip_preserves_bind_pose_pool(tmp_path: Path):
     assert len(mesh_b.indices) == len(mesh_a.indices)
 
 
+GOLDEN_MULTI_MGN = "abyssin_m_l0.mgn"
+
+
+def _resolve_multi_shader_mgn() -> Path:
+    if (Path(__file__).parent / "golden" / GOLDEN_MULTI_MGN).is_file():
+        return Path(__file__).parent / "golden" / GOLDEN_MULTI_MGN
+    from swg_pipeline.swg_main_paths import appearance_mesh, swg_main_root
+
+    root = swg_main_root()
+    if root:
+        found = appearance_mesh(GOLDEN_MULTI_MGN)
+        if found and found.is_file():
+            return found
+    pytest.skip("No mgn: copy abyssin_m_l0.mgn to tests/golden/ or set SWG_MAIN")
+
+
+def test_multi_shader_mgn_roundtrip_topology(tmp_path: Path):
+    original = load_skeletal_mesh(_resolve_multi_shader_mgn())
+    assert len(original.meshes) >= 2
+    out = tmp_path / "roundtrip.mgn"
+    write_skeletal_mesh_file(out, original)
+    roundtrip = load_skeletal_mesh(out)
+    assert len(roundtrip.meshes) == len(original.meshes)
+    for before, after in zip(original.meshes, roundtrip.meshes, strict=True):
+        assert len(before.positions) == len(after.positions)
+        assert len(before.indices) == len(after.indices)
+        assert before.material.shader_relpath == after.material.shader_relpath
+
+
 def test_skt_roundtrip_joints(tmp_path: Path):
     original = load_skeleton(_resolve_skt())
     out = tmp_path / "roundtrip.skt"

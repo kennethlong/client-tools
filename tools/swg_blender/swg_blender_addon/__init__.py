@@ -32,12 +32,23 @@ def register():
     from swg_blender_addon.operators import CLASSES as OP_CLASSES
     from swg_blender_addon.panel import CLASSES as PANEL_CLASSES
     from swg_blender_addon.preferences import SWG_AddonPreferences
-    from swg_blender_addon.properties import CLASSES as PROP_CLASSES, SWGExportSettings
+    from swg_blender_addon.properties import (
+        CLASSES as PROP_CLASSES,
+        SWGBuildingProjectSettings,
+        SWGCreatureProjectSettings,
+        SWGExportSettings,
+    )
 
     bpy.utils.register_class(SWG_AddonPreferences)
     for cls in (*PROP_CLASSES, *OP_CLASSES, *PANEL_CLASSES):
         bpy.utils.register_class(cls)
     bpy.types.Scene.swg_export = bpy.props.PointerProperty(type=SWGExportSettings)
+    bpy.types.Scene.swg_creature_project = bpy.props.PointerProperty(
+        type=SWGCreatureProjectSettings
+    )
+    bpy.types.Scene.swg_building_project = bpy.props.PointerProperty(
+        type=SWGBuildingProjectSettings
+    )
     bpy.types.TOPBAR_MT_file_import.append(menu_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_export)
 
@@ -52,6 +63,8 @@ def unregister():
 
     bpy.types.TOPBAR_MT_file_import.remove(menu_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_export)
+    del bpy.types.Scene.swg_building_project
+    del bpy.types.Scene.swg_creature_project
     del bpy.types.Scene.swg_export
     for cls in reversed((*PANEL_CLASSES, *OP_CLASSES, *PROP_CLASSES)):
         bpy.utils.unregister_class(cls)

@@ -27,6 +27,7 @@ Install `tools/swg_blender/swg_blender_addon/` → Sidebar **SWG** tab.
 
 | Panel | Purpose |
 | --- | --- |
+| **Creature project** | Full SAT graph: workspace + `appearance/…/foo.sat` → import multi-part collection; export back to same paths; optional pack TRE |
 | **Export** | Type: static / creature bundle / mgn / skt / anim / building; author; CKAT vs KFAT; ignore textures/blend targets; pack TRE |
 | **Hierarchy** | Lint Maya names (`mesh0`, `c0`, `pob`, `portals/`, …) |
 | **Run Export** | Dispatches from scene `swg_export` settings |
@@ -43,6 +44,10 @@ Creature bundle: select skinned mesh + armature → **Creature bundle** or Expor
 | Creature bundle (CLI) | `python -m swg_pipeline.batch_export skeletal --mgn ... --skt ... -outputdir ...` |
 | Pack bundle → TRE | `python -m swg_pipeline.pack_pipeline D:\swg_dev_bundle --rebuild-rsp` |
 | Build rsp files | `python -m swg_pipeline.rsp_builder <roots> --output-dir ...` |
+| Import creature DAG to workspace | `python -m swg_pipeline.tre_project import-creature --workspace W --sat appearance/abyssin_m.sat [--tre X.tre] [--blender]` |
+| Export creature project | `python -m swg_pipeline.tre_project export-creature --workspace W [--blender] [--rebuild-rsp]` |
+| Import building POB to workspace | `python -m swg_pipeline.tre_project import-building --workspace W --pob appearance/echo_base_pob.pob [--blender]` |
+| Export building project | `python -m swg_pipeline.tre_project export-building --workspace W [--blender]` |
 | List TRE contents | `python -m swg_pipeline.tre_list -l file.tre` |
 | Master TOC summary | `python -m swg_pipeline.tre_list --master file.toc` |
 | Validate spawn (human E2E) | `tools/swg_blender/HUMAN_E2E_TEST_GUIDE.md` |

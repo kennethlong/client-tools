@@ -32,6 +32,14 @@ def _swg_settings(context: bpy.types.Context):
     return context.scene.swg_export
 
 
+def _creature_project_settings(context: bpy.types.Context):
+    return context.scene.swg_creature_project
+
+
+def _building_project_settings(context: bpy.types.Context):
+    return context.scene.swg_building_project
+
+
 def _finalize_manifest(bundle_root: Path, context: bpy.types.Context) -> None:
     settings = _swg_settings(context)
     if not settings.author and not settings.export_notes:
@@ -419,6 +427,176 @@ class SWG_OT_run_export(Operator):
         return {"FINISHED"}
 
 
+class SWG_OT_import_creature_project(Operator):
+    bl_idname = "swg.import_creature_project"
+    bl_label = "SWG Import Creature Project"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = _creature_project_settings(context)
+        if not settings.workspace_dir:
+            self.report({"ERROR"}, "Set a workspace directory")
+            return {"CANCELLED"}
+        try:
+            ensure_pipeline_on_path()
+            _apply_swg_main_env()
+            from swg_pipeline.tre_project import import_creature_project
+            from swg_pipeline.tre_project_bpy import import_creature_from_workspace
+
+            workspace = Path(settings.workspace_dir)
+            tre = Path(settings.tre_path) if settings.tre_path else None
+            result = import_creature_project(
+                workspace,
+                settings.sat_relpath,
+                tre_path=tre,
+                copy_textures=settings.copy_textures,
+            )
+            bpy_result = import_creature_from_workspace(workspace)
+            if result.missing:
+                self.report(
+                    {"WARNING"},
+                    f"Missing {len(result.missing)} asset(s); see swg_tre_project.json",
+                )
+            self.report(
+                {"INFO"},
+                f"Imported {len(bpy_result.get('parts', []))} part(s) -> {bpy_result.get('collection')}",
+            )
+        except Exception as exc:
+            return _report_exception(self, exc)
+        return {"FINISHED"}
+
+
+class SWG_OT_rebuild_creature_sat_lmg(Operator):
+    bl_idname = "swg.rebuild_creature_sat_lmg"
+    bl_label = "SWG Rebuild SAT/LMG"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = _creature_project_settings(context)
+        if not settings.workspace_dir:
+            self.report({"ERROR"}, "Set a workspace directory")
+            return {"CANCELLED"}
+        try:
+            ensure_pipeline_on_path()
+            from swg_pipeline.creature_graph import resolve_creature_graph
+            from swg_pipeline.tre_project import (
+                load_project_manifest,
+                rebuild_creature_appearance_files,
+            )
+
+            workspace = Path(settings.workspace_dir)
+            manifest = load_project_manifest(workspace)
+            sat_path = workspace / str(manifest["root_sat"]).replace("\\", "/")
+            graph = resolve_creature_graph(sat_path, workspace=workspace)
+            rebuild_creature_appearance_files(workspace, graph)
+            self.report({"INFO"}, "Rebuilt SAT/LMG from workspace manifest")
+        except Exception as exc:
+            return _report_exception(self, exc)
+        return {"FINISHED"}
+
+
+class SWG_OT_export_creature_project(Operator):
+    bl_idname = "swg.export_creature_project"
+    bl_label = "SWG Export Creature Project"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = _creature_project_settings(context)
+        if not settings.workspace_dir:
+            self.report({"ERROR"}, "Set a workspace directory")
+            return {"CANCELLED"}
+        try:
+            ensure_pipeline_on_path()
+            _apply_swg_main_env()
+            from swg_pipeline.tre_project import export_creature_project
+
+            result = export_creature_project(
+                Path(settings.workspace_dir),
+                use_blender=True,
+                ignore_blend_targets=settings.ignore_blend_targets,
+                rebuild_rsp=settings.rebuild_rsp,
+            )
+            if settings.pack_tre:
+                from swg_pipeline.pack_pipeline import pack_bundle
+
+                pack_bundle(Path(settings.workspace_dir), rebuild_rsp=False)
+            count = len(result.exported_mgn)
+            self.report({"INFO"}, f"Exported {count} mesh part(s) to workspace")
+        except Exception as exc:
+            return _report_exception(self, exc)
+        return {"FINISHED"}
+
+
+class SWG_OT_import_building_project(Operator):
+    bl_idname = "swg.import_building_project"
+    bl_label = "SWG Import Building Project"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = _building_project_settings(context)
+        if not settings.workspace_dir:
+            self.report({"ERROR"}, "Set a workspace directory")
+            return {"CANCELLED"}
+        try:
+            ensure_pipeline_on_path()
+            _apply_swg_main_env()
+            from swg_pipeline.tre_project_building import import_building_project
+            from swg_pipeline.tre_project_bpy_building import import_building_from_workspace
+
+            workspace = Path(settings.workspace_dir)
+            tre = Path(settings.tre_path) if settings.tre_path else None
+            result = import_building_project(
+                workspace,
+                settings.pob_relpath,
+                tre_path=tre,
+                copy_textures=settings.copy_textures,
+            )
+            bpy_result = import_building_from_workspace(workspace)
+            if result.missing:
+                self.report(
+                    {"WARNING"},
+                    f"Missing {len(result.missing)} asset(s); see manifest",
+                )
+            self.report(
+                {"INFO"},
+                f"Imported {len(bpy_result.get('imported', []))} mesh(es) -> {bpy_result.get('collection')}",
+            )
+        except Exception as exc:
+            return _report_exception(self, exc)
+        return {"FINISHED"}
+
+
+class SWG_OT_export_building_project(Operator):
+    bl_idname = "swg.export_building_project"
+    bl_label = "SWG Export Building Project"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = _building_project_settings(context)
+        if not settings.workspace_dir:
+            self.report({"ERROR"}, "Set a workspace directory")
+            return {"CANCELLED"}
+        try:
+            ensure_pipeline_on_path()
+            _apply_swg_main_env()
+            from swg_pipeline.tre_project_building import export_building_project
+
+            result = export_building_project(
+                Path(settings.workspace_dir),
+                use_blender=True,
+                rebuild_rsp=settings.rebuild_rsp,
+            )
+            if settings.pack_tre:
+                from swg_pipeline.pack_pipeline import pack_bundle
+
+                pack_bundle(Path(settings.workspace_dir), rebuild_rsp=False)
+            count = len(result.exported_msh)
+            self.report({"INFO"}, f"Exported {count} .msh file(s) to workspace")
+        except Exception as exc:
+            return _report_exception(self, exc)
+        return {"FINISHED"}
+
+
 class SWG_OT_validate_hierarchy(Operator):
     bl_idname = "swg.validate_hierarchy"
     bl_label = "Validate Export Hierarchy"
@@ -460,6 +638,11 @@ CLASSES = (
     SWG_OT_export_animation_ans,
     SWG_OT_export_client_bundle,
     SWG_OT_export_creature_bundle,
+    SWG_OT_import_creature_project,
+    SWG_OT_rebuild_creature_sat_lmg,
+    SWG_OT_export_creature_project,
+    SWG_OT_import_building_project,
+    SWG_OT_export_building_project,
     SWG_OT_run_export,
     SWG_OT_validate_hierarchy,
 )

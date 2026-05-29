@@ -155,28 +155,43 @@ def export_skeletal_mesh(
     ignore_blend_targets: bool = False,
 ) -> SwgScene:
     """Write `.mgn` from Blender mesh object(s) or a pre-built SwgScene."""
+    mesh_path = Path(filepath)
     if scene is None:
         if not objects:
             raise ValueError("provide objects or scene")
-        if len(objects) != 1:
-            raise ValueError("skeletal export supports one mesh object per .mgn file")
-        mesh = mesh_object_to_swg_mesh(
-            objects[0],
-            armature=armature,
-            skeleton_template_names=skeleton_template_names,
-        )
-        skel = None
         arm_obj = _find_armature_object(objects[0], armature)
-        if arm_obj is not None:
-            skel = armature_object_to_swg_skeleton(arm_obj)
-        blend_targets = (
-            []
-            if ignore_blend_targets
-            else collect_blend_targets_from_object(objects[0], mesh)
-        )
-        scene = SwgScene(meshes=[mesh], skeleton=skel, blend_targets=blend_targets)
+        skel = armature_object_to_swg_skeleton(arm_obj) if arm_obj is not None else None
 
-    mesh_path = Path(filepath)
+        preserve: SwgScene | None = None
+        if mesh_path.is_file():
+            try:
+                preserve = load_skeletal_mesh(mesh_path)
+            except Exception:
+                preserve = None
+
+        meshes = [
+            mesh_object_to_swg_mesh(
+                obj,
+                armature=armature,
+                skeleton_template_names=skeleton_template_names,
+            )
+            for obj in objects
+        ]
+        blend_targets = []
+        if not ignore_blend_targets:
+            for obj, mesh in zip(objects, meshes, strict=True):
+                blend_targets.extend(collect_blend_targets_from_object(obj, mesh))
+
+        scene = SwgScene(
+            meshes=meshes,
+            skeleton=skel,
+            blend_targets=blend_targets,
+            dot3_vectors=list(preserve.dot3_vectors) if preserve else [],
+            occlusion=preserve.occlusion if preserve else SwgScene().occlusion,
+            skmg_occlusion_counts=preserve.skmg_occlusion_counts if preserve else (),
+            skmg_pre_psdt_blocks=list(preserve.skmg_pre_psdt_blocks) if preserve else [],
+            skmg_post_psdt_blocks=list(preserve.skmg_post_psdt_blocks) if preserve else [],
+        )
     write_skeletal_mesh_file(mesh_path, scene)
     scene.source_path = str(mesh_path)
     return scene

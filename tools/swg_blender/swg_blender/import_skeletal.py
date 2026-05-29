@@ -7,12 +7,77 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from swg_scene.coords import engine_to_blender_position, engine_to_blender_vector
+from swg_scene.coords import engine_to_blender_position
 from swg_scene.mesh_skeletal import load_skeletal_mesh
 from swg_scene.model import SwgJoint, SwgMesh, SwgScene, SwgSkeleton
 from swg_scene.skeleton import load_skeleton as load_skt_file
 
 IMPORT_ROTATION_EULER = (math.pi / 2.0, 0.0, 0.0)
+
+
+def _set_active_object(obj: Any) -> None:
+    import bpy
+
+    view = bpy.context.view_layer
+    for o in view.objects:
+        o.select_set(False)
+    obj.select_set(True)
+    view.objects.active = obj
+
+
+def _viewport_override_kwargs(active_obj: Any) -> dict[str, Any]:
+    import bpy
+
+    view = bpy.context.view_layer
+    window = bpy.context.window
+    if window is None and bpy.context.window_manager.windows:
+        window = bpy.context.window_manager.windows[0]
+
+    area = None
+    region = None
+    if window is not None:
+        for candidate in window.screen.areas:
+            if candidate.type == "VIEW_3D":
+                area = candidate
+                for reg in candidate.regions:
+                    if reg.type == "WINDOW":
+                        region = reg
+                        break
+                break
+
+    kwargs: dict[str, Any] = {
+        "scene": bpy.context.scene,
+        "view_layer": view,
+        "active_object": active_obj,
+        "object": active_obj,
+        "selected_objects": [active_obj],
+        "selected_editable_objects": [active_obj],
+    }
+    if window is not None:
+        kwargs["window"] = window
+        kwargs["screen"] = window.screen
+    if area is not None:
+        kwargs["area"] = area
+    if region is not None:
+        kwargs["region"] = region
+    return kwargs
+
+
+def _object_mode_set(mode: str, *, active_obj: Any) -> None:
+    import bpy
+
+    _set_active_object(active_obj)
+    if not hasattr(bpy.context, "temp_override"):
+        bpy.ops.object.mode_set(mode=mode)
+        return
+    kwargs = _viewport_override_kwargs(active_obj)
+    if "area" not in kwargs or "region" not in kwargs:
+        raise RuntimeError(
+            "Cannot switch object mode without a 3D Viewport (Scripting-only layout). "
+            "Split the 3D View or run from the Viewport's Scripting tab."
+        )
+    with bpy.context.temp_override(**kwargs):
+        bpy.ops.object.mode_set(mode=mode)
 
 
 def _ensure_repo_on_path() -> None:
@@ -42,6 +107,8 @@ def _skeleton_from_skt(path: Path) -> SwgSkeleton | None:
                 parent_index=joint.parent_index,
                 bind_translation=joint.bind_translation,
                 bind_rotation=joint.bind_rotation,
+                pre_rotation=joint.pre_rotation,
+                post_rotation=joint.post_rotation,
             )
             for joint in skel.joints
         ]
@@ -78,34 +145,25 @@ def load_mgn(
 
 
 def _mesh_to_blender_bmesh(mesh: SwgMesh, *, name: str | None = None) -> Any:
-    import bmesh
     import bpy
 
     obj_name = name or mesh.name or "swg_skeletal_mesh"
-    bm = bmesh.new()
-    vert_map = [bm.verts.new(v) for v in mesh.positions]
-    bm.verts.ensure_lookup_table()
-    bm.verts.index_update()
-
-    if mesh.indices:
-        for i in range(0, len(mesh.indices), 3):
-            try:
-                bm.faces.new([vert_map[mesh.indices[i + j]] for j in range(3)])
-            except ValueError:
-                pass
-    bm.faces.ensure_lookup_table()
+    # from_pydata keeps duplicate triangles; bmesh.faces.new silently dedupes them.
+    faces = [
+        tuple(mesh.indices[i : i + 3])
+        for i in range(0, len(mesh.indices), 3)
+    ]
+    me = bpy.data.meshes.new(obj_name)
+    me.from_pydata(mesh.positions, [], faces)
+    me.update()
 
     if mesh.uvs and mesh.uvs[0]:
-        uv_layer = bm.loops.layers.uv.new("UVMap")
-        for face in bm.faces:
-            for loop in face.loops:
-                vi = loop.vert.index
+        uv_layer = me.uv_layers.new(name="UVMap")
+        for poly in me.polygons:
+            for loop_idx in poly.loop_indices:
+                vi = me.loops[loop_idx].vertex_index
                 if vi < len(mesh.uvs[0]):
-                    loop[uv_layer].uv = mesh.uvs[0][vi]
-
-    me = bpy.data.meshes.new(obj_name)
-    bm.to_mesh(me)
-    bm.free()
+                    uv_layer.data[loop_idx].uv = mesh.uvs[0][vi]
 
     if mesh.normals and len(mesh.normals) == len(mesh.positions):
         try:
@@ -136,16 +194,36 @@ def _assign_vertex_groups(obj: Any, mesh: SwgMesh) -> None:
             group.add([v_idx], weight, "ADD")
 
 
-def _joint_blender_head(joint: SwgJoint) -> tuple[float, float, float]:
-    return engine_to_blender_position(*joint.bind_translation)
+def _swg_quat_to_blender(quat: tuple[float, float, float, float]) -> Any:
+    from mathutils import Quaternion
+
+    return Quaternion((-quat[0], -quat[1], quat[2], quat[3]))
 
 
-def _bone_tail(joint: SwgJoint, joints: list[SwgJoint]) -> tuple[float, float, float]:
-    head = _joint_blender_head(joint)
-    for child in joints:
-        if child.parent_index == joints.index(joint):
-            return _joint_blender_head(child)
-    return (head[0], head[1] + 0.05, head[2])
+def _joint_local_translation(joint: SwgJoint) -> Any:
+    from mathutils import Vector
+
+    return Vector(engine_to_blender_position(*joint.bind_translation))
+
+
+def _finalize_armature_import(
+    arm_obj: Any, *, apply_import_rotation: bool, bake_import_rotation: bool
+) -> None:
+    """Apply +90 deg X on the armature object (io_scene also supports baking into bones)."""
+    import bpy
+
+    if not apply_import_rotation:
+        return
+    arm_obj.rotation_euler = IMPORT_ROTATION_EULER
+    if not bake_import_rotation:
+        return
+    _object_mode_set("OBJECT", active_obj=arm_obj)
+    kwargs = _viewport_override_kwargs(arm_obj)
+    if "area" in kwargs and "region" in kwargs:
+        with bpy.context.temp_override(**kwargs):
+            bpy.ops.object.transform_apply(
+                location=False, scale=False, rotation=True
+            )
 
 
 def skeleton_to_armature(
@@ -153,30 +231,103 @@ def skeleton_to_armature(
     *,
     name: str = "swg_armature",
     collection: Any,
+    connect_bones: bool = False,
+    apply_import_rotation: bool = True,
+    bake_import_rotation: bool = False,
 ) -> Any:
+    """Build rest pose from SKTM local BPTR/BPRO/RPRE/RPST chain (io_scene_swg_msh parity)."""
     import bpy
+    from mathutils import Matrix, Vector
 
     arm_data = bpy.data.armatures.new(name)
     arm_obj = bpy.data.objects.new(name, arm_data)
+    arm_data.display_type = "OCTAHEDRAL"
+    arm_obj.show_in_front = True
     collection.objects.link(arm_obj)
+    _set_active_object(arm_obj)
+    kwargs = _viewport_override_kwargs(arm_obj)
+    if "area" not in kwargs or "region" not in kwargs:
+        raise RuntimeError(
+            "Cannot build armature without a 3D Viewport. Use a layout with a 3D View."
+        )
 
-    bpy.context.view_layer.objects.active = arm_obj
-    bpy.ops.object.mode_set(mode="EDIT")
-    edit_bones = arm_data.edit_bones
-    name_to_bone: dict[str, Any] = {}
+    bones: list[Any] = []
 
-    for idx, joint in enumerate(skeleton.joints):
-        bone = edit_bones.new(joint.name)
-        bone.head = _joint_blender_head(joint)
-        bone.tail = _bone_tail(joint, skeleton.joints)
-        name_to_bone[joint.name] = bone
+    def _build_edit_bones() -> None:
+        edit_bones = arm_data.edit_bones
+        bones.clear()
+        for joint in skeleton.joints:
+            bone = edit_bones.new(joint.name)
+            bone.use_deform = True
+            bone.use_inherit_rotation = True
+            bone["RPRE"] = joint.pre_rotation
+            bone["BPRO"] = joint.bind_rotation
+            bone["RPST"] = joint.post_rotation
+            bones.append(bone)
 
-    for idx, joint in enumerate(skeleton.joints):
-        if joint.parent_index >= 0 and joint.parent_index < len(skeleton.joints):
-            parent = skeleton.joints[joint.parent_index]
-            name_to_bone[joint.name].parent = name_to_bone[parent.name]
+        def process_bone_hierarchy(
+            bone_index: int, parent_transform: Matrix | None = None
+        ) -> None:
+            if bone_index < 0 or bone_index >= len(skeleton.joints):
+                return
+            if parent_transform is None:
+                parent_transform = Matrix.Identity(4)
 
-    bpy.ops.object.mode_set(mode="OBJECT")
+            joint = skeleton.joints[bone_index]
+            bone = bones[bone_index]
+
+            rpre = _swg_quat_to_blender(joint.pre_rotation)
+            rbind = _swg_quat_to_blender(joint.bind_rotation)
+            rpost = _swg_quat_to_blender(joint.post_rotation)
+            local_translation = _joint_local_translation(joint)
+            rotation_matrix = (rpost @ rbind @ rpre).to_matrix().to_4x4()
+            local_transform = Matrix.Translation(local_translation) @ rotation_matrix
+            world_transform = parent_transform @ local_transform
+
+            bone.head = world_transform.translation
+            bone.tail = bone.head + (
+                Matrix.Translation(Vector((0.0, 0.0, 0.025))) @ rotation_matrix
+            ).translation
+
+            parent_id = joint.parent_index
+            if parent_id >= 0:
+                bone.parent = bones[parent_id]
+
+            for child_index, child_joint in enumerate(skeleton.joints):
+                if child_joint.parent_index == bone_index:
+                    process_bone_hierarchy(child_index, world_transform)
+
+        for index, joint in enumerate(skeleton.joints):
+            if joint.parent_index < 0:
+                process_bone_hierarchy(index)
+
+        if connect_bones:
+            for bone in bones:
+                children = bone.children
+                if children:
+                    tail_pos = Vector((0.0, 0.0, 0.0))
+                    for child in children:
+                        tail_pos += child.head
+                    tail_pos /= len(children)
+                    bone.tail = tail_pos
+                    if len(children) == 1:
+                        children[0].use_connect = True
+                elif bone.parent is not None:
+                    delta = bone.head - bone.parent.head
+                    if delta.length > 1e-6:
+                        bone.tail = bone.head + delta.normalized() * delta.length * 0.5
+                else:
+                    bone.tail = bone.head + Vector((0.0, 0.0, 0.05))
+
+    with bpy.context.temp_override(**kwargs):
+        bpy.ops.object.mode_set(mode="EDIT")
+        _build_edit_bones()
+        bpy.ops.object.mode_set(mode="OBJECT")
+    _finalize_armature_import(
+        arm_obj,
+        apply_import_rotation=apply_import_rotation,
+        bake_import_rotation=bake_import_rotation,
+    )
     return arm_obj
 
 
@@ -187,6 +338,7 @@ def import_skeletal_mesh(
     collection: Any | None = None,
     object_name: str | None = None,
     apply_import_rotation: bool = True,
+    existing_armature: Any | None = None,
 ) -> list[Any]:
     """Import one `.mgn` (and optional `.skt`); returns [armature, mesh, ...]."""
     import bpy
@@ -196,17 +348,27 @@ def import_skeletal_mesh(
         collection = bpy.context.collection
 
     objects: list[Any] = []
-    arm_obj = None
-    if scene.skeleton and scene.skeleton.joints:
-        arm_obj = skeleton_to_armature(scene.skeleton, collection=collection)
-        if apply_import_rotation:
-            arm_obj.rotation_euler = IMPORT_ROTATION_EULER
+    arm_obj = existing_armature
+    if arm_obj is None and scene.skeleton and scene.skeleton.joints:
+        arm_obj = skeleton_to_armature(
+            scene.skeleton,
+            collection=collection,
+            apply_import_rotation=apply_import_rotation,
+            bake_import_rotation=False,
+        )
+        objects.append(arm_obj)
+    elif arm_obj is not None and arm_obj not in objects:
         objects.append(arm_obj)
 
     stem = Path(filepath).stem
     for idx, mesh in enumerate(scene.meshes):
-        name = object_name or (mesh.name if len(scene.meshes) == 1 else f"{stem}_{idx}")
+        if len(scene.meshes) == 1:
+            name = object_name or mesh.name or stem
+        else:
+            name = mesh.name or f"{stem}_{idx}"
         obj = _mesh_to_blender_bmesh(mesh, name=name)
+        if len(scene.meshes) > 1:
+            obj["swg_submesh_index"] = idx
         _assign_vertex_groups(obj, mesh)
         if apply_import_rotation:
             obj.rotation_euler = IMPORT_ROTATION_EULER

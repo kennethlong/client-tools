@@ -45,6 +45,35 @@ python -m swg_pipeline.tre_list --toc   # sample COT2000 when SWG_SAMPLE_TRE_DIR
 # TRE extract (requires built TreeFileExtractor.exe — needed for encrypted v6000 payloads)
 python -m swg_pipeline.tre_tools extract --tre path/to/file.tre --out extracted/
 
+# Creature TRE project (M16): materialize full SAT graph into a workspace
+python -m swg_pipeline.tre_project import-creature --workspace D:\swg_creature_ws --sat appearance/abyssin_m.sat
+python -m swg_pipeline.tre_project import-creature --workspace D:\swg_creature_ws --sat appearance/abyssin_m.sat --tre path\to\data.tre --copy-textures
+python -m swg_pipeline.tre_project import-creature --workspace D:\swg_creature_ws --sat appearance/abyssin_m.sat --blender
+python -m swg_pipeline.tre_project export-creature --workspace D:\swg_creature_ws --blender
+python -m swg_pipeline.tre_project pack --workspace D:\swg_creature_ws --rebuild-rsp
+
+# Headless export needs import+export in one Blender session (--roundtrip); in-addon export uses the open scene.
+python scripts/run_creature_roundtrip_check.py
+
+# Multi-shader .mgn (e.g. abyssin_m_l0): several mesh objects share one swg_tre_relpath; export merges PSDTs.
+# Creature import: per-.lmg child collection + LODs (l0 visible, l1+ in LODs coll, hidden); export walks all_objects.
+# Skeletal .mgn uses from_pydata (duplicate triangles preserved, same as static .msh).
+
+# Building TRE project (M17): POB -> cells -> static meshes
+python -m swg_pipeline.tre_project import-building --workspace D:\swg_building_ws --pob appearance/echo_base_pob.pob --blender
+python -m swg_pipeline.tre_project export-building --workspace D:\swg_building_ws --blender
+# Headless full session: python scripts/run_building_roundtrip_check.py (materialize + Blender --roundtrip)
+# Multi-shader .msh: import tags one building_mesh per cell; extras hidden; export merges all PSDTs per path
+# Static import uses mesh.from_pydata so retail duplicate triangles are preserved (bmesh deduped them)
+# Per cell: hidden wireframe floor0_{cell} from .flr (swg_kind=building_floor); export preserves BTRE/BEDG/PGRF
+# POB: cell collection props; portals/ has portal{N} empty + portal{N}_idtl mesh (IDTL); export rewrites CELS+PRTS
+# CELL rewrite preserves CMPT/PRTL/LGHT blocks; unchanged cells -> byte-identical .pob
+# Fast smoke: python scripts/run_building_smoke.py  (blacksun 21 cells; --pob for echo_base)
+# Creature client smoke: python scripts/run_creature_client_smoke.py [--blender] [--pack]
+# Side-by-side vs io_scene_swg_msh: python scripts/compare_creature_io_scene.py --in-blender (MCP/Scripting)
+#   or --workspace D:\path (spawns a second Blender GUI by default; use --background for -b)
+# See docs/research/sat-lmg-ux-comparison.md and docs/research/skeletal-import-io-scene-parity.md
+
 # PNG → DDS (Phase 8.7; DXT via texconv when available, else A8R8G8B8)
 python -m swg_pipeline.dds path/to/texture.png path/to/texture.dds
 python -m swg_pipeline.dds path/to/texture.dds --info

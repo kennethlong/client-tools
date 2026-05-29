@@ -31,34 +31,25 @@ def load_msh(path: str | Path, *, blender_coords: bool = True) -> SwgScene:
 
 def mesh_to_blender_bmesh(mesh: SwgMesh, *, name: str | None = None) -> Any:
     """Create a Blender mesh datablock from SwgMesh. Requires bpy."""
-    import bmesh
     import bpy
 
     obj_name = name or mesh.name or "swg_mesh"
-    bm = bmesh.new()
-    vert_map = [bm.verts.new(v) for v in mesh.positions]
-    bm.verts.ensure_lookup_table()
-    bm.verts.index_update()
-
-    if mesh.indices:
-        for i in range(0, len(mesh.indices), 3):
-            try:
-                bm.faces.new([vert_map[mesh.indices[i + j]] for j in range(3)])
-            except ValueError:
-                pass
-    bm.faces.ensure_lookup_table()
+    # from_pydata keeps duplicate triangles; bmesh.faces.new silently dedupes them.
+    faces = [
+        tuple(mesh.indices[i : i + 3])
+        for i in range(0, len(mesh.indices), 3)
+    ]
+    me = bpy.data.meshes.new(obj_name)
+    me.from_pydata(mesh.positions, [], faces)
+    me.update()
 
     if mesh.uvs and mesh.uvs[0]:
-        uv_layer = bm.loops.layers.uv.new("UVMap")
-        for face in bm.faces:
-            for loop in face.loops:
-                vi = loop.vert.index
+        uv_layer = me.uv_layers.new(name="UVMap")
+        for poly in me.polygons:
+            for loop_idx in poly.loop_indices:
+                vi = me.loops[loop_idx].vertex_index
                 if vi < len(mesh.uvs[0]):
-                    loop[uv_layer].uv = mesh.uvs[0][vi]
-
-    me = bpy.data.meshes.new(obj_name)
-    bm.to_mesh(me)
-    bm.free()
+                    uv_layer.data[loop_idx].uv = mesh.uvs[0][vi]
 
     if mesh.normals and len(mesh.normals) == len(mesh.positions):
         try:

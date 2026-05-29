@@ -236,6 +236,7 @@ def list_tre(path: str | Path) -> list[str]:
 def read_tre_payload(path: str | Path, logical_name: str) -> bytes:
     """Read payload bytes for an entry (decompresses zlib when compressor is set)."""
     p = Path(path)
+    header = read_tre_header(p)
     data = p.read_bytes()
     needle = logical_name.replace("\\", "/").lower()
     for entry in read_tre_entries(p):

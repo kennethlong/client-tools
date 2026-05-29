@@ -33,6 +33,8 @@ class SwgJoint:
     parent_index: int
     bind_translation: Vector3 = (0.0, 0.0, 0.0)
     bind_rotation: Quaternion = (0.0, 0.0, 0.0, 1.0)
+    pre_rotation: Quaternion = (0.0, 0.0, 0.0, 1.0)
+    post_rotation: Quaternion = (0.0, 0.0, 0.0, 1.0)
 
 
 @dataclass
@@ -117,11 +119,11 @@ def _load_skeleton_body(reader: IffReader, *, include_bpmj: bool) -> SwgSkeleton
     reader.exit_chunk(TAG_PRNT)
 
     reader.enter_chunk(TAG_RPRE)
-    reader.read_bytes(16 * joint_count)
+    pre_rotations = [_read_quaternion(reader) for _ in range(joint_count)]
     reader.exit_chunk(TAG_RPRE)
 
     reader.enter_chunk(TAG_RPST)
-    reader.read_bytes(16 * joint_count)
+    post_rotations = [_read_quaternion(reader) for _ in range(joint_count)]
     reader.exit_chunk(TAG_RPST)
 
     reader.enter_chunk(TAG_BPTR)
@@ -147,6 +149,8 @@ def _load_skeleton_body(reader: IffReader, *, include_bpmj: bool) -> SwgSkeleton
             parent_index=parents[i],
             bind_translation=translations[i],
             bind_rotation=rotations[i],
+            pre_rotation=pre_rotations[i],
+            post_rotation=post_rotations[i],
         )
         for i in range(joint_count)
     ]

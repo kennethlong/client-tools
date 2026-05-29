@@ -26,4 +26,7 @@ def test_addon_files_present():
     assert (root / "panel.py").is_file()
     text = (root / "properties.py").read_text(encoding="utf-8")
     assert "CREATURE_BUNDLE" in text
+    assert "SWGCreatureProjectSettings" in text
     assert "ignore_blend_targets" in text
+    panel = (root / "panel.py").read_text(encoding="utf-8")
+    assert "SWG_PT_creature_project" in panel

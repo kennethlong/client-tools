@@ -507,3 +507,196 @@ def _load_psdt(
         )
     finally:
         reader.exit_form(TAG_PSDT)
+
+
+@dataclass
+class IoParityFace:
+    """Global position + normal indices per triangle (io_scene import_mgn winding)."""
+
+    verts: tuple[int, int, int]
+    norms: tuple[int, int, int]
+
+
+@dataclass
+class IoParityPsdt:
+    """Per-shader triangles using global vertex indices (io_scene_swg_msh winding)."""
+
+    shader_relpath: str
+    faces: list[IoParityFace] = field(default_factory=list)
+
+
+@dataclass
+class IoParityMgn:
+    """SKMG data aligned with io_scene_swg_msh import_mgn (engine Z-flip on positions)."""
+
+    source_path: str
+    positions: list[Vector3] = field(default_factory=list)
+    normals: list[Vector3] = field(default_factory=list)
+    psdts: list[IoParityPsdt] = field(default_factory=list)
+
+
+def _io_parity_positions(positions: list[Vector3]) -> list[Vector3]:
+    return [(x, y, -z) for x, y, z in positions]
+
+
+def _load_indexed_tris_io_faces(
+    reader: IffReader,
+    *,
+    tag: int,
+    positions: list[Vector3],
+    position_indices: list[int],
+    normal_indices: list[int],
+    occluded: bool,
+) -> list[IoParityFace]:
+    reader.enter_chunk(tag)
+    tri_count = reader.read_int32()
+    faces: list[IoParityFace] = []
+    for _ in range(tri_count):
+        if occluded:
+            reader.read_int16()
+        i0 = reader.read_int32()
+        i1 = reader.read_int32()
+        i2 = reader.read_int32()
+        g0 = position_indices[i0]
+        g1 = position_indices[i1]
+        g2 = position_indices[i2]
+        if _triangle_area(positions, g0, g1, g2) == 0.0:
+            continue
+        if normal_indices:
+            n0 = normal_indices[i0]
+            n1 = normal_indices[i1]
+            n2 = normal_indices[i2]
+        else:
+            n0, n1, n2 = g0, g1, g2
+        # io_scene import_mgn: p1=pidx[tri.p3], n1=nidx[tri.p3], etc.
+        faces.append(IoParityFace(verts=(g2, g1, g0), norms=(n2, n1, n0)))
+    reader.exit_chunk(tag)
+    return faces
+
+
+def _load_psdt_io_parity(
+    reader: IffReader,
+    *,
+    positions: list[Vector3],
+    dot3_vectors: list[tuple[float, float, float, float]],
+) -> IoParityPsdt:
+    reader.enter_form(TAG_PSDT)
+    try:
+        reader.enter_chunk(TAG_NAME)
+        shader_path = reader.read_string()
+        reader.exit_chunk(TAG_NAME)
+
+        reader.enter_chunk(TAG_PIDX)
+        shader_vert_count = reader.read_int32()
+        position_indices = [reader.read_int32() for _ in range(shader_vert_count)]
+        reader.exit_chunk(TAG_PIDX)
+
+        normal_indices: list[int] = []
+        block = reader._peek_block()
+        if not block.is_form and block.tag == TAG_NIDX:
+            reader.enter_chunk(TAG_NIDX)
+            normal_indices = [reader.read_int32() for _ in range(shader_vert_count)]
+            reader.exit_chunk(TAG_NIDX)
+
+        load_psdt_dot3_indices(reader, shader_vert_count)
+
+        block = reader._peek_block()
+        if not block.is_form and block.tag == TAG_TXCI:
+            reader.enter_chunk(TAG_TXCI)
+            set_count = reader.read_int32()
+            dims = [reader.read_int32() for _ in range(set_count)]
+            reader.exit_chunk(TAG_TXCI)
+            reader.enter_form(TAG_TCSF)
+            for set_idx in range(set_count):
+                reader.enter_chunk(TAG_TCSD)
+                reader.read_bytes(shader_vert_count * 4 * max(1, dims[set_idx]))
+                reader.exit_chunk(TAG_TCSD)
+            reader.exit_form(TAG_TCSF)
+
+        faces: list[tuple[int, int, int]] = []
+        reader.enter_form(TAG_PRIM)
+        reader.enter_chunk(TAG_INFO)
+        prim_count = reader.read_int32()
+        reader.exit_chunk(TAG_INFO)
+        for _ in range(prim_count):
+            block = reader._peek_block()
+            if block.is_form:
+                reader.skip_block()
+                continue
+            if block.tag == TAG_ITL:
+                faces.extend(
+                    _load_indexed_tris_io_faces(
+                        reader,
+                        tag=TAG_ITL,
+                        positions=positions,
+                        position_indices=position_indices,
+                        normal_indices=normal_indices,
+                        occluded=False,
+                    )
+                )
+            elif block.tag == TAG_OITL:
+                faces.extend(
+                    _load_indexed_tris_io_faces(
+                        reader,
+                        tag=TAG_OITL,
+                        positions=positions,
+                        position_indices=position_indices,
+                        normal_indices=normal_indices,
+                        occluded=True,
+                    )
+                )
+            else:
+                reader.skip_block()
+        reader.exit_form(TAG_PRIM)
+
+        return IoParityPsdt(shader_relpath=shader_path, faces=faces)
+    finally:
+        reader.exit_form(TAG_PSDT)
+
+
+def load_skeletal_mesh_io_parity(path: str | Path) -> IoParityMgn:
+    """Load `.mgn` the way io_scene_swg_msh does (global pool, Z-flip on POSN)."""
+    p = Path(path)
+    reader = IffReader.from_file(p)
+    reader.enter_form(TAG_SKMG)
+    try:
+        version_tag = reader.current_name()
+        if version_tag not in (TAG_0002, TAG_0003, TAG_0004):
+            raise IffError(f"unsupported SKMG version {tag_to_str(version_tag)}")
+        reader.enter_form(version_tag)
+        try:
+            header = _read_info_chunk(reader)
+            _read_string_chunk(reader, TAG_SKTM, header.skeleton_name_count)
+            _read_string_chunk(reader, TAG_XFNM, header.transform_name_count)
+            positions_raw = _read_vector3_chunk(reader, TAG_POSN, header.position_count)
+            _read_int32_chunk(reader, TAG_TWHD, header.position_count)
+            _read_transform_weights(reader, header.transform_weight_data_count)
+            normals = _read_optional_vector3_chunk(reader, TAG_NORM, header.normal_count)
+            dot3_vectors = load_global_dot3(reader)
+
+            while not reader.at_end_of_form():
+                block = reader._peek_block()
+                if block.is_form and block.form_type == TAG_PSDT:
+                    break
+                reader.skip_block()
+
+            positions = _io_parity_positions(positions_raw)
+            psdts: list[IoParityPsdt] = []
+            for _ in range(header.per_shader_data_count):
+                psdts.append(
+                    _load_psdt_io_parity(
+                        reader,
+                        positions=positions,
+                        dot3_vectors=dot3_vectors,
+                    )
+                )
+            return IoParityMgn(
+                source_path=str(p),
+                positions=positions,
+                normals=normals,
+                psdts=psdts,
+            )
+        finally:
+            reader.exit_form(version_tag)
+    finally:
+        reader.exit_form(TAG_SKMG)

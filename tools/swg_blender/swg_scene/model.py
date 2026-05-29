@@ -99,6 +99,8 @@ class SwgJoint:
     parent_index: int = -1
     bind_translation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     bind_rotation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+    pre_rotation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+    post_rotation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
 
 
 @dataclass
