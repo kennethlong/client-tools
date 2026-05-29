@@ -1,9 +1,31 @@
 # Handoff: Phase 17 — char-select D3D11 beachhead
 
-**Updated:** 2026-05-29 (planning complete, execution not started)
+**Updated:** 2026-05-29 (Wave 5 executed; 17-05 parked at 17-05-task3)
 **Branch:** koogie-msvc-cpp20-base
 **Worktree:** D:\Code\swg-client-v2
-**Status:** Plans 17-01..17-04 **done** · 17-05 **parked at Task 3** · 17-06 split → **17-06a + 17-06b** · 17-07 **rewritten (Round-4 review)** · **No engine code changes in current WIP diff**
+**Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap committed `6668b7cac`) · 17-06a/06b/07 **next (Waves 6–7)** · 17-05 T4–5 **deferred to after 17-07**
+
+> **Execution note (this session):** running inline/sequential (Kenny-in-the-loop), not parallel
+> worktrees — the executor cannot boot the client (no `.tre`), every capture is a host checkpoint.
+> Wave-only fallback ordering is in effect (orchestrator does not resolve named partial deps).
+
+## PRE-gap baseline (recorded for Task 5's PRE/POST table)
+
+Host boot 2026-05-29 12:55, `stage/d3d11-debug.log` (32,594 lines), HEAD `9f5db9c3f`:
+`id=342`=0 · `id=343`=27 · `PSRC recompile FAILED`=0 · `wroteDiffuse=1`=0 · `wroteEmissive=1`=0 ·
+`wroteSpecular=1`=6 · `asset-PS bound=`=0 · `fallback-PS bound=`=0 · `Plan 17-07 COMPATIBLE/INCOMPATIBLE`=0/0 ·
+native `Plan 17-04 Task 1 INCOMPATIBLE`=27 (real PRE fallback driver). PRE state: GAP-2 open (0
+diffuse/emissive writes), GAP-3 open (27 incompatible pairs, 0 asset-PS binds). PNGs at 1920×1080:
+`evidence/char_default_d3d9_0003.png` + `evidence/char_default_d3d11_0003_preGap.png`.
+
+## D3D9 capture workaround (needed again for Task 4's D-06 re-boot)
+
+Current Debug binaries CANNOT boot D3D9 char-select (post-17-01 `SwgClient_d.exe` ABI-cascades with
+`gl05_d.dll` — parked Phase-17.X gl05 regression). **Capture D3D9 via the pre-17-01 Release stack:**
+`stage/SwgClient_r.exe` + `gl05_r.dll` (both 5/27). Release exe reads `stage/client.cfg`, which is
+edited (reversible) to `rasterMajor=5` + 1920×1080 — **leave it** for Task 4's D3D9 re-boot; revert at
+phase close. Use the in-client **F12** key (back-buffer dump to `stage/screenshots/`), not the OS snip
+tool (fights fullscreen). jpg→png transcode for canonical naming.
 
 ---
 
