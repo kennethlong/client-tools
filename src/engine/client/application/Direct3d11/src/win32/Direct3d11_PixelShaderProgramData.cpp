@@ -1617,14 +1617,18 @@ bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
 	{
 		if (!firstSeen) return;
 		char msg[512];
+		// Token shape "Plan 17-07 rewritten-lane (IN)COMPATIBLE vs=" so the
+		// Plan 17-05 grep contract `Plan 17-07 .* COMPATIBLE vs=` matches the
+		// rewritten verdict (the `.*` needs intervening text; a bare one-space
+		// "Plan 17-07 COMPATIBLE vs=" would NOT match that regex).
 		if (compatible)
 			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
-				"Plan 17-07 COMPATIBLE vs=0x%p ps=0x%p (rewritten, matched %u ps inputs)",
+				"Plan 17-07 rewritten-lane COMPATIBLE vs=0x%p ps=0x%p (matched %u ps inputs)",
 				static_cast<void const *>(vs), psForLog,
 				static_cast<unsigned>(psInputs.size()));
 		else
 			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
-				"Plan 17-07 INCOMPATIBLE vs=0x%p ps=0x%p (rewritten) reason='%s'",
+				"Plan 17-07 rewritten-lane INCOMPATIBLE vs=0x%p ps=0x%p reason='%s'",
 				static_cast<void const *>(vs), psForLog, detail ? detail : "");
 		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
 			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
@@ -1730,12 +1734,22 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 	// Tombstone helper: records a null entry (with the current hash) so repeated
 	// binds of an infeasible pair don't re-run the rewrite+compile every draw.
 	// operator[] overwrites any stale (hash-mismatched) entry found above.
-	auto tombstone = [&]() -> std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
+	auto tombstone = [&](char const *why) -> std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
 	{
 		PerVsRewriteEntry &slot = m_perVsRewrittenCache[vsData];
 		slot.ps.Reset();
 		slot.inputs.clear();
 		slot.vsOutputSignatureHash = vsOutputSignatureHash;
+		// One-shot diagnostic (the result is cached, so this fires ~once per VS):
+		// surfaces WHICH guard tripped for pairs that produce no rewritten verdict.
+		char dm[256];
+		_snprintf_s(dm, sizeof(dm), _TRUNCATE,
+			"Plan 17-07 rewrite TOMBSTONE vs=0x%p shader='%s' reason='%s'",
+			static_cast<void const *>(vsData),
+			(m_program ? m_program->getFileName() : "?"), why ? why : "?");
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, dm);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", dm));
 		return kNone;
 	};
 
@@ -1744,7 +1758,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 	char const *psrcText = (m_program ? m_program->m_psrcText : nullptr);
 	int  const  psrcLen  = (m_program ? m_program->m_psrcLen  : 0);
 	if (!psrcText || psrcLen < 7)
-		return tombstone();
+		return tombstone("retained PSRC text missing or too short (Plan 17-01 m_psrcText)");
 
 	// Only the //hlsl PSRC lane is rewritable (mirror the ctor classification:
 	// first non-whitespace, BOM-tolerant, must be "//hlsl"). asm PSRC is out of
@@ -1762,11 +1776,11 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 			if (c == ' ' || c == '\t' || c == '\r' || c == '\n') ++start; else break;
 		}
 		if (psrcLen - start < 7)
-			return tombstone();
+			return tombstone("PSRC after-whitespace remainder too short for //hlsl");
 		if (!(psrcText[start + 0] == '/' && psrcText[start + 1] == '/'
 			&& psrcText[start + 2] == 'h' && psrcText[start + 3] == 'l'
 			&& psrcText[start + 4] == 's' && psrcText[start + 5] == 'l'))
-			return tombstone();
+			return tombstone("PSRC first non-whitespace token is not //hlsl (asm or other prefix)");
 	}
 
 	std::string const psrcStr(psrcText);   // strlen-derived (ctor uses the same)
@@ -1776,7 +1790,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 	{
 		PsRewriteResult sb = rewritePsMainStructBoundParameterForVSOutputs(psrcStr, vsData->getReflectedOutputs());
 		if (sb.status == PsRewriteStatus::Failed)
-			return tombstone();
+			return tombstone("param-list rewriter Failed AND struct-bound rewriter Failed (no usable main() reorder)");
 		rr = sb;
 	}
 	// rr is now Rewritten or Unchanged -> rr.text is compilable.
@@ -1788,7 +1802,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 		(m_program ? m_program->getFileName() : "pixel_shader.psh"),
 		ps, blob, vsOutputSignatureHash);
 	if (!ok || !ps || !blob)
-		return tombstone();
+		return tombstone("rewritten PSRC D3DCompile/CreatePixelShader failed (non-fatal)");
 
 	// Reflect the rewritten PS's input signature (mirror the ctor reflect-once
 	// loop at :1061-1092; SV_* filtered). Reflection failure is non-fatal ->
@@ -1823,6 +1837,44 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 		}
 	}
 
+	// DECISIVE DIAGNOSTIC (Plan 17-07 Task-0-spike-equivalent, deferred to boot):
+	// log the rewrite status + the rewritten PS's reflected input registers vs
+	// the VS output registers. If a reordered COLOR0 still reflects v0 while the
+	// VS writes it at o1, the parameter-list reorder did NOT move the input
+	// register (legacy semantic->register pinning under the current compile
+	// flags), proving axis-(b) cannot fix the linkage as-built. One-shot per VS
+	// (the result is cached below, so the build path runs ~once per VS).
+	{
+		char const *statusStr =
+			(rr.status == PsRewriteStatus::Rewritten) ? "Rewritten" :
+			(rr.status == PsRewriteStatus::Unchanged) ? "Unchanged" : "Failed";
+		std::string psInStr;
+		for (Direct3d11_ReflectedPSInputSig const &s : entry.inputs)
+		{
+			char b[48];
+			_snprintf_s(b, sizeof(b), _TRUNCATE, "%s%u=v%u ", s.SemanticName, s.SemanticIndex, s.Register);
+			psInStr += b;
+		}
+		std::string vsOutStr;
+		for (Direct3d11_ReflectedVSOutput const &o : vsData->getReflectedOutputs())
+		{
+			char b[48];
+			_snprintf_s(b, sizeof(b), _TRUNCATE, "%s%u=o%u ", o.SemanticName, o.SemanticIndex, o.Register);
+			vsOutStr += b;
+		}
+		char head[192];
+		_snprintf_s(head, sizeof(head), _TRUNCATE,
+			"Plan 17-07 rewrite-diag vs=0x%p shader='%s' status=%s",
+			static_cast<void const *>(vsData), (m_program ? m_program->getFileName() : "?"), statusStr);
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+		{
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, head);
+			std::string const detail = std::string("Plan 17-07 rewrite-diag   psIn: ") + psInStr + "| vsOut: " + vsOutStr;
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, detail.c_str());
+		}
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n  psIn: %s\n  vsOut: %s\n", head, psInStr.c_str(), vsOutStr.c_str()));
+	}
+
 	// Defensive (Round-4 HIGH-6): only cache a rewrite that actually VALIDATES
 	// against the bound VS via its per-VS reflected inputs. A rewrite that
 	// compiled but still mismatches (e.g. the HLSL compiler packed inputs
@@ -1831,7 +1883,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 	// garbage. This emits the rewritten-lane verdict log; the StateCache re-check
 	// shares the (vs, ps) dedupe key so the log fires exactly once per pair.
 	if (!isCompatibleWithVS_withExplicitPSInputs(vsData, entry.inputs, static_cast<void const *>(ps.Get())))
-		return tombstone();
+		return tombstone("rewritten PS recompiled+reflected but still validated INCOMPATIBLE (see rewrite-diag registers)");
 
 	// Store (overwriting any stale hash-mismatched entry). std::map element
 	// addresses are stable across later inserts, so returning &slot.inputs is safe.
