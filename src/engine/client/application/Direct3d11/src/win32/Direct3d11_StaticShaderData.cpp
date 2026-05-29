@@ -813,6 +813,41 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 						return false;
 					};
 
+					// Plan 17-06b (GAP-2 MAPPING, Round-4 HIGH-1): companion helper for
+					// nested-member / array-element offset writes. The writeVarByName
+					// lambda above iterates top-level layout.Vars and string-compares
+					// whole names -- it CANNOT reach into userConstants[N] or a nested
+					// member. This helper writes an XMFLOAT4 at an EXPLICIT absolute byte
+					// offset with the same bounds-check posture (offset + 16 <= TotalSize).
+					//
+					// Plan 17-06b OUTCOME = CASE C (DEFERRED). Plan 17-06a's discovery boot
+					// (2026-05-29) showed userConstants reflects as a FLAT float4[17] array
+					// with NO member names (typeClass=3 D3D_SVC_VECTOR; elements at
+					// 128 + N*16). D3D11 reflection alone cannot say which index is diffuse
+					// vs emissive. The secondary source of truth -- setPixelShaderUserConstants_impl
+					// (Direct3d11.cpp:679-704) -- writes the userConstants[] slots POSITIONALLY
+					// from a generic VectorRgba const* array; there is NO engine line that maps
+					// a specific slot index to materialDiffuse / materialEmissive (the per-slot
+					// semantics are asset-defined in each shader's pixel_shader_constants.inc,
+					// which lives in the TRE archives, not in deterministic engine code).
+					// Per Round-5 review item 3, writing to a GUESSED slot would set
+					// wroteDiffuse=1 and FALSELY close GAP-2 -- forbidden. So the candidate
+					// chains below are intentionally LEFT UNCHANGED (no speculative write);
+					// this helper ships as latent infrastructure for a FUTURE evidence-grounded
+					// mapping (e.g. an open-world shader whose .inc names the slots, or a
+					// concrete engine upload-order source line). Per Round-4 HIGH-3,
+					// char-select PSes consume textureFactor.rgb + COLOR0, NOT cbuffer
+					// material diffuse/emissive -- so DEFERRING does not block CHAR-01/02/03
+					// visual delivery (that is GAP-3 / Plan 17-07).
+					auto writeVarFloat4AtOffset = [&](unsigned int absoluteOffset, DirectX::XMFLOAT4 const &value) -> bool
+					{
+						if (absoluteOffset + sizeof(DirectX::XMFLOAT4) > layout.TotalSize)
+							return false;
+						std::memcpy(staging.data() + absoluteOffset, &value, sizeof(DirectX::XMFLOAT4));
+						return true;
+					};
+					(void)writeVarFloat4AtOffset;   // Case C: latent infrastructure, not yet wired (no evidence-backed offset)
+
 					// Plan 17-04 Task 2: writeVarByName lookups are now SCHEMA-AWARE.
 					//
 					// Plan 17-03's R3-03g flush log proved wroteDiffuse / wroteSpecular /
