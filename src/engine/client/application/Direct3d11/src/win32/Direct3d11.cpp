@@ -74,6 +74,25 @@ extern "C"
 namespace Direct3d11Namespace
 {
 	// ------------------------------------------------------------------
+	// Plan 17-03 R3-03a + HIGH-3 (Option A): file-scope PerMaterialCB
+	// shadow. Promoted from the old function-local static at the bottom of
+	// setPixelShaderUserConstants_impl so BOTH that path AND
+	// Direct3d11_StaticShaderData::apply()'s per-pass material upload can
+	// read-modify-write into the SAME struct (most-recent write per field
+	// wins; each path flushes the FULL struct via updatePS so partial
+	// writes never leave garbage). The getter is DECLARED in
+	// Direct3d11_ConstantBuffer.h next to the struct; its DEFINITION lives
+	// here (where the shadow lives) and is exported through
+	// `using namespace Direct3d11Namespace` at the bottom of this file.
+
+	static Direct3d11_PerMaterialCB s_perMaterialShadow = {};
+
+	Direct3d11_PerMaterialCB & getPerMaterialShadow()
+	{
+		return s_perMaterialShadow;
+	}
+
+	// ------------------------------------------------------------------
 	// The exported Gl_api table.
 
 	Gl_api ms_glApi;
@@ -664,12 +683,23 @@ namespace Direct3d11Namespace
 		//
 		// D3D11 cbuffer migration: shadow into Direct3d11_PerMaterialCB
 		// userConstants[]. Same flush pattern as VS (Plan 11-06 territory).
-		static Direct3d11_PerMaterialCB s_perMaterialShadow = {};
-		int const slots = sizeof(s_perMaterialShadow.userConstants) / sizeof(s_perMaterialShadow.userConstants[0]);
+		//
+		// Plan 17-03 R3-03a + HIGH-3 (Option A): the shadow is now the
+		// FILE-SCOPE s_perMaterialShadow promoted to namespace scope above,
+		// shared with Direct3d11_StaticShaderData::apply()'s per-pass
+		// material upload via Direct3d11Namespace::getPerMaterialShadow().
+		// Both paths read-modify-write the same struct and flush the FULL
+		// struct via updatePS; the most-recent write per field wins for
+		// each flush. The previous function-local static here was a
+		// cross-clobber hazard waiting to surface (Iter-45 wired the
+		// userConstants flush but left the material* fields silently
+		// zero on every call — Plan 17-03 fixes both).
+		Direct3d11_PerMaterialCB & shadow = getPerMaterialShadow();
+		int const slots = sizeof(shadow.userConstants) / sizeof(shadow.userConstants[0]);
 		int const clamped = (count > slots) ? slots : count;
 		for (int i = 0; i < clamped; ++i)
 		{
-			s_perMaterialShadow.userConstants[i] = DirectX::XMFLOAT4(
+			shadow.userConstants[i] = DirectX::XMFLOAT4(
 				constants[i].r, constants[i].g, constants[i].b, constants[i].a);
 		}
 		if (count > slots)
@@ -679,18 +709,49 @@ namespace Direct3d11Namespace
 				count, slots));
 		}
 
-		// Plan 11-09.15 Iter-45: flush the PerMaterialCB shadow to PS slot 2.
-		// Pre-Iter-45 this stored userConstants into a function-local static
-		// that NOTHING uploaded -- a pure dead-write (Cursor caught it in the
-		// Iter-44 pipeline deep-dive; mirror of the VS-side dead-write fixed in
-		// Plan 11-09 Iter-2.7 Fix C). PS slot 2 is the PerMaterialCB binding
-		// (Direct3d11_HlslRewrite.cpp:797; 11-05-SUMMARY). Immediate upload
-		// matches D3D9's setPixelShaderConstants semantics and the existing
-		// slot-0/1 flush pattern (fog/fade/alpha-test). Material diffuse/specular/
-		// emissive remain zero here (Pass::apply uploads none -- Phase 12 scope),
-		// which matches the primeDefaults zero-fill, so this writes only the
-		// engine-supplied PSCR_userConstant values without regressing slot 2.
-		Direct3d11_ConstantBuffer::updatePS(2, &s_perMaterialShadow, sizeof(s_perMaterialShadow));
+		// Plan 17-03 R3 SUB-STEP 1g (HIGH-3 cross-clobber regression check):
+		// one-shot DEBUG_REPORT_LOG_PRINT + InfoQueue dual-route showing
+		// non-zero coexistence of userConstants + material* fields on the
+		// SAME shadow at the SAME flush. Proves both code paths read-modify-
+		// write the SAME struct without zeroing each other's fields.
+		// `#if 0`'d-out after the first successful boot is recorded.
+#if 1
+		{
+			static bool s_loggedOnce = false;
+			if (!s_loggedOnce)
+			{
+				s_loggedOnce = true;
+				char msg[512];
+				_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+					"Plan 17-03 R3 SUB-STEP 1g shared-shadow coexistence at setPixelShaderUserConstants flush: "
+					"userConstants[0]=(%.3f,%.3f,%.3f,%.3f) "
+					"materialDiffuse=(%.3f,%.3f,%.3f,%.3f) "
+					"materialSpecular=(%.3f,%.3f,%.3f,%.3f) "
+					"materialEmissive=(%.3f,%.3f,%.3f,%.3f)",
+					shadow.userConstants[0].x, shadow.userConstants[0].y, shadow.userConstants[0].z, shadow.userConstants[0].w,
+					shadow.materialDiffuse.x,  shadow.materialDiffuse.y,  shadow.materialDiffuse.z,  shadow.materialDiffuse.w,
+					shadow.materialSpecular.x, shadow.materialSpecular.y, shadow.materialSpecular.z, shadow.materialSpecular.w,
+					shadow.materialEmissive.x, shadow.materialEmissive.y, shadow.materialEmissive.z, shadow.materialEmissive.w);
+				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+				DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+			}
+		}
+#endif
+
+		// Plan 11-09.15 Iter-45 + Plan 17-03: flush the PerMaterialCB shadow
+		// to PS slot 2. The slot-2 binding is the engine's PerMaterialCB
+		// convention (Direct3d11_HlslRewrite.cpp:797; 11-05-SUMMARY); this
+		// remains hardcoded as slot 2 because userConstants always belong
+		// to that binding by engine convention (it is NOT a reflected
+		// lookup — Plan 17-03's reflection-driven path lives in
+		// Direct3d11_StaticShaderData::apply at layout.BindPoint).
+		// Material diffuse/specular/emissive in `shadow` are populated by
+		// Plan 17-03's apply() path when the current draw uses a material
+		// AND its reflected cbuffer is bound at slot 2; otherwise they
+		// remain at their last value (per pass `apply` zeros them on
+		// non-material passes per R3-03b so stale data does not bleed).
+		Direct3d11_ConstantBuffer::updatePS(2, &shadow, sizeof(shadow));
 	}
 
 	// ------------------------------------------------------------------

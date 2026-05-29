@@ -65,6 +65,38 @@ struct Direct3d11_PerMaterialCB
 static_assert(sizeof(Direct3d11_PerMaterialCB) == 112,              "Direct3d11_PerMaterialCB size mismatch");
 static_assert((sizeof(Direct3d11_PerMaterialCB) % 16) == 0,         "Direct3d11_PerMaterialCB not 16-byte aligned");
 
+// ======================================================================
+//
+// Plan 17-03 R3-03a + HIGH-3 (Option A):
+//   The Direct3d11_PerMaterialCB shadow that backs the slot-b2 PerMaterial
+//   cbuffer is PROMOTED to a file-scope static inside Direct3d11.cpp (no
+//   longer the function-local static at the old :667 inside
+//   setPixelShaderUserConstants_impl). Two code paths now read-modify-write
+//   into the SAME shared shadow and both flush the FULL struct via updatePS
+//   (most-recent write per field wins):
+//
+//     1. Direct3d11.cpp setPixelShaderUserConstants_impl()       (userConstants[])
+//     2. Direct3d11_StaticShaderData::apply() per-pass material upload
+//        (materialDiffuse / materialSpecular / materialEmissive — when the
+//        reflected cbuffer at the bound PS exposes those variables AND
+//        layout.BindPoint == 2; per R3-03c the apply() upload is generally
+//        offset-aware against the cached reflection layout regardless of
+//        bind point, and the shadow mirror lives here ONLY for the slot-b2
+//        case so setPixelShaderUserConstants_impl's slot-2 flush sees
+//        consistent material values).
+//
+//   The getter is DECLARED here (the header that already owns
+//   Direct3d11_PerMaterialCB) and DEFINED in Direct3d11.cpp (where the file-
+//   scope shadow lives). Direct3d11_StaticShaderData.cpp includes this
+//   header and calls Direct3d11Namespace::getPerMaterialShadow().
+//
+//   Single-threaded device-context contract: no concurrent-write surface.
+
+namespace Direct3d11Namespace
+{
+	Direct3d11_PerMaterialCB & getPerMaterialShadow();
+}
+
 // Plan 11-09.15 Iter-44B: per-pass alpha-test parameters for dynamic PS
 // clip(). D3D11 has no fixed-function alpha test (D3D9 D3DRS_ALPHATEST*
 // was removed); the test must live in the pixel shader as a clip() call.

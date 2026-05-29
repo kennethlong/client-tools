@@ -56,6 +56,7 @@ class StaticShader;
 
 #include "clientGraphics/StaticShader.h"
 
+#include <DirectXMath.h>   // Plan 17-03 SR-1: XMFLOAT4 for PerPassMaterial cache
 #include <d3d11.h>
 #include <array>
 #include <vector>
@@ -157,6 +158,27 @@ private:
 	static constexpr int kMaxStages = 8;
 	typedef std::array<Stage, kMaxStages> PerPassStages;
 	std::vector<PerPassStages>                                m_passStages;
+
+	// Plan 17-03 SR-1 per-pass material + textureFactor SOURCE-DATA cache.
+	// Mirrors the D3D9 sibling shape at Direct3d9_StaticShaderData.h:90-119
+	// + .cpp:593-700 — resolved at construct() time from pass.m_materialTag
+	// / pass.m_textureFactorTag(2) via shader.getMaterial / getTextureFactor.
+	// Without this source data, Plan 17-03's reflection-driven upload writes
+	// zero into the cbuffer regardless of the plumbing — gray eyes, CHAR-02
+	// fails. Sized 1:1 with m_passPS at construct().
+	struct PerPassMaterial
+	{
+		bool              m_materialValid;
+		DirectX::XMFLOAT4 m_diffuse;
+		DirectX::XMFLOAT4 m_specular;
+		DirectX::XMFLOAT4 m_emissive;
+		float             m_power;
+		bool              m_textureFactorValid;
+		bool              m_textureFactor2Valid;
+		DirectX::XMFLOAT4 m_textureFactor;
+		DirectX::XMFLOAT4 m_textureFactor2;
+	};
+	std::vector<PerPassMaterial>                              m_passMaterial;
 };
 
 // ======================================================================
