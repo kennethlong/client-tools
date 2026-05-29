@@ -1101,12 +1101,28 @@ namespace Direct3d11_StateCacheNamespace
 		if (ms_currentIBValid && ms_currentIB)
 			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
 
-		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3: reflection-driven
-		// fallback-variant selection when asset PS is null).
+		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3 / 17-04 Task 1:
+		// VS<->PS signature pair validation gates the asset-PS bind so D3D11
+		// register-position-strict linkage is honored. When incompatible,
+		// route through selectFallbackPSForVS whose buildHlslForVSOutputs-built
+		// PS mirrors the VS output signature register-for-register).
 		ctx->VSSetShader(vs, nullptr, 0);
-		if (ms_currentPSData && ms_currentPSData->getPixelShader())
+
+		// Plan 17-04 Task 1: validate the (VS, PS) pair signature compatibility
+		// before letting the Plan 17-02-bound asset PS win. Pre-17-04 this gate
+		// was implicit (any non-null ms_currentPSData->getPixelShader() won
+		// unconditionally), which produced id=343 x 24K per char-select boot
+		// because asset PS input register positions didn't match the VS output
+		// the recompile lane assigned independently. isCompatibleWithVS returns
+		// true for the safe-bind path (matched semantics + registers + types +
+		// mask-subset) and false on any mismatch (route through the VS-matched
+		// per-VS PS instead). See Direct3d11_PixelShaderProgramData::
+		// isCompatibleWithVS for the validation contract + per-pair logging.
+		ID3D11PixelShader *psToBind = nullptr;
+		if (ms_currentPSData && ms_currentPSData->getPixelShader()
+			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentPSData))
 		{
-			ctx->PSSetShader(ms_currentPSData->getPixelShader(), nullptr, 0);
+			psToBind = ms_currentPSData->getPixelShader();
 		}
 		else if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
 		{
@@ -1114,18 +1130,16 @@ namespace Direct3d11_StateCacheNamespace
 			// selection. selectFallbackPSForVS returns Variant T (textured-
 			// passthrough) when the bound VS's reflected output signature
 			// proves D3D11 stage-linkage compatibility with `float2 uv :
-			// TEXCOORD0`; otherwise Variant M (magenta). Without this,
-			// either every draw is magenta (Iter-2 state) or every draw
-			// gets a id=342 linkage rejection (Iter-1 state). Real per-
-			// shader PS lands when Phase 12 re-authors the .psh assets to
-			// DXBC-format SM4+ bytecode.
-			ctx->PSSetShader(fallback, nullptr, 0);
+			// TEXCOORD0`; otherwise Variant M (magenta). Plan 17-04 Task 1
+			// re-elevates this path for asset PSes whose input signature
+			// is incompatible with the bound VS (id=343 mitigation).
+			psToBind = fallback;
 		}
-		else
-		{
-			// Defensive: should never fire post-Iter-3 since install() FATALs
-			// on either variant's compile failure. Leave previous PS bound if it does.
-		}
+		// else: defensive -- should never fire post-Iter-3 since install()
+		// FATALs on either variant's compile failure. Leave previous PS bound
+		// if it does.
+		if (psToBind)
+			ctx->PSSetShader(psToBind, nullptr, 0);
 
 		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by
 		// Direct3d11.cpp's setVertexShaderUserConstants_impl /

@@ -36,7 +36,9 @@
 #include <algorithm>      // Iter-4: std::sort
 #include <cstdio>         // Iter-4: snprintf
 #include <cstring>
+#include <set>            // Plan 17-04 Task 1: per-(VS, PS) once-per-pair logging dedupe set
 #include <string>         // Iter-4: HLSL generator builds std::string source
+#include <utility>        // Plan 17-04 Task 1: std::pair key for the dedupe set
 #include <vector>
 #include <d3d11.h>
 #include <d3d11sdklayers.h>   // Iter-4: ID3D11InfoQueue::AddApplicationMessage
@@ -1079,6 +1081,189 @@ Direct3d11_PixelShaderProgramData::Direct3d11_PixelShaderProgramData(ShaderImple
 	DEBUG_REPORT_LOG_PRINT(true,
 		("Direct3d11_PixelShaderProgramData: '%s' is pre-compiled D3D9 PS %d.%d bytecode -- not consumable by D3D11; m_d3dPS NULL (asset re-author follow-up; Plan 11-06 draw skip)\n",
 		pixelShaderProgram.getFileName(), verMajor, verMinor));
+}
+
+// ----------------------------------------------------------------------
+//
+// Plan 17-04 Task 1: VS<->PS signature pair compatibility gate.
+//
+// Walks the PS's reflected input signature (user semantics; Plan 17-02
+// already filters SV_* at population time) and asserts each input is
+// satisfiable by a VS output at the SAME hardware register slot with
+// matching (SemanticName, SemanticIndex), matching component type, and a
+// VS write mask that is a SUPERSET of the PS read mask.
+//
+// Returns false on any mismatch -- the caller (Direct3d11_StateCache::
+// applyPreDrawState) then routes through selectFallbackPSForVS, whose
+// Iter-3 buildHlslForVSOutputs-built PS mirrors the VS output signature
+// register-for-register and is therefore compatible by construction.
+//
+// Per-(vs, ps) result is logged ONCE via DEBUG_REPORT_LOG_PRINT + the
+// ID3D11InfoQueue file sink (R3-02b dual-route precedent). The static
+// dedupe set keys on the (VS*, PS*) pair pointers; both pointers outlive
+// any draw that consults the validator (m_d3dVS / m_d3dPS live on the
+// per-template graphics-data objects), so the keys remain stable.
+//
+// Defensive-null behavior:
+//   * vs == nullptr -> return true (no VS to validate; let asset PS bind).
+//   * ps == nullptr -> caller-side assertion failure (deferred to NOT_NULL
+//     at the callsite); avoid here to keep the validator a pure observer.
+//   * ps has empty reflected inputs (Plan 17-02 reflection failed or PS
+//     has no user-varying inputs) -> trivially compatible (no inputs to
+//     mismatch).
+//   * vs has empty reflected outputs -> incompatible IF ps has any user
+//     inputs (PS expects inputs the VS doesn't provide). Empty PS inputs
+//     against empty VS outputs is compatible.
+
+bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS(
+	Direct3d11_VertexShaderData       const *vs,
+	Direct3d11_PixelShaderProgramData const *ps)
+{
+	if (!ps)
+		return false;   // defensive; callsite is expected to pre-check, but don't crash here.
+	if (!vs)
+		return true;    // pre-17-04 default: no VS-side data to compare; let asset PS bind.
+
+	std::vector<Direct3d11_ReflectedPSInputSig>  const &psInputs  = ps->getReflectedPSInputs();
+	std::vector<Direct3d11_ReflectedVSOutput>    const &vsOutputs = vs->getReflectedOutputs();
+
+	// Static dedupe set so we emit at most one log line per (VS, PS) pair
+	// across the entire process lifetime. Keys on raw pointers because the
+	// reflected program-data objects are template-graphics-data singletons
+	// (allocated by MemoryBlockManager + retained until plugin remove).
+	static std::set<std::pair<void const *, void const *>> s_loggedPairs;
+	std::pair<void const *, void const *> const key(
+		static_cast<void const *>(vs),
+		static_cast<void const *>(ps));
+	bool const firstSeen = (s_loggedPairs.find(key) == s_loggedPairs.end());
+	if (firstSeen)
+		s_loggedPairs.insert(key);
+
+	// Walk PS inputs; every input must be satisfiable. Trivial-compat early
+	// exit: PS declares no user inputs (e.g. magenta fallback PS) -> nothing
+	// to mismatch, return true. This path bypasses the empty-VS-outputs
+	// branch below because there's no PS demand for VS supply.
+	if (psInputs.empty())
+	{
+		if (firstSeen)
+		{
+			char msg[256];
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-04 Task 1 VS<->PS pair compatibility: COMPATIBLE (ps has no user-varying inputs) vs=%p ps=%p",
+				static_cast<void const *>(vs), static_cast<void const *>(ps));
+			if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+				iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+			DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+		}
+		return true;
+	}
+
+	// PS has demands and VS supplies nothing -> structurally incompatible.
+	// Caught here rather than failing the loop below so the log message is
+	// specific.
+	if (vsOutputs.empty())
+	{
+		if (firstSeen)
+		{
+			char msg[384];
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-04 Task 1 VS<->PS pair compatibility: INCOMPATIBLE vs=%p ps=%p reason='ps has %u user inputs but vs reflection produced 0 outputs (reflection failed at compile time or vs is degenerate)'",
+				static_cast<void const *>(vs), static_cast<void const *>(ps),
+				static_cast<unsigned>(psInputs.size()));
+			if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+				iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+			DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+		}
+		return false;
+	}
+
+	for (Direct3d11_ReflectedPSInputSig const &psIn : psInputs)
+	{
+		// Locate VS output matching THIS PS input by (SemanticName,
+		// SemanticIndex). _stricmp matches D3D11's semantic comparison
+		// (HLSL semantics are case-insensitive per the HLSL spec).
+		Direct3d11_ReflectedVSOutput const *vsOutMatch = nullptr;
+		for (Direct3d11_ReflectedVSOutput const &vsOut : vsOutputs)
+		{
+			if (_stricmp(vsOut.SemanticName, psIn.SemanticName) != 0) continue;
+			if (vsOut.SemanticIndex != psIn.SemanticIndex)            continue;
+			vsOutMatch = &vsOut;
+			break;
+		}
+
+		// Per-mismatch reason string; populated by the first failed check
+		// so the log line cites a concrete failure rather than "incompatible".
+		char const *mismatchReason = nullptr;
+		char        reasonBuf[256];
+
+		if (!vsOutMatch)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' has no matching vs output semantic",
+				psIn.SemanticName, psIn.SemanticIndex);
+			mismatchReason = reasonBuf;
+		}
+		else if (vsOutMatch->Register != psIn.Register)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' expects register v%u but vs writes semantic at register o%u (D3D11 stage linkage is register-position-strict; id=343)",
+				psIn.SemanticName, psIn.SemanticIndex,
+				psIn.Register, vsOutMatch->Register);
+			mismatchReason = reasonBuf;
+		}
+		else if (vsOutMatch->ComponentType != psIn.ComponentType)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' component type %d does not match vs output component type %d (e.g. float vs int)",
+				psIn.SemanticName, psIn.SemanticIndex,
+				static_cast<int>(psIn.ComponentType),
+				static_cast<int>(vsOutMatch->ComponentType));
+			mismatchReason = reasonBuf;
+		}
+		else if ((vsOutMatch->ComponentMask & psIn.Mask) != psIn.Mask)
+		{
+			// PS read mask must be a subset of VS write mask. Use VS
+			// ComponentMask (declared signature contract) rather than
+			// ReadWriteMask (which components VS actually wrote) -- D3D11
+			// validates against the declared signature.
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' read mask 0x%X is not a subset of vs write mask 0x%X at register %u",
+				psIn.SemanticName, psIn.SemanticIndex,
+				psIn.Mask, vsOutMatch->ComponentMask, psIn.Register);
+			mismatchReason = reasonBuf;
+		}
+
+		if (mismatchReason)
+		{
+			if (firstSeen)
+			{
+				char msg[512];
+				_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+					"Plan 17-04 Task 1 VS<->PS pair compatibility: INCOMPATIBLE vs=%p ps=%p reason='%s'",
+					static_cast<void const *>(vs), static_cast<void const *>(ps),
+					mismatchReason);
+				if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+				DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+			}
+			return false;
+		}
+	}
+
+	// Every PS input matched a VS output by (semantic, register, type,
+	// mask-subset). Asset PS is safe to bind.
+	if (firstSeen)
+	{
+		char msg[256];
+		_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+			"Plan 17-04 Task 1 VS<->PS pair compatibility: COMPATIBLE vs=%p ps=%p (matched %u ps inputs against vs outputs)",
+			static_cast<void const *>(vs), static_cast<void const *>(ps),
+			static_cast<unsigned>(psInputs.size()));
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+	}
+	return true;
 }
 
 // ----------------------------------------------------------------------
