@@ -1,15 +1,20 @@
 ---
 phase: 17
-review_round: 3
+review_round: 4
 reviewers: [codex, cursor]
-reviewed_at: 2026-05-28T16:22:00Z
-plans_reviewed: [17-01-PLAN.md, 17-02-PLAN.md, 17-03-PLAN.md]
+reviewed_at: 2026-05-29T08:40:00Z
+plans_reviewed: [17-01-PLAN.md, 17-02-PLAN.md, 17-03-PLAN.md, 17-05-PLAN.md, 17-06-PLAN.md, 17-07-PLAN.md]
 prior_rounds:
   - "Round 1 review at commit 797e9db57 (`docs: cross-AI review for phase 17`)"
   - "Round 2 replan at commit 6e0eae4e6 (`docs(17): incorporate cross-AI review feedback (codex+cursor)`)"
   - "Round 2 review at commit 85ff0b90b (`docs(17): cross-AI review round 2 (codex+cursor) — convergence NOT achieved`)"
   - "Round 3 replan at commit 6cfe19a7f (`docs(17): round 3 replan — convergence amendments (SR-2 reflect, HIGH-3 shadow, HIGH-4 routing, SR-3 split, plumbing fixes)`)"
-verdict: CONVERGENCE ACHIEVED — execution-ready with 1 LOW-severity frontmatter-cleanup item
+  - "Round 3 review at commit (this file's prior state) — CONVERGENCE ACHIEVED for plans 17-01/02/03"
+  - "Plans 17-01..17-04 executed; Phase 17 closed as INFRASTRUCTURE COMPLETE at commit 41d7f2fec; post-04 follow-up commit 04ef976 added materialSpecularColor recognition"
+  - "Synthesized 17-VERIFICATION.md inventoried GAP-1 (no A/B screenshot), GAP-2 (no wroteDiffuse/wroteEmissive), GAP-3 (0/9 asset-PS binds — COLOR0 register-position mismatch)"
+  - "Round 4 plans 17-05/06/07 authored as the gap-closure wave"
+verdict_round3: CONVERGENCE ACHIEVED — plans 17-01/02/03 execution-ready
+verdict_round4: CONVERGENCE NOT ACHIEVED — gap-closure plans 17-05/06/07 have HIGH-severity concerns that gate execution (writeVarByName sub-channel impossibility, files_modified contract violation, PSRC syntax mismatch, depends_on metadata deadlock)
 ---
 
 # Cross-AI Plan Review — Phase 17 (PSRC Census + Char-Select Beachhead) — ROUND 3
@@ -199,3 +204,321 @@ All eight Round 3 checklist items are present, grep-targeted, and aligned with t
 3. **At Plan 03 execution start** (per Cursor suggestion 1): treat acceptance block `17-03-PLAN.md:561-576` as authoritative over any stale `must_haves.truths` wording.
 
 4. **At Plan 02 Task 2 boot gate** (per Cursor suggestion 2): capture PS-cbuffer dump lines verbatim into `17-02-SUMMARY.md` with `BindPoint`, `TotalSize`, and `materialDiffuse`/`Specular`/`Emissive` offsets — Plan 03's Contract A and the R3-03d StateCache bind-loop decision depend on this real data.
+
+---
+
+# Round 4 — Gap-Closure Wave (Plans 17-05 / 17-06 / 17-07)
+
+Same two reviewers as Rounds 1–3 (Codex via `codex exec --sandbox read-only` and Cursor via `cursor-agent -p --mode ask --trust`). Both read the gap-closure plans authored after Phase 17 closed as INFRASTRUCTURE COMPLETE (commit `41d7f2fec`). Cursor additionally cross-read live tree state at `Direct3d11_StaticShaderData.cpp:794-896`, `Direct3d11_PixelShaderProgramData.cpp:469-1137`, `Direct3d11_HlslRewrite.cpp:747-767`, `Direct3d11_StateCache.cpp:1121-1137`, and the captured PSRC dump at `evidence/plan-17-04x-psrc-source-dump.txt`.
+
+Prompt: `.planning/tmp/gsd-review-prompt-17.md` (~134 KB, 1040 lines). Codex review: ~11 KB; Cursor review: ~19 KB.
+
+## Codex Review (Round 4)
+
+### Plan 17-05
+
+**Summary:** Solid verification plan and the right antidote to the Iter-44B false-claim problem. Its main weakness is orchestration: it is both a first plan and a final verification plan, so it parks mid-flight while 17-06/17-07 happen. That is acceptable only if the blocked state is explicit in the phase tracker.
+
+**Strengths**
+- Correctly separates PRE-gap evidence from POST-gap evidence.
+- Keeps D3D9 as the immutable reference and requires `rasterMajor=5` re-boot after code changes.
+- Does not let log greps substitute for visual parity.
+- Good use of verifier-produced `17-VERIFICATION.md` instead of mutating the synthesized stand-in quietly.
+
+**Concerns**
+- **MEDIUM:** Filename contract is inconsistent. Roadmap says pair convention `char_default_d3d11_0003.png`, but artifacts use `char_default_d3d11_0003_preGap.png` and `_postGap.png`. Fine for cycle evidence, but future harness compatibility should define aliases or explicitly bless suffixes.
+- **MEDIUM:** "D3D9 baseline is invariant" is mostly true, but 17-06/17-07 modify the D3D11 plugin only by intent, not by proof until after execution. Task 4 re-boots D3D9, but not re-screenshoting means subtle config/camera/user-character drift will not be caught.
+- **LOW:** `char_default_d3d9_0003.png` existence is treated as proof of clean D3D9 boot. It proves the client rendered once, not that the boot log was clean.
+- **LOW:** "No SUMMARY.md required" conflicts with the surrounding GSD habit and with 17-06/17-07 expecting summaries. Not fatal, but audit discoverability suffers.
+
+**Suggestions**
+- Add a stable canonical pair entry in `17-VERIFICATION.md`: "canonical comparison = D3D9 `char_default_d3d9_0003.png` vs D3D11 `char_default_d3d11_0003_postGap.png`."
+- In Task 4, require a fresh D3D9 screenshot only if the character/camera/default pose changed or if the post-17-07 D3D9 boot lands on a different visible state.
+- Record image dimensions, timestamp, renderer, commit SHA, and gl DLL timestamp in the evidence README or verification table.
+- Add a brief `17-05-SUMMARY.md` or a one-line pointer file if the GSD index expects one.
+
+**Risk Assessment:** **LOW-MEDIUM.** The plan is mostly documentation/evidence, but it creates a long-lived parked plan state and depends heavily on disciplined human capture.
+
+### Plan 17-06
+
+**Summary:** The goal is valid, but the technical path is under-specified and possibly aimed at the wrong target. The live code's `writeVarByName` only matches whole reflected variable names and writes full `float4`s, so "packedRegisterN.{xyzw} channel" is not implementable by adding candidate strings alone. This plan needs a discovery/fix split or a concrete offset-write design before execution.
+
+**Strengths**
+- Correctly rejects the falsified `material[0/1/2]` hypothesis.
+- Keeps scope plugin-local in `Direct3d11_StaticShaderData.cpp:794`.
+- Preserves `materialSpecularColor` and the existing diagnostic dump.
+- Good insistence on deriving mapping from source or boot evidence rather than guessing.
+
+**Concerns**
+- **HIGH:** `writeVarByName("packedRegisterN.x", ...)` will not work unless D3DReflect exposes that exact dotted name. Current code compares exact `var.Name` strings and writes a full `XMFLOAT4` at `StartOffset`; it has no component/channel writer. See `Direct3d11_StaticShaderData.cpp:794`.
+- **HIGH:** Writing diffuse/emissive into a whole `packedRegisterN` risks stomping sibling channels. The plan says "single-candidate-per-channel," but the implementation primitive is whole-register, not per-channel.
+- **HIGH:** The plan assumes `userConstants` inner reflection can reveal semantic names. If `userConstants` is an array of 17 float4s, reflection may expose only array elements or a single opaque variable, not meaningful "diffuse/emissive" fields.
+- **MEDIUM:** The source comment already says char-select PS programs may not directly consume `materialDiffuse`/`materialEmissive`; diffuse may come through `textureFactor` or texture sampling. Forcing the metric to `wroteDiffuse=1 && wroteEmissive=1` may be a false target if the shader never declares those values.
+- **MEDIUM:** Path B is a plan-within-a-plan requiring an extra commit, extra boot, and then a mapping commit. That is too much branching for one execute plan.
+
+**Suggestions**
+- Split 17-06 into `17-06a discovery` and `17-06b mapping/write`.
+- Add a new explicit helper if packed channels are real: `writeVarComponent("packedRegister0", componentIndex, valueComponent)` or `writeVarFloat4AtOffset(baseName, value, mask)`.
+- Change success wording from "wroteDiffuse/emissive must land" to "the shader inputs actually consumed by sul_eye/head receive the required material values," then list the concrete reflected variables after discovery.
+- Treat `textureFactor` / `textureFactor2` as first-class candidates if source inspection says they drive clothing/eye tint.
+
+**Risk Assessment:** **HIGH.** The target is valid, but the proposed candidate-chain mechanism does not match the current reflection/write primitive.
+
+### Plan 17-07
+
+**Summary:** This plan identifies the right root cause, but the proposed implementation is much riskier than the plan admits. A per-(VS, PS) rewritten asset shader cannot realistically be integrated by touching only `Direct3d11_PixelShaderProgramData.cpp`. The bind decision lives in `Direct3d11_StateCache.cpp:1123`, so the `files_modified` contract is probably false.
+
+**Strengths**
+- Keeps `isCompatibleWithVS` and `selectFallbackPSForVS` as safety rails.
+- Chooses the lower-blast-radius axis in principle: PS-side adaptation instead of VS-output reordering.
+- Correctly recognizes that ctor-time compile does not know the bound VS.
+- Good measurable metric: asset PS bind rate from 0/9 to >=8/9 compatible.
+
+**Concerns**
+- **HIGH:** The single-file scope is not credible. StateCache currently binds asset PS only if `isCompatibleWithVS(...)` succeeds, else falls back. A rewritten PS must be requested and bound in that path, which likely requires `Direct3d11_StateCache.cpp`.
+- **HIGH:** Avoiding `Direct3d11_PixelShaderProgramData.h` may be over-constrained. A clean API like `getOrCompileAssetPSForVS(vsData)` probably belongs on `Direct3d11_PixelShaderProgramData`; file-scope static maps keyed by `this` are a workaround with lifetime/cache risks.
+- **HIGH:** Parsing HLSL structs with ad hoc text scanning is fragile. Comments, macros, typedefs, includes, nested structs, multiple entry points, semantic casing, arrays, and `half`/`fixed`/legacy types can break this. "Return input unchanged" is safe, but may leave the plan failing 0/9.
+- **MEDIUM:** Reordering the struct fields may not force register assignment if semantics include system values or explicit interpolation modifiers. It likely helps for COLOR/TEXCOORD, but the plan should validate reflected input after compile before claiming success.
+- **MEDIUM:** Shader cache key handling is underdeveloped. `tryCompilePixelShaderFromHlslNoFatal` currently hashes source+defines before rewrite. Per-VS rewritten source must include a VS signature salt or the cache can return the wrong blob.
+- **MEDIUM:** Success log wording can inflate counts. Logging "Plan 17-07 ... COMPATIBLE" must only happen after D3DReflect on the rewritten PS and a real `isCompatibleWithVS` pass, not merely after compile.
+
+**Suggestions**
+- Update `files_modified` up front to include `Direct3d11_StateCache.cpp` and possibly `Direct3d11_PixelShaderProgramData.h`, or explicitly split "prototype hack" from "clean integration."
+- Prefer a narrow public method despite the ABI concern, with mandatory full plugin rebuild: `ID3D11PixelShader *getOrCompileRewrittenAssetPSForVS(Direct3d11_VertexShaderData const *vsData);`
+- Include VS-output-signature hash in the rewritten source or cache key before `Direct3d11_ShaderCache::hashSource`.
+- Add a compile-time postcondition: reflect rewritten PS inputs, run `isCompatibleWithVS`, only cache/bind if compatible.
+- Consider a smaller first fix: if every failing pair is only `COLOR0 v0/o1`, test a targeted COLOR0/TEXCOORD declaration-order rewrite before building a general HLSL parser.
+
+**Risk Assessment:** **HIGH.** Axis-(b) is lower risk than VS reordering conceptually, but this concrete plan underestimates integration and parser risk.
+
+### Codex Cross-Plan Assessment (Round 4)
+
+Together, the plans address the right three gaps on paper: 17-05 closes evidence, 17-06 targets material constant upload, and 17-07 targets asset PS bind compatibility. They do **not yet guarantee** CHAR-01/02/03 PASS. They can support PASS only if the POST-gap screenshots show visual parity and the logs prove the asset PS lane, not fallback PS, is carrying the relevant draws.
+
+The wave ordering is mostly correct: PRE capture → code fixes → POST capture → verification authoring. There is no fatal cycle, but 17-05 depends on 17-06/17-07 to finish while 17-06/17-07 depend on 17-05 PRE evidence. The tracker must represent 17-05 as "parked after Task 3," not failed or incomplete.
+
+The two human checkpoints in 17-05 are acceptable for this repo because only Kenny's host has assets. The risk is stale executor state. Mitigate by requiring commit SHAs and `stage/gl11_d.dll` timestamps in both resume signals.
+
+17-06's Path A/B branch should be split. Discovery that may require code instrumentation, boot, evidence ingestion, and then a second implementation commit is not a clean single execute task.
+
+17-07 violates its `files_modified` contract unless execution proves a very clever wrapper path. The honest plan should include `Direct3d11_StateCache.cpp` as likely modified. If a header method is needed, allow it and explicitly require a full plugin rebuild rather than contorting around the ABI trap.
+
+The success metrics are necessary but not sufficient. `>=8/9 COMPATIBLE`, `wroteDiffuse=1`, `wroteEmissive=1`, and three PNGs prove progress. Phase 17 closure still needs: matched visual parity, no magenta/fallback dominance on required surfaces, D3D9 and D3D11 boot confirmation, and an explicit statement for any residual nonmatching pair.
+
+Landmine handling is generally good, but there are inconsistencies: 17-07 says "single .cpp only" while its own Task 1 admits `StateCache.cpp` may be touched; 17-06 says "channel mapping" while the current write helper cannot write channels; 17-05 says D3D9 invariant but does not capture a post-fix D3D9 image unless needed.
+
+**Bottom line (Codex):** 17-05 is strong, 17-06 needs redesign around actual reflected variable/write mechanics, and 17-07 needs a more honest integration scope. I would not execute 17-06/17-07 as written without tightening those two contracts first.
+
+---
+
+## Cursor Review (Round 4)
+
+Review grounded in the plan text plus live tree state (`Direct3d11_StaticShaderData.cpp`, `Direct3d11_PixelShaderProgramData.cpp`, `Direct3d11_HlslRewrite.cpp`, `Direct3d11_StateCache.cpp`, `evidence/plan-17-04x-psrc-source-dump.txt`).
+
+### Plan 17-05 — A/B Verify (GAP-1)
+
+**Summary:** Well-structured verification plan that correctly treats missing screenshots as the blocking audit gap and enforces Iter-44B discipline. The PRE/post capture split is sound. The main weaknesses are dependency metadata that can deadlock Wave 6, weak capture reproducibility spec, and an implicit assumption that PRE-gap D3D11 will look dramatically broken when fallback PS may already produce partial texture.
+
+**Strengths**
+- Correctly centers GAP-1 as the formal close blocker; no grep-only PASS claims.
+- PRE-gap + POST-gap + invariant D3D9 baseline is the right experimental design.
+- Task 3 handoff explicitly parks 17-05 while 17-06/17-07 run — good orchestration intent.
+- No source edits; D3D9 path untouched; ABI trap avoided.
+- Task 5 acceptance criteria are concrete (frontmatter, PNG citations, grep counts).
+- Explicit PARTIAL/DEFERRED escape hatch if POST-gap still fails — honest.
+
+**Concerns**
+
+| Severity | Issue |
+|----------|-------|
+| **HIGH** | **`depends_on: ["17-05"]` on 17-06/17-07 conflicts with 17-05 parking at Task 3.** If the orchestrator treats `depends_on: ["17-05"]` as "plan complete," you get a cycle: 17-05 waits on 17-06/17-07 at Task 4; 17-06/17-07 wait on 17-05 complete. Frontmatter should be `depends_on: ["17-04", "17-05-task3"]` or wave-only ordering. |
+| **MEDIUM** | **No capture reproducibility contract.** Tasks 2/4 say "char-select default pose" and ScreenShotHelper, but don't pin character slot, camera, UI state, resolution, or whether screenshots are full-frame vs cropped. Phase 12 `COMPARISON.md` pairs are useless for pixel diff if framing drifts between D3D9 and D3D11 boots. |
+| **MEDIUM** | **Naming drift from ROADMAP.** Success criterion #5 references `char_default_d3d11_0003.png`; plan uses `_preGap` / `_postGap`. Fine internally, but Phase 20 harness needs an explicit alias rule or it will miss files. |
+| **MEDIUM** | **PRE-gap visual narrative may be wrong.** Current bind path uses `selectFallbackPSForVS` → Variant T (textured passthrough when TEXCOORD0 exists). PRE-gap may show textures but wrong lighting/head composite — not necessarily magenta/untextured. Task 5 prose should distinguish "fallback-PS partial parity" vs "asset-PS parity." |
+| **LOW** | **Task 1 boot-gate greps omit `wroteEmissive=1` and `wroteSpecular=1` in Task 2** (only 5 greps). Task 4 adds them — asymmetric baseline table. |
+| **LOW** | **`verified_by: pending /gsd:verify-work 17` after Task 5** — doc is verifier-produced but still not independently verified; milestone audit may over-read "closure." |
+
+**Suggestions**
+- Fix dependency wording in 17-06/17-07 frontmatter: `depends_on: ["17-04", "17-05-pre-gap-evidence"]` — "Runnable after 17-05 Task 3 commit; does NOT require 17-05 Task 5."
+- Add to `evidence/README.md`: "Same character slot, default camera, no UI panels obscuring face, 1920×1080 (or document actual), full client framebuffer."
+- Task 5 must require stating **which PS lane** delivered POST-gap visuals (grep `Plan 17-07 .* COMPATIBLE` vs fallback-only).
+- Add symlink or copy step: `char_default_d3d11_0003.png` → `char_default_d3d11_0003_postGap.png` for harness compatibility.
+
+**Risk Assessment: MEDIUM** — Process/orchestration risk (dependency deadlock, capture variance) exceeds technical risk; plan is otherwise appropriate for GAP-1.
+
+### Plan 17-06 — packedRegister / Diffuse+Emissive (GAP-2)
+
+**Summary:** Thorough discovery-first framing, but **likely mis-targeted for char-select visual parity**. Live code and PSRC dumps already show char-select shaders consume `textureFactor` / `textureFactor2` and **interpolated `COLOR0` (`vertexDiffuse`)**, not cbuffer `materialDiffuse` / `materialEmissive`. Rule D in `Direct3d11_HlslRewrite.cpp` preserves original declaration names — it does **not** contain a `c[N] → packedRegister[K].channel` table, so Path A is a dead end. Closing GAP-2 as defined (`wroteDiffuse=1` + `wroteEmissive=1`) may satisfy metrics without moving CHAR-01/02/03.
+
+**Strengths**
+- Correctly falsifies `material[0/1/2]` hypothesis; aligns with discovery dump.
+- Plugin-local scope (`Direct3d11_StaticShaderData.cpp` only) — no ABI/header trap.
+- Path B (extend discovery dump for `userConstants` inner fields) is the right fallback when Rule D is opaque.
+- Discovery dump self-suppression on `wrote(D,S,E)=(1,1,1)` is a good failure signal.
+- Preserves `materialSpecularColor` (04ef976) — don't regress specular.
+
+**Concerns**
+
+| Severity | Issue |
+|----------|-------|
+| **HIGH** | **GAP-2 may not be on the critical path for char-select.** Comments at `887:896:Direct3d11_StaticShaderData.cpp` state diffuse comes from texture sampler + `textureFactor.rgb`; emissive lives in `packedRegisterN` / `userConstants` engine state; `material*` lookups "will silently miss for char-select shaders." PSRC confirms `h_simple_pp_ps20.psh` uses `textureFactor.rgb`, not material diffuse cbuffer. |
+| **HIGH** | **Rule D does not document the mapping Path A needs.** `747:767:Direct3d11_HlslRewrite.cpp` only wraps `: register(cN)` → `packoffset(cN)` preserving names. `packedRegister0..4` in reflection means the **input** `.inc` declares those names — not that Rule D maps diffuse/emissive into them. Path A will almost certainly fall through to Path B every time. |
+| **HIGH** | **`writeVarByName` cannot write sub-channels.** Lambda at `794:812:Direct3d11_StaticShaderData.cpp` does exact `strcmp` on top-level names and writes a full `XMFLOAT4`. Plan text references `packedRegisterN.{xyzw}` but implementation only supports whole-variable names like `"packedRegister2"`. |
+| **MEDIUM** | **Conflicts with "single-candidate-per-channel" comment at lines 863–866** while Task 1 adds `||` chains — same tension 17-04 already had. Wrong first-hit candidate could write garbage to an unrelated packed slot. |
+| **MEDIUM** | **Path B should be the primary plan, not a branch.** Two-commit + extra Kenny boot adds latency; consider splitting `17-06a` (dump extension) / `17-06b` (mapping) upfront. |
+| **MEDIUM** | **Success metric `wroteDiffuse=1` conflates "write landed" with "visual fix."** `vertexDiffuse` lighting uses VS→PS interpolator (GAP-3), not cbuffer diffuse upload. |
+| **LOW** | **`textureFactor` / `textureFactor2` already hit** but are `(void)`-discarded in logging — no visibility in 17-05 grep set despite being char-select-relevant. |
+
+**Suggestions**
+- Re-scope 17-06 objective: "Close GAP-2 **instrumentation completeness** (D/S/E flags + dump suppression). Visual CHAR impact expected **low** for char-select; primary visual driver is GAP-3 + existing `textureFactor` path."
+- Start with Path B; treat Path A as "confirm Rule D preserves names" only.
+- If mapping lives in `userConstants`, verify D3DReflect exposes dotted paths — arrays of 17×float4 may not reflect inner semantics; may need **engine-side slot index** from D3D9 upload path, not PS reflection alone.
+- Extend `writeVarByName` or add offset write helper if mapping is sub-vector within `packedRegisterN`.
+- Add Task 1 acceptance: document PSRC consumption per anchor (`h_simple` → `textureFactor`; `h_color2_specmap` → `materialSpecularColor` + `textureFactor`) so 17-05 Task 5 doesn't attribute visual delta to the wrong gap.
+
+**Risk Assessment: MEDIUM–HIGH** — Low regression risk (plugin-local), but **high risk of false closure**: metrics pass, visuals unchanged, effort spent on non-critical path.
+
+### Plan 17-07 — PS Input-Signature Rewrite (GAP-3)
+
+**Summary:** Correctly identifies the beachhead-critical gap (0/9 asset-PS binds). Axis-(b) is directionally right vs disturbing `buildHlslForVSOutputs`. But the plan **underestimates PSRC syntax** (parameter-list `main()`, not struct inputs), **contradicts "`isCompatibleWithVS` unchanged"** with per-VS rewrite needs, and **will require bind-path changes** in practice (`Direct3d11_StateCache.cpp` or a new resolver API). This is the highest-complexity plan in the wave and the one most likely to slip schedule or pass grep metrics without visual parity.
+
+**Strengths**
+- Targets the actual blocker: register-position mismatch (`COLOR0` at v0 vs o1).
+- Axis-(b) scoped to PS recompile lane — avoids Phase 11 VS-output reorder regressions.
+- Preserves `selectFallbackPSForVS` safety net — correct.
+- `buildHlslForVSOutputs` at `469:492:Direct3d11_PixelShaderProgramData.cpp` is the right template for sort-by-register discipline.
+- Per-VS lazy recompile (b.1) matches `getOrCompilePSForVS` precedent.
+- Non-fatal degrade path via `tryCompilePixelShaderFromHlslNoFatal` is appropriate.
+- No header touch — ABI trap avoided.
+
+**Concerns**
+
+| Severity | Issue |
+|----------|-------|
+| **HIGH** | **Parser targets struct inputs; char-select PSRC uses parameter lists.** Evidence: `h_simple_pp_ps20.psh`, `h_color2_specmap_cbmp_ps20.psh` use `float4 main(in float3 vertexDiffuse : COLOR0, in float2 tcs_MAIN : TEXCOORD0, ...)`. Task 1 step 1a ("struct bound to `main` parameter type") will no-op or fail on dominant char-select shaders. Rewriter must reorder **`main()` parameter declarations**, not struct fields. |
+| **HIGH** | **`isCompatibleWithVS` unchanged vs per-VS rewritten PS is a logical contradiction.** Validator reads `ps->getReflectedPSInputs()` from **ctor-time** compile (`1060:1081:Direct3d11_PixelShaderProgramData.cpp`). Rewritten per-VS PS has different input registers but cached `m_reflectedPSInputs` stays wrong → validator still INCOMPATIBLE unless you also cache per-VS reflection OR bypass the gate. Acceptance criterion "`isCompatibleWithVS` definition unchanged" fights the fix. |
+| **HIGH** | **Bind integration requires StateCache or new resolver — not optional.** Current path at `1121:1137:Direct3d11_StateCache.cpp`: asset PS binds only if `getPixelShader()` && `isCompatibleWithVS`. Step 4's "lookup rewrite cache before fallback" **must** change this call site or replace it with e.g. `resolveAssetPSForVS(vs, ps)`. `files_modified: [Direct3d11_PixelShaderProgramData.cpp]` understates scope. |
+| **MEDIUM** | **Cache key must include VS signature hash.** `tryCompilePixelShaderFromHlslNoFatal` hashes source only (`306:307`). Per-VS rewrite without hash salt → wrong PS served across VS pairs. |
+| **MEDIUM** | **`>= 8/9 COMPATIBLE` via new log lines ≠ asset PS actually bound.** Plan can emit `Plan 17-07 ... COMPATIBLE` from rewrite path while StateCache still binds fallback if wiring is wrong. Need bind-path assertion (e.g. log `PSSetShader asset-PS ptr=...` vs fallback ptr). |
+| **MEDIUM** | **HLSL parameter reorder is fragile.** Macros, `#if`, multi-line params, `inout`, legacy `ps_1_x` profiles — string rewrite can break compile. Plan mentions non-fatal fallback but not a census of parse failure rate. |
+| **MEDIUM** | **Axis-(b) "lower risk" is only true vs axis-(a) — not vs complexity baseline.** Per-(VS,PS) lazy recompile + parse + cache + bind routing is a large single-task change for one `.cpp` file. |
+| **LOW** | **Log grep contract:** Task 4 expects `Plan 17-07 .* COMPATIBLE vs=` but existing compat logs use `Plan 17-04 Task 1 VS<->PS pair compatibility: COMPATIBLE`. Plan accounts for this — ensure executor doesn't double-count. |
+
+**Suggestions**
+- Split Task 1 into explicit subtasks:
+  1. `rewriteMainParameterOrderForVSOutputs()` — handle parameter-list PSRC (primary).
+  2. Optional struct-path for rare assets.
+  3. `resolvePixelShaderForVS(vs, ps)` returning `{assetRewritten | assetNative | fallback}`.
+  4. StateCache one-line swap to call resolver (add to `files_modified` upfront).
+- Change acceptance criteria from "`isCompatibleWithVS` unchanged" to: "`isCompatibleWithVS` unchanged for **native** ctor compile; rewritten PS validated via **per-VS reflected inputs** before bind."
+- Add boot metric: `asset-PS bound=` count distinct from `COMPATIBLE` log count.
+- Spike: manually reorder one PSRC (`h_simple_pp_ps20.psh`) parameter list to match VS register order, recompile, confirm `isCompatibleWithVS` true — de-risk before full cache impl.
+
+**Risk Assessment: HIGH** — Beachhead-critical, but implementation plan has unresolved architecture (bind path, reflection cache, PSRC parse shape) that can yield grep-green / visual-red outcomes.
+
+### Cursor Cross-Plan Assessment (Round 4)
+
+**Do 17-05 + 17-06 + 17-07 close GAP-1/2/3 and enable CHAR PASS?**
+
+| Gap | Likely closed? | CHAR impact |
+|-----|----------------|-------------|
+| **GAP-1** | **Yes**, if Kenny captures and Task 5 is honest | Enables formal verdicts; doesn't fix visuals |
+| **GAP-2** | **Maybe** (metrics only) | **Weak** for char-select per live code + PSRC — `textureFactor` already works; eyes/head depend on interpolators + asset PS |
+| **GAP-3** | **Conditional** — plan is necessary but current spec may fail on PSRC syntax / bind wiring | **Primary** driver for CHAR-01/03; CHAR-02 (eyes) likely needs GAP-3 + correct SRV/stage composite, not emissive cbuffer |
+
+**Verdict:** Together they can move Phase 17 from NOT-VERIFIED → evidence-backed PARTIAL/PASS, but **automatic PASS on all CHAR-0x is not guaranteed** even if all grep metrics hit. Most likely outcome: **CHAR-01 PARTIAL→PASS if GAP-3 lands; CHAR-02/03 PARTIAL** until head multi-stage and eye palette are visually confirmed in A/B narrative.
+
+**Wave ordering** is correct in intent; the hidden cycle is the `depends_on: ["17-05"]` metadata. 17-05 Task 4 also requires the **combined** gl11_d.dll from 17-06 AND 17-07 — parallel commits need explicit merge/build instruction ("deploy gl11_d.dll built from commit containing both").
+
+**Two-checkpoint structure in 17-05:** Acceptable but fragile. Executor blocked twice on Kenny is expected for this repo (no TRE in CI worktree). Mitigations: time-box checkpoints; allow Task 5 draft after Task 2 with DEFERRED CHAR verdicts updated after Task 4; don't block 17-06/17-07 on Task 4.
+
+**17-06 Path A vs Path B — split plans?** Path B should be default; recommend explicit split into `17-06a` (Discovery dump extension + Kenny boot) and `17-06b` (Mapping commit after evidence).
+
+**17-07 cache options + StateCache drift:** Yes, violates stated `files_modified` contract in practice. Recommend updating 17-07 frontmatter to: `files_modified: [Direct3d11_PixelShaderProgramData.cpp, Direct3d11_StateCache.cpp]`.
+
+**Success metrics vs Iter-44B discipline:**
+
+| Metric | Sufficient for phase close? |
+|--------|------------------------------|
+| 3 PNGs + written diff | **Necessary** for Iter-44B — good |
+| `wroteDiffuse=1` + `wroteEmissive=1` | **Insufficient alone** — may be irrelevant for char-select |
+| `>= 8/9 Plan 17-07 COMPATIBLE` | **Insufficient alone** — must prove asset PS bound, not just logged compat after rewrite |
+| D3D9 boot clean | **Necessary** D-06 — good |
+
+For PASS (not PARTIAL): Task 5 must show POST-gap D3D11 **visually matches** D3D9 on four axes **and** attribute which fixes drove delta (GAP-3 >> GAP-2 for char-select).
+
+**Is axis-(b) genuinely lower-risk than axis-(a)?** Yes, **relative to axis-(a)** — VS reorder touches settled Iter-3 fallback synthesis and broad VS lane. No, **in absolute terms** — parameter-list HLSL rewrite + per-VS cache + bind-path integration is still a large, brittle change. Axis-(b) is the right choice, but not "low risk"; it's "lower risk than the alternative."
+
+**Bottom line (Cursor):**
+- **17-05:** Solid verification scaffold; fix `depends_on` deadlock and capture reproducibility before execute.
+- **17-06:** Well-written discovery plan targeting a gap that **may not drive char-select visuals**; demote to instrumentation/completeness or re-scope before investing Path B boots.
+- **17-07:** Correct strategic target (asset-PS bind rate), but **under-specified on PSRC syntax, bind-path integration, and reflection caching** — highest execution risk in the wave.
+
+Recommended execution priority: Fix 17-05 metadata → **17-07 (with revised parser + StateCache/resolver scope)** → 17-05 POST capture → 17-06 in parallel or after if time-boxed (metrics hygiene, not beachhead-critical).
+
+Expected phase outcome if plans run as written without revisions: GAP-1 closed with evidence; GAP-2 closed on greps with uncertain visual impact; GAP-3 **at risk**; Phase 17 closes as **PARTIAL** with honest A/B, not blanket CHAR PASS.
+
+---
+
+## Round 4 Consensus
+
+Both reviewers independently converge on the same architectural concerns. Where the two diverge is mostly tone and table-vs-prose presentation — there are no substantive disagreements on the HIGH-severity items.
+
+### Agreed Strengths (raised by both)
+
+- **17-05:** PRE/POST capture design is correct; honoring Iter-44B no-false-pre-claim is enforced; PARTIAL/DEFERRED escape hatch is appropriate.
+- **17-06:** Falsifies the `material[0/1/2]` hypothesis correctly; plugin-local scope avoids ABI trap; preserves `materialSpecularColor` (04ef976).
+- **17-07:** Targets the correct root cause (register-position mismatch); axis-(b) is the right strategic direction over axis-(a); preserves `selectFallbackPSForVS` safety net; uses `tryCompilePixelShaderFromHlslNoFatal` non-fatal degrade path.
+
+### Agreed HIGH-Severity Concerns (raised by both)
+
+1. **`writeVarByName` cannot write sub-channels (HIGH × 2 — both reviewers).** Lambda at `Direct3d11_StaticShaderData.cpp:794` compares whole `var.Name` strings and writes a full `XMFLOAT4` at `StartOffset`. Plan 17-06's text references `packedRegisterN.{xyzw}` channel writes but the implementation primitive does not exist. The plan needs either (a) a new `writeVarComponent` / `writeVarFloat4AtOffset` helper added before the candidate-chain extension, or (b) a rescope that writes only whole reflected variables.
+
+2. **17-07 `files_modified` contract is dishonest (HIGH × 2 — both reviewers).** The bind decision lives in `Direct3d11_StateCache.cpp:1121-1137` — the rewritten-PS lookup MUST happen at or below that call site. The single-file scope (`Direct3d11_PixelShaderProgramData.cpp` only) is not credible. `Direct3d11_StateCache.cpp` should be in `files_modified` upfront, and `Direct3d11_PixelShaderProgramData.h` should be allowed (with explicit ABI rebuild discipline) rather than contorting around it with `this`-keyed file-scope-static maps.
+
+3. **GAP-2 closure may not move char-select visuals (HIGH × 2 — both reviewers).** Live code comments + the captured PSRC dump both show that char-select shaders (`h_simple_pp_ps20.psh`, `h_color2_specmap_cbmp_ps20.psh`) consume `textureFactor.rgb` and interpolated `COLOR0` (`vertexDiffuse`), NOT cbuffer `materialDiffuse` / `materialEmissive`. Closing GAP-2 as defined (`wroteDiffuse=1` + `wroteEmissive=1`) may satisfy metrics without moving CHAR-01/02/03. The plan's success metric conflates "write landed" with "visual fix."
+
+4. **17-07 PSRC syntax mismatch (HIGH — Cursor; corroborated by Codex's parser-fragility HIGH).** Plan 17-07 Task 1 step 1a targets "the struct bound to `main` parameter type" — but the captured PSRC dump shows the dominant char-select form is `float4 main(in float3 vertexDiffuse : COLOR0, in float2 tcs_MAIN : TEXCOORD0, ...)` (parameter-list, not struct). The rewriter must reorder **`main()` parameter declarations**, not struct fields, on the dominant char-select asset set. Codex's "ad hoc text scanning is fragile" concern is the same risk; recommends a targeted COLOR0/TEXCOORD-only spike first.
+
+5. **17-06 Path A is a dead end (HIGH — Cursor; corroborated by Codex's "Path B is a plan-within-a-plan" MEDIUM).** Rule D at `Direct3d11_HlslRewrite.cpp:747-767` only wraps `: register(cN)` → `packoffset(cN)` preserving original declaration names — it does NOT contain a `c[N] → packedRegister[K].channel` mapping table. The `packedRegister0..4` reflection names mean the **input** `.inc` declares them that way; Path A will always fall through to Path B. Recommendation: split into 17-06a / 17-06b.
+
+6. **17-07 `isCompatibleWithVS` unchanged contradicts per-VS rewrite (HIGH — Cursor; corroborated by Codex's MEDIUM postcondition concern).** The validator reads `m_reflectedPSInputs` from ctor-time compile (`Direct3d11_PixelShaderProgramData.cpp:1060-1081`). A rewritten per-VS PS has different input registers, but the cached `m_reflectedPSInputs` stays from the ctor-time reflection — so the validator still returns INCOMPATIBLE unless per-VS reflection is also cached OR the validator is bypassed for the rewritten lane. The acceptance criterion `"isCompatibleWithVS definition unchanged"` fights the fix.
+
+### Agreed MEDIUM-Severity Concerns (raised by both)
+
+- **17-05 dependency metadata creates a cycle.** `depends_on: ["17-05"]` on 17-06/17-07 conflicts with 17-05 parking at Task 3. Cursor escalates this to HIGH; Codex calls it acceptable IF the tracker represents "parked after Task 3" correctly. Both agree the metadata should be amended: `depends_on: ["17-04", "17-05-task3"]` or wave-only ordering.
+
+- **17-06 should be split.** Both recommend `17-06a discovery` + `17-06b mapping` instead of a single conditional Task 2.
+
+- **17-05 capture reproducibility under-specified.** No pin for character slot, camera, UI state, resolution. Pixel diff is useless if framing drifts between D3D9 and D3D11 boots.
+
+- **17-07 cache key needs VS-signature-hash salt.** `tryCompilePixelShaderFromHlslNoFatal` hashes source-only — per-VS rewrite without salt → wrong PS served across VS pairs.
+
+- **17-07 success metric inflation risk.** `>= 8/9 Plan 17-07 COMPATIBLE` log lines ≠ asset PS actually bound. Need a bind-path assertion (e.g. log `PSSetShader asset-PS ptr=...` vs fallback ptr) distinct from the rewrite log.
+
+- **Naming drift from ROADMAP.** Plan uses `_preGap` / `_postGap` suffixes; ROADMAP success criterion #5 references `char_default_d3d11_0003.png`. Need explicit alias rule for Phase 20 harness.
+
+- **17-05 Task 2 grep set is asymmetric** vs Task 4 (Task 2 omits `wroteEmissive=1` + `wroteSpecular=1`).
+
+### Divergent Views (where the reviewers split)
+
+- **17-05 overall risk:** Codex LOW-MEDIUM, Cursor MEDIUM. The substantive concerns are nearly identical; Cursor weights the orchestration cycle higher.
+- **17-06 overall risk:** Codex HIGH, Cursor MEDIUM-HIGH. Both flag the same HIGH concerns; Cursor adds the "may not move CHAR visuals" framing as an explicit risk.
+- **17-07 overall risk:** Both HIGH. No divergence.
+- **17-07 wrapper-approach feasibility:** Codex says the wrapper approach (keeping StateCache untouched) is implausible — "single-file scope is not credible." Cursor says the wrapper-only approach **without** StateCache change requires a new bind resolver called from `applyPreDrawState`, which is still a second file unless function-pointer injection (none documented) — substantively the same conclusion.
+
+### Round 4 Verdict
+
+**CONVERGENCE NOT ACHIEVED — gap-closure plans need amendment before execution.**
+
+The three gap-closure plans should NOT be executed as written. Required amendments before `/gsd:execute-phase 17 --gaps`:
+
+1. **17-05 frontmatter:** change 17-06/17-07 `depends_on` from `["17-04", "17-05"]` to `["17-04", "17-05-task3"]` (or equivalent post-Task-3 partial dependency); add capture-reproducibility contract to `evidence/README.md`; add Task 4 step requiring `asset-PS bound=` vs fallback-PS attribution in 17-VERIFICATION.md Task 5.
+2. **17-06 rescope:** either (a) split into `17-06a discovery` + `17-06b mapping/write`, defaulting to Path B (Rule D documented to NOT contain the mapping); OR (b) demote the plan to "instrumentation completeness — close GAP-2 metrics; visual char-select impact expected LOW" and explicitly call out that GAP-3 + existing `textureFactor` path is the primary visual driver. Add a `writeVarComponent` / `writeVarFloat4AtOffset` helper before the candidate-chain extension if sub-channel writes are genuinely required.
+3. **17-07 rewrite:** add `Direct3d11_StateCache.cpp` (and possibly `Direct3d11_PixelShaderProgramData.h`) to `files_modified`; replace "parser targets struct" with "parser targets `main()` parameter list (primary form)" + struct path as the rare-asset fallback; relax `"isCompatibleWithVS definition unchanged"` to `"isCompatibleWithVS unchanged for native ctor compile; rewritten PS validated via per-VS reflected inputs before bind"`; add bind-path assertion log (`PSSetShader asset-PS ptr=...`) distinct from the rewrite log; pre-execution spike (manually reorder one PSRC parameter list, recompile, confirm validator passes) to de-risk before full implementation.
+
+### Recommended Next Action
+
+- **`/gsd:plan-phase 17 --gaps --reviews`** — re-plan the gap-closure wave with the Round 4 review feedback folded in. Both reviewers' HIGH-severity items should be addressed in the replan; the MEDIUM items should be folded in as suggestions.
+- **DO NOT** `/gsd:execute-phase 17 --gaps` until the replan converges.
+- Optional pre-replan: a **`writeVarByName` capability audit** (does it support sub-channel writes? if not, document the new helper signature) and a **PSRC syntax census** (count `main()` parameter-list vs struct-input shapes across char-select PSes from the captured dump at `evidence/plan-17-04x-psrc-source-dump.txt`) — both feed the replan with concrete data rather than speculation.
