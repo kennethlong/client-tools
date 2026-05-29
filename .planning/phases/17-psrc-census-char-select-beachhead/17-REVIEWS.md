@@ -1,9 +1,9 @@
 ---
 phase: 17
-review_round: 4
+review_round: 5
 reviewers: [codex, cursor]
-reviewed_at: 2026-05-29T08:40:00Z
-plans_reviewed: [17-01-PLAN.md, 17-02-PLAN.md, 17-03-PLAN.md, 17-05-PLAN.md, 17-06-PLAN.md, 17-07-PLAN.md]
+reviewed_at: 2026-05-29T16:53:55Z
+plans_reviewed: [17-05-PLAN.md, 17-06a-PLAN.md, 17-06b-PLAN.md, 17-07-PLAN.md]
 prior_rounds:
   - "Round 1 review at commit 797e9db57 (`docs: cross-AI review for phase 17`)"
   - "Round 2 replan at commit 6e0eae4e6 (`docs(17): incorporate cross-AI review feedback (codex+cursor)`)"
@@ -13,8 +13,11 @@ prior_rounds:
   - "Plans 17-01..17-04 executed; Phase 17 closed as INFRASTRUCTURE COMPLETE at commit 41d7f2fec; post-04 follow-up commit 04ef976 added materialSpecularColor recognition"
   - "Synthesized 17-VERIFICATION.md inventoried GAP-1 (no A/B screenshot), GAP-2 (no wroteDiffuse/wroteEmissive), GAP-3 (0/9 asset-PS binds — COLOR0 register-position mismatch)"
   - "Round 4 plans 17-05/06/07 authored as the gap-closure wave"
+  - "Round 4 review (codex+cursor) — CONVERGENCE NOT ACHIEVED; HIGH items fed into the Round-5 replan"
+  - "Round 5 replan: 17-06 split into 17-06a (discovery) + 17-06b (mapping/write); 17-07 gained StateCache+PSData.h scope, main()-param-list rewriter, per-VS reflected-input cache, asset-PS-bound attribution log; 17-05 gained 17-05-task3 park point + symmetric grep sets"
 verdict_round3: CONVERGENCE ACHIEVED — plans 17-01/02/03 execution-ready
 verdict_round4: CONVERGENCE NOT ACHIEVED — gap-closure plans 17-05/06/07 have HIGH-severity concerns that gate execution (writeVarByName sub-channel impossibility, files_modified contract violation, PSRC syntax mismatch, depends_on metadata deadlock)
+verdict_round5: CONVERGENCE PARTIAL — Round-4 folds landed substantively (not cosmetic), but execution is gated on a small set of HIGH/MEDIUM amendments both reviewers converged on (COMPATIBLE-log grep contract mismatch 17-05↔17-07; 17-07 missing depends_on 17-06b + merge/rebuild-order stale-DLL hazard; D3D11_REWRITE_VERSION already "21" in live tree so bump must be →"22"; 17-06b can falsely close GAP-2 via any in-bounds write; 17-07 Task-0 spike is comment-only not a compile gate; VertexShaderData.h likely touched but not in files_modified)
 ---
 
 # Cross-AI Plan Review — Phase 17 (PSRC Census + Char-Select Beachhead) — ROUND 3
@@ -522,3 +525,423 @@ The three gap-closure plans should NOT be executed as written. Required amendmen
 - **`/gsd:plan-phase 17 --gaps --reviews`** — re-plan the gap-closure wave with the Round 4 review feedback folded in. Both reviewers' HIGH-severity items should be addressed in the replan; the MEDIUM items should be folded in as suggestions.
 - **DO NOT** `/gsd:execute-phase 17 --gaps` until the replan converges.
 - Optional pre-replan: a **`writeVarByName` capability audit** (does it support sub-channel writes? if not, document the new helper signature) and a **PSRC syntax census** (count `main()` parameter-list vs struct-input shapes across char-select PSes from the captured dump at `evidence/plan-17-04x-psrc-source-dump.txt`) — both feed the replan with concrete data rather than speculation.
+
+
+---
+
+# Round 5 — Gap-Closure Replan Review (Plans 17-05 / 17-06a / 17-06b / 17-07)
+
+Reviewers: **codex** + **cursor** (claude skipped for independence — review run from inside Claude Code). Reviewed at 2026-05-29T16:53:55Z. Both reviewed the Round-5 replans against the Round-4 HIGH/MEDIUM findings; Codex had read-only repo `exec` access, Cursor read the live tree.
+
+## Codex Review (Round 5)
+
+**Plan 17-05**
+**Summary:** Sound as the wave orchestrator. The Round-4 dependency-cycle, capture reproducibility, canonical naming, and metric-inflation concerns are materially folded in. It correctly separates evidence capture from renderer fixes and no longer treats GAP-2 greps as visual parity.
+
+**Strengths**
+- Uses `17-05-task3` partial dependency, which makes the park/resume workflow orchestratable.
+- Adds capture reproducibility pins and canonical `char_default_d3d11_0003.png` alias.
+- Requires lane attribution via `asset-PS bound=` / `fallback-PS bound=`, not just `COMPATIBLE`.
+- Explicitly frames GAP-2 as instrumentation-only for char-select.
+
+**Concerns**
+- **MEDIUM:** Task 4 does not require a fresh post-fix D3D9 screenshot, only a boot. That is probably acceptable, but if `SwgClient_d.exe` is rebuilt by 17-07, the “D3D9 baseline is invariant” claim is weaker than the evidence.
+- **MEDIUM:** The PRE/POST grep set is documented, but the final verifier can still overfit prose from Kenny’s subjective visual delta. Require the verifier to state “PASS unavailable” if screenshot framing differs.
+- **LOW:** Task 3 says commit exactly two PNGs, but Task 1’s README may be uncommitted unless the executor combines commits. Harmless, but the commit boundaries are fuzzy.
+- **LOW:** “No SUMMARY.md required” is still a small audit discoverability gap, though `17-VERIFICATION.md` is a defensible replacement.
+
+**Suggestions**
+- In Task 4, require a fresh D3D9 screenshot if `SwgClient_d.exe` was rebuilt or if resolution/gamma/character slot changed.
+- Add a verifier rule: if PRE/POST/D3D9 framing differs, CHAR verdicts cap at PARTIAL.
+- Record commit SHA and `gl11_d.dll` / `SwgClient_d.exe` timestamps in `17-VERIFICATION.md`.
+
+**Risk Assessment:** **LOW-MEDIUM.** Process risk remains, but the Round-4 folds are real.
+
+---
+
+**Plan 17-06a**
+**Summary:** The split into discovery is the right response to Round 4, and Path B is now the default. The main remaining risk is that the plan assumes `Direct3d11_StaticShaderData.cpp` can access enough reflection metadata to walk inner types without touching PSData APIs. If cached layouts are name/offset/size only, the “re-reflect at dump-time” option may not be implementable inside the declared single-file scope.
+
+**Strengths**
+- Correctly demotes GAP-2 to instrumentation completeness, not char-select visual delivery.
+- Correctly abandons Rule-D Path A as the primary path.
+- Keeps the one-shot diagnostic pattern and plugin-local scope.
+- Adds a blocking human evidence checkpoint before mapping.
+
+**Concerns**
+- **HIGH:** Option B says re-run `D3DReflect` from `Direct3d11_StaticShaderData.cpp` if cached metadata lacks type info, but the plan does not prove this file has access to PS bytecode or a PSData reflection API. If not, single-file scope breaks.
+- **HIGH:** Even if `userConstants` reflection is walked, char-select shaders may optimize away unused material fields. The discovery may not expose future open-world diffuse/emissive semantics, so “unambiguous mapping evidence” is overclaimed.
+- **MEDIUM:** D3D reflection type member sizes are not as simple as the plan implies. `D3D11_SHADER_TYPE_DESC` gives offsets, members, rows/columns/elements, but the implementation must compute sizes carefully for arrays/nested structs.
+- **MEDIUM:** The gate fires only for head/eye anchors. If those anchors do not reflect the relevant fields, 17-06b has no safe mapping, yet the wave still expects GAP-2 closure.
+- **LOW:** The plan promises a `17-06a-SUMMARY.md`, but it is not in `files_modified` or a concrete task acceptance block.
+
+**Suggestions**
+- Add a precondition: verify cached cbuffer layout includes type/member metadata, or explicitly add/read a PSData accessor before claiming single-file scope.
+- Change success wording to “captures whatever inner reflection is available,” not “unambiguous diffuse/emissive mapping.”
+- If only flat `userConstants[N]` appears, require 17-06b to defer unless engine source maps N to a named semantic with high confidence.
+- Put `17-06a-SUMMARY.md` in `files_modified`.
+
+**Risk Assessment:** **MEDIUM-HIGH.** The plan direction is right, but reflection access and semantic usefulness are not guaranteed.
+
+---
+
+**Plan 17-06b**
+**Summary:** The new offset-write helper directly addresses the Round-4 `writeVarByName` limitation. However, the proposed helper is too permissive: an absolute-offset write that only checks `offset + 16 <= TotalSize` will return true for any cbuffer of sufficient size, short-circuiting fallbacks and potentially writing the wrong field.
+
+**Strengths**
+- Correctly depends on 17-06a evidence and blocks if the summary is missing.
+- Adds an explicit offset helper instead of pretending dotted names work.
+- Preserves `materialSpecularColor` and existing fallback candidates.
+- Correctly states GAP-2 is not the char-select visual driver.
+
+**Concerns**
+- **HIGH:** `writeVarFloat4AtOffset` validates only bounds, not that the layout actually contains `userConstants` at the expected base/size. A wrong layout can still return true and short-circuit `material[0]` / `materialDiffuse` fallbacks.
+- **HIGH:** The threat model says fallbacks mitigate a wrong offset, but the candidate chain uses `||`; if the offset helper returns true, fallbacks are not attempted. That mitigation is false.
+- **HIGH:** Case B allows deriving diffuse/emissive from engine source if reflection is flat, but no concrete source contract is cited. If the source does not name the slots, this becomes guessing under another name.
+- **MEDIUM:** The helper signature in the truth statement includes `parentName, memberName`, but the actual lambda only takes `absoluteOffset`. The safer named validation was dropped.
+- **MEDIUM:** Offset overflow should be checked as `absoluteOffset <= layout.TotalSize - sizeof(XMFLOAT4)`, not `absoluteOffset + sizeof(...) > layout.TotalSize`.
+- **LOW:** Case C adds a latent helper even when mapping is deferred. That is low risk but arguably unnecessary churn.
+
+**Suggestions**
+- Make the helper validate parent identity: find top-level `userConstants`, confirm expected `StartOffset`, `Size`, and that target offset lies inside it.
+- Return false unless the parent var exists; then fallbacks remain meaningful.
+- Add separate booleans/logs for “offset candidate attempted” vs “offset candidate accepted.”
+- In Case B, require a cited source line mapping slot index to semantic; otherwise defer.
+
+**Risk Assessment:** **HIGH** until the helper validates the parent region. This is the biggest missed correctness issue in the 06a/06b split.
+
+---
+
+**Plan 17-07**
+**Summary:** The Round-4 folds are mostly real: parameter-list syntax is primary, StateCache is in scope, per-VS reflected inputs are cached, cache salting is acknowledged, and bind attribution is added. But the implementation plan still has serious correctness gaps in the spike, parser semantics, bind priority wording, and cache/resource ownership.
+
+**Strengths**
+- Correctly includes `Direct3d11_StateCache.cpp` and `Direct3d11_PixelShaderProgramData.h`.
+- Correctly replaces ctor-time `m_reflectedPSInputs` with per-VS reflected inputs for rewritten PS validation.
+- Adds distinct `asset-PS bound=` logging, closing the Round-4 metric-inflation issue.
+- Adds VS-signature hash salting and rewrite-version bump.
+- Keeps fallback PS as a safety net.
+
+**Concerns**
+- **HIGH:** Task 0 spike is not a real executable spike. It describes adding comments and “mentally” rewriting/validating; no harness or callable test path proves compilation/reflection/validator behavior.
+- **HIGH:** The parser rule “PSRC parameters with no VS-output match stay at the FRONT” can shift register assignment and break matched params. Non-system unmatched inputs should generally cause rewrite failure/fallback, not be kept ahead of matched inputs.
+- **HIGH:** The plan does not specify COM lifetime/release behavior for cached `ID3D11PixelShader*` entries. A per-VS cache can leak shaders unless destructor/cache cleanup releases them.
+- **MEDIUM:** Bind priority is internally inconsistent. Truth text says `rewritten > native > fallback`, but the implementation says `native > rewritten > fallback`, which is the priority requested and the safer behavior.
+- **MEDIUM:** `Direct3d11_VertexShaderData.{h,cpp}` may need edits for `computeOutputSignatureHash()`, but they are not declared in `files_modified`.
+- **MEDIUM:** “Return input unchanged” conflates parse failure with “already in correct order.” The builder needs an explicit result enum: unchanged-compatible, rewritten, failed.
+- **MEDIUM:** Per-VS cache keyed by raw VS pointer plus hash needs invalidation/lifetime assumptions documented. Pointer reuse after destruction would be bad if VSData objects are not process-lifetime stable.
+- **LOW:** Full solution `/t:Rebuild` is conservative, but the plan’s “all plugin vcxprojs” wording is imprecise; it likely rebuilds more than plugins.
+
+**Suggestions**
+- Replace Task 0 with a small debug-only helper or local unit-style harness that actually compiles the sample and reflects input registers.
+- Treat unmatched non-system semantics as rewrite failure. Handle `SV_Position` / system-value semantics explicitly.
+- Add cache entry destructor/release logic and document ownership.
+- Fix all wording to `native > rewritten > fallback`.
+- Add `Direct3d11_VertexShaderData.cpp/.h` to `files_modified` if the hash helper is not already present.
+- Make the rewrite helper return `{status, text}` instead of using string equality as control flow.
+
+**Risk Assessment:** **HIGH.** It is the right architecture, but the parser/cache/bind implementation still has enough sharp edges to produce grep-green / visual-red outcomes.
+
+---
+
+**Cross-Plan Assessment**
+**Summary:** Round-4 feedback was not merely cosmetic. The replan genuinely fixes the dependency cycle, splits 17-06, demotes GAP-2 visual claims, adds StateCache/header scope to 17-07, targets parameter-list PSRC, adds per-VS reflected inputs, and adds bind attribution. However, 17-06b’s offset helper is unsafe as specified, and 17-07 remains high-risk despite the improved architecture.
+
+**Strengths**
+- The wave is now conceptually coherent: 17-05 PRE evidence → 17-06a discovery → 17-06b mapping → 17-07 bind activation → 17-05 POST verification.
+- The plans now correctly separate “metric closed” from “visual fixed.”
+- The `17-05-task3` partial dependency is real and should avoid the Round-4 deadlock.
+- `asset-PS bound=` is the right anti-inflation metric.
+
+**Concerns**
+- **HIGH:** 17-07 does not depend on 17-06b in metadata, even though the narrative says Wave 7 is serial and final `gl11_d.dll` must contain both. If orchestrated in parallel, the deployed artifact can miss one plan’s changes.
+- **HIGH:** 17-06b can falsely close GAP-2 by writing any in-bounds offset and short-circuiting fallbacks.
+- **HIGH:** 17-07’s Task 0 spike is mostly procedural theater unless turned into an actual compile/reflect check.
+- **MEDIUM:** Several promised summaries are outside `files_modified` and not concrete tasks, weakening audit closure.
+- **MEDIUM:** Grep gates remain necessary but gameable. The final authority must be screenshots plus bind-path attribution, not log count thresholds alone.
+- **MEDIUM:** If 17-06a cannot expose semantic names, 17-06b must be allowed to close DEFERRED without delaying 17-07/17-05 POST verification.
+
+**Suggestions**
+- Make execution order explicit: `17-07 depends_on: ["17-04", "17-05-task3", "17-06b"]`, or add a final full rebuild after both 06b and 07.
+- Tighten 17-06b helper validation before execution.
+- Replace 17-07 Task 0 with an actual temporary harness or remove it and classify the first implementation boot as the spike.
+- Add all summary files and potential `VertexShaderData` files to frontmatter.
+- Final Phase 17 PASS should require: matched A/B visual parity, `asset-PS bound >= 8`, D3D9 boot clean, and explicit residual-gap notes. Anything less is PARTIAL.
+
+**Overall Risk:** **HIGH for execution as written**, mostly due to 17-06b and 17-07. The replan is much better than Round 4, but I would require the 06b helper safety fix and the 17-07 spike/parser/cache clarifications before calling this execution-ready.
+
+---
+
+## Cursor Review (Round 5)
+
+# Phase 17 Gap-Closure Wave (Round 5) — Cross-AI Plan Review
+
+Independent review of the **Round-5 replans** (17-05, 17-06a, 17-06b, 17-07) against Round-4 HIGH/MEDIUM findings and the live tree at `D:/Code/swg-client-v2`.
+
+**Bottom line:** Round-4 folds are **mostly real**, not cosmetic. The split (06a/06b), `17-05-task3` partial dependency, instrumentation-vs-visual framing, `writeVarFloat4AtOffset`, StateCache bind wiring, parameter-list rewriter, and per-VS reflected-input cache all address the right blockers. **Convergence is partial:** several cross-plan grep contracts, build/merge ordering, and 17-07 implementation details still have gaps that can produce **grep-green / visual-red** outcomes.
+
+---
+
+## Round-4 Fold Verification (summary)
+
+| Round-4 item | Folded? | Verdict |
+|---|---|---|
+| Dependency cycle (`17-05-task3`) | Yes | Real in frontmatter for 06a/07; orchestrator must understand partial deps |
+| Capture reproducibility | Yes | Task 1 contract is substantive |
+| Success-metric inflation | Partial | `asset-PS bound=` added; `Plan 17-07 COMPATIBLE` grep still mismatched |
+| 06 split + Path B default | Yes | 06a/06b split is the right structure |
+| `writeVarByName` can't do nested writes | Yes | 06b adds offset helper with bounds check |
+| GAP-2 not char-select visual driver | Yes | Honest in all four plans |
+| 07 `files_modified` dishonest | Yes | StateCache + PSData.h now declared |
+| PSRC parameter-list vs struct | Yes | 07 targets `main()` params; dump confirms 22× `float4 main`, 0 struct-bound |
+| HIGH-6 ctor-time `m_reflectedPSInputs` | Yes | Per-VS cache + overload planned |
+| Cache-key VS salt | Yes | Specified; live tree already at `D3D11_REWRITE_VERSION=21` |
+| Pre-exec spike | Partial | Task 0 is manual/comment-only, not a compile gate |
+
+---
+
+## Plan 17-05 — Evidence / Verification Orchestrator
+
+### Summary
+The strongest plan in the wave. PRE/POST capture design, Iter-44B discipline, instrumentation-vs-visual split, symmetric grep sets, and canonical alias handling are all sound. Remaining risk is **process/orchestration**, not renderer logic.
+
+### Strengths
+- **`17-05-task3` park point** breaks the Round-4 dependency deadlock cleanly; downstream plans declare `depends_on: ["17-04", "17-05-task3"]`.
+- **Capture contract** (slot, camera, UI, resolution, gamma) is concrete enough to reject bad captures.
+- **Dual-axis Task 5 verdicts** (instrumentation / visual / lane attribution) directly address Round-4 HIGH-3.
+- **PRE-gap narrative honesty:** fallback Variant T may already show partial texture — not necessarily magenta.
+- **No source edits** — D-06 safe.
+
+### Concerns
+- **MEDIUM — `17-05-task3` resolver support unproven.** Plans assume GSD's orchestrator resolves a named partial dependency from a handoff string. If it only understands full plan completion, the cycle returns. Task 3 requires literal `17-05-task3` in handoff — verify orchestrator implements this.
+- **MEDIUM — POST-gap deploy contract underspecified.** Task 4 says deploy gl11 built from 17-06a+06b+17-07 but does not mandate **merge order** (17-07 full rebuild should be last) or record **commit SHA + gl11_d.dll timestamp** in evidence README — both cited in Round-4 suggestions, not folded.
+- **MEDIUM — Idle-animation frame drift.** "Capture within 3 seconds" does not guarantee same idle frame across D3D9 / PRE / POST; diff noise can false-fail or false-pass CHAR verdicts.
+- **MEDIUM — `Plan 17-07 .* COMPATIBLE vs=` grep may not fire.** Live validator logs use `Plan 17-04 Task 1 VS<->PS pair compatibility: COMPATIBLE vs=...` (see ```1297:1300:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp```). 17-07 does not require new COMPATIBLE logs with a `Plan 17-07` prefix; POST-gap grep for `Plan 17-07 .* COMPATIBLE` may count **zero** even when rewrites succeed. `COMPATIBLE vs=` alone would work on existing logs.
+- **LOW — Task 2 accepts D3D9 boot from PNG existence only** — no log-clean gate for D3D9 baseline boot.
+- **LOW — `verified_by: pending`** — 17-VERIFICATION.md is executor-authored, not independently verified; milestone readers may over-read closure.
+
+### Suggestions
+1. Task 4 deploy step: **"Build/deploy gl11_d.dll from a single commit containing 17-06b + 17-07; 17-07 rebuild MUST be last."** Record SHA + DLL mtime in README.
+2. Fix grep set: either grep `COMPATIBLE vs=` (works today) **or** require 17-07's overload to emit `Plan 17-07 COMPATIBLE vs=`.
+3. Add evidence README field: **expected PRE-gap appearance** (fallback-PS partial texture vs magenta).
+4. Document orchestrator behavior for `17-05-task3` in STATE/handoff (already started in `.planning/handoff/phase-17-char-select.md`).
+
+### Risk Assessment
+**LOW–MEDIUM** — Process-heavy, technically safe; grep/orchestration gaps can block or mis-score closure without code risk.
+
+---
+
+## Plan 17-06a — GAP-2 Discovery (userConstants inner walk)
+
+### Summary
+Correctly demotes Path A, extends the existing 17-04 dump, and stays plugin-local. The discovery half is well-scoped. Live code confirms **Option (a) is impossible** — cached layout vars carry only `Name/StartOffset/Size`, no type descriptors (```66:78:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.h```), so **Option (b) re-reflect at dump time is mandatory**, not executor discretion.
+
+### Strengths
+- Extends existing gated dump at ```925:943:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp``` — no parallel instrumentation.
+- Path A dead-end documented with live code comments at ```887:896:Direct3d11_StaticShaderData.cpp``` matching PSRC (`textureFactor.rgb`, not cbuffer diffuse).
+- One-shot / depth-2 / ~34 lines — log budget sane.
+- Checkpoint produces evidence 06b can block on without guessing.
+
+### Concerns
+- **HIGH — Reflection may not yield semantic inner names.** `userConstants` may reflect as opaque blob or `float4[17]` with synthetic indices only. Case (C)-like outcome is common; 06b's diffuse/emissive mapping may require **D3D9 c-register folklore** (engine source), contradicting the "no guessing" story.
+- **MEDIUM — Option (b) not pinned in acceptance.** Task 1 should **require** dump-time `D3DReflect` on bound PS bytecode (or stored `m_psBytecodeBlob`) since cache lacks type info.
+- **MEDIUM — Anchor gating via `strstr(..., "head"/"eye")`** — fragile; dump may miss body/clothing anchors that also exercise GAP-2 metrics.
+- **MEDIUM — Blocks wave autonomy** — 06a is non-autonomous; 06b cannot run until Kenny checkpoint + SUMMARY lands.
+- **LOW — `wroteSpecular` already 9+** — dump gate `incomplete = !(D&&S&&E)` fires on every anchor until diffuse+emissive land; expected, but noisy.
+
+### Suggestions
+1. Task 1 acceptance: **grep for `GetMemberTypeByIndex` AND `m_psBytecodeBlob` or `D3DReflect`** — forbid cache-only inner walk.
+2. If array-only reflection: 06a SUMMARY must flag **"Case B — slot indices need D3D9 upload trace"** explicitly.
+3. Consider one body-shader anchor in dump gate (census-derived), not only head/eye substrings.
+
+### Risk Assessment
+**MEDIUM** — Low regression risk; discovery may not produce mappable names, delaying or deferring 06b without failing char-select visuals (which is fine per HIGH-3).
+
+---
+
+## Plan 17-06b — GAP-2 Mapping / Write
+
+### Summary
+Round-4 HIGH-1 is **substantively closed**: `writeVarFloat4AtOffset` with `offset + 16 <= layout.TotalSize` mirrors ```806:807:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp```. Evidence-driven mapping, Case C deferral, and preserved scalar fallbacks are correct. Success is **instrumentation completeness**, not CHAR visuals — appropriately scoped.
+
+### Strengths
+- **Blocks without 06a-SUMMARY** — no guessing path.
+- **Case A/B/C branching** with honest DEFERRED outcome.
+- **Single-candidate-per-channel** preserved vs old multi-index stomp risk.
+- Plugin-local; no ABI trap.
+
+### Concerns
+- **MEDIUM — Case B secondary source is weak.** `setPixelShaderUserConstants_impl` (```679:704:src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp```) copies engine arrays into `shadow.userConstants[i]` but does **not document which index is diffuse vs emissive**. Cross-referencing D3D9 register layout is plausible but **not spelled out** in the plan — executor may still guess.
+- **MEDIUM — Whole `float4` write at arbitrary offset** can stomp adjacent engine state if index wrong; bounds check prevents OOB but not semantic corruption. Mitigated by HIGH-3 (char-select PSes don't read these cbuffers) — acceptable for beachhead, risky for Phase 20.
+- **MEDIUM — `wroteDiffuse=1` may remain 0 post-06b** and still be correct (Task 4 already caveats this). Risk: executor treats 0 as failure vs expected instrumentation outcome.
+- **LOW — 06b wave-7 parallel with 17-07** — both rebuild `gl11_d.dll`; no explicit `depends_on` between them. OK if merge commit + 17-07 rebuild last; not stated in 06b.
+
+### Suggestions
+1. Case B: cite concrete D3D9 reference (e.g. `Direct3d9_StaticShaderData.cpp` upload order or `PSCR_userConstant` indices) as **required read_first**, not optional.
+2. 06b SUMMARY must state: **"wroteDiffuse=0 acceptable on char-select if PSRC consumes textureFactor only."**
+3. Add orchestrator note: **06b commit must be in the same branch as 17-07 before Kenny POST-gap boot.**
+
+### Risk Assessment
+**MEDIUM** — Implementation is straightforward; mapping evidence may not support Case A; false metric closure is possible but visually harmless on char-select.
+
+---
+
+## Plan 17-07 — GAP-3 PS Rewrite + Bind Path
+
+### Summary
+The **highest-value and highest-risk** plan. Round-4 architectural fixes are largely folded: StateCache bind site (```1121:1137:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp```), parameter-list primary form, per-VS reflected inputs, cache salt, bind attribution logs, Task 0 spike, full-plugin rebuild for header touch. This is the **primary char-select visual driver** alongside existing `textureFactor` uploads (already hitting via `writeVarByName("textureFactor", ...)` at ```907:908:Direct3d11_StaticShaderData.cpp```).
+
+### Strengths
+- Root cause correctly identified: register-position strict match at ```1245:1251:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp```.
+- **Bind priority** `rewritten > native > fallback` at the actual `PSSetShader` decision point.
+- **Per-VS cache stores reflected inputs** — fixes HIGH-6 without mutating ctor-time cache.
+- **`m_program->m_psrcText` is accessible** (public on `ShaderImplementationPassPixelShaderProgram`) for lazy rewrite — plan's `m_psrcText` wording is slightly off but workable.
+- Task 2 checkpoint before 17-05 POST capture — good fail-fast.
+- Shared-header ABI trap explicitly handled with full-solution Rebuild.
+
+### Concerns
+- **HIGH — COMPATIBLE log / grep contract mismatch with 17-05.** 17-05 Task 4 expects `Plan 17-07 .* COMPATIBLE vs=`. Task 1 adds `asset-PS bound=` but **does not specify** `Plan 17-07 COMPATIBLE vs=` lines from `isCompatibleWithVS_withExplicitPSInputs`. Existing success path logs **Plan 17-04** prefix. POST-gap acceptance can fail while binds work, or pass on wrong metric.
+- **HIGH — Parameter-list reorder ≠ guaranteed register fix.** Plan assumes declaration-order → `vN` assignment. Correct for typical `ps_2_0`/`ps_4_0` without explicit `register(vN)` on params (char-select PSRC matches — ```139:144:.planning/phases/17-psrc-census-char-select-beachhead/evidence/plan-17-04x-psrc-source-dump.txt```). **Not validated by Task 0** — spike is comment-only, no compile/reflect in CI.
+- **MEDIUM — `D3D11_REWRITE_VERSION` already `"21"`** in live code (```153:153:src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp```). Plan says bump 20→21; executor must bump to **22** or cache invalidation for 17-07 changes won't happen.
+- **MEDIUM — `Direct3d11_VertexShaderData.h` likely touched** for `computeOutputSignatureHash()` but **not in `files_modified`** — ABI/rebuild scope incomplete.
+- **MEDIUM — Full-solution `/t:Rebuild`** is correct for ABI trap but expensive and may surface unrelated breakage; plan has no narrowed target list if Rebuild fails mid-graph.
+- **MEDIUM — Parser fragility:** multi-line params, `#include` expansion, `inout`, macros, profiles like `ps_1_1` (```167:168:evidence/plan-17-04x-psrc-source-dump.txt```) — non-fatal fallback preserves boot but can leave **0/9 rewritten**.
+- **MEDIUM — `>= 8/9` threshold** hides one persistent INCOMPATIBLE pair; Task 5 should document which shader pair remains on fallback and whether it affects eyes/head.
+- **LOW — Per-VS cache keyed on VS pointer** — fine for template singletons; hash salt on outputs is the real guard against wrong PS blob.
+- **LOW — Task 1 is a single monolithic task** — high executor blast radius; spike doesn't gate with automated compile.
+
+### Suggestions
+1. **Align logs with 17-05 greps:** emit `Plan 17-07 COMPATIBLE vs=` / `INCOMPATIBLE vs=` from the overload **or** change 17-05 to grep existing `Plan 17-04 Task 1 ... COMPATIBLE vs=` for native path + `Plan 17-07 ...` only for rewritten path.
+2. Bump **`D3D11_REWRITE_VERSION` to `"22"`** explicitly in acceptance criteria.
+3. Add **`Direct3d11_VertexShaderData.h/.cpp`** to `files_modified` if hash helper is new.
+4. Task 0: require **one automated compile + D3DReflect register dump** (even a unit-style harness in PSData.cpp under `#if 0` test block) before Task 1 proceeds.
+5. Task 1 acceptance: post-rewrite **`Register` match** for COLOR0/TEXCOORD0 on at least `h_simple_pp_ps20.psh` against a known INCOMPATIBLE VS from Kenny's log.
+
+### Risk Assessment
+**HIGH** — Correct strategic target; implementation + verification contracts still have holes that can yield fallback-PS visuals with inflated bind logs or vice versa.
+
+---
+
+## Cross-Plan Assessment
+
+### Wave ordering (Waves 5 → 6 → 7)
+
+```
+17-05 Tasks 1–3 (PRE evidence) ──► 17-05-task3 park
+         ├─► 17-06a (discovery + Kenny boot) ──► 17-06b (mapping write)
+         └─► 17-07 (rewrite + bind)     [parallel with 06b after 06a checkpoint]
+17-05 Task 4–5 (POST evidence + VERIFICATION) ◄── requires merged 06b + 07 gl11
+```
+
+**Sequencing is orchestratable** if:
+1. Orchestrator honors `17-05-task3` (not full 17-05 complete).
+2. **17-07 lands last** (header touch + full rebuild) or POST-gap uses a merge commit containing both 06b and 07.
+3. Kenny runs **one** POST-gap boot on the combined DLL.
+
+**Stale-DLL hazard:** Real but mitigated if 17-07's full Rebuild is the final step. **Not documented as a hard gate in 17-05 Task 4 step 1** — fold incompletely.
+
+**06b graceful dependency on 06a-SUMMARY:** Real — 06b Task 1 precondition blocks cleanly.
+
+### Do these four plans close Phase 17 / CHAR-01/02/03?
+
+| Gap | Likely closed? | CHAR impact |
+|-----|----------------|-------------|
+| **GAP-1** (evidence) | **Yes**, if Kenny captures | Enables honest verdict; doesn't fix visuals |
+| **GAP-2** (cbuffer writes) | **Partial** (metrics/instrumentation) | **Low** on char-select — PSRC uses `textureFactor` + `COLOR0` |
+| **GAP-3** (asset PS binds) | **Conditional** on 17-07 parser + bind wiring | **Primary** driver for CHAR-01/03; CHAR-02 also needs correct interpolators + composites |
+
+**Expected outcome if executed as written:**
+- GAP-1: closed with evidence.
+- GAP-2: closed on greps **or** DEFERRED (Case C) — likely **no visible delta** on char-select.
+- GAP-3: **best effort** — if parameter reorder works, CHAR-01 moves toward PASS; eyes/head (CHAR-02/03) may remain PARTIAL until multi-stage + palette confirmed in A/B narrative.
+- Phase 17: **PARTIAL → PASS plausible**, not guaranteed blanket CHAR PASS.
+
+### Verifiability — are grep gates measuring the right thing?
+
+| Metric | Gameable / wrong? |
+|--------|-------------------|
+| 4 PNGs + written diff | **Good** — necessary for Iter-44B |
+| `wroteDiffuse/Emissive=1` | **Misleading alone** on char-select — plans now say so |
+| `Plan 17-07 COMPATIBLE vs=` | **Broken contract** unless 17-07 adds those log lines |
+| `asset-PS bound=` | **Good** if emitted at `PSSetShader` — distinguishes validator vs bind |
+| `COMPATIBLE vs=` (17-04 prefix) | **Works today** but 17-05 doesn't use it consistently |
+
+### Scope vs over-engineering
+
+- **17-05:** appropriately scoped; slightly heavy grep arithmetic in acceptance — fine.
+- **06a/06b:** right-sized for instrumentation; not over-engineered given HIGH-3 honesty.
+- **17-07:** large single Task 1 (parser + cache + overload + StateCache + full rebuild) — **under-decomposed** for HIGH risk; struct-bound fallback may be YAGNI for char-select (0 instances) but cheap as second parser path.
+
+### Axis-(b) vs axis-(a)
+
+**Yes, lower risk than VS reordering** — confirmed. **Not low risk in absolute terms** — parameter-list rewrite + per-VS cache + shared-header rebuild is still a major change.
+
+---
+
+## Overall Verdict
+
+**CONVERGENCE PARTIAL — executable with targeted amendments, not blind `/gsd:execute-phase 17 --gaps`.**
+
+Round-4 HIGH items are **mostly substantively folded**, not lipstick:
+- Dependency cycle → `17-05-task3` ✓
+- 06 split + Path B + offset helper ✓
+- 07 StateCache + parameter-list + per-VS reflection cache ✓
+- Metric inflation → `asset-PS bound=` ✓ (partial)
+
+**Remaining blockers before execution:**
+
+1. **Unify COMPATIBLE log grep** across 17-05 and 17-07 (HIGH).
+2. **Mandate POST-gap deploy from merge commit; 17-07 rebuild last; record SHA/DLL mtime** (MEDIUM).
+3. **06a: require re-reflect path** (cached layout has no type info) (MEDIUM).
+4. **07: bump rewrite version to 22; add VertexShaderData.h to scope if needed; strengthen Task 0 to real compile** (MEDIUM).
+5. **Confirm orchestrator supports `17-05-task3`** (MEDIUM).
+
+**Recommended execution priority:** 17-05 Tasks 1–3 → **17-07** (with grep/version fixes) → 06a → Kenny discovery → 06b → 17-07 Task 2 bind checkpoint → 17-05 Tasks 4–5.
+
+**Phase 17 beachhead goal:** These plans **can** prove end-to-end asset PS pipeline on char-select **if GAP-3 lands and POST A/B shows parity** — but automatic CHAR-01/02/03 PASS is **not guaranteed** even with all grep metrics green. Plan for **PARTIAL with honest lane attribution** as the likely floor, PASS as the ceiling.
+
+---
+
+## Round 5 Consensus
+
+Both reviewers ran independently — **Codex** (prompt + read-only repo `exec` access) and **Cursor** (live-tree read via `--mode ask`). They converged tightly: the Round-4 HIGH/MEDIUM folds are **substantive, not cosmetic**, but execution is gated on a small, well-defined amendment set. Neither reviewer recommends a blind `/gsd:execute-phase 17 --gaps`.
+
+**Overall verdict: CONVERGENCE PARTIAL** — executable after targeted amendments. Per-plan risk: 17-05 **LOW–MEDIUM**, 17-06a **MEDIUM**, 17-06b **MEDIUM**, 17-07 **HIGH**.
+
+### Agreed Strengths (both reviewers)
+
+- The wave is now coherent: 17-05 PRE evidence → 17-06a discovery → 17-06b mapping → 17-07 bind activation → 17-05 POST verification.
+- `17-05-task3` partial-dependency park point genuinely breaks the Round-4 dependency deadlock.
+- Plans correctly separate **"metric closed" from "visual fixed"** (Round-4 HIGH-3 honored across all four).
+- `asset-PS bound=` is the right anti-inflation metric — it distinguishes "validator returned COMPATIBLE" from "PSSetShader actually bound the asset PS."
+- The 17-06 split (06a/06b) and Path-B default are the right structure; `writeVarFloat4AtOffset` with `offset + 16 <= layout.TotalSize` correctly closes Round-4 HIGH-1.
+- 17-07 puts the bind decision where it actually lives (StateCache.cpp:1121-1137), targets `main()` parameter-list form (dump-confirmed 22× `float4 main`, 0 struct-bound), and caches per-VS reflected inputs to fix HIGH-6 without mutating the ctor-time cache.
+
+### Agreed Concerns (raised by both, or raised by one and verified — highest priority)
+
+- **HIGH — COMPATIBLE-log grep contract mismatch (17-05 ↔ 17-07).** 17-05 Task 4 greps `Plan 17-07 .* COMPATIBLE vs=`, but 17-07 only specifies the new `asset-PS bound=` log; the existing validator emits a **`Plan 17-04`** prefix (Cursor cites `Direct3d11_PixelShaderProgramData.cpp:1297-1300`). POST-gap acceptance can read **zero** even when rewrites succeed — grep-green/visual-red or the inverse. *(Cursor HIGH, Codex via "grep gates gameable / measuring wrong thing".)* **Fix:** either emit `Plan 17-07 COMPATIBLE vs=` from the overload, or change 17-05 to grep the existing `COMPATIBLE vs=` (works today) for the native path and `Plan 17-07 ...` only for the rewritten path.
+- **HIGH — 17-07 has no `depends_on: 17-06b`; merge/rebuild order is a stale-DLL hazard.** Both plans are Wave 7 and both rebuild `gl11_d.dll`; the narrative says "serial, 17-07 last" but nothing in metadata enforces it. If orchestrated in parallel, the deployed DLL can miss one plan's changes. *(Codex HIGH, Cursor MEDIUM + cross-plan.)* **Fix:** add `17-07 depends_on: ["17-04","17-05-task3","17-06b"]` **or** mandate a single merge commit with 17-07's full Rebuild as the final step, and record the SHA + `gl11_d.dll` mtime in evidence/README before Kenny's POST-gap boot.
+- **HIGH — 17-06b can falsely close GAP-2.** `writeVarFloat4AtOffset` short-circuits the scalar fallbacks; writing *any* in-bounds offset sets `wroteDiffuse=1` even if the offset is the wrong slot — green metric, wrong (or semantically corrupting) write. Bounds check prevents OOB, not mis-identification. Mitigated on char-select by HIGH-3 (those PSes don't read these cbuffers) but risky for Phase 20. *(Codex HIGH, Cursor MEDIUM.)* **Fix:** tighten helper validation; require the Case-B slot identification to cite a concrete D3D9 upload-order reference (not "plausible folklore"); allow honest Case-C DEFERRED.
+- **HIGH — 17-07 Task 0 spike is procedural theater.** It is comment-only ("mentally rewrite", record result as a comment) — no actual compile + D3DReflect register-position check gates Task 1. The core assumption (declaration-order → `vN` register assignment) is therefore unvalidated before the monolithic Task 1 lands. *(Both HIGH.)* **Fix:** make Task 0 a real compile + reflect on one known-INCOMPATIBLE char-select pair (e.g. `h_simple_pp_ps20.psh`), or reclassify the first implementation boot as the spike.
+- **MEDIUM (verified by Cursor against live tree) — `D3D11_REWRITE_VERSION` is already `"21"`.** 17-07 says "bump 20→21"; live code is at `"21"` (`Direct3d11_PixelShaderProgramData.cpp:153`). As written the bump is a **no-op** and stale `.cso` caches won't invalidate. **Fix:** bump to `"22"` explicitly in the acceptance criterion.
+- **MEDIUM — `Direct3d11_VertexShaderData.h/.cpp` likely touched but not in `files_modified`.** `computeOutputSignatureHash()` is probably new; if so it's a second header touch with its own ABI/rebuild scope. *(Both.)* **Fix:** add it to frontmatter (or confirm the helper already exists during read_first).
+- **MEDIUM — 17-06a Option (a) is impossible; re-reflect is mandatory.** Cursor verified the cached layout vars carry only `Name/StartOffset/Size`, no type descriptors (`Direct3d11_PixelShaderProgramData.h:66-78`), so the dump-time inner walk **must** re-run `D3DReflect` on the bound PS bytecode — it is not executor discretion. **Fix:** make Option (b)/re-reflect a hard acceptance requirement (grep for `GetMemberTypeByIndex` AND `D3DReflect`/`m_psBytecodeBlob`).
+- **MEDIUM — `17-05-task3` orchestrator support is unproven.** Both plans assume GSD's orchestrator resolves a named *partial* dependency from a handoff string. If it only understands full-plan completion, the Round-4 cycle returns. **Fix:** confirm/implement partial-dep resolution (a start exists at `.planning/handoff/phase-17-char-select.md`).
+- **MEDIUM — Summaries/audit-trail gaps.** Several promised SUMMARY files sit outside `files_modified` and aren't concrete tasks; final Phase-17 PASS authority must be screenshots + bind-path attribution, not log thresholds alone.
+
+### Divergent / Unique Views
+
+- **Cursor (repo-verified, weight heavily):** exact live-tree citations — REWRITE_VERSION already `"21"`; COMPATIBLE-log prefix is `Plan 17-04` not `Plan 17-07`; cached layout has no type info; `setPixelShaderUserConstants_impl` (`Direct3d11.cpp:679-704`) does **not** document which userConstants index is diffuse vs emissive (Case-B identification weaker than the plan implies); anchor gating via `strstr("head"/"eye")` may miss body/clothing anchors. Recommends execution order **17-05 T1-3 → 17-07 → 06a → 06b → 17-07 T2 → 17-05 T4-5**.
+- **Codex (unique):** per-VS cache keyed on raw VS pointer needs documented lifetime/invalidation (pointer reuse after destruction is a latent bug); the rewrite helper should return `{status, text}` rather than using string-equality as control flow; unmatched non-system semantics should be treated as rewrite *failure* and `SV_Position`/system-values handled explicitly; "all plugin vcxprojs" wording is imprecise (the full `/t:Rebuild` rebuilds more than plugins).
+- **No genuine disagreements** — where one reviewer rated an item HIGH and the other MEDIUM (06b false-closure; 17-07 depends_on), the lower rating reflects the char-select HIGH-3 mitigation, not a dispute about the defect.
+
+### Recommended Next Action
+
+- **`/gsd:plan-phase 17 --gaps --reviews`** — fold the Round-5 amendments in. Both reviewers' HIGH items gate execution; the MEDIUMs should land as concrete acceptance-criteria edits, not prose.
+- Minimum HIGH set to clear before `/gsd:execute-phase 17 --gaps`:
+  1. Unify the COMPATIBLE-log grep contract across 17-05 and 17-07.
+  2. Enforce 17-07-after-17-06b ordering (depends_on or single merge commit + final full rebuild) and record SHA/DLL mtime.
+  3. Make 17-07 Task 0 a real compile+reflect gate; bump `D3D11_REWRITE_VERSION` to `"22"`; add `Direct3d11_VertexShaderData.h` to scope if the hash helper is new.
+  4. Tighten 17-06b so a wrong-offset write can't masquerade as GAP-2 closure; pin 17-06a re-reflect as mandatory.
+  5. Confirm the orchestrator honors the `17-05-task3` partial dependency.
+- **DO NOT** `/gsd:execute-phase 17 --gaps` until these converge.
