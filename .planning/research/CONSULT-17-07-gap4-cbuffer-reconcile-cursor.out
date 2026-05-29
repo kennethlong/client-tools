@@ -1,0 +1,230 @@
+# GAP-4 design review: feed `SwgVertexConstants` @ b0
+
+## Executive recommendation
+
+**Pick (b) + (c) together, not either/or:** a single persistent **legacy PS constant shadow** for b0 (`SwgVertexConstants`), with **multiple producers** that mirror the **D3D9 `SetPixelShaderConstantF` call sites**, and **one upload** to `updatePS(0, …, 400)`.
+
+**Reject (a)** — moving the rewriter to b2 cannot work without recompiling every asset PS against `Direct3d11_PerMaterialCB` (112 B, different field order, only 4 `userConstants`).
+
+**Do not treat this as “redirect `setPixelShaderUserConstants` to b0 index 0”** — that is the main wrong assumption in the problem statement.
+
+---
+
+## Wrong assumptions to flag
+
+| Assumption | Reality |
+|------------|---------|
+| `setPixelShaderUserConstants` is the only PS constant source | On D3D9 there are **several** paths: `LightManager` → `PSCR_dot3LightDirection` (+4), `StaticShaderData` → `PSCR_textureFactor` / `PSCR_materialSpecularColor`, `setSpecularPower` → `.w` of direction, and **only then** `PSCR_userConstant`. |
+| Lighting lives in `userConstants[]` | `PSCR_userConstant` is enum value **8** (register **c8**, byte offset **128**). Lights are **c0–c4**. |
+| `VectorRgba[0]` maps to `packedRegister0` / c0 | **No.** API index 0 = first **user** constant = **c8+**. |
+| Redirect engine push to b2 fixes asset PS | Asset PS **only binds b0**; b2 is the plugin’s synthetic `PerMaterialCB`, not `packoffset(cN)` layout. |
+| `.inc` is required to unblock char-select black | **`Direct3d9_PixelShaderConstantRegisters.h` is already in-repo** and is the encoded register map (“WARNING … encoded into pixel shader data files”). Reflection offsets (0, 16, …, 128) line up with that enum. |
+| `wroteDiffuse=0` explains black body | Char-select body PS (`a_specmap_pp_ps20`) uses **`dot3Light*`** and **`materialSpecularColor`**, not `materialDiffuse`. Black = **zero lights in b0 bytes 0–79**, not missing diffuse write. |
+
+---
+
+## 1. Target architecture (Q1)
+
+### Correct layout: **legacy b0 shadow + multi-producer RMW**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  s_swgPsConstantsShadow[400]   // mirrors SwgVertexConstants    │
+│  (file-scope, zero-init once)                                   │
+└─────────────────────────────────────────────────────────────────┘
+         ▲              ▲                    ▲
+         │              │                    │
+   Producer A      Producer B           Producer C
+   Light/dot3      StaticShaderData     setPixelShaderUserConstants
+   (c0..c4)        (c5,c6,c7 + spec power)   (c8..c24)
+         │              │                    │
+         └──────────────┴────────────────────┘
+                        │
+            updatePS(0, shadow, 400)   // bindPS(0) unchanged
+                        │
+                 Asset PS reads b0
+```
+
+**Why (b)+(c), not (b) alone:** `StaticShaderData::apply()` today does `staging(400, 0)` and **wipes** bytes 0–79 and 128–399 every pass. Even if you merged `PerMaterialCB` into staging, you still would not get lights unless **Producer A** exists.
+
+**Why not (c) alone:** material/textureFactor already have a writer in `StaticShaderData`; they must **patch** the shared shadow, not fight a separate full zero upload.
+
+### Slot plan (unchanged)
+
+| PS slot | Consumer |
+|---------|----------|
+| **b0** | Asset PS `SwgVertexConstants` (400 B) |
+| **b1** | Fallback PS alpha test |
+| **b2** | Optional: keep `PerMaterialCB` for future non-asset shaders; **not read by char-select asset PS** |
+| **b3** | `Direct3d11_LightingCB` (modern path; asset PS ignores) |
+
+### Concrete touch points
+
+| File | Change |
+|------|--------|
+| **New** `Direct3d11_LegacyPSConstants.h/.cpp` | `s_shadow[400]`, `getLegacyPSShadow()`, `writePSFloat4(cRegisterIndex, XMFLOAT4)`, `writePSRange(cStart, void*, numFloat4s)`, `flushLegacyPSConstants()` |
+| `Direct3d11_LightManager.cpp` | After building light state (port logic from `Direct3d9_LightManager.cpp` ~592–625, 823–844), `memcpy` `PixelDot3Data` to shadow at **`PSCR_dot3LightDirection * 16`**; include `materialSpecularPower` in `localDirection.w` via shared `setSpecularPower` state |
+| `Direct3d11_StaticShaderData.cpp` | Replace `vector staging(400,0)` with **`memcpy(staging, getLegacyPSShadow(), 400)`**, then name-based patches for `textureFactor`, `materialSpecularColor`; upload; **copy back** to shadow so later passes do not lose lights |
+| `Direct3d11.cpp` `setPixelShaderUserConstants_impl` | Write `constants[i]` → shadow at **`(PSCR_userConstant + i) * 16`**; call `flushLegacyPSConstants()` (or mark dirty); **stop treating this as the sole fix**; b2 flush can remain for non-asset paths |
+| `Direct3d11_StateCache.cpp` `applyPreDrawState` | Ensure `bindPS(0)` happens **after** producers for that draw (already ~1227); optional: central dirty flush if you defer upload |
+
+**Do not change** `Direct3d11_HlslRewrite.cpp` b0 choice — comments at 795–805 already say Plan 11-08 mirrors legacy **c-register layout into b0**; GAP-4 is that wiring.
+
+---
+
+## 2. Where do `register(cN)` globals come from? (Q2)
+
+**Separate engine paths on D3D9 — not one `userConstants` blob.**
+
+Evidence in-repo:
+
+```21:35:src/engine/client/application/Direct3d9/src/win32/Direct3d9_PixelShaderConstantRegisters.h
+enum Direct3d9_PixelShaderConstantRegisters
+{
+	PSCR_dot3LightDirection,
+	PSCR_dot3LightDiffuseColor,
+	PSCR_dot3LightSpecularColor,
+	PSCR_dot3LightTangentMinusDiffuseColor,
+	PSCR_dot3LightTangentMinusBackColor,
+	PSCR_textureFactor,
+	PSCR_textureFactor2,
+	PSCR_materialSpecularColor,
+	PSCR_userConstant,
+	PSCR_MAX
+};
+```
+
+- **Lights (c0–c4):** `Direct3d9_LightManager.cpp` → `setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5)`
+- **Material spec / power:** `Direct3d9_StaticShaderData.cpp` → `PSCR_materialSpecularColor` + `setSpecularPower` (stuffed into `PixelDot3Data.localDirection.w` in light path)
+- **Texture factor:** `Direct3d9_StaticShaderData.cpp` → `PSCR_textureFactor`, count 2
+- **User constants only:** `setPixelShaderUserConstants` → `PSCR_userConstant` only (`Direct3d9.cpp` ~3511)
+
+**D3D11 today:** only the last path is implemented (into b2 `PerMaterialCB`). **`Direct3d11_LightManager` does not push PS dot3 at all** — it only fills `Direct3d11_LightingCB` @ slot 3.
+
+### How to determine without `.inc`
+
+1. **Read `Direct3d9_PixelShaderConstantRegisters.h`** (done above) — authoritative c-index semantics.
+2. **Grep D3D9 plugin** for `setPixelShaderConstants(PSCR_` — complete producer list.
+3. **Compare** to your reflection dump: offsets 0, 16, 32, 48, 64, 80, 96, 112, 128 = c0…c8 — matches enum order.
+4. **Optional:** extract `pixel_shader_constants.inc` only to validate struct sizes (e.g. `float3` vs `float4` padding); not required to know **which engine API** feeds which slot.
+
+**Conclusion:** Fix is **wire missing D3D9-equivalent producers into b0**, not “find another callback.”
+
+---
+
+## 3. Positional mapping without `.inc` (Q3)
+
+**Partial yes — per region, not whole buffer.**
+
+| Region | Positional 1:1? | Rule |
+|--------|------------------|------|
+| **c0–c4** (lights) | N/A for `setPixelShaderUserConstants` | Engine pushes **`PixelDot3Data`** as 5 consecutive `float4`s at c0 — mirror D3D9 struct layout byte-for-byte. |
+| **c5–c7** | By **name** on D3D9 | `textureFactor`, `materialSpecularColor` from static shader / material pass — use reflected names on b0 (you already do). |
+| **c8+** (`userConstants[17]`) | **Yes, for API array** | `constants[k]` → `userConstants[k]` @ offset `128 + k*16`. Same as D3D9 `PSCR_userConstant + k`. |
+| **Whole `VectorRgba[]` from index 0 → c0** | **Refuted** | Would put bloom/alpha-fade vectors into light direction — nonsense. |
+
+**Confirm:** one boot log of `setPixelShaderUserConstants_impl` with `count>0` on char-select; if non-zero values appear only at shadow offset ≥128 after fix, positional user mapping is correct.
+
+**Refute:** if lighting still black while `userConstants[0]` at offset 128 is non-zero — problem is c0–c4, not user array.
+
+---
+
+## 4. Extract `.inc`? (Q4)
+
+**Not a prerequisite for GAP-4 char-select lighting black.**
+
+**Minimum if you extract later (sanity / padding):**
+
+- From `pixel_shader_constants.inc`: declarations for `dot3LightDirection`, `dot3LightDiffuseColor`, `dot3LightSpecularColor`, `materialSpecularColor`, `materialSpecularPower`, `textureFactor`, and any `userConstant*` / `register(cN)` entries ≥ 8.
+- Confirm each is `float4` (or document `float3` padding) so `PixelDot3Data` memcpy size matches `packoffset(cN)`.
+
+**`vertex_shader_constants.inc`:** needed for VS/matrix issues, not for this PS black-silhouette bug.
+
+---
+
+## 5. Instrumentation (Q5)
+
+One log in **`flushLegacyPSConstants()`** (or first `StaticShaderData` upload after lights), one-shot on char-select body draw:
+
+```text
+GAP4 b0: c0.xyz=(%.3f,%.3f,%.3f) c0.w=specPower(%.3f) c1.rgb=diffuse(%.3f,%.3f,%.3f) c7=matSpec(%.3f,%.3f,%.3f) c8=user0(%.3f,%.3f,%.3f,%.3f) path=%s
+```
+
+- **Pass:** `c0.xyz` length > 0.01 and `c1.rgb` not all zero → lights reached b0.
+- **Fail persists:** log shows zeros at offsets 0 and 16 → Producer A (LightManager) still missing.
+- **Mis-route:** non-zero at offset 0 but shader still black → struct padding / wrong `.w` for spec power (compare D3D9 `getSpecularPower()` in `localDirection.w`).
+
+Second line (optional): `StaticShaderData` log `wroteSpecular` + **hex dump of shadow[112..127]** — confirms c7 not clobbered by zero-init staging.
+
+---
+
+## 6. Failure modes & D3D9 exploit (Q6)
+
+### Exploit D3D9 register file mapping
+
+The SOE pipeline was designed around **fixed `PSCR_*` indices** compiled into shader assets. Your rewriter preserved that via `packoffset(cN)`. **Mirror `Direct3d9_StateCache::setPixelShaderConstants` call pattern into b0 byte offsets** — that is the cleanest bridge, not a new abstract layout.
+
+### Failure modes
+
+1. **`StaticShaderData` zero-init staging** — root cause for clobbering good shadow data; must switch to RMW from shared shadow.
+2. **D3D11 `LightManager` simplified** — pushes slot-3 `LightingCB` only; asset PS never reads it → black diffuse lighting.
+3. **`PerMaterialCB` truncation** — shadow has only 4 `userConstants`; asset buffer has 17 — engine may pass `count>4` (truncation warning already in `Direct3d11.cpp` ~705–709). User region needs full 17×16 B in **b0** shadow.
+4. **`materialSpecularPower`** — not a separate reflected var; D3D9 packs into **`dot3LightDirection.w`**. Missing power → wrong spec, but **zero diffuse** still dominates black.
+5. **`packedRegister0..4` names** — reflection loses semantics; mapping is **by offset**, not by name (use `PSCR_*` indices).
+6. **Order/race** — `apply()` upload after lights must read merged shadow; if you flush b0 only in `apply()`, lights must be written **before** draw in `setLights` (same order as D3D9 frame).
+7. **PS vs VS `.inc`** — PS include may declare a different c-range than VS; always use **PS reflection** / `pixel_shader_constants.inc` for PS b0, not VS slot-0 layout.
+
+### Simpler alternatives (beachhead only)
+
+- **Hardcode char-select fill light in b0 c0–c2** — fast spike; do not ship as final (violates census gate for correctness proof).
+- **Force fallback PS** — proves textures/interpolators; abandons asset lighting.
+- **Rewrite shader to read `LightingCB` @ b3** — breaks asset fidelity and D3D9 parity.
+
+---
+
+## Data-flow summary (recommended)
+
+```
+Frame: Graphics::setLights()
+  → Direct3d11_LightManager::setLights()     [EXTEND]
+  → build PixelDot3Data (port from D3D9)
+  → writePSRange(PSCR_dot3LightDirection, &pixelDot3Data, 5)
+
+Per draw: StaticShader::apply()
+  → Direct3d11_StaticShaderData::apply()     [CHANGE]
+  → staging = copy(s_swgPsConstantsShadow)
+  → patch textureFactor / materialSpecularColor by reflected offset
+  → updatePS(0, staging); copy staging → shadow
+
+Effect/bloom: Graphics::setPixelShaderUserConstants(ptr, n)  [CHANGE]
+  → write ptr[i] → shadow[(PSCR_userConstant+i)*16]
+  → flushLegacyPSConstants()  // or dirty-flag in applyPreDrawState
+
+applyPreDrawState()
+  → bindPS(0), bindPS(1) fallback, bindPS(2) optional
+  → asset rewritten PS samples b0 with non-zero lights
+```
+
+---
+
+## Risks
+
+| Risk | Mitigation |
+|------|------------|
+| `PixelDot3Data` vs HLSL padding | `static_assert(sizeof(PixelDot3Data)==80)`; compare one draw against D3D9 with PIX/register dump if available |
+| Porting full D3D9 light logic | Start with dot3 parallel path used on char-select (`applyLights` PS pushes); don’t rewrite hemispheric VS path |
+| Dual flush b0 + b2 | Harmless if asset PS ignores b2; avoid zeroing b0 from b2 path |
+| Open-world shaders with different `.inc` | Same mechanism (c-index from reflection); extract `.inc` when a shader’s reflected size ≠ 400 |
+
+---
+
+## Direct answers (short)
+
+1. **Architecture:** Shared **b0 legacy shadow** + producers mirroring D3D9; **(b)+(c)**. Reject **(a)**.
+2. **c-register source:** **Separate from `setPixelShaderUserConstants`** — wire **LightManager + StaticShaderData** equivalents; prove via `Direct3d9_PixelShaderConstantRegisters.h` + D3D9 grep.
+3. **Positional without `.inc`:** **Only for `userConstants` at c8+**; lights need **struct memcpy at c0**, not user API array.
+4. **`.inc` extract:** **Not required** for this bug; optional for padding audit.
+5. **Logs:** **c0.xyz + c1.rgb + c7 + c8** from b0 shadow at flush.
+6. **Exploit D3D9:** **`PSCR_*` → byte offset = index×16** into b0; don’t redesign cbuffers.
+
+I validated the above against your tree (`Direct3d9_PixelShaderConstantRegisters.h`, `Direct3d11.cpp`, `Direct3d11_StaticShaderData.cpp`, `Direct3d9_LightManager.cpp`). Switch to Agent mode if you want this implemented in the D3D11 plugin only.
