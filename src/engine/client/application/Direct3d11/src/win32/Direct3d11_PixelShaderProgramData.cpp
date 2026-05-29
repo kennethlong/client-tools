@@ -663,29 +663,31 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 	}
 
 	// ------------------------------------------------------------------
-	// Plan 17-07 (HIGH-4): PSRC main() parameter-list rewriter.
+	// Plan 17-07 (HIGH-4): PSRC main() VS-signature reconstruction rewriter.
 	//
 	// The dominant char-select PSRC form (22/22 per
 	// evidence/plan-17-04x-psrc-source-dump.txt) is
 	//   float4 main(in TYPE NAME : SEMANTIC, ...) : SV_Target
-	// The HLSL compiler assigns the asset PS input registers (v0..vN) in
-	// parameter DECLARATION order; the independently-compiled VS assigns its
-	// outputs (o0..oN) in its own order, so the native PS lands at the wrong
-	// register positions and isCompatibleWithVS rejects it (id=343). This
-	// reorders the PS main() parameter declarations into the bound VS's
-	// output-register order so the recompiled PS's v# line up with the VS's
-	// o# by construction -- the same Register-major sort discipline
-	// buildHlslForVSOutputs (:487-492) applies when synthesizing a struct, but
-	// applied to an existing parameter list so the asset's PS BODY is preserved
-	// (only the input declaration order changes).
+	//
+	// FINDING (project_17_07_ps_register_base_offset, from the 2026-05-29 boot
+	// rewrite-diag): the VS<->PS mismatch is a register-BASE offset, NOT an
+	// ordering problem. The VS reserves output register o0 for SV_Position, so its
+	// user varyings start at o1; the asset PS starts its varyings at v0. D3D11
+	// matches by register number -> COLOR0@v0 != COLOR0@o1 -> id=343 / INCOMPATIBLE.
+	// A parameter-LIST REORDER can never introduce the +1 base shift (the first
+	// declared PS param is always v0), and some PSes also SKIP a VS output, which a
+	// reorder cannot pad. So this rewriter does NOT reorder -- it RECONSTRUCTS the
+	// PS input signature to mirror the VS output signature exactly (SV_Position at
+	// register 0, then one field per VS output in register order with matching
+	// type/mask), the proven buildHlslForVSOutputs (:487-492) invariant, then wraps
+	// the asset's renamed main() so its real shading body is preserved verbatim.
 	//
 	// Round-5 item 9: returns a {status,text} result rather than string-equality
-	// control flow. Failed = parse failure OR a non-system consumed input with
-	// no VS producer (rewriting that would compile a PS reading garbage). On
-	// Failed the caller tries the struct-bound rewriter, then selectFallbackPSForVS.
-	// System-value semantics (SV_*) bind to system registers, not v0..vN, so they
-	// are EXCLUDED from the match loop + sort and kept at the front in original
-	// order. Input-validation bounds (T-17-07-01): 64 KiB source cap, 16 param cap.
+	// control flow. Failed = parse failure / non-float4 entry / a non-system
+	// consumed input with no VS producer (would compile a PS reading garbage) ->
+	// caller tries the struct-bound rewriter, then selectFallbackPSForVS. Only
+	// SV_Position is a supported system-value input. Input-validation bounds
+	// (T-17-07-01): 64 KiB source cap, 16 param cap.
 
 	enum class PsRewriteStatus { Rewritten, Unchanged, Failed };
 	struct PsRewriteResult { PsRewriteStatus status; std::string text; };
@@ -812,21 +814,30 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		PsRewriteResult result{ PsRewriteStatus::Failed, psrcText };
 
 		if (psrcText.size() > 64u * 1024u) return result;   // T-17-07-01 size bound
-		if (vsOutputsIn.empty())           return result;   // nothing to order against
+		if (vsOutputsIn.empty())           return result;
 
 		size_t const openIdx = psRewriteFindMainParen(psrcText);
 		if (openIdx == std::string::npos) return result;
 		size_t const closeIdx = psRewriteMatchParen(psrcText, openIdx);
 		if (closeIdx == std::string::npos) return result;
-		if (closeIdx <= openIdx + 1)
-		{
-			// main() with an empty parameter list -> nothing to reorder.
-			result.status = PsRewriteStatus::Unchanged;
-			result.text   = psrcText;
-			return result;
-		}
 
-		std::string const paramList = psrcText.substr(openIdx + 1, closeIdx - openIdx - 1);
+		// Locate the entry-point "main" identifier (immediately before openIdx,
+		// across optional whitespace) so we can rename it -> assetMain1707, and
+		// require the return type to be `float4` (only the float4-returning entry
+		// form is wrapper-safe; void/out-param mains -> Failed -> fallback).
+		size_t q = openIdx;
+		while (q > 0 && psRewriteIsWs(psrcText[q - 1])) --q;
+		if (q < 4) return result;
+		size_t const mainStart = q - 4;
+		if (psrcText.compare(mainStart, 4, "main") != 0) return result;
+		size_t r = mainStart;
+		while (r > 0 && psRewriteIsWs(psrcText[r - 1])) --r;
+		if (r < 6 || psrcText.compare(r - 6, 6, "float4") != 0) return result;
+
+		// Parse the asset main() parameter list.
+		std::string const paramList = (closeIdx > openIdx + 1)
+			? psrcText.substr(openIdx + 1, closeIdx - openIdx - 1)
+			: std::string();
 		std::vector<std::string> const rawParams = psRewriteSplitTopLevelCommas(paramList);
 		if (rawParams.size() > 16) return result;           // T-17-07-01 count bound
 
@@ -840,73 +851,102 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		}
 		if (params.empty())
 		{
+			// PS reads no varyings -> trivially register-compatible; no rewrite.
 			result.status = PsRewriteStatus::Unchanged;
 			result.text   = psrcText;
 			return result;
 		}
 
-		// A param with no semantic binding => likely struct-bound form -> let the
-		// struct-bound rewriter try instead.
+		// Every param must be semantic-bound (else likely struct-bound -> let the
+		// struct-bound rewriter try) and a clean identifier; only SV_Position is a
+		// supported system-value input (others -> Failed -> fallback).
 		for (PsParsedParam const &pp : params)
+		{
 			if (!pp.hasSemantic) return result;
+			if (!isValidHlslIdentifier(pp.semanticBase.c_str())) return result;
+			if (pp.isSystemValue && _stricmp(pp.semanticBase.c_str(), "SV_Position") != 0)
+				return result;
+		}
 
 		// Sort a copy of VS outputs by Register (ties: SemanticIndex) -- mirror
-		// buildHlslForVSOutputs:487-492.
+		// buildHlslForVSOutputs:487-492. Validate each semantic is a clean identifier.
 		std::vector<Direct3d11_ReflectedVSOutput> vsOutputs = vsOutputsIn;
+		for (Direct3d11_ReflectedVSOutput const &o : vsOutputs)
+			if (!isValidHlslIdentifier(o.SemanticName)) return result;
 		std::sort(vsOutputs.begin(), vsOutputs.end(),
 			[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
 				if (a.Register != b.Register) return a.Register < b.Register;
 				return a.SemanticIndex < b.SemanticIndex;
 			});
 
-		// Walk VS outputs in register order; emit the matching user-varying param.
-		// SV_* params are excluded here and re-prepended below in original order.
-		std::vector<bool>   used(params.size(), false);
-		std::vector<size_t> orderedUser;
-		for (Direct3d11_ReflectedVSOutput const &o : vsOutputs)
+		// Map each non-SV asset param to its VS output index (by semantic+index).
+		// A non-system consumed input with no VS producer -> Failed (would read garbage).
+		std::vector<int> paramToVs(params.size(), -1);
+		for (size_t k = 0; k < params.size(); ++k)
 		{
-			for (size_t j = 0; j < params.size(); ++j)
+			if (params[k].isSystemValue) continue;   // SV_Position sourced from f_pos1707
+			int found = -1;
+			for (size_t j = 0; j < vsOutputs.size(); ++j)
 			{
-				if (used[j] || params[j].isSystemValue) continue;
-				if (_stricmp(params[j].semanticBase.c_str(), o.SemanticName) != 0) continue;
-				if (params[j].semanticIndex != o.SemanticIndex) continue;
-				orderedUser.push_back(j);
-				used[j] = true;
+				if (_stricmp(params[k].semanticBase.c_str(), vsOutputs[j].SemanticName) != 0) continue;
+				if (params[k].semanticIndex != vsOutputs[j].SemanticIndex) continue;
+				found = static_cast<int>(j);
 				break;
 			}
+			if (found < 0) return result;            // consumed input, no producer -> Failed
+			paramToVs[k] = found;
 		}
 
-		// Any user-varying param not matched to a VS output is a consumed input
-		// with no producer -> Failed (do NOT silently drop -- it would read garbage).
-		for (size_t j = 0; j < params.size(); ++j)
-			if (!params[j].isSystemValue && !used[j]) return result;
-
-		// New order: system-value params (original order) then user params
-		// (register order).
-		std::vector<size_t> newOrder;
-		for (size_t j = 0; j < params.size(); ++j)
-			if (params[j].isSystemValue) newOrder.push_back(j);
-		for (size_t j : orderedUser) newOrder.push_back(j);
-
-		bool changed = (newOrder.size() != params.size());
-		for (size_t i = 0; !changed && i < newOrder.size(); ++i)
-			if (newOrder[i] != i) changed = true;
-
-		if (!changed)
+		// === VS-signature reconstruction (NOT a reorder) ===
+		// The VS<->PS mismatch is a register-BASE offset, not an ordering problem
+		// (see project_17_07_ps_register_base_offset): the VS reserves output
+		// register o0 for SV_Position so user varyings start at o1, while the asset
+		// PS starts its varyings at v0. Reordering the parameter list can never add
+		// that base shift. Instead we RECONSTRUCT the PS input signature to mirror
+		// the VS output signature EXACTLY -- SV_Position at register 0, then one
+		// field per VS output in register order with the matching type/mask -- so
+		// the HLSL compiler re-derives the SAME register + component packing as the
+		// VS (the buildHlslForVSOutputs invariant), including the +1 base AND any VS
+		// outputs the PS doesn't consume (kept as unused padding fields to preserve
+		// alignment). The asset main() is renamed assetMain1707 and called from a new
+		// wrapper main(PsIn1707), sourcing each asset param from its mirror field --
+		// so the asset's real shading body is preserved verbatim.
+		std::string mirror;
+		mirror.reserve(1024);
+		mirror += "\n\n// Plan 17-07 VS-mirror wrapper (register-base alignment; project_17_07_ps_register_base_offset).\n";
+		mirror += "struct PsIn1707\n{\n";
+		mirror += "    float4 f_pos1707 : SV_Position;\n";
+		for (size_t j = 0; j < vsOutputs.size(); ++j)
 		{
-			result.status = PsRewriteStatus::Unchanged;
-			result.text   = psrcText;
-			return result;
+			Direct3d11_ReflectedVSOutput const &o = vsOutputs[j];
+			std::string const type = hlslTypeFor(o.ComponentType, o.ComponentMask);
+			char idx[16];   _snprintf_s(idx,   sizeof(idx),   _TRUNCATE, "%u",  o.SemanticIndex);
+			char fname[24]; _snprintf_s(fname, sizeof(fname), _TRUNCATE, "f_%zu", j);
+			mirror += "    "; mirror += type; mirror += " "; mirror += fname;
+			mirror += " : "; mirror += o.SemanticName; mirror += idx; mirror += ";\n";
 		}
-
-		std::string rebuilt;
-		for (size_t i = 0; i < newOrder.size(); ++i)
+		mirror += "};\n\n";
+		mirror += "float4 main(PsIn1707 i1707) : SV_Target\n{\n    return assetMain1707(";
+		for (size_t k = 0; k < params.size(); ++k)
 		{
-			if (i) rebuilt += ", ";
-			rebuilt += params[newOrder[i]].text;
+			if (k) mirror += ", ";
+			if (params[k].isSystemValue)
+			{
+				mirror += "i1707.f_pos1707";
+			}
+			else
+			{
+				char arg[24]; _snprintf_s(arg, sizeof(arg), _TRUNCATE, "i1707.f_%d", paramToVs[k]);
+				mirror += arg;
+			}
 		}
+		mirror += ");\n}\n";
 
-		result.text   = psrcText.substr(0, openIdx + 1) + rebuilt + psrcText.substr(closeIdx);
+		// Rename the asset entry main -> assetMain1707 (so it is a plain function
+		// defined before the wrapper), then append the mirror struct + wrapper.
+		std::string const renamed =
+			psrcText.substr(0, mainStart) + "assetMain1707" + psrcText.substr(mainStart + 4);
+		result.text   = renamed + mirror;
 		result.status = PsRewriteStatus::Rewritten;
 		return result;
 	}
