@@ -15,12 +15,14 @@
 #include "Direct3d11_StaticShaderData.h"
 
 #include "Direct3d11.h"
+#include "Direct3d11_ConstantBuffer.h"   // Plan 17-03 R3-03a: getPerMaterialShadow declaration
 #include "Direct3d11_Device.h"   // Plan 11-09.15 Iter-17: getInfoQueue for stage0-resolve diagnostic
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_StateCache.h"
 #include "Direct3d11_TextureData.h"
 #include "Direct3d11_VertexShaderData.h"
 
+#include "clientGraphics/Material.h"              // Plan 17-03 SR-1: shader.getMaterial source-data resolution
 #include "clientGraphics/ShaderEffect.h"          // m_effect -> ShaderEffect *
 #include "clientGraphics/ShaderImplementation.h"
 #include "clientGraphics/StaticShader.h"
@@ -30,6 +32,8 @@
 #include "sharedFoundation/MemoryBlockManager.h"
 
 #include <algorithm>
+#include <cstring>     // Plan 17-03 R3-03c: std::memcpy + std::strcmp + std::strlen for offset-aware staging buffer
+#include <vector>      // Plan 17-03 R3-03c: staging byte buffer
 
 // ======================================================================
 
@@ -346,6 +350,7 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	m_passVS.clear();
 	m_passPS.clear();
 	m_passStages.clear();
+	m_passMaterial.clear();
 
 	if (!m_implementation)
 		return;
@@ -359,6 +364,18 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		for (auto &s : emptyStages)
 			s = Stage{ false, nullptr, {} };
 		m_passStages.assign(passCount, emptyStages);
+	}
+	// Plan 17-03 SR-1: per-pass material source-data cache sized 1:1 with
+	// the PS cache. Default-construct to zero/false so any pass that fails
+	// resolution below stays at the safe "no material" state.
+	{
+		PerPassMaterial emptyMat = {};
+		emptyMat.m_diffuse         = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		emptyMat.m_specular        = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		emptyMat.m_emissive        = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		emptyMat.m_textureFactor   = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		emptyMat.m_textureFactor2  = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		m_passMaterial.assign(passCount, emptyMat);
 	}
 
 	size_t passIndex = 0;
@@ -390,6 +407,82 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		{
 			m_passPS[passIndex] = static_cast<Direct3d11_PixelShaderProgramData const *>(
 				pass->m_pixelShader->m_program->m_graphicsData);
+		}
+
+		// Plan 17-03 SR-1: per-pass MATERIAL + TEXTUREFACTOR source-data
+		// resolution. Mirrors Direct3d9_StaticShaderData.cpp:593-700.
+		// Without this source data, the Plan 17-03 reflection-driven upload
+		// writes ZERO into the cbuffer for every pass and CHAR-02 fails
+		// (gray eyes). The cached PerPassMaterial is consumed by apply()
+		// at draw time. Defensive defaults mirror the D3D9 sibling's
+		// material-tag-failure-fallback (white diffuse, opaque alpha) so
+		// passes whose material tag does not resolve still render visibly
+		// rather than silently going black.
+		{
+			PerPassMaterial pm = {};
+			pm.m_diffuse        = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			pm.m_specular       = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			pm.m_emissive       = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			pm.m_textureFactor  = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			pm.m_textureFactor2 = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+
+			ShaderImplementation::Pass const * const engPass = pass;   // R3-03e: nested-type alias
+
+			if (engPass->m_materialTag)
+			{
+				Material material;
+				if (shader.getMaterial(engPass->m_materialTag, material))
+				{
+					pm.m_materialValid = true;
+					VectorArgb const &d = material.getDiffuseColor();
+					VectorArgb const &s = material.getSpecularColor();
+					VectorArgb const &e = material.getEmissiveColor();
+					pm.m_diffuse  = DirectX::XMFLOAT4(d.r, d.g, d.b, d.a);
+					pm.m_specular = DirectX::XMFLOAT4(s.r, s.g, s.b, s.a);
+					pm.m_emissive = DirectX::XMFLOAT4(e.r, e.g, e.b, e.a);
+					pm.m_power    = material.getSpecularPower();
+				}
+				else
+				{
+					// Defensive defaults mirroring Direct3d9_StaticShaderData.cpp:627-650.
+					pm.m_materialValid = true;
+					pm.m_diffuse  = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+					pm.m_specular = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+					pm.m_emissive = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+					pm.m_power    = 0.0f;
+					DEBUG_WARNING(true,
+						("Direct3d11_StaticShaderData: could not find material tag in shader %s",
+						shader.getStaticShaderTemplate().getName().getString()));
+				}
+			}
+
+			if (engPass->m_textureFactorTag)
+			{
+				uint32 tf = 0;
+				if (shader.getTextureFactor(engPass->m_textureFactorTag, tf))
+				{
+					pm.m_textureFactor.x = static_cast<float>((tf >> 16) & 0xff) / 255.0f;
+					pm.m_textureFactor.y = static_cast<float>((tf >>  8) & 0xff) / 255.0f;
+					pm.m_textureFactor.z = static_cast<float>((tf >>  0) & 0xff) / 255.0f;
+					pm.m_textureFactor.w = static_cast<float>((tf >> 24) & 0xff) / 255.0f;
+					pm.m_textureFactorValid = true;
+				}
+			}
+
+			if (engPass->m_textureFactorTag2)
+			{
+				uint32 tf2 = 0;
+				if (shader.getTextureFactor(engPass->m_textureFactorTag2, tf2))
+				{
+					pm.m_textureFactor2.x = static_cast<float>((tf2 >> 16) & 0xff) / 255.0f;
+					pm.m_textureFactor2.y = static_cast<float>((tf2 >>  8) & 0xff) / 255.0f;
+					pm.m_textureFactor2.z = static_cast<float>((tf2 >>  0) & 0xff) / 255.0f;
+					pm.m_textureFactor2.w = static_cast<float>((tf2 >> 24) & 0xff) / 255.0f;
+					pm.m_textureFactor2Valid = true;
+				}
+			}
+
+			m_passMaterial[passIndex] = pm;
 		}
 
 		// Plan 11-09.14 (CODEX Bucket A): walk pass->m_pixelShader->m_textureSamplers
@@ -536,6 +629,12 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 			}
 		}
 	}
+
+	// Plan 17-03 SR-1: m_passMaterial must be sized 1:1 with m_passPS so
+	// apply() can index by pass number without an extra bounds check.
+	DEBUG_FATAL(m_passMaterial.size() != m_passPS.size(),
+		("Direct3d11_StaticShaderData: m_passMaterial.size()=%zu != m_passPS.size()=%zu (SR-1 invariant)",
+		m_passMaterial.size(), m_passPS.size()));
 }
 
 // ======================================================================
@@ -615,6 +714,152 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			size_t const idx = static_cast<size_t>(passNumber);
 			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx]);
 			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
+
+			// Plan 17-03 R3 (D-04 + HIGH-2 + HIGH-3 + R3-03a + R3-03b + R3-03c + SR-1 + SR-2):
+			// OFFSET-AWARE reflection-driven material + textureFactor upload into the
+			// shared PerMaterial shadow. The upload uses the cached layout's actual
+			// NAME / BIND POINT / variable START OFFSETS -- NEVER hardcoded
+			// "PerMaterial" or slot 2 or sizeof(Direct3d11_PerMaterialCB). Every
+			// pass uploads a current cbuffer (mirrors D3D9
+			// Direct3d9_StaticShaderData.cpp:835-897 per-pass apply semantics).
+			// R3-03b: !pm.m_materialValid passes upload ZERO material so stale
+			// data does NOT bleed into a subsequent material pass.
+			if (m_passPS[idx] && idx < m_passMaterial.size())
+			{
+				PerPassMaterial const &pm = m_passMaterial[idx];
+				Direct3d11_PerMaterialCB & shadow = Direct3d11Namespace::getPerMaterialShadow();
+				std::vector<Direct3d11_ReflectedPSCbufferLayout> const &layouts =
+					m_passPS[idx]->getReflectedCbufferLayouts();
+
+				// R3-03b: read source XMFLOAT4s for THIS pass. If !m_materialValid,
+				// source values are ZERO (so the eventual updatePS call uploads zero
+				// material -- never the prior pass's data).
+				DirectX::XMFLOAT4 const passDiffuse  = pm.m_materialValid       ? pm.m_diffuse        : DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+				DirectX::XMFLOAT4 const passSpecular = pm.m_materialValid       ? pm.m_specular       : DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+				DirectX::XMFLOAT4 const passEmissive = pm.m_materialValid       ? pm.m_emissive       : DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+				DirectX::XMFLOAT4 const passTexFac   = pm.m_textureFactorValid  ? pm.m_textureFactor  : DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+				DirectX::XMFLOAT4 const passTexFac2  = pm.m_textureFactor2Valid ? pm.m_textureFactor2 : DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+
+				// For each reflected cbuffer layout, build a staging byte buffer sized
+				// to the cbuffer's reflected TotalSize, copy our XMFLOAT4 source data
+				// at each named variable's StartOffset (bounds-checked against var.Size),
+				// then upload via updatePS(layout.BindPoint, staging, layout.TotalSize).
+				// Variables not present in the cached layout are silently skipped
+				// (Plan 03 must handle name-mismatches per R3-03f -- documented in
+				// 17-03-SUMMARY.md if the reflected names don't match the candidate
+				// set {materialDiffuse/Specular/Emissive, textureFactor, textureFactor2}).
+				for (auto const &layout : layouts)
+				{
+					if (layout.TotalSize == 0)
+						continue;   // Defensive: zero-size means Plan 02 reflection failed for this entry.
+
+					// Staging buffer sized to the reflected cbuffer total size. Char-select
+					// PS cbuffers are 400 bytes (per Plan 02's PS-cbuffer dump for
+					// SwgVertexConstants @ b0); std::vector is safe for any size up to
+					// Direct3d11_ConstantBuffer::kMaxCBufferBytes (1152).
+					std::vector<unsigned char> staging(layout.TotalSize, 0u);
+
+					// Lookup + write helper. Returns true on a successful write so the
+					// shadow mirror below can mirror only the writes that landed.
+					auto writeVarByName = [&](char const *varName, DirectX::XMFLOAT4 const &value) -> bool
+					{
+						for (auto const &var : layout.Vars)
+						{
+							if (std::strcmp(var.Name, varName) != 0) continue;
+							// R3-03c bounds: a reflected var smaller than 16 bytes means
+							// the asset declared something narrower (e.g. float3) -- skip
+							// rather than overrun. A larger var is unexpected for a
+							// material/textureFactor variable; we still only write the
+							// first 16 bytes.
+							if (var.Size < sizeof(DirectX::XMFLOAT4))
+								return false;
+							if (var.StartOffset + sizeof(DirectX::XMFLOAT4) > layout.TotalSize)
+								return false;
+							std::memcpy(staging.data() + var.StartOffset, &value, sizeof(DirectX::XMFLOAT4));
+							return true;
+						}
+						return false;
+					};
+
+					bool const wroteDiffuse  = writeVarByName("materialDiffuse",  passDiffuse);
+					bool const wroteSpecular = writeVarByName("materialSpecular", passSpecular);
+					bool const wroteEmissive = writeVarByName("materialEmissive", passEmissive);
+					(void)writeVarByName("textureFactor",  passTexFac);
+					(void)writeVarByName("textureFactor2", passTexFac2);
+
+					// Mirror writes into the shared shadow so setPixelShaderUserConstants_impl's
+					// slot-2 flush sees the SAME material values when the bound layout binds
+					// at slot 2 (R3-03a + HIGH-3 shared shadow contract). When the layout's
+					// bind point is NOT 2 the shadow mirror is a harmless overwrite -- the
+					// staging buffer is what reaches THIS shader's reflected cbuffer.
+					if (wroteDiffuse)  shadow.materialDiffuse  = passDiffuse;
+					if (wroteSpecular) shadow.materialSpecular = passSpecular;
+					if (wroteEmissive) shadow.materialEmissive = passEmissive;
+					// textureFactor mirror is conditional on the optional sub-step-1d
+					// PerMaterialCB extension; Plan 17-03 char-select census did NOT
+					// surface textureFactor in any reflected PS cbuffer (all are
+					// SwgVertexConstants @ b0, 9 vars, no textureFactor present), so
+					// the extension is SKIPPED and the staging buffer alone holds the
+					// asset's offsets if the asset ever declares textureFactor.
+
+					// R3-03d StateCache bind-point coverage: char-select census shows
+					// ALL reflected cbuffers at layout.BindPoint == 0; slot 0 is already
+					// bound at Direct3d11_StateCache.cpp:1138. No StateCache edit needed.
+					// If a future asset surfaces a non-{0,2} bind point, extend the
+					// pre-draw bind loop there.
+					Direct3d11_ConstantBuffer::updatePS(layout.BindPoint, staging.data(), layout.TotalSize);
+
+					// R3-03g (HIGH-3 + R3-03b proof): one-shot dual-routed log of the
+					// material values at THIS flush for the HEAD pass and the EYE pass.
+					// Heuristic: shader template name (.sht path) contains 'head' or
+					// 'eye'. Static flags ensure only TWO lines land in the log per boot.
+					// `#if 0` this block after the first successful boot is recorded.
+#if 1
+					{
+						static bool s_loggedHeadFlush = false;
+						static bool s_loggedEyeFlush  = false;
+						char const *shaderName = "?";
+						if (m_shader)
+						{
+							CrcString const &templateName = m_shader->getStaticShaderTemplate().getName();
+							char const * const sn = templateName.getString();
+							if (sn && *sn) shaderName = sn;
+						}
+						bool isHead = false;
+						bool isEye  = false;
+						if (std::strstr(shaderName, "head")) isHead = true;
+						if (std::strstr(shaderName, "eye"))  isEye  = true;
+						if ((isHead && !s_loggedHeadFlush) || (isEye && !s_loggedEyeFlush))
+						{
+							if (isHead) s_loggedHeadFlush = true;
+							if (isEye)  s_loggedEyeFlush  = true;
+							char msg[512];
+							_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+								"Plan 17-03 R3-03g perMaterialShadow at flush shader='%s' bindPoint=%u totalSize=%u "
+								"wroteDiffuse=%d wroteSpecular=%d wroteEmissive=%d "
+								"diffuse=(%.3f,%.3f,%.3f,%.3f) specular=(%.3f,%.3f,%.3f,%.3f) "
+								"emissive=(%.3f,%.3f,%.3f,%.3f) materialValid=%d",
+								shaderName, layout.BindPoint, layout.TotalSize,
+								wroteDiffuse  ? 1 : 0,
+								wroteSpecular ? 1 : 0,
+								wroteEmissive ? 1 : 0,
+								passDiffuse.x,  passDiffuse.y,  passDiffuse.z,  passDiffuse.w,
+								passSpecular.x, passSpecular.y, passSpecular.z, passSpecular.w,
+								passEmissive.x, passEmissive.y, passEmissive.z, passEmissive.w,
+								pm.m_materialValid ? 1 : 0);
+							if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+								iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+							DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+						}
+					}
+#endif
+				}
+				// If layouts is empty (reflection failed at compile time per Plan 02
+				// HIGH-2 non-fatal path), there is no upload this draw. Acceptable for
+				// a shader that has no cbuffers; if a shader's reflection went missing
+				// due to a compile failure, Plan 03 cannot recover -- documented
+				// per-shader in 17-03-SUMMARY.md.
+			}
 
 			// Plan 11-09.15 Iter-39C: per-pass alpha-blend enable.
 			// Iter-39B wired this to Direct3d11_ShaderImplementationData::apply
