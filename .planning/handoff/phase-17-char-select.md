@@ -5,6 +5,17 @@
 **Worktree:** D:\Code\swg-client-v2
 **Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap `6668b7cac`) · 17-06a **DONE** (`cafbe6111`+`73d15101f`: userConstants = flat float4[17]) · 17-06b **DONE — Case C DEFERRED** (`97d7bbf93`+`c701b229e`: latent `writeVarFloat4AtOffset`, no evidence-backed offset; dual-AI confirmed) · **17-07 NEXT (the only remaining code plan)** · 17-05 T4–5 **deferred to after 17-07**
 
+> **STATUS 2026-05-29 (17-07 Task 1 LANDED):** code committed `f9e5ac569` (PS param-list rewriter
+> `rewritePsMainParameterListForVSOutputs` + struct-bound rare-asset fallback + per-VS rewrite cache
+> keyed on VS* + `computeOutputSignatureHash()` + `isCompatibleWithVS_withExplicitPSInputs` overload +
+> StateCache native>rewritten>fallback bind priority + `asset-PS bound=`/`fallback-PS bound=` attribution
+> + `D3D11_REWRITE_VERSION` 21→22 + VS-output-sig .cso salt). `gl11_d.dll` rebuilt + staged
+> (5/29 14:37); **0 errors / 0 unresolved externals in Direct3d11 + SwgClient projects**. KEY FINDING:
+> the touched headers are **Direct3d11-plugin-internal**, so ONLY `gl11_d.dll` relinked — `SwgClient_d.exe`
+> (5/28) is unchanged and compatible (this is NOT the `ShaderImplementation.h` shared-header ABI trap; the
+> all-plugin-rebuild mandate was over-cautious). Provenance recorded in `evidence/README.md` §6 (`5a1f9c1bf`).
+> **NEXT: 17-07 Task 2 (Kenny boots POST-gap) → then write 17-07-SUMMARY.md → then 17-05 Tasks 4–5.**
+>
 > **RESUME HERE → execute 17-07, then 17-05 Tasks 4–5.** 17-07 is the big one: HLSL parameter-list
 > parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
 > pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring

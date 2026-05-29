@@ -54,10 +54,10 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 ## Current Position
 
 Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING (gap-closure, inline)
-Plan: 6 of 8 complete — 17-07 is the only remaining code plan; 17-05 T4–5 deferred to after it
-Status: Checkpoint — fresh context requested for 17-07 (HLSL parser + per-VS cache + all-plugin ABI rebuild)
-Resume: /gsd-execute-phase 17 --gaps  →  see .planning/handoff/phase-17-char-select.md (RESUME HERE block)
-Last activity: 2026-05-29 -- gap-closure Waves 5–6 + 17-06b done; 17-05 parked at 17-05-task3 (PRE-gap evidence); 17-06b Case C DEFERRED (dual-AI confirmed); 17-07 next
+Plan: 6 of 8 complete — 17-07 code LANDED (Task 1); awaiting Task 2 host boot; 17-05 T4–5 next
+Status: CHECKPOINT (17-07 Task 2 human-verify) — gl11_d.dll rebuilt + staged (5/29 14:37, HEAD f9e5ac569); Kenny boots rasterMajor=11 char-select + pastes 5 GAP-3 grep counts (asset-PS bound= ≥8, Plan 17-07 .* COMPATIBLE vs= ≥8); then D-06 rasterMajor=5 re-boot
+Resume: after Kenny's POST-gap boot paste → write 17-07-SUMMARY.md (boot-evidence section) → close 17-07 → run 17-05 Tasks 4–5. See .planning/handoff/phase-17-char-select.md.
+Last activity: 2026-05-29 -- 17-07 Task 1 committed f9e5ac569 (PS param-list rewrite + per-VS cache + bind-path attribution; REWRITE_VERSION 21→22); gl11_d.dll-only relink (plugin-internal headers, NOT the shared-header ABI trap; SwgClient_d.exe unchanged 5/28, compatible); 0 errors/0 unresolved in Direct3d11+SwgClient projects
 
 ## Accumulated Context
 
