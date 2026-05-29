@@ -150,7 +150,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "21" });   // Plan 17-02 Task 1 SUB-STEP 1d: bump 20 -> 21 to invalidate stale .cso caches for the new non-fatal PSRC-recompile lane (D3DCompile sourceLen now strlen-derived per R3-02g instead of m_psrcLen-with-trailing-NUL; a stale .cso entry produced under the prior cache contract could otherwise mask a regression). Prior Iter-29B note (Plan 11-09.15) preserved in version history.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "22" });   // Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -287,7 +287,8 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		size_t sourceLen,
 		char const *displayName,
 		Microsoft::WRL::ComPtr<ID3D11PixelShader> &outComPtr,
-		Microsoft::WRL::ComPtr<ID3DBlob>          &outBytecodeBlob)
+		Microsoft::WRL::ComPtr<ID3DBlob>          &outBytecodeBlob,
+		uint32_t vsOutputSignatureHashSalt = 0)   // Plan 17-07 MEDIUM: non-zero for the per-VS rewrite lane -> salts the .cso cache key so the same PSRC recompiled against different VS output orderings does not collide. 0 (default) for the native ctor lane -> cache key identical to Plan 17-02.
 	{
 		if (!sourceText || sourceLen == 0)
 			return false;
@@ -300,7 +301,18 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "21" });  // Plan 17-02: must match the FATAL helper (above) so the .cso cache hash is shared
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "22" });  // Plan 17-07 Round-5 item 5: bump 21 -> 22; must match the FATAL helper (above) so the .cso cache hash is shared.
+		// Plan 17-07 MEDIUM: per-VS rewrite lane salt. saltStr must outlive the
+		// D3DCompile call below (D3D_SHADER_MACRO holds char const*), so it is a
+		// stack buffer scoped to this function body. Native ctor lane passes 0 ->
+		// no salt define -> cache key identical to Plan 17-02.
+		char saltStr[16] = { 0 };
+		if (vsOutputSignatureHashSalt != 0)
+		{
+			_snprintf_s(saltStr, sizeof(saltStr), _TRUNCATE, "%u",
+				static_cast<unsigned>(vsOutputSignatureHashSalt));
+			defines.push_back({ "D3D11_VS_OUTPUT_SIG_HASH", saltStr });
+		}
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -648,6 +660,275 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		hlsl += "}\n";
 
 		return hlsl;
+	}
+
+	// ------------------------------------------------------------------
+	// Plan 17-07 (HIGH-4): PSRC main() parameter-list rewriter.
+	//
+	// The dominant char-select PSRC form (22/22 per
+	// evidence/plan-17-04x-psrc-source-dump.txt) is
+	//   float4 main(in TYPE NAME : SEMANTIC, ...) : SV_Target
+	// The HLSL compiler assigns the asset PS input registers (v0..vN) in
+	// parameter DECLARATION order; the independently-compiled VS assigns its
+	// outputs (o0..oN) in its own order, so the native PS lands at the wrong
+	// register positions and isCompatibleWithVS rejects it (id=343). This
+	// reorders the PS main() parameter declarations into the bound VS's
+	// output-register order so the recompiled PS's v# line up with the VS's
+	// o# by construction -- the same Register-major sort discipline
+	// buildHlslForVSOutputs (:487-492) applies when synthesizing a struct, but
+	// applied to an existing parameter list so the asset's PS BODY is preserved
+	// (only the input declaration order changes).
+	//
+	// Round-5 item 9: returns a {status,text} result rather than string-equality
+	// control flow. Failed = parse failure OR a non-system consumed input with
+	// no VS producer (rewriting that would compile a PS reading garbage). On
+	// Failed the caller tries the struct-bound rewriter, then selectFallbackPSForVS.
+	// System-value semantics (SV_*) bind to system registers, not v0..vN, so they
+	// are EXCLUDED from the match loop + sort and kept at the front in original
+	// order. Input-validation bounds (T-17-07-01): 64 KiB source cap, 16 param cap.
+
+	enum class PsRewriteStatus { Rewritten, Unchanged, Failed };
+	struct PsRewriteResult { PsRewriteStatus status; std::string text; };
+
+	inline bool psRewriteIsWs(char c)    { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
+	inline bool psRewriteIsAlpha(char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'; }
+	inline bool psRewriteIsDigit(char c) { return c >= '0' && c <= '9'; }
+	inline bool psRewriteIsAlnum(char c) { return psRewriteIsAlpha(c) || psRewriteIsDigit(c); }
+
+	std::string psRewriteTrim(std::string const &s)
+	{
+		size_t b = 0, e = s.size();
+		while (b < e && psRewriteIsWs(s[b])) ++b;
+		while (e > b && psRewriteIsWs(s[e - 1])) --e;
+		return s.substr(b, e - b);
+	}
+
+	// Offset of '(' opening the entry-point main() parameter list, or npos.
+	size_t psRewriteFindMainParen(std::string const &s)
+	{
+		size_t pos = 0;
+		while ((pos = s.find("main", pos)) != std::string::npos)
+		{
+			bool okPrev = (pos == 0) || !psRewriteIsAlnum(s[pos - 1]);
+			size_t p = pos + 4;
+			while (p < s.size() && psRewriteIsWs(s[p])) ++p;
+			if (okPrev && p < s.size() && s[p] == '(')
+				return p;
+			pos += 4;
+		}
+		return std::string::npos;
+	}
+
+	// Index of the ')' matching the '(' at openIdx (paren-depth scan), or npos.
+	size_t psRewriteMatchParen(std::string const &s, size_t openIdx)
+	{
+		int depth = 0;
+		for (size_t i = openIdx; i < s.size(); ++i)
+		{
+			if (s[i] == '(') ++depth;
+			else if (s[i] == ')') { if (--depth == 0) return i; }
+		}
+		return std::string::npos;
+	}
+
+	struct PsParsedParam
+	{
+		std::string text;          // trimmed original parameter substring (preserved verbatim on emit)
+		std::string semanticBase;  // e.g. "COLOR", "TEXCOORD", "SV_Position"
+		UINT        semanticIndex; // trailing integer, default 0
+		bool        hasSemantic;
+		bool        isSystemValue;
+	};
+
+	// Parse one parameter substring. Returns false on malformed input (-> Failed).
+	bool psRewriteParseParam(std::string const &raw, PsParsedParam &out)
+	{
+		out.text          = psRewriteTrim(raw);
+		out.semanticIndex = 0;
+		out.hasSemantic   = false;
+		out.isSystemValue = false;
+		if (out.text.empty())
+			return true;   // tolerate trailing empty slot; caller filters
+
+		size_t const colon = out.text.rfind(':');
+		if (colon == std::string::npos)
+			return true;   // no semantic binding -> likely struct-bound param
+
+		size_t p = colon + 1;
+		while (p < out.text.size() && psRewriteIsWs(out.text[p])) ++p;
+		if (p >= out.text.size() || !psRewriteIsAlpha(out.text[p]))
+			return false;  // malformed semantic
+
+		std::string sem;
+		while (p < out.text.size() && psRewriteIsAlnum(out.text[p]))
+			sem += out.text[p++];
+
+		// Split sem into alpha/underscore base + trailing decimal index.
+		size_t digitStart = sem.size();
+		while (digitStart > 0 && psRewriteIsDigit(sem[digitStart - 1])) --digitStart;
+		if (digitStart == 0)
+			return false;  // all-digit semantic is malformed
+
+		out.semanticBase = sem.substr(0, digitStart);
+		if (digitStart < sem.size())
+		{
+			UINT idx = 0;
+			for (size_t i = digitStart; i < sem.size(); ++i)
+				idx = idx * 10u + static_cast<UINT>(sem[i] - '0');
+			out.semanticIndex = idx;
+		}
+		out.hasSemantic = true;
+
+		// SV_ prefix (case-insensitive) => system value.
+		if (out.semanticBase.size() >= 3)
+		{
+			auto up = [](char c) { return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 32) : c; };
+			if (up(out.semanticBase[0]) == 'S' && up(out.semanticBase[1]) == 'V' && out.semanticBase[2] == '_')
+				out.isSystemValue = true;
+		}
+		return true;
+	}
+
+	std::vector<std::string> psRewriteSplitTopLevelCommas(std::string const &params)
+	{
+		std::vector<std::string> out;
+		int depth = 0;
+		size_t start = 0;
+		for (size_t i = 0; i < params.size(); ++i)
+		{
+			char const c = params[i];
+			if (c == '(' || c == '[') ++depth;
+			else if (c == ')' || c == ']') --depth;
+			else if (c == ',' && depth == 0) { out.push_back(params.substr(start, i - start)); start = i + 1; }
+		}
+		out.push_back(params.substr(start));
+		return out;
+	}
+
+	PsRewriteResult rewritePsMainParameterListForVSOutputs(
+		std::string const &psrcText,
+		std::vector<Direct3d11_ReflectedVSOutput> const &vsOutputsIn)
+	{
+		PsRewriteResult result{ PsRewriteStatus::Failed, psrcText };
+
+		if (psrcText.size() > 64u * 1024u) return result;   // T-17-07-01 size bound
+		if (vsOutputsIn.empty())           return result;   // nothing to order against
+
+		size_t const openIdx = psRewriteFindMainParen(psrcText);
+		if (openIdx == std::string::npos) return result;
+		size_t const closeIdx = psRewriteMatchParen(psrcText, openIdx);
+		if (closeIdx == std::string::npos) return result;
+		if (closeIdx <= openIdx + 1)
+		{
+			// main() with an empty parameter list -> nothing to reorder.
+			result.status = PsRewriteStatus::Unchanged;
+			result.text   = psrcText;
+			return result;
+		}
+
+		std::string const paramList = psrcText.substr(openIdx + 1, closeIdx - openIdx - 1);
+		std::vector<std::string> const rawParams = psRewriteSplitTopLevelCommas(paramList);
+		if (rawParams.size() > 16) return result;           // T-17-07-01 count bound
+
+		std::vector<PsParsedParam> params;
+		for (std::string const &rp : rawParams)
+		{
+			PsParsedParam pp;
+			if (!psRewriteParseParam(rp, pp)) return result;   // malformed -> Failed
+			if (pp.text.empty()) continue;                     // tolerate trailing empty slot
+			params.push_back(pp);
+		}
+		if (params.empty())
+		{
+			result.status = PsRewriteStatus::Unchanged;
+			result.text   = psrcText;
+			return result;
+		}
+
+		// A param with no semantic binding => likely struct-bound form -> let the
+		// struct-bound rewriter try instead.
+		for (PsParsedParam const &pp : params)
+			if (!pp.hasSemantic) return result;
+
+		// Sort a copy of VS outputs by Register (ties: SemanticIndex) -- mirror
+		// buildHlslForVSOutputs:487-492.
+		std::vector<Direct3d11_ReflectedVSOutput> vsOutputs = vsOutputsIn;
+		std::sort(vsOutputs.begin(), vsOutputs.end(),
+			[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+				if (a.Register != b.Register) return a.Register < b.Register;
+				return a.SemanticIndex < b.SemanticIndex;
+			});
+
+		// Walk VS outputs in register order; emit the matching user-varying param.
+		// SV_* params are excluded here and re-prepended below in original order.
+		std::vector<bool>   used(params.size(), false);
+		std::vector<size_t> orderedUser;
+		for (Direct3d11_ReflectedVSOutput const &o : vsOutputs)
+		{
+			for (size_t j = 0; j < params.size(); ++j)
+			{
+				if (used[j] || params[j].isSystemValue) continue;
+				if (_stricmp(params[j].semanticBase.c_str(), o.SemanticName) != 0) continue;
+				if (params[j].semanticIndex != o.SemanticIndex) continue;
+				orderedUser.push_back(j);
+				used[j] = true;
+				break;
+			}
+		}
+
+		// Any user-varying param not matched to a VS output is a consumed input
+		// with no producer -> Failed (do NOT silently drop -- it would read garbage).
+		for (size_t j = 0; j < params.size(); ++j)
+			if (!params[j].isSystemValue && !used[j]) return result;
+
+		// New order: system-value params (original order) then user params
+		// (register order).
+		std::vector<size_t> newOrder;
+		for (size_t j = 0; j < params.size(); ++j)
+			if (params[j].isSystemValue) newOrder.push_back(j);
+		for (size_t j : orderedUser) newOrder.push_back(j);
+
+		bool changed = (newOrder.size() != params.size());
+		for (size_t i = 0; !changed && i < newOrder.size(); ++i)
+			if (newOrder[i] != i) changed = true;
+
+		if (!changed)
+		{
+			result.status = PsRewriteStatus::Unchanged;
+			result.text   = psrcText;
+			return result;
+		}
+
+		std::string rebuilt;
+		for (size_t i = 0; i < newOrder.size(); ++i)
+		{
+			if (i) rebuilt += ", ";
+			rebuilt += params[newOrder[i]].text;
+		}
+
+		result.text   = psrcText.substr(0, openIdx + 1) + rebuilt + psrcText.substr(closeIdx);
+		result.status = PsRewriteStatus::Rewritten;
+		return result;
+	}
+
+	// Plan 17-07 (HIGH-4 rare-asset fallback): struct-bound main() form
+	// `struct PSIn { ... }; float4 main(in PSIn input) : SV_Target`. ZERO
+	// occurrences in the captured char-select PSRC dump (22/22 use the
+	// parameter-list form handled above). A correct struct-member reorderer is
+	// the same sort discipline applied to struct fields, but it cannot be
+	// exercised or validated on the char-select beachhead (no struct-bound asset
+	// boots it). Per Round-5's anti-"mental rewrite" stance we do NOT ship an
+	// unvalidated reorderer that would silently run on a legacy asset; we return
+	// Failed so the bind cleanly falls through to selectFallbackPSForVS (the
+	// documented safety net for the residual 0-1/9 pair). When a real
+	// struct-bound char-select asset surfaces, implement the field reorder here
+	// mirroring rewritePsMainParameterListForVSOutputs.
+	PsRewriteResult rewritePsMainStructBoundParameterForVSOutputs(
+		std::string const &psrcText,
+		std::vector<Direct3d11_ReflectedVSOutput> const &vsOutputsIn)
+	{
+		(void)vsOutputsIn;
+		return PsRewriteResult{ PsRewriteStatus::Failed, psrcText };
 	}
 
 	// First-time-the-generator-runs diagnostic. Routes via the
@@ -1303,6 +1584,262 @@ bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS(
 		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
 	}
 	return true;
+}
+
+// ----------------------------------------------------------------------
+//
+// Plan 17-07 (HIGH-6 + Round-5 item 1): rewritten-lane validator. Mirrors
+// isCompatibleWithVS above but reads an EXPLICIT per-VS reflected-input vector
+// (the rewritten PS's signature) instead of the ctor-time m_reflectedPSInputs
+// (the native PS's signature). Emits a DISTINCT "Plan 17-07 COMPATIBLE/
+// INCOMPATIBLE vs=... ps=... (rewritten)" verdict so Plan 17-05's
+// `Plan 17-07 .* COMPATIBLE vs=` grep measures the rewritten verdict, NOT the
+// native `Plan 17-04 Task 1 ... COMPATIBLE (...) vs=` token. Deduped per
+// (vs, psForLog) pair. The native isCompatibleWithVS above is left UNCHANGED.
+
+bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
+	Direct3d11_VertexShaderData                 const *vs,
+	std::vector<Direct3d11_ReflectedPSInputSig> const &psInputs,
+	void                                        const *psForLog)
+{
+	if (!vs)
+		return true;   // no VS to validate against (mirror native-path default).
+
+	std::vector<Direct3d11_ReflectedVSOutput> const &vsOutputs = vs->getReflectedOutputs();
+
+	static std::set<std::pair<void const *, void const *>> s_loggedPairs;
+	std::pair<void const *, void const *> const key(static_cast<void const *>(vs), psForLog);
+	bool const firstSeen = (s_loggedPairs.find(key) == s_loggedPairs.end());
+	if (firstSeen)
+		s_loggedPairs.insert(key);
+
+	auto emitVerdict = [&](bool compatible, char const *detail)
+	{
+		if (!firstSeen) return;
+		char msg[512];
+		if (compatible)
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-07 COMPATIBLE vs=0x%p ps=0x%p (rewritten, matched %u ps inputs)",
+				static_cast<void const *>(vs), psForLog,
+				static_cast<unsigned>(psInputs.size()));
+		else
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-07 INCOMPATIBLE vs=0x%p ps=0x%p (rewritten) reason='%s'",
+				static_cast<void const *>(vs), psForLog, detail ? detail : "");
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+	};
+
+	if (psInputs.empty())
+	{
+		emitVerdict(true, nullptr);   // no user inputs to mismatch.
+		return true;
+	}
+	if (vsOutputs.empty())
+	{
+		emitVerdict(false, "ps has user inputs but vs reflection produced 0 outputs");
+		return false;
+	}
+
+	for (Direct3d11_ReflectedPSInputSig const &psIn : psInputs)
+	{
+		Direct3d11_ReflectedVSOutput const *match = nullptr;
+		for (Direct3d11_ReflectedVSOutput const &o : vsOutputs)
+		{
+			if (_stricmp(o.SemanticName, psIn.SemanticName) != 0) continue;
+			if (o.SemanticIndex != psIn.SemanticIndex)           continue;
+			match = &o;
+			break;
+		}
+
+		char        reasonBuf[256];
+		char const *reason = nullptr;
+		if (!match)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' has no matching vs output semantic",
+				psIn.SemanticName, psIn.SemanticIndex);
+			reason = reasonBuf;
+		}
+		else if (match->Register != psIn.Register)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' expects register v%u but vs writes at o%u",
+				psIn.SemanticName, psIn.SemanticIndex, psIn.Register, match->Register);
+			reason = reasonBuf;
+		}
+		else if (match->ComponentType != psIn.ComponentType)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' component type %d != vs %d",
+				psIn.SemanticName, psIn.SemanticIndex,
+				static_cast<int>(psIn.ComponentType), static_cast<int>(match->ComponentType));
+			reason = reasonBuf;
+		}
+		else if ((match->ComponentMask & psIn.Mask) != psIn.Mask)
+		{
+			_snprintf_s(reasonBuf, sizeof(reasonBuf), _TRUNCATE,
+				"ps input '%s%u' read mask 0x%X not a subset of vs write mask 0x%X",
+				psIn.SemanticName, psIn.SemanticIndex, psIn.Mask, match->ComponentMask);
+			reason = reasonBuf;
+		}
+
+		if (reason)
+		{
+			emitVerdict(false, reason);
+			return false;
+		}
+	}
+
+	emitVerdict(true, nullptr);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+//
+// Plan 17-07 (HIGH-2 + HIGH-4 + HIGH-6): per-VS rewritten-PS lookup. Lazily
+// rewrites the retained //hlsl PSRC main() parameter list into the bound VS's
+// output-register order, recompiles (salted .cso key), reflects the new input
+// signature, and caches the result keyed on (VS pointer + output-sig hash).
+// const + mutable cache: lazy memoization, logically const (ms_currentPSData
+// is a const* at the StateCache call site).
+
+std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
+Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData) const
+{
+	std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *> const kNone(nullptr, nullptr);
+	if (!vsData)
+		return kNone;
+
+	uint32_t const vsOutputSignatureHash = vsData->computeOutputSignatureHash();
+
+	// Cache lookup with raw-pointer-reuse staleness guard (MEDIUM): a stored
+	// entry whose hash != the current VS hash is a MISS (rebuild), not a serve.
+	{
+		std::map<Direct3d11_VertexShaderData const *, PerVsRewriteEntry>::const_iterator const it =
+			m_perVsRewrittenCache.find(vsData);
+		if (it != m_perVsRewrittenCache.end() && it->second.vsOutputSignatureHash == vsOutputSignatureHash)
+		{
+			if (it->second.ps)
+				return std::make_pair(it->second.ps.Get(), &it->second.inputs);
+			return kNone;   // tombstone: rewrite previously infeasible for this VS.
+		}
+	}
+
+	// Tombstone helper: records a null entry (with the current hash) so repeated
+	// binds of an infeasible pair don't re-run the rewrite+compile every draw.
+	// operator[] overwrites any stale (hash-mismatched) entry found above.
+	auto tombstone = [&]() -> std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
+	{
+		PerVsRewriteEntry &slot = m_perVsRewrittenCache[vsData];
+		slot.ps.Reset();
+		slot.inputs.clear();
+		slot.vsOutputSignatureHash = vsOutputSignatureHash;
+		return kNone;
+	};
+
+	// Need the retained PSRC //hlsl source (Plan 17-01 m_psrcText on the engine
+	// program struct).
+	char const *psrcText = (m_program ? m_program->m_psrcText : nullptr);
+	int  const  psrcLen  = (m_program ? m_program->m_psrcLen  : 0);
+	if (!psrcText || psrcLen < 7)
+		return tombstone();
+
+	// Only the //hlsl PSRC lane is rewritable (mirror the ctor classification:
+	// first non-whitespace, BOM-tolerant, must be "//hlsl"). asm PSRC is out of
+	// scope (re-assembling asm reproduces the rejected D3D9 bytecode).
+	{
+		int start = 0;
+		if (psrcLen >= 3
+			&& static_cast<unsigned char>(psrcText[0]) == 0xEF
+			&& static_cast<unsigned char>(psrcText[1]) == 0xBB
+			&& static_cast<unsigned char>(psrcText[2]) == 0xBF)
+			start = 3;
+		while (start < psrcLen)
+		{
+			char const c = psrcText[start];
+			if (c == ' ' || c == '\t' || c == '\r' || c == '\n') ++start; else break;
+		}
+		if (psrcLen - start < 7)
+			return tombstone();
+		if (!(psrcText[start + 0] == '/' && psrcText[start + 1] == '/'
+			&& psrcText[start + 2] == 'h' && psrcText[start + 3] == 'l'
+			&& psrcText[start + 4] == 's' && psrcText[start + 5] == 'l'))
+			return tombstone();
+	}
+
+	std::string const psrcStr(psrcText);   // strlen-derived (ctor uses the same)
+
+	PsRewriteResult rr = rewritePsMainParameterListForVSOutputs(psrcStr, vsData->getReflectedOutputs());
+	if (rr.status == PsRewriteStatus::Failed)
+	{
+		PsRewriteResult sb = rewritePsMainStructBoundParameterForVSOutputs(psrcStr, vsData->getReflectedOutputs());
+		if (sb.status == PsRewriteStatus::Failed)
+			return tombstone();
+		rr = sb;
+	}
+	// rr is now Rewritten or Unchanged -> rr.text is compilable.
+
+	ComPtr<ID3D11PixelShader> ps;
+	ComPtr<ID3DBlob>          blob;
+	bool const ok = tryCompilePixelShaderFromHlslNoFatal(
+		rr.text.c_str(), rr.text.size(),
+		(m_program ? m_program->getFileName() : "pixel_shader.psh"),
+		ps, blob, vsOutputSignatureHash);
+	if (!ok || !ps || !blob)
+		return tombstone();
+
+	// Reflect the rewritten PS's input signature (mirror the ctor reflect-once
+	// loop at :1061-1092; SV_* filtered). Reflection failure is non-fatal ->
+	// empty inputs -> validator treats as trivially compatible.
+	PerVsRewriteEntry entry;
+	entry.ps                    = ps;
+	entry.vsOutputSignatureHash = vsOutputSignatureHash;
+
+	ComPtr<ID3D11ShaderReflection> reflector;
+	HRESULT const reflectHr = D3DReflect(
+		blob->GetBufferPointer(), blob->GetBufferSize(),
+		IID_PPV_ARGS(reflector.GetAddressOf()));
+	if (SUCCEEDED(reflectHr) && reflector)
+	{
+		D3D11_SHADER_DESC shaderDesc = {};
+		if (SUCCEEDED(reflector->GetDesc(&shaderDesc)))
+		{
+			for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
+			{
+				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
+				if (FAILED(reflector->GetInputParameterDesc(i, &desc))) continue;
+				if (desc.SystemValueType != D3D_NAME_UNDEFINED) continue;   // SV_* filtered
+				Direct3d11_ReflectedPSInputSig sig = {};
+				if (desc.SemanticName)
+					strncpy_s(sig.SemanticName, sizeof(sig.SemanticName), desc.SemanticName, _TRUNCATE);
+				sig.SemanticIndex = desc.SemanticIndex;
+				sig.Register      = desc.Register;
+				sig.Mask          = desc.Mask;
+				sig.ComponentType = desc.ComponentType;
+				entry.inputs.push_back(sig);
+			}
+		}
+	}
+
+	// Defensive (Round-4 HIGH-6): only cache a rewrite that actually VALIDATES
+	// against the bound VS via its per-VS reflected inputs. A rewrite that
+	// compiled but still mismatches (e.g. the HLSL compiler packed inputs
+	// differently than declaration order assumed) is tombstoned so the bind
+	// falls through to selectFallbackPSForVS rather than binding a PS that reads
+	// garbage. This emits the rewritten-lane verdict log; the StateCache re-check
+	// shares the (vs, ps) dedupe key so the log fires exactly once per pair.
+	if (!isCompatibleWithVS_withExplicitPSInputs(vsData, entry.inputs, static_cast<void const *>(ps.Get())))
+		return tombstone();
+
+	// Store (overwriting any stale hash-mismatched entry). std::map element
+	// addresses are stable across later inserts, so returning &slot.inputs is safe.
+	PerVsRewriteEntry &slot = m_perVsRewrittenCache[vsData];
+	slot = std::move(entry);
+	if (slot.ps)
+		return std::make_pair(slot.ps.Get(), &slot.inputs);
+	return kNone;
 }
 
 // ----------------------------------------------------------------------

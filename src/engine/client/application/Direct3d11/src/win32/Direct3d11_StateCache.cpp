@@ -63,7 +63,9 @@
 
 #include <cstdint>
 #include <cstring>
+#include <set>            // Plan 17-07: per-(VS, PS, path) bind-attribution dedupe set
 #include <unordered_map>
+#include <utility>        // Plan 17-07: std::pair / std::tuple key for the dedupe set
 #include <vector>
 
 // ======================================================================
@@ -991,6 +993,52 @@ namespace Direct3d11_StateCacheNamespace
 	}
 
 	// ------------------------------------------------------------------
+	// Plan 17-07 (Round-4 MEDIUM 'success metric inflation'): bind-path
+	// attribution log emitted at the PSSetShader call site, AFTER psToBind is
+	// decided. Distinct from the COMPATIBLE/INCOMPATIBLE validator logs -- this
+	// proves WHICH lane (native asset PS / rewritten asset PS / dynamic fallback)
+	// actually delivered each bind. Plan 17-05 Task 4 greps `asset-PS bound=`
+	// (>= 8) vs `fallback-PS bound=` (<= 1) on Kenny's POST-gap boot. Deduped per
+	// (VS*, PS*, path) triple so the log doesn't flood per draw; dual-route
+	// (DEBUG_REPORT_LOG_PRINT + ID3D11InfoQueue file sink) mirroring 17-02/17-04.
+	void emitPlan1707BindAttribution(
+		Direct3d11_VertexShaderData       const *vsData,
+		Direct3d11_PixelShaderProgramData const *psData,
+		ID3D11PixelShader                       *psToBind,
+		char const                              *bindPath)
+	{
+		typedef std::pair<void const *, void const *> VsPsKey;
+		// Encode the path in the key's third dimension by partitioning into two
+		// dedupe sets keyed on (VS, PS) -- one for asset binds, one for fallback.
+		static std::set<VsPsKey> s_assetLogged;
+		static std::set<VsPsKey> s_fallbackLogged;
+
+		bool const isFallback = (bindPath && std::strcmp(bindPath, "fallback") == 0);
+		VsPsKey const key(static_cast<void const *>(vsData), static_cast<void const *>(psToBind));
+		std::set<VsPsKey> &logged = isFallback ? s_fallbackLogged : s_assetLogged;
+		if (logged.find(key) != logged.end())
+			return;
+		logged.insert(key);
+
+		char const *shaderName = psData ? psData->getFileName() : "?";
+
+		char msg[512];
+		if (isFallback)
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-07 fallback-PS bound= ptr=0x%p vs=0x%p shader='%s'",
+				static_cast<void const *>(psToBind), static_cast<void const *>(vsData), shaderName);
+		else
+			_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				"Plan 17-07 asset-PS bound= ptr=0x%p vs=0x%p ps=0x%p (path=%s) shader='%s'",
+				static_cast<void const *>(psToBind), static_cast<void const *>(vsData),
+				static_cast<void const *>(psData), bindPath ? bindPath : "?", shaderName);
+
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+	}
+
+	// ------------------------------------------------------------------
 	// Resolve the VS / PS / input-layout from the currently-bound static
 	// shader's pass data. Sets ms_currentVSData / ms_currentPSData /
 	// ms_currentInputLayout. Returns true if at least the VS is valid
@@ -1118,28 +1166,55 @@ namespace Direct3d11_StateCacheNamespace
 		// mask-subset) and false on any mismatch (route through the VS-matched
 		// per-VS PS instead). See Direct3d11_PixelShaderProgramData::
 		// isCompatibleWithVS for the validation contract + per-pair logging.
+		// Plan 17-07 (HIGH-2 + Round-5 item 10): bind priority is
+		// native-asset-PS > rewritten-cached-PS > dynamic-fallback-PS.
 		ID3D11PixelShader *psToBind = nullptr;
+		char const *bindPath = "none";
 		if (ms_currentPSData && ms_currentPSData->getPixelShader()
 			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentPSData))
 		{
+			// 1. Native asset PS validated by the unchanged ctor-time validator.
 			psToBind = ms_currentPSData->getPixelShader();
+			bindPath = "native";
 		}
-		else if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
+		else if (ms_currentPSData)
 		{
-			// Plan 11-09.13 Iter-3: reflection-driven fallback-variant
-			// selection. selectFallbackPSForVS returns Variant T (textured-
-			// passthrough) when the bound VS's reflected output signature
-			// proves D3D11 stage-linkage compatibility with `float2 uv :
-			// TEXCOORD0`; otherwise Variant M (magenta). Plan 17-04 Task 1
-			// re-elevates this path for asset PSes whose input signature
-			// is incompatible with the bound VS (id=343 mitigation).
-			psToBind = fallback;
+			// 2. Plan 17-07: native asset PS was INCOMPATIBLE (register-position
+			// mismatch). Try the per-VS rewritten cache (the retained //hlsl PSRC
+			// main() parameter list reordered into the bound VS's output-register
+			// layout) BEFORE the dynamic fallback. Validate the rewritten PS via
+			// its OWN per-VS reflected inputs (HIGH-6) so the native ctor-time
+			// m_reflectedPSInputs cache doesn't false-reject it.
+			std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *> const rewritten =
+				ms_currentPSData->tryGetOrBuildRewrittenPSForVS(ms_currentVSData);
+			if (rewritten.first && rewritten.second
+				&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
+					ms_currentVSData, *rewritten.second, static_cast<void const *>(rewritten.first)))
+			{
+				psToBind = rewritten.first;
+				bindPath = "rewritten";
+			}
 		}
-		// else: defensive -- should never fire post-Iter-3 since install()
-		// FATALs on either variant's compile failure. Leave previous PS bound
-		// if it does.
+		if (!psToBind)
+		{
+			// 3. Plan 11-09.13 Iter-3 / 17-04 Task 1 safety net: VS-matched per-VS
+			// PS (Variant T textured-passthrough) when the bound VS's reflected
+			// output signature is stage-linkage compatible, else Variant M
+			// (magenta). Owns the residual 0-1/9 pair the asset lane can't satisfy.
+			if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
+			{
+				psToBind = fallback;
+				bindPath = "fallback";
+			}
+		}
 		if (psToBind)
+		{
 			ctx->PSSetShader(psToBind, nullptr, 0);
+			// Plan 17-07 (Round-4 MEDIUM): prove WHICH lane delivered the bind --
+			// `asset-PS bound=` (path=native|rewritten) vs `fallback-PS bound=`.
+			// One-shot per (VS, PS, path); Plan 17-05 Task 4 greps these counts.
+			emitPlan1707BindAttribution(ms_currentVSData, ms_currentPSData, psToBind, bindPath);
+		}
 
 		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by
 		// Direct3d11.cpp's setVertexShaderUserConstants_impl /

@@ -82,6 +82,8 @@
 
 #include "sharedFoundation/MemoryBlockManager.h"
 
+#include <algorithm>      // Plan 17-07: std::sort for computeOutputSignatureHash determinism
+#include <cstdint>        // Plan 17-07: uint32_t hash
 #include <cstring>
 #include <vector>
 #include <d3d11.h>
@@ -218,6 +220,55 @@ Direct3d11_VertexShaderData::~Direct3d11_VertexShaderData()
 {
 	m_vertexShader = nullptr;
 	// ComPtr members release automatically.
+}
+
+// ----------------------------------------------------------------------
+//
+// Plan 17-07 (Round-5 review item 7): cache-key salt + raw-VS-pointer-reuse
+// staleness guard for Direct3d11_PixelShaderProgramData's per-VS rewrite
+// cache. FNV-1a over the sorted (SemanticName, SemanticIndex, Register,
+// ComponentMask) tuple list of reflected outputs. Sorted first so the hash
+// is order-independent over the reflected-output vector (reflection order is
+// not guaranteed stable across runs). Returns 0 on no reflected outputs.
+
+uint32_t Direct3d11_VertexShaderData::computeOutputSignatureHash() const
+{
+	if (m_reflectedOutputs.empty())
+		return 0u;
+
+	// Sort a local copy by (Register, SemanticIndex, SemanticName) for a
+	// deterministic, order-independent hash input. Mirrors the sort discipline
+	// in buildHlslForVSOutputs (Register-major).
+	std::vector<Direct3d11_ReflectedVSOutput> sorted = m_reflectedOutputs;
+	std::sort(sorted.begin(), sorted.end(),
+		[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+			if (a.Register != b.Register)           return a.Register < b.Register;
+			if (a.SemanticIndex != b.SemanticIndex) return a.SemanticIndex < b.SemanticIndex;
+			return std::strcmp(a.SemanticName, b.SemanticName) < 0;
+		});
+
+	uint32_t hash = 2166136261u;                  // FNV-1a 32-bit offset basis
+	auto fold = [&hash](unsigned char byte) {
+		hash ^= byte;
+		hash *= 16777619u;                        // FNV-1a 32-bit prime
+	};
+	auto foldUint = [&fold](UINT v) {
+		fold(static_cast<unsigned char>( v        & 0xff));
+		fold(static_cast<unsigned char>((v >> 8)  & 0xff));
+		fold(static_cast<unsigned char>((v >> 16) & 0xff));
+		fold(static_cast<unsigned char>((v >> 24) & 0xff));
+	};
+
+	for (Direct3d11_ReflectedVSOutput const &o : sorted)
+	{
+		for (char const *p = o.SemanticName; *p; ++p)
+			fold(static_cast<unsigned char>(*p));
+		fold(0);                                  // name terminator so "AB"+"C" != "A"+"BC"
+		foldUint(o.SemanticIndex);
+		foldUint(o.Register);
+		foldUint(o.ComponentMask);
+	}
+	return hash;
 }
 
 // ----------------------------------------------------------------------

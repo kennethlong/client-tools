@@ -44,7 +44,9 @@ class MemoryBlockManager;
 #include <cstdint>
 #include <d3d11.h>
 #include <d3d11shader.h>      // Plan 17-02 HIGH-2: D3D_REGISTER_COMPONENT_TYPE for reflected PS input signature
+#include <map>               // Plan 17-07 HIGH-6: per-VS rewrite cache keyed on Direct3d11_VertexShaderData const*
 #include <unordered_map>
+#include <utility>           // Plan 17-07: std::pair return of tryGetOrBuildRewrittenPSForVS
 #include <vector>             // Plan 17-02 HIGH-2: std::vector for reflected PS cbuffer layouts + input sig
 #include <wrl/client.h>
 
@@ -168,6 +170,42 @@ public:
 		Direct3d11_VertexShaderData       const *vs,
 		Direct3d11_PixelShaderProgramData const *ps);
 
+	// Plan 17-07 (HIGH-6 + Round-5 item 1): rewritten-lane variant of the
+	// validator. Reads an EXPLICIT per-VS reflected-input vector instead of
+	// the ctor-time m_reflectedPSInputs cache (which belongs to the native
+	// asset PS, not the per-VS rewritten PS). The native-path isCompatibleWithVS
+	// above is intentionally left UNCHANGED. Emits a DISTINCT "Plan 17-07
+	// COMPATIBLE/INCOMPATIBLE vs=... ps=... (rewritten)" verdict log (deduped
+	// per (vs, psForLog) pair) so Plan 17-05's `Plan 17-07 .* COMPATIBLE vs=`
+	// grep measures the rewritten verdict, NOT the native `Plan 17-04 Task 1
+	// ... COMPATIBLE (...) vs=` token. psForLog is the rewritten PS pointer,
+	// used only for the dedupe key + log (no deref).
+	static bool isCompatibleWithVS_withExplicitPSInputs(
+		Direct3d11_VertexShaderData                       const *vs,
+		std::vector<Direct3d11_ReflectedPSInputSig>       const &psInputs,
+		void                                              const *psForLog);
+
+	// Plan 17-07 (HIGH-2 + HIGH-4): per-VS rewritten-PS lookup consumed by
+	// Direct3d11_StateCache::applyPreDrawState. When the native asset PS is
+	// register-position-INCOMPATIBLE with the bound VS, this rewrites the
+	// retained PSRC main() parameter list (Plan 17-01 m_psrcText) into the
+	// VS-output register order, recompiles via tryCompilePixelShaderFromHlslNoFatal,
+	// reflects the new input signature, and caches the result keyed on the VS
+	// pointer + its output-signature hash (raw-pointer-reuse guarded). Returns
+	// {rewrittenPS, &perVsReflectedInputs} on success (caller validates via
+	// isCompatibleWithVS_withExplicitPSInputs then binds), or {nullptr, nullptr}
+	// when the rewrite is infeasible (no PSRC / parse failure / compile failure)
+	// so the caller falls through to selectFallbackPSForVS. const + mutable cache:
+	// this is lazy memoization, logically const; ms_currentPSData is a const* at
+	// the StateCache call site.
+	std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
+		tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData) const;
+
+	// Plan 17-07: engine-side shader filename for the StateCache bind-path
+	// attribution log (shader='%s'). Returns "?" defensively when m_program is
+	// null. Mirrors Direct3d11_VertexShaderData::getEngineShader access pattern.
+	char const *getFileName() const;
+
 	// Plan 11-09 Iter-2: minimal magenta pass-through PS, compiled in
 	// install(). applyPreDrawState binds this when ms_currentPSData has
 	// no real PS (per Plan 11-05 PEXE caveat) AND getOrCompilePSForVS
@@ -242,6 +280,25 @@ private:
 	// at Direct3d11_VertexShaderData.h:158/:161).
 	std::vector<Direct3d11_ReflectedPSCbufferLayout>          m_reflectedCbufferLayouts;
 	std::vector<Direct3d11_ReflectedPSInputSig>               m_reflectedPSInputs;
+
+	// Plan 17-07 (HIGH-6 + MEDIUM cache-key salt): per-VS rewritten-PS cache.
+	// Lazily populated by tryGetOrBuildRewrittenPSForVS on first bind that needs
+	// it. Keyed on the raw Direct3d11_VertexShaderData pointer (the engine's VS
+	// cache owns these long-lived objects for the process; mirrors 17-04's
+	// raw-VS*/PS* dedupe keys). vsOutputSignatureHash defends the raw-pointer-
+	// reuse edge: a lookup whose stored hash != the VS's recomputed
+	// computeOutputSignatureHash() is a MISS (rebuild), not a stale-PS serve.
+	// `inputs` holds the rewritten PS's per-VS reflected input signature so the
+	// validator can be re-run with per-VS data (the ctor-time m_reflectedPSInputs
+	// belongs to the native PS). A null `ps` is a tombstone (rewrite infeasible)
+	// that prevents retry storms. `mutable`: lazy memoization, logically const.
+	struct PerVsRewriteEntry
+	{
+		Microsoft::WRL::ComPtr<ID3D11PixelShader>    ps;                    // rewritten compiled PS (null tombstone if infeasible)
+		std::vector<Direct3d11_ReflectedPSInputSig>  inputs;                // per-VS reflected inputs (HIGH-6)
+		uint32_t                                     vsOutputSignatureHash; // cache-key salt + staleness guard (MEDIUM)
+	};
+	mutable std::map<Direct3d11_VertexShaderData const *, PerVsRewriteEntry> m_perVsRewrittenCache;
 };
 
 // ======================================================================
@@ -249,6 +306,13 @@ private:
 inline ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getPixelShader() const
 {
 	return m_d3dPS.Get();
+}
+
+// ----------------------------------------------------------------------
+
+inline char const *Direct3d11_PixelShaderProgramData::getFileName() const
+{
+	return m_program ? m_program->getFileName() : "?";
 }
 
 // ----------------------------------------------------------------------

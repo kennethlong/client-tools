@@ -126,6 +126,18 @@ public:
 	// defaults to Variant M (magenta), matching pre-Iter-3 behavior.
 	std::vector<Direct3d11_ReflectedVSOutput> const & getReflectedOutputs() const;
 
+	// Plan 17-07 (Round-5 review item 7): cheap FNV-1a hash over the sorted
+	// (SemanticName, SemanticIndex, Register, ComponentMask) tuple list of the
+	// reflected VS outputs. Used by Direct3d11_PixelShaderProgramData's per-VS
+	// rewrite cache as (a) the cache-key salt that distinguishes the same PSRC
+	// recompiled against different VS output orderings, and (b) the staleness
+	// guard against raw-VS-pointer reuse (a freed VS whose address is reused by
+	// a new VS with a different output signature). Returns 0 when no reflected
+	// outputs exist (degenerate VS / reflection failed). CONFIRMED NEW this
+	// session: no prior computeOutputSignatureHash / outputSignature symbol
+	// existed in this class.
+	uint32_t computeOutputSignatureHash() const;
+
 	// Plan 11-09.15 Iter-5 diagnostic: expose the engine-side
 	// ShaderImplementationPassVertexShader so drawTriangleFan can dump
 	// VS filename + a source snippet when ms_currentVBFormat.isTransformed()
