@@ -83,7 +83,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
   5. Single-stream vs multi-stream skeletal skinning is confirmed (RenderDoc mesh-viewer A/B) before any residual head/mesh weirdness is attributed to the PS; `id=342==0 && id=343==0` in `stage/d3d11-debug.log`; both `rasterMajor=5` and `=11` boot to char-select without crash.
 **Plans**: 3 plans (3 waves — sequential; census gates recompile gates reflection)
 - [x] 17-01-PLAN.md — PSRC retain + flag-gated census on real char-select boot; record HLSL:asm ratio; COMPARISON dir (gating)
-- [ ] 17-02-PLAN.md — recompile lane: //hlsl PSRC -> compilePixelShaderFromHlsl -> bind m_d3dPS; CHAR-01 single-stage control A/B
+- [x] 17-02-PLAN.md — recompile lane: //hlsl PSRC -> compilePixelShaderFromHlsl -> bind m_d3dPS; CHAR-01 single-stage control A/B
 - [ ] 17-03-PLAN.md — D3DReflect-driven material/textureFactor upload; CHAR-02 eyes + CHAR-03 head A/B; D-08 skinning confirm
 **UI hint**: yes
 **Mode:** standard
@@ -177,7 +177,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 14. Vivox Removal | v2.1 | 3/3 | Complete | 2026-05-26 |
 | 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete | 2026-05-27 |
 | 16. v2.1 Tech-Debt Cleanup | v2.1 | 3/3 | Complete | 2026-05-27 |
-| 17. PSRC Census + Char-Select Beachhead | v2.2 | 1/3 | In Progress|  |
+| 17. PSRC Census + Char-Select Beachhead | v2.2 | 2/3 | In Progress|  |
 | 18. Load-Screen Half-Texel Seam | v2.2 | 0/TBD | Not started | - |
 | 19. Gamma LUT + Interior Lighting | v2.2 | 0/TBD | Not started | - |
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
