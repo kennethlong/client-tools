@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: executing
-last_updated: "2026-05-29T19:30:00.000Z"
-last_activity: 2026-05-29 -- Phase 17 gap-closure Waves 5-6 + 17-06b done; 17-07 next (fresh context)
+last_updated: "2026-05-29T22:46:53.967Z"
+last_activity: "2026-05-29 -- 17-07 GAP-3 CLOSED (commits f9e5ac569→d8cc1ca99): VS-signature-RECONSTRUCTION rewriter (axis-b reorder proved wrong — mismatch was a register-BASE offset, VS reserves o0=SV_Position) → 9/9 asset-PS binds path=rewritten. Enabling the lane revealed GAP-4: black silhouette from unfed b0 lighting constants."
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -54,10 +54,10 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 ## Current Position
 
 Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING (gap-closure, inline)
-Plan: 6 of 8 complete — 17-07 code LANDED (Task 1); awaiting Task 2 host boot; 17-05 T4–5 next
-Status: CHECKPOINT (17-07 Task 2 human-verify) — gl11_d.dll rebuilt + staged (5/29 14:37, HEAD f9e5ac569); Kenny boots rasterMajor=11 char-select + pastes 5 GAP-3 grep counts (asset-PS bound= ≥8, Plan 17-07 .* COMPATIBLE vs= ≥8); then D-06 rasterMajor=5 re-boot
-Resume: after Kenny's POST-gap boot paste → write 17-07-SUMMARY.md (boot-evidence section) → close 17-07 → run 17-05 Tasks 4–5. See .planning/handoff/phase-17-char-select.md.
-Last activity: 2026-05-29 -- 17-07 Task 1 committed f9e5ac569 (PS param-list rewrite + per-VS cache + bind-path attribution; REWRITE_VERSION 21→22); gl11_d.dll-only relink (plugin-internal headers, NOT the shared-header ABI trap; SwgClient_d.exe unchanged 5/28, compatible); 0 errors/0 unresolved in Direct3d11+SwgClient projects
+Plan: 7 of 8 complete — 17-07 DONE (GAP-3 closed, asset-PS bind 0/9→9/9); GAP-4 (black) blocks visual parity; 17-05 T4–5 next
+Status: GAP-4 cross-AI consult IN FLIGHT (.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile{,-codex,-cursor}.out). Asset-PS lane delivers 9/9 binds but renders BLACK — b0(asset SwgVertexConstants)↔b2(engine PerMaterialCB) cbuffer layout mismatch + unwired c-register push; depends on TRE .inc extraction (census gate). D-06 rasterMajor=5 re-boot still PENDING (gl11-only change, D3D9 byte-for-byte).
+Resume: read consult outputs → design GAP-4 plan → then 17-05 T4–5 verdict CHAR-01/02/03 = PARTIAL (asset-PS active, black pending GAP-4). gl11_d.dll = HEAD d8cc1ca99 (5/29 17:23). See handoff + project_17_07_ps_register_base_offset memory.
+Last activity: 2026-05-29 -- 17-07 GAP-3 CLOSED (commits f9e5ac569→d8cc1ca99): VS-signature-RECONSTRUCTION rewriter (axis-b reorder proved wrong — mismatch was a register-BASE offset, VS reserves o0=SV_Position) → 9/9 asset-PS binds path=rewritten. Enabling the lane revealed GAP-4: black silhouette from unfed b0 lighting constants.
 
 ## Accumulated Context
 

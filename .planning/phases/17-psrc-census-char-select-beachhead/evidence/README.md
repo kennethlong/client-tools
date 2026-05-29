@@ -123,9 +123,10 @@ lossless future-diff input. Success = "matches `rasterMajor=5`", NOT "no magenta
 
 ## SECTION 6 — POST-gap build provenance (stale-DLL hard gate)
 
-POST-gap build provenance:
-- **HEAD commit:** `f9e5ac569e0482f4c654c6cdddbc559ee1ae4b11` (`feat(17-07): PS parameter-list rewrite axis-(b) + per-VS cache + bind-path attribution (closes GAP-3)`) — sits on top of 17-06b `97d7bbf93`, so this build contains BOTH 17-06b (StaticShaderData) and 17-07 (PSData + StateCache + VertexShaderData).
-- **`stage/gl11_d.dll` LastWriteTime:** `2026-05-29 14:37:47 -05:00` (rebuilt this session; Plan 17-05 Task 4 must verify the deployed DLL matches this mtime before booting).
+POST-gap build provenance (UPDATED after the 17-07 rewriter redesign):
+- **HEAD commit:** `d8cc1ca99` (`feat(17-07): redesign rewriter to RECONSTRUCT PS input sig vs VS skeleton`) — final 17-07 code; sits on top of 17-06b `97d7bbf93`, so this build contains BOTH 17-06b (StaticShaderData) and 17-07 (PSData + StateCache + VertexShaderData). [Superseded earlier provenance for `f9e5ac569` (axis-b reorder, which the boot proved insufficient — see 17-07-SUMMARY).]
+- **`stage/gl11_d.dll` LastWriteTime:** `2026-05-29 17:23 -05:00` (rebuilt this session; Plan 17-05 Task 4 must verify the deployed DLL matches this mtime before booting).
+- **POST-gap visual:** asset-PS lane active (9/9 bind, `path=rewritten`) but renders BLACK — GAP-4 (b0↔b2 constant-buffer reconcile, cross-AI consult in flight). 17-05 Task 4/5 verdicts CHAR-01/02/03 = PARTIAL.
 - **`stage/SwgClient_d.exe`:** UNCHANGED (`2026-05-28 20:51`) and CORRECT to be so — 17-07 touched only Direct3d11-plugin-internal headers (`Direct3d11_PixelShaderProgramData.h`, `Direct3d11_VertexShaderData.h`), which no other binary includes. Empirically confirmed by the incremental build: only `gl11_d.dll` relinked; `SwgClient_d.exe` was up-to-date and was NOT relinked. The plugin's EXPORTED interface is unchanged, so the 5/28 exe + 5/29 `gl11_d.dll` is a valid pairing. (This is NOT the shared-header ABI cascade trap of `project_shared_header_abi_cascade_trap`, which was specific to the clientGraphics `ShaderImplementation.h` shared header — untouched here.)
 - **Build scope note:** built via incremental `swg.sln` Debug Win32. `Direct3d11.vcxproj` and `SwgClient.vcxproj` both reported **0 errors / 0 unresolved external symbols**. The whole-solution build exits non-zero only due to pre-existing, client-irrelevant tool/server project failures (MFC-dependent editors + missing `serverGame` headers: `SwgSpaceZoneEditor`, `CoreWeaponExporterTool`, `DataTableTool`, `Md5sum`, `UpdateLocalizedStrings`, etc.). Build log: `build-17-07-allplugins.msbuild.log`.
 
