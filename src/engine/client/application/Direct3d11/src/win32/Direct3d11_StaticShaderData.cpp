@@ -34,6 +34,8 @@
 #include <algorithm>
 #include <cstring>     // Plan 17-03 R3-03c: std::memcpy + std::strcmp + std::strlen for offset-aware staging buffer
 #include <vector>      // Plan 17-03 R3-03c: staging byte buffer
+#include <d3d11shader.h>   // Plan 17-06a GAP-2 discovery: ID3D11ShaderReflectionType inner-walk of userConstants
+#include <d3dcompiler.h>   // Plan 17-06a GAP-2 discovery: D3DReflect re-reflection at one-shot dump time
 
 // ======================================================================
 
@@ -974,6 +976,120 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 								if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
 									iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, varMsg);
 								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", varMsg));
+							}
+
+							// Plan 17-06a (GAP-2 DISCOVERY): walk the INNER reflection of
+							// any non-trivial top-level var (struct or array) -- notably
+							// userConstants[17] (272 B opaque region at offset 128). The
+							// cached layout.Vars carries ONLY {Name,StartOffset,Size} with
+							// NO type descriptors (Direct3d11_PixelShaderProgramData.h:66-70),
+							// so D3DReflect MUST re-run here to obtain inner member/element
+							// names + offsets. This is ONE-SHOT per anchor (same s_dumped*
+							// gate as above) -- at most two D3DReflect calls per boot (head
+							// + eye), NEVER per draw. Recursion capped at depth 2. Output
+							// gives Plan 17-06b unambiguous mapping evidence for where
+							// diffuse + emissive material colors actually live.
+							{
+								auto emit06a = [&](char const *fieldPath, unsigned absOffset, unsigned byteSize, int typeClass, char const *typeName)
+								{
+									char m06a[384];
+									_snprintf_s(m06a, sizeof(m06a), _TRUNCATE,
+										"Plan 17-06a cbuffer-vars-discovery shader='%s' %s offset=%u size=%u typeClass=%d typeName='%s'",
+										shaderNameDbg, fieldPath, absOffset, byteSize, typeClass,
+										(typeName && typeName[0]) ? typeName : "?");
+									if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+										iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, m06a);
+									DEBUG_REPORT_LOG_PRINT(true, ("%s\n", m06a));
+								};
+
+								ID3DBlob *const psBlob06a = (m_passPS[idx] ? m_passPS[idx]->getPsBytecode() : nullptr);
+								if (psBlob06a)
+								{
+									ID3D11ShaderReflection *refl06a = nullptr;
+									HRESULT const hr06a = D3DReflect(
+										psBlob06a->GetBufferPointer(), psBlob06a->GetBufferSize(),
+										IID_ID3D11ShaderReflection, reinterpret_cast<void **>(&refl06a));
+									if (SUCCEEDED(hr06a) && refl06a)
+									{
+										ID3D11ShaderReflectionConstantBuffer *cb06a =
+											(layout.Name && layout.Name[0]) ? refl06a->GetConstantBufferByName(layout.Name) : nullptr;
+										D3D11_SHADER_BUFFER_DESC cbd06a = {};
+										if (cb06a && SUCCEEDED(cb06a->GetDesc(&cbd06a)))
+										{
+											for (UINT cvi = 0; cvi < cbd06a.Variables; ++cvi)
+											{
+												ID3D11ShaderReflectionVariable *cv = cb06a->GetVariableByIndex(cvi);
+												if (!cv) continue;
+												D3D11_SHADER_VARIABLE_DESC cvd = {};
+												if (FAILED(cv->GetDesc(&cvd))) continue;
+												ID3D11ShaderReflectionType *ct = cv->GetType();
+												if (!ct) continue;
+												D3D11_SHADER_TYPE_DESC ctd = {};
+												if (FAILED(ct->GetDesc(&ctd))) continue;
+
+												bool const isStruct06a = (ctd.Members  > 0);
+												bool const isArray06a  = (ctd.Elements > 0);
+												if (!isStruct06a && !isArray06a)
+													continue;   // only walk non-trivial vars (userConstants, nested structs)
+
+												unsigned const baseOff = cvd.StartOffset;   // absolute within cbuffer
+
+												if (isStruct06a)
+												{
+													for (UINT mi = 0; mi < ctd.Members; ++mi)
+													{
+														ID3D11ShaderReflectionType *mt = ct->GetMemberTypeByIndex(mi);
+														char const *mn = ct->GetMemberTypeName(mi);
+														if (!mt) continue;
+														D3D11_SHADER_TYPE_DESC mtd = {};
+														if (FAILED(mt->GetDesc(&mtd))) continue;
+														unsigned const mOff = baseOff + mtd.Offset;
+														unsigned const mSz  = (mtd.Rows ? mtd.Rows : 1u) * (mtd.Columns ? mtd.Columns : 1u) * 4u
+														                      * (mtd.Elements ? mtd.Elements : 1u);
+														char path1[160];
+														_snprintf_s(path1, sizeof(path1), _TRUNCATE, "%s.%s",
+															cvd.Name, (mn && mn[0]) ? mn : "?");
+														emit06a(path1, mOff, mSz, static_cast<int>(mtd.Class), mtd.Name);
+
+														// depth-2: one nested level only (recursion cap)
+														if (mtd.Members > 0)
+														{
+															for (UINT mj = 0; mj < mtd.Members; ++mj)
+															{
+																ID3D11ShaderReflectionType *m2 = mt->GetMemberTypeByIndex(mj);
+																char const *m2n = mt->GetMemberTypeName(mj);
+																if (!m2) continue;
+																D3D11_SHADER_TYPE_DESC m2d = {};
+																if (FAILED(m2->GetDesc(&m2d))) continue;
+																unsigned const m2Off = mOff + m2d.Offset;
+																unsigned const m2Sz  = (m2d.Rows ? m2d.Rows : 1u) * (m2d.Columns ? m2d.Columns : 1u) * 4u
+																                       * (m2d.Elements ? m2d.Elements : 1u);
+																char path2[224];
+																_snprintf_s(path2, sizeof(path2), _TRUNCATE, "%s.%s.%s",
+																	cvd.Name, (mn && mn[0]) ? mn : "?", (m2n && m2n[0]) ? m2n : "?");
+																emit06a(path2, m2Off, m2Sz, static_cast<int>(m2d.Class), m2d.Name);
+															}
+														}
+													}
+												}
+												else   // flat array (no member names) -- e.g. userConstants[17]
+												{
+													unsigned const stride = (ctd.Elements > 0 && cvd.Size > 0)
+														? (cvd.Size / ctd.Elements) : 16u;
+													for (UINT ei = 0; ei < ctd.Elements; ++ei)
+													{
+														unsigned const eOff = baseOff + ei * stride;
+														char pathA[160];
+														_snprintf_s(pathA, sizeof(pathA), _TRUNCATE, "%s[%u]", cvd.Name, ei);
+														emit06a(pathA, eOff, stride, static_cast<int>(ctd.Type), ctd.Name);
+													}
+												}
+											}
+										}
+										refl06a->Release();
+										refl06a = nullptr;
+									}
+								}
 							}
 						}
 					}
