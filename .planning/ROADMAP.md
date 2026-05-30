@@ -86,6 +86,12 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 - [x] 17-02-PLAN.md — recompile lane: //hlsl PSRC -> compilePixelShaderFromHlsl -> bind m_d3dPS; CHAR-01 single-stage control A/B
 - [x] 17-03-PLAN.md — D3DReflect-driven material/textureFactor upload; CHAR-02 eyes + CHAR-03 head A/B; D-08 skinning confirm
 - [x] 17-04-PLAN.md — visual parity activation: VS↔PS signature pair validation (eliminates id=343 × 24K) + writeVarByName for SwgVertexConstants material[N] schema (so cbuffer values actually land); CHAR-01/02/03 textured-character A/B at boot
+- [~] 17-05-PLAN.md — GAP-1: matched D3D9-vs-D3D11 char-select A/B evidence + real 17-VERIFICATION.md (T1–3 done/PARKED at `17-05-task3`; T4–5 LIT POST-gap capture deferred until GAP-4 lands)
+- [x] 17-06a-PLAN.md — GAP-2 discovery: userConstants inner-reflection dump (= flat float4[17])
+- [x] 17-06b-PLAN.md — GAP-2 mapping: `writeVarFloat4AtOffset` (Case-C DEFERRED — no evidence-backed offset; dual-AI confirmed)
+- [x] 17-07-PLAN.md — GAP-3: PS-input-sig reconstruction vs VS skeleton → asset-PS bind 0/9→9/9 (`path=rewritten`)
+- [ ] 17-08-PLAN.md — GAP-4: b0 SwgVertexConstants multi-producer shadow (LightManager c0–c4 push + StaticShaderData RMW + userConstants@c8+) → fixes the black-silhouette body so the asset PS lane delivers a LIT character
+**Gap-closure status (2026-05-29):** Phase 17 infrastructure complete; GAP-3 closed (9/9 binds). GAP-4 (asset PS renders BLACK — unfed b0 lighting constants) is the last code blocker → 17-08. Then 17-05 T4–5 captures the LIT POST-gap A/B for the CHAR-01/02/03 verdict.
 **UI hint**: yes
 **Mode:** standard
 **Research:** NEEDS per-phase research — (a) census tool is the gating first deliverable (HLSL:asm ratio); (b) which TextureOperation/FFP passes char-select actually exercises; (c) single-stream-skinning-fix vs multi-stream-flip decision.

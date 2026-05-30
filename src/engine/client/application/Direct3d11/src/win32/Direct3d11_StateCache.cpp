@@ -31,6 +31,7 @@
 #include "Direct3d11.h"
 #include "Direct3d11_ConstantBuffer.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_LightManager.h"   // Plan 17-08 (GAP-5): VS vertex-lighting fill in composeSlot0Shadow
 #include "Direct3d11_DynamicIndexBufferData.h"
 #include "Direct3d11_DynamicVertexBufferData.h"
 #include "Direct3d11_PixelShaderProgramData.h"
@@ -270,6 +271,15 @@ namespace Direct3d11_StateCacheNamespace
 	                                      0.0f, 0.0f, 1.0f, 0.0f,
 	                                      0.0f, 0.0f, 0.0f, 1.0f);
 	XMFLOAT4   s_cachedCameraPos = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	// Plan 17-08 (GAP-4) Producer A: the raw orthonormal object->world
+	// Transform (NOT scale-composed like s_cachedWorld) so we can reuse the
+	// engine's own Transform::rotate_p2l to map a world light direction into
+	// object-local space EXACTLY as Direct3d9_LightManager does
+	// (ms_objectToWorldTransform.rotate_p2l). Default-constructed = identity;
+	// if a draw never set an object transform, rotate_p2l is a pass-through
+	// (lighting stays non-black, just world-aligned -- refine on boot).
+	Transform  s_cachedObjectToWorldTransform;
 	bool       s_anyMatrixWritten = false;
 
 	// Plan 11-09 Iter-2.7 Fix C: namespace-scope shadow of the full VS slot 0
@@ -348,6 +358,51 @@ namespace Direct3d11_StateCacheNamespace
 		// rules. c9 + c10 stay at whatever value other setters put there
 		// (c9 = viewportData, c10 = fog -- preserved from setFog calls).
 		s_slot0Shadow.c8_to_c10[0] = s_cachedCameraPos;
+
+		// Plan 17-08 (GAP-5): fill the VS vertex-lighting region so the VS emits a
+		// real COLOR0 (vertexDiffuse) / COLOR1 (vertexSpecular) instead of NaN ->
+		// fixes the dark-body residual after GAP-4. Mirrors D3D9
+		// applyLights_vertexShader's lightData upload (Direct3d9_LightManager.cpp:
+		// 530-628 / 723 + the dot3 path :768-846). Object-local dir + camera pos
+		// are derived from the cached object->world transform exactly as D3D9 does
+		// (ms_objectToWorldTransform.rotate_p2l / rotateTranslate_p2l). We fill BOTH
+		// parallelSpecular[0] (c17-c19, WORLD dir) AND dot3 (c40-c43, OBJECT-LOCAL)
+		// so whichever the VS reads is populated. extendedLightData (c60-c63) carries
+		// the hemispheric colors. VSCR layout: lightData[28]@c16, ext[8]@c60 (see
+		// Direct3d9_VertexShaderConstantRegisters.h + the VertexSlot0CB static_asserts).
+		{
+			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+
+			// ambient @ lightData[0] (c16) -- always (even with no directional light).
+			s_slot0Shadow.lightData[0] = d3.ambient;
+
+			if (d3.valid)
+			{
+				Vector const worldDir(
+					d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z);
+				Vector const localDir = s_cachedObjectToWorldTransform.rotate_p2l(worldDir);
+				Vector const camWorld(s_cachedCameraPos.x, s_cachedCameraPos.y, s_cachedCameraPos.z);
+				Vector const localCam = s_cachedObjectToWorldTransform.rotateTranslate_p2l(camWorld);
+
+				// parallelSpecular[0] @ lightData[1..3] (c17-c19): WORLD dir (negated), colors.
+				s_slot0Shadow.lightData[1] = DirectX::XMFLOAT4(-worldDir.x, -worldDir.y, -worldDir.z, 0.0f);
+				s_slot0Shadow.lightData[2] = d3.diffuseColor;
+				s_slot0Shadow.lightData[3] = d3.specularColor;
+
+				// dot3 @ lightData[24..27] (c40-c43): OBJECT-LOCAL (localCameraPosition,
+				// localDirection=-rotate_p2l(dir), diffuseColor, specularColor).
+				s_slot0Shadow.lightData[24] = DirectX::XMFLOAT4(localCam.x, localCam.y, localCam.z, 1.0f);
+				s_slot0Shadow.lightData[25] = DirectX::XMFLOAT4(-localDir.x, -localDir.y, -localDir.z, 0.0f);
+				s_slot0Shadow.lightData[26] = d3.diffuseColor;
+				s_slot0Shadow.lightData[27] = d3.specularColor;
+
+				// extendedLightData @ [0..3] (c60-c63): hemispheric back/tangent + deltas.
+				s_slot0Shadow.extendedLightData[0] = d3.backColor;
+				s_slot0Shadow.extendedLightData[1] = d3.tangentColor;
+				s_slot0Shadow.extendedLightData[2] = d3.tangentMinusBackColor;
+				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
+			}
+		}
 
 		// Plan 11-09 Iter-2.7 Fix C: defer GPU upload to flushSlot0IfDirty.
 		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
@@ -1783,6 +1838,10 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
 	// Iter-38B's transpose-at-upload (composeSlot0Shadow) handles the
 	// stored-vs-math packing for the cbuffer; this site just needs to
 	// match what D3D9 produces.
+	// Plan 17-08 (GAP-4) Producer A: cache the raw orthonormal transform for
+	// world->object-local light direction mapping (reuses Transform::rotate_p2l).
+	s_cachedObjectToWorldTransform = objectToWorld;
+
 	auto const &m = objectToWorld.getMatrix();    // real[3][4]
 	s_cachedWorld = XMFLOAT4X4(
 		static_cast<float>(m[0][0]) * scale.x, static_cast<float>(m[0][1]) * scale.x, static_cast<float>(m[0][2]) * scale.x, static_cast<float>(m[0][3]),
@@ -1822,6 +1881,15 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
 			}
 		}
 	}
+}
+
+// ----------------------------------------------------------------------
+
+Vector Direct3d11_StateCache::worldDirectionToObjectLocal(Vector const &worldDir)
+{
+	// Mirrors Direct3d9_LightManager::applyLights_vertexShader_dot3:
+	//   ms_objectToWorldTransform.rotate_p2l(direction)
+	return s_cachedObjectToWorldTransform.rotate_p2l(worldDir);
 }
 
 // ----------------------------------------------------------------------

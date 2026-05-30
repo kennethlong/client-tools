@@ -1,0 +1,649 @@
+OpenAI Codex v0.133.0
+--------
+workdir: D:\Code\swg-client-v2
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e76cd-98f8-7aa1-8ed1-f19a8f8fae72
+--------
+user
+# CONSULT: GAP-6 — bump-shader VS emits NaN vertex colors (missing tangent basis) on D3D11
+
+You are a senior graphics/engine engineer doing an independent design review. I need a concrete,
+implementable design — not a restatement of the problem. Be specific about WHERE the fix belongs and
+WHY. Flag wrong assumptions. No repo access; everything you need is below. We have learned a LOT since
+the last consult (GAP-4); this brief supersedes the earlier black-screen framing.
+
+## System context
+
+Star Wars Galaxies (SOE) client being ported from a D3D9 fixed-function/VSPS renderer to a new D3D11
+renderer plugin (`gl11_d.dll`, runtime-loaded via a C API vtable). We are proving the "asset pixel
+shader pipeline" on the deterministic character-select screen as a beachhead. Pixel/vertex shaders ship
+as IFF assets carrying their ORIGINAL D3D9-era HLSL (`//hlsl ps_2_0` / vertex equivalents) in a retained
+chunk; our lane RECOMPILES that HLSL to `ps_4_0` / `vs_4_0` at load (D3DCompile with
+`D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY`).
+
+## What now works (do NOT redesign — all RenderDoc-confirmed this session)
+
+- **GAP-3:** asset PS bind rate 0/9 → **9/9** (`path=rewritten`). The recompiled PS input signature is
+  reconstructed to mirror the VS output signature exactly (SV_Position@reg0 + one field per VS output).
+- **GAP-4:** the asset PS reads light/material constants from a reflected cbuffer `SwgVertexConstants` @
+  **PS b0** (`pixel_shader_constants.inc` wrapped: `dot3LightDirection`=packedRegister0.xyz=c0,
+  `materialSpecularPower`=c0.w, `dot3LightDiffuseColor`=c1, ... `userConstants[17]`=c8). We now feed b0
+  via 3 producers (LightManager dot3 push @ c0-c4, StaticShaderData RMW @ c5-c7, userConstants @ c8+).
+  RenderDoc confirmed the b0 values are correct.
+- **GAP-5:** the VS reads its OWN lighting from `SwgVertexConstants` @ **VS b0** (= the 1152-byte
+  `VertexSlot0CB`; `vertex_shader_constants.inc` layout, VSCR map: WVP@c0, World@c4, cameraPosition@c8,
+  material@c11, **lightData[28]@c16** [ambient@c16, parallelSpecular@c17-19, dot3@c40-c43],
+  **extendedLightData[8]@c60**). We now fill these per-object in the VS cbuffer (mirroring D3D9
+  `applyLights_vertexShader`). RenderDoc confirmed: for the failing draw, `dot3.direction_o =
+  (0.735,0.399,0.549)`, `diffuseColor=(1,1,1)`, `specularColor=0.5`, `ambient=0.0169`, all FILLED and
+  correct; the VS-input NORMAL is valid (e.g. `-0.913,0.136,0.401`).
+
+**Result:** the character now renders LIT and textured via the asset-PS lane — face/skin, white tunic,
+pants, shoes all correct. **Most of the model is right.**
+
+## The problem (GAP-6): bump-shader parts render with wrong/underlit color (NaN vertex colors)
+
+On the SAME character, the parts drawn by **bump pixel shaders** (e.g. `h_specmap_bump_ps20`,
+`h_color2_specmap_bump_ps20`) — the **sleeves and hands** — come out the wrong color (dark/“purple”).
+RenderDoc pixel + mesh inspection of one such draw shows:
+
+- The PS inputs `COLOR0` (vertexDiffuse) and `COLOR1` (vertexSpecular) are **NaN**.
+- The **VS OUTPUT** `COLOR0`/`COLOR1` are **NaN for every vertex** (so the VS itself produces NaN; it is
+  not an interpolation/PS issue).
+- The VS **INPUT** has position, NORMAL (valid), skinning, and TEXCOORD sets — but **no dedicated
+  TANGENT/BINORMAL** element.
+
+A NaN `vertexDiffuse` flows into the PS `calculateHemisphericLighting(...)` (vertexDiffuse is an additive
+term) → `result.rgb = NaN`. (We added a wrapper NaN-guard `any(isnan(COLOR0)) ? 0 : COLOR0` so it no
+longer renders fully black — it falls back to per-pixel N·L only, which is why the part is lit-but-wrong
+rather than black. We want to fix the source, not rely on the guard.)
+
+## ROOT-CAUSE HYPOTHESIS (the key mechanism — please validate or refute)
+
+**SWG does NOT use `D3DDECLUSAGE_TANGENT`/`BINORMAL`.** Both the D3D9 and D3D11 vertex-declaration
+mappings only emit POSITION / NORMAL / PSIZE / COLOR0 / COLOR1 / **TEXCOORD<n>**. So the tangent basis
+for bump shaders is carried as **extra TEXCOORD sets** (dimension-3 texcoords), and the bump VS builds
+its tangent-space basis from those TEXCOORD inputs.
+
+The D3D11 plugin (Plan 11-09.8) has a **phantom-element mechanism**: `CreateInputLayout` under `vs_4_0`
+validates the layout against the bytecode input signature strictly. The engine's D3D9-era HLSL declares
+TEXCOORD inputs even when the bound vertex buffer's `VertexBufferFormat` doesn't provide them; to satisfy
+strict validation, the plugin adds **phantom input elements at InputSlot 15 bound to a stride-0,
+16-byte, ZERO-filled buffer** — so the VS reads **zero** for any declared input the VB doesn't cover.
+
+So our hypothesis: the bump VS declares TEXCOORD input(s) for the tangent/binormal, but the char mesh's
+`VertexBufferFormat` for these parts does NOT include those TEXCOORD set(s) → the phantom buffer feeds
+**zero** → the VS does `normalize(0)` on the tangent (or `cross()` of zero vectors) → **NaN** → the NaN
+contaminates the shared output including `COLOR0`.
+
+**CONFIRMED via RenderDoc (decisive):** for the failing `h_specmap_bump` sleeve draw, the VS Input has
+`TEXCOORD0` (real — diffuse uv) and `TEXCOORD1` (real) — but **`TEXCOORD2` is all `0.0`** (the phantom
+zero buffer). So the VS reads `TEXCOORD2` (the tangent or binormal of the tangent-space basis) as a zero
+vector and `normalize()`s it → NaN. The VB format reports fewer TEXCOORD sets than the bump VS's input
+signature declares, so `TEXCOORD2` is phantom-augmented to zero.
+
+The remaining unknown: is `TEXCOORD2` a set the char mesh's `VertexBufferFormat` SHOULD carry (i.e. the
+VB has the tangent data but the D3D11 VB-format→input-element mapping under-reports the texcoord-set
+count, dropping it), OR does this mesh genuinely store only TEXCOORD0/1 and the original D3D9 bump VS
+DERIVED the third basis vector (e.g. binormal = cross(normal, tangent)) without faulting on a zero —
+meaning the recompiled `vs_4_0` path is the regression?
+
+## Design questions (answer each concretely)
+
+1. **Is the phantom-zero → `normalize(0)` → NaN the right root cause?** The VS NORMAL is valid and the
+   lighting constants are correct, yet `COLOR0` (vertex diffuse, which seemingly needs only normal+light)
+   is NaN. How does a degenerate tangent basis poison `COLOR0` specifically — i.e. is it typical for these
+   SOE dot3/bump VS shaders to compute the per-vertex diffuse color through a shared tangent-space
+   transform (so one NaN intermediate kills all color outputs)?
+
+2. **Where should the tangent basis come from?** Options we see: (a) the char mesh genuinely HAS the
+   tangent/binormal as TEXCOORD sets in its vertex buffer, and the D3D11 input-layout build is dropping or
+   mis-mapping them (so the fix is in the VB-format → input-element mapping); (b) the mesh genuinely lacks
+   them and D3D9 tolerated the zero (different VS math / no normalize), so the D3D11-recompiled VS must be
+   guarded; (c) the engine derives the tangent basis elsewhere (a CPU-side per-mesh tangent generation, or
+   a separate stream the D3D11 path isn't binding). How would you determine which, from RenderDoc (we can
+   inspect the VB contents, the VS input signature, and the D3D9 capture of the same mesh)?
+
+3. **If the data IS present as TEXCOORD sets but fed zero by the phantom path:** what's the most likely
+   mapping bug — a TEXCOORD UsageIndex/offset mismatch between the VB format and the VS input signature,
+   or the phantom augmentation shadowing a real element? How to make the real TEXCOORD reach the VS.
+
+4. **If the data is genuinely absent:** is guarding the VS `normalize` (e.g. emit a safe default basis
+   when the tangent is zero) acceptable for parity, or does correct bump/specular REQUIRE a real tangent
+   basis (meaning we must generate/supply one)? What's the minimal correct fix for the beachhead?
+
+5. **Instrumentation:** what one or two RenderDoc observations (VB element list + the specific TEXCOORD
+   values at a vertex, VS input signature semantics/indices, D3D9-capture comparison) would most quickly
+   confirm the chosen root cause?
+
+6. Any failure mode / simpler alternative we're missing (e.g. is the `D3DCOMPILE_ENABLE_BACKWARDS_
+   COMPATIBILITY` recompile changing how the VS consumes the TEXCOORD tangent vs the original D3D9
+   bytecode)?
+
+Give a recommended approach with concrete touch points (VB-format→input-element mapping vs VS-recompile
+guard vs tangent generation) and the data flow, then the risks.
+
+codex
+**Recommendation**
+
+Treat this as an input data/layout bug until proven otherwise. The first fix should live in the D3D11 vertex declaration / input layout path, not in the shader guard.
+
+Specifically: make the D3D11 plugin prove whether every `TEXCOORDn` in the compiled VS input signature is backed by a real vertex declaration element before assigning it to the phantom zero slot. If `TEXCOORD2` is present in the actual vertex declaration or secondary stream, it must bind to the real VB offset/slot. Only truly absent inputs should be phantom-filled.
+
+The NaN guard is a containment patch. It should remain as a defensive fallback, but it is not the parity fix.
+
+---
+
+**1. Root Cause**
+
+Yes: phantom-zero `TEXCOORD2` feeding `normalize(0)` is the right root cause.
+
+It also explains why `COLOR0`/`COLOR1` become NaN even though the object normal and VS lighting constants are valid.
+
+In many D3D9-era bump/dot3 shaders, “vertex diffuse” is not necessarily computed from object-space `normal · light` directly. The VS often builds a tangent-space light vector or tangent-space basis first, then uses that shared tangent-space result for:
+
+- per-vertex hemispheric/diffuse contribution
+- specular setup
+- dot3 light vector outputs
+- color prelighting terms
+- sometimes packed values reused by the PS
+
+So if the shader does something like:
+
+```hlsl
+float3 T = normalize(texcoord2.xyz);
+float3 B = normalize(cross(N, T));
+float3 Lts = float3(dot(L, T), dot(L, B), dot(L, N));
+float diffuse = saturate(dot(normalize(Lts), ...));
+```
+
+then a zero tangent produces NaN in `T`, and that NaN can poison all later outputs, including `COLOR0`, even if `NORMAL` and light constants are fine.
+
+This is typical enough for SOE-era shared shader includes that I would not expect `COLOR0` to be isolated from the bump basis.
+
+---
+
+**2. Where The Tangent Basis Should Come From**
+
+Most likely: from extra `TEXCOORD` vertex declaration elements, not `TANGENT`/`BINORMAL`.
+
+For SWG-era D3D9 content, tangent-like payloads commonly ride through:
+
+- `TEXCOORD1`
+- `TEXCOORD2`
+- `TEXCOORD3`
+- dimension-3 or dimension-4 texcoord declarations
+- sometimes packed/renamed by shader convention rather than semantic name
+
+You should determine which case you are in with this order:
+
+1. Inspect the failing D3D11 draw’s actual bound vertex buffer bytes and decoded declaration.
+   - Does the underlying VB stride contain data past the offsets for `TEXCOORD0`/`TEXCOORD1`?
+   - Is there a plausible float3/float4 vector where `TEXCOORD2` would be?
+   - Are there nonzero, normalized-ish vectors in the raw VB that are not exposed to the VS input viewer?
+
+2. Inspect the D3D11 VS input signature.
+   - Confirm exact semantics:
+     - `TEXCOORD0`
+     - `TEXCOORD1`
+     - `TEXCOORD2`
+   - Confirm component masks. If `TEXCOORD2.xyz` is consumed, the input layout must provide at least 3 components.
+
+3. Compare to a D3D9 capture of the same draw.
+   - If D3D9 `TEXCOORD2` is nonzero for the same vertex, D3D11 is dropping/mismapping real data.
+   - If D3D9 also has zero/missing `TEXCOORD2` but renders correctly, then the shader recompile/math behavior is suspect.
+   - If D3D9 has a different VS variant or declaration for the same material, you may be binding the wrong D3D11 VS or reconstructing the signature incorrectly.
+
+My expectation: D3D9 will show a real `TEXCOORD2` or equivalent stream for the bump draw. Character meshes with bump/specular skin generally need a tangent frame somewhere.
+
+---
+
+**3. If Data Is Present But Phantom Feeds Zero**
+
+The most likely bug is under-reporting or mismapping the texcoord declaration count/components in the D3D11 VB-format-to-input-element translation.
+
+Less likely: the phantom element is “shadowing” a real one, unless the input-layout builder uses signature semantics as the final source of truth and accidentally appends duplicate `TEXCOORD2` entries. D3D11 input layouts should not have duplicate semantic/index pairs for the same input. If duplicates exist, layout creation should usually fail or behave predictably badly. Since rendering proceeds, I suspect the real element was never emitted.
+
+Look for these bugs:
+
+- `VertexBufferFormat` says “2 texture coordinate sets” because it counts UV sets, but bump tangent data is stored as a non-UV texcoord-like element elsewhere.
+- Only 2D texcoords are emitted; 3D/4D texcoord payloads are skipped.
+- A D3D9 declaration type such as `FLOAT3` with `D3DDECLUSAGE_TEXCOORD, 2` is ignored because the mapper assumes texcoords are `FLOAT2`.
+- Usage index is compacted incorrectly:
+  - real declaration has `TEXCOORD0`, `TEXCOORD2`
+  - mapper renumbers it to `TEXCOORD0`, `TEXCOORD1`
+  - shader asks for `TEXCOORD2`
+  - phantom fills `TEXCOORD2`
+- Secondary stream or instanced/extra stream is not bound in D3D11.
+- Offset calculation drops an element because legacy declaration has padding/color/weight elements between texcoords.
+
+Fix behavior:
+
+```text
+For each D3D9 vertex declaration element:
+  preserve Usage + UsageIndex exactly
+  preserve Type/component count
+  preserve Stream
+  preserve Offset
+  map TEXCOORD UsageIndex N -> D3D11 semantic "TEXCOORD", SemanticIndex N
+```
+
+Do not compact texcoord indices. Do not infer texcoord count from material UV usage. Build the D3D11 input elements from the actual declaration/VB format, then add phantom elements only for signature entries not already backed by a real semantic/index.
+
+---
+
+**4. If Data Is Genuinely Absent**
+
+A safe `normalize` guard is acceptable as a crash/NaN containment measure, but it is not visually correct parity for bump/specular materials.
+
+Correct bump/specular requires a real tangent basis or a reproducible derived basis. Without one:
+
+- normal maps are interpreted in the wrong space
+- specular lobes will be wrong
+- mirrored UVs and seams will be wrong
+- hands/sleeves may become “lit enough” but not match D3D9
+
+Minimal beachhead fix if data is absent:
+
+1. Keep the NaN guard to prevent black/NaN output.
+2. Add a shader-side safe basis fallback:
+   - normalize normal safely
+   - if tangent length is near zero, build an arbitrary orthonormal basis from normal
+   - derive binormal from `cross(N, T)`
+3. Use this only for absent/phantom tangent inputs, and log it loudly per shader/material/mesh.
+
+Example concept:
+
+```hlsl
+float3 safeNormalize(float3 v, float3 fallback)
+{
+    float len2 = dot(v, v);
+    return len2 > 1e-8 ? v * rsqrt(len2) : fallback;
+}
+
+float3 makeFallbackTangent(float3 n)
+{
+    float3 axis = abs(n.z) < 0.999 ? float3(0,0,1) : float3(0,1,0);
+    return normalize(cross(axis, n));
+}
+```
+
+But for real parity, if D3D9 also lacked the stream and still rendered correctly, you need to identify the original derivation path. It may have used a different texcoord, a pretransformed basis, or shader bytecode that did not match the recompiled source path.
+
+---
+
+**5. Fastest Instrumentation**
+
+The two highest-value observations:
+
+1. **D3D11 failing draw: input signature versus real layout source**
+   - VS signature: list every input semantic/index/mask.
+   - Generated input layout: list semantic/index, slot, offset, format, phantom yes/no.
+   - Bound VB stride and stream slot.
+   - You want a line like:
+
+```text
+VS wants TEXCOORD2.xyz
+layout maps TEXCOORD2 -> slot 15, offset 0, R32G32B32A32_FLOAT, phantom
+real declaration has TEXCOORD2 FLOAT3 at slot 0 offset 48
+```
+
+That immediately proves the layout bug.
+
+2. **D3D9 same draw, same vertex**
+   - Inspect `TEXCOORD2` for the same mesh/material.
+   - If D3D9 `TEXCOORD2` is nonzero and D3D11 is zero, the D3D11 declaration path is wrong.
+   - If both are zero, inspect the D3D9 shader bytecode/source path and whether it consumes `TEXCOORD2` the same way.
+
+A third useful observation: in RenderDoc D3D11, view raw VB bytes around the expected offset. If there is a sequence of plausible unit vectors not decoded as any input element, the data exists and the mapper is dropping it.
+
+---
+
+**6. Other Failure Modes**
+
+Yes, a few are plausible.
+
+`D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` may change behavior around undefined/legacy math, but it should not be your first suspect. `normalize(0)` producing NaN is expected on modern shader models. D3D9-era hardware/drivers may have returned zero, a denormal, or some other tolerated value. That explains why the recompiled path can expose the bug harder, but it does not explain why a required tangent input is phantom zero.
+
+Other things to check:
+
+- **Wrong VS variant bound.** A bump PS may be paired with a VS variant expecting tangent basis, while the mesh/material combination originally used a different VS.
+- **Signature reconstruction mismatch.** If your rewritten PS input mirroring caused a different VS to be selected or compiled, verify material shader pairing.
+- **Texcoord index renumbering.** This is very likely. Legacy declarations often have non-contiguous semantic indices.
+- **Component format mismatch.** `TEXCOORD2` may be packed as `SHORT4N`, `UBYTE4N`, or color-like data and incorrectly mapped to float zero/default.
+- **Secondary stream missing.** Tangent basis may be in a second stream that D3D9 bound but D3D11 does not.
+- **Skinning path mismatch.** For skinned meshes, tangent/binormal must be skinned with the same weights as normal. If the tangent exists but is not skinned or is read from the wrong stream, lighting will still be wrong, though usually not all-zero.
+
+---
+
+**Concrete Fix Plan**
+
+1. **Add input-layout diagnostics in the D3D11 plugin.**
+
+At `CreateInputLayout` time, dump for asset VS draws:
+
+```text
+shader input: semantic/index/mask/register
+real declaration candidates: semantic/index/type/slot/offset/format
+final layout: semantic/index/slot/offset/format/real-or-phantom
+```
+
+This belongs in the D3D11 renderer plugin’s vertex declaration/input layout builder, around the phantom augmentation code.
+
+2. **Fix real declaration preservation.**
+
+The VB-format to input-element mapping should preserve D3D9 declaration semantics exactly:
+
+```text
+D3DDECLUSAGE_TEXCOORD + UsageIndex N
+    -> SemanticName = "TEXCOORD"
+    -> SemanticIndex = N
+```
+
+No compaction. No “UV count” shortcut. No dropping float3/float4 texcoords. No replacing an existing semantic/index with phantom.
+
+3. **Bind missing secondary streams if present.**
+
+If the D3D9 declaration references stream `1+`, the D3D11 path must bind the corresponding VB slot with the correct stride and offset. A phantom should only be used when the declaration truly lacks the semantic/index.
+
+4. **Keep shader NaN guard as containment.**
+
+Do not remove the `isnan`/safe color guard yet. It protects the beachhead from one bad asset path taking the whole material black. But mark it as defensive, not parity.
+
+5. **Only add VS safe-normalize fallback if data is genuinely absent in both D3D9 and D3D11.**
+
+If D3D9 proves the mesh lacks `TEXCOORD2`, then implement a targeted source rewrite for affected bump VS assets:
+
+- guard tangent/binormal normalization
+- derive fallback tangent from normal
+- log shader/material names using fallback
+
+That is acceptable for character-select bring-up, but lower parity than supplying/generated tangents.
+
+6. **If no tangent data exists but parity matters, generate tangents CPU-side.**
+
+Longer-term correct fix:
+
+```text
+position + normal + UV0 + indices
+    -> generate tangent/handedness per vertex
+    -> store/bind as TEXCOORD2 or whichever semantic the original VS expects
+    -> skin tangent like normal for skinned meshes
+```
+
+For the beachhead, I would not start here unless RenderDoc/D3D9 proves the data is genuinely absent.
+
+---
+
+**Risk Summary**
+
+Primary risk: patching the shader hides a renderer declaration bug and leaves many future bump/specular assets subtly wrong.
+
+Secondary risk: generated fallback tangents may make the character select screen look acceptable but will diverge on mirrored UVs, seams, and specular highlights.
+
+Highest-confidence path: prove whether D3D9 has nonzero `TEXCOORD2`; if yes, fix the D3D11 declaration/stream mapping. That is the right ownership boundary and the most likely parity fix.
+tokens used
+26,565
+**Recommendation**
+
+Treat this as an input data/layout bug until proven otherwise. The first fix should live in the D3D11 vertex declaration / input layout path, not in the shader guard.
+
+Specifically: make the D3D11 plugin prove whether every `TEXCOORDn` in the compiled VS input signature is backed by a real vertex declaration element before assigning it to the phantom zero slot. If `TEXCOORD2` is present in the actual vertex declaration or secondary stream, it must bind to the real VB offset/slot. Only truly absent inputs should be phantom-filled.
+
+The NaN guard is a containment patch. It should remain as a defensive fallback, but it is not the parity fix.
+
+---
+
+**1. Root Cause**
+
+Yes: phantom-zero `TEXCOORD2` feeding `normalize(0)` is the right root cause.
+
+It also explains why `COLOR0`/`COLOR1` become NaN even though the object normal and VS lighting constants are valid.
+
+In many D3D9-era bump/dot3 shaders, “vertex diffuse” is not necessarily computed from object-space `normal · light` directly. The VS often builds a tangent-space light vector or tangent-space basis first, then uses that shared tangent-space result for:
+
+- per-vertex hemispheric/diffuse contribution
+- specular setup
+- dot3 light vector outputs
+- color prelighting terms
+- sometimes packed values reused by the PS
+
+So if the shader does something like:
+
+```hlsl
+float3 T = normalize(texcoord2.xyz);
+float3 B = normalize(cross(N, T));
+float3 Lts = float3(dot(L, T), dot(L, B), dot(L, N));
+float diffuse = saturate(dot(normalize(Lts), ...));
+```
+
+then a zero tangent produces NaN in `T`, and that NaN can poison all later outputs, including `COLOR0`, even if `NORMAL` and light constants are fine.
+
+This is typical enough for SOE-era shared shader includes that I would not expect `COLOR0` to be isolated from the bump basis.
+
+---
+
+**2. Where The Tangent Basis Should Come From**
+
+Most likely: from extra `TEXCOORD` vertex declaration elements, not `TANGENT`/`BINORMAL`.
+
+For SWG-era D3D9 content, tangent-like payloads commonly ride through:
+
+- `TEXCOORD1`
+- `TEXCOORD2`
+- `TEXCOORD3`
+- dimension-3 or dimension-4 texcoord declarations
+- sometimes packed/renamed by shader convention rather than semantic name
+
+You should determine which case you are in with this order:
+
+1. Inspect the failing D3D11 draw’s actual bound vertex buffer bytes and decoded declaration.
+   - Does the underlying VB stride contain data past the offsets for `TEXCOORD0`/`TEXCOORD1`?
+   - Is there a plausible float3/float4 vector where `TEXCOORD2` would be?
+   - Are there nonzero, normalized-ish vectors in the raw VB that are not exposed to the VS input viewer?
+
+2. Inspect the D3D11 VS input signature.
+   - Confirm exact semantics:
+     - `TEXCOORD0`
+     - `TEXCOORD1`
+     - `TEXCOORD2`
+   - Confirm component masks. If `TEXCOORD2.xyz` is consumed, the input layout must provide at least 3 components.
+
+3. Compare to a D3D9 capture of the same draw.
+   - If D3D9 `TEXCOORD2` is nonzero for the same vertex, D3D11 is dropping/mismapping real data.
+   - If D3D9 also has zero/missing `TEXCOORD2` but renders correctly, then the shader recompile/math behavior is suspect.
+   - If D3D9 has a different VS variant or declaration for the same material, you may be binding the wrong D3D11 VS or reconstructing the signature incorrectly.
+
+My expectation: D3D9 will show a real `TEXCOORD2` or equivalent stream for the bump draw. Character meshes with bump/specular skin generally need a tangent frame somewhere.
+
+---
+
+**3. If Data Is Present But Phantom Feeds Zero**
+
+The most likely bug is under-reporting or mismapping the texcoord declaration count/components in the D3D11 VB-format-to-input-element translation.
+
+Less likely: the phantom element is “shadowing” a real one, unless the input-layout builder uses signature semantics as the final source of truth and accidentally appends duplicate `TEXCOORD2` entries. D3D11 input layouts should not have duplicate semantic/index pairs for the same input. If duplicates exist, layout creation should usually fail or behave predictably badly. Since rendering proceeds, I suspect the real element was never emitted.
+
+Look for these bugs:
+
+- `VertexBufferFormat` says “2 texture coordinate sets” because it counts UV sets, but bump tangent data is stored as a non-UV texcoord-like element elsewhere.
+- Only 2D texcoords are emitted; 3D/4D texcoord payloads are skipped.
+- A D3D9 declaration type such as `FLOAT3` with `D3DDECLUSAGE_TEXCOORD, 2` is ignored because the mapper assumes texcoords are `FLOAT2`.
+- Usage index is compacted incorrectly:
+  - real declaration has `TEXCOORD0`, `TEXCOORD2`
+  - mapper renumbers it to `TEXCOORD0`, `TEXCOORD1`
+  - shader asks for `TEXCOORD2`
+  - phantom fills `TEXCOORD2`
+- Secondary stream or instanced/extra stream is not bound in D3D11.
+- Offset calculation drops an element because legacy declaration has padding/color/weight elements between texcoords.
+
+Fix behavior:
+
+```text
+For each D3D9 vertex declaration element:
+  preserve Usage + UsageIndex exactly
+  preserve Type/component count
+  preserve Stream
+  preserve Offset
+  map TEXCOORD UsageIndex N -> D3D11 semantic "TEXCOORD", SemanticIndex N
+```
+
+Do not compact texcoord indices. Do not infer texcoord count from material UV usage. Build the D3D11 input elements from the actual declaration/VB format, then add phantom elements only for signature entries not already backed by a real semantic/index.
+
+---
+
+**4. If Data Is Genuinely Absent**
+
+A safe `normalize` guard is acceptable as a crash/NaN containment measure, but it is not visually correct parity for bump/specular materials.
+
+Correct bump/specular requires a real tangent basis or a reproducible derived basis. Without one:
+
+- normal maps are interpreted in the wrong space
+- specular lobes will be wrong
+- mirrored UVs and seams will be wrong
+- hands/sleeves may become “lit enough” but not match D3D9
+
+Minimal beachhead fix if data is absent:
+
+1. Keep the NaN guard to prevent black/NaN output.
+2. Add a shader-side safe basis fallback:
+   - normalize normal safely
+   - if tangent length is near zero, build an arbitrary orthonormal basis from normal
+   - derive binormal from `cross(N, T)`
+3. Use this only for absent/phantom tangent inputs, and log it loudly per shader/material/mesh.
+
+Example concept:
+
+```hlsl
+float3 safeNormalize(float3 v, float3 fallback)
+{
+    float len2 = dot(v, v);
+    return len2 > 1e-8 ? v * rsqrt(len2) : fallback;
+}
+
+float3 makeFallbackTangent(float3 n)
+{
+    float3 axis = abs(n.z) < 0.999 ? float3(0,0,1) : float3(0,1,0);
+    return normalize(cross(axis, n));
+}
+```
+
+But for real parity, if D3D9 also lacked the stream and still rendered correctly, you need to identify the original derivation path. It may have used a different texcoord, a pretransformed basis, or shader bytecode that did not match the recompiled source path.
+
+---
+
+**5. Fastest Instrumentation**
+
+The two highest-value observations:
+
+1. **D3D11 failing draw: input signature versus real layout source**
+   - VS signature: list every input semantic/index/mask.
+   - Generated input layout: list semantic/index, slot, offset, format, phantom yes/no.
+   - Bound VB stride and stream slot.
+   - You want a line like:
+
+```text
+VS wants TEXCOORD2.xyz
+layout maps TEXCOORD2 -> slot 15, offset 0, R32G32B32A32_FLOAT, phantom
+real declaration has TEXCOORD2 FLOAT3 at slot 0 offset 48
+```
+
+That immediately proves the layout bug.
+
+2. **D3D9 same draw, same vertex**
+   - Inspect `TEXCOORD2` for the same mesh/material.
+   - If D3D9 `TEXCOORD2` is nonzero and D3D11 is zero, the D3D11 declaration path is wrong.
+   - If both are zero, inspect the D3D9 shader bytecode/source path and whether it consumes `TEXCOORD2` the same way.
+
+A third useful observation: in RenderDoc D3D11, view raw VB bytes around the expected offset. If there is a sequence of plausible unit vectors not decoded as any input element, the data exists and the mapper is dropping it.
+
+---
+
+**6. Other Failure Modes**
+
+Yes, a few are plausible.
+
+`D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` may change behavior around undefined/legacy math, but it should not be your first suspect. `normalize(0)` producing NaN is expected on modern shader models. D3D9-era hardware/drivers may have returned zero, a denormal, or some other tolerated value. That explains why the recompiled path can expose the bug harder, but it does not explain why a required tangent input is phantom zero.
+
+Other things to check:
+
+- **Wrong VS variant bound.** A bump PS may be paired with a VS variant expecting tangent basis, while the mesh/material combination originally used a different VS.
+- **Signature reconstruction mismatch.** If your rewritten PS input mirroring caused a different VS to be selected or compiled, verify material shader pairing.
+- **Texcoord index renumbering.** This is very likely. Legacy declarations often have non-contiguous semantic indices.
+- **Component format mismatch.** `TEXCOORD2` may be packed as `SHORT4N`, `UBYTE4N`, or color-like data and incorrectly mapped to float zero/default.
+- **Secondary stream missing.** Tangent basis may be in a second stream that D3D9 bound but D3D11 does not.
+- **Skinning path mismatch.** For skinned meshes, tangent/binormal must be skinned with the same weights as normal. If the tangent exists but is not skinned or is read from the wrong stream, lighting will still be wrong, though usually not all-zero.
+
+---
+
+**Concrete Fix Plan**
+
+1. **Add input-layout diagnostics in the D3D11 plugin.**
+
+At `CreateInputLayout` time, dump for asset VS draws:
+
+```text
+shader input: semantic/index/mask/register
+real declaration candidates: semantic/index/type/slot/offset/format
+final layout: semantic/index/slot/offset/format/real-or-phantom
+```
+
+This belongs in the D3D11 renderer plugin’s vertex declaration/input layout builder, around the phantom augmentation code.
+
+2. **Fix real declaration preservation.**
+
+The VB-format to input-element mapping should preserve D3D9 declaration semantics exactly:
+
+```text
+D3DDECLUSAGE_TEXCOORD + UsageIndex N
+    -> SemanticName = "TEXCOORD"
+    -> SemanticIndex = N
+```
+
+No compaction. No “UV count” shortcut. No dropping float3/float4 texcoords. No replacing an existing semantic/index with phantom.
+
+3. **Bind missing secondary streams if present.**
+
+If the D3D9 declaration references stream `1+`, the D3D11 path must bind the corresponding VB slot with the correct stride and offset. A phantom should only be used when the declaration truly lacks the semantic/index.
+
+4. **Keep shader NaN guard as containment.**
+
+Do not remove the `isnan`/safe color guard yet. It protects the beachhead from one bad asset path taking the whole material black. But mark it as defensive, not parity.
+
+5. **Only add VS safe-normalize fallback if data is genuinely absent in both D3D9 and D3D11.**
+
+If D3D9 proves the mesh lacks `TEXCOORD2`, then implement a targeted source rewrite for affected bump VS assets:
+
+- guard tangent/binormal normalization
+- derive fallback tangent from normal
+- log shader/material names using fallback
+
+That is acceptable for character-select bring-up, but lower parity than supplying/generated tangents.
+
+6. **If no tangent data exists but parity matters, generate tangents CPU-side.**
+
+Longer-term correct fix:
+
+```text
+position + normal + UV0 + indices
+    -> generate tangent/handedness per vertex
+    -> store/bind as TEXCOORD2 or whichever semantic the original VS expects
+    -> skin tangent like normal for skinned meshes
+```
+
+For the beachhead, I would not start here unless RenderDoc/D3D9 proves the data is genuinely absent.
+
+---
+
+**Risk Summary**
+
+Primary risk: patching the shader hides a renderer declaration bug and leaves many future bump/specular assets subtly wrong.
+
+Secondary risk: generated fallback tangents may make the character select screen look acceptable but will diverge on mirrored UVs, seams, and specular highlights.
+
+Highest-confidence path: prove whether D3D9 has nonzero `TEXCOORD2`; if yes, fix the D3D11 declaration/stream mapping. That is the right ownership boundary and the most likely parity fix.

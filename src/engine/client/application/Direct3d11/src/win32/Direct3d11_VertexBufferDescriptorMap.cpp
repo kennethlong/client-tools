@@ -191,7 +191,8 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
 	VertexBufferFormat const &format,
 	D3D11_INPUT_ELEMENT_DESC *outDesc,
 	int maxElements,
-	UINT inputSlot)
+	UINT inputSlot,
+	UINT firstTexCoordSemanticIndex)
 {
 	NOT_NULL(outDesc);
 
@@ -259,7 +260,13 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
 				DEBUG_FATAL(true, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: invalid texcoord dim=%d", dim));
 				break;
 		}
-		add("TEXCOORD", static_cast<UINT>(t), dxgi, bytes);
+		// Plan 17-08 (GAP-6): GLOBAL TEXCOORD usage index across streams (mirror
+		// D3D9 Direct3d9_VertexDeclarationMap.cpp:119-224). Per-stream-local `t`
+		// would relabel stream 1's skinned DOT3 tangent as TEXCOORD0; the bump VS
+		// declares it as TEXCOORD2 -> uncovered -> phantom-zeroed -> normalize(0)
+		// -> NaN COLOR0. Offsetting by firstTexCoordSemanticIndex makes the
+		// semantic index match what the VS (and D3D9) expect.
+		add("TEXCOORD", firstTexCoordSemanticIndex + static_cast<UINT>(t), dxgi, bytes);
 	}
 
 	DEBUG_FATAL(n == 0, ("Direct3d11_VertexBufferDescriptorMap::buildInputElementDesc: empty layout"));

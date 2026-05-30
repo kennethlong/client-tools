@@ -17,6 +17,8 @@
 #include "Direct3d11.h"
 #include "Direct3d11_ConstantBuffer.h"   // Plan 17-03 R3-03a: getPerMaterialShadow declaration
 #include "Direct3d11_Device.h"   // Plan 11-09.15 Iter-17: getInfoQueue for stage0-resolve diagnostic
+#include "Direct3d11_LegacyPSConstants.h"   // Plan 17-08 (GAP-4) Producer B: RMW b0 staging from the shared legacy shadow
+#include "Direct3d11_LightManager.h"   // Plan 17-08 (GAP-4) Producer A: per-frame dot3 light snapshot
 #include "Direct3d11_PixelShaderProgramData.h"
 #include "Direct3d11_StateCache.h"
 #include "Direct3d11_TextureData.h"
@@ -30,6 +32,7 @@
 #include "clientGraphics/Texture.h"
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/MemoryBlockManager.h"
+#include "sharedMath/Vector.h"   // Plan 17-08 (GAP-4) Producer A: world->object-local light dir
 
 #include <algorithm>
 #include <cstring>     // Plan 17-03 R3-03c: std::memcpy + std::strcmp + std::strlen for offset-aware staging buffer
@@ -789,7 +792,72 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// PS cbuffers are 400 bytes (per Plan 02's PS-cbuffer dump for
 					// SwgVertexConstants @ b0); std::vector is safe for any size up to
 					// Direct3d11_ConstantBuffer::kMaxCBufferBytes (1152).
+					//
+					// Plan 17-08 (GAP-4) Producer B: for the asset PS's SwgVertexConstants
+					// cbuffer @ b0 (BindPoint==0, TotalSize==400), RMW-initialise the
+					// staging from the SHARED legacy b0 shadow instead of zeroing it, so
+					// the dot3 light constants (c0..c4, Producer A) AND user constants
+					// (c8+, Producer C) SURVIVE -- the material/textureFactor name patches
+					// below then layer on top (c5..c7). The previous zero-init was the
+					// clobber that wiped the lights and rendered the body BLACK. All other
+					// cbuffers keep the zero-init (they have no shared shadow).
+					bool const isLegacyB0 =
+						(layout.BindPoint == 0
+						 && layout.TotalSize == Direct3d11_LegacyPSConstants::kShadowBytes);
 					std::vector<unsigned char> staging(layout.TotalSize, 0u);
+					if (isLegacyB0)
+					{
+						std::memcpy(staging.data(),
+							Direct3d11_LegacyPSConstants::getShadow(),
+							Direct3d11_LegacyPSConstants::kShadowBytes);
+
+						// Plan 17-08 (GAP-4) Producer A (write site): compute the dot3
+						// light constants in OBJECT-LOCAL space (the asset PS lights
+						// against the object-space normal_o) from the per-frame snapshot
+						// + the current object transform, and write c0..c4 into the
+						// staging by reflected byte offset (c-index * 16; the reflected
+						// vars are generic packedRegister0..4 so we map by OFFSET, not
+						// name -- consult-validated). Mirrors
+						// Direct3d9_LightManager::applyLights_vertexShader_dot3 (:777-830):
+						// localDirection = -rotate_p2l(worldDir), .w = materialSpecularPower.
+						Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+							// Plan 17-08 (GAP-4) VISIBLE diagnostic via InfoQueue (DEBUG_REPORT_LOG_PRINT
+							// is NOT captured in d3d11-debug.log). First few b0 draws report whether
+							// Producer A fed lights. d3valid=0 => no T_parallel light at char-select
+							// -> c0..c4 zero -> BLACK (prime suspect). d3valid=1 + black => value/space bug.
+							{
+								static int s_gap4DiagCount = 0;
+								if (s_gap4DiagCount < 6)
+								{
+									++s_gap4DiagCount;
+									char const *sn = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+									char gap4[400];
+									_snprintf_s(gap4, sizeof(gap4), _TRUNCATE,
+										"Plan 17-08 GAP4 b0 #%d shader='%s' d3valid=%d worldDir=(%.3f,%.3f,%.3f) "
+										"diffuse=(%.3f,%.3f,%.3f) specPow=%.3f",
+										s_gap4DiagCount, (sn && *sn) ? sn : "(empty)",
+										d3.valid ? 1 : 0,
+										d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z,
+										d3.diffuseColor.x, d3.diffuseColor.y, d3.diffuseColor.z, pm.m_power);
+									if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+										iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, gap4);
+								}
+							}
+						if (d3.valid)
+						{
+							using namespace Direct3d11_LegacyPSConstantRegisters;
+							Vector const worldDir(
+								d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z);
+							Vector const localDir = Direct3d11_StateCache::worldDirectionToObjectLocal(worldDir);
+
+							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
+							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &d3.diffuseColor,             sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &d3.specularColor,            sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
+						}
+					}
 
 					// Lookup + write helper. Returns true on a successful write so the
 					// shadow mirror below can mirror only the writes that landed.
@@ -1150,6 +1218,24 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// If a future asset surfaces a non-{0,2} bind point, extend the
 					// pre-draw bind loop there.
 					Direct3d11_ConstantBuffer::updatePS(layout.BindPoint, staging.data(), layout.TotalSize);
+
+					// Plan 17-08 (GAP-4) Producer B: persist the merged staging back into
+					// the shared legacy shadow so this pass's material/textureFactor
+					// patches (c5..c7) are retained for the next pass alongside the
+					// lights (Producer A) + user constants (Producer C). One-shot GAP4 b0
+					// instrumentation: prove c0 lights reached b0 (c0.xyz != 0 => not black).
+					if (isLegacyB0)
+					{
+						Direct3d11_LegacyPSConstants::writeShadowBack(staging.data());
+#if 1
+						static bool s_loggedGap4B0 = false;
+						if (!s_loggedGap4B0)
+						{
+							s_loggedGap4B0 = true;
+							Direct3d11_LegacyPSConstants::logShadow("StaticShaderData::apply b0 flush");
+						}
+#endif
+					}
 
 					// R3-03g (HIGH-3 + R3-03b proof): one-shot dual-routed log of the
 					// material values at THIS flush for the HEAD pass and the EYE pass.

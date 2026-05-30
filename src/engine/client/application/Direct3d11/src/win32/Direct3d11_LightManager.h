@@ -60,12 +60,46 @@ static_assert((sizeof(Direct3d11_LightingCB) % 16) == 0,    "Direct3d11_Lighting
 
 // ======================================================================
 
+// Plan 17-08 (GAP-4) Producer A: per-frame snapshot of the primary
+// directional light's dot3 PS constants, mirroring the D3D9
+// Direct3d9_LightManager PixelDot3Data (5 float4 @ PSCR_dot3LightDirection).
+// Captured in WORLD space here (per frame); StaticShaderData::apply
+// transforms localDirectionWorld into object-local space per draw (the
+// asset PS lights against the object-space normal_o) and writes c0..c4
+// into the b0 SwgVertexConstants shadow. `.w` channels carry the same
+// alpha-fade/bloom/spec-power packing the D3D9 path uses, EXCEPT
+// localDirection.w (materialSpecularPower) which is filled per-draw from
+// the material at the write site.
+struct Direct3d11_PixelDot3State
+{
+	DirectX::XMFLOAT4 localDirectionWorld;        // xyz = world light dir (NOT yet object-local); w unused here
+	DirectX::XMFLOAT4 diffuseColor;
+	DirectX::XMFLOAT4 specularColor;
+	DirectX::XMFLOAT4 tangentMinusDiffuseColor;
+	DirectX::XMFLOAT4 tangentMinusBackColor;
+	// Plan 17-08 (GAP-5): extra fields the VS vertex-lighting path needs.
+	// Direct3d11_StateCache::composeSlot0Shadow fills VertexSlot0CB.lightData
+	// (ambient @ c16, dot3 @ c40-c43, parallelSpecular @ c17-c19) +
+	// extendedLightData (@ c60-c63) from these so the VS emits a real COLOR0
+	// (vertexDiffuse) instead of NaN -> fixes the dark-body residual.
+	DirectX::XMFLOAT4 ambient;                     // accumulated T_ambient (lightData[0] @ c16)
+	DirectX::XMFLOAT4 backColor;                   // raw hemispheric back  (extendedLightData[0] @ c60)
+	DirectX::XMFLOAT4 tangentColor;                // raw hemispheric tangent (extendedLightData[1] @ c61)
+	bool              valid;                       // false until a directional light is seen this frame
+};
+
+// ======================================================================
+
 class Direct3d11_LightManager
 {
 public:
 
 	static void install();
 	static void remove();
+
+	// Plan 17-08 (GAP-4) Producer A: the current frame's primary-directional
+	// dot3 snapshot for the b0 SwgVertexConstants asset-PS lighting path.
+	static Direct3d11_PixelDot3State const &getPixelDot3State();
 
 	// Gl_api::setLights slot body.
 	// Iterates the engine's light list, accumulates ambient + directional

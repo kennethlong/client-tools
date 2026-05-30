@@ -73,6 +73,14 @@ public:
 	static void setProjectionMatrix(GlMatrix4x4 const &projectionMatrix);
 	static void setFog(bool enabled, real density, PackedArgb const &color);
 	static void setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale);
+
+	// Plan 17-08 (GAP-4) Producer A: map a WORLD-space direction into the
+	// current object's local frame using the cached object->world transform
+	// (Transform::rotate_p2l). Used by Direct3d11_StaticShaderData::apply to
+	// orient the dot3 light direction against the asset PS's object-space
+	// normal_o before writing the b0 SwgVertexConstants shadow.
+	static Vector worldDirectionToObjectLocal(Vector const &worldDir);
+
 	static void setTextureTransform(int stage, bool enabled, int dimension, bool projected, real const *transform);
 	static void setAlphaFadeOpacity(bool enabled, float opacity);
 

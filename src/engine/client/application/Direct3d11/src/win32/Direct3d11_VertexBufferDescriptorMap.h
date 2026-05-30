@@ -53,11 +53,20 @@ public:
 	// previous return value, etc.). Returns -1 if maxElements is
 	// exceeded (caller should treat as failure -- ID3D11InputLayout
 	// has a hard 16-element cap).
+	// Plan 17-08 (GAP-6): firstTexCoordSemanticIndex threads a GLOBAL running
+	// TEXCOORD usage index across streams, mirroring D3D9
+	// Direct3d9_VertexDeclarationMap.cpp:119-224 (which uses a single
+	// `textureCoordinate` counter spanning all streams). Without this, stream 1's
+	// TEXCOORD sets reset to index 0 and the bump VS's `TEXCOORD2` tangent (DOT3
+	// on stream 1) is never matched -> phantom-zeroed -> normalize(0) -> NaN.
+	// Single-stream callers pass 0. Caller advances by the stream's
+	// getNumberOfTextureCoordinateSets() before the next stream.
 	static int buildInputElementDescForStream(
 		VertexBufferFormat const &format,
 		D3D11_INPUT_ELEMENT_DESC *outDesc,
 		int maxElements,
-		UINT inputSlot);
+		UINT inputSlot,
+		UINT firstTexCoordSemanticIndex = 0);
 
 	// Plan 11-09.8: append phantom elements for VS-declared inputs not
 	// covered by the format-derived elements. Phantom elements use

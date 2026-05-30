@@ -1,0 +1,282 @@
+# GAP-6 Design Review: Bump VS NaN Vertex Colors
+
+## Executive verdict
+
+Your **mechanism is correct** (zero tangent → `normalize(0)` → NaN), but the **dominant root cause for char-select bump sleeves is not “mesh lacks tangent data.”** It is almost certainly a **multi-stream TEXCOORD semantic-index mismatch** between D3D9 and D3D11. Plan 11-09.8’s phantom buffer then **masks** that bug by feeding zeros for `TEXCOORD2`, which makes draws succeed but renders wrong.
+
+**Primary fix:** mirror D3D9’s **global running TEXCOORD UsageIndex** in the D3D11 multi-stream input-layout builder.
+
+**Do not:** add tangent generation, rewrite bump VS HLSL, or rely on NaN guards for parity.
+
+---
+
+## 1. Is phantom-zero → `normalize(0)` → NaN the right root cause?
+
+**Yes — with one refinement.**
+
+RenderDoc evidence is decisive:
+- VS **inputs** show `TEXCOORD2 = (0,0,0)` from slot 15 (phantom).
+- VS **outputs** `COLOR0`/`COLOR1` are NaN for every vertex.
+- VS **inputs** `NORMAL` and VS cbuffer lighting are valid.
+
+So the NaN is born in the VS, not PS interpolation.
+
+### Why NaN in tangent basis poisons `COLOR0`
+
+For SOE bump VS family (`a_specmap_bump_vs20_for_ps20` → `h_specmap_bump_ps20` / `h_color2_specmap_bump_ps20`), the VS does **not** compute diffuse in isolation from the tangent frame. Typical flow:
+
+1. Read skinned tangent from `TEXCOORD2` (DOT3 xyz from mesh).
+2. `tangent = normalize(TEXCOORD2.xyz)` → **NaN** when input is zero.
+3. Build binormal via `cross(normal, tangent)` (also degenerate).
+4. Build TBN; transform light/view vectors to tangent space for PS (`lightDirection_t`, `halfAngle_t`).
+5. Compute `COLOR0`/`COLOR1` (vertex diffuse/specular) — often via shared include paths (`applyLights_vertexShader`, hemispheric helpers) that run **after** basis construction or reuse contaminated temporaries.
+
+Even when diffuse *looks* like it only needs `NORMAL` + light constants, these VSes are structured as one unified basis-build + lighting block. One NaN in the TBN construction commonly poisons **all** color outputs, not just bump/specular interpolators.
+
+**Wrong assumption to drop:** “COLOR0 only needs normal+light, so tangent can’t affect it.” On bump VSes, basis construction is on the critical path for the whole output struct.
+
+---
+
+## 2. Where should the tangent basis come from?
+
+For char-select bump parts (sleeves/hands), **option (a) — data is present, mapping is wrong** — is the leading hypothesis. Not (b) or (c).
+
+### Evidence from engine data flow
+
+`SoftwareBlendSkeletalShaderPrimitive` explicitly handles DOT3:
+
+| Aspect | Behavior |
+|--------|----------|
+| Mesh IFF | `TAG_DOT3` chunk stores per-vertex tangent + flip |
+| TC layout | Last 4D texcoord set = DOT3 (tangent xyz + handedness w) |
+| Multi-stream split | Stream 0 (constant): COLOR + non-DOT3 UVs (2× float2). Stream 1 (dynamic): POSITION + NORMAL + skinned DOT3 float4 |
+| Skinning | DOT3 is bone-transformed and written into dynamic VB |
+
+The tangent **exists** and is skinned. Your RenderDoc observation (`TEXCOORD0/1` valid, `TEXCOORD2` zero) matches “data on stream 1, VS reads wrong semantic index.”
+
+### The D3D9 vs D3D11 divergence (smoking gun)
+
+D3D9 multi-stream declaration uses a **global running counter** for TEXCOORD indices across streams:
+
+```119:224:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexDeclarationMap.cpp
+	int textureCoordinate = 0;
+	for (int i = 0; i < count; ++i)
+	{
+		// ... POSITION, NORMAL, COLOR per stream ...
+		const int numberOfTextureCoordinateSets = vertexBufferFormat.getNumberOfTextureCoordinateSets();
+		for (int j = 0; j < numberOfTextureCoordinateSets; ++j)
+		{
+			// ...
+			ms_vertexElements[vertexElement].UsageIndex = static_cast<BYTE>(textureCoordinate);
+			++textureCoordinate;
+		}
+	}
+```
+
+D3D11 multi-stream uses **per-stream local indices** (`TEXCOORD0` on each stream):
+
+```246:262:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferDescriptorMap.cpp
+	const int numberOfTexCoordSets = format.getNumberOfTextureCoordinateSets();
+	for (int t = 0; t < numberOfTexCoordSets; ++t)
+	{
+		// ...
+		add("TEXCOORD", static_cast<UINT>(t), dxgi, bytes);  // t resets per stream!
+	}
+```
+
+For a bump sleeve draw:
+
+| Stream | VB contents | D3D9 semantic | D3D11 semantic (bug) |
+|--------|-------------|---------------|----------------------|
+| 0 | UV_MAIN, UV_NRML | TEXCOORD0, TEXCOORD1 | TEXCOORD0, TEXCOORD1 ✓ |
+| 1 | skinned DOT3 float4 | **TEXCOORD2** | **TEXCOORD0** ✗ |
+
+Bump VS declares input `TEXCOORD2` (tangent). D3D11 layout exposes stream-1 DOT3 as `TEXCOORD0`. `augmentWithPhantomElements` sees `TEXCOORD2` uncovered → slot-15 phantom → zero → NaN.
+
+Non-bump parts (face/tunic) use VS that don’t read `TEXCOORD2` as tangent input, so they render correctly — exactly your symptom split.
+
+### How to confirm (RenderDoc + D3D9 capture)
+
+**Decisive test (5 minutes):**
+
+1. **D3D11 Input Layout** for failing draw: find element with `Semantic=TEXCOORD, Index=2`. Today it should be `InputSlot=15` (phantom). After fix: `InputSlot=1`, non-zero offset into dynamic VB.
+
+2. **D3D11 Stream 1 VB raw bytes** at a sleeve vertex: DOT3 block should be non-zero unit-ish vector (e.g. `(0.8, 0.1, 0.5, ±1)`). If non-zero in VB but zero at VS input → mapping bug confirmed.
+
+3. **D3D9 capture** of same mesh/shader: VS input assembler should show stream-1 element at **TEXCOORD index 2** (not 0).
+
+4. **Cross-check:** disable multi-stream (`ConfigClientGraphics::getDisableMultiStreamVertexBuffers()` or single-stream merge path). If bug disappears, it’s definitively the multi-stream index issue.
+
+---
+
+## 3. If data is present but fed zero — what mapping bug?
+
+**Most likely: per-stream vs global TEXCOORD UsageIndex**, not offset mismatch and not phantom shadowing a real element.
+
+Phantom logic matches on `(SemanticName, SemanticIndex)` only:
+
+```350:365:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferDescriptorMap.cpp
+		for (int i = 0; i < n; ++i)
+		{
+			if (existing.SemanticIndex != ri.SemanticIndex) continue;
+			if (_stricmp(existing.SemanticName, ri.SemanticName) != 0) continue;
+			covered = true;
+		}
+```
+
+Stream 1’s real DOT3 element is `TEXCOORD0`. VS wants `TEXCOORD2`. Phantom does not “shadow” a real `TEXCOORD2`; it **substitutes** because the real element was mislabeled.
+
+**Not** a UsageIndex/off-by-one within a single stream. **Not** a byte-offset bug (TEXCOORD0/1 are correct).
+
+### Fix: make real TEXCOORD2 reach the VS
+
+**Touch point 1:** `Direct3d11_VertexDeclarationMap::getOrCreateMultiStream`  
+Add a running `textureCoordinate` counter across streams (mirror D3D9 lines 119–224).
+
+**Touch point 2:** `Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream`  
+Add parameter `UINT firstTexCoordSemanticIndex`. Emit:
+
+```cpp
+add("TEXCOORD", firstTexCoordSemanticIndex + t, ...);
+```
+
+Single-stream path unchanged (counter starts at 0, one stream).
+
+**Do not change:** phantom mechanism itself — it remains correct for draws that genuinely lack declared inputs (hair, UI, etc.). After this fix, bump draws should stop hitting phantom for `TEXCOORD2`.
+
+**Secondary check after index fix:** DOT3 is float4 in VB; VS input `TEXCOORD2` may be float3 (mask `0x7`). D3D9 bound `FLOAT4` at that usage index. If `CreateInputLayout` fails after index fix, align format to VS reflection (float4 at semantic 2, or float3 reading first 12 bytes of the 16-byte DOT3 slot). D3D9 precedent favors float4 at the DOT3 offset.
+
+---
+
+## 4. If data were genuinely absent — guard vs generate?
+
+For the **beachhead**, neither is the right first move — data is present for bump sleeves.
+
+| Approach | Parity | Bump correctness |
+|----------|--------|------------------|
+| VS `normalize` guard (fallback basis) | Stops NaN/black | **Wrong bump lighting** — normal map sampling uses tangent-space light vectors |
+| CPU tangent generation | Overkill | Correct only if UV/layout assumptions match SOE DOT3 convention |
+| Fix semantic mapping | **D3D9 parity** | **Correct** — uses authored + skinned DOT3 |
+
+Minimal correct beachhead fix: **global TEXCOORD indexing in multi-stream layout only.** No VS rewrite, no tangent gen.
+
+If you later find assets with **no DOT3 chunk** but bump shaders, that’s a separate asset/shader-compat case. Guarding `normalize` is acceptable as a **degradation path** (flat bump / object-space fallback), not as the primary fix for char-select.
+
+---
+
+## 5. Instrumentation — two fastest confirmations
+
+### Observation A (confirms mapping bug in one draw)
+
+In RenderDoc for failing `h_specmap_bump` sleeve draw:
+
+- **Pipeline → Input Layout:** list all elements. Expect today: `TEXCOORD2 @ InputSlot=15, AlignedByteOffset=0`.
+- **Mesh → Vertex Buffer → Stream 1:** read DOT3 floats at vertex 0. Expect non-zero tangent.
+- **VS Invocations → Inputs:** `TEXCOORD2 = 0`. **Mismatch = mapping bug confirmed.**
+
+### Observation B (confirms D3D9 parity target)
+
+D3D9 capture of same character part + same shader family:
+
+- Input assembler declaration: stream 1 DOT3 at **`TEXCOORD/2`**.
+- Compare to fixed D3D11 layout — indices must match exactly.
+
+Optional third: log `(stream0Flags, stream1Flags, vsHash)` → emitted input elements at layout creation. One line per cache miss is enough.
+
+---
+
+## 6. Failure modes / alternatives you might be missing
+
+### A. Multi-stream semantic index bug (primary — new since GAP-4 framing)
+
+Plan 11-09.8 solved **CreateInputLayout validation** (“TEXCOORD2 cascade”), but for multi-stream bump meshes it **papered over** a semantic-index regression. Draws succeed; shading is wrong. This supersedes the earlier “missing tangent in VB format” narrative.
+
+### B. `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` changing TEXCOORD consumption
+
+**Unlikely as primary cause.** You have direct proof `TEXCOORD2` is zero at VS input from phantom slot 15. Backwards-compat might affect dead-code stripping or register allocation, but cannot explain “valid NORMAL, zero TEXCOORD2, NaN COLOR0” when stream-1 VB has DOT3 data.
+
+Worth checking only if, **after** semantic-index fix, `TEXCOORD2` is non-zero but COLOR0 still NaN — then disassemble D3D9 vs D3D11 VS bytecode for `normalize` placement.
+
+### C. Single-stream path accidentally used with wrong format
+
+Unlikely for your case (TEXCOORD0/1 work). Would show different failure mode.
+
+### D. DOT3 disabled via `GraphicsOptionTags::get(TAG_DOT3)`
+
+Would mean no DOT3 in source data at all. Char-select bump sleeves almost certainly have DOT3 (they use bump PS). Quick check: stream-1 VB non-zero after fix attempt #1.
+
+### E. Phantom still needed post-fix
+
+Keep it. Other shaders/meshes genuinely lack declared inputs. After index fix, bump draws should **stop** using phantom for `TEXCOORD2`; phantom count for those draws should drop to zero.
+
+---
+
+## Recommended approach
+
+```mermaid
+flowchart LR
+  subgraph mesh [Mesh / SBSSP]
+    IFF["TAG_DOT3 in IFF"]
+    Skin["Skinned DOT3 → stream-1 dynamic VB"]
+  end
+
+  subgraph d3d9 [D3D9 - works]
+    Decl9["Global TEXCOORD counter\nstream0: TC0,TC1\nstream1: TC2"]
+    VS9["a_specmap_bump VS\nreads TEXCOORD2 tangent"]
+  end
+
+  subgraph d3d11bug [D3D11 - GAP-6]
+    Decl11["Per-stream local indices\nstream1 DOT3 → TEXCOORD0"]
+    Phantom["augmentWithPhantomElements\nTEXCOORD2 → slot 15 zero"]
+    VS11["normalize(0) → NaN\nCOLOR0/COLOR1 NaN"]
+  end
+
+  subgraph fix [Fix]
+    DeclFix["Global TEXCOORD counter\n(mirror D3D9)"]
+  end
+
+  IFF --> Skin
+  Skin --> Decl9 --> VS9
+  Skin --> Decl11 --> Phantom --> VS11
+  Skin --> DeclFix
+```
+
+### Implementation order
+
+1. **Fix multi-stream TEXCOORD UsageIndex** (D3D11 plugin, ~30 lines).
+   - Files: `Direct3d11_VertexDeclarationMap.cpp`, `Direct3d11_VertexBufferDescriptorMap.cpp/.h`
+   - Reference: `Direct3d9_VertexDeclarationMap.cpp:119–224`
+
+2. **Verify in RenderDoc** on sleeve draw:
+   - VS input `TEXCOORD2` ≈ stream-1 DOT3 xyz (non-zero, unit-length after normalize).
+   - VS output `COLOR0`/`COLOR1` finite.
+   - PS output sane color (remove or keep NaN guard temporarily for A/B).
+
+3. **Regression sweep:** hair/UI draws that relied on phantom for *genuinely* missing inputs still pass CreateInputLayout.
+
+4. **Only if still broken:** check DOT3 float4 vs VS-reflected float3 format at semantic 2.
+
+### Explicitly do NOT do (yet)
+
+- VS HLSL rewrite / safe-normalize injection
+- CPU tangent generation pipeline
+- Change phantom slot-15 design
+- Change cbuffer paths (GAP-4/5 are confirmed good)
+
+---
+
+## Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Fix breaks non-bump multi-stream draws | Low | D3D9 already defines behavior; mirror exactly |
+| float4 DOT3 vs VS float3 `TEXCOORD2` format mismatch | Medium | Match D3D9 FLOAT4 binding; validate via reflection |
+| Input-layout cache stale | None | Fix is deterministic from format flags; no cache key change needed |
+| Phantom still fires on some bump variants needing TEXCOORD3+ | Low | Check VS reflection; global counter handles increment |
+| Single-stream-only test passes, multi-stream fails in prod | Medium | Test with default multi-stream enabled (normal D3D11 path) |
+
+---
+
+## Bottom line
+
+GAP-6 is not a shader-recompile or missing-asset-data problem. It is a **Plan 11-09.7 multi-stream input-layout parity gap** that Plan 11-09.8’s phantom buffer turned from a crash into **silent wrong shading**. Fix the TEXCOORD semantic index assignment to match D3D9; the skinned DOT3 data already in stream 1 will reach `TEXCOORD2`, `normalize` will succeed, and `COLOR0`/`COLOR1` should become finite — unblocking correct bump PS lighting without touching the asset PS lane you’ve already validated.

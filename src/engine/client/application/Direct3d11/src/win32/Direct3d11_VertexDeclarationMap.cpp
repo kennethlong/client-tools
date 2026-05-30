@@ -208,6 +208,12 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 
 	D3D11_INPUT_ELEMENT_DESC elements[16] = {};
 	int total = 0;
+	// Plan 17-08 (GAP-6): GLOBAL running TEXCOORD usage index across streams,
+	// mirroring D3D9 Direct3d9_VertexDeclarationMap.cpp:119-224. Stream 1's
+	// skinned DOT3 tangent must surface as TEXCOORD2 (not a per-stream-local
+	// TEXCOORD0) so the bump VS's TEXCOORD2 input binds to real data instead of
+	// being phantom-zeroed (-> normalize(0) -> NaN COLOR0 -> wrong sleeves/hands).
+	UINT runningTexCoord = 0;
 	for (int s = 0; s < streamCount; ++s)
 	{
 		if (!streamFormats[s])
@@ -217,7 +223,8 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 			*streamFormats[s],
 			elements + total,
 			remaining,
-			static_cast<UINT>(s));
+			static_cast<UINT>(s),
+			runningTexCoord);
 		if (n <= 0)
 		{
 			// buildInputElementDescForStream returns 0 if format is empty OR
@@ -229,6 +236,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 			return nullptr;
 		}
 		total += n;
+		runningTexCoord += static_cast<UINT>(streamFormats[s]->getNumberOfTextureCoordinateSets());
 	}
 
 	if (total == 0)

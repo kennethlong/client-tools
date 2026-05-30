@@ -25,6 +25,7 @@
 #include "Direct3d11_Device.h"
 #include "Direct3d11_DynamicIndexBufferData.h"
 #include "Direct3d11_DynamicVertexBufferData.h"
+#include "Direct3d11_LegacyPSConstants.h"   // Plan 17-08 (GAP-4) Producer C: user constants -> b0 shadow @ c8+
 #include "Direct3d11_LightManager.h"
 #include "Direct3d11_Metrics.h"
 #include "Direct3d11_PixelShaderProgramData.h"
@@ -213,11 +214,22 @@ namespace Direct3d11Namespace
 	bool supportsMipmappedCubeMaps_impl()    { return false; }
 	bool supportsScissorRect_impl()          { return false; }
 	bool supportsTwoSidedStencil_impl()      { return false; }
-	bool supportsStreamOffsets_impl()        { return false; }
+	// Plan 17-08 (GAP-6 / D-08): enable MULTI-STREAM skinned-mesh path. These
+	// two caps gate SoftwareBlendSkeletalShaderPrimitive::ms_useMultiStreamVertexBuffers
+	// (set at install: maxStreamCount>1 && supportsStreamOffsets && !disableMultiStream).
+	// With them false the engine forced single-stream, which places the skinned DOT3
+	// tangent at a texcoord index the recompiled bump VS doesn't read as TEXCOORD2 ->
+	// phantom-zero -> normalize(0) -> NaN COLOR0 -> wrong sleeves/hands. The D3D11
+	// multi-stream bind path is already implemented (Plan 11-09.7
+	// setVertexBufferVectorBindState + getOrCreateMultiStream + 11-09.8 phantom) and
+	// the GAP-6 global-TEXCOORD-index fix routes stream-1 DOT3 -> TEXCOORD2. D3D11
+	// IASetVertexBuffers natively supports per-stream offsets, so advertising both is
+	// honest. getOrCreateMultiStream caps streamCount at 2 (constant + dynamic skinned).
+	bool supportsStreamOffsets_impl()        { return true; }
 	bool supportsDynamicTextures_impl()      { return false; }
 	bool supportsAntialias_impl()            { return false; }
 
-	int  getMaximumVertexBufferStreamCount_impl() { return 1; }
+	int  getMaximumVertexBufferStreamCount_impl() { return 2; }
 
 	// Plan 11-03: displayModeChanged delegates directly to Direct3d11_Device.
 	// (Old Plan 11-02 displayModeChanged_impl no-op shim removed.)
@@ -707,6 +719,24 @@ namespace Direct3d11Namespace
 			DEBUG_REPORT_LOG_PRINT(true,
 				("Direct3d11::setPixelShaderUserConstants: count=%d > userConstants[] slots=%d; truncated\n",
 				count, slots));
+		}
+
+		// Plan 17-08 (GAP-4) Producer C: ALSO mirror the user constants into the
+		// legacy b0 SwgVertexConstants shadow at c8+ (PSCR_userConstant + i) --
+		// the slot where the recompiled asset PS actually reads them (the b2
+		// PerMaterialCB flush below is retained for any non-asset path). The b0
+		// user region holds 17 float4 (c8..c24), independent of the (smaller)
+		// PerMaterialCB userConstants[] slot count. byte offset = (8 + i) * 16.
+		{
+			using namespace Direct3d11_LegacyPSConstantRegisters;
+			int const b0UserSlots = Direct3d11_LegacyPSConstants::kRegisterCount - PSCR_userConstant; // 17
+			int const b0Clamped   = (count > b0UserSlots) ? b0UserSlots : count;
+			for (int i = 0; i < b0Clamped; ++i)
+			{
+				Direct3d11_LegacyPSConstants::writeFloat4(
+					PSCR_userConstant + i,
+					DirectX::XMFLOAT4(constants[i].r, constants[i].g, constants[i].b, constants[i].a));
+			}
 		}
 
 		// Plan 17-03 R3 SUB-STEP 1g (HIGH-3 cross-clobber regression check):

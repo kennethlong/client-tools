@@ -150,7 +150,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "22" });   // Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "24" });   // Plan 17-08 GAP-5: 23 -> 24 (wrapper now USES VS COLOR0 with NaN guard, not hard 0). 22->23 was the COLOR-zero beachhead. Prior: Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -301,7 +301,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "22" });  // Plan 17-07 Round-5 item 5: bump 21 -> 22; must match the FATAL helper (above) so the .cso cache hash is shared.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "24" });  // Plan 17-08 GAP-5: 23 -> 24 (wrapper uses VS COLOR0 w/ NaN guard); must match the FATAL helper (above) so the .cso cache hash is shared.
 		// Plan 17-07 MEDIUM: per-VS rewrite lane salt. saltStr must outlive the
 		// D3DCompile call below (D3D_SHADER_MACRO holds char const*), so it is a
 		// stack buffer scoped to this function body. Native ctor lane passes 0 ->
@@ -933,6 +933,22 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			if (params[k].isSystemValue)
 			{
 				mirror += "i1707.f_pos1707";
+			}
+			else if (_stricmp(params[k].semanticBase.c_str(), "COLOR") == 0)
+			{
+				// Plan 17-08 (GAP-5): the char-select VS computes per-vertex diffuse/
+				// specular (COLOR0/COLOR1) from its OWN lighting constants. GAP-5
+				// (Direct3d11_StateCache::composeSlot0Shadow) now feeds those VS lighting
+				// constants (lightData/extendedLightData in VertexSlot0CB), so the VS
+				// emits VALID vertex colors -- USE them for full per-vertex ambient
+				// parity. NaN GUARD: if a residual NaN slips through (unfed edge case),
+				// fall back to 0 -- per functions.inc vertexDiffuse is purely ADDITIVE,
+				// so 0 yields clean per-pixel N.L from the GAP-4-fed b0 dot3 constants
+				// (lit, never the NaN->black silhouette). HLSL broadcasts the scalar 0.
+				// History: GAP-4 (pre-GAP-5) hard-passed 0 here as a beachhead.
+				char arg[72]; _snprintf_s(arg, sizeof(arg), _TRUNCATE,
+					"(any(isnan(i1707.f_%d)) ? 0 : i1707.f_%d)", paramToVs[k], paramToVs[k]);
+				mirror += arg;
 			}
 			else
 			{
