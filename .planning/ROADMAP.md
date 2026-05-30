@@ -62,7 +62,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 **Root cause (research + CODEX/Cursor consult):** the engine ships pre-compiled D3D9 PEXE pixel-shader bytecode (`TAG_PEXE`) that `ID3D11Device::CreatePixelShader` rejects, leaving `m_d3dPS` null and falling back to a slot-0-only dynamic PS (or magenta), with per-pass `Pass::apply` constants never uploaded. The fix recompiles the discarded `TAG_PSRC` source (primary: `//hlsl` → `compilePixelShaderFromHlsl`; secondary: asm `PSRC` ported to HLSL → `ps_4_0`; tertiary/narrow: FFP `TextureOperation` generator only for genuine FFP-only passes) and uploads per-pass constants **reflection-driven (D3DReflect)**, not via copied D3D9 register indices. Re-assembling asm just reproduces the rejected D3D9 bytecode — a named landmine.
 
 - [x] **Phase 17: PSRC Census + Char-Select Beachhead** - Census the real asset PS source, then prove the recompile + reflection-driven constant pipeline on char-select textures, eyes, and head (completed 2026-05-30; CHAR-01/02/03 PASS, verified + secured)
-- [ ] **Phase 18: Load-Screen Half-Texel Seam** - Eliminate the load-screen centerline seam via the half-pixel UV-mapping fix (independent 2D canary)
+- [x] **Phase 18: Load-Screen Half-Texel Seam** - Eliminate the load-screen centerline seam via the half-pixel UV-mapping fix (independent 2D canary) (completed 2026-05-30)
 - [ ] **Phase 19: Gamma LUT + Interior Lighting** - Replicate the D3D9 gamma ramp as a LUT post-pass and fix blown-out flat-white interior lighting
 - [ ] **Phase 20: Open-World PS Extension + Minimap** - Extend the PS pipeline to open-world surfaces, multi-stage compositing, and the round minimap
 - [ ] **Phase 21: Particles & Ribbon Effects** - Restore correct particle blending and ribbon/swoosh rendering under D3D11
@@ -185,7 +185,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete | 2026-05-27 |
 | 16. v2.1 Tech-Debt Cleanup | v2.1 | 3/3 | Complete | 2026-05-27 |
 | 17. PSRC Census + Char-Select Beachhead | v2.2 | 7/9 | Complete    | 2026-05-30 |
-| 18. Load-Screen Half-Texel Seam | v2.2 | 2/3 | In Progress|  |
+| 18. Load-Screen Half-Texel Seam | v2.2 | 3/3 | Complete    | 2026-05-30 |
 | 19. Gamma LUT + Interior Lighting | v2.2 | 0/TBD | Not started | - |
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
 | 21. Particles & Ribbon Effects | v2.2 | 0/TBD | Not started | - |

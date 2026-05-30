@@ -25,7 +25,7 @@
 
 ### 2D / UI
 
-- [ ] **UI-01**: The loading screen renders with no vertical centerline seam under D3D11 (half-texel fullscreen-blit fix). Image-independent: verified across multiple splash images.
+- [x] **UI-01**: The loading screen renders with no vertical centerline seam under D3D11 (half-texel fullscreen-blit fix). Image-independent: verified across multiple splash images.
 - [ ] **UI-02**: The minimap/radar renders round (not square) under D3D11, matching D3D9. *(Verified by screenshot diff — a prior iteration falsely pre-claimed this; do not mark done without a diff.)*
 
 ### Effects
@@ -74,7 +74,7 @@ Explicitly excluded for v2.2. Documented to prevent scope creep.
 | WORLD-02 | Phase 20 | Pending |
 | WORLD-03 | Phase 19 | Pending |
 | GAMMA-01 | Phase 19 | Pending |
-| UI-01 | Phase 18 | Pending |
+| UI-01 | Phase 18 | Complete |
 | UI-02 | Phase 20 | Pending |
 | FX-01 | Phase 21 | Pending |
 | FX-02 | Phase 21 | Pending |
