@@ -1,16 +1,31 @@
 # Handoff: Phase 17 — char-select D3D11 beachhead
 
-**Updated:** 2026-05-30 (GAP-6 bump arms FIXED → char-select renders FULLY correct; 17-05 T4–5 next)
+**Updated:** 2026-05-30 (17-05 T4–5 DONE → CHAR-01/02/03 = PASS; Phase 17 char-select verification COMPLETE)
 **Branch:** koogie-msvc-cpp20-base
 **Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` — Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree with `& $env:MSBUILD <worktree>\src\build\win32\swg.sln /t:Direct3d11 /p:Configuration=Debug /p:Platform=Win32 /m /nodeReuse:false`. The worktree `stage` is a **junction → main stage**, so the postbuild copy auto-deploys `gl11_d.dll` to `D:\Code\swg-client-v2\stage` (no manual copy; see memory `project_d3d11_worktree_stage_junction`).
 **Status:** 17-01..17-04 done · 17-05 T1–3 PARKED · 17-06a/06b done · 17-07/GAP-3 DONE (9/9 binds) · GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE `e1db7bf65` · **GAP-6 (bump sleeves/hands) FIXED+COMMITTED `a0d5ac80f` (pushed to origin)** → char-select asset-PS renders LIT+textured for ALL parts (face/skin, tunic, pants, shoes, AND bump sleeves/hands). · 17-05 T4–5 (A/B + verdict) still pending.
 
-> ## ▶ RESUME HERE (2026-05-30) → 17-05 Tasks 4–5 (D3D9 baseline A/B + author 17-VERIFICATION.md)
+> ## ▶ PHASE 17 char-select VERIFICATION COMPLETE (2026-05-30) — CHAR-01/02/03 = PASS
 >
-> **GAP-6 / bump arms are DONE** (`a0d5ac80f`). Char-select renders fully correct. The multi-stream
-> TEXCOORD theory below was SUPERSEDED — see the resolution note. Next is the phase verification:
+> **17-05 T4–5 DONE** (commit `bb4b13a00`). Matched-pair A/B captured on Kenny's host: D3D9
+> `screenShot0029` (rasterMajor=5 Release stack) vs D3D11 `screenShot0030` (rasterMajor=11) →
+> near-identical lit+textured char-select; only residual is a minor brightness/tone delta tracked
+> under **GAMMA-01 (Phase 19)**, out of CHAR scope. POST-gap metric set: `asset-PS bound=`**9**,
+> `COMPATIBLE`**9** / `INCOMPATIBLE`**0**, `id=342`=0, `PSRC recompile FAILED`=0 (asset-PS lane
+> delivering — the primary char-select visual driver). Verifier-produced `17-VERIFICATION.md`
+> supersedes the synthesized stand-in (`a20e828d8`); 4 evidence PNGs committed (D3D9 + preGap +
+> postGap + canonical alias); evidence/README.md §6 provenance corrected to the GAP-6 build.
 >
-> **17-05 T4–5:** capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack — see "D3D9 capture
+> **GAP-1 closed.** No remaining char-select work. Possible next steps: push `bb4b13a00` to origin;
+> run `/gsd:verify-work 17` for the formal pass; close/audit the phase; or advance to the next
+> ROADMAP phase. NOTE: the 17-05-PLAN Task-5 acceptance criteria literally greps
+> `authored_by: claude-opus-4.7` — the doc honestly records `claude-opus-4.8` (the real author), so
+> that one stale literal-string gate will mismatch; the field's provenance intent is satisfied.
+>
+> _(Superseded resume blocks below — kept for the root-cause derivation history.)_
+>
+> ### Earlier resume: 17-05 Tasks 4–5 (now DONE)
+> capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack — see "D3D9 capture
 > workaround" below) + author `17-VERIFICATION.md`. Expect CHAR-01/02/03 PASS on pipeline/lighting and ALL
 > body parts now (bump parts included). Append the POST-gap build provenance (HEAD `a0d5ac80f` + gl11_d.dll
 > mtime) to evidence/README.md §6 before the A/B.
