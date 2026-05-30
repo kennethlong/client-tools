@@ -1,0 +1,157 @@
+**Verdict**
+
+Use the D3D11 `viewportData` cbuffer constant at `Direct3d11_StateCache.cpp:setViewport`, specifically the c9 `.z/.w` offset terms.
+
+Recommended correction:
+
+```cpp
+viewportData.z = -1.0f - xOffset + (1.0f / width);
+viewportData.w =  1.0f + yOffset - (1.0f / height);
+```
+
+That is: **X: `+1/w` into `.z`**, **Y: `-1/h` into `.w`**.
+
+Do this only in the D3D11 renderer. Do not touch D3D9.
+
+**1. Sign**
+
+Your derived sign is correct.
+
+Current D3D11 mapping:
+
+```text
+ndc.x = pixel.x * (2/w)  + z
+ndc.y = pixel.y * (-2/h) + w
+```
+
+For the baked D3D9-style UI vertex:
+
+```text
+pixel.x = -0.5
+pixel.y = -0.5
+```
+
+Current D3D11 gives:
+
+```text
+x = -0.5 * 2/w + (-1) = -1 - 1/w
+y = -0.5 * -2/h + ( 1) =  1 + 1/h
+```
+
+But in D3D11 center-sampling, the top-left pixel center convention wants this geometry to behave as if the logical screen coordinate were `0,0`:
+
+```text
+x should be -1
+y should be  1
+```
+
+Therefore:
+
+```text
+z += 1/w
+w -= 1/h
+```
+
+So yes: **positive X clip offset, negative Y clip offset**.
+
+**2. Magnitude**
+
+The magnitude is exactly **half a pixel expressed in clip/NDC space**, which is:
+
+```text
+0.5 pixel * 2/w = 1/w
+0.5 pixel * 2/h = 1/h
+```
+
+Because the shader constant already stores the screen-to-NDC scale, the correction to the offset term is not `0.5/w`; it is `1/w`.
+
+So the correction is:
+
+```text
+z += 1.0f / width
+w -= 1.0f / height
+```
+
+Not `0.5f / width`.
+
+**3. Site Ranking**
+
+Rank:
+
+1. **c9 `viewportData.z/.w` in `Direct3d11_StateCache.cpp:setViewport`**  
+   Correct central site. It fixes the D3D9-style baked `-0.5` screen-space convention exactly where screen pixels become NDC.
+
+2. **Path A: shader-body bias**  
+   Technically could work, but wrong layer. Higher blast radius, textual HLSL rewrite risk, harder to reason about, and likely to miss or double-apply depending on shader shape.
+
+3. **Path C: passthrough VS substitution**  
+   Too broad and semantically risky. You would be replacing shader behavior to solve what is really a coordinate convention issue.
+
+4. **Path B: CPU-side NDC pre-conversion**  
+   Most invasive. It moves renderer convention logic into vertex stream handling and risks desynchronizing transformed/non-transformed paths.
+
+So: **c9 beats A/B/C**.
+
+**4. Mechanism Judgment**
+
+The stronger mechanism is the **global D3D9 XYZRHW half-pixel convention leaking into D3D11 center-sampling**, not a purely local UV/sampler-edge defect.
+
+Why:
+
+- The captured fullscreen quad has the classic `(-0.5, -0.5)` D3D9 fingerprint.
+- The engine applies `CuiManager::ms_pixelOffset = -0.5f` broadly to UI quads.
+- D3D11 no longer needs that baked D3D9 half-pixel compensation.
+- The seam appears only under D3D11 and across many images.
+- The c9 path is the shared screen-space to clip-space conversion for this renderer.
+
+However, the split-texture UV-edge theory is still a real failure mode. A global c9 fix would be disproven if, after applying it, all 2D UI visibly shifts/sharpens/softens but the center seam remains exactly at the texture join. That would mean the seam is caused by sampling across the right edge of the left texture or left edge of the right texture, not by pixel-center alignment.
+
+If c9 is wrong, the minimal correct fix would be local to the splash split draw: adjust the UVs at the shared edge so each half samples texel centers inside its own texture, or clamp/address the edge correctly so the seam cannot sample outside/against transparent padding. That fix belongs in the D3D11 splash/texture-blit path that emits the two halves, not in the global viewport constant.
+
+But based on the data given, I would implement the c9 correction first.
+
+**5. Resolution Independence**
+
+Yes. The correction must be based on the active viewport dimensions:
+
+```text
+1.0f / width
+1.0f / height
+```
+
+No hardcoded `512`, `1024`, or fixed clip-space constants.
+
+The seam persisting at higher resolution is consistent with a fixed half-pixel convention error. The clip-space value of that correction changes with viewport size.
+
+**6. Regression Risk**
+
+A central c9 edit affects every D3D11 2D XYZRHW draw using that cbuffer. That is intended, but it means you must check:
+
+- HUD element alignment against screen edges
+- font sharpness and baseline stability
+- radial menu center alignment
+- char-select UI placement
+- cursor/tooltips if they use the same transformed path
+- render-to-texture or sub-viewport UI if `setViewport` is called with nonzero `x/y`
+- any path that already compensated for D3D11 locally, because it would become double-corrected
+
+The main failure mode is: some D3D11 2D path has already added its own `+0.5` fix somewhere else. Then the c9 correction would shift that path by a full pixel relative to D3D9. Look specifically for UI that becomes subtly soft, one-pixel displaced, or clipped at the top/left/bottom/right edges.
+
+Also watch split-screen/sub-viewport math. The proposed correction is relative to `width/height`, while the existing `xOffset/yOffset` handles viewport origin. That is correct, but nonzero viewport origins are worth testing.
+
+**7. Dead Stub**
+
+Yes: implementing `getOneToOneUVMapping` at the D3D11 fatal stub would fix nothing visible for this seam if there are truly zero real callers.
+
+If the splash routed through it, D3D11 would fatal instead of rendering with a seam. Since it renders, this is not the active path. Leave it stubbed unless a separate caller is found later.
+
+**Final Recommendation**
+
+Make one D3D11-only central edit in `Direct3d11_StateCache.cpp:setViewport`:
+
+```text
+viewportData.z += 1.0f / width
+viewportData.w -= 1.0f / height
+```
+
+Mechanism judgment: **global D3D9 XYZRHW half-pixel convention mismatch is more likely than a UV/sampler-edge-only split texture artifact**. The key validation is whether the seam disappears without causing a global half-pixel UI regression.

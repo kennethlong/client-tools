@@ -11,7 +11,7 @@ This milestone closes the remaining visual gap between the D3D11 (gl11_d.dll) an
 
 The critical reframe for implementation is that every .psh asset already carries the original shader source text (TAG_PSRC), which the engine loads and then discards at ShaderImplementation.cpp:2904. The correct fix is NOT decompiling bytecode, NOT a runtime D3D9-asm interpreter, and NOT per-asset hand-authored replacements. It is: load the discarded PSRC chunk and recompile it via the existing Phase-11 VS-compile toolchain (D3DCompile + Direct3d11_HlslRewrite + .cso ShaderCache + D3DReflect). PSRC is either HLSL (recompile to ps_4_0 via lane b) or D3D9 assembly (generate equivalent HLSL from the pass TextureOperation stage model via lane d). Both lanes emit DXBC through the same compilePixelShaderFromHlsl machinery that already exists in Direct3d11_PixelShaderProgramData.cpp. The HLSL:ASM ratio across the live .psh population is the single open measurement that governs how much of the milestone is lane b vs lane d — a D3DReflect census tool is the mandatory first task.
 
-Two gaps are architecturally independent of the PS-pipeline blocker and can land in any order: the load-screen half-texel seam (D3D9 vertex data bakes in -0.5; the D3D11 path must add +0.5 via the getOneToOneUVMapping stub at Direct3d11.cpp:995) and the gamma LUT post-pass (the setBrightnessContrastGamma_impl no-op at Direct3d11.cpp:253; replicate D3D9 pow() ramp as a fullscreen pass — do NOT flip to sRGB views, which double-corrects). The seam fix is a safe early canary; gamma must come after PS-pipeline so the corrected image is shaded correctly before the LUT is calibrated.
+Two gaps are architecturally independent of the PS-pipeline blocker and can land in any order: the load-screen half-texel seam (D3D9 vertex data bakes in -0.5 via the live constant CuiManager::ms_pixelOffset = -0.5f; the D3D11 fix is a central correction to the c9 viewportData XYZRHW->NDC convention in Direct3d11_StateCache.cpp:1593-1602, sign/magnitude consult-gated per Phase 18 D-01 — NOT the dead getOneToOneUVMapping scaffold_fatal_stub at Direct3d11.cpp:1056, which has zero callers and must not be implemented) and the gamma LUT post-pass (the setBrightnessContrastGamma_impl no-op at Direct3d11.cpp:253; replicate D3D9 pow() ramp as a fullscreen pass — do NOT flip to sRGB views, which double-corrects). The seam fix is a safe early canary; gamma must come after PS-pipeline so the corrected image is shaded correctly before the LUT is calibrated.
 
 ---
 
@@ -46,7 +46,7 @@ The features are visual behaviors that already exist under D3D9 and must be repl
 - World/terrain textured surfaces + detail-blend multi-stage — same generator, broader TextureOperation coverage.
 - Minimap round disc — circular alpha-mask in uicanvas_radar.sht; gates on multi-stage PS; MUST be screenshot-diff verified (Iter-44B falsely pre-claimed).
 - Gamma/tone LUT post-pass — independent of PS pipeline; fixes cream-washed sky; schedule after PS so a correctly-shaded image is calibrated.
-- Load-screen half-texel seam — independent 2D canary; getOneToOneUVMapping stub at Direct3d11.cpp:995; best early win.
+- Load-screen half-texel seam — independent 2D canary; central c9 viewportData fix in Direct3d11_StateCache.cpp:1593-1602 (sign consult-gated, Phase 18 D-01); NOT the dead getOneToOneUVMapping stub at Direct3d11.cpp:1056; best early win.
 - FFP lighting / material-source parity — fixes blown-out flat-white interiors once the PS lighting cbuffer constants are wired.
 
 **Should have — post-baseline (P3):**
@@ -76,7 +76,7 @@ All new work plugs into the existing gl11_d.dll plugin at named, already-present
 2. Direct3d11_StaticShaderData.cpp ::apply (MODIFY) — add deferred per-pass constant uploads: material (VSCR_material c11-c15), textureFactor x2 (c44/c45), textureScroll (c47), alpha-test ref, stencil ref; mirror Direct3d9_StaticShaderData::Pass::apply:820-966. Pass per-stage TextureOperation + coord-set through to the PS generator. Add stencil state mapping into DSS.
 3. ShaderImplementation.cpp:2900-2901 (ENGINE EDIT, gated) — change the PSRC load to KEEP the source text (mirror how m_text is kept for VS at :2155-2159). Gate behind D3D9-ignore so the working reference path is unaffected.
 4. Direct3d11.cpp:253 setBrightnessContrastGamma_impl + new LUT-pass module (NEW) — wire the no-op stub; add a fullscreen LUT post-pass in the present path using the D3D9 pow() formula.
-5. Direct3d11.cpp:995 getOneToOneUVMapping stub (MODIFY) — implement the +0.5 half-pixel correction for the 2D/screen-space transformed-vertex path.
+5. Direct3d11_StateCache.cpp:1593-1602 c9 viewportData (MODIFY) — fold the central half-pixel correction into the .z/.w offset terms of the screen-space->NDC convention; sign/magnitude consult-gated per Phase 18 D-01. The getOneToOneUVMapping stub at Direct3d11.cpp:1056 is a DEAD scaffold_fatal_stub with zero callers — do NOT implement it.
 6. Direct3d11_ConstantBuffer.h (MODIFY as needed) — extend Direct3d11_PerMaterialCB / add stage-params struct if the 4 userConstants[4] slots are insufficient.
 
 **Key integration invariants that must not break:**
@@ -125,7 +125,7 @@ All phases continue from Phase 16 (v2.1 Decruft). v2.2 starts at Phase 17.
 
 **Rationale:** Architecturally independent of Phase 17. Zero dependency on the PS pipeline. A small, isolated, deterministic win that exercises the 2D screen-space vertex/UV path. Best scheduled in parallel with Phase 17 or immediately after.
 
-**Delivers:** Centerline seam eliminated on all D3D11 load screens. getOneToOneUVMapping stub at Direct3d11.cpp:995 implemented. Half-pixel convention fixed once at viewportData (c9) in Direct3d11_StateCache.cpp:1504-1511 or at screen-space vertex emit.
+**Delivers:** Centerline seam eliminated on all D3D11 load screens. Half-pixel convention fixed once centrally at the c9 viewportData .z/.w offset terms in Direct3d11_StateCache.cpp:1593-1602 (sign/magnitude consult-gated, Phase 18 D-01). The getOneToOneUVMapping stub at Direct3d11.cpp:1056 is a DEAD scaffold_fatal_stub (zero callers) and is explicitly NOT implemented.
 
 **Addresses:** Load-screen fullscreen blit (P2).
 
@@ -202,7 +202,7 @@ Phases needing deeper research during planning:
 - **Phase 22:** Single-stream-skinning-fix vs multi-stream-flip decision; settled re-capture findings.
 
 Phases with standard patterns (skip research):
-- **Phase 18:** D3D9 to D3D10+ half-pixel offset is well-documented; getOneToOneUVMapping stub location is known.
+- **Phase 18:** D3D9 to D3D10+ half-pixel offset is well-documented; the central fix is the c9 viewportData convention in Direct3d11_StateCache.cpp:1593-1602 (sign consult-gated, Phase 18 D-01) — NOT the dead getOneToOneUVMapping stub at Direct3d11.cpp:1056.
 - **Phase 23:** Mirrors Phase 10 DPVS methodology; no new patterns needed.
 
 ---
@@ -233,7 +233,7 @@ Phases with standard patterns (skip research):
 
 ### Primary (HIGH confidence)
 
-- Live source tree: ShaderImplementation.cpp:2895-2911 (PSRC discarded / PEXE kept); ShaderImplementation.h:498-526 (26-op TextureOperation enum); Direct3d11_PixelShaderProgramData.cpp:716-756 (divergence ctor), :339-513 (generator), :605-623 (magenta fallback), :86-261 (compilePixelShaderFromHlsl); Direct3d11_StaticShaderData.cpp:587 (apply), :820-966 (D3D9 Pass::apply parity reference); Direct3d11.cpp:253 (gamma no-op), :995 (UV-mapping stub); Direct3d11_StateCache.cpp:1029 (applyPreDrawState), :1107-1123 (PS-bind chain); Direct3d11_ConstantBuffer.h; Direct3d9_VertexShaderConstantRegisters.h / Direct3d9_PixelShaderConstantRegisters.h; ShaderBuilder PixelShaderProgramView.cpp:172,308 (PSRC is asm or HLSL); Node.cpp:5843-5849 (PSRC+PEXE both written to asset).
+- Live source tree: ShaderImplementation.cpp:2895-2911 (PSRC discarded / PEXE kept); ShaderImplementation.h:498-526 (26-op TextureOperation enum); Direct3d11_PixelShaderProgramData.cpp:716-756 (divergence ctor), :339-513 (generator), :605-623 (magenta fallback), :86-261 (compilePixelShaderFromHlsl); Direct3d11_StaticShaderData.cpp:587 (apply), :820-966 (D3D9 Pass::apply parity reference); Direct3d11.cpp:253 (gamma no-op), :1056 (dead getOneToOneUVMapping scaffold_fatal_stub, zero callers); Direct3d11_StateCache.cpp:1029 (applyPreDrawState), :1107-1123 (PS-bind chain); Direct3d11_ConstantBuffer.h; Direct3d9_VertexShaderConstantRegisters.h / Direct3d9_PixelShaderConstantRegisters.h; ShaderBuilder PixelShaderProgramView.cpp:172,308 (PSRC is asm or HLSL); Node.cpp:5843-5849 (PSRC+PEXE both written to asset).
 - Phase 11 artifacts: 11-SUMMARY.md; 11-09.15-CODEX-CONSULT-iter44-pipeline-deepdive.md (+ RESPONSES); 11-07-LEARNINGS.md.
 - docs/research/phase12-baseline/COMPARISON.md — authoritative 5-bucket gap catalogue with matched D3D9/D3D11 image evidence.
 - Project memory records: d3d11_cbuffer_transpose_quirk, d3d11_baked_rt_bgra_format, d3d9_compare_table_swap, project_phase11_close_pass_with_deferrals, project_phase11_minimap_never_round, project_phase12_visual_baseline, project_d3d11_collide_use_after_free, project_rastermajor_values.
