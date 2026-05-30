@@ -9,9 +9,9 @@
 
 ### Character Rendering — char-select beachhead (first vertical slice)
 
-- [ ] **CHAR-01**: On the character-select screen, character skin & clothing render with correct diffuse textures under D3D11 (matches D3D9) — not untextured, flat-white, or magenta.
-- [ ] **CHAR-02**: Character eyes render correctly under D3D11 — correct customization-palette color, seated in the face, not gray and not visible through the back of the head.
-- [ ] **CHAR-03**: Character head/face multi-stage materials (e.g. `sul_*_head.sht`) composite their texture stages correctly under D3D11.
+- [x] **CHAR-01**: On the character-select screen, character skin & clothing render with correct diffuse textures under D3D11 (matches D3D9) — not untextured, flat-white, or magenta.
+- [x] **CHAR-02**: Character eyes render correctly under D3D11 — correct customization-palette color, seated in the face, not gray and not visible through the back of the head.
+- [x] **CHAR-03**: Character head/face multi-stage materials (e.g. `sul_*_head.sht`) composite their texture stages correctly under D3D11.
 
 ### World Surface Rendering — open world
 
@@ -67,9 +67,9 @@ Explicitly excluded for v2.2. Documented to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAR-01 | Phase 17 | Pending |
-| CHAR-02 | Phase 17 | Pending |
-| CHAR-03 | Phase 17 | Pending |
+| CHAR-01 | Phase 17 | Complete |
+| CHAR-02 | Phase 17 | Complete |
+| CHAR-03 | Phase 17 | Complete |
 | WORLD-01 | Phase 20 | Pending |
 | WORLD-02 | Phase 20 | Pending |
 | WORLD-03 | Phase 19 | Pending |

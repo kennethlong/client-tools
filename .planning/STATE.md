@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
-status: executing
+status: ready_to_plan
 last_updated: "2026-05-29T22:46:53.967Z"
-last_activity: "2026-05-29 -- 17-07 GAP-3 CLOSED (commits f9e5ac569→d8cc1ca99): VS-signature-RECONSTRUCTION rewriter (axis-b reorder proved wrong — mismatch was a register-BASE offset, VS reserves o0=SV_Position) → 9/9 asset-PS binds path=rewritten. Enabling the lane revealed GAP-4: black silhouette from unfed b0 lighting constants."
+last_activity: "2026-05-30 -- Phase 17 COMPLETE + VERIFIED. GAP-3/4/5/6 all closed → char-select renders LIT+textured for ALL parts. 17-05 T4-5 done (commit bb4b13a00): matched A/B (D3D9 screenShot0029 vs D3D11 0030), CHAR-01/02/03 = PASS (asset-PS lane, 9/9 binds). UAT 3/3 pass; security 28/28 threats closed (17-SECURITY.md). Phase advanced 17→18. Pushed to origin."
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
   completed_plans: 7
-  percent: 88
+  percent: 14
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
 
 **Core value:** Every change must leave the client bootable to character select — and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
-**Current focus:** Phase 17 — psrc-census-char-select-beachhead
+**Current focus:** Phase 18 — load-screen-half-texel-seam (UI-01)
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -53,11 +53,11 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 17 (psrc-census-char-select-beachhead) — EXECUTING (gap-closure, inline)
-Plan: 7 of 8 complete — 17-07 DONE (GAP-3 closed, asset-PS bind 0/9→9/9); GAP-4 (black) blocks visual parity; 17-05 T4–5 next
-Status: GAP-4 cross-AI consult IN FLIGHT (.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile{,-codex,-cursor}.out). Asset-PS lane delivers 9/9 binds but renders BLACK — b0(asset SwgVertexConstants)↔b2(engine PerMaterialCB) cbuffer layout mismatch + unwired c-register push; depends on TRE .inc extraction (census gate). D-06 rasterMajor=5 re-boot still PENDING (gl11-only change, D3D9 byte-for-byte).
-Resume: read consult outputs → design GAP-4 plan → then 17-05 T4–5 verdict CHAR-01/02/03 = PARTIAL (asset-PS active, black pending GAP-4). gl11_d.dll = HEAD d8cc1ca99 (5/29 17:23). See handoff + project_17_07_ps_register_base_offset memory.
-Last activity: 2026-05-29 -- 17-07 GAP-3 CLOSED (commits f9e5ac569→d8cc1ca99): VS-signature-RECONSTRUCTION rewriter (axis-b reorder proved wrong — mismatch was a register-BASE offset, VS reserves o0=SV_Position) → 9/9 asset-PS binds path=rewritten. Enabling the lane revealed GAP-4: black silhouette from unfed b0 lighting constants.
+Phase: 18
+Plan: Not started
+Status: Ready to plan
+Resume: None — Phase 17 complete + verified + secured. Ready to plan Phase 18 (load-screen half-texel seam, UI-01 — `getOneToOneUVMapping` stub; independent of the PS pipeline). gl11_d.dll = HEAD a0d5ac80f (5/30 13:24). See memory project_phase17_charselect_d3d11_parity_verified.
+Last activity: 2026-05-30
 
 ## Accumulated Context
 
