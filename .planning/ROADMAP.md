@@ -185,7 +185,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 15. XPCOM Removal + Gate | v2.1 | 4/4 | Complete | 2026-05-27 |
 | 16. v2.1 Tech-Debt Cleanup | v2.1 | 3/3 | Complete | 2026-05-27 |
 | 17. PSRC Census + Char-Select Beachhead | v2.2 | 7/9 | Complete    | 2026-05-30 |
-| 18. Load-Screen Half-Texel Seam | v2.2 | 0/TBD | Not started | - |
+| 18. Load-Screen Half-Texel Seam | v2.2 | 1/3 | In Progress|  |
 | 19. Gamma LUT + Interior Lighting | v2.2 | 0/TBD | Not started | - |
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
 | 21. Particles & Ribbon Effects | v2.2 | 0/TBD | Not started | - |
