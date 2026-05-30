@@ -17,8 +17,25 @@
 | `spotB_exterior_d3d9_0011.jpg`  | D3D9  | B — outside cantina door | 0011 | exact | ground-truth exterior |
 | `spotC_exterior_d3d11_0014.jpg` | D3D11 | C — Mos Eisley street | 0014 | exact* | "kitchen-sink" messy frame |
 | `spotC_exterior_d3d9_0015.jpg`  | D3D9  | C — Mos Eisley street | 0015 | exact | ground-truth exterior |
-| `loadscreen_tatooine_centerline_seam_d3d11_0012.jpg` | D3D11 | load screen | 0012 | — | **centerline seam artifact** |
+| `loadscreen_tatooine_centerline_seam_d3d11_0012.jpg` | D3D11 | load screen | 0012 | — | **centerline seam artifact** (BEFORE — pre-Phase-18 reference, leave intact) |
 | `loadscreen_tatooine_d3d9_noseam_0016.jpg` | D3D9 | load screen | 0016 | corrob. | no seam (different splash variant; seam is blit-path-level, not image-specific) |
+
+### Phase 18 captures (post-c9-fix, 2026-05-30) — ‹PENDING CAPTURE›
+
+| File | Renderer | Spot / Route | Shot | Match | Notes |
+|------|----------|--------------|------|-------|-------|
+| `loadscreen_tatooine_d3d11_seamfixed_‹id›.jpg` | D3D11 | Route 1 — Tatooine world load (PRIMARY) | ‹id› | exact | AFTER — seam gone (pairs with the d3d9 below + the 0012 BEFORE) |
+| `loadscreen_tatooine_d3d9_‹id›.jpg` | D3D9 | Route 1 — Tatooine world load | ‹id› | exact | reference, no seam |
+| `loadscreen_‹route2›_d3d11_seamfixed_‹id›.jpg` | D3D11 | Route 2 — ‹Naboo / 2nd planet› world load | ‹id› | exact | AFTER — seam gone |
+| `loadscreen_‹route2›_d3d9_‹id›.jpg` | D3D9 | Route 2 — ‹Naboo / 2nd planet› world load | ‹id› | exact | reference |
+| `loadscreen_‹route3›_d3d11_seamfixed_‹id›.jpg` | D3D11 | Route 3 — ‹3rd planet / space zone› world load | ‹id› | exact | AFTER — seam gone |
+| `loadscreen_‹route3›_d3d9_‹id›.jpg` | D3D9 | Route 3 — ‹3rd planet / space zone› world load | ‹id› | exact | reference |
+| `loadscreen_‹route›_d3d11_seamfixed_1440p_‹id›.jpg` | D3D11 | higher-res world load — **‹2560×1440 or recorded fallback›** | ‹id› | — | resolution-independence: seam still gone at higher res |
+| `‹oddwidth_or_rt›_d3d11_‹id›.jpg` | D3D11 | non-default viewport / odd width — ‹describe› | ‹id› | — | seam-suspect edge case (odd width / scaled RT) |
+| `‹oddwidth_or_rt›_d3d9_‹id›.jpg` | D3D9 | non-default viewport / odd width — ‹describe› | ‹id› | — | reference |
+| `hud_‹surface›_d3d9_postphase18_‹id›.jpg` | D3D9 | D-04 re-capture — known HUD surface | ‹id› | vs baseline | evidences rasterMajor=5 byte-for-byte unregressed |
+
+*(If a route was unreachable and a forced-image substitution was used instead, record which substitution + why here so the evidence is reproducible.)*
 
 ---
 
@@ -58,3 +75,46 @@ This is a **2D fullscreen image** — no 3D geometry, skinning, or lighting invo
 1. **Asset PS pipeline** (bucket 1) — unblocks textures + magenta + likely lighting (bucket 2) and minimap (bucket 4) at once.
 2. **Loading-screen seam** (bucket 5) — small isolated half-texel fix; good standalone win / sampling-path canary.
 3. **Exterior geometry distortion** (bucket 3) — investigate whether static meshes distort too, beyond the now-fixed skeletal single-stream path.
+
+---
+
+## Phase 18 — Load-screen centerline seam FIXED (UI-01) — ‹PENDING FINAL CAPTURE/VERDICT›
+
+**Fixed:** 2026-05-30 (branch `koogie-msvc-cpp20-base`)
+**Fix:** central single-site half-pixel correction folded into the c9 `viewportData` `.z`/`.w` offset terms in `Direct3d11_StateCache.cpp:setViewport` (`.z += 1.0f/width`, `.w -= 1.0f/height`), resolution-independent. Confirmed by the unanimous D-01 CODEX+Cursor consult (`.planning/research/CONSULT-18-half-texel-seam-SYNTHESIS.md`). Root cause: the engine bakes `CuiManager::ms_pixelOffset = -0.5f` into every 2D XYZRHW vertex (fingerprint `(-0.5,-0.5)…(1023.5,767.5)`), which aligned under D3D9's pre-D3D10 `-0.5` texel rule but misaligned under D3D11 center-sampling. gl11-only; D3D9 path untouched (D-04). `getOneToOneUVMapping` stays a dead `scaffold_fatal_stub` (D-01).
+
+### Result (UI-01)
+- **Seam GONE** under `rasterMajor=11` on the world load screen — confirmed in-client 2026-05-30 (18-02 wrong-sign detector: seam gone, character renders correctly). ‹confirm across all routes below›
+- **Mechanism = global XYZRHW position bias** (consult judgment); the split-texture join was only a *visibility amplifier*. The c9 correction removed it, so the named UV/sampler-edge fallback was NOT needed.
+
+### Image-independence (≥3 deterministic routes)
+| Route | Splash | D3D11 (AFTER) seam? | Matches D3D9? |
+|-------|--------|---------------------|---------------|
+| 1 — Tatooine (primary) | ‹variant› | ‹GONE / present› | ‹yes/no› |
+| 2 — ‹Naboo / 2nd planet› | ‹variant› | ‹GONE / present› | ‹yes/no› |
+| 3 — ‹3rd planet / space› | ‹variant› | ‹GONE / present› | ‹yes/no› |
+
+### Resolution-independence
+- Higher-res capture at **‹2560×1440 or recorded fallback, exact W×H›** (default capture res: ‹1920×1080›): seam ‹GONE / present›. The fix is `1/w`,`1/h` in NDC, so it tracks viewport size — consistent with the seam having persisted at higher res before the fix.
+
+### Edge case (odd width / non-default viewport / scaled RT)
+- ‹describe surface + width›: seam ‹GONE / present›; alignment ‹OK / shifted›.
+
+### Full-2D no-regression sweep (D-03) — D3D11 vs D3D9, zoom-crop / pixel-aligned on thin text + radial edges
+A central c9 edit drives ALL 2D XYZRHW draws, so "splash fixed but HUD blurry" would be a FAIL. Per-surface:
+
+| Surface | Method | Result (no shift/blur vs D3D9?) |
+|---------|--------|----------------------------------|
+| HUD (element edges vs screen borders) | zoom-crop / pixel diff | ‹PASS / FAIL — detail› |
+| Fonts / in-game text (thin glyph crispness, baseline) | zoom-crop / pixel diff | ‹PASS / FAIL — detail› |
+| Radial menu (center alignment, no oval distortion) | zoom-crop / pixel diff | ‹PASS / FAIL — detail› |
+| Char-select 2D | zoom-crop / pixel diff | ‹PASS / FAIL — detail› |
+| Scissored subregion (inventory/nested viewport) | zoom-crop / pixel diff | ‹PASS / FAIL — detail› |
+
+Reviewer-flagged risks to watch (from the 18-01 synthesis): double-correction (some path already added a local +0.5 → ~1px shift), wrong-magnitude (would leave seam attenuated), sub-viewport origin bleed.
+
+### D3D9 byte-for-byte unregressed (D-04) — evidenced, not asserted
+- Post-18-02 `rasterMajor=5` re-capture of ‹HUD surface› vs its pre-Phase-18 look: ‹identical / differs›. (Structurally guaranteed — no `…/Direct3d9/…` file was modified — but evidenced here per D-04.)
+
+### Verdict (UI-01 human A/B gate)
+‹PENDING — "approved" = seam gone with no 2D regression, phase closes. On FAIL: note wrong-SIGN (flip bias) vs wrong-MECHANISM (pursue the named UV/sampler-edge or non-c9 central-site fallback) → 18-02 sent back.›
