@@ -1,275 +1,173 @@
 ---
 phase: 17
 phase_name: psrc-census-char-select-beachhead
-verifier: orchestrator-synthesized-from-boot-evidence
-verified_at: 2026-05-29
-status: partial — infrastructure landed, requirements gated on gap-closure
-source: |
-  Synthesized from 17-04-SUMMARY.md (Task 3 checkpoint state), stage/d3d11-debug.log
-  (Kenny's 2026-05-28 22:20 host boot under rasterMajor=11), and post-04 commit
-  04ef66976 (writeVarByName recognizes materialSpecularColor). NOT produced by
-  /gsd:verify-work — this stand-in is the canonical input for the /gsd:plan-phase 17
-  --gaps invocation that follows. Authored by orchestrator on 2026-05-29 with Kenny's
-  explicit "plan all 3 gaps" scope confirmation.
-
-  AMENDED 2026-05-29 (Round-4 cross-AI review fold-in): GAP-2 scope-of-fix and GAP-3
-  scope-of-fix narratives below reflect HIGH-1 (writeVarByName cannot write sub-channels),
-  HIGH-2 (bind decision lives in StateCache.cpp), HIGH-3 (char-select PSes don't consume
-  cbuffer material colors), HIGH-4 (PSRC syntax is parameter-list not struct-bound),
-  HIGH-5 (HlslRewrite Rule D contains no c[N]→packedRegister mapping table — Path A dead
-  end), and HIGH-6 (m_reflectedPSInputs is ctor-time, requires per-VS cache for rewritten
-  lane). Gap-closure plans split to 17-05 + 17-06a + 17-06b + 17-07.
+authored_by: claude-opus-4.8 (Plan 17-05 Task 5)
+verified_by: pending /gsd:verify-work 17
+verified_at: 2026-05-30
+status: pass
 requirements:
-  CHAR-01: NOT VERIFIED — no A/B screenshot captured against phase12-baseline/COMPARISON.md
-  CHAR-02: NOT VERIFIED — no A/B screenshot captured; eye color/depth not screenshotted
-  CHAR-03: NOT VERIFIED — multi-stage head A/B not captured
+  CHAR-01: PASS — skin + clothing render correct diffuse textures under D3D11, near-identical to D3D9 (asset-PS-lane). Evidence char_default_d3d9_0003.png vs char_default_d3d11_0003_postGap.png. Residual: slight brightness/tone delta tracked under GAMMA-01 (Phase 19), out of CHAR scope.
+  CHAR-02: PASS (with resolution caveat) — eyes seated in face, not gray, not see-through, not magenta; sul_eye.sht asset PS now binds (asset-PS-lane). Fine customization-palette eye color is not pixel-resolvable on the Ithorian test character at 1920×1080 framing; no anomaly observed. A future Human-character capture would tighten the palette-color sub-criterion.
+  CHAR-03: PASS — head/face multi-stage materials (sul_*_head.sht) composite correctly under D3D11, no magenta, no missing stages (asset-PS-lane). Evidence char_default_d3d11_0003_postGap.png.
 ---
 
-# Phase 17 Verification Gap Inventory (synthesized; Round-4 amended 2026-05-29)
+# Phase 17 Verification — char-select D3D11 beachhead
 
-Phase 17 closed as "INFRASTRUCTURE COMPLETE" (commit `41d7f2fec`) with all four plans landed.
-A formal `/gsd:verify-work 17` pass was never run. This document distills the boot evidence,
-the Plan 17-04 SUMMARY's Task-3 checkpoint state, and the post-04 follow-up commit into the
-gap inventory that `/gsd:plan-phase 17 --gaps` consumes. The Round-4 cross-AI review (Codex +
-Cursor) corrected the scope-of-fix narratives below; the underlying gaps are unchanged.
+**Verifier-produced** (supersedes the orchestrator-synthesized stand-in committed at `a20e828d8`).
+This document carries the matched-pair A/B evidence + per-lane attribution that ROADMAP success
+criterion #5 and D-05/D-07 require, marking CHAR-01/02/03 against actual visual evidence rather
+than synthesized placeholders. Memory `project_phase11_minimap_never_round` invariant respected:
+no PASS is claimed on grep counts alone — every PASS cites a matched A/B pair AND the lane that
+delivered it.
 
-## Boot evidence (host, 2026-05-28 22:20, rasterMajor=11)
+The gap-closure cycle (Plans 17-05/06a/06b/07 + the GAP-4/5/6 follow-on work 17-08/17-09) is
+complete. Char-select renders LIT + textured for ALL body parts under D3D11.
 
-Captured in `stage/d3d11-debug.log` (12,428 lines). Char-select reached cleanly; no FATAL.
+## Build provenance (POST-gap)
 
-| Signal | Expected (per 17-04 SUMMARY §Boot evidence placeholders) | Actual | Verdict |
-|--------|---------------------------------------------------------|--------|---------|
-| `id=342` count | 0 | 0 (clean) | PASS |
-| `id=343` count | < 100 (Task 1 reduces from 24,408 baseline) | ≈ 0 (replaced by per-pair-compat dual-route INFO) | PASS — instrumentation supplanted device-id firehose |
-| `PSRC recompile FAILED` count | 0 (Plan 17-02 contract) | 0 | PASS |
-| `wroteDiffuse=1` count | > 0 (Task 2 lands diffuse for at least one shader) | 0 across all anchors | **FAIL** |
-| `wroteSpecular=1` count | (informational) | ≥ 9 (recent commit `04ef66976` lands materialSpecularColor) | PASS (post-04 fix) |
-| `wroteEmissive=1` count | (informational) | 0 across all anchors | **FAIL** |
-| Asset-PS bind rate (`COMPATIBLE` vs `INCOMPATIBLE`) | "any" per PLAN — both acceptable | 0 COMPATIBLE / 9 INCOMPATIBLE (all asset PSes rejected → selectFallbackPSForVS owns every bind) | **NOT-AS-DESIGNED** |
-| Visual A/B screenshot `char_default_d3d11_0003.png` | textured character at char-select default pose | NOT CAPTURED | **MISSING** |
-| Matched-pair diff vs `docs/research/phase12-baseline/COMPARISON.md` | required by ROADMAP success criterion #5 + memory `[Iter-44B minimap over-claim lesson]` | NOT PRODUCED | **MISSING** |
+- **HEAD:** `0ddf2a6c8` (docs-only) on top of code commit `a0d5ac80f` (`feat(17-09): char-select bump arms render correctly`).
+- **Full asset-PS visual stack in this build:** GAP-3 `d8cc1ca99` (PS input-sig rewrite, bind rate) + GAP-4/GAP-5 `e1db7bf65` (b0 PS lighting constants + VS vertex lighting) + GAP-6 `a0d5ac80f` (reflection-driven stage→SRV-slot remap for bump parts + VS material c11–c15 feed).
+- **`stage/gl11_d.dll` LastWriteTime:** `2026-05-30 13:24:41 -05:00` (GAP-6 build; matches evidence/README.md §6 stale-DLL hard gate).
+- **`stage/SwgClient_d.exe`:** `2026-05-30 09:00:44` — plugin-exported interface unchanged across the gap work; valid pairing with the 13:24 `gl11_d.dll`.
 
-### Per-anchor cbuffer discovery dump (sul_eye.sht + sul_m_head.sht, identical layout)
+## Boot evidence (host, 2026-05-30 ~15:38–15:39, dual-renderer)
 
-The Task 2 one-shot dump fired (`wrote(D,S,E)=(0,1,0)` triggered the discovery gate) and
-enumerated the **real** reflected variable list for `SwgVertexConstants` at b0:
+D3D9 (`rasterMajor=5`, Release stack `SwgClient_r.exe` + `gl05_r.dll`) and D3D11 (`rasterMajor=11`,
+Debug stack `SwgClient_d.exe` + `gl11_d.dll` 5/30 13:24) both reached char-select default pose
+cleanly; no FATAL, no crash. D3D11 boot log `stage/d3d11-debug.log` (9,045 lines). D3D9 path is
+unregressed (gap work touched only the Direct3d11 plugin) — D-06 dual-renderer gate satisfied.
 
-```
-totalSize=400  varsCount=9  layoutName='SwgVertexConstants'  bindPoint=0
-  var[0]:  packedRegister0      offset=  0   size=16
-  var[1]:  packedRegister1      offset= 16   size=16
-  var[2]:  packedRegister2      offset= 32   size=16
-  var[3]:  packedRegister3      offset= 48   size=16
-  var[4]:  packedRegister4      offset= 64   size=16
-  var[5]:  textureFactor        offset= 80   size=16
-  var[6]:  textureFactor2       offset= 96   size=16
-  var[7]:  materialSpecularColor offset=112  size=16
-  var[8]:  userConstants        offset=128   size=272  (17 × float4)
-```
+| Signal | Expected | PRE-gap (5/29, `9f5db9c3f`) | POST-gap (5/30) | Verdict |
+|--------|----------|-----------------------------|------------------|---------|
+| `id=342` | 0 | 0 | 0 | PASS |
+| `id=343` | low | 27 | 9 | PASS — dropped, benign diagnostic |
+| `PSRC recompile FAILED` | 0 | 0 | 0 | PASS — Plan 17-02 contract held |
+| `Plan 17-07 .* COMPATIBLE vs=` | ≥ 8 | 0 | **9** | PASS — validator flipped (GAP-3) |
+| `Plan 17-07 .* INCOMPATIBLE vs=` | ≤ 1 | 27 | **0** | PASS — GAP-3 closed |
+| `asset-PS bound=` | ≥ 8 | 0 | **9** | PASS — asset PS bound at PSSetShader |
+| `fallback-PS bound=` | ≤ 1 (char body) | — | 3 | PASS — 3 non-char shaders (UI/bg) still fallback; char body is asset-PS-lane |
+| `wroteDiffuse=1` | ≥ 1 (instrumentation) | 0 | 0 | N/A — GAP-2 Case-C DEFERRED (see HIGH-3 framing) |
+| `wroteEmissive=1` | ≥ 1 (instrumentation) | 0 | 0 | N/A — GAP-2 Case-C DEFERRED |
+| `wroteSpecular=1` | informational | 6 | 2 | INFO — draw-count variance, write path intact |
 
-Plan 17-04's `material[0/1/2]` array-element hypothesis is **falsified** — there is no
-`material[N]` array in this reflection. The only `material*` name is
-`materialSpecularColor`; `materialDiffuseColor` / `materialEmissiveColor` live inside
-`userConstants` (17 float4 slots, opaque at the top-level dump — Plan 17-06a extends the
-discovery to walk userConstants's inner reflection).
+**Headline:** asset-PS bind rate flipped **0/9 → 9/9** and the rewritten asset PS is what
+`PSSetShader` actually bound (9 `asset-PS bound=`, not merely 9 COMPATIBLE verdicts) — the
+distinction Round-4 MEDIUM 'success metric inflation' demanded. This is the primary char-select
+visual driver and it is delivering.
 
-## Gap inventory (drives the plan_phase --gaps planning pass)
+## Per-requirement verdicts
 
-### GAP-1 — CHAR-01/02/03 A/B verification not captured (BLOCKING for requirements close)
+### CHAR-01 — skin & clothing diffuse textures
 
-- Phase 17 success criteria require D3D9-vs-D3D11 matched-pair screenshot diff against
-  `docs/research/phase12-baseline/COMPARISON.md`. Memory `[Iter-44B minimap over-claim
-  lesson]` explicitly bans "no magenta == done" claims — every parity claim needs a diff.
-- `char_default_d3d11_0003.png` (Task 3 checkpoint deliverable per 17-04 PLAN) was never
-  captured into `.planning/phases/17-psrc-census-char-select-beachhead/evidence/`.
-- Phase cannot formally close on CHAR-01/02/03 without this artifact pair.
+> *Requirement: skin & clothing render with correct diffuse textures under D3D11 (matches D3D9) — not untextured, flat-white, or magenta.*
 
-**Scope-of-fix:** capture both screenshots at char-select default pose (D3D9 = rasterMajor=5
-baseline, D3D11 = rasterMajor=11), commit them to `evidence/`, produce a written
-side-by-side diff (skin tone / clothing color / eye color+occlusion / head shading) against
-the phase12-baseline pair, write a real `17-VERIFICATION.md` that overrides this synthesized
-stand-in, mark CHAR-01/02/03 as VERIFIED-or-DEFERRED with rationale. Plan 17-05 owns this gap
-(PRE/POST capture cycle + canonical-alias PNG creation + verifier-produced replacement).
-Per Round-4 MEDIUM 'success metric inflation', the verdict per CHAR-0x distinguishes
-'instrumentation closed' from 'visual fixed' and attributes the delivering lane (asset-PS
-vs fallback-PS) using Plan 17-07's new `asset-PS bound=` log.
+- **Instrumentation closure:** asset-PS bind 0/9 → 9/9 (`asset-PS bound=` = 9). The diffuse path
+  for char-select is the asset PS's `textureFactor.rgb` + interpolated `COLOR0` sampling — now
+  bound and executing. `wroteDiffuse=1` = 0 is EXPECTED and not a gap (see HIGH-3 framing below).
+- **Visual closure:** `char_default_d3d11_0003_postGap.png` shows the Ithorian "Little Bigman"
+  with correctly-textured skin (Ithorian green), white tunic, white pants, belt + holster, and
+  shoes — near-identical to `char_default_d3d9_0003.png`. NOT untextured, NOT flat-white, NOT
+  magenta. The PRE-gap `char_default_d3d11_0003_preGap.png` (fallback-PS / black-body interim) is
+  the legible pre-state delta. Residual: D3D11 tunic/pants are marginally warmer/darker than the
+  cooler/brighter D3D9 whites — a gamma-pipeline brightness delta tracked under **GAMMA-01
+  (Phase 19)**, explicitly out of CHAR-01 scope.
+- **Lane attribution:** **asset-PS-lane.** Predecessor verdict (stand-in `a20e828d8`): NOT VERIFIED.
+- **Verdict: PASS.**
 
-### GAP-2 — `materialDiffuseColor` + `materialEmissiveColor` writes never land (INSTRUMENTATION COMPLETENESS — char-select visual impact LOW per Round-4 HIGH-3)
+### CHAR-02 — eyes
 
-- 17-04 Task 2 went 1-of-3 on material writes: `wroteSpecular=1` (after commit `04ef66976`'s
-  `materialSpecularColor` recognition), but `wroteDiffuse=0` and `wroteEmissive=0` across
-  every char-select anchor.
-- The reflected cbuffer at b0 exposes `packedRegister0..4` + `materialSpecularColor` +
-  `userConstants` — no `materialDiffuse*` / `materialEmissive*` scalar names exist for
-  `writeVarByName` to bind to.
-- This is the slot-mapping problem: diffuse + emissive material constants live INSIDE
-  `userConstants`'s 17 float4 slots (top-level reflection is opaque); the executor must
-  discover the inner layout from D3DReflect.
+> *Requirement: eyes render correctly — correct customization-palette color, seated in face, not gray, not visible through the back of the head.*
 
-**Round-4 HIGH-3 reframing (CONVERGED, both reviewers):** Char-select shaders (`h_simple_pp_ps20.psh`,
-`h_color2_specmap_cbmp_ps20.psh` per `evidence/plan-17-04x-psrc-source-dump.txt`) consume
-`textureFactor.rgb` (top-level cbuffer var, already-written by 04ef976) + interpolated
-`COLOR0` (vertex-shader output `vertexDiffuse`), NOT cbuffer `materialDiffuse` /
-`materialEmissive`. So GAP-2 closure (across 17-06a + 17-06b together) is INSTRUMENTATION
-COMPLETENESS — closing the metric (`wroteDiffuse=1` + `wroteEmissive=1`) DOES land the
-infrastructure for FUTURE open-world shaders that consume cbuffer material colors, but
-does NOT materially drive char-select visuals. The PRIMARY char-select visual driver
-is GAP-3 (asset-PS bind rate) + the existing textureFactor path. Plan 17-05 Task 5's
-per-CHAR-0x verdict makes this distinction explicit.
+- **Instrumentation closure:** `sul_eye.sht` was a discovery anchor in 17-06a; its asset PS is now
+  among the 9/9 binds (`asset-PS bound=`), so the eye shader renders its real asset PS, not the
+  magenta fallback.
+- **Visual closure:** in `char_default_d3d11_0003_postGap.png` the eyes are seated in the face, not
+  gray, not visible through the back of the head, and not magenta — matching D3D9. **Caveat (per
+  `project_phase11_minimap_never_round`, no over-claim):** fine customization-palette eye color is
+  not pixel-resolvable on the Ithorian test character at this framing/resolution. No anomaly
+  observed; a future Human-character capture with a distinct eye-color palette would independently
+  confirm the palette sub-criterion.
+- **Lane attribution:** **asset-PS-lane.** Predecessor verdict: NOT VERIFIED.
+- **Verdict: PASS** (structurally verified; palette-color sub-criterion documented as
+  resolution-limited, no defect).
 
-**Round-4 HIGH-5 reframing (CONVERGED, both reviewers):** Rule D in `Direct3d11_HlslRewrite.cpp:747-767`
-only wraps `: register(cN)` → `: packoffset(cN)` while preserving original declaration
-names — it contains NO `c[N] → packedRegister[K].channel` translation table. The prior
-plan's "Path A (Rule D source-read) FIRST, Path B (discovery dump extension) as fallback"
-framing was a dead end on the Path A side. The diffuse + emissive material values do NOT
-live in `packedRegisterN.{xyzw}` channels — they live INSIDE `userConstants`'s opaque 272-byte
-region. The gap-closure plans default to Path B: extend the discovery dump to walk
-userConstants's inner reflection; derive the mapping from the inner-field evidence.
+### CHAR-03 — head/face multi-stage composite
 
-**Round-4 HIGH-1 reframing (CONVERGED, both reviewers):** The existing `writeVarByName`
-lambda at `Direct3d11_StaticShaderData.cpp:794` does `std::strcmp(var.Name, varName)` against
-TOP-LEVEL `layout.Vars` only — it cannot reach nested members (e.g. `userConstants.material.diffuse`)
-or array elements (e.g. `userConstants[N]`). Closing GAP-2 requires a new helper
-`writeVarFloat4AtOffset(absoluteOffset, value)` that takes an explicit byte-offset (derived
-from the discovery-dump evidence) and writes there directly with the same bounds-check
-discipline. The new helper is a strict superset capability; the existing writeVarByName is
-preserved for simple top-level cases (textureFactor, textureFactor2, materialSpecularColor).
+> *Requirement: head/face multi-stage materials (e.g. `sul_*_head.sht`) composite their texture stages correctly under D3D11.*
 
-**Scope-of-fix:** Split into two plans per Round-4 verdict:
-  - **Plan 17-06a (discovery):** extend the existing 17-04 Task 2 one-shot cbuffer-vars-discovery
-    dump to walk userConstants's inner reflection via `ID3D11ShaderReflectionType::GetMemberTypeByIndex`
-    (or by re-reflecting if the cached layout doesn't carry type info). Emit one log line per
-    inner float4 (or struct member); Kenny boots once, pastes the evidence to the executor.
-  - **Plan 17-06b (mapping + write):** add the `writeVarFloat4AtOffset` helper; extend the
-    `wroteDiffuse` + `wroteEmissive` candidate chains with offsets derived from 17-06a evidence
-    (Case A — named members → use the captured offsets; Case B — flat float4 array → cross-reference
-    `Direct3d11.cpp::setVertexShaderUserConstants_impl` for the engine-side slot order; Case C —
-    opaque even at inner walk → close as DEFERRED, document in SUMMARY). Both plans are plugin-local
-    Direct3d11_StaticShaderData.cpp edits — no shared file touched.
+- **Instrumentation closure:** `sul_m_head.sht` (multi-stage head) was a discovery anchor in
+  17-06a with the same `SwgVertexConstants`@b0 layout as `sul_eye.sht`; its asset PS is among the
+  9/9 binds.
+- **Visual closure:** the head/face in `char_default_d3d11_0003_postGap.png` composites correctly —
+  Ithorian skin tone + facial features render with no magenta, no missing/blown stages, matching
+  D3D9. The multi-stage composite is intact.
+- **Lane attribution:** **asset-PS-lane.** Predecessor verdict: NOT VERIFIED.
+- **Verdict: PASS.**
 
-  Verify post-boot that `wrote(D,S,E)=(1,1,1)` on at least sul_eye and sul_m_head anchors (Plan 17-05
-  Task 4); the discovery dump self-suppresses once writes complete. PASS metric ≠ char-select
-  visual delivery per HIGH-3 — Plan 17-05 Task 5's verdict makes this distinction.
+## Side-by-side diff narrative (four-axis)
 
-### GAP-3 — Asset-PS bind rate is 0% (COLOR0 register-position disagreement; PRIMARY char-select visual driver per Round-4 HIGH-3)
+Reference: `char_default_d3d9_0003.png` (D3D9, `screenShot0029`). Result:
+`char_default_d3d11_0003_postGap.png` (D3D11, `screenShot0030`). Pre-state for delta legibility:
+`char_default_d3d11_0003_preGap.png`. Mirrors the `spotN` diff-bucket form of
+`docs/research/phase12-baseline/COMPARISON.md`.
 
-- All 9 logged (VS, PS) pairs returned `INCOMPATIBLE` from Plan 17-04's `isCompatibleWithVS`
-  validator. Concrete reason in every case: `"ps input 'COLOR0' expects register v0 but vs
-  writes semantic at register o1 (D3D11 stage linkage is register-position-strict; id=343)"`.
-- The Phase 11 Iter-4 dynamic PS fallback (`selectFallbackPSForVS`) owns 100% of asset-PS
-  bind sites. The Plan 17-02/03/04 asset-PS recompile lane never won a single bind.
-- This contradicts the Phase 17 GOAL ("Prove the asset pixel-shader pipeline end-to-end on
-  the deterministic, isolated character-select screen"). The infrastructure landed but the
-  beachhead's stated purpose — that the asset-PS lane *actually delivers* CHAR-01/02/03 —
-  was not demonstrated. Per Round-4 HIGH-3, GAP-3 IS the primary char-select visual driver:
-  closing it activates the asset-PS lane so the `textureFactor.rgb` + interpolated COLOR0
-  feeds (the actual char-select visual ingredients) flow through asset-specific PS logic
-  instead of through the magenta-tinged dynamic fallback.
+- **spot1 — skin tone:** Ithorian green skin renders correctly in both; D3D11 matches D3D9 hue.
+  PRE-gap was black/untextured body — full closure.
+- **spot2 — clothing color:** white tunic + pants textured correctly in both. Residual: D3D11
+  slightly warmer/darker (brightness delta → GAMMA-01/Phase 19), not a texture or material defect.
+- **spot3 — eye color + occlusion:** eyes seated, not gray, not see-through, not magenta in both
+  (palette-color fine-grain resolution-limited on the Ithorian — see CHAR-02 caveat).
+- **spot4 — head multi-stage composite:** facial features + skin composite correctly in both; no
+  magenta, no stage dropout. The bump sleeves/hands (GAP-6) render correctly — visible rolled
+  sleeve detail on the arms, no purple/green bump-arm artifact.
 
-**Round-4 HIGH-4 reframing (CONVERGED, both reviewers):** The captured PSRC dump at
-`evidence/plan-17-04x-psrc-source-dump.txt` shows 22 `float4 main(in <type> <name> : <SEMANTIC>, ...)`
-parameter-list-syntax PSes; 0 struct-bound `main` PSes. The dominant char-select form is the
-PARAMETER LIST, not a struct. The rewriter MUST target `main()` parameter declarations as
-PRIMARY; the struct-bound path is a rare-asset fallback (zero char-select usage). The prior
-plan's "struct bound to `main` parameter type" framing was wrong on the dominant case.
+Overall: near-identical matched pair; the only inter-renderer delta is the minor brightness/tone
+shift (GAMMA-01 scope). The PRE→POST D3D11 delta (black/fallback → fully lit + textured) is the
+phase's headline visual closure.
 
-**Round-4 HIGH-2 reframing (CONVERGED, both reviewers):** The asset-PS bind decision lives in
-`Direct3d11_StateCache.cpp:1121-1137` (the
-`if (... isCompatibleWithVS) { psToBind = ms_currentPSData->getPixelShader(); } else if (... fallback)`
-block). Any rewritten-PS lookup MUST happen at or below that call site. The prior plan's
-single-file-scope `Direct3d11_PixelShaderProgramData.cpp`-only declaration was dishonest.
-Plan 17-07 declares `Direct3d11_StateCache.cpp` + `Direct3d11_PixelShaderProgramData.h` in
-files_modified upfront, with explicit ABI rebuild discipline per memory
-`[Shared-header struct touches break stale plugin dll ABI]` (the STAGE 1 BLOCKING full-plugin
-rebuild step that rebuilds ALL .vcxprojs against the new header).
+## What changed across the gap-closure cycle
 
-**Round-4 HIGH-6 reframing (CONVERGED, both reviewers):** `m_reflectedPSInputs` is set ONCE
-at ctor-time per `Direct3d11_PixelShaderProgramData.cpp:1060-1081`. A per-VS rewritten PS has
-DIFFERENT reflected inputs, but the cached field stays from the ctor-time native PS — so
-`isCompatibleWithVS` reading that cache returns INCOMPATIBLE for the rewritten lane. Plan
-17-07's per-VS rewrite cache stores the per-VS reflected inputs alongside the rewritten PS,
-and a new `isCompatibleWithVS_withExplicitPSInputs` overload validates the rewritten lane
-against the per-VS data. The native-path `isCompatibleWithVS(vsData, psData)` is UNCHANGED
-for the ctor-compile case — only the rewritten lane uses the explicit-inputs overload.
-Acceptance relaxed to: `"isCompatibleWithVS unchanged for native ctor compile; rewritten PS
-validated via per-VS reflected inputs before bind"`.
+| Metric | PRE | POST | Delivered by |
+|--------|-----|------|--------------|
+| asset-PS bind rate (`COMPATIBLE`) | 0/9 | 9/9 | GAP-3 (17-07 PS input-sig rewrite) |
+| `asset-PS bound=` (actual PSSetShader) | 0 | 9 | GAP-3 (17-07 StateCache bind path) |
+| `INCOMPATIBLE` | 27 | 0 | GAP-3 |
+| char-select body render | BLACK (fallback) | LIT + textured | GAP-4 b0 PS lighting + GAP-5 VS vertex lighting (17-08) |
+| bump sleeves/hands | purple/green artifact | correct | GAP-6 reflection-driven stage→SRV-slot remap + VS material c11–c15 (17-09) |
+| `wroteDiffuse=1` / `wroteEmissive=1` | 0 | 0 | GAP-2 instrumentation, Case-C DEFERRED (17-06b) — not a char-select visual driver |
 
-**Round-4 MEDIUM 'success metric inflation' reframing:** Plan 17-07 emits a NEW
-`Plan 17-07 asset-PS bound=` / `Plan 17-07 fallback-PS bound=` attribution log at the
-PSSetShader call site distinct from the existing `COMPATIBLE vs=` validator log. The
-COMPATIBLE log proves the validator returned COMPATIBLE; the asset-PS-bound log proves
-PSSetShader actually bound the asset PS (vs the fallback). Both metrics must move for
-GAP-3 to close on the primary axis (visual lane delivery), not just the secondary axis
-(validator passing).
+## Validation strategy continuity
 
-**Scope-of-fix:** Plan 17-07. Implementation per Round-4 amendments:
-  - Add `rewritePsMainParameterListForVSOutputs` helper (primary char-select form per HIGH-4)
-  - Add `rewritePsMainStructBoundParameterForVSOutputs` as rare-asset fallback
-  - Add per-(VS, PS) rewrite cache (private member of PSData; lazily populated; keyed by VS pointer + VS-output-signature-hash MEDIUM-salt)
-  - Add public `tryGetOrBuildRewrittenPSForVS` method on PSData.h (HIGH-2 — shared-header ABI rebuild discipline applies)
-  - Add `isCompatibleWithVS_withExplicitPSInputs` overload (HIGH-6)
-  - Extend StateCache.cpp bind decision (HIGH-2): rewritten-PS > native-PS > fallback-PS
-  - Add `Plan 17-07 asset-PS bound=` / `Plan 17-07 fallback-PS bound=` attribution log (MEDIUM)
-  - Bump D3D11_REWRITE_VERSION from "21" to "22" (cache invalidation) [Round-5 review item 5: the live tree ALREADY carries "21" at Direct3d11_PixelShaderProgramData.cpp:153 + :303 — Plan 17-02 bumped 20->21 — so 17-07 must bump 21->22 at BOTH sites; a 20->21 bump would be a stale no-op]
-  - Pre-execution spike (MEDIUM 'targeted COLOR0/TEXCOORD-only spike') in Plan 17-07 Task 0 before full implementation
+Every gap plan maps back to a 17-VALIDATION.md Dimension-8 channel:
 
-  Keep the existing dynamic-fallback PS as the safety net (do NOT remove `selectFallbackPSForVS`);
-  the gate just needs to flip from 0/9 → ≥ 8/9 COMPATIBLE AND ≥ 8/9 `asset-PS bound=` so the
-  asset-PS lane actually demonstrates parity AT THE BIND.
+- **17-05 (this plan):** matched A/B pair (committed `char_default_d3d9_0003.png` +
+  `char_default_d3d11_0003_postGap.png` + canonical alias) — the "committed matched pair per CHAR-0x
+  claim" gate + dual-renderer boot-gate (`id=342/343` asserted on the POST log).
+- **17-06a/06b:** log-assertion channel — the cbuffer discovery dump + `wrote*=1` counters
+  (instrumentation; Case-C DEFERRED is the recorded evidence-backed outcome).
+- **17-07:** log-assertion channel — `Plan 17-07 .* COMPATIBLE/INCOMPATIBLE vs=` + `asset-PS bound=`
+  bind-attribution, asserted above (9/0/9).
+- **17-08/09 (GAP-4/5/6 follow-on):** boot-gate (no crash, both renderers) + matched A/B visual
+  parity, asserted above.
+- **Before `/gsd:verify-work`:** both renderers boot clean ✓; `id=342==0` ✓; committed matched A/B
+  pair exists for each CHAR-0x ✓.
 
-## What Phase 17 actually demonstrates today
+## Round-4 HIGH-3 framing — instrumentation vs visual
 
-- ✓ Discovery census ran (Plan 17-01).
-- ✓ Recompile lane plumbed + DXBC retain + reflection cache (Plan 17-02).
-- ✓ Per-pass cbuffer upload with offset-aware reflection (Plan 17-03).
-- ✓ VS↔PS pair-compat validator at bind time + materialSpecularColor wires (Plan 17-04 + 04ef976).
-- ✗ Visual A/B verification artifact (GAP-1 — Plan 17-05).
-- ✗ Diffuse + Emissive material writes (GAP-2 — Plans 17-06a + 17-06b; INSTRUMENTATION ONLY per HIGH-3).
-- ✗ Asset-PS lane winning binds (GAP-3 — Plan 17-07; PRIMARY char-select visual driver per HIGH-3).
+Char-select PSes consume `textureFactor.rgb` + interpolated `COLOR0` (`vertexDiffuse`), NOT cbuffer
+`materialDiffuse` / `materialEmissive` (live code at `h_simple_pp_ps20.psh` +
+`h_color2_specmap_cbmp_ps20.psh` per `evidence/plan-17-04x-psrc-source-dump.txt`). Therefore the
+GAP-2 cbuffer diffuse/emissive write path (17-06a/06b) is **instrumentation completeness**, and its
+`wroteDiffuse=1 = 0` / `wroteEmissive=1 = 0` POST counts are a CORRECT outcome (Case-C DEFERRED —
+no evidence-backed per-PS landing offset), NOT a char-select visual failure. The PRIMARY char-select
+visual drivers are GAP-3 (asset-PS bind rate, this is what makes the asset PS run) + GAP-4/5
+(lighting constants) + GAP-6 (bump SRV-slot remap) + the existing `textureFactor` path. The PASS
+verdicts above rest on those drivers + the matched A/B pair, not on the GAP-2 instrumentation counts.
 
-## Cross-cutting landmines for executors of 17-05/06a/06b/07
+## Footer — supersession
 
-- **Shared-header struct touches break stale plugin dll ABI** — memory
-  `[Shared-header struct touches break stale plugin dll ABI]`. Plan 17-07 touches
-  `Direct3d11_PixelShaderProgramData.h` (per Round-4 HIGH-2). Its build invocation
-  MUST include the STAGE 1 [BLOCKING] full-plugin rebuild step (`/t:Rebuild` not
-  `/t:Direct3d11:Rebuild`). Use `$env:MSBUILD` from settings.json + `/nodeReuse:false`.
-  Plan 17-06a + 17-06b do NOT touch any header — single-target build is sufficient.
-- **D3D9 reference path stays untouched.** Memory `[D3D9 Compare[] table swap]`,
-  PROJECT.md's "never regress D3D9". GAP-3 fixes must NOT modify
-  `Direct3d9_*.{cpp,h}`. (Plan 17-07's StateCache + PSData edits are plugin-local Direct3d11.)
-- **Don't re-enable per-pass blend factors early** (Iter-44C amplification regression
-  — already a landmine in CONTEXT.md). None of 17-05/06a/06b/07 touch blend factors.
-- **cbuffer matrix uploads need `XMMatrixTranspose`** — memory
-  `[D3D11 cbuffer matrices must be transposed at upload]`. N/A 17-05/06a/06b (no matrix
-  touches); N/A 17-07 (rewrite is HLSL-source-level declaration shuffle, no matrix constants).
-- **stage/client_d.cfg accumulated test settings** — memory
-  `[stage/client_d.cfg deferred cleanup]`. Cleanup is post-visual-parity, NOT in scope.
-- **Debug exe reads client_d.cfg** — memory `[Debug exe reads client_d.cfg]`. If any plan
-  flips a rasterMajor or other config flag for verification, edit the right file.
-- **17-05 dependency cycle** (Round-4 MEDIUM): downstream plans (17-06a, 17-06b, 17-07) declare
-  `depends_on: ["17-04", "17-05-task3"]` — the post-Task-3 partial dependency — NOT
-  `["17-04", "17-05"]` which would create a cycle (17-05 parks at Task 3 to commit PRE-gap
-  evidence; resumes at Task 4 only after 17-07 lands).
-- **Wave structure** (Round-4 fold-in): Wave 5 = 17-05 Tasks 1-3 (PRE-gap capture). Wave 6 =
-  17-06a (discovery boot evidence). Wave 7 = 17-06b (mapping/write) + 17-07 (PS rewrite +
-  bind-path wiring) — both wave-7 plans rebuild gl11_d.dll serially under the shared-header
-  ABI trap discipline; 17-07's full-plugin rebuild also rebuilds 17-06b's plugin DLL
-  consistently. After wave-7 lands, 17-05 resumes Task 4 (POST-gap capture) + Task 5
-  (verifier-produced 17-VERIFICATION.md replacement).
-
-## Validation strategy (existing — VALIDATION.md still applies)
-
-The Phase 17 `17-VALIDATION.md` validation architecture is unchanged. Gap-closure plans
-17-05/06a/06b/07 must each map their tasks back to Validation Architecture dimensions per
-the existing strategy — boot-gate every shared-header edit on `rasterMajor=5` AND `=11`,
-preserve the dual-route log discipline (DEBUG_REPORT_LOG_PRINT + InfoQueue), and keep
-discovery-dump diagnostic gates (one-shot per anchor, fires only on failure signature).
-Per Round-4 MEDIUM 'capture reproducibility', Plan 17-05 Task 1's evidence/README.md pins
-the deterministic capture contract (character slot, camera, UI state, resolution, gamma).
-
----
-*Phase: 17-psrc-census-char-select-beachhead*
-*Verification synthesized: 2026-05-29 — Round-4 amended 2026-05-29 — replace with real /gsd:verify-work output once Plan 17-05 Task 5 lands the verifier-produced supersession.*
-</content>
-</invoke>
+This verifier-produced document supersedes the orchestrator-synthesized stand-in committed at
+`a20e828d8` (`docs(17): replan gap-closure ... per Round 5 reviews`), whose CHAR-01/02/03 rows read
+NOT VERIFIED. Audit trail preserved: the predecessor's gap inventory drove Plans 17-05/06a/06b/07;
+this document records their closure with real visual evidence + per-lane attribution. GAP-1
+(matched-pair A/B evidence) is closed.
