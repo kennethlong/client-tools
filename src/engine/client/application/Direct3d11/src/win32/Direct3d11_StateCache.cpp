@@ -1681,11 +1681,27 @@ void Direct3d11_StateCache::setViewport(int x, int y, int width, int height, rea
 	// Formula verbatim from Direct3d9.cpp:3240-3243 (VSPS path).
 	float const xOffset = (static_cast<float>(x) * 2.0f) / static_cast<float>(width);
 	float const yOffset = (static_cast<float>(y) * 2.0f) / static_cast<float>(height);
+	// Plan 18-02 — half-pixel load-screen seam fix (D-01 CODEX+Cursor consult,
+	// UNANIMOUS; .planning/research/CONSULT-18-half-texel-seam-SYNTHESIS.md). The
+	// engine bakes CuiManager::ms_pixelOffset (-0.5) into every 2D XYZRHW vertex
+	// (fingerprint (-0.5,-0.5)...(1023.5,767.5)). Those baked positions aligned under
+	// D3D9's pre-D3D10 -0.5 texel rasterizer rule, but misalign under D3D11 center-
+	// sampling -> the load-screen centerline seam plus a global half-pixel shift on
+	// all 2D UI. D3D9 carried this compensation in the rasterizer; D3D11 must fold it
+	// into this shared clip-map constant ONCE (D-02: central, not per-draw fudge).
+	// Confirmed sign+magnitude: .z += 1/width, .w -= 1/height. A baked half-pixel maps
+	// to 1/w in NDC because the c9 scale term is 2/w (half of that scale is one over
+	// width); a smaller term would only cancel a quarter pixel and leave the seam.
+	// Resolution-independent — derived from the live viewport width/height, no
+	// hardcoded pixel constants. gl11-only: the D3D9 reference path is byte-for-byte
+	// unchanged (D-04).
+	float const halfPixelClipX = 1.0f / static_cast<float>(width);
+	float const halfPixelClipY = 1.0f / static_cast<float>(height);
 	float const viewportData[4] = {
 		 2.0f / static_cast<float>(width),
 		-2.0f / static_cast<float>(height),
-		-1.0f - xOffset,
-		 1.0f + yOffset
+		-1.0f - xOffset + halfPixelClipX,
+		 1.0f + yOffset - halfPixelClipY
 	};
 	constexpr int kVSCR_viewportData = 9;
 	setVSConstants(kVSCR_viewportData, viewportData, 1);
