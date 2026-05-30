@@ -20,6 +20,9 @@
 #include <tuple>
 #include <utility>
 
+#include <cstdio>   // GAP-6 diagnostic: input-layout dump to file (temporary)
+#include <vector>   // GAP-6 diagnostic: reflected VS input dump
+
 // ======================================================================
 
 using Microsoft::WRL::ComPtr;
@@ -51,6 +54,46 @@ namespace Direct3d11_VertexDeclarationMapNamespace
 	int ms_multiStreamCacheMisses = 0;
 }
 using namespace Direct3d11_VertexDeclarationMapNamespace;
+
+// ======================================================================
+// GAP-6 diagnostic (TEMPORARY): dump every distinct input layout the cache
+// builds to stage/gap6_layout.log. We need to know, for a bump VS (whose
+// reflected inputs include TEXCOORD2 = skinned DOT3 tangent), whether the
+// final layout binds TEXCOORD2 to a REAL stream slot (0/1) or the phantom
+// zero slot (15). Truncates once per process, appends after. Char-select
+// has only a handful of distinct (format,vsHash) layouts, so this is small.
+
+namespace
+{
+	FILE *gap6OpenLayoutLog()
+	{
+		static bool s_truncated = false;
+		FILE *f = fopen("gap6_layout.log", s_truncated ? "a" : "w");
+		s_truncated = true;
+		return f;
+	}
+
+	void gap6DumpElements(FILE *f, D3D11_INPUT_ELEMENT_DESC const *e, int n)
+	{
+		for (int i = 0; i < n; ++i)
+			fprintf(f, "    elem[%d]: %-10s idx=%u slot=%u fmt=%d off=%u\n",
+				i,
+				e[i].SemanticName ? e[i].SemanticName : "(null)",
+				e[i].SemanticIndex, e[i].InputSlot,
+				static_cast<int>(e[i].Format), e[i].AlignedByteOffset);
+	}
+
+	// Dump what the RECOMPILED VS actually declares as inputs (from D3DReflect),
+	// independent of the format-derived layout elements. Reveals whether the VS
+	// reads TEXCOORD1 at all, or only TEXCOORD0 + TEXCOORD2 (=> the real DOT3 at
+	// TEXCOORD1 is on an input the VS ignores).
+	void gap6DumpReflectedInputs(FILE *f, std::vector<Direct3d11_ReflectedVSInput> const &ri)
+	{
+		for (auto const &r : ri)
+			fprintf(f, "    vsin: %-10s idx=%u mask=0x%x type=%d\n",
+				r.SemanticName, r.SemanticIndex, r.ComponentMask, static_cast<int>(r.ComponentType));
+	}
+}
 
 // ======================================================================
 
@@ -97,18 +140,15 @@ int Direct3d11_VertexDeclarationMap::getCachedLayoutCount()
 
 ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 	VertexBufferFormat const &format,
-	Direct3d11_VertexShaderData const *vsData)
+	Direct3d11_VertexShaderData::Variant const &variant)
 {
 	NOT_NULL(ms_cache);
 
-	if (!vsData)
-		return nullptr;
-
-	ID3DBlob *bytecode = vsData->getBytecode();
+	ID3DBlob *bytecode = variant.bytecode.Get();
 	if (!bytecode)
 		return nullptr;     // //asm VS or compile failure path -- draw must skip
 
-	Key const key(format.getFlags(), vsData->getBytecodeHash());
+	Key const key(format.getFlags(), variant.bytecodeHash);
 
 	auto it = ms_cache->find(key);
 	if (it != ms_cache->end())
@@ -129,9 +169,19 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 	// unused declared inputs in the bytecode signature; CreateInputLayout
 	// rejects layouts that don't match the signature. CODEX-reviewed.
 	elementCount = Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
-		vsData->getReflectedInputs(), elements, elementCount, 16);
+		variant.reflectedInputs, elements, elementCount, 16);
 	if (elementCount < 0)
 		return nullptr;   // overflow -- VS signature exceeds 16-element layout cap
+
+	if (FILE *gap6 = gap6OpenLayoutLog())
+	{
+		fprintf(gap6, "[single] vsHash=0x%016llx flags=0x%08x tc=%d elems=%d\n",
+			static_cast<unsigned long long>(variant.bytecodeHash),
+			format.getFlags(), format.getNumberOfTextureCoordinateSets(), elementCount);
+		gap6DumpElements(gap6, elements, elementCount);
+		gap6DumpReflectedInputs(gap6, variant.reflectedInputs);
+		fclose(gap6);
+	}
 
 	ComPtr<ID3D11InputLayout> layout;
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateInputLayout(
@@ -149,7 +199,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 		DEBUG_REPORT_LOG_PRINT(true,
 			("Direct3d11_VertexDeclarationMap::CreateInputLayout failed (format=0x%08x, vsHash=0x%016llx): %s\n",
 			format.getFlags(),
-			static_cast<unsigned long long>(vsData->getBytecodeHash()),
+			static_cast<unsigned long long>(variant.bytecodeHash),
 			Direct3d11Namespace::hresultString(hr)));
 		return nullptr;
 	}
@@ -177,7 +227,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 	VertexBufferFormat const * const *streamFormats,
 	int streamCount,
-	Direct3d11_VertexShaderData const *vsData)
+	Direct3d11_VertexShaderData::Variant const &variant)
 {
 	NOT_NULL(ms_multiStreamCache);
 	NOT_NULL(streamFormats);
@@ -186,16 +236,13 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 		("Direct3d11_VertexDeclarationMap::getOrCreateMultiStream: streamCount=%d outside [1,2]",
 		streamCount));
 
-	if (!vsData)
-		return nullptr;
-
-	ID3DBlob *bytecode = vsData->getBytecode();
+	ID3DBlob *bytecode = variant.bytecode.Get();
 	if (!bytecode)
 		return nullptr;
 
 	uint32 const flags0 = streamFormats[0] ? streamFormats[0]->getFlags() : 0u;
 	uint32 const flags1 = (streamCount >= 2 && streamFormats[1]) ? streamFormats[1]->getFlags() : 0u;
-	MultiStreamKey const key(flags0, flags1, vsData->getBytecodeHash());
+	MultiStreamKey const key(flags0, flags1, variant.bytecodeHash);
 
 	auto it = ms_multiStreamCache->find(key);
 	if (it != ms_multiStreamCache->end())
@@ -246,9 +293,23 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 	// VS-declared inputs the multi-stream VBFormats don't cover. Same
 	// reasoning as single-stream getOrCreate above.
 	total = Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
-		vsData->getReflectedInputs(), elements, total, 16);
+		variant.reflectedInputs, elements, total, 16);
 	if (total < 0)
 		return nullptr;   // overflow
+
+	if (FILE *gap6 = gap6OpenLayoutLog())
+	{
+		fprintf(gap6, "[multi]  vsHash=0x%016llx streamCount=%d",
+			static_cast<unsigned long long>(variant.bytecodeHash), streamCount);
+		for (int s = 0; s < streamCount; ++s)
+			fprintf(gap6, " s%d{flags=0x%08x tc=%d}", s,
+				streamFormats[s] ? streamFormats[s]->getFlags() : 0u,
+				streamFormats[s] ? streamFormats[s]->getNumberOfTextureCoordinateSets() : 0);
+		fprintf(gap6, " elems=%d\n", total);
+		gap6DumpElements(gap6, elements, total);
+		gap6DumpReflectedInputs(gap6, variant.reflectedInputs);
+		fclose(gap6);
+	}
 
 	ComPtr<ID3D11InputLayout> layout;
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateInputLayout(
@@ -264,7 +325,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 			("Direct3d11_VertexDeclarationMap::CreateInputLayout (multi-stream) failed "
 			 "(stream0Flags=0x%08x, stream1Flags=0x%08x, vsHash=0x%016llx): %s\n",
 			flags0, flags1,
-			static_cast<unsigned long long>(vsData->getBytecodeHash()),
+			static_cast<unsigned long long>(variant.bytecodeHash),
 			Direct3d11Namespace::hresultString(hr)));
 		return nullptr;
 	}

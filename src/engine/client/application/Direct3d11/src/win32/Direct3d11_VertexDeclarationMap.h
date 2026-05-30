@@ -22,12 +22,13 @@
 
 // ======================================================================
 
+#include "Direct3d11_VertexShaderData.h"   // Plan 17-09: getOrCreate takes a resolved per-key Variant const&
+
 #include <cstdint>
 #include <d3d11.h>
 #include <wrl/client.h>
 
 class VertexBufferFormat;
-class Direct3d11_VertexShaderData;
 
 // ======================================================================
 
@@ -43,9 +44,13 @@ public:
 	// release the returned pointer. Returns nullptr if either argument is
 	// degenerate (empty format, NULL VS bytecode) -- caller should skip
 	// the draw call (Plan 11-06 draw-dispatch contract).
+	// Plan 17-09: takes the resolved per-key VS Variant (bytecode + hash +
+	// reflected inputs). The caller (StateCache) resolves it from
+	// (vsData, textureCoordinateSetKey) and passes it EXPLICITLY -- the layout
+	// cache must not read an ambient "current key".
 	static ID3D11InputLayout *getOrCreate(
 		VertexBufferFormat const &format,
-		Direct3d11_VertexShaderData const *vsData);
+		Direct3d11_VertexShaderData::Variant const &variant);
 
 	// Plan 11-09.7: multi-stream variant. Builds an input layout where
 	// element entries for each stream's format are tagged with
@@ -57,7 +62,7 @@ public:
 	static ID3D11InputLayout *getOrCreateMultiStream(
 		VertexBufferFormat const * const *streamFormats,
 		int streamCount,
-		Direct3d11_VertexShaderData const *vsData);
+		Direct3d11_VertexShaderData::Variant const &variant);
 
 	// Diagnostic: count of distinct input layouts cached (sum of both
 	// single-stream + multi-stream caches).

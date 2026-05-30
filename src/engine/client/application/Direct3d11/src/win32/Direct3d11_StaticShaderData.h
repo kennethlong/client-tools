@@ -129,6 +129,12 @@ private:
 	std::vector<Direct3d11_VertexShaderData const *>          m_passVS;
 	std::vector<Direct3d11_PixelShaderProgramData const *>    m_passPS;
 
+	// Plan 17-09: per-pass texcoord-set key (each shader texcoord tag -> the mesh
+	// set index that feeds it, 3 bits/tag), computed in construct() exactly like
+	// Direct3d9_StaticShaderData::Pass::construct. apply() resolves the per-key VS
+	// variant with this and hands it to the StateCache. Sized 1:1 with m_passVS.
+	std::vector<uint32>                                       m_passTexcoordKey;
+
 	// Plan 11-09.14 (CODEX Bucket A): per-pass slot-0 stage cache. Mirrors
 	// the D3D9 sibling's Direct3d9_StaticShaderData::Stage but minimal --
 	// only the m_textureIndex==0 entry of pass.m_pixelShader->m_textureSamplers,

@@ -122,6 +122,20 @@ public:
 	std::vector<Direct3d11_ReflectedPSCbufferLayout> const &    getReflectedCbufferLayouts() const;
 	std::vector<Direct3d11_ReflectedPSInputSig> const &         getReflectedPSInputs() const;
 
+	// Plan 17-09 (bump-arm texture-swap fix): map a D3D9 texture STAGE index
+	// (Direct3d11 StaticShaderData binds SRVs by stage) to the SRV register the
+	// recompiled PS actually expects for that texture. Legacy
+	// `sampler NAME : register(sN)` pins only the SAMPLER register; when fxc
+	// splits sampler2D into Texture2D+SamplerState for SM4 it assigns the
+	// TEXTURE register by first-USE order, which diverges from stage order in
+	// multi-texture PSes (specmap_bump samples normalMap before diffuseMap ->
+	// normalMap texture=t0, diffuseMap texture=t1, while samplers stay
+	// diffuseMap=s0/normalMap=s1). Binding SRVs by stage then lands the diffuse
+	// texture in the normalMap slot -> purple/green. Returns the reflected SRV
+	// slot, or `stage` itself (identity) when no remap is known -- so single-
+	// texture shaders and the unreflected fallback lane behave exactly as before.
+	int                                                         getSrvSlotForStage(int stage) const;
+
 	// Plan 17-04 Task 1: VS<->PS signature pair compatibility gate.
 	//
 	// Plan 17-02 wired the recompile lane so EVERY //hlsl PSRC becomes a
@@ -166,8 +180,13 @@ public:
 	// the caller bind the asset PS) since there is no VS to validate
 	// against; this matches the pre-17-04 default behavior. Pass null ps
 	// is undefined-behavior territory and is asserted at callsite.
+	// Plan 17-09: textureCoordinateSetKey selects which per-key VS variant's
+	// reflected OUTPUT signature to validate against. (Outputs are key-invariant
+	// -- only VS inputs remap -- but we pass the bound key so we read the exact
+	// variant already compiled for this draw rather than forcing an extra compile.)
 	static bool isCompatibleWithVS(
 		Direct3d11_VertexShaderData       const *vs,
+		uint32                                   textureCoordinateSetKey,
 		Direct3d11_PixelShaderProgramData const *ps);
 
 	// Plan 17-07 (HIGH-6 + Round-5 item 1): rewritten-lane variant of the
@@ -182,6 +201,7 @@ public:
 	// used only for the dedupe key + log (no deref).
 	static bool isCompatibleWithVS_withExplicitPSInputs(
 		Direct3d11_VertexShaderData                       const *vs,
+		uint32                                                   textureCoordinateSetKey,   // Plan 17-09
 		std::vector<Direct3d11_ReflectedPSInputSig>       const &psInputs,
 		void                                              const *psForLog);
 
@@ -199,7 +219,7 @@ public:
 	// this is lazy memoization, logically const; ms_currentPSData is a const* at
 	// the StateCache call site.
 	std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
-		tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData) const;
+		tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey) const;   // Plan 17-09
 
 	// Plan 17-07: engine-side shader filename for the StateCache bind-path
 	// attribution log (shader='%s'). Returns "?" defensively when m_program is
@@ -237,7 +257,7 @@ public:
 	// now read actual texture data for passes whose pixelShader has a
 	// TextureSampler with m_textureIndex == 0. Slots 1..7 still deferred
 	// to Phase 12 real per-asset PS compile.
-	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData);
+	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey);   // Plan 17-09
 
 private:
 
@@ -280,6 +300,11 @@ private:
 	// at Direct3d11_VertexShaderData.h:158/:161).
 	std::vector<Direct3d11_ReflectedPSCbufferLayout>          m_reflectedCbufferLayouts;
 	std::vector<Direct3d11_ReflectedPSInputSig>               m_reflectedPSInputs;
+
+	// Plan 17-09 (bump-arm texture-swap fix): stage -> SRV-slot remap, populated
+	// from the reflected texture/sampler bindings in the recompile-lane ctor.
+	// -1 = no remap known (identity). Indexed by D3D9 texture stage [0..7].
+	int                                                       m_srvSlotForStage[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
 	// Plan 17-07 (HIGH-6 + MEDIUM cache-key salt): per-VS rewritten-PS cache.
 	// Lazily populated by tryGetOrBuildRewrittenPSForVS on first bind that needs
@@ -341,6 +366,16 @@ inline std::vector<Direct3d11_ReflectedPSCbufferLayout> const &Direct3d11_PixelS
 inline std::vector<Direct3d11_ReflectedPSInputSig> const &Direct3d11_PixelShaderProgramData::getReflectedPSInputs() const
 {
 	return m_reflectedPSInputs;
+}
+
+// ----------------------------------------------------------------------
+
+inline int Direct3d11_PixelShaderProgramData::getSrvSlotForStage(int stage) const
+{
+	if (stage < 0 || stage >= 8)
+		return stage;
+	int const mapped = m_srvSlotForStage[stage];
+	return (mapped >= 0) ? mapped : stage;   // identity when no remap reflected
 }
 
 // ======================================================================

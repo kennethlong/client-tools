@@ -82,9 +82,11 @@
 
 #include "sharedFoundation/MemoryBlockManager.h"
 
-#include <algorithm>      // Plan 17-07: std::sort for computeOutputSignatureHash determinism
+#include <algorithm>      // Plan 17-07: std::sort for output-signature-hash determinism
 #include <cstdint>        // Plan 17-07: uint32_t hash
+#include <cstdio>         // Plan 17-09: _snprintf_s for generated macro strings
 #include <cstring>
+#include <string>         // Plan 17-09: generated per-key macro strings (kept alive across D3DCompile)
 #include <vector>
 #include <d3d11.h>
 #include <d3dcompiler.h>
@@ -108,39 +110,48 @@ namespace Direct3d11_VertexShaderDataNamespace
 	// reason vs_5_0 is still avoided.
 	char const * const kVertexShaderProfile = "vs_4_0";
 
-	// Scan the .vsh header for the language tag. Format examples:
-	//   //hlsl vs_1_1
-	//   //asm vs_1_1
-	// We accept either, signal `isAssembly` to caller. Returns the
-	// offset (within the source text) of the first character AFTER the
-	// recognized header line so the compile body starts cleanly.
-	bool parseHeader(char const *text, size_t length, bool &outIsAssembly)
+	// Plan 17-09: texcoord-set tag parsing, mirroring
+	// Direct3d9_VertexShaderData (getToken / skipRestOfTheLine / TAG_DOT3).
+	// The .vsh header carries leading `#define textureCoordinateSet<TAG>
+	// textureCoordinateSet<N>` lines that name the shader's texcoord inputs.
+	// D3D9 strips those defaults and regenerates them per-key; we mirror that.
+	Tag const TAG_DOT3_local = TAG(D,O,T,3);
+
+	// Copy the next whitespace-delimited token into d (mirror D3D9 getToken).
+	void getToken(char const *&s, char *d)
 	{
-		outIsAssembly = false;
-		if (!text || length < 6)
-			return false;
-
-		// Skip leading whitespace.
-		size_t i = 0;
-		while (i < length && (text[i] == ' ' || text[i] == '\t' || text[i] == '\r' || text[i] == '\n'))
-			++i;
-		if (i + 6 > length)
-			return false;
-
-		if (std::strncmp(text + i, "//hlsl", 6) == 0)
-		{
-			outIsAssembly = false;
-			return true;
-		}
-		if (std::strncmp(text + i, "//asm", 5) == 0)
-		{
-			outIsAssembly = true;
-			return true;
-		}
-		// No header -- treat as HLSL by default (engine asset pipeline
-		// only ships //hlsl / //asm variants; defensive default-HLSL).
-		return true;
+		if (s == nullptr || *s == '\0') { *d = '\0'; return; }
+		while (*s && (*s == ' ' || *s == '\r' || *s == '\n' || *s == '\t'))
+			++s;
+		for ( ; *s && *s != ' ' && *s != '\n' && *s != '\r' && *s != '\t'; ++s, ++d)
+			*d = *s;
+		*d = '\0';
 	}
+
+	// Advance s past the rest of the current line, honoring backslash line
+	// continuations (mirror D3D9 skipRestOfTheLine).
+	void skipRestOfTheLine(char const *&s)
+	{
+		if (s == nullptr || *s == '\0') return;
+		for ( ; *s && *s != '\n' && *s != '\r'; )
+		{
+			if (*s == '\\')
+			{
+				++s;
+				if (*s == '\r') ++s;
+				if (*s == '\n') ++s;
+			}
+			else
+				++s;
+		}
+	}
+
+
+	// Plan 17-09: header detection + texcoord-tag parsing + body-strip now lives
+	// inline in the constructor (mirroring Direct3d9_VertexShaderData), using the
+	// getToken / skipRestOfTheLine helpers above. The old parseHeader (//hlsl vs
+	// //asm only, no #define strip) was removed -- the constructor's tokenizer
+	// supersedes it.
 }
 using namespace Direct3d11_VertexShaderDataNamespace;
 
@@ -185,20 +196,60 @@ void Direct3d11_VertexShaderData::operator delete(void *memory)
 Direct3d11_VertexShaderData::Direct3d11_VertexShaderData(ShaderImplementationPassVertexShader const &vertexShader)
 :	ShaderImplementationPassVertexShaderGraphicsData(),
 	m_vertexShader(&vertexShader),
-	m_d3dVS(),
-	m_bytecode(),
-	m_bytecodeHash(0),
-	m_isAssembly(false)
+	m_isAssembly(false),
+	m_bodyText(nullptr),
+	m_bodyLen(0)
 {
-	// Detect language flavor from the leading //hlsl or //asm token.
-	bool ok = parseHeader(vertexShader.m_text, static_cast<size_t>(vertexShader.m_textLength), m_isAssembly);
-	UNREF(ok);
+	// Plan 17-09: parse the .vsh header EXACTLY like Direct3d9_VertexShaderData --
+	// detect //hlsl vs //asm, collect the leading texcoord-set `#define` tags, and
+	// set the compile body to AFTER the stripped leading //hlsl + #define block.
+	// The stripped texcoord macros are regenerated per-key in compileVariant().
+	{
+		char const *text = vertexShader.m_text;
+		char const *bodyStart = text;
+		bool hlsl = false;
+		for (bool done = false; !done; )
+		{
+			bodyStart = text;                 // position before the failing token (mirror D3D9 m_compileText)
+			char token[128];
+			getToken(text, token);
+			if (std::strcmp(token, "//hlsl") == 0)
+			{
+				hlsl = true;
+				skipRestOfTheLine(text);
+			}
+			else if (std::strcmp(token, "//asm") == 0)
+			{
+				m_isAssembly = true;
+				skipRestOfTheLine(text);
+			}
+			else if (std::strcmp(token, "#define") == 0)
+			{
+				char defToken[128];
+				getToken(text, defToken);
+				char const *tag = nullptr;
+				if (hlsl && std::strncmp(defToken, "textureCoordinateSet", 20) == 0)
+					tag = defToken + 20;
+				else if (m_isAssembly && std::strncmp(defToken, "vTextureCoordinateSet", 21) == 0)
+					tag = defToken + 21;
+				if (tag && *tag)
+					m_textureCoordinateSetTags.push_back(ConvertStringToTag(tag));
+				skipRestOfTheLine(text);
+			}
+			else
+			{
+				done = true;
+			}
+		}
+		m_bodyText = bodyStart;
+		m_bodyLen  = (bodyStart && *bodyStart) ? std::strlen(bodyStart) : 0;
+	}
 
 	if (m_isAssembly)
 	{
 		// D3D9-era vertex shader assembly (vs_1_1 / vs_2_0). D3DCompile
 		// does not accept assembly; reassembly via D3DAssemble is gone
-		// from the modern SDK. Record the situation; m_d3dVS stays NULL
+		// from the modern SDK. Record the situation; variant.d3dVS stays NULL
 		// and Plan 11-06's draw dispatch will skip these passes (or
 		// trigger a build-time error if an asset surfaces here in target
 		// scenes). Per Plan 11-01 D-04a finding: the Tatooine + cantina
@@ -211,7 +262,7 @@ Direct3d11_VertexShaderData::Direct3d11_VertexShaderData(ShaderImplementationPas
 		return;
 	}
 
-	compileOrLoad(vertexShader.m_text, static_cast<size_t>(vertexShader.m_textLength), vertexShader.getFilename());
+	// Plan 17-09: variants are compiled lazily, per texcoord-set key, in getVariant().
 }
 
 // ----------------------------------------------------------------------
@@ -231,15 +282,16 @@ Direct3d11_VertexShaderData::~Direct3d11_VertexShaderData()
 // is order-independent over the reflected-output vector (reflection order is
 // not guaranteed stable across runs). Returns 0 on no reflected outputs.
 
-uint32_t Direct3d11_VertexShaderData::computeOutputSignatureHash() const
+// Plan 17-09: file-scope helper (was a member); computes per-variant at compile.
+static uint32_t computeOutputSignatureHashFor(std::vector<Direct3d11_ReflectedVSOutput> const &outputs)
 {
-	if (m_reflectedOutputs.empty())
+	if (outputs.empty())
 		return 0u;
 
 	// Sort a local copy by (Register, SemanticIndex, SemanticName) for a
 	// deterministic, order-independent hash input. Mirrors the sort discipline
 	// in buildHlslForVSOutputs (Register-major).
-	std::vector<Direct3d11_ReflectedVSOutput> sorted = m_reflectedOutputs;
+	std::vector<Direct3d11_ReflectedVSOutput> sorted = outputs;
 	std::sort(sorted.begin(), sorted.end(),
 		[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
 			if (a.Register != b.Register)           return a.Register < b.Register;
@@ -273,13 +325,34 @@ uint32_t Direct3d11_VertexShaderData::computeOutputSignatureHash() const
 
 // ----------------------------------------------------------------------
 
-void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t sourceLen, char const *displayName)
+Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::getVariant(uint32 textureCoordinateSetKey) const
 {
-	if (!sourceText || sourceLen == 0)
+	auto it = m_variants.find(textureCoordinateSetKey);
+	if (it != m_variants.end())
+		return it->second;
+	return compileVariant(textureCoordinateSetKey);
+}
+
+// ----------------------------------------------------------------------
+
+Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::compileVariant(uint32 textureCoordinateSetKey) const
+{
+	// Insert the (empty) variant first so even early-returns (assembly / empty
+	// body) yield a STABLE cached reference with a null d3dVS -- the draw is then
+	// skipped, matching pre-17-09 behavior. No further m_variants insertions happen
+	// in this call, so the reference stays valid (no rehash).
+	Variant &variant = m_variants[textureCoordinateSetKey];
+
+	char const * const sourceText  = m_bodyText;
+	size_t       const sourceLen   = m_bodyLen;
+	char const * const displayName = m_vertexShader ? m_vertexShader->getFilename() : nullptr;
+
+	if (m_isAssembly || !sourceText || sourceLen == 0)
 	{
 		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11_VertexShaderData: empty source for '%s'\n", displayName ? displayName : "<unnamed>"));
-		return;
+			("Direct3d11_VertexShaderData: no compile path for '%s' (assembly=%d emptyBody=%d)\n",
+			displayName ? displayName : "<unnamed>", m_isAssembly ? 1 : 0, (sourceText && sourceLen) ? 0 : 1));
+		return variant;
 	}
 
 	// Build defines: SV_POSITION macro injection per Pitfall 1. We do
@@ -396,7 +469,56 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "15" });   // Plan 11-09.6 Iter-1: vs_4_0_level_9_3 -> vs_4_0 target bump; invalidates Plan 11-08 Iter-1.5 cache.
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "16" });   // Plan 17-09: per-key texcoord-set remap macros; invalidates Plan 11-09.6 cache.
+
+	// Plan 17-09: regenerate the texcoord-set remap macros from the key, mirroring
+	// Direct3d9_VertexShaderData::createVertexShader:356-421. Tag i -> mesh set
+	// (key >> (i*3)) & 7; DOT3 is dim-4, others dim-2. Emit one
+	// `#define textureCoordinateSet<TAG> textureCoordinateSet<set>` per tag, then a
+	// single DECLARE_textureCoordinateSets declaring each UNIQUE set ONCE (aliased
+	// tags -- e.g. MAIN+NRML both -> set0 -- collapse to one declaration). No
+	// `: register(vN)` on the members: vs_4_0 rejects struct-member register binds
+	// (the X3202 class) and D3D11 binds inputs by semantic via the input layout.
+	// macroStorage backs the char* pointers and MUST outlive the D3DCompile call.
+	std::vector<std::string> macroStorage;
+	if (!m_textureCoordinateSetTags.empty())
+	{
+		int setDim[8] = { 0,0,0,0,0,0,0,0 };
+		int maxSet = -1;
+		size_t const tagCount = m_textureCoordinateSetTags.size();
+		macroStorage.reserve(tagCount * 2 + 2);
+		for (size_t i = 0; i < tagCount; ++i)
+		{
+			int const set = static_cast<int>((textureCoordinateSetKey >> (i * 3)) & 7u);
+			int const dim = (m_textureCoordinateSetTags[i] == TAG_DOT3_local) ? 4 : 2;
+			setDim[set] = dim;
+			if (set > maxSet) maxSet = set;
+
+			char tagStr[16] = {};
+			ConvertTagToString(m_textureCoordinateSetTags[i], tagStr);              // 4 chars + NUL, e.g. "MAIN"
+			macroStorage.push_back(std::string("textureCoordinateSet") + tagStr);   // Name:       textureCoordinateSetMAIN
+			macroStorage.push_back(std::string("textureCoordinateSet") + std::to_string(set)); // Definition: textureCoordinateSet0
+		}
+
+		std::string decl;
+		for (int s = 0; s <= maxSet; ++s)
+		{
+			if (setDim[s] == 0) continue;
+			decl += "float";  decl += std::to_string(setDim[s]);
+			decl += " textureCoordinateSet"; decl += std::to_string(s);
+			decl += " : TEXCOORD"; decl += std::to_string(s);
+			decl += ";";
+		}
+		macroStorage.push_back(std::string("DECLARE_textureCoordinateSets"));
+		macroStorage.push_back(decl);
+
+		// macroStorage is fully populated now -- c_str() pointers are stable.
+		size_t const perTag = tagCount * 2;
+		for (size_t i = 0; i < perTag; i += 2)
+			defines.push_back({ macroStorage[i].c_str(), macroStorage[i + 1].c_str() });
+		defines.push_back({ macroStorage[perTag].c_str(), macroStorage[perTag + 1].c_str() });
+	}
+
 	defines.push_back({ nullptr,                  nullptr });   // terminator
 
 	// Hash the source + defines -- include the trailing terminator entry
@@ -568,8 +690,8 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		Direct3d11_ShaderCache::store(hash, blob.Get());
 	}
 
-	m_bytecode     = blob;
-	m_bytecodeHash = hash;
+	variant.bytecode = blob;
+	variant.bytecodeHash = hash;
 
 	// Plan 11-09.15 Iter-7: dump disassembled VS bytecode to a single
 	// append-only file for offline analysis. CODEX consult Iter-5/6
@@ -604,7 +726,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 				int const headerLen = _snprintf_s(header, sizeof(header), _TRUNCATE,
 					"\n=== Plan 11-09.15 Iter-7 VS disassembly: %s hash=0x%016llX bytecode_size=%zu ===\n",
 					displayName ? displayName : "<unknown>",
-					static_cast<unsigned long long>(m_bytecodeHash),
+					static_cast<unsigned long long>(variant.bytecodeHash),
 					blob->GetBufferSize());
 				if (headerLen > 0)
 					fwrite(header, 1, static_cast<size_t>(headerLen), fp);
@@ -631,7 +753,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		blob->GetBufferPointer(),
 		blob->GetBufferSize(),
 		nullptr,
-		m_d3dVS.GetAddressOf());
+		variant.d3dVS.GetAddressOf());
 	FATAL_DX_HR("Direct3d11_VertexShaderData::CreateVertexShader failed: %s", hr);
 
 	// Plan 11-09.8: capture the VS input signature via D3DReflect for
@@ -654,11 +776,11 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 	// 11-09.13-CODEX-CONSULT-reflection-driven-fallback-variant-selection.md).
 	//
 	// Reflection failure is treated as defensive non-fatal; both
-	// m_reflectedInputs and m_reflectedOutputs stay empty -- augmentation
+	// variant.reflectedInputs and variant.reflectedOutputs stay empty -- augmentation
 	// becomes a no-op, fallback-variant selection defaults to magenta,
 	// matching pre-Iter-3 behavior.
-	m_reflectedInputs.clear();
-	m_reflectedOutputs.clear();
+	variant.reflectedInputs.clear();
+	variant.reflectedOutputs.clear();
 	ComPtr<ID3D11ShaderReflection> reflector;
 	HRESULT const reflectHr = D3DReflect(
 		blob->GetBufferPointer(),
@@ -669,7 +791,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 		D3D11_SHADER_DESC shaderDesc = {};
 		if (SUCCEEDED(reflector->GetDesc(&shaderDesc)))
 		{
-			m_reflectedInputs.reserve(shaderDesc.InputParameters);
+			variant.reflectedInputs.reserve(shaderDesc.InputParameters);
 			for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
 			{
 				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
@@ -689,7 +811,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 				ri.SemanticIndex = desc.SemanticIndex;
 				ri.ComponentMask = desc.Mask;
 				ri.ComponentType = desc.ComponentType;
-				m_reflectedInputs.push_back(ri);
+				variant.reflectedInputs.push_back(ri);
 			}
 
 			// Plan 11-09.13 Iter-3: parallel output-signature capture.
@@ -701,7 +823,7 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 			// rules. We preserve the full descriptor (Mask + ReadWriteMask
 			// + ComponentType) so the selection logic in StateCache can
 			// pick variants conservatively.
-			m_reflectedOutputs.reserve(shaderDesc.OutputParameters);
+			variant.reflectedOutputs.reserve(shaderDesc.OutputParameters);
 			for (UINT i = 0; i < shaderDesc.OutputParameters; ++i)
 			{
 				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
@@ -721,10 +843,16 @@ void Direct3d11_VertexShaderData::compileOrLoad(char const *sourceText, size_t s
 				ro.ComponentMask  = desc.Mask;
 				ro.ReadWriteMask  = desc.ReadWriteMask;
 				ro.ComponentType  = desc.ComponentType;
-				m_reflectedOutputs.push_back(ro);
+				variant.reflectedOutputs.push_back(ro);
 			}
 		}
 	}
+
+	// Plan 17-09: per-variant output-signature hash (outputs only) -- the PS
+	// reconstruction rewrite-cache salt + raw-VS-pointer-reuse guard. Computed
+	// here so it stays coherent with this variant's reflected outputs.
+	variant.outputSigHash = computeOutputSignatureHashFor(variant.reflectedOutputs);
+	return variant;
 }
 
 // ======================================================================

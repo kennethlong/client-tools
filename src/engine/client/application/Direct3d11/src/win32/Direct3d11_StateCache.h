@@ -34,6 +34,7 @@
 // ======================================================================
 
 #include <d3d11.h>
+#include <DirectXMath.h>   // Plan 17-09 (GAP-5): DirectX::XMFLOAT4 in setVertexMaterialColors
 
 #include "clientGraphics/Graphics.def"
 #include "sharedFoundation/Tag.h"
@@ -194,8 +195,27 @@ public:
 	// Direct3d11_StaticShaderData::apply once per draw. Assigning a non-null
 	// pointer marks ms_geometryRebindNeeded so the next applyPreDrawState
 	// reselects the input layout against the new VS signature.
-	static void setCurrentVSData(Direct3d11_VertexShaderData const *vs);
+	static void setCurrentVSData(Direct3d11_VertexShaderData const *vs, uint32 textureCoordinateSetKey);   // Plan 17-09: per-key variant
 	static void setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps);
+
+	// Plan 17-09 (GAP-5): materialSpecularPower for the VS object-space specular
+	// (lightData[25].w). Mirror Direct3d9_StateCache::setSpecularPower; fed per-pass
+	// from StaticShaderData::apply. A 0 power makes pow() emit NaN -> dark/wrong bump.
+	static void setSpecularPower(float power);
+
+	// Plan 17-09 (GAP-5 bump-arm audit): feed the VS material color struct
+	// (c11 diffuse / c13 specular / c14 emissive) of Direct3d11_VertexSlot0CB.
+	// Mirrors Direct3d9_StaticShaderData.cpp:862 `setVertexShaderConstants(
+	// VSCR_material, &m_material, 5)`. The asset VS reads cb0[14] (emissive) as
+	// the diffuse accumulator SEED and cb0[13] (specular) as the specular output
+	// tint (proven by the a_specmap_bump_vs20 disasm). composeSlot0Shadow only
+	// fed material[4].x (power) -> these stayed 0, so the VS specular output was
+	// always black and the diffuse seed dropped the material emissive vs D3D9.
+	// Called per-pass from StaticShaderData::apply next to setSpecularPower.
+	static void setVertexMaterialColors(
+		DirectX::XMFLOAT4 const &diffuse,
+		DirectX::XMFLOAT4 const &specular,
+		DirectX::XMFLOAT4 const &emissive);
 
 	// Plan 11-09 Iter-2.7 Fix C: raw register-index write into the VS slot 0
 	// cbuffer shadow. Mirrors D3D9's Direct3d9_StateCache::setVertexShaderConstants

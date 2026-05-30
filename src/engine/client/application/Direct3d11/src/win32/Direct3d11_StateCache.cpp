@@ -166,6 +166,8 @@ namespace Direct3d11_StateCacheNamespace
 
 	// Shader tracking.
 	Direct3d11_VertexShaderData const *           ms_currentVSData = nullptr;
+	uint32                                        ms_currentVSKey  = 0;   // Plan 17-09: per-pass texcoord-set key for the current VS variant
+	float                                         ms_specularPower = 32.0f;   // Plan 17-09 (GAP-5): materialSpecularPower for lightData[25].w (mirror D3D9 ms_specularPower default 32)
 	Direct3d11_PixelShaderProgramData const *     ms_currentPSData = nullptr;
 	ID3D11InputLayout *                           ms_currentInputLayout = nullptr;
 	bool                                          ms_geometryRebindNeeded = true;
@@ -391,8 +393,16 @@ namespace Direct3d11_StateCacheNamespace
 
 				// dot3 @ lightData[24..27] (c40-c43): OBJECT-LOCAL (localCameraPosition,
 				// localDirection=-rotate_p2l(dir), diffuseColor, specularColor).
+				// Plan 17-09 (GAP-5 specular-power fix): lightData[25].w carries
+				// materialSpecularPower (mirror D3D9 applyLights_vertexShader:577
+				// `dot3.localDirection.w = getSpecularPower()`). The pre-17-09 stub
+				// left .w = 0.0f, but calculateDiffuseSpecularLighting's pow() lowers
+				// to exp2(power * log2(N.H)); with power=0 AND N.H<=0 (back/perp
+				// vertices, common on arms) that is exp2(0 * -INF) = exp2(NaN) = NaN,
+				// poisoning COLOR0/COLOR1 -> the purple/green bump arms. 32 = D3D9's
+				// default specular power; the real per-material value is fed below.
 				s_slot0Shadow.lightData[24] = DirectX::XMFLOAT4(localCam.x, localCam.y, localCam.z, 1.0f);
-				s_slot0Shadow.lightData[25] = DirectX::XMFLOAT4(-localDir.x, -localDir.y, -localDir.z, 0.0f);
+				s_slot0Shadow.lightData[25] = DirectX::XMFLOAT4(-localDir.x, -localDir.y, -localDir.z, ms_specularPower);
 				s_slot0Shadow.lightData[26] = d3.diffuseColor;
 				s_slot0Shadow.lightData[27] = d3.specularColor;
 
@@ -403,6 +413,23 @@ namespace Direct3d11_StateCacheNamespace
 				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
 			}
 		}
+
+		// Plan 17-09 (GAP-5, THE bump-arm fix): the VS light loops process a FIXED
+		// (unrolled) set of point lights; each computes distanceAttenuation =
+		// 1 / dot(attenuationCoeffs, factors). For an UNUSED point light whose coeffs
+		// are (0,0,0,0) that is 1/0 = INF, and INF * 0(color) = NaN -> NaN COLOR0/
+		// COLOR1 -> the PS NaN-guard zeroes diffuse -> only the normal-map bump term
+		// renders -> the purple/green arms. D3D9 avoids this by setting unused point
+		// lights' constant attenuation k0=1 (Direct3d9_LightManager.cpp:685 + :717),
+		// making denom>=1. We never fill point lights, so ALL are unused -> set every
+		// point attenuation.k0 (the .x) = 1. Indices from the D3D9 LightData layout:
+		// pointSpecular.attenuation = lightData[10]; point[0..3].attenuation =
+		// lightData[14/17/20/23] (PointSpecularData=4 regs, PointData=3 regs).
+		s_slot0Shadow.lightData[10].x = 1.0f;   // pointSpecular[0].attenuation.k0
+		s_slot0Shadow.lightData[14].x = 1.0f;   // point[0].attenuation.k0
+		s_slot0Shadow.lightData[17].x = 1.0f;   // point[1].attenuation.k0
+		s_slot0Shadow.lightData[20].x = 1.0f;   // point[2].attenuation.k0
+		s_slot0Shadow.lightData[23].x = 1.0f;   // point[3].attenuation.k0
 
 		// Plan 11-09 Iter-2.7 Fix C: defer GPU upload to flushSlot0IfDirty.
 		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
@@ -1034,13 +1061,13 @@ namespace Direct3d11_StateCacheNamespace
 	// lifetime counters logged at Direct3d11_StaticShaderData::remove() +
 	// Direct3d11_StateCache::remove() shutdown.
 
-	ID3D11PixelShader *selectFallbackPSForVS(Direct3d11_VertexShaderData const *vsData)
+	ID3D11PixelShader *selectFallbackPSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey)
 	{
 		ID3D11PixelShader *variantM = Direct3d11_PixelShaderProgramData::getFallbackPS();
 		if (!vsData)
 			return variantM;
 
-		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData);
+		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData, textureCoordinateSetKey);
 		if (!perVS)
 			return variantM;   // tombstone -> magenta safety net
 
@@ -1105,6 +1132,12 @@ namespace Direct3d11_StateCacheNamespace
 		if (!ms_currentVSData)
 			return false;
 
+		// Plan 17-09: resolve the per-key VS variant ONCE (cheap cached lookup
+		// after first compile) and pass it EXPLICITLY into layout creation -- the
+		// layout cache never reads the ambient key.
+		Direct3d11_VertexShaderData::Variant const &vsVariant =
+			ms_currentVSData->getVariant(ms_currentVSKey);
+
 		// Plan 11-09.7: multi-stream path takes precedence -- the engine
 		// calls either setVertexBuffer OR setVertexBufferVector, and they
 		// clear each other's state.
@@ -1113,16 +1146,16 @@ namespace Direct3d11_StateCacheNamespace
 			ms_currentInputLayout = Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 				ms_currentVBVectorFormats,
 				ms_currentVBVectorStreamCount,
-				ms_currentVSData);
-			return ms_currentVSData->getVertexShader() != nullptr;
+				vsVariant);
+			return vsVariant.d3dVS.Get() != nullptr;
 		}
 
 		if (!ms_currentVBValid)
-			return ms_currentVSData->getVertexShader() != nullptr;
+			return vsVariant.d3dVS.Get() != nullptr;
 
 		ms_currentInputLayout = Direct3d11_VertexDeclarationMap::getOrCreate(
-			ms_currentVBFormat, ms_currentVSData);
-		return ms_currentVSData->getVertexShader() != nullptr;
+			ms_currentVBFormat, vsVariant);
+		return vsVariant.d3dVS.Get() != nullptr;
 	}
 
 	// ------------------------------------------------------------------
@@ -1148,7 +1181,7 @@ namespace Direct3d11_StateCacheNamespace
 			++ms_skippedDrawsNullVS;
 			return false;
 		}
-		ID3D11VertexShader *vs = ms_currentVSData->getVertexShader();
+		ID3D11VertexShader *vs = ms_currentVSData->getVariant(ms_currentVSKey).d3dVS.Get();   // Plan 17-09: per-key variant
 		if (!vs)
 		{
 			++ms_skippedDrawsNullVS;
@@ -1226,7 +1259,7 @@ namespace Direct3d11_StateCacheNamespace
 		ID3D11PixelShader *psToBind = nullptr;
 		char const *bindPath = "none";
 		if (ms_currentPSData && ms_currentPSData->getPixelShader()
-			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentPSData))
+			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentVSKey, ms_currentPSData))
 		{
 			// 1. Native asset PS validated by the unchanged ctor-time validator.
 			psToBind = ms_currentPSData->getPixelShader();
@@ -1241,10 +1274,10 @@ namespace Direct3d11_StateCacheNamespace
 			// its OWN per-VS reflected inputs (HIGH-6) so the native ctor-time
 			// m_reflectedPSInputs cache doesn't false-reject it.
 			std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *> const rewritten =
-				ms_currentPSData->tryGetOrBuildRewrittenPSForVS(ms_currentVSData);
+				ms_currentPSData->tryGetOrBuildRewrittenPSForVS(ms_currentVSData, ms_currentVSKey);
 			if (rewritten.first && rewritten.second
 				&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
-					ms_currentVSData, *rewritten.second, static_cast<void const *>(rewritten.first)))
+					ms_currentVSData, ms_currentVSKey, *rewritten.second, static_cast<void const *>(rewritten.first)))
 			{
 				psToBind = rewritten.first;
 				bindPath = "rewritten";
@@ -1256,7 +1289,7 @@ namespace Direct3d11_StateCacheNamespace
 			// PS (Variant T textured-passthrough) when the bound VS's reflected
 			// output signature is stage-linkage compatible, else Variant M
 			// (magenta). Owns the residual 0-1/9 pair the asset lane can't satisfy.
-			if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData))
+			if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData, ms_currentVSKey))
 			{
 				psToBind = fallback;
 				bindPath = "fallback";
@@ -1527,6 +1560,7 @@ void Direct3d11_StateCache::remove()
 	ms_currentIB = nullptr;
 	ms_currentInputLayout = nullptr;
 	ms_currentVSData = nullptr;
+	ms_currentVSKey  = 0;   // Plan 17-09
 	ms_currentPSData = nullptr;
 	ms_currentVBValid = ms_currentIBValid = false;
 	// Plan 11-09.7: clear multi-stream state too.
@@ -2307,17 +2341,75 @@ void Direct3d11_StateCache::setStaticShader(StaticShader const &shader, int pass
 
 // ----------------------------------------------------------------------
 
-void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs)
+void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs, uint32 textureCoordinateSetKey)
 {
 	// Plan 11-09 Iter-1: Direct3d11_StaticShaderData::apply calls this
 	// once per draw with the per-pass VS pointer. Trip ms_geometryRebindNeeded
 	// so the next applyPreDrawState reselects the input layout against the
 	// new VS bytecode signature (Pitfall 6 territory).
-	if (Direct3d11_StateCacheNamespace::ms_currentVSData != vs)
+	//
+	// Plan 17-09: the per-pass texcoord-set key rides alongside the VS pointer.
+	// The SAME VS asset can bind under different keys across passes -- each key
+	// is a distinct compiled variant (distinct bytecode/signature), so a key
+	// change must also rebind the layout. resolveShaders / applyPreDrawState
+	// read ms_currentVSKey explicitly to resolve the right variant.
+	if (Direct3d11_StateCacheNamespace::ms_currentVSData != vs
+		|| Direct3d11_StateCacheNamespace::ms_currentVSKey != textureCoordinateSetKey)
 	{
 		Direct3d11_StateCacheNamespace::ms_currentVSData = vs;
+		Direct3d11_StateCacheNamespace::ms_currentVSKey  = textureCoordinateSetKey;
 		Direct3d11_StateCacheNamespace::ms_geometryRebindNeeded = true;
 	}
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setSpecularPower(float power)
+{
+	// Plan 17-09 (GAP-5): mirror Direct3d9_StateCache::setSpecularPower. The VS
+	// object-space specular reads materialSpecularPower from lightData[25].w
+	// (dot3.localDirection.w). Store it (composeSlot0Shadow uses it) AND patch the
+	// live shadow in place so the next flush is correct regardless of whether
+	// composeSlot0Shadow re-runs this draw. Reject 0 / NaN / wild values (they make
+	// pow() produce NaN) -- fall back to the D3D9 default of 32.
+	float const safe = (power > 0.0f && power < 1.0e6f) ? power : 32.0f;
+	Direct3d11_StateCacheNamespace::ms_specularPower = safe;
+	// c15.x (material[4].x) is materialSpecularPower -- the register the VS object-
+	// space specular actually reads (proven by disasm: `mul r4.w, r4.w, cb0[15].x`).
+	// composeSlot0Shadow never fills material[], so without this it is 0 -> at a
+	// perpendicular vertex (nDotH==0) the unclamped `log2(0)*0 = -INF*0 = NaN` is
+	// selected by the >=0 movc mask -> NaN COLOR0/COLOR1 -> purple/green arms.
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.material[4].x = safe;
+	// Also mirror D3D9's dot3.localDirection.w (c41.w) for the PS dot3 path.
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.lightData[25].w = safe;
+	Direct3d11_StateCacheNamespace::s_slot0Dirty = true;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setVertexMaterialColors(
+	DirectX::XMFLOAT4 const &diffuse,
+	DirectX::XMFLOAT4 const &specular,
+	DirectX::XMFLOAT4 const &emissive)
+{
+	// Plan 17-09 (GAP-5 bump-arm audit): mirror Direct3d9_StaticShaderData.cpp:862
+	// `setVertexShaderConstants(VSCR_material, &m_material, 5)` (VSCR_material=11).
+	// The VS material struct of Direct3d11_VertexSlot0CB is material[5] @ c11..c15:
+	//   material[0] = c11 diffuse, material[1] = c12 ambient, material[2] = c13
+	//   specular, material[3] = c14 emissive, material[4].x = c15 specularPower.
+	// composeSlot0Shadow never fills c11..c14 and setSpecularPower only fills
+	// material[4].x, so the asset VS read cb0[14] (emissive, the diffuse SEED) and
+	// cb0[13] (specular tint) as ZERO -> dark diffuse seed + always-black VS
+	// specular, diverging from D3D9. We patch the live shadow in place (like
+	// setSpecularPower) so the next flush carries them regardless of whether
+	// composeSlot0Shadow re-runs. material[1] (c12 ambient) is left untouched:
+	// PerPassMaterial carries no ambient and no asset VS in the char-select set
+	// reads c12 (the diffuse path seeds from emissive, not material ambient).
+	// material[4].x (power) is owned by setSpecularPower -- not touched here.
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.material[0] = diffuse;
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.material[2] = specular;
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.material[3] = emissive;
+	Direct3d11_StateCacheNamespace::s_slot0Dirty = true;
 }
 
 // ----------------------------------------------------------------------
@@ -2457,7 +2549,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 			{
 				ShaderImplementationPassVertexShader const *eng = ms_currentVSData->getEngineShader();
 				char const *vsFilename = (eng ? eng->getFilename() : "<no engine shader>");
-				uint64_t const vsHash = ms_currentVSData->getBytecodeHash();
+				uint64_t const vsHash = ms_currentVSData->getVariant(ms_currentVSKey).bytecodeHash;   // Plan 17-09
 
 				// Header line: which transformed-vert fan call this is +
 				// which VS is bound.
@@ -2492,7 +2584,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 
 				// Reflected VS inputs (Plan 11-09.8 captured these).
 				{
-					auto const &inputs = ms_currentVSData->getReflectedInputs();
+					auto const &inputs = ms_currentVSData->getVariant(ms_currentVSKey).reflectedInputs;   // Plan 17-09
 					char buf[384];
 					int outIdx = _snprintf_s(buf, sizeof(buf), _TRUNCATE,
 						"Plan 11-09.15 Iter-5 transformed-fan#%d VS-inputs(%zu):",
@@ -2511,7 +2603,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 
 				// Reflected VS outputs (Plan 11-09.13 Iter-3 captured these).
 				{
-					auto const &outputs = ms_currentVSData->getReflectedOutputs();
+					auto const &outputs = ms_currentVSData->getVariant(ms_currentVSKey).reflectedOutputs;   // Plan 17-09
 					char buf[384];
 					int outIdx = _snprintf_s(buf, sizeof(buf), _TRUNCATE,
 						"Plan 11-09.15 Iter-5 transformed-fan#%d VS-outputs(%zu):",

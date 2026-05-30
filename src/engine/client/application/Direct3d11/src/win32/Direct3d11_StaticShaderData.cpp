@@ -354,6 +354,7 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	//   - ShaderImplementation.h  (Direct3d11_StaticShaderData for m_pass)
 	m_passVS.clear();
 	m_passPS.clear();
+	m_passTexcoordKey.clear();   // Plan 17-09
 	m_passStages.clear();
 	m_passMaterial.clear();
 
@@ -364,6 +365,7 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	size_t const passCount = passes.size();
 	m_passVS.assign(passCount, nullptr);
 	m_passPS.assign(passCount, nullptr);
+	m_passTexcoordKey.assign(passCount, 0u);   // Plan 17-09
 	{
 		PerPassStages emptyStages;
 		for (auto &s : emptyStages)
@@ -398,6 +400,27 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		{
 			m_passVS[passIndex] = static_cast<Direct3d11_VertexShaderData const *>(
 				pass->m_vertexShader->m_graphicsData);
+
+			// Plan 17-09: compute this pass's texcoord-set key, mirroring
+			// Direct3d9_StaticShaderData::Pass::construct:550-578. Each VS texcoord
+			// tag (MAIN/NRML/DOT3/...) maps to the mesh set index the StaticShader
+			// assigns it; 3 bits per tag. apply() resolves the matching VS variant
+			// so the recompiled VS reads its texcoords from the right registers
+			// (e.g. 1-UV+DOT3 mesh -> MAIN/NRML alias set0, DOT3 -> set1).
+			uint32 key = 0;
+			std::vector<Tag> const &tags = m_passVS[passIndex]->getTextureCoordinateSetTags();
+			int const tagCount = static_cast<int>(tags.size());
+			DEBUG_FATAL(tagCount > 8, ("Plan 17-09: more than 8 texcoord-set tags (%d)", tagCount));
+			for (int t = 0; t < tagCount && t < 8; ++t)
+			{
+				uint8 setIndex = 0;
+				if (!shader.getTextureCoordinateSet(tags[t], setIndex))
+					setIndex = 0;   // mirror D3D9 fallback: missing tag -> set 0
+				if (setIndex > 7)
+					setIndex = 0;   // mirror D3D9 clamp: out-of-range -> 0
+				key |= (static_cast<uint32>(setIndex) << (t * 3));
+			}
+			m_passTexcoordKey[passIndex] = key;
 		}
 
 		// PS: pass->m_pixelShader (public, ShaderImplementation.h:265) -->
@@ -717,8 +740,36 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 		if (passNumber >= 0 && static_cast<size_t>(passNumber) < m_passVS.size())
 		{
 			size_t const idx = static_cast<size_t>(passNumber);
-			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx]);
+			// Plan 17-09: hand the StateCache BOTH the VS data and this pass's
+			// resolved texcoord-set key, so it binds the correct per-key variant
+			// (and passes the key explicitly into layout creation -- never ambient).
+			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx], m_passTexcoordKey[idx]);
 			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
+
+			// Plan 17-09 (GAP-5): feed materialSpecularPower into the VS b0 shadow
+			// (lightData[25].w). Mirrors D3D9 applyLights_vertexShader:577 reading
+			// Direct3d9_StateCache::getSpecularPower(). m_power was captured from
+			// material.getSpecularPower() in construct(). Without this the VS object-
+			// space specular does pow(N.H, 0) = NaN on back/perp vertices -> the
+			// purple/green bump arms. setSpecularPower clamps 0/NaN to the D3D9 default.
+			if (idx < m_passMaterial.size())
+			{
+				PerPassMaterial const &pmPower = m_passMaterial[idx];
+				Direct3d11_StateCache::setSpecularPower(pmPower.m_materialValid ? pmPower.m_power : 32.0f);
+
+				// Plan 17-09 (GAP-5 bump-arm audit): also feed the VS material COLOR
+				// struct (c11/c13/c14) -- mirrors D3D9 StaticShaderData:862
+				// setVertexShaderConstants(VSCR_material, &m_material, 5). The asset VS
+				// seeds its diffuse from cb0[14]=emissive and tints specular by
+				// cb0[13]=specular; without this they were 0 (black VS specular, no
+				// material emissive in the diffuse seed). When the pass has no valid
+				// material, feed zero (matches D3D9 Zero(m_material) default + the
+				// R3-03b zero-material convention used for the PS path below).
+				if (pmPower.m_materialValid)
+					Direct3d11_StateCache::setVertexMaterialColors(pmPower.m_diffuse, pmPower.m_specular, pmPower.m_emissive);
+				else
+					Direct3d11_StateCache::setVertexMaterialColors(DirectX::XMFLOAT4(0,0,0,0), DirectX::XMFLOAT4(0,0,0,0), DirectX::XMFLOAT4(0,0,0,0));
+			}
 
 			// Plan 17-03 R3 (D-04 + HIGH-2 + HIGH-3 + R3-03a + R3-03b + R3-03c + SR-1 + SR-2):
 			// OFFSET-AWARE reflection-driven material + textureFactor upload into the
@@ -1388,24 +1439,38 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			// the visual symptoms (gray-eye / head-clipping diagnostic
 			// from 2026-05-23).
 			PerPassStages const &stages = m_passStages[idx];
+
+			// Plan 17-09 (bump-arm texture-swap fix): the engine resolves textures by
+			// D3D9 stage index, but the recompiled PS may assign SRV registers in a
+			// different order (fxc first-use ordering when splitting sampler2D). Map
+			// each present stage's SRV to the slot the PS actually reads (identity for
+			// single-texture / unreflected PSes). SAMPLERS stay at the stage index --
+			// the PSRC pins sampler registers to stage order (s0=diffuse, s1=normal),
+			// confirmed correct in the RenderDoc capture; only the texture diverged.
+			// Build the SRV slot array FIRST so an absent stage cannot clear a slot a
+			// present stage remapped its SRV into (the slots are a permutation).
+			Direct3d11_PixelShaderProgramData const * const psData = m_passPS[idx];
+			ID3D11ShaderResourceView * srvForSlot[kMaxStages] = {};
 			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
 			{
 				Stage const &stage = stages[slotIdx];
-				if (!stage.m_present)
+				if (stage.m_present && stage.m_texture && *stage.m_texture)
 				{
-					Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
+					int const srvSlot = psData ? psData->getSrvSlotForStage(slotIdx) : slotIdx;
+					if (srvSlot >= 0 && srvSlot < kMaxStages)
+						srvForSlot[srvSlot] = (*stage.m_texture)->getShaderResourceView();
 				}
-				else if (!stage.m_texture || !*stage.m_texture)
-				{
-					Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
+			}
+			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
+			{
+				Stage const &stage = stages[slotIdx];
+				// SRV: bind the (possibly remapped) resource for this slot; a null
+				// clears it -- covers both absent stages and present-but-no-texture.
+				Direct3d11_StateCache::setPixelShaderResource(slotIdx, srvForSlot[slotIdx]);
+				// Sampler: unchanged from Iter-44E -- bound at the stage/sampler
+				// register for every present stage (regardless of texture presence).
+				if (stage.m_present)
 					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
-				}
-				else
-				{
-					Direct3d11_StateCache::setPixelShaderResource(slotIdx,
-						(*stage.m_texture)->getShaderResourceView());
-					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
-				}
 			}
 
 			// Iter-44E one-shot log: first 50 apply() calls that have at
@@ -1465,7 +1530,7 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			// re-using stale state from another shader. Plan 11-09.15
 			// Iter-44E: clear all 8 PS SRV slots (multi-stage extension)
 			// rather than only slot 0.
-			Direct3d11_StateCache::setCurrentVSData(nullptr);
+			Direct3d11_StateCache::setCurrentVSData(nullptr, 0);   // Plan 17-09: clear (key irrelevant)
 			Direct3d11_StateCache::setCurrentPSData(nullptr);
 			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
 				Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);

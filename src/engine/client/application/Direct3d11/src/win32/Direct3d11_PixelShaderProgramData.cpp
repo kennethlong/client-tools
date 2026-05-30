@@ -1119,7 +1119,7 @@ void Direct3d11_PixelShaderProgramData::remove()
 
 // ----------------------------------------------------------------------
 
-ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData)
+ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey)
 {
 	// Plan 11-09.13 Iter-4: lazy per-VS PS generation + cache. Keyed by
 	// VS bytecode hash so identical bytecode shares a PS. Cache miss
@@ -1130,12 +1130,17 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	if (!vsData)
 		return nullptr;
 
-	uint64_t const hash = vsData->getBytecodeHash();
+	// Plan 17-09: resolve the per-key VS variant (cached after the bind path's
+	// first getVariant). Outputs are key-invariant, but keying ms_perVSCache by
+	// THIS variant's bytecode hash keeps the per-VS PS coherent with the exact
+	// variant bound for the draw.
+	Direct3d11_VertexShaderData::Variant const &vsVariant = vsData->getVariant(textureCoordinateSetKey);
+	uint64_t const hash = vsVariant.bytecodeHash;
 	auto it = ms_perVSCache.find(hash);
 	if (it != ms_perVSCache.end())
 		return it->second.Get();   // hit (may be null tombstone)
 
-	std::vector<Direct3d11_ReflectedVSOutput> const &outputs = vsData->getReflectedOutputs();
+	std::vector<Direct3d11_ReflectedVSOutput> const &outputs = vsVariant.reflectedOutputs;
 
 	// No outputs (reflection failed or VS is degenerate) -> tombstone.
 	// Empty PS generator output (validation failure) -> tombstone.
@@ -1394,6 +1399,66 @@ Direct3d11_PixelShaderProgramData::Direct3d11_PixelShaderProgramData(ShaderImple
 								DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
 							}
 
+							// Plan 17-09 (bump-arm texture-swap fix): build the stage->SRV-slot
+							// remap from the reflected texture + sampler bindings. The engine
+							// binds SRVs by D3D9 stage index, but fxc assigns SM4 texture
+							// registers by first-USE order (not the pinned sampler/stage order)
+							// when splitting legacy sampler2D -- so for multi-texture PSes the
+							// texture register != stage. Pair each texture with its sampler BY
+							// NAME (fxc names both after the source `sampler NAME`): the SRV slot
+							// for stage S is the bind point of the texture whose name matches the
+							// sampler at register S. Identity when a stage has no matching pair.
+							{
+								char  samplerNameByReg[8][128] = {};
+								bool  samplerPresent[8]        = {};
+								struct TexBind { char name[128]; UINT bindPoint; };
+								std::vector<TexBind> texBinds;
+								for (UINT r = 0; r < shaderDesc.BoundResources; ++r)
+								{
+									D3D11_SHADER_INPUT_BIND_DESC rb = {};
+									if (FAILED(reflector->GetResourceBindingDesc(r, &rb)) || !rb.Name)
+										continue;
+									if (rb.Type == D3D_SIT_SAMPLER)
+									{
+										if (rb.BindPoint < 8)
+										{
+											strncpy_s(samplerNameByReg[rb.BindPoint], 128, rb.Name, _TRUNCATE);
+											samplerPresent[rb.BindPoint] = true;
+										}
+									}
+									else if (rb.Type == D3D_SIT_TEXTURE)
+									{
+										TexBind tb = {};
+										strncpy_s(tb.name, 128, rb.Name, _TRUNCATE);
+										tb.bindPoint = rb.BindPoint;
+										texBinds.push_back(tb);
+									}
+								}
+								for (int s = 0; s < 8; ++s)
+								{
+									if (!samplerPresent[s])
+										continue;
+									for (TexBind const &tb : texBinds)
+									{
+										if (std::strcmp(tb.name, samplerNameByReg[s]) == 0)
+										{
+											m_srvSlotForStage[s] = static_cast<int>(tb.bindPoint);
+											break;
+										}
+									}
+									if (m_srvSlotForStage[s] >= 0 && m_srvSlotForStage[s] != s)
+									{
+										char msg[256];
+										_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+											"PS-srv-remap shader='%s' stage=%d -> srvSlot=%d (sampler='%s')",
+											pixelShaderProgram.getFileName(), s, m_srvSlotForStage[s],
+											samplerNameByReg[s]);
+										if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, msg);
+										DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+									}
+								}
+							}
+
 							// HIGH-4: PS input signature dump (cache + R3-02b DUAL-ROUTE log).
 							for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
 							{
@@ -1493,6 +1558,7 @@ Direct3d11_PixelShaderProgramData::Direct3d11_PixelShaderProgramData(ShaderImple
 
 bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS(
 	Direct3d11_VertexShaderData       const *vs,
+	uint32                                   textureCoordinateSetKey,
 	Direct3d11_PixelShaderProgramData const *ps)
 {
 	if (!ps)
@@ -1501,7 +1567,7 @@ bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS(
 		return true;    // pre-17-04 default: no VS-side data to compare; let asset PS bind.
 
 	std::vector<Direct3d11_ReflectedPSInputSig>  const &psInputs  = ps->getReflectedPSInputs();
-	std::vector<Direct3d11_ReflectedVSOutput>    const &vsOutputs = vs->getReflectedOutputs();
+	std::vector<Direct3d11_ReflectedVSOutput>    const &vsOutputs = vs->getVariant(textureCoordinateSetKey).reflectedOutputs;   // Plan 17-09
 
 	// Static dedupe set so we emit at most one log line per (VS, PS) pair
 	// across the entire process lifetime. Keys on raw pointers because the
@@ -1655,13 +1721,14 @@ bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS(
 
 bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
 	Direct3d11_VertexShaderData                 const *vs,
+	uint32                                             textureCoordinateSetKey,
 	std::vector<Direct3d11_ReflectedPSInputSig> const &psInputs,
 	void                                        const *psForLog)
 {
 	if (!vs)
 		return true;   // no VS to validate against (mirror native-path default).
 
-	std::vector<Direct3d11_ReflectedVSOutput> const &vsOutputs = vs->getReflectedOutputs();
+	std::vector<Direct3d11_ReflectedVSOutput> const &vsOutputs = vs->getVariant(textureCoordinateSetKey).reflectedOutputs;   // Plan 17-09
 
 	static std::set<std::pair<void const *, void const *>> s_loggedPairs;
 	std::pair<void const *, void const *> const key(static_cast<void const *>(vs), psForLog);
@@ -1766,13 +1833,14 @@ bool Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
 // is a const* at the StateCache call site).
 
 std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *>
-Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData) const
+Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey) const
 {
 	std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *> const kNone(nullptr, nullptr);
 	if (!vsData)
 		return kNone;
 
-	uint32_t const vsOutputSignatureHash = vsData->computeOutputSignatureHash();
+	Direct3d11_VertexShaderData::Variant const &vsVariant = vsData->getVariant(textureCoordinateSetKey);   // Plan 17-09 (outputs key-invariant)
+	uint32_t const vsOutputSignatureHash = vsVariant.outputSigHash;
 
 	// Cache lookup with raw-pointer-reuse staleness guard (MEDIUM): a stored
 	// entry whose hash != the current VS hash is a MISS (rebuild), not a serve.
@@ -1841,10 +1909,10 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 
 	std::string const psrcStr(psrcText);   // strlen-derived (ctor uses the same)
 
-	PsRewriteResult rr = rewritePsMainParameterListForVSOutputs(psrcStr, vsData->getReflectedOutputs());
+	PsRewriteResult rr = rewritePsMainParameterListForVSOutputs(psrcStr, vsVariant.reflectedOutputs);   // Plan 17-09
 	if (rr.status == PsRewriteStatus::Failed)
 	{
-		PsRewriteResult sb = rewritePsMainStructBoundParameterForVSOutputs(psrcStr, vsData->getReflectedOutputs());
+		PsRewriteResult sb = rewritePsMainStructBoundParameterForVSOutputs(psrcStr, vsVariant.reflectedOutputs);
 		if (sb.status == PsRewriteStatus::Failed)
 			return tombstone("param-list rewriter Failed AND struct-bound rewriter Failed (no usable main() reorder)");
 		rr = sb;
@@ -1912,7 +1980,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 			psInStr += b;
 		}
 		std::string vsOutStr;
-		for (Direct3d11_ReflectedVSOutput const &o : vsData->getReflectedOutputs())
+		for (Direct3d11_ReflectedVSOutput const &o : vsVariant.reflectedOutputs)   // Plan 17-09
 		{
 			char b[48];
 			_snprintf_s(b, sizeof(b), _TRUNCATE, "%s%u=o%u ", o.SemanticName, o.SemanticIndex, o.Register);
@@ -1938,7 +2006,7 @@ Direct3d11_PixelShaderProgramData::tryGetOrBuildRewrittenPSForVS(Direct3d11_Vert
 	// falls through to selectFallbackPSForVS rather than binding a PS that reads
 	// garbage. This emits the rewritten-lane verdict log; the StateCache re-check
 	// shares the (vs, ps) dedupe key so the log fires exactly once per pair.
-	if (!isCompatibleWithVS_withExplicitPSInputs(vsData, entry.inputs, static_cast<void const *>(ps.Get())))
+	if (!isCompatibleWithVS_withExplicitPSInputs(vsData, textureCoordinateSetKey, entry.inputs, static_cast<void const *>(ps.Get())))
 		return tombstone("rewritten PS recompiled+reflected but still validated INCOMPATIBLE (see rewrite-diag registers)");
 
 	// Store (overwriting any stale hash-mismatched entry). std::map element

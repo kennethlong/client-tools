@@ -9,6 +9,8 @@
 #include "clientSkeletalAnimation/FirstClientSkeletalAnimation.h"
 #include "clientSkeletalAnimation/SoftwareBlendSkeletalShaderPrimitive.h"
 
+#include <cstdio>   // GAP-6 diagnostic: fopen/fprintf latch dump (temporary)
+
 #include "clientGraphics/Camera.h"
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/CustomizableShader.h"
@@ -327,11 +329,37 @@ void SoftwareBlendSkeletalShaderPrimitive::install()
 	installMemoryBlockManager();
 	RenderCommand::install();
 
-	ms_useMultiStreamVertexBuffers = 
-		   (Graphics::getMaximumVertexBufferStreamCount() > 1) 
-		&& Graphics::supportsStreamOffsets()
-		&& !ConfigClientGraphics::getDisableMultiStreamVertexBuffers()
+	// Plan 17-08 (GAP-6) diagnostic: the multi-stream tangent path (skinned DOT3
+	// surfaced as TEXCOORD2 for bump VS) only fires when this flag latches true.
+	// It is computed ONCE here, so if any input reads a default value (e.g. gl11
+	// caps not yet live at this point in the boot sequence), multi-stream stays
+	// off for the whole session and the bump VS's TEXCOORD2 gets phantom-zeroed
+	// -> normalize(0) -> NaN COLOR0 -> wrong sleeves/hands. Capture each
+	// sub-condition + the final flag so one boot says exactly which input is
+	// false at latch time. (Logic below is unchanged from the original &&-chain.)
+	int  const  gap6MaxStreamCount = Graphics::getMaximumVertexBufferStreamCount();
+	bool const  gap6StreamOffsets  = Graphics::supportsStreamOffsets();
+	bool const  gap6DisableCfg     = ConfigClientGraphics::getDisableMultiStreamVertexBuffers();
+
+	ms_useMultiStreamVertexBuffers =
+		   (gap6MaxStreamCount > 1)
+		&& gap6StreamOffsets
+		&& !gap6DisableCfg
 		;
+
+	DEBUG_REPORT_LOG(true, ("GAP-6 multistream latch: maxStreamCount=%d (>1=%d) supportsStreamOffsets=%d disableMultiStreamCfg=%d -> ms_useMultiStreamVertexBuffers=%d\n",
+		gap6MaxStreamCount, (gap6MaxStreamCount > 1) ? 1 : 0, gap6StreamOffsets ? 1 : 0, gap6DisableCfg ? 1 : 0, ms_useMultiStreamVertexBuffers ? 1 : 0));
+	// GAP-6 diagnostic: DEBUG_REPORT_LOG only reaches OutputDebugString (needs a
+	// debugger/DebugView); the plugin's d3d11-debug.log is InfoQueue-only. Write
+	// the latch result straight to a file in the client CWD (stage/) so a plain
+	// boot captures it with no extra tooling. Temporary -- remove when GAP-6 closes.
+	if (FILE *gap6Log = fopen("gap6_latch.log", "w"))
+	{
+		fprintf(gap6Log,
+			"GAP-6 multistream latch: maxStreamCount=%d (>1=%d) supportsStreamOffsets=%d disableMultiStreamCfg=%d -> ms_useMultiStreamVertexBuffers=%d\n",
+			gap6MaxStreamCount, (gap6MaxStreamCount > 1) ? 1 : 0, gap6StreamOffsets ? 1 : 0, gap6DisableCfg ? 1 : 0, ms_useMultiStreamVertexBuffers ? 1 : 0);
+		fclose(gap6Log);
+	}
 
 #if TRY_FOR_SSE
 	s_useSSE = SseMath::canDoSseMath();

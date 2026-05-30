@@ -4,21 +4,22 @@
 // Phase 11 D3D11 renderer plugin -- vertex shader (HLSL source) compile +
 // ID3D11VertexShader ownership + input-layout cache. Plan 11-05.
 //
-// Per RESEARCH §Pattern 3: D3DCompile vs_5_0 + ShaderCache wiring.
+// Plan 17-09 (GAP-6 fix): the VS is now compiled PER textureCoordinateSetKey,
+// mirroring D3D9 Direct3d9_VertexShaderData::createVertexShader. The asset
+// .vsh declares its texcoord inputs through named tags (MAIN/NRML/DOT3/...)
+// via leading `#define textureCoordinateSet<TAG> textureCoordinateSet<N>` +
+// `DECLARE_textureCoordinateSets`. D3D9 STRIPS those defaults and regenerates
+// them per-mesh from a key (each tag -> the mesh texcoord set index that feeds
+// it), so a 1-UV+DOT3 mesh aliases MAIN/NRML to set0 and lands DOT3 at set1.
+// The pre-17-09 D3D11 path compiled the source defaults verbatim (MAIN=0,
+// NRML=1, DOT3=2), producing a 3-input signature the 2-set mesh can't satisfy
+// -> the bump VS read its tangent from an unfed TEXCOORD2 -> NaN. We now
+// replicate the per-key remap, so each key produces its own compiled variant.
+//
 // Per RESEARCH Pitfall 1: POSITION -> SV_POSITION macro injected.
 // Per RESEARCH Pitfall 6: input-layout cache keyed by (VBFormat,
-// VS-bytecode-hash) -- the same shader compiled with different defines
-// becomes different bytecode and needs its own ID3D11InputLayout.
-//
-// Per CONTEXT D-01: clean rewrite; Direct3d9_VertexShaderData is design
-// reference only. Per D-13: ComPtr ownership only.
-//
-// Engine-side: the asset pipeline ships HLSL text in
-// ShaderImplementationPassVertexShader::m_text (loaded by
-// ShaderImplementation.cpp:2155 from <filename>.vsh under
-// TreeFile::PriorityData). The .vsh format includes a "//hlsl vs_X_Y" header
-// line + the HLSL body; D3D9 parses the header and routes vs_1_1 / vs_2_0
-// through D3DXCompileShader. We always compile vs_5_0 under D3D11 (SPEC R3).
+// VS-bytecode-hash) -- per-key variants have distinct bytecode/hash so the
+// layout cache composes with no cache-key change.
 //
 // ======================================================================
 
@@ -30,11 +31,13 @@
 class MemoryBlockManager;
 
 #include "clientGraphics/ShaderImplementation.h"
+#include "sharedFoundation/Tag.h"            // Plan 17-09: Tag + ConvertStringToTag for texcoord-set tags
 
 #include <cstdint>
 #include <d3d11.h>
 #include <d3d11shader.h>     // Plan 11-09.8: ID3D11ShaderReflection + D3D11_SIGNATURE_PARAMETER_DESC
 #include <d3dcompiler.h>     // D3DReflect + D3DCompile
+#include <unordered_map>     // Plan 17-09: per-key variant cache
 #include <vector>
 #include <wrl/client.h>
 
@@ -67,15 +70,6 @@ struct Direct3d11_ReflectedVSInput
 // can be enforced at bind time -- mirroring Plan 11-09.8's input-side
 // pattern but on the VS-output / PS-input boundary.
 //
-// CODEX-endorsed (consult: 11-09.13-CODEX-CONSULT-reflection-driven-
-// fallback-variant-selection.md). ReadWriteMask is stored alongside
-// ComponentMask because Microsoft Learn signature docs flag both as
-// stage-linkage signals: Mask = which components the signature declares,
-// ReadWriteMask = which components the VS actually wrote. For Variant T
-// selection we check ComponentMask (the signature contract) plus
-// ComponentType (must be FLOAT32 for sampling); ReadWriteMask is
-// preserved for future telemetry / diagnostics.
-//
 // System-value outputs (SV_POSITION etc.) are FILTERED OUT before storage
 // -- only "normal" semantics that may map to a PS input are recorded.
 
@@ -83,7 +77,7 @@ struct Direct3d11_ReflectedVSOutput
 {
 	char                         SemanticName[16];   // null-terminated; truncate beyond 15 chars
 	UINT                         SemanticIndex;
-	UINT                         Register;           // Plan 11-09.13 Iter-4: HW output register the HLSL compiler assigned (o0/o1/o2/...). Load-bearing for D3D11 stage linkage: the PS input at register vN must match VS output at register oN by semantic + component type/mask.
+	UINT                         Register;           // Plan 11-09.13 Iter-4: HW output register the HLSL compiler assigned (o0/o1/o2/...). Load-bearing for D3D11 stage linkage.
 	UINT                         ComponentMask;      // .Mask from D3D11_SIGNATURE_PARAMETER_DESC
 	UINT                         ReadWriteMask;      // .ReadWriteMask -- which components VS wrote
 	D3D_REGISTER_COMPONENT_TYPE  ComponentType;
@@ -94,6 +88,20 @@ struct Direct3d11_ReflectedVSOutput
 class Direct3d11_VertexShaderData : public ShaderImplementationPassVertexShaderGraphicsData
 {
 public:
+
+	// Plan 17-09: one compiled variant per textureCoordinateSetKey. All the
+	// per-compile state that used to be single-instance members now lives here,
+	// keyed by the per-pass texcoord-set mapping. The input-layout cache and PS
+	// reconstruction key off bytecodeHash / outputSigHash, both per-variant.
+	struct Variant
+	{
+		Microsoft::WRL::ComPtr<ID3D11VertexShader>   d3dVS;
+		Microsoft::WRL::ComPtr<ID3DBlob>             bytecode;
+		uint64_t                                     bytecodeHash = 0;
+		std::vector<Direct3d11_ReflectedVSInput>     reflectedInputs;
+		std::vector<Direct3d11_ReflectedVSOutput>    reflectedOutputs;
+		uint32_t                                     outputSigHash = 0;   // Plan 17-07 PS-rewrite-cache salt (outputs only)
+	};
 
 	static void *operator new(size_t size);
 	static void  operator delete(void *memory);
@@ -106,44 +114,20 @@ public:
 	explicit Direct3d11_VertexShaderData(ShaderImplementationPassVertexShader const &vertexShader);
 	virtual ~Direct3d11_VertexShaderData() override;
 
-	// Accessors used by Plan 11-06 state cache / draw dispatch.
-	ID3D11VertexShader *getVertexShader() const;
-	ID3DBlob           *getBytecode() const;
+	// Plan 17-09: the ordered texcoord-set tags parsed from the .vsh header
+	// (MAIN/NRML/DOT3/...). Direct3d11_StaticShaderData uses this list to build
+	// the per-pass textureCoordinateSetKey (mirror Direct3d9_StaticShaderData::
+	// Pass::construct). Empty for tag-less shaders (key is then irrelevant).
+	std::vector<Tag> const & getTextureCoordinateSetTags() const;
 
-	// VS-bytecode hash -- used as the second half of the
-	// (VBFormat, VS-bytecode-hash) input-layout cache key (Pitfall 6).
-	uint64_t            getBytecodeHash() const;
+	// Plan 17-09: fetch (lazily compiling on first request) the compiled variant
+	// for a given texcoord-set key. The caller (StaticShaderData via StateCache)
+	// passes the key EXPLICITLY -- never read from ambient state in cached/async
+	// layout creation. Assembly / compile-failure VS data returns the empty
+	// variant (null d3dVS) and the draw is skipped, matching prior behavior.
+	Variant const & getVariant(uint32 textureCoordinateSetKey) const;
 
-	// Plan 11-09.8: VS-declared input signature (post-reflection,
-	// SV_* filtered). Empty vector if reflection failed (defensive
-	// non-fatal); layout creation then proceeds without phantom-
-	// element augmentation, matching pre-Plan-11-09.8 behavior.
-	std::vector<Direct3d11_ReflectedVSInput> const & getReflectedInputs() const;
-
-	// Plan 11-09.13 Iter-3: VS-declared output signature (post-reflection,
-	// SV_* filtered). Empty vector if reflection failed (defensive
-	// non-fatal); Direct3d11_StateCache's fallback-PS selection then
-	// defaults to Variant M (magenta), matching pre-Iter-3 behavior.
-	std::vector<Direct3d11_ReflectedVSOutput> const & getReflectedOutputs() const;
-
-	// Plan 17-07 (Round-5 review item 7): cheap FNV-1a hash over the sorted
-	// (SemanticName, SemanticIndex, Register, ComponentMask) tuple list of the
-	// reflected VS outputs. Used by Direct3d11_PixelShaderProgramData's per-VS
-	// rewrite cache as (a) the cache-key salt that distinguishes the same PSRC
-	// recompiled against different VS output orderings, and (b) the staleness
-	// guard against raw-VS-pointer reuse (a freed VS whose address is reused by
-	// a new VS with a different output signature). Returns 0 when no reflected
-	// outputs exist (degenerate VS / reflection failed). CONFIRMED NEW this
-	// session: no prior computeOutputSignatureHash / outputSignature symbol
-	// existed in this class.
-	uint32_t computeOutputSignatureHash() const;
-
-	// Plan 11-09.15 Iter-5 diagnostic: expose the engine-side
-	// ShaderImplementationPassVertexShader so drawTriangleFan can dump
-	// VS filename + a source snippet when ms_currentVBFormat.isTransformed()
-	// is true. CODEX consult on XYZRHW-transformed-vertex-handling asked
-	// for filename + reflected inputs/outputs + whether the VS reads
-	// viewportData/c9 vs WVP -- this getter is the access point.
+	// Plan 11-09.15 Iter-5 diagnostic: engine-side shader access point.
 	ShaderImplementationPassVertexShader const *getEngineShader() const { return m_vertexShader; }
 
 private:
@@ -152,7 +136,10 @@ private:
 	Direct3d11_VertexShaderData(Direct3d11_VertexShaderData const &);
 	Direct3d11_VertexShaderData &operator =(Direct3d11_VertexShaderData const &);
 
-	void compileOrLoad(char const *sourceText, size_t sourceLen, char const *displayName);
+	// Plan 17-09: compile one variant for `key`, applying the D3D9-equivalent
+	// per-tag remap macros + DECLARE_textureCoordinateSets. Returns a reference
+	// to the cached variant (inserted into m_variants).
+	Variant const & compileVariant(uint32 textureCoordinateSetKey) const;
 
 private:
 
@@ -161,51 +148,27 @@ private:
 private:
 
 	ShaderImplementationPassVertexShader const * m_vertexShader;
-	Microsoft::WRL::ComPtr<ID3D11VertexShader>   m_d3dVS;
-	Microsoft::WRL::ComPtr<ID3DBlob>             m_bytecode;
-	uint64_t                                     m_bytecodeHash;
-	bool                                         m_isAssembly;  // .vsh starts "//asm vs_..."; we can't compile that under D3D11
+	bool                                         m_isAssembly;  // .vsh starts "//asm vs_..."; cannot compile under D3D11
 
-	// Plan 11-09.8: captured post-compile via D3DReflect.
-	std::vector<Direct3d11_ReflectedVSInput>     m_reflectedInputs;
+	// Plan 17-09: compile body = source AFTER the stripped leading //hlsl +
+	// `#define` lines (mirrors Direct3d9_VertexShaderData m_compileText). The
+	// stripped texcoord `#define`s are regenerated per-key in compileVariant.
+	char const *                                 m_bodyText;
+	size_t                                       m_bodyLen;
 
-	// Plan 11-09.13 Iter-3: VS output signature, parallel capture.
-	std::vector<Direct3d11_ReflectedVSOutput>    m_reflectedOutputs;
+	// Plan 17-09: ordered texcoord-set tags (MAIN/NRML/DOT3/...) parsed once.
+	std::vector<Tag>                             m_textureCoordinateSetTags;
+
+	// Plan 17-09: per-key compiled variants (lazy). mutable so getVariant() can
+	// stay const while compiling on demand.
+	mutable std::unordered_map<uint32_t, Variant> m_variants;
 };
 
 // ======================================================================
 
-inline ID3D11VertexShader *Direct3d11_VertexShaderData::getVertexShader() const
+inline std::vector<Tag> const & Direct3d11_VertexShaderData::getTextureCoordinateSetTags() const
 {
-	return m_d3dVS.Get();
-}
-
-// ----------------------------------------------------------------------
-
-inline ID3DBlob *Direct3d11_VertexShaderData::getBytecode() const
-{
-	return m_bytecode.Get();
-}
-
-// ----------------------------------------------------------------------
-
-inline uint64_t Direct3d11_VertexShaderData::getBytecodeHash() const
-{
-	return m_bytecodeHash;
-}
-
-// ----------------------------------------------------------------------
-
-inline std::vector<Direct3d11_ReflectedVSInput> const & Direct3d11_VertexShaderData::getReflectedInputs() const
-{
-	return m_reflectedInputs;
-}
-
-// ----------------------------------------------------------------------
-
-inline std::vector<Direct3d11_ReflectedVSOutput> const & Direct3d11_VertexShaderData::getReflectedOutputs() const
-{
-	return m_reflectedOutputs;
+	return m_textureCoordinateSetTags;
 }
 
 // ======================================================================
