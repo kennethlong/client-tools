@@ -1,11 +1,37 @@
 # Handoff: Phase 17 — char-select D3D11 beachhead
 
-**Updated:** 2026-05-29 (Waves 5–6 + 17-06b executed; 17-07 is all that remains before 17-05 T4–5)
+**Updated:** 2026-05-29 (GAP-4 + GAP-5 DONE → char-select renders LIT+textured; GAP-6 next)
 **Branch:** koogie-msvc-cpp20-base
-**Worktree:** D:\Code\swg-client-v2
-**Status:** Plans 17-01..17-04 **done** · 17-05 **T1–3 DONE, PARKED** at `17-05-task3` (PRE-gap `6668b7cac`) · 17-06a **DONE** (`cafbe6111`+`73d15101f`: userConstants = flat float4[17]) · 17-06b **DONE — Case C DEFERRED** (`97d7bbf93`+`c701b229e`: latent `writeVarFloat4AtOffset`, no evidence-backed offset; dual-AI confirmed) · **17-07 NEXT (the only remaining code plan)** · 17-05 T4–5 **deferred to after 17-07**
+**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` — Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree, then copy `src/compile/win32/Direct3d11/Debug/gl11_d.dll` → main `stage\gl11_d.dll` for boots (worktree has no stage/, postbuild copy "fails" harmlessly). `$env:MSBUILD` builds `...\build\win32\Direct3d11.vcxproj` Debug|Win32 /nodeReuse:false.
+**Status:** 17-01..17-04 done · 17-05 T1–3 PARKED · 17-06a/06b done · 17-07/GAP-3 DONE (9/9 binds) · **GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE+COMMITTED `e1db7bf65`** → char-select asset-PS renders LIT+textured (face/skin, tunic, pants, shoes correct). **GAP-6 (bump sleeves/hands) infra committed but DORMANT** · 17-05 T4–5 (A/B + verdict) still pending.
 
-> ## ▶ RESUME HERE (2026-05-29 checkpoint) → implement GAP-4 (asset-PS b0 constant feed)
+> ## ▶ RESUME HERE (2026-05-29) → GAP-6 / D-08: activate multi-stream (then 17-05 A/B)
+>
+> **Full detail + every RenderDoc finding is in memory `project_gap4_lights_fed_still_black`.** Read it first.
+>
+> **GAP-6** = bump sleeves/hands render wrong (purple/green). Root cause RenderDoc-confirmed: the bump VS
+> reads its skinned DOT3 tangent at `TEXCOORD2`, but char meshes are SINGLE-stream and the DOT3 lands at a
+> different texcoord index → phantom-zeroed → `normalize(0)` → NaN COLOR0. Dual-AI consult (codex+cursor,
+> `.planning/research/CONSULT-17-08-gap6-tangent-basis*`) converged: fix the renderer input layout, not the
+> shader. The fix (global TEXCOORD index across streams, mirror D3D9) is IMPLEMENTED in gl11
+> (Direct3d11_VertexBufferDescriptorMap/VertexDeclarationMap) + gl11 caps flipped (Direct3d11.cpp:217/221
+> supportsStreamOffsets→true, maxStreamCount→2) + config `stage/client_d.cfg [ClientGraphics]
+> disableMultiStreamVertexBuffers=false`. **BUT multi-stream won't ACTIVATE** (VBVectorActive stays 0):
+> `ms_useMultiStreamVertexBuffers` latches false at `SoftwareBlendSkeletalShaderPrimitive::install()`
+> (SetupClientSkeletalAnimation.cpp:162) — caps+config are correct (Graphics caps are LIVE gl11 calls,
+> KEY_BOOL section="ClientGraphics"), so the suspect is INIT ORDER (install runs before the gl11 renderer
+> is up → reads default 1/false → latches).
+>
+> **NEXT STEP:** add a log at `SoftwareBlendSkeletalShaderPrimitive.cpp:330` printing the 3 conditions +
+> the final flag to confirm; if init-order, re-evaluate/force the flag after the renderer installs. This is
+> a CLIENT-side change (clientSkeletalAnimation) → **full SwgClient_d.exe rebuild (ABI cascade)**, not a
+> gl11-only build. Alternative if multi-stream stays blocked: single-stream DOT3-index fix in SBSSP (place
+> the DOT3 at the TEXCOORD index the bump VS reads — register=2/3/4, float3, per the PS-input-sig log).
+> After GAP-6: **17-05 T4–5** = D3D9 baseline A/B (rasterMajor=5 Release stack) + author 17-VERIFICATION.md
+> (expect CHAR-01/02/03 PASS on pipeline/lighting/face/tunic/pants/shoes; the bump parts upgrade to PASS
+> once GAP-6 lands).
+>
+> _(Superseded GAP-4 design block below — kept for the root-cause derivation; GAP-4 is now DONE+committed.)_
 >
 > **17-07 / GAP-3 is DONE** (commits `f9e5ac569`→`d8cc1ca99`, SUMMARY `8639c5458`). The asset-PS bind
 > rate went 0/9 → **9/9** (`path=rewritten`) via VS-signature RECONSTRUCTION (axis-b reorder was wrong —
