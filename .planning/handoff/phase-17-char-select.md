@@ -1,35 +1,37 @@
 # Handoff: Phase 17 — char-select D3D11 beachhead
 
-**Updated:** 2026-05-29 (GAP-4 + GAP-5 DONE → char-select renders LIT+textured; GAP-6 next)
+**Updated:** 2026-05-30 (GAP-6 bump arms FIXED → char-select renders FULLY correct; 17-05 T4–5 next)
 **Branch:** koogie-msvc-cpp20-base
-**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` — Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree, then copy `src/compile/win32/Direct3d11/Debug/gl11_d.dll` → main `stage\gl11_d.dll` for boots (worktree has no stage/, postbuild copy "fails" harmlessly). `$env:MSBUILD` builds `...\build\win32\Direct3d11.vcxproj` Debug|Win32 /nodeReuse:false.
-**Status:** 17-01..17-04 done · 17-05 T1–3 PARKED · 17-06a/06b done · 17-07/GAP-3 DONE (9/9 binds) · **GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE+COMMITTED `e1db7bf65`** → char-select asset-PS renders LIT+textured (face/skin, tunic, pants, shoes correct). **GAP-6 (bump sleeves/hands) infra committed but DORMANT** · 17-05 T4–5 (A/B + verdict) still pending.
+**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` — Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree with `& $env:MSBUILD <worktree>\src\build\win32\swg.sln /t:Direct3d11 /p:Configuration=Debug /p:Platform=Win32 /m /nodeReuse:false`. The worktree `stage` is a **junction → main stage**, so the postbuild copy auto-deploys `gl11_d.dll` to `D:\Code\swg-client-v2\stage` (no manual copy; see memory `project_d3d11_worktree_stage_junction`).
+**Status:** 17-01..17-04 done · 17-05 T1–3 PARKED · 17-06a/06b done · 17-07/GAP-3 DONE (9/9 binds) · GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE `e1db7bf65` · **GAP-6 (bump sleeves/hands) FIXED+COMMITTED `a0d5ac80f` (pushed to origin)** → char-select asset-PS renders LIT+textured for ALL parts (face/skin, tunic, pants, shoes, AND bump sleeves/hands). · 17-05 T4–5 (A/B + verdict) still pending.
 
-> ## ▶ RESUME HERE (2026-05-29) → GAP-6 / D-08: activate multi-stream (then 17-05 A/B)
+> ## ▶ RESUME HERE (2026-05-30) → 17-05 Tasks 4–5 (D3D9 baseline A/B + author 17-VERIFICATION.md)
 >
-> **Full detail + every RenderDoc finding is in memory `project_gap4_lights_fed_still_black`.** Read it first.
+> **GAP-6 / bump arms are DONE** (`a0d5ac80f`). Char-select renders fully correct. The multi-stream
+> TEXCOORD theory below was SUPERSEDED — see the resolution note. Next is the phase verification:
 >
-> **GAP-6** = bump sleeves/hands render wrong (purple/green). Root cause RenderDoc-confirmed: the bump VS
-> reads its skinned DOT3 tangent at `TEXCOORD2`, but char meshes are SINGLE-stream and the DOT3 lands at a
-> different texcoord index → phantom-zeroed → `normalize(0)` → NaN COLOR0. Dual-AI consult (codex+cursor,
-> `.planning/research/CONSULT-17-08-gap6-tangent-basis*`) converged: fix the renderer input layout, not the
-> shader. The fix (global TEXCOORD index across streams, mirror D3D9) is IMPLEMENTED in gl11
-> (Direct3d11_VertexBufferDescriptorMap/VertexDeclarationMap) + gl11 caps flipped (Direct3d11.cpp:217/221
-> supportsStreamOffsets→true, maxStreamCount→2) + config `stage/client_d.cfg [ClientGraphics]
-> disableMultiStreamVertexBuffers=false`. **BUT multi-stream won't ACTIVATE** (VBVectorActive stays 0):
-> `ms_useMultiStreamVertexBuffers` latches false at `SoftwareBlendSkeletalShaderPrimitive::install()`
-> (SetupClientSkeletalAnimation.cpp:162) — caps+config are correct (Graphics caps are LIVE gl11 calls,
-> KEY_BOOL section="ClientGraphics"), so the suspect is INIT ORDER (install runs before the gl11 renderer
-> is up → reads default 1/false → latches).
+> **17-05 T4–5:** capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack — see "D3D9 capture
+> workaround" below) + author `17-VERIFICATION.md`. Expect CHAR-01/02/03 PASS on pipeline/lighting and ALL
+> body parts now (bump parts included). Append the POST-gap build provenance (HEAD `a0d5ac80f` + gl11_d.dll
+> mtime) to evidence/README.md §6 before the A/B.
 >
-> **NEXT STEP:** add a log at `SoftwareBlendSkeletalShaderPrimitive.cpp:330` printing the 3 conditions +
-> the final flag to confirm; if init-order, re-evaluate/force the flag after the renderer installs. This is
-> a CLIENT-side change (clientSkeletalAnimation) → **full SwgClient_d.exe rebuild (ABI cascade)**, not a
-> gl11-only build. Alternative if multi-stream stays blocked: single-stream DOT3-index fix in SBSSP (place
-> the DOT3 at the TEXCOORD index the bump VS reads — register=2/3/4, float3, per the PS-input-sig log).
-> After GAP-6: **17-05 T4–5** = D3D9 baseline A/B (rasterMajor=5 Release stack) + author 17-VERIFICATION.md
-> (expect CHAR-01/02/03 PASS on pipeline/lighting/face/tunic/pants/shoes; the bump parts upgrade to PASS
-> once GAP-6 lands).
+> ### How GAP-6 was actually fixed (the multi-stream theory was WRONG)
+> The purple/green bump arms were NOT a tangent/NaN problem. Full detail: memory
+> `project_d3d11_multitexture_srv_slot_swap`. Two parts:
+> 1. **Tangent**: the per-key VS texcoord-set variant (Fix A — `Direct3d11_VertexShaderData`/`VertexDeclarationMap`
+>    per-`textureCoordinateSetKey` recompile) gave the bump VS its real DOT3 tangent at TEXCOORD1. This did
+>    NOT require activating multi-stream — single-stream per-key remap sufficed, so the
+>    `SoftwareBlendSkeletalShaderPrimitive` multi-stream-activation rabbit hole was unnecessary.
+> 2. **The real culprit — TEXTURE-SLOT SWAP**: fxc assigns SM4 texture registers by first-USE order when
+>    splitting legacy `sampler2D`. specmap_bump samples `normalMap` before `diffuseMap` → normalMap=t0,
+>    diffuseMap=t1, opposite the engine's D3D9 stage-index SRV bind → the blue normal map was sampled as
+>    albedo. Fixed by a reflection-driven stage→SRV-slot remap (`Direct3d11_PixelShaderProgramData::
+>    getSrvSlotForStage`, used in `Direct3d11_StaticShaderData::apply`). Also added the VS material c11–c15
+>    feed (`Direct3d11_StateCache::setVertexMaterialColors`, mirrors D3D9 `VSCR_material`). The VS-NaN that
+>    the old GAP-6 handoff (`gap6-bump-arms-vs-lighting-nan.md`) chased was already fixed by GAP-5 + the
+>    material feed — RenderDoc "Debug this Vertex" confirmed finite COLOR0/COLOR1.
+> The GAP-6 multi-stream infra (caps flip, VertexBufferDescriptorMap changes) committed in `e1db7bf65`
+> remains DORMANT/unused — harmless; revisit only if a true multi-stream asset ever needs it.
 >
 > _(Superseded GAP-4 design block below — kept for the root-cause derivation; GAP-4 is now DONE+committed.)_
 >
