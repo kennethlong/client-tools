@@ -1,0 +1,4 @@
+sxe 0xc0000090
+bu gl05_r!Direct3d9_VertexShaderData::createVertexShader "r fpsw; gc"
+bl
+g
