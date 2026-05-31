@@ -25,6 +25,7 @@
 
 #include <map>
 #include <vector>
+#include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded D3DX compile (FP-fault fix)
 #include <d3dx9.h>
 #include <d3dx9shader.h>
 
@@ -70,6 +71,47 @@ namespace Direct3d9_VertexShaderDataNamespace
 	Defines        ms_defines;
 	char           ms_scratchBuffer[2 * 1024];
 	IncludeCache * ms_includeCache;
+
+	// ------------------------------------------------------------------
+	// Phase 19 fix (2026-05-31): the D3DX library is statically compiled FROM SOURCE into the
+	// D3D9 plugin (gl05/gl07). Built with the modern MSVC toolchain its shader compiler unmasks
+	// FP exceptions and trips an invalid-op / divide-by-zero during its post-compile FP cleanup
+	// (the FWAIT inside _control87, observed as 0xC0000090) on certain vertex shaders -- the
+	// retail VS2003-built D3DX did not. Confirmed by control test: the pristine SWG Source
+	// VS2003 client renders the same shader/asset/spot without faulting; ours crashes. The shader
+	// bytecode is fully produced BEFORE the cleanup fault, so wrap the call in SEH, reset the FPU,
+	// and keep the compiled result. Extracted to a helper because __try/__except cannot live in a
+	// function that needs C++ object unwinding (C2712). One fix covers all VSPS plugins (gl05/07).
+	// TODO (Fix B, deferred): port D3D9 shader compile to D3DCompile, which is immune to this
+	// D3DX-era FPU bug (the D3D11 path already uses it). See .planning todo.
+	inline int direct3d9CompileFpExceptionFilter(unsigned long code)
+	{
+		// STATUS_FLOAT_* SEH codes occupy 0xC000008D..0xC0000093 (denormal..underflow).
+		return (code >= 0xC000008DUL && code <= 0xC0000093UL) ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	HRESULT compileVertexShaderFpGuarded(
+		LPCSTR src, UINT srcLen, D3DXMACRO const *defines, LPD3DXINCLUDE includeHandler,
+		LPCSTR functionName, LPCSTR profile, DWORD flags,
+		LPD3DXBUFFER *outShader, LPD3DXBUFFER *outErrors)
+	{
+		HRESULT hr = E_FAIL;
+		__try
+		{
+			hr = D3DXCompileShader(src, srcLen, defines, includeHandler, functionName, profile, flags, outShader, outErrors, NULL);
+			_clearfp();
+		}
+		__except (direct3d9CompileFpExceptionFilter(GetExceptionCode()))
+		{
+			// D3DX faulted during its post-compile FP cleanup; *outShader already holds the
+			// compiled bytecode. Reset the FPU to a sane masked state and report success when
+			// we have bytecode (mirrors the no-fault path's result on the old toolchain).
+			_fpreset();
+			_clearfp();
+			hr = (outShader && *outShader) ? S_OK : E_FAIL;
+		}
+		return hr;
+	}
 }
 using namespace Direct3d9_VertexShaderDataNamespace;
 
@@ -430,13 +472,17 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 
 		IncludeHandler includeHandler;
 		ID3DXBuffer *error = NULL;
-		HRESULT result = D3DXCompileShader(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, "main", target, 0, &compiledShader, &error, NULL);
+		// Phase 19: SEH-guarded to survive the modern-toolchain D3DX post-compile FP fault
+		// (0xC0000090) -- see compileVertexShaderFpGuarded above.
+		HRESULT result = compileVertexShaderFpGuarded(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, "main", target, 0, &compiledShader, &error);
 
 		//-----------------------------------------------------------------------------------
-		// DBE - I was getting strange Float Invalid Operation Exceptions (0xC0000090) in the 
-		// Debug Build on floating point instructions which I eventually traced back to the FPU 
+		// DBE - I was getting strange Float Invalid Operation Exceptions (0xC0000090) in the
+		// Debug Build on floating point instructions which I eventually traced back to the FPU
 		// being left in some bad state after a call to D3DXCompileShader (on a certain .vsh).
 		// I also found that calling '_clearfp()' cleared up the problem.
+		// (Retained belt-and-suspenders; the SEH guard above is the actual fix for the fault
+		//  that occurs INSIDE the call, which this post-call _clearfp cannot reach.)
 		_clearfp();
 		//-----------------------------------------------------------------------------------
 
