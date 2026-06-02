@@ -14,9 +14,19 @@
 #include "ConfigDirect3d11.h"
 
 #include "sharedFoundation/MemoryBlockManager.h"
+#include "sharedFoundation/Os.h"
 
 #include <d3d11.h>
 #include <wrl/client.h>
+
+// Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). See the
+// matching block in Direct3d11_DynamicVertexBufferData.cpp. Smoking-gun test:
+// log every dynamic IB ring lock that runs OFF the main/render thread.
+// RESULT 2026-05-31: SILENT (CPU-thread race dead). P19_DISCARD_ONLY forces
+// WRITE_DISCARD on every lock to test the CPU/GPU intra-frame reuse hazard.
+// RESULT 2026-05-31: DISCARD-only ring = NO CHANGE -> dynamic ring EXONERATED.
+#define P19_THREAD_AUDIT 0
+#define P19_DISCARD_ONLY 0
 
 // ======================================================================
 
@@ -159,13 +169,32 @@ Index *Direct3d11_DynamicIndexBufferData::lock(int numberOfIndices)
 	m_numberOfIndices = numberOfIndices;
 	int const lengthBytes = numberOfIndices * static_cast<int>(sizeof(Index));
 
+#if P19_THREAD_AUDIT
+	if (!Os::isMainThread())
+	{
+		static int s_offThreadIBLocks = 0;
+		++s_offThreadIBLocks;
+		char tbuf[160];
+		_snprintf_s(tbuf, sizeof(tbuf), _TRUNCATE,
+			"[P19THREAD] dynamic IB ring lock OFF MAIN THREAD tid=%lu count=%d numIndices=%d",
+			GetCurrentThreadId(), s_offThreadIBLocks, numberOfIndices);
+		ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+		if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, tbuf);
+	}
+#endif
+
 	++ms_locksSinceBeginFrame;
 	++ms_locksSinceResourceCreation;
 	++ms_locksEver;
 
 	D3D11_MAP    mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
 	int          discard = 0;
-	if (ms_newFrame || ms_usedNumberOfIndices + numberOfIndices > ms_numberOfIndices)
+#if P19_DISCARD_ONLY
+	bool const p19ForceDiscard = true;  // diagnostic: rename every lock
+#else
+	bool const p19ForceDiscard = false;
+#endif
+	if (p19ForceDiscard || ms_newFrame || ms_usedNumberOfIndices + numberOfIndices > ms_numberOfIndices)
 	{
 		ms_newFrame = false;
 		++ms_discardsSinceBeginFrame;

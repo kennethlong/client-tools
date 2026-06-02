@@ -84,6 +84,13 @@ namespace Direct3d11_DeviceNamespace
 	// this and is a no-op when null.
 	ComPtr<ID3D11InfoQueue>        ms_infoQueue;
 
+	// Phase 19 (19-04 Task 0) DEV-ONLY value-dump frame counter. Monotonic,
+	// incremented once per drainInfoQueue() (per-frame boundary). Tags the
+	// neutral b0 / setLights dumps so a value's frame-to-frame variation is
+	// unambiguous across StaticShaderData.cpp + LightManager.cpp. REVERT after
+	// the cross-frame light-feed question is answered (P19_LIGHTDUMP).
+	unsigned                       s_diagFrameIndex = 0u;
+
 	// Plan 11-08 Iter-1.7: file sink for InfoQueue messages. Opened in
 	// append mode at create() time when ms_infoQueue is acquired so a
 	// crash mid-frame doesn't lose any messages drained since the
@@ -440,6 +447,7 @@ void Direct3d11_Device::destroy()
 
 ID3D11Device *        Direct3d11_Device::getDevice()  { return ms_device.Get(); }
 ID3D11RenderTargetView * Direct3d11_Device::getBackBufferRTV() { return ms_backBufferRTV.Get(); }
+ID3D11DepthStencilView * Direct3d11_Device::getDepthStencilView() { return ms_depthStencilDSV.Get(); }   // Phase 19: shared screen depth (::46); RenderTarget binds it on the full-screen scene RT so the world depth-tests (D3D9 parity -- depth surface persists across SetRenderTarget for screen-sized RTs)
 ID3D11Buffer *        Direct3d11_Device::getPhantomZeroBuffer() { return ms_phantomZeroBuffer.Get(); }
 
 // Plan 11-09 Iter-2.7f (CODEX Round 6): frame-draw-activity flag + pending
@@ -856,6 +864,31 @@ bool Direct3d11_Device::present()
 		             static_cast<unsigned>(reason)));
 	}
 	FATAL_DX_HR("IDXGISwapChain1::Present failed: %s", hr);
+
+#if 0   // Phase 19 DIAGNOSTIC (REVERT -- set to 0): force full CPU<->GPU serialization
+		// each frame to test the "RenderDoc replay is clean -> non-deterministic resource
+		// content" hypothesis. Spins the CPU until the GPU finishes this frame's work. If the
+		// bright flicker STOPS with this on, the bug is a CPU-upload / GPU-read RACE (a buffer
+		// or texture read before its update completes -> fix = proper resource versioning/sync).
+		// If it PERSISTS, it's UNINITIALIZED resource content (-> fix = init-on-create).
+		// Intentionally kills pipelining (slow) -- diagnostic only, DO NOT SHIP.
+	if (ms_context && ms_device)
+	{
+		ms_context->Flush();
+		D3D11_QUERY_DESC qd;
+		qd.Query = D3D11_QUERY_EVENT;
+		qd.MiscFlags = 0;
+		ID3D11Query *q = nullptr;
+		if (SUCCEEDED(ms_device->CreateQuery(&qd, &q)) && q)
+		{
+			ms_context->End(q);
+			BOOL done = FALSE;
+			while (ms_context->GetData(q, &done, sizeof(done), 0) != S_OK)
+			{ /* spin until the GPU reaches this point */ }
+			q->Release();
+		}
+	}
+#endif
 	return true;
 }
 
@@ -973,6 +1006,18 @@ void Direct3d11_Device::drainInfoQueue()
 	}
 
 	ms_infoQueue->ClearStoredMessages();
+
+	// Phase 19 (19-04 Task 0) DEV-ONLY: advance the value-dump frame index once
+	// per drained frame. REVERT with the P19_LIGHTDUMP dumps.
+	++s_diagFrameIndex;
+}
+
+// ----------------------------------------------------------------------
+// Phase 19 (19-04 Task 0) DEV-ONLY value-dump frame accessor. REVERT after use.
+
+unsigned Direct3d11_Device::getDiagFrameIndex()
+{
+	return s_diagFrameIndex;
 }
 
 // ----------------------------------------------------------------------

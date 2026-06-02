@@ -25,6 +25,18 @@
 
 #include <cstring>
 
+// Phase 19 world-corruption fix/diagnostic. WRITE_DISCARD returns UNDEFINED
+// memory for the whole cbuffer; updateVS/updatePS write only sizeBytes, so a
+// shader reading past sizeBytes samples per-frame driver garbage -> flat
+// cycling red/yellow/teal surfaces on world geometry. Zero the tail to make
+// unwritten registers read 0. If this kills the corruption it confirms the
+// partial-cbuffer-undefined-read; the proper fix is then to always upload the
+// full register payload the bound shader expects.
+// 2026-06-01: crash under RenderDoc was the DEBUG client's D3D11 debug layer +
+// RenderDoc on a 32-bit process, NOT this memset (Release client captured fine
+// 50x last night). Color fix stays ON; capture on the Release client.
+#define P19_CBUF_ZERO_TAIL 1
+
 // ======================================================================
 
 using Microsoft::WRL::ComPtr;
@@ -164,6 +176,14 @@ void Direct3d11_ConstantBuffer::updateVS(int slot, void const *data, size_t size
 		ms_vsBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	FATAL_DX_HR("Direct3d11_ConstantBuffer::updateVS: Map failed: %s", hr);
 
+#if P19_CBUF_ZERO_TAIL
+	// Phase 19 fix/diagnostic: WRITE_DISCARD returns UNDEFINED driver memory for
+	// the WHOLE buffer; callers write only sizeBytes, so a shader whose cbuffer
+	// layout reads past sizeBytes samples garbage that VARIES PER FRAME (flat
+	// cycling saturated colors). Zero the undefined tail so unwritten registers
+	// read as 0 instead of per-frame garbage.
+	std::memset(mapped.pData, 0, static_cast<size_t>(kMaxCBufferBytes));
+#endif
 	std::memcpy(mapped.pData, data, sizeBytes);
 
 	Direct3d11_Device::getContext()->Unmap(ms_vsBuffers[slot].Get(), 0);
@@ -185,6 +205,12 @@ void Direct3d11_ConstantBuffer::updatePS(int slot, void const *data, size_t size
 		ms_psBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	FATAL_DX_HR("Direct3d11_ConstantBuffer::updatePS: Map failed: %s", hr);
 
+#if P19_CBUF_ZERO_TAIL
+	// Phase 19 fix/diagnostic (see updateVS): zero the WRITE_DISCARD undefined
+	// tail so a PS reading past sizeBytes gets 0, not per-frame garbage (the
+	// flat cycling red/yellow/teal surfaces).
+	std::memset(mapped.pData, 0, static_cast<size_t>(kMaxCBufferBytes));
+#endif
 	std::memcpy(mapped.pData, data, sizeBytes);
 
 	Direct3d11_Device::getContext()->Unmap(ms_psBuffers[slot].Get(), 0);

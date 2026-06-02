@@ -35,6 +35,7 @@
 #include <wrl/client.h>
 
 #include <map>
+#include <vector>  // P19 retain-textures diagnostic
 
 // ======================================================================
 
@@ -484,8 +485,24 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 
 // ----------------------------------------------------------------------
 
+// Phase 19 world-corruption DIAGNOSTIC. Set to 1 to leak every underlying
+// D3D11 texture/SRV so its GPU memory is NEVER recycled. The replay-clean
+// signature (live corruption, RenderDoc replay clean) implies the live GPU
+// samples freed/recycled memory, not wrong tracked contents -> suspected
+// use-after-free on LOD eviction. If world corruption VANISHES with this on,
+// a dangling SRV / freed-texture UAF is confirmed. REVERT to 0 afterward.
+// RESULT 2026-05-31: leaking ALL textures = NO change -> texture lifetime
+// EXONERATED. Capture-clean confirmed via RenderDoc MCP. Left at 0.
+#define P19_RETAIN_TEXTURES 0
+
 Direct3d11_TextureData::~Direct3d11_TextureData()
 {
+#if P19_RETAIN_TEXTURES
+	static std::vector<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> > s_retainSrv;
+	static std::vector<Microsoft::WRL::ComPtr<ID3D11Resource> >           s_retainTex;
+	if (m_srv)     s_retainSrv.push_back(m_srv);
+	if (m_texture) s_retainTex.push_back(m_texture);
+#endif
 	// ComPtr handles Release().
 	m_srv.Reset();
 	m_texture.Reset();
@@ -673,6 +690,19 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 			lockData.isReadOnly() ? D3D11_MAP_READ : D3D11_MAP_WRITE, 0, &mapped);
 		FATAL_DX_HR("Direct3d11_TextureData::lock Map (staging 3D) failed: %s", hr);
 
+		// Phase 19 world-corruption fix (CODEX+Cursor consult, .planning/
+		// research/CONSULT-19-d3d11-world-corruption*): BC staging dims were
+		// padded UP to the 4-pixel block boundary above, but Map() returns
+		// UNINITIALIZED driver memory and the engine writes only the logical
+		// block-rows. unlock()'s 4-aligned CopySubresourceRegion then bakes
+		// those unwritten padded texels into the destination mip. Zero the
+		// mapped staging first so the padded region is deterministic.
+		if (!lockData.isReadOnly() && mapped.pData && isBlockCompressedFormat(native))
+		{
+			ZeroMemory(mapped.pData,
+				static_cast<size_t>(mapped.DepthPitch) * static_cast<size_t>(lockData.getDepth()));
+		}
+
 		lockData.m_pixelData  = mapped.pData;
 		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
 		lockData.m_slicePitch = static_cast<int>(mapped.DepthPitch);
@@ -721,6 +751,23 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 		hr = context->Map(staging, 0,
 			lockData.isReadOnly() ? D3D11_MAP_READ : D3D11_MAP_WRITE, 0, &mapped);
 		FATAL_DX_HR("Direct3d11_TextureData::lock Map (staging 2D) failed: %s", hr);
+
+		// Phase 19 world-corruption fix (CODEX+Cursor consult, .planning/
+		// research/CONSULT-19-d3d11-world-corruption*): the BC staging was
+		// padded UP to the 4-pixel block boundary above, but Map() returns
+		// UNINITIALIZED driver memory and the engine writes only the logical
+		// block-rows. unlock()'s 4-aligned CopySubresourceRegion then bakes
+		// the unwritten padded texels into the destination mip -> garbage in
+		// bottom-of-chain BC mips, sampled as wrong-texture corruption on
+		// distant/LOD geometry (D3D9 LockRects sub-block mips directly, so it
+		// never hit this). Zero the mapped staging first so the padded region
+		// is deterministic. stagingHeight is a 4-multiple here, so blockRows
+		// = stagingHeight/4 spans exactly the padded block grid.
+		if (!lockData.isReadOnly() && mapped.pData && isBlockCompressedFormat(native))
+		{
+			size_t const blockRows = static_cast<size_t>(stagingHeight) / 4u;
+			ZeroMemory(mapped.pData, static_cast<size_t>(mapped.RowPitch) * blockRows);
+		}
 
 		lockData.m_pixelData  = mapped.pData;
 		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);

@@ -1162,6 +1162,28 @@ namespace Direct3d11_StateCacheNamespace
 	// Apply pending bindings to the GPU pipeline before issuing the draw.
 	// Order mirrors RESEARCH "Pre-draw setup" enumeration in 11-06-PLAN.md.
 
+	// Phase 19 cell-shell diagnostic: thousands of draws/session are skipped
+	// at the VS stage (skippedNullVS=12k-26k) with d3dVS null ("//asm VS or
+	// compile failure"). Cell walls/floor are suspected to be among them ->
+	// clear-only. Log, once per unique shader template, which shaders get
+	// VS-skipped so we can name the cell-shell culprit. REVERT (set to 0).
+#define P19_SKIP_AUDIT 1
+#if P19_SKIP_AUDIT
+	void p19LogSkipOnce(char const *reason)
+	{
+		static std::set<std::string> s_logged;
+		char const *sn = Direct3d11_StaticShaderData::getActiveStaticShaderName();
+		std::string key = std::string(reason) + "|" + (sn ? sn : "(null)");
+		if (!s_logged.insert(key).second)
+			return;
+		char buf[320];
+		_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+			"[P19SKIP] draw skipped (%s) shader='%s'", reason, sn ? sn : "(null)");
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, buf);
+	}
+#endif
+
 	bool applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY topology)
 	{
 		ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
@@ -1179,12 +1201,18 @@ namespace Direct3d11_StateCacheNamespace
 		if (!resolveShaders())
 		{
 			++ms_skippedDrawsNullVS;
+#if P19_SKIP_AUDIT
+			p19LogSkipOnce("resolveShaders-fail");
+#endif
 			return false;
 		}
 		ID3D11VertexShader *vs = ms_currentVSData->getVariant(ms_currentVSKey).d3dVS.Get();   // Plan 17-09: per-key variant
 		if (!vs)
 		{
 			++ms_skippedDrawsNullVS;
+#if P19_SKIP_AUDIT
+			p19LogSkipOnce("VS-null-asm-or-compilefail");
+#endif
 			return false;       // //asm VS or compile failure -- skip
 		}
 
@@ -1258,7 +1286,19 @@ namespace Direct3d11_StateCacheNamespace
 		// native-asset-PS > rewritten-cached-PS > dynamic-fallback-PS.
 		ID3D11PixelShader *psToBind = nullptr;
 		char const *bindPath = "none";
-		if (ms_currentPSData && ms_currentPSData->getPixelShader()
+		// Phase 19: when the VS is the generic //asm FALLBACK (isAssembly), it
+		// emits only SV_Position + TEXCOORD0 + const-white COLOR0 -- NOT the
+		// asm-computed varyings the asset PS expects. Skip the native/rewritten
+		// asset-PS lanes entirely and route straight to selectFallbackPSForVS,
+		// whose buildHlslForVSOutputs PS mirrors the fallback VS output sig
+		// (textured-passthrough). Binding an asset PS here would read undeclared
+		// varyings -> wrong/magenta. See Direct3d11_VertexShaderData::isAssembly.
+		bool const vsIsFallback = ms_currentVSData && ms_currentVSData->isAssembly();
+		if (vsIsFallback)
+		{
+			// fall through to the fallback-PS selection block below
+		}
+		else if (ms_currentPSData && ms_currentPSData->getPixelShader()
 			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentVSKey, ms_currentPSData))
 		{
 			// 1. Native asset PS validated by the unchanged ctor-time validator.
@@ -1457,6 +1497,15 @@ void Direct3d11_StateCache::install()
 	ssDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 	ssDesc.MinLOD         = 0.0f;
 	ssDesc.MaxLOD         = D3D11_FLOAT32_MAX;
+	// Phase 19 DIAGNOSTIC (P19_MAXLOD0): clamp to mip 0 only. Tests whether the
+	// world corruption lives in the low mips (bad content OR not-yet-uploaded
+	// streaming transient). Corruption gone -> mip chain implicated. REVERT.
+// RESULT 2026-05-31: MaxLOD=0 = NO CHANGE -> mip chain EXONERATED (it's a flat
+// per-frame cbuffer-garbage color, not a texture). Reverted.
+#define P19_MAXLOD0 0
+#if P19_MAXLOD0
+	ssDesc.MaxLOD         = 0.0f;
+#endif
 
 	HRESULT const hr = Direct3d11_Device::getDevice()->CreateSamplerState(&ssDesc, ms_defaultSampler.GetAddressOf());
 	FATAL_DX_HR("Direct3d11_StateCache::install: CreateSamplerState (default) failed: %s", hr);

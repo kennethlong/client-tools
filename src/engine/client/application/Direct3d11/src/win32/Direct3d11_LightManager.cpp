@@ -16,6 +16,7 @@
 #include "Direct3d11_LightManager.h"
 
 #include "Direct3d11_ConstantBuffer.h"
+#include "Direct3d11_Device.h"   // Phase 19 (19-04 Task 0) DEV-ONLY: getInfoQueue + getDiagFrameIndex for the neutral light-list dump (REVERT)
 
 #include "clientGraphics/Light.h"
 
@@ -24,8 +25,17 @@
 #include "sharedObject/Object.h"
 
 #include <vector>
+#include <cstdio>            // Phase 19 (19-04 Task 0) DEV-ONLY: _snprintf_s for the light-list dump (REVERT)
+#include <d3d11sdklayers.h>  // Phase 19 (19-04 Task 0) DEV-ONLY: ID3D11InfoQueue::AddApplicationMessage + severity enum (REVERT)
 
 // ======================================================================
+
+// Phase 19 (19-04 Task 0) DEV-ONLY neutral light-feed value-dump. Compile-guarded
+// so it is trivially revertible once the cross-frame light-feed question is answered.
+// Set to 0 (or delete the guarded blocks) to remove. Pairs with the b0 upload dump in
+// Direct3d11_StaticShaderData.cpp under the same macro.
+// OFF 2026-06-01: served its purpose (lights reach b0); reduces 32-bit heap pressure.
+#define P19_LIGHTDUMP 0
 
 using DirectX::XMFLOAT4;
 
@@ -171,6 +181,59 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 	Direct3d11_ConstantBuffer::bindVS(kLightingCBSlot);
 	Direct3d11_ConstantBuffer::updatePS(kLightingCBSlot, &cb, sizeof(cb));
 	Direct3d11_ConstantBuffer::bindPS(kLightingCBSlot);
+
+#if P19_LIGHTDUMP
+	// Phase 19 (19-04 Task 0) DEV-ONLY neutral dump: the SOURCE light list this
+	// setLights call saw, in iteration order, plus what the snapshot kept. Logs
+	// the first few setLights calls per frame to bound volume. NEUTRAL: it does
+	// not assume a cause -- it lets us see whether the list order/content (and
+	// therefore the "first directional" the snapshot keeps) varies frame-to-frame
+	// while the camera is still. REVERT after the question is answered.
+	{
+		static unsigned s_lastFrame = 0xFFFFFFFFu;
+		static int      s_callThisFrame = 0;
+		unsigned const frame = Direct3d11_Device::getDiagFrameIndex();
+		if (frame != s_lastFrame) { s_lastFrame = frame; s_callThisFrame = 0; }
+		int const callIdx = s_callThisFrame++;
+		if (callIdx < 6)
+		{
+			if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			{
+				char line[400];
+				_snprintf_s(line, sizeof(line), _TRUNCATE,
+					"[P19DUMP] f=%u setLights#%d listSz=%d dirKept=%d ambient=(%.3f,%.3f,%.3f) "
+					"firstDir=(%.3f,%.3f,%.3f) firstDirCol=(%.3f,%.3f,%.3f) pts=%d",
+					frame, callIdx, static_cast<int>(lightList.size()),
+					directionalAssigned ? 1 : 0,
+					cb.ambientColor.x, cb.ambientColor.y, cb.ambientColor.z,
+					cb.directionalDir.x, cb.directionalDir.y, cb.directionalDir.z,
+					cb.directionalColor.x, cb.directionalColor.y, cb.directionalColor.z,
+					pointLightCount);
+				iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, line);
+
+				// Per-light rows in iteration order (cap 8) -- the raw selection input.
+				int li = 0;
+				bool markedFirstDir = false;
+				for (Light const *light : lightList)
+				{
+					if (!light) { ++li; continue; }
+					if (li >= 8) break;
+					VectorArgb const &c = light->getScaledDiffuseColor();
+					float const inten = light->getScaledDiffuseIntensity();
+					int const t = static_cast<int>(light->getType());
+					bool const isFirstDir = (!markedFirstDir && light->getType() == Light::T_parallel);
+					if (isFirstDir) markedFirstDir = true;
+					char row[300];
+					_snprintf_s(row, sizeof(row), _TRUNCATE,
+						"[P19DUMP] f=%u   light[%d] type=%d col=(%.3f,%.3f,%.3f) inten=%.3f%s",
+						frame, li, t, c.r, c.g, c.b, inten, isFirstDir ? " <-firstDir" : "");
+					iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, row);
+					++li;
+				}
+			}
+		}
+	}
+#endif
 }
 
 // ----------------------------------------------------------------------

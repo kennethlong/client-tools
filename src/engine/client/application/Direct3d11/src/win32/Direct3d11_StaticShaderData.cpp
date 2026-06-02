@@ -40,6 +40,13 @@
 #include <d3d11shader.h>   // Plan 17-06a GAP-2 discovery: ID3D11ShaderReflectionType inner-walk of userConstants
 #include <d3dcompiler.h>   // Plan 17-06a GAP-2 discovery: D3DReflect re-reflection at one-shot dump time
 
+// Phase 19 (19-04 Task 0) DEV-ONLY neutral b0 upload value-dump. Compile-guarded
+// so it is trivially revertible. Must match the same macro in
+// Direct3d11_LightManager.cpp. Set to 0 / delete the guarded block to remove.
+// OFF 2026-06-01: b0 clean + color bug fixed; the ~1M-msg [P19FULL] scanner was
+// flooding a 1.2GB log + the in-proc D3D11 InfoQueue (32-bit heap pressure).
+#define P19_LIGHTDUMP 0
+
 // ======================================================================
 
 MemoryBlockManager *Direct3d11_StaticShaderData::ms_memoryBlockManager = nullptr;
@@ -240,6 +247,14 @@ namespace
 		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 		desc.MinLOD         = 0.0f;
 		desc.MaxLOD         = D3D11_FLOAT32_MAX;
+		// Phase 19 DIAGNOSTIC (P19_MAXLOD0): clamp the ASSET-PS sampler to mip 0
+		// only -- the path world geometry actually uses. Corruption gone ->
+		// low-mip content/upload-transient implicated. REVERT.
+// RESULT 2026-05-31: MaxLOD=0 = NO CHANGE -> mip chain EXONERATED. Reverted.
+#define P19_MAXLOD0 0
+#if P19_MAXLOD0
+		desc.MaxLOD         = 0.0f;
+#endif
 		// BorderColor zeroed (D3D9 sibling doesn't override; D3D11 default
 		// matches D3D9 fallback of opaque-black border).
 		return desc;
@@ -908,6 +923,52 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
 							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
 						}
+#if P19_LIGHTDUMP
+						// Phase 19 (19-04 Task 0) DEV-ONLY neutral b0 upload dump: the ACTUAL
+						// dot3 bytes about to be uploaded for THIS draw (what the GPU sees),
+						// read back from staging. Logs the first b0 draws each frame. NEUTRAL:
+						// reads the uploaded values regardless of d3.valid, so a value STABLE
+						// across frames while pixels still cycle REFUTES the light-feed story,
+						// and a value that JUMPS while the camera is still implicates it (and
+						// the setLights dump says why). REVERT after the question is answered.
+						{
+							static unsigned s_lastFrame = 0xFFFFFFFFu;
+							static int      s_b0ThisFrame = 0;
+							unsigned const frame = Direct3d11_Device::getDiagFrameIndex();
+							if (frame != s_lastFrame) { s_lastFrame = frame; s_b0ThisFrame = 0; }
+							int const b0Idx = s_b0ThisFrame++;
+							if (b0Idx < 48)
+							{
+								using namespace Direct3d11_LegacyPSConstantRegisters;
+								DirectX::XMFLOAT4 upDir, upDiff, upSpec;
+								std::memcpy(&upDir,  staging.data() + PSCR_dot3LightDirection    * 16, sizeof(upDir));
+								std::memcpy(&upDiff, staging.data() + PSCR_dot3LightDiffuseColor  * 16, sizeof(upDiff));
+								std::memcpy(&upSpec, staging.data() + PSCR_dot3LightSpecularColor * 16, sizeof(upSpec));
+								char const *sn = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+								if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+								{
+									// Phase 19 (19-04 Task 0b): also log the per-material color the PS
+									// reads (matDiff + textureFactor). If THESE jump frame-to-frame for
+									// the same surface while the light feed is stable, the material/asset
+									// path is the cycling source, not lighting.
+									char line[512];
+									_snprintf_s(line, sizeof(line), _TRUNCATE,
+										"[P19DUMP] f=%u b0#%d shader='%s' d3valid=%d upDir=(%.3f,%.3f,%.3f,%.3f) "
+										"upDiff=(%.3f,%.3f,%.3f) upSpec=(%.3f,%.3f,%.3f) "
+										"matV=%d matDiff=(%.3f,%.3f,%.3f,%.3f) tfV=%d texFac=(%.3f,%.3f,%.3f,%.3f)",
+										frame, b0Idx, (sn && *sn) ? sn : "(empty)", d3.valid ? 1 : 0,
+										upDir.x, upDir.y, upDir.z, upDir.w,
+										upDiff.x, upDiff.y, upDiff.z,
+										upSpec.x, upSpec.y, upSpec.z,
+										pm.m_materialValid ? 1 : 0,
+										pm.m_diffuse.x, pm.m_diffuse.y, pm.m_diffuse.z, pm.m_diffuse.w,
+										pm.m_textureFactorValid ? 1 : 0,
+										pm.m_textureFactor.x, pm.m_textureFactor.y, pm.m_textureFactor.z, pm.m_textureFactor.w);
+									iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, line);
+								}
+							}
+						}
+#endif
 					}
 
 					// Lookup + write helper. Returns true on a successful write so the
@@ -1268,6 +1329,45 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// bound at Direct3d11_StateCache.cpp:1138. No StateCache edit needed.
 					// If a future asset surfaces a non-{0,2} bind point, extend the
 					// pre-draw bind loop there.
+#if P19_LIGHTDUMP
+					// Phase 19 (19-05) DEV: full b0 register dump of the FINAL staging (all
+					// non-zero c5..c24) per isLegacyB0 draw, capped per frame. Goal: find the
+					// register that VARIES for the SAME shader frame-to-frame -- the shared-shadow
+					// RMW stale-inheritance leak (writeShadowBack at :1331 persists every reg, so a
+					// draw that doesn't overwrite c8+ inherits the prior draw's bright value). Logs
+					// every draw in-process, so it catches the leak whenever it occurs regardless of
+					// camera/timing (unlike RenderDoc capture). REVERT after the reg is identified.
+					if (isLegacyB0)
+					{
+						static unsigned s_p19fLastFrame = 0xFFFFFFFFu;
+						static int      s_p19fThisFrame  = 0;
+						unsigned const p19fFrame = Direct3d11_Device::getDiagFrameIndex();
+						if (p19fFrame != s_p19fLastFrame) { s_p19fLastFrame = p19fFrame; s_p19fThisFrame = 0; }
+						if (s_p19fThisFrame++ < 250)
+						{
+							char const *p19sn = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+							if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+							{
+								char p19line[700];
+								bool const p19d3v = Direct3d11_LightManager::getPixelDot3State().valid;
+								int p19o = _snprintf_s(p19line, sizeof(p19line), _TRUNCATE,
+									"[P19FULL] f=%u d3v=%d sh='%s'", p19fFrame, p19d3v ? 1 : 0, (p19sn && *p19sn) ? p19sn : "(empty)");
+								for (int p19c = 0; p19c < 25 && p19o > 0 && p19o < 620; ++p19c)
+								{
+									DirectX::XMFLOAT4 p19r;
+									std::memcpy(&p19r, staging.data() + p19c * 16, sizeof(p19r));
+									if (p19r.x != 0.0f || p19r.y != 0.0f || p19r.z != 0.0f || p19r.w != 0.0f)
+									{
+										int const p19w = _snprintf_s(p19line + p19o, sizeof(p19line) - p19o, _TRUNCATE,
+											" c%d=(%.2f,%.2f,%.2f,%.2f)", p19c, p19r.x, p19r.y, p19r.z, p19r.w);
+										if (p19w > 0) p19o += p19w;
+									}
+								}
+								iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, p19line);
+							}
+						}
+					}
+#endif
 					Direct3d11_ConstantBuffer::updatePS(layout.BindPoint, staging.data(), layout.TotalSize);
 
 					// Plan 17-08 (GAP-4) Producer B: persist the merged staging back into
@@ -1473,6 +1573,34 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
 			}
 
+#if P19_LIGHTDUMP
+			// Phase 19 (19-04 Task 0b) DEV-ONLY: the ACTUAL SRVs bound for THIS draw,
+			// per slot, after the stage->SRV remap. Correlate by shader+frame with the
+			// b0 line. If a surface's bound SRV pointers change frame-to-frame while it
+			// still cycles, an SRV-slot/texture instability (Phase-17 precedent) is the
+			// cycling source; if they are stable, textures are not the cause. REVERT after.
+			{
+				static unsigned s_lastFrameSrv = 0xFFFFFFFFu;
+				static int      s_srvThisFrame = 0;
+				unsigned const frameSrv = Direct3d11_Device::getDiagFrameIndex();
+				if (frameSrv != s_lastFrameSrv) { s_lastFrameSrv = frameSrv; s_srvThisFrame = 0; }
+				int const srvIdx = s_srvThisFrame++;
+				if (srvIdx < 48)
+				{
+					char const *snv = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+					if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+					{
+						char line[512];
+						_snprintf_s(line, sizeof(line), _TRUNCATE,
+							"[P19DUMP] f=%u srv#%d shader='%s' pass=%d srv=[%p %p %p %p %p %p %p %p]",
+							frameSrv, srvIdx, (snv && *snv) ? snv : "(empty)", passNumber,
+							(void*)srvForSlot[0], (void*)srvForSlot[1], (void*)srvForSlot[2], (void*)srvForSlot[3],
+							(void*)srvForSlot[4], (void*)srvForSlot[5], (void*)srvForSlot[6], (void*)srvForSlot[7]);
+						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, line);
+					}
+				}
+			}
+#endif
 			// Iter-44E one-shot log: first 50 apply() calls that have at
 			// least one present stage with index > 0 (the new territory
 			// this iter opens up). Tells us which assets actually exercise

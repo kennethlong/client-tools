@@ -86,6 +86,7 @@
 #include <cstdint>        // Plan 17-07: uint32_t hash
 #include <cstdio>         // Plan 17-09: _snprintf_s for generated macro strings
 #include <cstring>
+#include <set>            // Phase 19: one-shot-per-filename fallback telemetry dedupe
 #include <string>         // Plan 17-09: generated per-key macro strings (kept alive across D3DCompile)
 #include <vector>
 #include <d3d11.h>
@@ -152,6 +153,129 @@ namespace Direct3d11_VertexShaderDataNamespace
 	// getToken / skipRestOfTheLine helpers above. The old parseHeader (//hlsl vs
 	// //asm only, no #define strip) was removed -- the constructor's tokenizer
 	// supersedes it.
+
+	// ------------------------------------------------------------------
+	// Phase 19: fallback VS for legacy //asm vertex programs.
+	//
+	// D3DCompile cannot consume D3D9 vertex assembly, so interior/structural/
+	// sky geometry that ships as `//asm` `.vsh` produced a NULL d3dVS -> the
+	// draw was skipped (skippedNullVS / [P19SKIP]) -> cell walls/floor/ceiling
+	// + sky never rendered (handoff facet 5). The PIXEL path already has a
+	// fallback (Phase 17: selectFallbackPSForVS -> buildHlslForVSOutputs); the
+	// VERTEX path had none. This generic HLSL VS restores the symmetry: it
+	// applies the standard object->clip WVP (objectWorldCameraProjectionMatrix
+	// @ b0 c0 -- the exact transform3d() the //hlsl VS use, row-vector mul +
+	// PACK_MATRIX_ROW_MAJOR to match the transposed upload) and forwards
+	// TEXCOORD0, emitting a CONST WHITE COLOR0 so the reflection-driven
+	// fallback PS samples t0/s0 * white = the diffuse texture. Design:
+	// .planning/research/CONSULT-19-vs-fallback-interior-asm-SYNTHESIS.md
+	// (CODEX + Cursor converged, code-grounded).
+	//
+	// Input is MINIMAL (POSITION0 + TEXCOORD0 only): missing semantics are
+	// backed by phantom-zero elements at slot 15 (augmentWithPhantomElements).
+	// COLOR0 is EMITTED const-white, never DECLARED as an input -- a mesh
+	// without vertex color would otherwise feed COLOR0=0 and the PS would
+	// multiply the texture to black.
+	//
+	// LIMITATIONS (first cut, by design -- the visibility bridge, not parity):
+	//   * No lighting / baked vertex color -> flat / over-bright vs D3D9.
+	//   * Only TEXCOORD0 forwarded -> lightmaps / detail UVs (TEXCOORD1+) lost.
+	//   * Static-world transform ONLY: transformed/RHW geometry (e.g.
+	//     gradient_sky, POSITION as XYZRHW) is double-transformed and will look
+	//     wrong. A dedicated transformed/sky variant is the documented
+	//     follow-up; the long-term fix is authoring //hlsl versions of the
+	//     shared //asm `.vsh` set (restores lighting/lightmaps/sky).
+	char const * const kAssemblyFallbackVSSource =
+		"cbuffer SwgVertexConstants : register(b0)\n"
+		"{\n"
+		"    float4x4 objectWorldCameraProjectionMatrix : packoffset(c0);\n"
+		"};\n"
+		"struct VSIn  { float3 position : POSITION0; float2 tc0 : TEXCOORD0; };\n"
+		"struct VSOut { float4 position : SV_POSITION; float2 tc0 : TEXCOORD0; float4 color : COLOR0; };\n"
+		"VSOut main(VSIn input)\n"
+		"{\n"
+		"    VSOut o;\n"
+		"    o.position = mul(float4(input.position, 1.0f), objectWorldCameraProjectionMatrix);\n"
+		"    o.tc0      = input.tc0;\n"
+		"    o.color    = float4(1.0f, 1.0f, 1.0f, 1.0f);\n"
+		"    return o;\n"
+		"}\n";
+
+	// Compile the fallback VS into outBlob (+ outHash for the .cso cache key /
+	// input-layout cache). Source + defines are key-INDEPENDENT, so every
+	// texcoord-set key shares one cached blob. Returns false on compile failure
+	// (caller leaves d3dVS null -> draw skipped, matching prior behavior); we
+	// deliberately do NOT FATAL here (our own controlled source failing should
+	// not crash a world load).
+	bool compileAssemblyFallbackVS(char const *displayName, ComPtr<ID3DBlob> &outBlob, uint64_t &outHash)
+	{
+		std::vector<D3D_SHADER_MACRO> defines;
+		defines.push_back({ "D3D11",             "1" });
+		defines.push_back({ "D3D11_PROFILE",     kVertexShaderProfile });
+		defines.push_back({ "D3D11_VS_FALLBACK", "1" });   // salts the cache key; distinguishes from any asset VS
+		defines.push_back({ nullptr,             nullptr });
+
+		size_t   const srcLen = std::strlen(kAssemblyFallbackVSSource);
+		uint64_t const hash   = Direct3d11_ShaderCache::hashSource(
+			kAssemblyFallbackVSSource, srcLen, defines.data());
+		outHash = hash;
+
+		ComPtr<ID3DBlob> blob;
+		if (!Direct3d11_ShaderCache::tryLoad(hash, blob))
+		{
+			UINT flags = 0;
+	#ifdef _DEBUG
+			flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	#else
+			flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+	#endif
+			flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+			flags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;   // match the transposed WVP upload (transform3d convention)
+
+			char virtName[160];
+			_snprintf_s(virtName, sizeof(virtName), _TRUNCATE,
+				"vs_fallback(%s)", (displayName && *displayName) ? displayName : "asm");
+
+			ComPtr<ID3DBlob> errors;
+			HRESULT const hr = D3DCompile(
+				kAssemblyFallbackVSSource, srcLen, virtName,
+				defines.data(), nullptr /*no #include*/, "main", kVertexShaderProfile,
+				flags, 0, blob.GetAddressOf(), errors.GetAddressOf());
+			if (FAILED(hr) || !blob)
+			{
+				char const *err = errors ? static_cast<char const *>(errors->GetBufferPointer()) : "no error blob";
+				DEBUG_REPORT_LOG_PRINT(true,
+					("Direct3d11_VertexShaderData: FALLBACK VS compile FAILED for //asm '%s': %s\n",
+					(displayName && *displayName) ? displayName : "asm", err));
+				return false;
+			}
+			Direct3d11_ShaderCache::store(hash, blob.Get());
+		}
+		outBlob = blob;
+		return true;
+	}
+
+	// One-shot-per-filename telemetry: which //asm .vsh now get the fallback VS
+	// (handoff NEXT STEP 2: ".vsh filename telemetry on the asm path"). Dual
+	// route (DEBUG_REPORT_LOG + InfoQueue) so it shows alongside [P19SKIP] in
+	// the RenderDoc/info log. Census these names -> author //hlsl for the
+	// shared set (the long-term correctness fix).
+	void logAssemblyFallbackOnce(char const *displayName)
+	{
+		static std::set<std::string> s_logged;
+		std::string const key = displayName ? displayName : "(null)";
+		if (!s_logged.insert(key).second)
+			return;
+		DEBUG_REPORT_LOG_PRINT(true,
+			("[P19VSFALLBACK] generic world-transform VS bound for //asm '%s'\n", key.c_str()));
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+		{
+			char buf[320];
+			_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+				"[P19VSFALLBACK] generic world-transform VS bound for //asm '%s'", key.c_str());
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+		}
+	}
 }
 using namespace Direct3d11_VertexShaderDataNamespace;
 
@@ -247,19 +371,21 @@ Direct3d11_VertexShaderData::Direct3d11_VertexShaderData(ShaderImplementationPas
 
 	if (m_isAssembly)
 	{
-		// D3D9-era vertex shader assembly (vs_1_1 / vs_2_0). D3DCompile
-		// does not accept assembly; reassembly via D3DAssemble is gone
-		// from the modern SDK. Record the situation; variant.d3dVS stays NULL
-		// and Plan 11-06's draw dispatch will skip these passes (or
-		// trigger a build-time error if an asset surfaces here in target
-		// scenes). Per Plan 11-01 D-04a finding: the Tatooine + cantina
-		// scenes did not surface FFP usage; assembly VS usage in those
-		// scenes is also expected to be zero, but logging is kept loud
-		// in case an asset surprises us.
+		// D3D9-era vertex shader assembly (vs_1_1 / vs_2_0). D3DCompile does
+		// not accept assembly; reassembly via D3DAssemble is gone from the
+		// modern SDK. Phase 19: rather than leave variant.d3dVS NULL (which
+		// made the draw-dispatch SKIP the pass -> interiors/structural/sky
+		// invisible -- handoff facet 5), compileVariant() now binds a GENERIC
+		// FALLBACK VS (world-transform + TEXCOORD0 + const-white COLOR0) for
+		// the //asm case. We DON'T early-return here anymore; compileVariant's
+		// m_isAssembly branch produces the fallback lazily per key, and the
+		// draw path forces the matching fallback PS lane. The Plan 11-01 D-04a
+		// expectation (cantina has zero //asm VS) proved WRONG: the interior
+		// cell shell + sky use unconverted //asm `.vsh`.
 		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11_VertexShaderData: '%s' is //asm vs_*; no D3D11 compile path. NULL VS bound; Plan 11-06 will skip pass.\n",
+			("Direct3d11_VertexShaderData: '%s' is //asm vs_*; no native D3D11 path -- Phase 19 generic fallback VS will be bound.\n",
 			vertexShader.getFilename()));
-		return;
+		// fall through: variants (incl. the fallback) compile lazily in getVariant().
 	}
 
 	// Plan 17-09: variants are compiled lazily, per texcoord-set key, in getVariant().
@@ -324,6 +450,136 @@ static uint32_t computeOutputSignatureHashFor(std::vector<Direct3d11_ReflectedVS
 }
 
 // ----------------------------------------------------------------------
+//
+// Shared post-compile tail for BOTH the normal //hlsl path and the Phase 19
+// //asm fallback path: disassembly dump (diagnostic), CreateVertexShader, and
+// D3DReflect-driven input/output signature capture + output-sig hash. The
+// caller must have already set variant.bytecode + variant.bytecodeHash. Reads
+// the blob through variant.bytecode so the body below is identical to the
+// historical inline tail (the local `blob` alias preserves it verbatim).
+
+static void finalizeVariantFromBytecode(Direct3d11_VertexShaderData::Variant &variant, char const *displayName)
+{
+	ID3DBlob * const blob = variant.bytecode.Get();
+	if (!blob)
+		return;
+
+	// Plan 11-09.15 Iter-7: dump disassembled VS bytecode to a single
+	// append-only file for offline analysis. First compile per session
+	// truncates the file; subsequent compiles append. Output: stage/vs-disasm-all.txt
+	{
+		static bool s_iter7FirstWrite = true;
+		Microsoft::WRL::ComPtr<ID3DBlob> disasmBlob;
+		HRESULT const disasmHr = D3DDisassemble(
+			blob->GetBufferPointer(),
+			blob->GetBufferSize(),
+			0, nullptr, disasmBlob.GetAddressOf());
+		if (SUCCEEDED(disasmHr) && disasmBlob)
+		{
+			char const * const mode = s_iter7FirstWrite ? "wb" : "ab";
+			s_iter7FirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/vs-disasm-all.txt", mode);
+			if (fp)
+			{
+				char header[512];
+				int const headerLen = _snprintf_s(header, sizeof(header), _TRUNCATE,
+					"\n=== Plan 11-09.15 Iter-7 VS disassembly: %s hash=0x%016llX bytecode_size=%zu ===\n",
+					displayName ? displayName : "<unknown>",
+					static_cast<unsigned long long>(variant.bytecodeHash),
+					blob->GetBufferSize());
+				if (headerLen > 0)
+					fwrite(header, 1, static_cast<size_t>(headerLen), fp);
+				size_t const disasmSize = disasmBlob->GetBufferSize();
+				size_t writeSize = disasmSize;
+				if (writeSize > 0)
+				{
+					char const * const disasmText = static_cast<char const *>(disasmBlob->GetBufferPointer());
+					if (disasmText[writeSize - 1] == '\0')
+						--writeSize;
+				}
+				if (writeSize > 0)
+					fwrite(disasmBlob->GetBufferPointer(), 1, writeSize, fp);
+				fclose(fp);
+			}
+		}
+	}
+
+	// Create the ID3D11VertexShader from the bytecode blob.
+	HRESULT const hr = Direct3d11_Device::getDevice()->CreateVertexShader(
+		blob->GetBufferPointer(),
+		blob->GetBufferSize(),
+		nullptr,
+		variant.d3dVS.GetAddressOf());
+	FATAL_DX_HR("Direct3d11_VertexShaderData::CreateVertexShader failed: %s", hr);
+
+	// Plan 11-09.8 / 11-09.13 Iter-3: capture VS input + output signatures via
+	// D3DReflect. Reflection failure is treated as defensive non-fatal; both
+	// reflectedInputs and reflectedOutputs stay empty.
+	variant.reflectedInputs.clear();
+	variant.reflectedOutputs.clear();
+	ComPtr<ID3D11ShaderReflection> reflector;
+	HRESULT const reflectHr = D3DReflect(
+		blob->GetBufferPointer(),
+		blob->GetBufferSize(),
+		IID_PPV_ARGS(reflector.GetAddressOf()));
+	if (SUCCEEDED(reflectHr) && reflector)
+	{
+		D3D11_SHADER_DESC shaderDesc = {};
+		if (SUCCEEDED(reflector->GetDesc(&shaderDesc)))
+		{
+			variant.reflectedInputs.reserve(shaderDesc.InputParameters);
+			for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
+			{
+				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
+				if (FAILED(reflector->GetInputParameterDesc(i, &desc)))
+					continue;
+				// Filter SV_* system-value inputs -- auto-generated by the IA.
+				if (desc.SystemValueType != D3D_NAME_UNDEFINED)
+					continue;
+
+				Direct3d11_ReflectedVSInput ri = {};
+				if (desc.SemanticName)
+				{
+					strncpy_s(ri.SemanticName, sizeof(ri.SemanticName),
+					          desc.SemanticName, _TRUNCATE);
+				}
+				ri.SemanticIndex = desc.SemanticIndex;
+				ri.ComponentMask = desc.Mask;
+				ri.ComponentType = desc.ComponentType;
+				variant.reflectedInputs.push_back(ri);
+			}
+
+			variant.reflectedOutputs.reserve(shaderDesc.OutputParameters);
+			for (UINT i = 0; i < shaderDesc.OutputParameters; ++i)
+			{
+				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
+				if (FAILED(reflector->GetOutputParameterDesc(i, &desc)))
+					continue;
+				if (desc.SystemValueType != D3D_NAME_UNDEFINED)
+					continue;
+
+				Direct3d11_ReflectedVSOutput ro = {};
+				if (desc.SemanticName)
+				{
+					strncpy_s(ro.SemanticName, sizeof(ro.SemanticName),
+					          desc.SemanticName, _TRUNCATE);
+				}
+				ro.SemanticIndex  = desc.SemanticIndex;
+				ro.Register       = desc.Register;
+				ro.ComponentMask  = desc.Mask;
+				ro.ReadWriteMask  = desc.ReadWriteMask;
+				ro.ComponentType  = desc.ComponentType;
+				variant.reflectedOutputs.push_back(ro);
+			}
+		}
+	}
+
+	// Plan 17-09: per-variant output-signature hash (outputs only).
+	variant.outputSigHash = computeOutputSignatureHashFor(variant.reflectedOutputs);
+}
+
+// ----------------------------------------------------------------------
 
 Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::getVariant(uint32 textureCoordinateSetKey) const
 {
@@ -347,11 +603,31 @@ Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::compil
 	size_t       const sourceLen   = m_bodyLen;
 	char const * const displayName = m_vertexShader ? m_vertexShader->getFilename() : nullptr;
 
-	if (m_isAssembly || !sourceText || sourceLen == 0)
+	// Phase 19: legacy //asm vertex programs can't compile under D3D11. Instead
+	// of leaving d3dVS null (which skipped the draw -> interiors/sky invisible),
+	// bind a generic world-transform fallback VS so the geometry is at least
+	// drawn textured. See compileAssemblyFallbackVS preamble + CONSULT-19
+	// synthesis. The fallback is key-independent; we still cache per key (cheap,
+	// shares one .cso). On fallback compile failure we keep the old behavior
+	// (null d3dVS -> draw skipped).
+	if (m_isAssembly)
+	{
+		logAssemblyFallbackOnce(displayName);
+		ComPtr<ID3DBlob> fbBlob;
+		uint64_t         fbHash = 0;
+		if (!compileAssemblyFallbackVS(displayName, fbBlob, fbHash) || !fbBlob)
+			return variant;
+		variant.bytecode     = fbBlob;
+		variant.bytecodeHash = fbHash;
+		finalizeVariantFromBytecode(variant, displayName);
+		return variant;
+	}
+
+	if (!sourceText || sourceLen == 0)
 	{
 		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11_VertexShaderData: no compile path for '%s' (assembly=%d emptyBody=%d)\n",
-			displayName ? displayName : "<unnamed>", m_isAssembly ? 1 : 0, (sourceText && sourceLen) ? 0 : 1));
+			("Direct3d11_VertexShaderData: no compile path for '%s' (emptyBody=1)\n",
+			displayName ? displayName : "<unnamed>"));
 		return variant;
 	}
 
@@ -469,7 +745,7 @@ Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::compil
 	defines.push_back({ "POSITION",               "SV_POSITION" });
 	defines.push_back({ "D3D11",                  "1" });
 	defines.push_back({ "D3D11_PROFILE",          kVertexShaderProfile });
-	defines.push_back({ "D3D11_REWRITE_VERSION",  "16" });   // Plan 17-09: per-key texcoord-set remap macros; invalidates Plan 11-09.6 cache.
+	defines.push_back({ "D3D11_REWRITE_VERSION",  "17" });   // Phase 19: 16 -> 17 (shared rewriter gained Rule F specular-pow guard; bump keeps VS .cso cache in lockstep with the rewriter logic). Plan 17-09: per-key texcoord-set remap macros; invalidates Plan 11-09.6 cache.
 
 	// Plan 17-09: regenerate the texcoord-set remap macros from the key, mirroring
 	// Direct3d9_VertexShaderData::createVertexShader:356-421. Tag i -> mesh set
@@ -693,165 +969,10 @@ Direct3d11_VertexShaderData::Variant const & Direct3d11_VertexShaderData::compil
 	variant.bytecode = blob;
 	variant.bytecodeHash = hash;
 
-	// Plan 11-09.15 Iter-7: dump disassembled VS bytecode to a single
-	// append-only file for offline analysis. CODEX consult Iter-5/6
-	// confirmed the right 2D VS is bound for transformed-vert callers
-	// (2d_texture.vsh / ui_radar.vsh) -- math goes through
-	// transform2d(vertex.position) from functions.inc, which should
-	// use viewportData @ c9 plumbed by Plan 11-09 Iter-2.7b. But the
-	// visual is still wrong (Iter-4 radial, Iter-5/6 black-splash).
-	// Disassembly tells us EXACTLY:
-	//   * which cbuffer slot/offset the VS reads for viewportData
-	//   * whether the VS output position semantic landed on
-	//     o0 / SV_POSITION (D3D11 rasterizer-recognized) or somewhere else
-	//   * any unexpected math
-	// First compile per session truncates the file; subsequent compiles
-	// append. Output: stage/vs-disasm-all.txt
-	{
-		static bool s_iter7FirstWrite = true;
-		Microsoft::WRL::ComPtr<ID3DBlob> disasmBlob;
-		HRESULT const disasmHr = D3DDisassemble(
-			blob->GetBufferPointer(),
-			blob->GetBufferSize(),
-			0, nullptr, disasmBlob.GetAddressOf());
-		if (SUCCEEDED(disasmHr) && disasmBlob)
-		{
-			char const * const mode = s_iter7FirstWrite ? "wb" : "ab";
-			s_iter7FirstWrite = false;
-			FILE *fp = nullptr;
-			fopen_s(&fp, "stage/vs-disasm-all.txt", mode);
-			if (fp)
-			{
-				char header[512];
-				int const headerLen = _snprintf_s(header, sizeof(header), _TRUNCATE,
-					"\n=== Plan 11-09.15 Iter-7 VS disassembly: %s hash=0x%016llX bytecode_size=%zu ===\n",
-					displayName ? displayName : "<unknown>",
-					static_cast<unsigned long long>(variant.bytecodeHash),
-					blob->GetBufferSize());
-				if (headerLen > 0)
-					fwrite(header, 1, static_cast<size_t>(headerLen), fp);
-				size_t const disasmSize = disasmBlob->GetBufferSize();
-				// D3DDisassemble blobs typically include a trailing null;
-				// strip it from the file write so the text isn't littered
-				// with null bytes between concatenated records.
-				size_t writeSize = disasmSize;
-				if (writeSize > 0)
-				{
-					char const * const disasmText = static_cast<char const *>(disasmBlob->GetBufferPointer());
-					if (disasmText[writeSize - 1] == '\0')
-						--writeSize;
-				}
-				if (writeSize > 0)
-					fwrite(disasmBlob->GetBufferPointer(), 1, writeSize, fp);
-				fclose(fp);
-			}
-		}
-	}
-
-	// Create the ID3D11VertexShader from the bytecode blob.
-	HRESULT const hr = Direct3d11_Device::getDevice()->CreateVertexShader(
-		blob->GetBufferPointer(),
-		blob->GetBufferSize(),
-		nullptr,
-		variant.d3dVS.GetAddressOf());
-	FATAL_DX_HR("Direct3d11_VertexShaderData::CreateVertexShader failed: %s", hr);
-
-	// Plan 11-09.8: capture the VS input signature via D3DReflect for
-	// reflection-driven input-layout assembly. CreateInputLayout under
-	// vs_4_0 validates the provided layout against the bytecode signature
-	// strictly (D3D9-era HLSL declares TEXCOORD inputs even when unused;
-	// vs_4_0_level_9_3 was lenient about this, plain vs_4_0 is not). We
-	// store the (non-SV) declared inputs here so that
-	// Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements
-	// can append missing semantics at InputSlot=15 (phantom zero buffer)
-	// when the VBFormat-driven element list doesn't cover them. CODEX-
-	// reviewed (consult: 11-09.8-CODEX-CONSULT-texcoord2-signature-mismatch).
-	//
-	// Plan 11-09.13 Iter-3: parallel capture of the VS OUTPUT signature
-	// for reflection-driven fallback-PS variant selection. Mirrors the
-	// input-side pattern but on the VS-output / PS-input boundary --
-	// applyPreDrawState selects Variant T (textured-passthrough) only
-	// when reflection proves the bound VS outputs TEXCOORD0 with a
-	// float component type at xy mask coverage. CODEX-reviewed (consult:
-	// 11-09.13-CODEX-CONSULT-reflection-driven-fallback-variant-selection.md).
-	//
-	// Reflection failure is treated as defensive non-fatal; both
-	// variant.reflectedInputs and variant.reflectedOutputs stay empty -- augmentation
-	// becomes a no-op, fallback-variant selection defaults to magenta,
-	// matching pre-Iter-3 behavior.
-	variant.reflectedInputs.clear();
-	variant.reflectedOutputs.clear();
-	ComPtr<ID3D11ShaderReflection> reflector;
-	HRESULT const reflectHr = D3DReflect(
-		blob->GetBufferPointer(),
-		blob->GetBufferSize(),
-		IID_PPV_ARGS(reflector.GetAddressOf()));
-	if (SUCCEEDED(reflectHr) && reflector)
-	{
-		D3D11_SHADER_DESC shaderDesc = {};
-		if (SUCCEEDED(reflector->GetDesc(&shaderDesc)))
-		{
-			variant.reflectedInputs.reserve(shaderDesc.InputParameters);
-			for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
-			{
-				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
-				if (FAILED(reflector->GetInputParameterDesc(i, &desc)))
-					continue;
-				// Filter SV_* system-value inputs -- they're auto-generated by
-				// the input assembler, NOT consumed from a VB element.
-				if (desc.SystemValueType != D3D_NAME_UNDEFINED)
-					continue;
-
-				Direct3d11_ReflectedVSInput ri = {};
-				if (desc.SemanticName)
-				{
-					strncpy_s(ri.SemanticName, sizeof(ri.SemanticName),
-					          desc.SemanticName, _TRUNCATE);
-				}
-				ri.SemanticIndex = desc.SemanticIndex;
-				ri.ComponentMask = desc.Mask;
-				ri.ComponentType = desc.ComponentType;
-				variant.reflectedInputs.push_back(ri);
-			}
-
-			// Plan 11-09.13 Iter-3: parallel output-signature capture.
-			// Filter SV_* outputs (SV_POSITION, SV_Depth etc.) -- those are
-			// hardware-routed to rasterizer stage, not consumed by PS as a
-			// "normal" interpolated input. PS-declared inputs match VS
-			// outputs by (SemanticName, SemanticIndex) with component-type
-			// and mask compatibility per Microsoft Learn stage-linkage
-			// rules. We preserve the full descriptor (Mask + ReadWriteMask
-			// + ComponentType) so the selection logic in StateCache can
-			// pick variants conservatively.
-			variant.reflectedOutputs.reserve(shaderDesc.OutputParameters);
-			for (UINT i = 0; i < shaderDesc.OutputParameters; ++i)
-			{
-				D3D11_SIGNATURE_PARAMETER_DESC desc = {};
-				if (FAILED(reflector->GetOutputParameterDesc(i, &desc)))
-					continue;
-				if (desc.SystemValueType != D3D_NAME_UNDEFINED)
-					continue;
-
-				Direct3d11_ReflectedVSOutput ro = {};
-				if (desc.SemanticName)
-				{
-					strncpy_s(ro.SemanticName, sizeof(ro.SemanticName),
-					          desc.SemanticName, _TRUNCATE);
-				}
-				ro.SemanticIndex  = desc.SemanticIndex;
-				ro.Register       = desc.Register;   // Iter-4: HW output register, drives PS-input declaration order in buildHlslForVSOutputs
-				ro.ComponentMask  = desc.Mask;
-				ro.ReadWriteMask  = desc.ReadWriteMask;
-				ro.ComponentType  = desc.ComponentType;
-				variant.reflectedOutputs.push_back(ro);
-			}
-		}
-	}
-
-	// Plan 17-09: per-variant output-signature hash (outputs only) -- the PS
-	// reconstruction rewrite-cache salt + raw-VS-pointer-reuse guard. Computed
-	// here so it stays coherent with this variant's reflected outputs.
-	variant.outputSigHash = computeOutputSignatureHashFor(variant.reflectedOutputs);
+	// Plan 11-09.15 Iter-7 disasm dump + CreateVertexShader + D3DReflect
+	// input/output signature capture + output-sig hash. Extracted to a shared
+	// helper (Phase 19) so the //asm fallback path above reuses it verbatim.
+	finalizeVariantFromBytecode(variant, displayName);
 	return variant;
 }
 

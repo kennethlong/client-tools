@@ -233,11 +233,35 @@ void Direct3d11_RenderTarget::setRenderTarget(Texture *texture, CubeFace cubeFac
 
 		ms_userRTV = cachedRTV;   // ComPtr AddRef -- texture retains master ownership
 
-		ID3D11RenderTargetView * rtvs[1] = { ms_userRTV.Get() };
-		context->OMSetRenderTargets(1, rtvs, nullptr);
-
 		ms_copyWidth  = (std::max)(1, texture->getWidth()  >> mipmapLevel);
 		ms_copyHeight = (std::max)(1, texture->getHeight() >> mipmapLevel);
+
+		// Phase 19 FIX: bind the shared screen depth-stencil when this render
+		// target is the engine's FULL-SCREEN scene RT (the post-FX baked target
+		// the entire world renders into). D3D9 parity: Direct3d9_RenderTarget::
+		// setRenderTarget calls SetDepthStencilSurface(NULL) ONLY for the
+		// non-render-target user-texture path; for a real (screen-sized) render
+		// target it leaves the primary depth surface bound, so the world
+		// depth-tests normally. The pre-fix code bound `nullptr` here too (a
+		// mis-stated "matches D3D9" comment), so the WHOLE world rendered with NO
+		// depth buffer -> draws landed in submission order -> overlapping props
+		// (e.g. ceiling light fixtures) painted over/under each other ("object
+		// depth out of whack"). RenderDoc capture11: ResourceId::323 took ~480
+		// ColorTarget draws with no depthTarget bound. Gate on an exact
+		// screen-dimension match (D3D11 requires RT and DSV dimensions to agree);
+		// smaller offscreen RTs (cubemaps/water/portraits, cubeFace != CF_none,
+		// or mip-reduced) keep nullptr -- those 2D/offscreen passes don't use the
+		// screen depth and a size mismatch would be invalid.
+		ID3D11DepthStencilView * dsv = nullptr;
+		if (cubeFace == CF_none
+			&& ms_copyWidth  == Direct3d11_Device::getWidth()
+			&& ms_copyHeight == Direct3d11_Device::getHeight())
+		{
+			dsv = Direct3d11_Device::getDepthStencilView();
+		}
+
+		ID3D11RenderTargetView * rtvs[1] = { ms_userRTV.Get() };
+		context->OMSetRenderTargets(1, rtvs, dsv);
 	}
 
 	// Update the viewport to match the active render target's dimensions.

@@ -1001,6 +1001,133 @@ namespace
 		outLen = wrappedLen;
 		return dst;
 	}
+
+	// ------------------------------------------------------------------
+	// Rule F (Phase 19): guard the asset specular pow() against NaN.
+	//
+	// The asset spec-map pixel shaders (a_specmap_pp, h_specmap_cbmp,
+	// h_envmask_specmap, h_color2_specmap_cbmp, h_spec_pp,
+	// h_color2_specmap_bump, h_specmap_bump) compute, verbatim:
+	//   dot3SpecularIntensity = pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower);
+	// (plus a tangent-space `_t` variant). fxc lowers pow(x,p) to
+	// exp2(p * log2(x)); when saturate(dot)==0 (back-facing / non-specular
+	// pixel) AND materialSpecularPower==0 (matte material), this is
+	// exp2(0 * -INF) = NaN, which is added into the pixel color -> the whole
+	// surface goes black. This blackens interior cell surfaces + NPC bodies.
+	// D3D9 runs the original ps_2_0 bytecode (pow(x,0)~0, no NaN); only the
+	// D3D11 recompile (this lane) hits it. The shader's own isnan guards
+	// cover only the vertex inputs, not this internally-generated NaN.
+	// RenderDoc-confirmed (draw 1612, capture1.rdc) + CODEX+Cursor consult
+	// 2026-06-01 (.planning/research/CONSULT-19-interior-nan-specular-pow*).
+	//
+	// Rule F wraps each occurrence with
+	//   ((materialSpecularPower > 0.0f && <nh> > 0.0f) ? <pow> : 0.0f)
+	// which matches D3D9 matte-off (power 0 -> 0) and avoids NaN on back
+	// faces (nh 0 -> 0), while leaving exterior specular (power>0, nh>0)
+	// numerically unchanged. It runs as a PRE-PASS (like Rule D) so the
+	// A/B/C/E scanner then runs on the result. The inserted ternary
+	// `: 0.0f` is not a `: register(...)` / `: [bcstuv]N` binding, so Rules
+	// B/C never touch it. The replacement embeds the original `pow(...)`
+	// verbatim; because we scan the INPUT and emit to a separate OUTPUT
+	// (never re-scanning emitted bytes), the embedded pow does not re-match.
+	// ------------------------------------------------------------------
+
+	struct SpecGuardPattern
+	{
+		char const *find;
+		char const *replace;
+	};
+
+	constexpr SpecGuardPattern kSpecGuardPatterns[] = {
+		{ "pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower)",
+		  "((materialSpecularPower > 0.0f && saturate(dot(halfAngle_o, normal_o)) > 0.0f) ? pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower) : 0.0f)" },
+		{ "pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower)",
+		  "((materialSpecularPower > 0.0f && saturate(dot(halfAngle_t, normal_t)) > 0.0f) ? pow(saturate(dot(halfAngle_t, normal_t)), materialSpecularPower) : 0.0f)" },
+	};
+
+	constexpr std::size_t kSpecGuardPatternCount =
+		sizeof(kSpecGuardPatterns) / sizeof(kSpecGuardPatterns[0]);
+
+	// Returns find-length (and sets outIdx) if any spec-guard pattern matches
+	// at `pos`, else 0.
+	std::size_t tryMatchRuleF(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t          pos,
+		std::size_t         &outIdx)
+	{
+		for (std::size_t k = 0; k < kSpecGuardPatternCount; ++k)
+		{
+			std::size_t const flen = std::strlen(kSpecGuardPatterns[k].find);
+			if (pos + flen > length)
+				continue;
+			if (std::memcmp(src + pos, kSpecGuardPatterns[k].find, flen) == 0)
+			{
+				outIdx = k;
+				return flen;
+			}
+		}
+		return 0;
+	}
+
+	// Rule F core. Scans `src` for the specular pow idiom(s); on any match,
+	// produces a fresh heap buffer (caller owns; delete[]) with each match
+	// wrapped in the NaN guard, and sets `outLen`. Returns nullptr (and
+	// leaves `outLen` untouched) when nothing matches (caller keeps original).
+	unsigned char *tryRuleFGuard(
+		unsigned char const *src,
+		std::size_t          length,
+		std::size_t         &outLen)
+	{
+		// Pass 1: count matches + accumulate size delta.
+		std::size_t deltaTotal = 0;
+		std::size_t matchCount = 0;
+		{
+			std::size_t i = 0;
+			while (i < length)
+			{
+				std::size_t idx = 0;
+				std::size_t const m = tryMatchRuleF(src, length, i, idx);
+				if (m != 0)
+				{
+					deltaTotal += std::strlen(kSpecGuardPatterns[idx].replace) - m;
+					++matchCount;
+					i += m;
+					continue;
+				}
+				++i;
+			}
+		}
+
+		if (matchCount == 0)
+			return nullptr;
+
+		std::size_t const wrappedLen = length + deltaTotal;
+		unsigned char *dst = new unsigned char[wrappedLen];
+		std::size_t outPos = 0;
+		std::size_t i = 0;
+		while (i < length)
+		{
+			std::size_t idx = 0;
+			std::size_t const m = tryMatchRuleF(src, length, i, idx);
+			if (m != 0)
+			{
+				std::size_t const rlen = std::strlen(kSpecGuardPatterns[idx].replace);
+				std::memcpy(dst + outPos, kSpecGuardPatterns[idx].replace, rlen);
+				outPos += rlen;
+				i      += m;
+				continue;
+			}
+			dst[outPos++] = src[i++];
+		}
+
+		DEBUG_FATAL(outPos != wrappedLen,
+			("Direct3d11_HlslRewrite Rule F: emit length mismatch outPos=%zu"
+			 " expected=%zu (matchCount=%zu)", outPos, wrappedLen, matchCount));
+
+		outLen = wrappedLen;
+		return dst;
+	}
 }
 
 // ======================================================================
@@ -1090,19 +1217,37 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 	unsigned char const *srcU =
 		reinterpret_cast<unsigned char const *>(src);
 
+	// Phase 19 Rule F pre-pass: guard the asset specular pow() against NaN.
+	// The idiom lives in the PS main source (.psh body), so this MUST run on
+	// the main-source path (not just include content). On match we work from
+	// the guarded heap buffer; the A/B/C/E scanner below then runs on it.
+	unsigned char *ruleFBuffer = nullptr;
+	std::size_t    ruleFLen    = 0;
+	if (unsigned char *guarded = tryRuleFGuard(srcU, length, ruleFLen))
+	{
+		DEBUG_REPORT_LOG_PRINT(true,
+			("Direct3d11_HlslRewrite: main-source '%s' Rule F guarded specular"
+			 " pow against NaN (input=%zu bytes -> guarded=%zu bytes; delta=%+zd)\n",
+			 diagName ? diagName : "<unnamed>", length, ruleFLen,
+			 static_cast<ptrdiff_t>(ruleFLen) - static_cast<ptrdiff_t>(length)));
+		ruleFBuffer = guarded;
+		srcU        = guarded;
+		length      = ruleFLen;
+	}
+
 	std::size_t rewriteCount = 0;
 	std::size_t const rewrittenLen = computeRewrittenLength(
 		srcU, length, rewriteCount);
 
 	outVec.resize(rewrittenLen);
-	if (rewrittenLen == 0)
-		return;
-
-	emitRewritten(
-		srcU,
-		length,
-		reinterpret_cast<unsigned char *>(outVec.data()),
-		rewrittenLen);
+	if (rewrittenLen != 0)
+	{
+		emitRewritten(
+			srcU,
+			length,
+			reinterpret_cast<unsigned char *>(outVec.data()),
+			rewrittenLen);
+	}
 
 	if (rewriteCount != 0)
 	{
@@ -1114,6 +1259,9 @@ void Direct3d11_HlslRewrite::applyToMainSource(
 			 length, rewrittenLen,
 			 static_cast<ptrdiff_t>(rewrittenLen) - static_cast<ptrdiff_t>(length)));
 	}
+
+	// Free the Rule F intermediate (no-op on nullptr / fast path).
+	delete[] ruleFBuffer;
 }
 
 // ======================================================================

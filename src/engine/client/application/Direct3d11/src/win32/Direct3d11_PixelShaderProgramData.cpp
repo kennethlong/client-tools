@@ -150,7 +150,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "24" });   // Plan 17-08 GAP-5: 23 -> 24 (wrapper now USES VS COLOR0 with NaN guard, not hard 0). 22->23 was the COLOR-zero beachhead. Prior: Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "25" });   // Phase 19: 24 -> 25 (Rule F specular-pow NaN guard for interiors/NPCs). Plan 17-08 GAP-5: 23 -> 24 (wrapper now USES VS COLOR0 with NaN guard, not hard 0). 22->23 was the COLOR-zero beachhead. Prior: Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -301,7 +301,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "24" });  // Plan 17-08 GAP-5: 23 -> 24 (wrapper uses VS COLOR0 w/ NaN guard); must match the FATAL helper (above) so the .cso cache hash is shared.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "25" });  // Phase 19: 24 -> 25 (Rule F specular-pow NaN guard); must match the FATAL helper (above) so the .cso cache hash is shared.
 		// Plan 17-07 MEDIUM: per-VS rewrite lane salt. saltStr must outlive the
 		// D3DCompile call below (D3D_SHADER_MACRO holds char const*), so it is a
 		// stack buffer scoped to this function body. Native ctor lane passes 0 ->

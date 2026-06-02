@@ -130,6 +130,15 @@ public:
 	// Plan 11-09.15 Iter-5 diagnostic: engine-side shader access point.
 	ShaderImplementationPassVertexShader const *getEngineShader() const { return m_vertexShader; }
 
+	// Phase 19: true when the .vsh is legacy //asm (vs_1_1 / vs_2_0) and the
+	// variant therefore carries the GENERIC FALLBACK VS (const-white COLOR0,
+	// TEXCOORD0-only, world-transform) rather than the asset's own compiled VS.
+	// The draw path uses this to FORCE the reflection-driven fallback PS lane:
+	// an asset PS expects the asm-computed varyings, which the fallback VS does
+	// not produce, so binding it would render wrong (or magenta). See
+	// Direct3d11_StateCache::applyPreDrawState PS-selection.
+	bool isAssembly() const { return m_isAssembly; }
+
 private:
 
 	Direct3d11_VertexShaderData();

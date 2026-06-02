@@ -67,6 +67,15 @@ public:
 	// hit an offscreen RT instead of the swapchain backbuffer.
 	static ID3D11RenderTargetView * getBackBufferRTV();
 
+	// Phase 19: the shared screen depth-stencil view (full-screen D24S8).
+	// Direct3d11_RenderTarget binds this on the engine's full-screen scene RT
+	// (the post-FX baked target the whole world renders into) so world geometry
+	// depth-tests. D3D9 parity: SetRenderTarget for a screen-sized RT does NOT
+	// clear the depth surface, so the primary depth persists (Direct3d9_
+	// RenderTarget::setRenderTarget only nulls depth for non-render-target user
+	// textures). Caller does NOT own the returned pointer.
+	static ID3D11DepthStencilView * getDepthStencilView();
+
 	// Plan 11-09.8: phantom zero buffer at InputSlot=15. A 16-byte
 	// zero-filled BIND_VERTEX_BUFFER (USAGE_IMMUTABLE) created at install
 	// time. Bound by Direct3d11_StateCache::applyPreDrawState with
@@ -131,6 +140,11 @@ public:
 	// the debug layer is not live. Caller must NOT Release; the device
 	// holds the ComPtr.
 	static ID3D11InfoQueue *getInfoQueue();
+
+	// Phase 19 (19-04 Task 0) DEV-ONLY: monotonic per-frame index for the
+	// neutral b0 / setLights value-dump. Incremented in drainInfoQueue().
+	// REVERT after the cross-frame light-feed question is answered.
+	static unsigned getDiagFrameIndex();
 };
 
 // ======================================================================

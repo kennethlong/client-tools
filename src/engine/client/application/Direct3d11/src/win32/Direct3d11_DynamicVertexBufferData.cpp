@@ -25,10 +25,31 @@
 
 #include "clientGraphics/VertexBuffer.h"
 #include "sharedFoundation/MemoryBlockManager.h"
+#include "sharedFoundation/Os.h"
 
 #include <d3d11.h>
 #include <dxgi.h>
 #include <wrl/client.h>
+
+// Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). Both
+// AIs independently fingered the process-wide dynamic VB/IB ring + its
+// unsynchronized static accounting (ms_used/ms_newFrame) as the #1 suspect
+// for a live-only, RenderDoc-masked engine-transaction RACE. Smoking-gun test:
+// log every ring lock that runs OFF the main/render thread. If this fires, an
+// off-thread graphics transaction is confirmed (the hole the D3D11 runtime
+// MT-lock does not cover). If it NEVER fires across a corrupt roam, the
+// threading hypothesis is dead too. REVERT (set to 0) afterward.
+//
+// RESULT 2026-05-31: SILENT across a corrupt roam (896 ring unlocks, ~1M draws,
+// 0 off-thread locks) -> CPU-thread race on the ring is DEAD. Next suspect: the
+// CPU-races-GPU intra-frame WRITE_NO_OVERWRITE reuse hazard, which the thread
+// audit cannot see (single CPU thread, but the GPU runs async). P19_DISCARD_ONLY
+// forces WRITE_DISCARD on every dynamic VB/IB lock so each lock gets a freshly
+// renamed buffer -> no overlap with an in-flight same-frame draw. Corruption
+// VANISHES -> ring reuse hazard confirmed. Slow (many renames); diagnostic, REVERT.
+// RESULT 2026-05-31: DISCARD-only ring = NO CHANGE -> dynamic ring EXONERATED.
+#define P19_THREAD_AUDIT 0
+#define P19_DISCARD_ONLY 0
 
 // ======================================================================
 
@@ -203,12 +224,29 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
 	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
 	int const length     = numberOfVertices * vertexSize;
 
+#if P19_THREAD_AUDIT
+	if (!Os::isMainThread())
+	{
+		static int s_offThreadVBLocks = 0;
+		++s_offThreadVBLocks;
+		char tbuf[160];
+		_snprintf_s(tbuf, sizeof(tbuf), _TRUNCATE,
+			"[P19THREAD] dynamic VB ring lock OFF MAIN THREAD tid=%lu count=%d numVerts=%d",
+			GetCurrentThreadId(), s_offThreadVBLocks, numberOfVertices);
+		ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+		if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, tbuf);
+	}
+#endif
+
 	++ms_locksSinceBeginFrame;
 	++ms_locksSinceResourceCreation;
 	++ms_locksEver;
 
 	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
 	int          discard  = 0;
+#if P19_DISCARD_ONLY
+	forceDiscard = true;  // diagnostic: rename every lock (kills intra-frame reuse hazard)
+#endif
 	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
 	{
 		ms_newFrame = false;
