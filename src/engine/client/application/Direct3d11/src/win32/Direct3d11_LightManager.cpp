@@ -79,11 +79,18 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 	cb.pointLightCountPad    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	int pointLightCount = 0;
-	bool directionalAssigned = false;
 
 	// Plan 17-08 (GAP-4) Producer A: invalidate last frame's dot3 snapshot;
 	// re-captured below when the primary directional light is assigned.
 	s_pixelDot3State.valid = false;
+
+	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
+	// distribution (:423-440). The sun (highest SPECULAR intensity) wins the single
+	// parallelSpecular slot (-> dot3/specular); the next two by DIFFUSE intensity fill
+	// parallel[0..1] (the fill + bounce lights the world VS's main diffuse term reads). D3D11
+	// previously kept only the first T_parallel -> walls lit by fill/bounce rendered black.
+	Light const *psSlot   = nullptr;            // parallelSpecular[0] (the sun)
+	Light const *pSlot[2] = { nullptr, nullptr }; // parallel[0..1] (fill, bounce) by diffuse
 
 	for (Light const *light : lightList)
 	{
@@ -95,48 +102,42 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 		switch (light->getType())
 		{
 			case Light::T_ambient:
-				// Accumulate ambient contribution.
-				cb.ambientColor.x += color.r * intensity;
-				cb.ambientColor.y += color.g * intensity;
-				cb.ambientColor.z += color.b * intensity;
+				// Accumulate ambient contribution. Black-walls fix (2026-06-08): sum the ambient
+				// light's color with NO intensity multiply, matching Direct3d9_LightManager::
+				// selectLights (:412-418 `ambient += getPossiblyScaledDiffuseColor()`). D3D11 was
+				// doing color*intensity = 0.130*0.130 = 0.0169 (≈4/255 = visually black), crushing
+				// the Mos Eisley daytime ambient to 1/8 of D3D9's 0.130 -> shadow-side surfaces
+				// rendered black. The ambient light's color already encodes its level; the separate
+				// intensity must NOT be re-applied here (the directional still carries intensity).
+				cb.ambientColor.x += color.r;
+				cb.ambientColor.y += color.g;
+				cb.ambientColor.z += color.b;
 				cb.ambientColor.w  = 1.0f;
 				break;
 
 			case Light::T_parallel:
-				// First directional only; subsequent ignored (matches
-				// SM5.0 simple-shader convention; multi-directional
-				// support lands when shaders surface the need).
-				if (!directionalAssigned)
+			{
+				// Black-walls fix (2026-06-08): D3D9 selectLights cascade (:423-440). A directional
+				// first contends for the single specular slot (by specular intensity); the light it
+				// displaces then contends for the two diffuse slots (by diffuse intensity). The swap
+				// semantics flow the displaced light down so each ends in its correct slot, and the
+				// sun (only light with specular) is consumed by the specular slot and never also
+				// lands in parallel[]. Captured into the snapshot after the loop.
+				Light const *l = light;
+				if (!psSlot || l->getScaledSpecularIntensity() > psSlot->getScaledSpecularIntensity())
 				{
-					Vector const dir = light->getObjectFrameK_w();
-					cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, intensity);
-					cb.directionalColor = XMFLOAT4(color.r, color.g, color.b, 1.0f);
-					directionalAssigned = true;
-
-					// Plan 17-08 (GAP-4) Producer A: capture this light's dot3 PS
-					// constants in WORLD space (mirrors Direct3d9_LightManager's
-					// PixelDot3Data assembly at :592-601 / :823-830 +
-					// _vsps_setExtendedLightData at :732-760). The world->object-local
-					// rotation of localDirectionWorld + the materialSpecularPower in
-					// .w happen per-draw at the b0 write site (StaticShaderData::apply).
-					VectorArgb const &diffuse = light->getScaledDiffuseColor();
-					VectorArgb const &specular = light->getScaledSpecularColor();
-					VectorArgb const &back    = light->getScaledDiffuseBackColor();
-					VectorArgb const &tangent = light->getScaledDiffuseTangentColor();
-
-					s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
-					s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
-					s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
-					s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
-						tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
-					s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
-						tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
-					// Plan 17-08 (GAP-5): raw hemispheric colors for the VS extendedLightData.
-					s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
-					s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
-					s_pixelDot3State.valid = true;
+					Light const *t = psSlot; psSlot = l; l = t;
+				}
+				if (l && (!pSlot[0] || l->getScaledDiffuseIntensity() > pSlot[0]->getScaledDiffuseIntensity()))
+				{
+					Light const *t = pSlot[0]; pSlot[0] = l; l = t;
+				}
+				if (l && (!pSlot[1] || l->getScaledDiffuseIntensity() > pSlot[1]->getScaledDiffuseIntensity()))
+				{
+					Light const *t = pSlot[1]; pSlot[1] = l; l = t;
 				}
 				break;
+			}
 
 			case Light::T_point:
 			case Light::T_point_multicell:
@@ -165,6 +166,54 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 			case Light::T_OBSOLETE_parallelPoint:
 			default:
 				break;
+		}
+	}
+
+	// Black-walls fix (2026-06-08): process the directional slots after the cascade, mirroring
+	// Direct3d9_LightManager::applyLights_vertexShader. The sun (parallelSpecular[0]) feeds the
+	// dot3 PS path + the LightingCB directional; the fill+bounce (parallel[0..1]) feed the world
+	// VS's main diffuse term via the snapshot, which composeSlot0Shadow writes to c20-c23.
+	if (psSlot)
+	{
+		Vector    const dir      = psSlot->getObjectFrameK_w();
+		VectorArgb const &diffuse  = psSlot->getScaledDiffuseColor();
+		VectorArgb const &specular = psSlot->getScaledSpecularColor();
+		VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
+		VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
+
+		cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, psSlot->getScaledDiffuseIntensity());
+		cb.directionalColor = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, 1.0f);
+
+		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+			tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
+		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+			tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
+		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+		s_pixelDot3State.valid = true;
+	}
+
+	// fill + bounce -> parallel[0..1] (the world VS's main diffuse term). Mirror D3D9
+	// applyLights_vertexShader :630-650: direction is the raw light direction (negated at the
+	// fill site, matching the c20/c21 packing in composeSlot0Shadow), color is the diffuse.
+	s_pixelDot3State.parallelCount = 0;
+	for (int i = 0; i < 2; ++i)
+	{
+		if (pSlot[i])
+		{
+			Vector     const d = pSlot[i]->getObjectFrameK_w();
+			VectorArgb const &c = pSlot[i]->getScaledDiffuseColor();
+			s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(d.x, d.y, d.z, 0.0f);
+			s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(c.r, c.g, c.b, c.a);
+			++s_pixelDot3State.parallelCount;
+		}
+		else
+		{
+			s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 		}
 	}
 

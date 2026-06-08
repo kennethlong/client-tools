@@ -375,7 +375,8 @@ namespace Direct3d11_StateCacheNamespace
 		{
 			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
 
-			// ambient @ lightData[0] (c16) -- always (even with no directional light).
+			// ambient @ lightData[0] (c16) -- the real accumulated ambient (always, even with no
+			// directional light). Mirrors D3D9 applyLights_vertexShader's lightData.ambient upload.
 			s_slot0Shadow.lightData[0] = d3.ambient;
 
 			if (d3.valid)
@@ -411,6 +412,21 @@ namespace Direct3d11_StateCacheNamespace
 				s_slot0Shadow.extendedLightData[1] = d3.tangentColor;
 				s_slot0Shadow.extendedLightData[2] = d3.tangentMinusBackColor;
 				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
+			}
+
+			// parallel[0..1] @ lightData[4..7] (c20-c23): THE BLACK-WALLS FIX (2026-06-08).
+			// The world VS's MAIN diffuse term sums lightData.parallel[0] (c20-21) + parallel[1]
+			// (c22-23) -- the FILL + BOUNCE directionals, NOT the sun (the sun is in
+			// parallelSpecular[0]/dot3). GAP-5 never filled parallel[] -> the VS diffuse was 0 ->
+			// surfaces lit by fill/bounce went black. Feed the diffuse-sorted directionals captured
+			// in setLights (direction negated to toward-light, mirroring D3D9 applyLights_vertexShader
+			// :638-647 `parallel.direction = -getObjectFrameK_w()`). Independent of d3.valid (the
+			// sun): a scene can have fill/bounce without the sun winning the dot3 path.
+			for (int pi = 0; pi < 2; ++pi)
+			{
+				DirectX::XMFLOAT4 const &pd = d3.parallelDirectionWorld[pi];
+				s_slot0Shadow.lightData[4 + pi * 2] = DirectX::XMFLOAT4(-pd.x, -pd.y, -pd.z, 0.0f);
+				s_slot0Shadow.lightData[5 + pi * 2] = d3.parallelDiffuseColor[pi];
 			}
 		}
 

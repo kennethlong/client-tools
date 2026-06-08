@@ -86,6 +86,16 @@ struct Direct3d11_PixelDot3State
 	DirectX::XMFLOAT4 backColor;                   // raw hemispheric back  (extendedLightData[0] @ c60)
 	DirectX::XMFLOAT4 tangentColor;                // raw hemispheric tangent (extendedLightData[1] @ c61)
 	bool              valid;                       // false until a directional light is seen this frame
+
+	// Black-walls fix (2026-06-08): the DIFFUSE parallel lights the world VS reads at
+	// lightData.parallel[0..1] (c20-23). D3D9 selectLights routes the sun (highest specular)
+	// into parallelSpecular[0]/dot3 and the next two directionals BY DIFFUSE INTENSITY into
+	// parallel[0],[1]; the asset VS's MAIN diffuse term sums parallel[0]+parallel[1] (the
+	// fill + bounce lights), NOT the sun. D3D11 captured only the first T_parallel -> walls lit
+	// by fill/bounce went dark. Mirror D3D9: capture up to 2 diffuse-sorted directionals here.
+	DirectX::XMFLOAT4 parallelDirectionWorld[2];   // world dir of parallel[0..1] (negated at the fill site)
+	DirectX::XMFLOAT4 parallelDiffuseColor[2];     // diffuse color of parallel[0..1]
+	int               parallelCount;               // 0..2 valid entries in the two arrays above
 };
 
 // ======================================================================
