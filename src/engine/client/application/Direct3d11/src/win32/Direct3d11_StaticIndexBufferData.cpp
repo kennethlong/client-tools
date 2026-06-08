@@ -68,7 +68,9 @@ Direct3d11_StaticIndexBufferData::Direct3d11_StaticIndexBufferData(const StaticI
 	m_indexBuffer(indexBuffer),
 	m_d3dIndexBuffer(),
 	m_lockBuffer(nullptr),
-	m_lockedReadOnly(false)
+	m_lockedReadOnly(false),
+	m_shadow(nullptr),
+	m_shadowCount(0)
 {
 	ID3D11Device * const device = Direct3d11_Device::getDevice();
 	NOT_NULL(device);
@@ -95,6 +97,11 @@ Direct3d11_StaticIndexBufferData::~Direct3d11_StaticIndexBufferData()
 		operator delete[](m_lockBuffer);
 		m_lockBuffer = nullptr;
 	}
+	if (m_shadow)
+	{
+		operator delete[](m_shadow);
+		m_shadow = nullptr;
+	}
 	m_d3dIndexBuffer.Reset();
 }
 
@@ -108,7 +115,13 @@ Index *Direct3d11_StaticIndexBufferData::lock(bool readOnly)
 	m_lockBuffer = static_cast<Index *>(operator new[](static_cast<size_t>(length)));
 	m_lockedReadOnly = readOnly;
 
-	if (readOnly)
+	// Seed the scratch buffer from the CPU shadow so the caller sees the REAL indices
+	// (a DEFAULT IB can't be Map-read). This matters for read-locks (collide ray-tests)
+	// AND guarantees that if unlock() re-uploads (a write-intent lock that only read --
+	// the cape-spike collide() bug), it writes back valid data, never uninitialized heap.
+	if (m_shadow && m_shadowCount == m_indexBuffer.getNumberOfIndices())
+		memcpy(m_lockBuffer, m_shadow, static_cast<size_t>(length));
+	else
 		memset(m_lockBuffer, 0, static_cast<size_t>(length));
 
 	return m_lockBuffer;
@@ -126,6 +139,26 @@ void Direct3d11_StaticIndexBufferData::unlock()
 		ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
 		NOT_NULL(context);
 		context->UpdateSubresource(m_d3dIndexBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+
+		// Persist the uploaded indices as the CPU shadow. Subsequent lock()s seed from
+		// this, so a read-only consumer that locks writable (collide) re-uploads valid
+		// data on unlock rather than the uninitialized scratch heap (the IB corruption).
+		int const count  = m_indexBuffer.getNumberOfIndices();
+		int const length = count * static_cast<int>(sizeof(Index));
+		if (count > 0)
+		{
+			if (m_shadow && m_shadowCount != count)
+			{
+				operator delete[](m_shadow);
+				m_shadow = nullptr;
+			}
+			if (!m_shadow)
+			{
+				m_shadow      = static_cast<Index *>(operator new[](static_cast<size_t>(length)));
+				m_shadowCount = count;
+			}
+			memcpy(m_shadow, m_lockBuffer, static_cast<size_t>(length));
+		}
 	}
 
 	operator delete[](m_lockBuffer);

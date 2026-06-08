@@ -62,6 +62,14 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer>      m_d3dIndexBuffer;
 	Index                                    *m_lockBuffer;
 	bool                                      m_lockedReadOnly;
+	// CPU shadow of the last-uploaded index data. A DEFAULT-usage IB cannot be
+	// Map-read, so lock() can only hand back a scratch allocation. D3D9 returns a
+	// pointer INTO the live IB, so read-locks see real indices and a no-write
+	// unlock is harmless. We mirror that: seed every lock from the shadow so reads
+	// (e.g. collide ray-tests) get real indices, and any unlock re-upload writes
+	// back correct data instead of uninitialized heap (the cape-spike IB corruption).
+	Index                                    *m_shadow;
+	int                                       m_shadowCount;
 };
 
 // ======================================================================
