@@ -299,6 +299,16 @@ void Direct3d11_StaticShaderData::beginFrame()
 
 // ----------------------------------------------------------------------
 
+// CONSULT-39 (2026-06-08): see header. Forces the next setStaticShader->apply() to be a cache
+// miss so the full b0 (incl. dot3 c0..c4) is re-uploaded, undoing a partial updatePS(0) clobber.
+void Direct3d11_StaticShaderData::invalidateApplyCache()
+{
+	ms_active     = nullptr;
+	ms_activePass = -1;
+}
+
+// ----------------------------------------------------------------------
+
 void *Direct3d11_StaticShaderData::operator new(size_t size)
 {
 	UNREF(size);

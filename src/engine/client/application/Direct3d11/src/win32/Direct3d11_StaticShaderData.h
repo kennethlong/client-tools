@@ -75,6 +75,11 @@ public:
 	static void install();
 	static void remove();
 	static void beginFrame();
+	// CONSULT-39 (2026-06-08): drop the apply() cache (ms_active/ms_activePass) so the NEXT
+	// setStaticShader re-runs apply() and re-uploads the full 400B b0. Must be called after any
+	// raw partial updatePS(0,...) (setAlphaFadeOpacity/setFog) that zero-tail-clobbers the b0
+	// dot3 block (c1/c3/c4) -- otherwise a cache-hit draw skips the dot3 rewrite and renders BLACK.
+	static void invalidateApplyCache();
 
 public:
 

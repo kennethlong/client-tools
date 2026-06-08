@@ -1918,6 +1918,9 @@ void Direct3d11_StateCache::setFog(bool enabled, real density, PackedArgb const 
 	float const b = static_cast<float>(color.getB()) * (1.0f / 255.0f);
 	XMFLOAT4 fog(r, g, b, a);
 	Direct3d11_ConstantBuffer::updatePS(0, &fog, sizeof(fog));
+	// CONSULT-39 (2026-06-08): same b0 zero-tail clobber as setAlphaFadeOpacity -- drop the apply()
+	// cache so the dot3 block is re-uploaded on the next setStaticShader.
+	Direct3d11_StaticShaderData::invalidateApplyCache();
 }
 
 // ----------------------------------------------------------------------
@@ -2026,6 +2029,10 @@ void Direct3d11_StateCache::setAlphaFadeOpacity(bool /*enabled*/, float opacity)
 	// userConstants[0].a or expect a dedicated slot.
 	XMFLOAT4 fade(opacity, opacity, opacity, opacity);
 	Direct3d11_ConstantBuffer::updatePS(0, &fade, sizeof(fade));
+	// CONSULT-39 (2026-06-08): this 16B updatePS(0) zero-tail-clobbers the b0 dot3 block
+	// (P19_CBUF_ZERO_TAIL). Drop the apply() cache so the next setStaticShader re-uploads the full
+	// b0 -- else a cache-hit bump draw skips the dot3 rewrite and renders BLACK (the toggling walls).
+	Direct3d11_StaticShaderData::invalidateApplyCache();
 }
 
 // ----------------------------------------------------------------------

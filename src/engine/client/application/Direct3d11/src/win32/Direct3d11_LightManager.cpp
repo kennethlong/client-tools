@@ -80,9 +80,14 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 
 	int pointLightCount = 0;
 
-	// Plan 17-08 (GAP-4) Producer A: invalidate last frame's dot3 snapshot;
-	// re-captured below when the primary directional light is assigned.
-	s_pixelDot3State.valid = false;
+	// Plan 17-08 (GAP-4) Producer A: dot3 snapshot of the primary directional.
+	// CONSULT-38 FIX (2026-06-08): do NOT invalidate the dot3 snapshot on every setLights call.
+	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+	// boundaries (popCell); the old unconditional `valid = false` left the snapshot invalid for
+	// any bump/dot3 draw submitted before the next sun-bearing call. D3D9's PS dot3 constants are
+	// STICKY (the register file persists until a real light change), so persist last-good here:
+	// the snapshot is only UPDATED by the psSlot block below when a directional is present; a
+	// sunless/empty list leaves the previous sun intact.  (Was: s_pixelDot3State.valid = false;)
 
 	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
 	// distribution (:423-440). The sun (highest SPECULAR intensity) wins the single
