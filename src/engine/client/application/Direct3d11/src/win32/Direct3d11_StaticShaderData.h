@@ -52,6 +52,8 @@ class Direct3d11_TextureData;
 class Direct3d11_VertexShaderData;
 class MemoryBlockManager;
 class ShaderImplementation;
+class ShaderImplementationPassVertexShaderGraphicsData;       // UAF fix: live-deref slot base type
+class ShaderImplementationPassPixelShaderProgramGraphicsData; // UAF fix: live-deref slot base type
 class StaticShader;
 
 #include "clientGraphics/StaticShader.h"
@@ -128,6 +130,25 @@ private:
 	// graph above; we hold raw pointers per CODEX Q4 D3D9-mirror guidance.
 	std::vector<Direct3d11_VertexShaderData const *>          m_passVS;
 	std::vector<Direct3d11_PixelShaderProgramData const *>    m_passPS;
+
+	// UAF FIX (release boot-crash 2026-06-02, ROOT-CAUSED via full /ma dump):
+	// the m_passVS/m_passPS pointers ABOVE are the construct-time SNAPSHOT of the
+	// derived Direct3d11_*Data graphics-data pointers. A device-level graphics-data
+	// remove/restore during boot FREES and RECREATES *m_graphicsData (the gl11
+	// per-program object goes back to its 0x50-byte MemoryBlockManager freelist),
+	// so the snapshot DANGLES -> apply() iterating getReflectedCbufferLayouts() on a
+	// freed/reused block -> c0000005 (crash moved across PPEM + UI shaders because
+	// EVERY snapshot is stale; it was misdiagnosed as a layout-sensitive Heisenbug).
+	//
+	// The D3D9 sibling is immune because it NEVER caches the derived pointer -- it
+	// reads m_graphicsData LIVE at apply (Direct3d9_StaticShaderData.cpp:829 for VS;
+	// PS binds via the impl's live Direct3d9_ShaderImplementationData::apply). Mirror
+	// that with the SAME double-indirection pattern already used for Stage::m_texture
+	// (see comment above): store the ADDRESS of the engine owner's m_graphicsData
+	// slot -- stable for our lifetime (only the pointed-to sub-object is recreated on
+	// restore) -- and deref it live in apply(). 1:1 with m_passVS/m_passPS.
+	std::vector<ShaderImplementationPassVertexShaderGraphicsData       * const *> m_passVSSlot;
+	std::vector<ShaderImplementationPassPixelShaderProgramGraphicsData * const *> m_passPSSlot;
 
 	// Plan 17-09: per-pass texcoord-set key (each shader texcoord tag -> the mesh
 	// set index that feeds it, 3 bits/tag), computed in construct() exactly like

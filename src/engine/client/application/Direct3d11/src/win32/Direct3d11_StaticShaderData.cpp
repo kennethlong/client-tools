@@ -332,6 +332,8 @@ Direct3d11_StaticShaderData::Direct3d11_StaticShaderData(StaticShader const &sha
 	m_implementation(shader.getStaticShaderTemplate().m_effect->m_implementation),
 	m_passVS(),
 	m_passPS(),
+	m_passVSSlot(),  // UAF fix: live-deref slots (see header)
+	m_passPSSlot(),  // UAF fix: live-deref slots (see header)
 	m_passStages()  // Plan 11-09.14 (slot 0) / Plan 11-09.15 Iter-44E (all 8 stages)
 {
 	construct(shader);
@@ -369,6 +371,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	//   - ShaderImplementation.h  (Direct3d11_StaticShaderData for m_pass)
 	m_passVS.clear();
 	m_passPS.clear();
+	m_passVSSlot.clear();   // UAF fix: live-deref slots
+	m_passPSSlot.clear();   // UAF fix: live-deref slots
 	m_passTexcoordKey.clear();   // Plan 17-09
 	m_passStages.clear();
 	m_passMaterial.clear();
@@ -380,6 +384,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	size_t const passCount = passes.size();
 	m_passVS.assign(passCount, nullptr);
 	m_passPS.assign(passCount, nullptr);
+	m_passVSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
+	m_passPSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
 	m_passTexcoordKey.assign(passCount, 0u);   // Plan 17-09
 	{
 		PerPassStages emptyStages;
@@ -415,6 +421,10 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		{
 			m_passVS[passIndex] = static_cast<Direct3d11_VertexShaderData const *>(
 				pass->m_vertexShader->m_graphicsData);
+			// UAF fix: store the ADDRESS of the engine owner's m_graphicsData slot so
+			// apply() can re-read it LIVE (it is freed+recreated on graphics-data
+			// restore; the cast snapshot above would dangle). See header.
+			m_passVSSlot[passIndex] = &pass->m_vertexShader->m_graphicsData;
 
 			// Plan 17-09: compute this pass's texcoord-set key, mirroring
 			// Direct3d9_StaticShaderData::Pass::construct:550-578. Each VS texcoord
@@ -450,6 +460,10 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		{
 			m_passPS[passIndex] = static_cast<Direct3d11_PixelShaderProgramData const *>(
 				pass->m_pixelShader->m_program->m_graphicsData);
+			// UAF fix: store the ADDRESS of the engine owner's m_graphicsData slot so
+			// apply() can re-read it LIVE (it is freed+recreated on graphics-data
+			// restore; the cast snapshot above would dangle -> the boot crash). See header.
+			m_passPSSlot[passIndex] = &pass->m_pixelShader->m_program->m_graphicsData;
 		}
 
 		// Plan 17-03 SR-1: per-pass MATERIAL + TEXTUREFACTOR source-data
@@ -755,11 +769,30 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 		if (passNumber >= 0 && static_cast<size_t>(passNumber) < m_passVS.size())
 		{
 			size_t const idx = static_cast<size_t>(passNumber);
+
+			// UAF FIX (release boot-crash 2026-06-02): re-derive the per-pass VS/PS
+			// graphics-data pointers LIVE from the stable engine-owner slots, instead
+			// of trusting the construct-time snapshot (m_passVS/m_passPS), which dangles
+			// after a device graphics-data remove/restore frees+recreates *m_graphicsData.
+			// D3D9 reads m_graphicsData live at apply for exactly this reason
+			// (Direct3d9_StaticShaderData.cpp:829). Use liveVS/livePS for every deref
+			// below; the snapshot vectors are kept only for construct-time work + the
+			// usesVertexShader() presence check (a stale-but-non-null entry still
+			// correctly answers "this pass has a VS/PS").
+			Direct3d11_VertexShaderData const * const liveVS =
+				(idx < m_passVSSlot.size() && m_passVSSlot[idx] && *m_passVSSlot[idx])
+					? static_cast<Direct3d11_VertexShaderData const *>(*m_passVSSlot[idx])
+					: nullptr;
+			Direct3d11_PixelShaderProgramData const * const livePS =
+				(idx < m_passPSSlot.size() && m_passPSSlot[idx] && *m_passPSSlot[idx])
+					? static_cast<Direct3d11_PixelShaderProgramData const *>(*m_passPSSlot[idx])
+					: nullptr;
+
 			// Plan 17-09: hand the StateCache BOTH the VS data and this pass's
 			// resolved texcoord-set key, so it binds the correct per-key variant
 			// (and passes the key explicitly into layout creation -- never ambient).
-			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx], m_passTexcoordKey[idx]);
-			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
+			Direct3d11_StateCache::setCurrentVSData(liveVS, m_passTexcoordKey[idx]);
+			Direct3d11_StateCache::setCurrentPSData(livePS);
 
 			// Plan 17-09 (GAP-5): feed materialSpecularPower into the VS b0 shadow
 			// (lightData[25].w). Mirrors D3D9 applyLights_vertexShader:577 reading
@@ -795,12 +828,12 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			// Direct3d9_StaticShaderData.cpp:835-897 per-pass apply semantics).
 			// R3-03b: !pm.m_materialValid passes upload ZERO material so stale
 			// data does NOT bleed into a subsequent material pass.
-			if (m_passPS[idx] && idx < m_passMaterial.size())
+			if (livePS && idx < m_passMaterial.size())
 			{
 				PerPassMaterial const &pm = m_passMaterial[idx];
 				Direct3d11_PerMaterialCB & shadow = Direct3d11Namespace::getPerMaterialShadow();
 				std::vector<Direct3d11_ReflectedPSCbufferLayout> const &layouts =
-					m_passPS[idx]->getReflectedCbufferLayouts();
+					livePS->getReflectedCbufferLayouts();
 
 				// R3-03b: read source XMFLOAT4s for THIS pass. If !m_materialValid,
 				// source values are ZERO (so the eventual updatePS call uploads zero
@@ -1217,7 +1250,7 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 									DEBUG_REPORT_LOG_PRINT(true, ("%s\n", m06a));
 								};
 
-								ID3DBlob *const psBlob06a = (m_passPS[idx] ? m_passPS[idx]->getPsBytecode() : nullptr);
+								ID3DBlob *const psBlob06a = (livePS ? livePS->getPsBytecode() : nullptr);
 								if (psBlob06a)
 								{
 									ID3D11ShaderReflection *refl06a = nullptr;
@@ -1549,7 +1582,7 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			// confirmed correct in the RenderDoc capture; only the texture diverged.
 			// Build the SRV slot array FIRST so an absent stage cannot clear a slot a
 			// present stage remapped its SRV into (the slots are a permutation).
-			Direct3d11_PixelShaderProgramData const * const psData = m_passPS[idx];
+			Direct3d11_PixelShaderProgramData const * const psData = livePS;   // UAF fix: live, not the stale snapshot
 			ID3D11ShaderResourceView * srvForSlot[kMaxStages] = {};
 			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
 			{
