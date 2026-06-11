@@ -430,22 +430,31 @@ namespace Direct3d11_StateCacheNamespace
 			}
 		}
 
-		// Plan 17-09 (GAP-5, THE bump-arm fix): the VS light loops process a FIXED
-		// (unrolled) set of point lights; each computes distanceAttenuation =
-		// 1 / dot(attenuationCoeffs, factors). For an UNUSED point light whose coeffs
-		// are (0,0,0,0) that is 1/0 = INF, and INF * 0(color) = NaN -> NaN COLOR0/
-		// COLOR1 -> the PS NaN-guard zeroes diffuse -> only the normal-map bump term
-		// renders -> the purple/green arms. D3D9 avoids this by setting unused point
-		// lights' constant attenuation k0=1 (Direct3d9_LightManager.cpp:685 + :717),
-		// making denom>=1. We never fill point lights, so ALL are unused -> set every
-		// point attenuation.k0 (the .x) = 1. Indices from the D3D9 LightData layout:
-		// pointSpecular.attenuation = lightData[10]; point[0..3].attenuation =
-		// lightData[14/17/20/23] (PointSpecularData=4 regs, PointData=3 regs).
-		s_slot0Shadow.lightData[10].x = 1.0f;   // pointSpecular[0].attenuation.k0
-		s_slot0Shadow.lightData[14].x = 1.0f;   // point[0].attenuation.k0
-		s_slot0Shadow.lightData[17].x = 1.0f;   // point[1].attenuation.k0
-		s_slot0Shadow.lightData[20].x = 1.0f;   // point[2].attenuation.k0
-		s_slot0Shadow.lightData[23].x = 1.0f;   // point[3].attenuation.k0
+		// Point-light VS lane (2026-06-11, blue-NPC-face fix; supersedes the Plan 17-09
+		// k0=1-only stub): feed the five point-light terms the world VS sums into its
+		// main diffuse (v1) -- pointSpecular[0] @ lightData[8-11] (c24-27) + point[0..3]
+		// @ lightData[12-23] (c28-39, PointSpecularData=4 regs, PointData=3 regs).
+		// Previously ONLY the unused-slot k0=1 NaN guards were written ("we never fill
+		// point lights"), so interior scenes lit by warm POINT fixtures (cantina) lost
+		// all point terms: v1 = ambient+fills (cool blue), and a near-white face albedo
+		// showed it raw -> the blue NPC face (D3D9 includes the points -> pink).
+		// Positions are WORLD space (the VS subtracts them from the world-space vertex,
+		// instr 15/54/66/78 of the asset VS) -- direct copy, no transform. The snapshot
+		// carries the (1,0,0,0) attenuation divide-guard for unused slots, preserving
+		// the Plan 17-09 NaN fix (1/dp4 >= 1, colors zero).
+		{
+			Direct3d11_PixelDot3State const &d3p = Direct3d11_LightManager::getPixelDot3State();
+			s_slot0Shadow.lightData[8]  = d3p.pointSpecPosition;
+			s_slot0Shadow.lightData[9]  = d3p.pointSpecDiffuse;
+			s_slot0Shadow.lightData[10] = d3p.pointSpecAttenuation;
+			s_slot0Shadow.lightData[11] = d3p.pointSpecSpecular;
+			for (int pi = 0; pi < 4; ++pi)
+			{
+				s_slot0Shadow.lightData[12 + pi * 3] = d3p.pointPosition[pi];
+				s_slot0Shadow.lightData[13 + pi * 3] = d3p.pointDiffuse[pi];
+				s_slot0Shadow.lightData[14 + pi * 3] = d3p.pointAttenuation[pi];
+			}
+		}
 
 		// Plan 11-09 Iter-2.7 Fix C: defer GPU upload to flushSlot0IfDirty.
 		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
@@ -1083,7 +1092,14 @@ namespace Direct3d11_StateCacheNamespace
 		if (!vsData)
 			return variantM;
 
-		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData, textureCoordinateSetKey);
+		// Walls fix 2026-06-11: ms_boundSRV[0] is the SHADOW state for the
+		// UPCOMING draw (StaticShaderData::apply wrote it before the draw
+		// call reached applyPreDrawState; the flush below at step 7 uploads
+		// it). Note this is the shadow, NOT a PSGetShaderResources device
+		// read -- the Plan 11-09.14 staleness caveat above applied to device
+		// reads only. Textured draws get the sampling variant; untextured
+		// draws get the vertex-color variant (FFP: no texture -> diffuse).
+		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData, textureCoordinateSetKey, ms_boundSRV[0] != nullptr);
 		if (!perVS)
 			return variantM;   // tombstone -> magenta safety net
 
@@ -2022,18 +2038,31 @@ void Direct3d11_StateCache::setTextureTransform(int /*stage*/, bool /*enabled*/,
 
 // ----------------------------------------------------------------------
 
-void Direct3d11_StateCache::setAlphaFadeOpacity(bool /*enabled*/, float opacity)
+// CONSULT-40 (2026-06-08): D3D9-parity alpha-fade state (mirrors D3D9 ms_alphaFadeOpacity).
+namespace { bool s_alphaFadeEnabled = false; float s_alphaFadeOpacity = 1.0f; }
+
+void Direct3d11_StateCache::setAlphaFadeOpacity(bool enabled, float opacity)
 {
-	// Push opacity into the per-material cbuffer alpha channel. Plan 11-07
-	// smoke will surface whether the engine shaders read it from
-	// userConstants[0].a or expect a dedicated slot.
-	XMFLOAT4 fade(opacity, opacity, opacity, opacity);
-	Direct3d11_ConstantBuffer::updatePS(0, &fade, sizeof(fade));
-	// CONSULT-39 (2026-06-08): this 16B updatePS(0) zero-tail-clobbers the b0 dot3 block
-	// (P19_CBUF_ZERO_TAIL). Drop the apply() cache so the next setStaticShader re-uploads the full
-	// b0 -- else a cache-hit bump draw skips the dot3 rewrite and renders BLACK (the toggling walls).
+	// CONSULT-40 (2026-06-08): RECORD the engine's alpha-fade state; the dot3 b0 packing in
+	// Direct3d11_StaticShaderData::apply reads it back (getAlphaFadeEnabled/Opacity) and writes
+	// c1.a = enabled?1:0 and c2.a = opacity -- exactly D3D9 applyLights_vertexShader (:582,584).
+	//
+	// REMOVED the old 16-byte `updatePS(0, fade, 16)`: it pushed the opacity into b0 *c0*, a slot
+	// the asset dot3 PS never reads for alpha (it reads c1.a/c2.a). Worse, c0 holds the dot3
+	// LIGHT DIRECTION + specular power, so this write CLOBBERED it every fade call (one source of
+	// the P19/black-walls churn -- the CONSULT-39 invalidateApplyCache was papering over it). The
+	// genuine fade opacity was therefore dropped and the light's own specular.a (~0.6) leaked into
+	// c2.a instead, forcing every dot3-shaded surface (faces, bump walls) into the PS fade branch
+	// -> translucent. Now the real fade flows through the c1.a/c2.a packing and c0 is left intact.
+	s_alphaFadeEnabled = enabled;
+	s_alphaFadeOpacity = opacity;
+	// Force the next setStaticShader to be an apply() cache MISS so the per-draw dot3 staging fill
+	// (StaticShaderData.cpp:962-968) re-runs and picks up the new c1.a/c2.a fade values.
 	Direct3d11_StaticShaderData::invalidateApplyCache();
 }
+
+bool  Direct3d11_StateCache::getAlphaFadeEnabled() { return s_alphaFadeEnabled; }
+float Direct3d11_StateCache::getAlphaFadeOpacity() { return s_alphaFadeOpacity; }
 
 // ----------------------------------------------------------------------
 

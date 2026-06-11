@@ -96,6 +96,25 @@ struct Direct3d11_PixelDot3State
 	DirectX::XMFLOAT4 parallelDirectionWorld[2];   // world dir of parallel[0..1] (negated at the fill site)
 	DirectX::XMFLOAT4 parallelDiffuseColor[2];     // diffuse color of parallel[0..1]
 	int               parallelCount;               // 0..2 valid entries in the two arrays above
+
+	// Point-light VS lane (2026-06-11, blue-NPC-face fix): the world VS's main diffuse
+	// term ALSO sums pointSpecular[0] (lightData[8-11] @ c24-27) + point[0..3]
+	// (lightData[12-23] @ c28-39) -- five point-light terms D3D11 never fed (only the
+	// k0=1 NaN guards, StateCache:444-448). Interior scenes (cantina) are lit by warm
+	// POINT fixtures; with these zero, v1 = ambient+fills only (cool blue) while D3D9's
+	// v1 includes the warm points -> pink skin. Capture35 draw 516: c24-c39 all zero,
+	// v1 B/R=1.39 on a near-white face albedo = the blue face. Mirror
+	// Direct3d9_LightManager::selectLights' point cascade (:442-463) +
+	// applyLights_vertexShader's packing (:652-720). Unused slots carry attenuation
+	// (1,0,0,0) -- the divide-guard (1/dp4(att,(1,d,d2,0))) -- and zero colors/position.
+	// Member initializers cover the window before the first setLights call.
+	DirectX::XMFLOAT4 pointSpecPosition    { 0.0f, 0.0f, 0.0f, 0.0f };   // lightData[8]  @ c24 (world, w=1 when valid)
+	DirectX::XMFLOAT4 pointSpecDiffuse     { 0.0f, 0.0f, 0.0f, 0.0f };   // lightData[9]  @ c25
+	DirectX::XMFLOAT4 pointSpecAttenuation { 1.0f, 0.0f, 0.0f, 0.0f };   // lightData[10] @ c26 (k0,k1,k2,0)
+	DirectX::XMFLOAT4 pointSpecSpecular    { 0.0f, 0.0f, 0.0f, 0.0f };   // lightData[11] @ c27
+	DirectX::XMFLOAT4 pointPosition[4]     { {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f} };   // lightData[12/15/18/21] @ c28/31/34/37
+	DirectX::XMFLOAT4 pointDiffuse[4]      { {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f,0.0f} };   // lightData[13/16/19/22] @ c29/32/35/38
+	DirectX::XMFLOAT4 pointAttenuation[4]  { {1.0f,0.0f,0.0f,0.0f}, {1.0f,0.0f,0.0f,0.0f}, {1.0f,0.0f,0.0f,0.0f}, {1.0f,0.0f,0.0f,0.0f} };   // lightData[14/17/20/23] @ c30/33/36/39
 };
 
 // ======================================================================

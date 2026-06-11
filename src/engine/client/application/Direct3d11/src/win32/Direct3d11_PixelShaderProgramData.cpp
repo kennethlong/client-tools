@@ -483,10 +483,13 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 	// output HW register layout exactly (HLSL compiler assigns PS input
 	// registers in declaration order -> v0==o0, v1==o1, ...). Body
 	// samples SRV0/sampler0 via the matching TEXCOORD0 declaration when
-	// the VS provides TEXCOORD0 + FLOAT32 + at least xy; otherwise
-	// returns magenta. Returns empty string on validation failure
-	// (caller treats as tombstone).
-	std::string buildHlslForVSOutputs(std::vector<Direct3d11_ReflectedVSOutput> const &outputsIn)
+	// the VS provides TEXCOORD0 + FLOAT32 + at least 2 components AND the
+	// caller allows sampling (allowTextureSample == an SRV is actually
+	// bound at slot 0 -- sampling a null SRV returns (0,0,0,0) = black,
+	// so untextured passes must take the color-only branch instead);
+	// otherwise vertex color or magenta. Returns empty string on
+	// validation failure (caller treats as tombstone).
+	std::string buildHlslForVSOutputs(std::vector<Direct3d11_ReflectedVSOutput> const &outputsIn, bool allowTextureSample)
 	{
 		// Defensive: validate semantic names BEFORE we start emitting.
 		for (Direct3d11_ReflectedVSOutput const &o : outputsIn)
@@ -495,28 +498,62 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 				return std::string();
 		}
 
-		// Sort by Register; ties broken by SemanticIndex for determinism.
+		// Sort by Register, then by FIRST COMPONENT within the register
+		// (walls fix 2026-06-11): two semantics can share one register with
+		// complementary masks (tfcl interior VS packs FOG at o2.x and
+		// TEXCOORD0 at o2.yz). fxc packs PS inputs greedily in DECLARATION
+		// order, so within a shared register the lower-component semantic
+		// must be declared first or the PS's packing diverges from the VS's
+		// (FOG@x/uv@yz vs uv@xy/FOG@z) -> register-position linkage break
+		// (id=343) / garbage uv. SemanticIndex remains the final tie-break.
+		auto firstComponent = [](UINT mask) -> UINT {
+			if (mask & 0x1) return 0;
+			if (mask & 0x2) return 1;
+			if (mask & 0x4) return 2;
+			if (mask & 0x8) return 3;
+			return 0;
+		};
 		std::vector<Direct3d11_ReflectedVSOutput> outputs = outputsIn;
 		std::sort(outputs.begin(), outputs.end(),
-			[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+			[&firstComponent](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
 				if (a.Register != b.Register) return a.Register < b.Register;
+				UINT const fa = firstComponent(a.ComponentMask);
+				UINT const fb = firstComponent(b.ComponentMask);
+				if (fa != fb) return fa < fb;
 				return a.SemanticIndex < b.SemanticIndex;
 			});
 
-		// Find TEXCOORD0 / FLOAT32 / xy declared -- decides whether the
-		// body samples or returns magenta. ComponentMask (declared
-		// signature contract) gates this, not ReadWriteMask (runtime
-		// write behavior).
+		// Find TEXCOORD0 / FLOAT32 / >=2 components declared -- decides
+		// whether the body samples or returns vertex color / magenta.
+		// ComponentMask (declared signature contract) gates this, not
+		// ReadWriteMask (runtime write behavior).
+		//
+		// Walls fix 2026-06-11: the gate previously required the uv at
+		// .xy of its register ((mask & 0x3) == 0x3). The tfcl interior
+		// family packs fog at o2.x and uv0 at o2.yz (mask 0x6), which
+		// failed that gate and forced the color-only branch -- flat grey
+		// untextured walls/floor. The declared struct field's arity equals
+		// the mask's popcount and the field's own .xy IS the semantic's
+		// first two components wherever they live in the register, so
+		// requiring >=2 components is sufficient.
 		int texcoord0Index = -1;
-		for (size_t i = 0; i < outputs.size(); ++i)
+		if (allowTextureSample)
 		{
-			Direct3d11_ReflectedVSOutput const &o = outputs[i];
-			if (_stricmp(o.SemanticName, "TEXCOORD") != 0) continue;
-			if (o.SemanticIndex != 0) continue;
-			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
-			if ((o.ComponentMask & 0x3) != 0x3) continue;
-			texcoord0Index = static_cast<int>(i);
-			break;
+			for (size_t i = 0; i < outputs.size(); ++i)
+			{
+				Direct3d11_ReflectedVSOutput const &o = outputs[i];
+				if (_stricmp(o.SemanticName, "TEXCOORD") != 0) continue;
+				if (o.SemanticIndex != 0) continue;
+				if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+				int componentCount = 0;
+				if (o.ComponentMask & 0x1) ++componentCount;
+				if (o.ComponentMask & 0x2) ++componentCount;
+				if (o.ComponentMask & 0x4) ++componentCount;
+				if (o.ComponentMask & 0x8) ++componentCount;
+				if (componentCount < 2) continue;
+				texcoord0Index = static_cast<int>(i);
+				break;
+			}
 		}
 
 		// Plan 11-09.15 Iter-28: COLOR0 detection. Iter-27 surfaced UI
@@ -1119,7 +1156,7 @@ void Direct3d11_PixelShaderProgramData::remove()
 
 // ----------------------------------------------------------------------
 
-ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey)
+ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound)
 {
 	// Plan 11-09.13 Iter-4: lazy per-VS PS generation + cache. Keyed by
 	// VS bytecode hash so identical bytecode shares a PS. Cache miss
@@ -1136,7 +1173,13 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	// variant bound for the draw.
 	Direct3d11_VertexShaderData::Variant const &vsVariant = vsData->getVariant(textureCoordinateSetKey);
 	uint64_t const hash = vsVariant.bytecodeHash;
-	auto it = ms_perVSCache.find(hash);
+	// Walls fix 2026-06-11: a VS can be drawn both with and without a
+	// texture at SRV0 (FFP stage-based passes bind per-pass; some passes
+	// have no texture). The textured and untextured generated PSes differ
+	// (sample-modulate vs vertex-color), so each gets its own cache entry --
+	// salt the untextured key. Same VS + same srv0Bound -> same entry.
+	uint64_t const cacheKey = srv0Bound ? hash : (hash ^ 0x5EBAF00D5EBAF00Dull);
+	auto it = ms_perVSCache.find(cacheKey);
 	if (it != ms_perVSCache.end())
 		return it->second.Get();   // hit (may be null tombstone)
 
@@ -1146,18 +1189,18 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	// Empty PS generator output (validation failure) -> tombstone.
 	// Compile failure -> tombstone. All paths cache-miss-then-tombstone
 	// to avoid retry storms across thousands of draws using the same VS.
-	std::string const hlsl = buildHlslForVSOutputs(outputs);
+	std::string const hlsl = buildHlslForVSOutputs(outputs, srv0Bound);
 	if (hlsl.empty())
 	{
-		ms_perVSCache[hash] = ComPtr<ID3D11PixelShader>();
+		ms_perVSCache[cacheKey] = ComPtr<ID3D11PixelShader>();
 		return nullptr;
 	}
 
-	emitFirstGeneratorLog(hash, hlsl);
+	emitFirstGeneratorLog(cacheKey, hlsl);
 
 	char displayName[64];
-	snprintf(displayName, sizeof(displayName), "perVS_dyn_%016llX.hlsl",
-	         static_cast<unsigned long long>(hash));
+	snprintf(displayName, sizeof(displayName), "perVS_dyn_%016llX%s.hlsl",
+	         static_cast<unsigned long long>(hash), srv0Bound ? "" : "_notex");
 
 	ComPtr<ID3D11PixelShader> ps;
 	bool const compiled = compilePixelShaderFromHlsl(
@@ -1165,11 +1208,11 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 
 	if (!compiled || !ps)
 	{
-		ms_perVSCache[hash] = ComPtr<ID3D11PixelShader>();
+		ms_perVSCache[cacheKey] = ComPtr<ID3D11PixelShader>();
 		return nullptr;
 	}
 
-	ms_perVSCache[hash] = ps;
+	ms_perVSCache[cacheKey] = ps;
 	return ps.Get();
 }
 

@@ -97,6 +97,15 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 	Light const *psSlot   = nullptr;            // parallelSpecular[0] (the sun)
 	Light const *pSlot[2] = { nullptr, nullptr }; // parallel[0..1] (fill, bounce) by diffuse
 
+	// Point-light VS lane (2026-06-11, blue-NPC-face fix): mirror D3D9 selectLights'
+	// point cascade (:442-463) -- pointSpecular[0] wins by SPECULAR intensity, the
+	// displaced light contends for point[0..3] by DIFFUSE intensity. These feed the
+	// world VS's five point-light diffuse terms (lightData[8-23] @ c24-39) via the
+	// snapshot + composeSlot0Shadow. Spots are NOT selected here (D3D9 :465-469
+	// discards spots for this lane; the cb.pointLight PS lane below keeps them).
+	Light const *psPointSlot   = nullptr;                                      // pointSpecular[0]
+	Light const *pointSlot[4]  = { nullptr, nullptr, nullptr, nullptr };       // point[0..3] by diffuse
+
 	for (Light const *light : lightList)
 	{
 		if (!light)
@@ -153,6 +162,24 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 					cb.pointLightColor[pointLightCount] = XMFLOAT4(color.r, color.g, color.b, intensity);
 					++pointLightCount;
 				}
+
+				// Point-light VS lane (2026-06-11): D3D9 selectLights cascade (:447-460).
+				// The specular slot contends by specular intensity; the displaced light
+				// flows down into the diffuse-sorted point[0..3] slots.
+				{
+					Light const *l = light;
+					if (!psPointSlot || l->getScaledSpecularIntensity() > psPointSlot->getScaledSpecularIntensity())
+					{
+						Light const *t = psPointSlot; psPointSlot = l; l = t;
+					}
+					for (int i = 0; l && i < 4; ++i)
+					{
+						if (!pointSlot[i] || l->getScaledDiffuseIntensity() > pointSlot[i]->getScaledDiffuseIntensity())
+						{
+							Light const *t = pointSlot[i]; pointSlot[i] = l; l = t;
+						}
+					}
+				}
 				break;
 
 			case Light::T_spot:
@@ -178,32 +205,74 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 	// Direct3d9_LightManager::applyLights_vertexShader. The sun (parallelSpecular[0]) feeds the
 	// dot3 PS path + the LightingCB directional; the fill+bounce (parallel[0..1]) feed the world
 	// VS's main diffuse term via the snapshot, which composeSlot0Shadow writes to c20-c23.
-	if (psSlot)
+	// CONSULT-42 (2026-06-09, 4/4 crew): persist the dot3 snapshot ONLY across a TRULY EMPTY
+	// setLights({}) (the transient popCell cell-boundary call the sorter emits -- the black-walls
+	// case CONSULT-38 needed). A *populated* call that selected NO directional (psSlot==null) must
+	// CLEAR the dot3 sun, exactly like D3D9 selectLights (which NULLs ms_currentLights every call
+	// and applyLights_vertexShader_dot3 writes Zero(pixelDot3Data) when parallelSpecular[0]==NULL,
+	// Direct3d9_LightManager.cpp:380-391,645-660). The old `if (psSlot)`-only gate let a PRIOR
+	// cell's blue interior directional survive onto a later object whose own list is sunless (e.g.
+	// the cantina NPC face) -> blue face. D3D9 rebuilds per-draw so it can't stick (-> warm/pink).
+	if (!lightList.empty())
 	{
-		Vector    const dir      = psSlot->getObjectFrameK_w();
-		VectorArgb const &diffuse  = psSlot->getScaledDiffuseColor();
-		VectorArgb const &specular = psSlot->getScaledSpecularColor();
-		VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
-		VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
+		if (psSlot)
+		{
+			Vector    const dir      = psSlot->getObjectFrameK_w();
+			VectorArgb const &diffuse  = psSlot->getScaledDiffuseColor();
+			VectorArgb const &specular = psSlot->getScaledSpecularColor();
+			VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
+			VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
 
-		cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, psSlot->getScaledDiffuseIntensity());
-		cb.directionalColor = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, 1.0f);
+			cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, psSlot->getScaledDiffuseIntensity());
+			cb.directionalColor = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, 1.0f);
 
-		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
-		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
-		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
-		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
-			tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
-		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
-			tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
-		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
-		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
-		s_pixelDot3State.valid = true;
+			s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+			s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+			s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+			s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+				tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
+			s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+				tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
+			s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+			s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+			s_pixelDot3State.valid = true;
+		}
+		else
+		{
+			// Populated but no parallel directional -> D3D9 zeros the dot3 sun. Don't inherit a
+			// prior cell's blue sun.
+			s_pixelDot3State.valid                    = false;
+			s_pixelDot3State.localDirectionWorld      = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.diffuseColor             = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.specularColor            = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.backColor                = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.tangentColor             = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		}
 	}
 
 	// fill + bounce -> parallel[0..1] (the world VS's main diffuse term). Mirror D3D9
 	// applyLights_vertexShader :630-650: direction is the raw light direction (negated at the
 	// fill site, matching the c20/c21 packing in composeSlot0Shadow), color is the diffuse.
+	//
+	// CONSULT-42 (2026-06-09, 4/4 crew -- Opus numeric proof): the blue NPC face is THIS register
+	// (parallel[0] = c20-c23, the VS main-diffuse fill) carrying a PRIOR cell's blue cell-fill that
+	// survived a sunless call. The CONSULT-39 `if (psSlot)` gate persisted parallel[] across ANY
+	// non-directional call; that was too broad.
+	//
+	// CONSULT-42 residual (2026-06-09/11, Capture35 hardware trace): even the `!empty` gate
+	// left the cantina NPC blue, because ShaderPrimitiveSorter::Phase::draw() calls
+	// setLights(entry.lightBitSet) before EVERY draw entry, and HER entries' bit sets are
+	// EMPTY -> her own preceding call was the truly-empty case the gate skipped -> she
+	// inherited the prior entry's blue fill (her face/dress/hair/shoulder draws all read
+	// v1 with B/R~1.35 in Capture35). D3D9 clears parallel[0..1] on EVERY selectLights
+	// call including empty ones (Direct3d9_LightManager.cpp:380-391) -> no-light entries
+	// render ambient-only (warm). Mirror that: rebuild parallel[] UNCONDITIONALLY -- an
+	// empty list writes zeros (pSlot[] are null). Lit geometry is unaffected: every lit
+	// entry gets its own populated setLights immediately before it draws, so nothing real
+	// depended on empty-call persistence for parallel[]. (The dot3 sun + ambient blocks
+	// above/below keep their empty-call persistence -- not implicated, lower risk.)
 	s_pixelDot3State.parallelCount = 0;
 	for (int i = 0; i < 2; ++i)
 	{
@@ -222,12 +291,63 @@ void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lig
 		}
 	}
 
+	// Point-light VS lane (2026-06-11): pack the selected points into the snapshot,
+	// mirroring D3D9 applyLights_vertexShader (:652-720): world position (w=1), scaled
+	// diffuse color, attenuation (k0,k1,k2,0); pointSpecular also carries scaled
+	// specular. Unused slot -> attenuation (1,0,0,0) divide-guard + zero colors, same
+	// as D3D9's else-branch (:685/:717). Rebuilt UNCONDITIONALLY like parallel[] above:
+	// D3D9 rebuilds per selectLights call, so an empty/sunless call clears (no-light
+	// objects render ambient-only, never a prior cell's points).
+	if (psPointSlot)
+	{
+		Vector     const pos = psPointSlot->getPosition_w();
+		VectorArgb const &dc = psPointSlot->getScaledDiffuseColor();
+		VectorArgb const &sc = psPointSlot->getScaledSpecularColor();
+		s_pixelDot3State.pointSpecPosition    = XMFLOAT4(pos.x, pos.y, pos.z, 1.0f);
+		s_pixelDot3State.pointSpecDiffuse     = XMFLOAT4(dc.r, dc.g, dc.b, dc.a);
+		s_pixelDot3State.pointSpecAttenuation = XMFLOAT4(
+			psPointSlot->getConstantAttenuation(),
+			psPointSlot->getLinearAttenuation(),
+			psPointSlot->getQuadraticAttenuation(), 0.0f);
+		s_pixelDot3State.pointSpecSpecular    = XMFLOAT4(sc.r, sc.g, sc.b, sc.a);
+	}
+	else
+	{
+		s_pixelDot3State.pointSpecPosition    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		s_pixelDot3State.pointSpecDiffuse     = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+		s_pixelDot3State.pointSpecAttenuation = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
+		s_pixelDot3State.pointSpecSpecular    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+	for (int i = 0; i < 4; ++i)
+	{
+		if (pointSlot[i])
+		{
+			Vector     const pos = pointSlot[i]->getPosition_w();
+			VectorArgb const &dc = pointSlot[i]->getScaledDiffuseColor();
+			s_pixelDot3State.pointPosition[i]    = XMFLOAT4(pos.x, pos.y, pos.z, 1.0f);
+			s_pixelDot3State.pointDiffuse[i]     = XMFLOAT4(dc.r, dc.g, dc.b, dc.a);
+			s_pixelDot3State.pointAttenuation[i] = XMFLOAT4(
+				pointSlot[i]->getConstantAttenuation(),
+				pointSlot[i]->getLinearAttenuation(),
+				pointSlot[i]->getQuadraticAttenuation(), 0.0f);
+		}
+		else
+		{
+			s_pixelDot3State.pointPosition[i]    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.pointDiffuse[i]     = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			s_pixelDot3State.pointAttenuation[i] = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
+		}
+	}
+
 	cb.pointLightCountPad.x = static_cast<float>(pointLightCount);
 
-	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS
-	// vertex-lighting fill (lightData[0] @ c16). Set unconditionally so the
-	// body keeps an ambient floor even when no directional light is present.
-	s_pixelDot3State.ambient = cb.ambientColor;
+	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS vertex-lighting fill
+	// (lightData[0] @ c16). CONSULT-42 (Sonnet): gate on !empty too -- a truly empty popCell call
+	// has cb.ambientColor==0 and would zero the snapshot ambient (darkening the next draw that
+	// inherits the persisted directional). Persist the last real ambient across empty calls, in
+	// lockstep with the dot3/parallel persistence above (D3D9's register file is likewise sticky).
+	if (!lightList.empty())
+		s_pixelDot3State.ambient = cb.ambientColor;
 
 	// Flush + bind on both VS and PS stages -- shader passes may sample
 	// lighting on either side.

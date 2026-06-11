@@ -209,9 +209,17 @@ namespace
 	// invalid-fallback semantics (textureData.X != TF_invalid ? textureData.X
 	// : textureSampler.X). Zero-init the desc first (cache-hash padding
 	// hazard per Plan 11-06 Risk #3).
+	//
+	// Walls fix 2026-06-11: templated over the sampler-source type because
+	// FFP stage-based passes carry the same fields on
+	// ShaderImplementation::Pass::Stage (m_textureAddressU/V/W +
+	// m_texture{Mip,Minification,Magnification}Filter, same enum ordering)
+	// -- exactly the dual D3D9 mirrors with its two Stage::construct
+	// overloads (Direct3d9_StaticShaderData.cpp:143 FFP / :297 sampler).
+	template <typename SamplerSourceT>
 	D3D11_SAMPLER_DESC buildSamplerDescForStage0(
 		StaticShaderTemplate::TextureData const &textureData,
-		ShaderImplementation::Pass::PixelShader::TextureSampler const &textureSampler)
+		SamplerSourceT const &textureSampler)
 	{
 		using SST = StaticShaderTemplate;
 		auto resolveAddr = [](SST::TextureAddress td, SST::TextureAddress ts) {
@@ -695,6 +703,76 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 				// and each entry is stored at its own m_textureIndex slot.
 			}
 		}
+		// Walls fix 2026-06-11: FFP STAGE-BASED passes (no m_pixelShader --
+		// interior wall/floor .shts use D3D9 fixed-function texture stages,
+		// modulate texture x diffuse). Pre-fix these passes left m_passStages
+		// empty, so apply() cleared SRV0 every draw and the generated PS could
+		// only emit flat Gouraud vertex color (grey-lavender untextured walls,
+		// Capture35 ev7915). Mirrors the D3D9 sibling's FFP else-branch
+		// (Direct3d9_StaticShaderData.cpp:792-803 + Stage::construct:143):
+		// stage list position IS the destination texture stage index. The
+		// generated PS samples only t0 (main texture) for now; detail-blend
+		// layers at stages 1..3 are bound here but await a multi-stage PS
+		// variant (later quality pass).
+		else if (pass->m_stage)
+		{
+			using SIPStage = ShaderImplementation::Pass::Stage;
+			ShaderImplementation::Pass::Stages const &ffpStages = *pass->m_stage;
+			int stageIndex = 0;
+			for (ShaderImplementation::Pass::Stages::const_iterator si = ffpStages.begin();
+			     si != ffpStages.end() && stageIndex < kMaxStages; ++si, ++stageIndex)
+			{
+				SIPStage const * const st = *si;
+				if (!st)
+					continue;
+				// D3D9 FFP disables this and all later stages at the first
+				// TO_disable color op -- stop populating there.
+				if (st->m_colorOperation == SIPStage::TO_disable)
+					break;
+
+				Stage &stage = m_passStages[passIndex][stageIndex];
+				stage.m_present = true;
+				if (stageIndex == 0)
+					++s_passesWithSampler0;
+
+				// Texture resolution mirrors the sampler branch above /
+				// D3D9 FFP Stage::construct (Direct3d9_StaticShaderData.cpp:145-176):
+				// safe defaults, getTextureData by tag, global short-circuit.
+				StaticShaderTemplate::TextureData textureData;
+				textureData.placeholder         = false;
+				textureData.addressU            = StaticShaderTemplate::TA_wrap;
+				textureData.addressV            = StaticShaderTemplate::TA_wrap;
+				textureData.addressW            = StaticShaderTemplate::TA_wrap;
+				textureData.mipFilter           = StaticShaderTemplate::TF_linear;
+				textureData.minificationFilter  = StaticShaderTemplate::TF_linear;
+				textureData.magnificationFilter = StaticShaderTemplate::TF_linear;
+				textureData.maxAnisotropy       = 1;
+				textureData.texture             = nullptr;
+
+				if (st->m_textureTag)
+					shader.getTextureData(st->m_textureTag, textureData);
+
+				bool const tagIsGlobal = st->m_textureTag && Direct3d11_TextureData::isGlobalTexture(st->m_textureTag);
+				if (tagIsGlobal)
+				{
+					stage.m_texture = Direct3d11_TextureData::getGlobalTexture(st->m_textureTag);
+				}
+				else if (textureData.texture)
+				{
+					stage.m_texture = reinterpret_cast<Direct3d11_TextureData const * const *>(
+						textureData.texture->getGraphicsDataAddress());
+				}
+				else
+				{
+					stage.m_texture = nullptr;
+				}
+
+				if (stageIndex == 0 && stage.m_texture)
+					++s_passesWithSampler0TextureResolved;
+
+				stage.m_samplerDesc = buildSamplerDescForStage0(textureData, *st);
+			}
+		}
 	}
 
 	// Plan 17-03 SR-1: m_passMaterial must be sized 1:1 with m_passPS so
@@ -961,8 +1039,26 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 
 							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
 							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
-							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &d3.diffuseColor,             sizeof(DirectX::XMFLOAT4));
-							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &d3.specularColor,            sizeof(DirectX::XMFLOAT4));
+
+							// CONSULT-40 (2026-06-08): pack the alpha-fade control into c1.a/c2.a, NOT the
+							// light's own diffuse/specular alpha. The asset dot3 PS computes its output alpha as
+							//   o0.w = (c1.a > 0) ? c2.a : luminanceBloom
+							// where D3D9 sets c1.a = alphaFadeOpacityEnabled (0 when NOT fading) and c2.a =
+							// alphaFadeOpacity (Direct3d9_LightManager.cpp:582,584). D3D11 was copying d3.diffuse-
+							// Color.a / d3.specularColor.a here -- the SUN light's scaled alphas (diffuse.a == 1.0
+							// from PackedRgb::convert default, specular.a == mainSpecularColorScale ~0.6). c1.a==1.0
+							// (>0) forced the fade branch on EVERY dot3-shaded draw and emitted ~0.6 as alpha ->
+							// faces/bump surfaces rendered translucent/washed (the vertex-lit body shader ignores
+							// c1/c2, so it stayed opaque -- the face-wrong/body-right signature). Override .a here,
+							// per-draw, from the engine's recorded fade state so non-fading objects take the opaque
+							// luminance branch exactly like D3D9. Local copies: the snapshot's .a (used by the VS
+							// lightData path in composeSlot0Shadow) is left untouched.
+							DirectX::XMFLOAT4 dot3Diffuse  = d3.diffuseColor;
+							DirectX::XMFLOAT4 dot3Specular = d3.specularColor;
+							dot3Diffuse.w  = Direct3d11_StateCache::getAlphaFadeEnabled() ? 1.0f : 0.0f;
+							dot3Specular.w = Direct3d11_StateCache::getAlphaFadeOpacity();
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &dot3Diffuse,                sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &dot3Specular,               sizeof(DirectX::XMFLOAT4));
 							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
 							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
 						}

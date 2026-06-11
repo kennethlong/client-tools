@@ -257,7 +257,15 @@ public:
 	// now read actual texture data for passes whose pixelShader has a
 	// TextureSampler with m_textureIndex == 0. Slots 1..7 still deferred
 	// to Phase 12 real per-asset PS compile.
-	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey);   // Plan 17-09
+	//
+	// Walls fix 2026-06-11: srv0Bound selects between the textured
+	// (tex2D(t0, uv) [* COLOR0]) and untextured (COLOR0 passthrough)
+	// generated variants -- each cached separately. Sampling a null SRV
+	// returns (0,0,0,0) in D3D11, so passes that bind no texture must NOT
+	// take the sampling branch (FFP semantics: no texture -> diffuse).
+	// Caller passes the StateCache's ms_boundSRV[0] shadow, which is
+	// current for the upcoming draw at applyPreDrawState time.
+	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound);   // Plan 17-09
 
 private:
 

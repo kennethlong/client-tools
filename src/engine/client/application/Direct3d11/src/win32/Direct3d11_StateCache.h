@@ -85,6 +85,15 @@ public:
 	static void setTextureTransform(int stage, bool enabled, int dimension, bool projected, real const *transform);
 	static void setAlphaFadeOpacity(bool enabled, float opacity);
 
+	// CONSULT-40 (2026-06-08): D3D9-parity alpha-fade state. The dot3 asset PS reads its
+	// output-alpha control from b0 c1.a (alphaFadeOpacityEnabled) and c2.a (alphaFadeOpacity)
+	// -- see Direct3d9_LightManager.cpp:582,584. setAlphaFadeOpacity records enabled/opacity
+	// here; Direct3d11_StaticShaderData::apply patches the per-draw dot3 c1.a/c2.a from these
+	// getters (NOT the light's own diffuse/specular alpha, which previously leaked in and forced
+	// every dot3 surface into the fade branch -> translucent faces). Mirrors D3D9 ms_alphaFadeOpacity.
+	static bool  getAlphaFadeEnabled();
+	static float getAlphaFadeOpacity();
+
 	// Plan 11-09.15 Iter-39B: per-pass alpha-blend control. Called from
 	// Direct3d11_ShaderImplementationData::apply() to honor the engine's
 	// per-shader m_alphaBlendEnable (UI canvas / particles / glow billboards
