@@ -13,6 +13,11 @@
 #include "clientGame/Bloom.h"
 #include "clientGame/Game.h"
 #include "clientGame/GroundScene.h"
+#ifdef _DEBUG
+// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
+#include "clientGraphics/DpvsProfileInstrumentation.h"
+#include "clientGraphics/RenderWorld.h"
+#endif
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/PostProcessingEffectsManager.h"
 #include "clientGraphics/ShaderTemplateList.h"
@@ -951,6 +956,30 @@ IoResult CuiIoWin::processEvent (IoEvent * event)
 
 	case IOET_KeyDown:
 		AwayFromKeyBoardManager::touch();
+
+#ifdef _DEBUG
+		// Phase 10 -- DPVS profiling instrumentation hooks (THROWAWAY; D-15 cleanup target).
+		// F10 toggles capture; F11 toggles the DPVS occlusion-culling bit.
+		// Hook runs BEFORE InputMap so it preempts any TRE-archived input-map
+		// binding for these keys (acceptable per RESEARCH.md A2 -- F10/F11 are
+		// not in source today; the debug-only intercept consumes the event with
+		// retval=true; break;).
+		// Phase 23: F11 rewired to the surviving ms_forceDisableOcclusionCulling
+		// flag via RenderWorld::toggleForceDisableOcclusionCulling() -- the old
+		// occlusion get/set accessor pair was deleted by Option alpha.
+		if (event->arg2 == DIK_F10)
+		{
+			DpvsProfileInstrumentation::toggleCapture();
+			retval = true;
+			break;
+		}
+		if (event->arg2 == DIK_F11)
+		{
+			RenderWorld::toggleForceDisableOcclusionCulling();
+			retval = true;
+			break;
+		}
+#endif
 
 		if (m_keyboardInputActive)
 		{
