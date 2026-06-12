@@ -1,6 +1,10 @@
 # whitengold — SWG Client Modernisation Port
 
-## Current State: v2.1 Decruft SHIPPED (2026-05-27)
+## Current State: v2.2 Visual Parity — Phase 23 complete (2026-06-12), all roadmap phases done
+
+Phase 23 (DPVS D3D11 Remeasure, the strictly-last v2.2 phase) is complete: the Phase 10 DPVS instrumentation was restored CPU-only, a live occlusion-vs-no-occlusion A/B was captured on the D3D11 path (Mos Eisley plaza outdoor + cantina indoor, 3 passes/condition, 100% flag purity), and the keep/remove verdict is recorded in `docs/recon/23-dpvs-d3d11-profiling.md`. **Both Phase 10 verdicts flipped under D3D11** — outdoor now `keep` (occlusion culls ~140 objects, net −0.76 ms median), indoor now `remove` (portals already bound the set; occlusion is pure overhead) — Option α is REVISED as a recorded decision; the shipped culling code is untouched (acting on the verdict is follow-up work). DPVS-01 satisfied; v2.2 roadmap phases 17–23 all complete.
+
+## Prior State: v2.1 Decruft SHIPPED (2026-05-27)
 
 v2.1 re-applied the orphaned v2.0 dead-code removals (CLEAN-01..04) against the active Koogie/MSBuild tree: five dormant subsystems — trackIR/stationapi/SwgClientSetup/lcdui (Phase 12), VideoCapture (13), Vivox voice chat (14), and the XPCOM/Mozilla in-game browser (15) — were fully unlinked and deleted, plus a final tech-debt cleanup pass (Phase 16). The client stays bootable to character-select under **both** D3D9 (`rasterMajor=5`) and D3D11 (`=11`) after every removal. Audit: `tech_debt` (7/7 DECRUFT satisfied, 0 blockers, 28/28 integration). See `MILESTONES.md` + `milestones/v2.1-*`.
 
@@ -238,4 +242,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-27 — **v2.2 Visual Parity STARTED** (`/gsd-new-milestone`). Scope confirmed: full COMPARISON.md gap set (asset PS pipeline, gamma/lighting, minimap, multi-stage sampling, load-screen seam, geometry distortion, particles/ribbon, DPVS D3D11 remeasure). Sequencing: character-select beachhead first (textures + eyes), then open world. Phases continue from 16 → start at 17. Prior: v2.1 Decruft SHIPPED + tagged `v2.1` (Phases 12–16; 7/7 DECRUFT); roadmap/requirements archived to `milestones/v2.1-*`. Requirements being defined now via the milestone workflow (research → REQUIREMENTS.md → ROADMAP.md).*
+*Last updated: 2026-06-12 — **Phase 23 complete; all v2.2 roadmap phases (17–23) done.** DPVS D3D11 remeasure captured live; Option α REVISED (outdoor keep / indoor remove) in `docs/recon/23-dpvs-d3d11-profiling.md`; DPVS-01 closed. Milestone ready for audit/close (`/gsd-audit-milestone`). Prior: v2.2 Visual Parity STARTED 2026-05-27 (`/gsd-new-milestone`). Scope confirmed: full COMPARISON.md gap set (asset PS pipeline, gamma/lighting, minimap, multi-stage sampling, load-screen seam, geometry distortion, particles/ribbon, DPVS D3D11 remeasure). Sequencing: character-select beachhead first (textures + eyes), then open world. Phases continue from 16 → start at 17. Prior: v2.1 Decruft SHIPPED + tagged `v2.1` (Phases 12–16; 7/7 DECRUFT); roadmap/requirements archived to `milestones/v2.1-*`. Requirements being defined now via the milestone workflow (research → REQUIREMENTS.md → ROADMAP.md).*
