@@ -70,15 +70,15 @@ Explicitly excluded for v2.2. Documented to prevent scope creep.
 | CHAR-01 | Phase 17 | Complete |
 | CHAR-02 | Phase 17 | Complete |
 | CHAR-03 | Phase 17 | Complete |
-| WORLD-01 | Phase 20 | Pending |
-| WORLD-02 | Phase 20 | Pending |
-| WORLD-03 | Phase 19 | Pending |
-| GAMMA-01 | Phase 19 | Pending |
+| WORLD-01 | Phase 20 | Complete (ad-hoc) |
+| WORLD-02 | Phase 20 | Complete (ad-hoc) |
+| WORLD-03 | Phase 19 | Complete (ad-hoc) |
+| GAMMA-01 | Phase 19 | Complete (ad-hoc) |
 | UI-01 | Phase 18 | Complete |
-| UI-02 | Phase 20 | Pending |
-| FX-01 | Phase 21 | Pending |
-| FX-02 | Phase 21 | Pending |
-| GEO-01 | Phase 22 | Pending |
+| UI-02 | Phase 20 | Complete (ad-hoc) |
+| FX-01 | Phase 21 | Complete (ad-hoc) |
+| FX-02 | Phase 21 | Complete (ad-hoc) |
+| GEO-01 | Phase 22 | Complete (ad-hoc) |
 | DPVS-01 | Phase 23 | Complete |
 
 **Coverage:**
