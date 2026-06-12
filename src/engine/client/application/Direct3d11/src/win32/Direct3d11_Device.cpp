@@ -33,8 +33,12 @@
 
 #include <d3d11.h>
 #include <d3d11sdklayers.h>   // ID3D11InfoQueue (Plan 11-08 Iter-1 safety net)
+#include <d3dcompiler.h>      // GAMMA-01: compile the brightness/contrast/gamma pass shaders
 #include <dxgi1_2.h>
 #include <wrl/client.h>
+
+#include <cmath>              // fabsf for GAMMA-01 identity detection
+#include <cstring>            // strlen/memcpy for GAMMA-01 shader compile + cbuffer update
 
 #include <cstdio>             // snprintf for InfoQueue category/severity formatting; fopen for Iter-1.7 file sink
 #include <ctime>              // time_t / localtime_s / strftime for Iter-1.7 session header
@@ -101,6 +105,245 @@ namespace Direct3d11_DeviceNamespace
 	// OutputDebugString + stdout/stderr which are invisible when
 	// SwgClient_d.exe is launched from explorer.
 	FILE *                         ms_d3d11LogFile = nullptr;
+
+	// ------------------------------------------------------------------
+	// GAMMA-01: brightness/contrast/gamma state + lazily-created resources
+	// for the pre-Present full-screen curve pass (D3D9 SetGammaRamp parity,
+	// Direct3d9.cpp:2198-2216). All null until the first non-identity
+	// setBrightnessContrastGamma call; identity keeps ms_bcgActive false
+	// and present() skips the pass entirely.
+
+	float ms_bcgBrightness = 1.0f;
+	float ms_bcgContrast   = 1.0f;
+	float ms_bcgGamma      = 1.0f;
+	bool  ms_bcgActive     = false;
+	bool  ms_bcgInitFailed = false;   // compile/create failed once -- don't retry per frame
+
+	ComPtr<ID3D11VertexShader>       ms_bcgVS;
+	ComPtr<ID3D11PixelShader>        ms_bcgPS;
+	ComPtr<ID3D11Buffer>             ms_bcgCB;
+	ComPtr<ID3D11SamplerState>       ms_bcgSampler;
+	ComPtr<ID3D11Texture2D>          ms_bcgTempTex;   // back-buffer copy (CopyResource source can't be the RTV target)
+	ComPtr<ID3D11ShaderResourceView> ms_bcgTempSRV;
+	UINT ms_bcgTempWidth  = 0;
+	UINT ms_bcgTempHeight = 0;
+
+	// Fullscreen triangle via SV_VertexID (no VB / no input layout). The PS
+	// applies the exact D3D9 ramp curve (Direct3d9.cpp:2207); saturate before
+	// pow avoids the NaN a negative base would produce (D3D9's int clamp
+	// covered the same range).
+	char const * const cms_bcgShaderSource =
+		"Texture2D srcTex : register(t0);\n"
+		"SamplerState srcSamp : register(s0);\n"
+		"cbuffer BcgCB : register(b0) { float4 bcg; }\n"   // x=brightness y=contrast z=1/gamma w=unused
+		"struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };\n"
+		"VSOut vsMain(uint id : SV_VertexID)\n"
+		"{\n"
+		"	VSOut o;\n"
+		"	float2 uv = float2((id << 1) & 2, id & 2);\n"
+		"	o.pos = float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, 0.0, 1.0);\n"
+		"	o.uv = uv;\n"
+		"	return o;\n"
+		"}\n"
+		"float4 psMain(VSOut i) : SV_Target\n"
+		"{\n"
+		"	float3 c = srcTex.Sample(srcSamp, i.uv).rgb;\n"
+		"	c = pow(saturate(0.5 + bcg.y * (c * bcg.x - 0.5)), bcg.z);\n"
+		"	return float4(c, 1.0);\n"
+		"}\n";
+
+	bool createBcgResources()
+	{
+		ComPtr<ID3DBlob> blob;
+		ComPtr<ID3DBlob> errors;
+
+		HRESULT hr = D3DCompile(cms_bcgShaderSource, strlen(cms_bcgShaderSource), "bcg_pass",
+			nullptr, nullptr, "vsMain", "vs_5_0", 0, 0, blob.GetAddressOf(), errors.GetAddressOf());
+		if (FAILED(hr))
+		{
+			DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device: GAMMA-01 vsMain compile failed: %s\n",
+				errors ? static_cast<char const *>(errors->GetBufferPointer()) : "<no log>"));
+			return false;
+		}
+		hr = ms_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &ms_bcgVS);
+		if (FAILED(hr))
+			return false;
+
+		blob.Reset();
+		errors.Reset();
+		hr = D3DCompile(cms_bcgShaderSource, strlen(cms_bcgShaderSource), "bcg_pass",
+			nullptr, nullptr, "psMain", "ps_5_0", 0, 0, blob.GetAddressOf(), errors.GetAddressOf());
+		if (FAILED(hr))
+		{
+			DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device: GAMMA-01 psMain compile failed: %s\n",
+				errors ? static_cast<char const *>(errors->GetBufferPointer()) : "<no log>"));
+			return false;
+		}
+		hr = ms_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &ms_bcgPS);
+		if (FAILED(hr))
+			return false;
+
+		D3D11_SAMPLER_DESC sd = {};
+		sd.Filter   = D3D11_FILTER_MIN_MAG_MIP_POINT;
+		sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+		hr = ms_device->CreateSamplerState(&sd, &ms_bcgSampler);
+		if (FAILED(hr))
+			return false;
+
+		D3D11_BUFFER_DESC bd = {};
+		bd.ByteWidth      = 16;
+		bd.Usage          = D3D11_USAGE_DYNAMIC;
+		bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+		bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		hr = ms_device->CreateBuffer(&bd, nullptr, &ms_bcgCB);
+		return SUCCEEDED(hr);
+	}
+
+	// Runs the curve pass: back buffer -> temp copy -> draw back through the
+	// curve PS. Saves and restores every piece of context state it touches so
+	// the StateCache's view of bound state stays truthful.
+	void applyBcgPass()
+	{
+		if (!ms_bcgActive || ms_bcgInitFailed || !ms_context || !ms_swapChain || !ms_backBufferRTV)
+			return;
+
+		if (!ms_bcgVS)
+		{
+			if (!createBcgResources())
+			{
+				ms_bcgInitFailed = true;
+				return;
+			}
+			DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device: GAMMA-01 pass resources created\n"));
+		}
+
+		ComPtr<ID3D11Texture2D> backBuffer;
+		if (FAILED(ms_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer))))
+			return;
+
+		D3D11_TEXTURE2D_DESC bbDesc;
+		backBuffer->GetDesc(&bbDesc);
+
+		if (!ms_bcgTempTex || ms_bcgTempWidth != bbDesc.Width || ms_bcgTempHeight != bbDesc.Height)
+		{
+			ms_bcgTempSRV.Reset();
+			ms_bcgTempTex.Reset();
+
+			D3D11_TEXTURE2D_DESC td = bbDesc;
+			td.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+			td.MiscFlags      = 0;
+			td.CPUAccessFlags = 0;
+			td.Usage          = D3D11_USAGE_DEFAULT;
+			if (FAILED(ms_device->CreateTexture2D(&td, nullptr, &ms_bcgTempTex))
+				|| FAILED(ms_device->CreateShaderResourceView(ms_bcgTempTex.Get(), nullptr, &ms_bcgTempSRV)))
+			{
+				ms_bcgTempSRV.Reset();
+				ms_bcgTempTex.Reset();
+				ms_bcgInitFailed = true;
+				return;
+			}
+			ms_bcgTempWidth  = bbDesc.Width;
+			ms_bcgTempHeight = bbDesc.Height;
+		}
+
+		ms_context->CopyResource(ms_bcgTempTex.Get(), backBuffer.Get());
+
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		if (SUCCEEDED(ms_context->Map(ms_bcgCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+		{
+			float const vals[4] = { ms_bcgBrightness, ms_bcgContrast, 1.0f / ms_bcgGamma, 0.0f };
+			memcpy(mapped.pData, vals, sizeof(vals));
+			ms_context->Unmap(ms_bcgCB.Get(), 0);
+		}
+
+		// -- save the state the pass touches (Get* adds refs; released below)
+		ID3D11RenderTargetView   *oldRTV = nullptr;
+		ID3D11DepthStencilView   *oldDSV = nullptr;
+		ID3D11RasterizerState    *oldRS  = nullptr;
+		ID3D11BlendState         *oldBlend = nullptr;
+		FLOAT                     oldBlendFactor[4];
+		UINT                      oldSampleMask = 0xffffffffu;
+		ID3D11DepthStencilState  *oldDSS = nullptr;
+		UINT                      oldStencilRef = 0;
+		ID3D11InputLayout        *oldLayout = nullptr;
+		D3D11_PRIMITIVE_TOPOLOGY  oldTopology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+		ID3D11VertexShader       *oldVS = nullptr;
+		ID3D11PixelShader        *oldPS = nullptr;
+		ID3D11ShaderResourceView *oldSRV0 = nullptr;
+		ID3D11SamplerState       *oldSamp0 = nullptr;
+		ID3D11Buffer             *oldPSCB0 = nullptr;
+		D3D11_VIEWPORT            oldViewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		UINT                      oldViewportCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+
+		ms_context->OMGetRenderTargets(1, &oldRTV, &oldDSV);
+		ms_context->RSGetState(&oldRS);
+		ms_context->OMGetBlendState(&oldBlend, oldBlendFactor, &oldSampleMask);
+		ms_context->OMGetDepthStencilState(&oldDSS, &oldStencilRef);
+		ms_context->IAGetInputLayout(&oldLayout);
+		ms_context->IAGetPrimitiveTopology(&oldTopology);
+		ms_context->VSGetShader(&oldVS, nullptr, nullptr);
+		ms_context->PSGetShader(&oldPS, nullptr, nullptr);
+		ms_context->PSGetShaderResources(0, 1, &oldSRV0);
+		ms_context->PSGetSamplers(0, 1, &oldSamp0);
+		ms_context->PSGetConstantBuffers(0, 1, &oldPSCB0);
+		ms_context->RSGetViewports(&oldViewportCount, oldViewports);
+
+		// -- run the pass
+		ID3D11RenderTargetView *rtv = ms_backBufferRTV.Get();
+		ms_context->OMSetRenderTargets(1, &rtv, nullptr);
+
+		D3D11_VIEWPORT vp = {};
+		vp.Width    = static_cast<FLOAT>(bbDesc.Width);
+		vp.Height   = static_cast<FLOAT>(bbDesc.Height);
+		vp.MaxDepth = 1.0f;
+		ms_context->RSSetViewports(1, &vp);
+
+		FLOAT const blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		ms_context->RSSetState(nullptr);
+		ms_context->OMSetBlendState(nullptr, blendFactor, 0xffffffffu);
+		ms_context->OMSetDepthStencilState(nullptr, 0);
+		ms_context->IASetInputLayout(nullptr);
+		ms_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		ms_context->VSSetShader(ms_bcgVS.Get(), nullptr, 0);
+		ms_context->PSSetShader(ms_bcgPS.Get(), nullptr, 0);
+		ID3D11ShaderResourceView *srv = ms_bcgTempSRV.Get();
+		ms_context->PSSetShaderResources(0, 1, &srv);
+		ID3D11SamplerState *samp = ms_bcgSampler.Get();
+		ms_context->PSSetSamplers(0, 1, &samp);
+		ID3D11Buffer *cb = ms_bcgCB.Get();
+		ms_context->PSSetConstantBuffers(0, 1, &cb);
+
+		ms_context->Draw(3, 0);
+
+		// -- restore + release the Get* refs
+		ms_context->OMSetRenderTargets(1, &oldRTV, oldDSV);
+		ms_context->RSSetState(oldRS);
+		ms_context->OMSetBlendState(oldBlend, oldBlendFactor, oldSampleMask);
+		ms_context->OMSetDepthStencilState(oldDSS, oldStencilRef);
+		ms_context->IASetInputLayout(oldLayout);
+		ms_context->IASetPrimitiveTopology(oldTopology);
+		ms_context->VSSetShader(oldVS, nullptr, 0);
+		ms_context->PSSetShader(oldPS, nullptr, 0);
+		ms_context->PSSetShaderResources(0, 1, &oldSRV0);
+		ms_context->PSSetSamplers(0, 1, &oldSamp0);
+		ms_context->PSSetConstantBuffers(0, 1, &oldPSCB0);
+		if (oldViewportCount)
+			ms_context->RSSetViewports(oldViewportCount, oldViewports);
+
+		if (oldRTV)    oldRTV->Release();
+		if (oldDSV)    oldDSV->Release();
+		if (oldRS)     oldRS->Release();
+		if (oldBlend)  oldBlend->Release();
+		if (oldDSS)    oldDSS->Release();
+		if (oldLayout) oldLayout->Release();
+		if (oldVS)     oldVS->Release();
+		if (oldPS)     oldPS->Release();
+		if (oldSRV0)   oldSRV0->Release();
+		if (oldSamp0)  oldSamp0->Release();
+		if (oldPSCB0)  oldPSCB0->Release();
+	}
 
 	// ------------------------------------------------------------------
 	// Helper: create back-buffer RTV + depth-stencil texture + DSV.
@@ -423,6 +666,17 @@ void Direct3d11_Device::destroy()
 
 	// Plan 11-09.8: release phantom zero buffer alongside other VBs.
 	ms_phantomZeroBuffer.Reset();
+
+	// GAMMA-01: release curve-pass resources before the device goes away.
+	ms_bcgTempSRV.Reset();
+	ms_bcgTempTex.Reset();
+	ms_bcgCB.Reset();
+	ms_bcgSampler.Reset();
+	ms_bcgPS.Reset();
+	ms_bcgVS.Reset();
+	ms_bcgTempWidth  = 0;
+	ms_bcgTempHeight = 0;
+	ms_bcgInitFailed = false;
 
 	ms_depthStencilDSV.Reset();
 	ms_depthStencilTex.Reset();
@@ -841,6 +1095,26 @@ void Direct3d11_Device::clearViewport(bool clearColor, uint32 colorValue,
 }
 
 // ----------------------------------------------------------------------
+// GAMMA-01: store the curve parameters; the pass itself runs in present().
+// Mirrors the D3D9 semantics where each setBrightnessContrastGamma call
+// replaces the whole ramp. Identity (1,1,1) disables the pass.
+
+void Direct3d11_Device::setBrightnessContrastGamma(float brightness, float contrast, float gamma)
+{
+	ms_bcgBrightness = brightness;
+	ms_bcgContrast   = contrast;
+	ms_bcgGamma      = (gamma > 0.001f) ? gamma : 0.001f;   // guard the 1/gamma in the PS constants
+
+	float const epsilon = 0.001f;
+	ms_bcgActive = std::fabs(ms_bcgBrightness - 1.0f) > epsilon
+		|| std::fabs(ms_bcgContrast - 1.0f) > epsilon
+		|| std::fabs(ms_bcgGamma - 1.0f) > epsilon;
+
+	DEBUG_REPORT_LOG_PRINT(true, ("Direct3d11_Device: setBrightnessContrastGamma(%.3f, %.3f, %.3f) -> pass %s\n",
+		ms_bcgBrightness, ms_bcgContrast, ms_bcgGamma, ms_bcgActive ? "ACTIVE" : "identity (off)"));
+}
+
+// ----------------------------------------------------------------------
 // present -- flip-model present. Per D-13 / SPEC §Boundaries:
 // DEVICE_REMOVED is a process-restart class event (no recovery attempt).
 
@@ -848,6 +1122,11 @@ bool Direct3d11_Device::present()
 {
 	if (!ms_swapChain)
 		return false;
+
+	// GAMMA-01: apply the brightness/contrast/gamma curve over the finished
+	// frame (no-op when identity). Runs BEFORE drainInfoQueue so any
+	// validation messages the pass fires drain on the same frame.
+	applyBcgPass();
 
 	// Plan 11-08 Iter-1: drain D3D11 debug-layer validation messages
 	// accumulated by this frame's draw calls BEFORE Present so they reach

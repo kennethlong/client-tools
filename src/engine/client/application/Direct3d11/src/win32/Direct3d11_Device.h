@@ -115,6 +115,14 @@ public:
 	// Gl_api::present  -- bool (*present)()
 	static bool present();
 
+	// GAMMA-01: D3D9 SetGammaRamp parity (Direct3d9.cpp:2198-2216). D3D11
+	// has no device-level gamma ramp, so the curve is applied as a final
+	// full-screen pass over the back buffer right before Present -- like a
+	// hardware ramp, it affects everything including UI. Identity values
+	// (1,1,1) disable the pass entirely (zero per-frame cost). Called from
+	// setBrightnessContrastGamma_impl (Graphics::install + options slider).
+	static void setBrightnessContrastGamma(float brightness, float contrast, float gamma);
+
 	// Gl_api::displayModeChanged  -- void (*displayModeChanged)()
 	// Recreates back-buffer RTV + DSV at the new HWND client-rect size.
 	static void displayModeChanged();

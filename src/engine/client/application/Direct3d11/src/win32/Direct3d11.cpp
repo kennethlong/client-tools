@@ -270,20 +270,21 @@ namespace Direct3d11Namespace
 	}
 
 	// ------------------------------------------------------------------
-	// Plan 11-03: no-op slots that fire BEFORE the per-frame loop
+	// Plan 11-03: slots that fire BEFORE the per-frame loop
 	// (Graphics::install line 320 setBrightnessContrastGamma) or every
 	// frame BEFORE beginScene (Game::run line 1211 Graphics::update).
-	// Wave 4+ wires real implementations:
-	//   - setBrightnessContrastGamma -> DXGI output color-space / per-frame
-	//     post-process LUT (D3D11 has no IDirect3DDevice9::SetGammaRamp
-	//     equivalent at the device level)
+	//   - setBrightnessContrastGamma: GAMMA-01 (2026-06-11) -- real
+	//     implementation in Direct3d11_Device: D3D11 has no
+	//     IDirect3DDevice9::SetGammaRamp equivalent, so the D3D9 ramp curve
+	//     (Direct3d9.cpp:2207) runs as a pre-Present full-screen pass over
+	//     the back buffer. Identity (1,1,1) keeps it fully disabled.
 	//   - update -> per-frame elapsed-time bookkeeping (DPVS-style timing,
 	//     dynamic-vertex-buffer discard, etc.; Wave 4+ when resource layer
 	//     and instrumentation arrive)
 
-	void setBrightnessContrastGamma_impl(float /*brightness*/, float /*contrast*/, float /*gamma*/)
+	void setBrightnessContrastGamma_impl(float brightness, float contrast, float gamma)
 	{
-		// no-op in scaffold; Wave 4+ wires real gamma/contrast/brightness
+		Direct3d11_Device::setBrightnessContrastGamma(brightness, contrast, gamma);
 	}
 
 	void update_impl(float /*elapsedTime*/)
