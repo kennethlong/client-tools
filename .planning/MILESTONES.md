@@ -1,5 +1,24 @@
 # Milestones
 
+## v2.2 Visual Parity (Shipped: 2026-06-12)
+
+**Scope:** Phases 17–23 (13/13 requirements satisfied). Phases 17, 18, 23 ran through GSD (15 plans, full artifacts); the Phase 19–22 work was executed **ad-hoc** on `koogie-msvc-cpp20-base` 2026-06-08..12 — `milestones/v2.2-MILESTONE-AUDIT.md` is their de-facto verification record. Audit: `tech_debt` — functional PASS, 13/13 requirements, 13/13 integration paths WIRED, 0 blockers. Timeline: 16 days (2026-05-27 → 2026-06-12), 119 commits, ~115 files, +13.5k lines.
+
+**Delivered:** The D3D11 renderer (`rasterMajor=11`) now visually matches the known-good D3D9 baseline (`rasterMajor=5`) — characters, interiors, open world, terrain, gamma, UI, and effects — closing every gap bucket catalogued in `docs/research/phase12-baseline/COMPARISON.md`, with the D3D9 reference path unregressed.
+
+**Key accomplishments:**
+
+1. **Asset pixel-shader pipeline (Phase 17, CHAR-01/02/03)** — recompiled the discarded `TAG_PSRC` source instead of the D3D11-rejected PEXE bytecode: `//hlsl` recompile lane + 17-07 PS-input-signature reconstruction (asset-PS bind rate 0/9 → 9/9) + reflection-driven constants (D3DReflect, not copied D3D9 registers) + b0 lighting feed + stage→SRV-slot remap. Char-select renders lit + textured, near-identical to D3D9.
+2. **Load-screen half-texel seam (Phase 18, UI-01)** — single central `setViewport` correction (resolution-independent, no per-draw fudge); verified across 3 splash images; D3D9 untouched.
+3. **Interior + world parity (ad-hoc 19/20, WORLD-01/02/03)** — cantina at D3D9 parity via the FFP combiner-cascade PS (full texture-stage emulation), per-pixel fog in all three PS lanes, sticky-dot3 + alpha-fade register-leak fixes, ambient/directional lighting parity (8x-crush + unfed-parallels bugs), hemispheric terrain sun, and the blend-factors re-land that fixed dark terrain patches. Verified by Kenny in-client + RenderDoc pixel traces.
+4. **Gamma, minimap, effects (ad-hoc 19/20/21, GAMMA-01/UI-02/FX-01/FX-02)** — D3D9's exact gamma ramp as a pre-Present curve pass (identity = off); round minimap via `ui_radar.psh` PSRC override; particles fixed by the sticky-dot3 + additive-blend-factor work; ribbons/swooshes verified undistorted in dual-renderer A/B. Exterior geometry closed as no-real-distortion on settled captures (GEO-01).
+5. **DPVS D3D11 remeasure (Phase 23, DPVS-01)** — Phase 10 instrumentation restored CPU-only + occlusion A/B re-gate; 12-CSV live capture. Both verdicts **FLIPPED** vs D3D9: outdoor `remove→keep`, indoor `keep→remove` — Option α premise REVISED (`docs/recon/23-dpvs-d3d11-profiling.md`); shipped branch untouched, acting on the verdict is a deferred follow-up.
+6. **Bonus (no REQ assigned)** — full audio restoration + warning-flood perf-drag elimination (missing `stage/miles/` codec redist; 141k→1.8k log lines); combat kill-crash fix (`d549a8acd`, erase-then-++ iterator UB woken by the MSVC-STL migration); shader-override workflow now tracked in git (`stage/override/`).
+
+**Known deferred at close: 7 open artifacts acknowledged (see STATE.md Deferred Items)** — 2 closed debug sessions; 4 pre-existing/low todos (incl. the medium pre-existing Options-window FATAL); the deliberate config-gate-DPVS-occlusion follow-up. Plus the audit `tech_debt` list: D-15 instrumentation removal, machine-specific `stage/override` + `stage/miles` paths, blend-factors-everywhere scene-sweep risk, missing Nyquist VALIDATIONs (18, 19–22), `client_d.cfg` test-settings cleanup.
+
+---
+
 ## v2.1 Decruft (Shipped: 2026-05-27)
 
 **Scope:** Phases 12–16 (5 phases — incl. inserted Phase 16 tech-debt closure; 16 plans, 31 tasks). Audit: `tech_debt` — functional PASS, 7/7 DECRUFT requirements satisfied, 28/28 cross-phase integration (0 blocker), dual-renderer boot human-confirmed (see `milestones/v2.1-MILESTONE-AUDIT.md`).

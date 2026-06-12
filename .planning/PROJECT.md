@@ -1,8 +1,10 @@
 # whitengold — SWG Client Modernisation Port
 
-## Current State: v2.2 Visual Parity — Phase 23 complete (2026-06-12), all roadmap phases done
+## Current State: v2.2 Visual Parity SHIPPED (2026-06-12)
 
-Phase 23 (DPVS D3D11 Remeasure, the strictly-last v2.2 phase) is complete: the Phase 10 DPVS instrumentation was restored CPU-only, a live occlusion-vs-no-occlusion A/B was captured on the D3D11 path (Mos Eisley plaza outdoor + cantina indoor, 3 passes/condition, 100% flag purity), and the keep/remove verdict is recorded in `docs/recon/23-dpvs-d3d11-profiling.md`. **Both Phase 10 verdicts flipped under D3D11** — outdoor now `keep` (occlusion culls ~140 objects, net −0.76 ms median), indoor now `remove` (portals already bound the set; occlusion is pure overhead) — Option α is REVISED as a recorded decision; the shipped culling code is untouched (acting on the verdict is follow-up work). DPVS-01 satisfied; v2.2 roadmap phases 17–23 all complete.
+**D3D11 visual parity achieved.** The D3D11 renderer (`rasterMajor=11`) now visually matches the known-good D3D9 baseline (`rasterMajor=5`) across characters, interiors, open world, terrain, gamma, UI, and effects — all 13 v2.2 requirements satisfied (audit: `tech_debt`, 0 blockers; see `milestones/v2.2-MILESTONE-AUDIT.md`). The core delivery is the **asset pixel-shader pipeline**: recompiling the discarded `TAG_PSRC` shader source (instead of the D3D11-rejected PEXE bytecode) with reflection-driven constants, plus the FFP combiner-cascade fallback PS, per-pixel fog in all three PS lanes, lighting parity fixes, the gamma pre-Present curve pass, and a git-tracked `stage/override/` shader-override workflow. Phases 17/18/23 ran through GSD; the Phase 19–22 work shipped ad-hoc (2026-06-08..12) with the milestone audit as its verification record. DPVS verdict: both Phase 10 calls **flipped** under D3D11 (outdoor `keep`, indoor `remove`) — Option α revised on paper, shipped culling code untouched (config-gate follow-up pending). Bonus: audio fully restored (missing `stage/miles/` redist), combat kill-crash fixed, warning-flood perf drag eliminated.
+
+**Next milestone:** not yet defined — run `/gsd-new-milestone`. Leading candidates from the deferred list: acting on the DPVS verdict, D-15 instrumentation removal, machine-portability of `stage/override`/`stage/miles` paths, SWG-Source community-compat sync, the pre-existing Options-window FATAL.
 
 ## Prior State: v2.1 Decruft SHIPPED (2026-05-27)
 
@@ -30,21 +32,9 @@ v2.1 re-applied the orphaned v2.0 dead-code removals (CLEAN-01..04) against the 
 ✓ Phase 15 complete (2026-05-27) — DECRUFT-06/-07 done: XPCOM/Mozilla in-game browser fully removed + v2.1 milestone gate PASS. The 3 `SwgCuiWebBrowser*` units (the only `libMozilla::` consumers) deleted, all live callers + 5 `IsA(TUIWebBrowser)` focus sites de-wired, `TUIWebBrowser` deleted outright from `UITypeID.h` (ordinal never serialized — no placeholder, unlike CR-01), TCG browser tie severed (libEverQuestTCG kept), Mozilla-family link tokens stripped from `SwgClient.vcxproj` + `.rsp` + 7 editors + SwgGodClient, `libMozilla.vcxproj` dropped from `swg.sln` (11 GUID locations), and the vendored `libMozilla/` tree (1,866 files: XPCOM/Gecko SDK) deleted. Milestone-wide P12–P15 residue sweep == 0 / KEEP-listed (incl. lcdui A1 cleanup); Debug+Release link gate clean (0 unresolved; Optimized EXEMPT per DEF-14-01); dual-renderer boot (rasterMajor=5 D3D9 + =11 D3D11) human-confirmed to character-select with correct HUD/radial/IME focus. Verified 9/9 must-haves; code review 0 blockers (3 advisory warnings, all the deliberate T-15-02/D-04a TCG-tie severance — TCG revival out of scope). **v2.1 Decruft COMPLETE (Phases 12–15; DECRUFT-01..07 all done).** Next: v2.2 Visual Parity.
 ✓ Phase 16 complete (2026-05-27) — v2.1 tech-debt cleanup (post-milestone-audit closure, no new product reqs): unlinked the dead SwgGodClient `989crypt.lib` latent-LNK1181 token (soePlatform KEEP-list + the separate live `crypto.lib` preserved), confirmed the 4 editor vcxproj lcdui-clean (verify-only), and removed the cosmetic P12–P15 source residue — the dead `finalUrl` browser-CS URL block (+ now-dead `shellapi.h`/`ConfigClientGame.h` includes) in `SwgCuiHudAction.cpp` and the orphaned voice-volume API (2 statics + 2 REGISTER_OPTION persistence lines + 4 accessors + 4 decls) in `CuiPreferences.cpp/.h`. All grep-zero gates green; SwgClient Debug+Release relink clean (0 unresolved externals, Optimized EXEMPT per DEF-14-01); single rasterMajor=11 (D3D11) boot to character-select human-confirmed (no-behavior-change phase → single boot replaces the dual-renderer matrix). Verified 8/8 must-haves (D-01..D-08); code review 0 blocker/0 warning/1 INFO (the `httpParams` builder is now write-only — 16-02's intentional narrow scope, follow-up-pass candidate). Discovered + ruled out a pre-existing Options-window crash (`checkShowToolbarCommandCooldownTimer` `.ui`-data mismatch from feature commit `d1b3c0eaf` — NOT a Decruft regression; captured as a pending todo). **v2.1 Decruft milestone-audit tech-debt fully closed.**
 
-## Current Milestone: v2.2 — Visual Parity (ACTIVE, started 2026-05-27)
+## Shipped Milestone: v2.2 — Visual Parity (closed 2026-06-12)
 
-**Goal:** Close the D3D11 visual gaps so it matches the known-good D3D9 baseline — **starting with a deterministic character-select beachhead** (get textures + eyes correct there first), then extending the working PS pipeline outward to the open world. The #1 blocker is **the asset pixel-shader pipeline**: the engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects, so D3D11 falls back to a magenta PS and renders untextured surfaces. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md` (5 gap buckets). Phases continue from 16 → **start at Phase 17**.
-
-**Target features (all confirmed in scope):**
-- **Asset PS pipeline** — re-author/bridge engine pixel shaders so D3D11 binds real asset shaders. Proven **first on character-select (textures + eyes)**, then world surfaces.
-- **Gamma LUT + lighting** — fix blown-out flat-white interiors.
-- **Minimap shape** — square → round (PS-gen / 2D-texturing family).
-- **Multi-stage sampling** — multi-texture material stages.
-- **Load-screen centerline seam** — half-texel fullscreen-blit fix (isolated, deterministic sampling-path canary).
-- **Geometry distortion** — exterior static-mesh shards (OPEN investigation; the skeletal-path twin was already fixed at `905fb5d64`).
-- **Particles / ribbon** — post-PS-pipeline.
-- **DPVS D3D11 remeasure** — SPEC R7, deferred from v2.0 ("after the asset PS pipeline lands" = now).
-
-**Key sequencing constraint:** the **character-select screen is the first vertical slice** — quick to reach, deterministic, isolated. Nail textures + eyes there before any open-world work. *(Milestone reordered after v2.1: cleanup-first shrank the surface area before visual work + upstream imports.)*
+**Goal (MET):** Closed the D3D11 visual gaps against the D3D9 baseline — character-select beachhead first (Phase 17 asset-PS pipeline), then outward to interiors, open world, gamma, UI, and effects. All 13 requirements satisfied (CHAR-01..03, UI-01/02, WORLD-01..03, GAMMA-01, FX-01/02, GEO-01, DPVS-01). Every COMPARISON.md gap bucket closed: asset PS pipeline, gamma LUT (pre-Present curve pass), round minimap, multi-stage sampling (FFP combiner cascade), load-screen seam, exterior geometry (closed as no-real-distortion on settled captures), particles/ribbons, DPVS remeasure. Per-phase detail archived in `milestones/v2.2-ROADMAP.md`; ad-hoc 19–22 execution record in `milestones/v2.2-MILESTONE-AUDIT.md` + `.planning/handoff/2026-06-11-cantina-parity-COMPLETE-rendering-bug-list-next.md`.
 
 ---
 
@@ -88,6 +78,17 @@ orphaned dead-code removals to the active MSBuild tree; v2.2 targets D3D11 visua
   `animation-system.md`, `foliage-system.md`)
 - ✓ **SWG-Source diff** — confirmed server-only fork, no client patches to adopt;
   build patterns are transferable (`docs/recon/07-swg-source-diff-findings.md`)
+
+**v2.2 Visual Parity (shipped 2026-06-12) — D3D11 matches the D3D9 baseline:**
+
+- ✓ **CHAR-01/02/03** — char-select skin/clothing/eyes/head at D3D9 parity via the asset-PS pipeline (0/9 → 9/9 binds) — v2.2 (Phase 17)
+- ✓ **UI-01** — load-screen half-texel seam eliminated, central single-site fix — v2.2 (Phase 18)
+- ✓ **WORLD-01/02/03** — open-world textures, multi-stage FFP combiner cascade, interior lighting parity — v2.2 (ad-hoc 19/20)
+- ✓ **GAMMA-01** — D3D9 gamma ramp as pre-Present curve pass (no sRGB double-correction) — v2.2 (ad-hoc 19, `493287510`)
+- ✓ **UI-02** — round minimap via `ui_radar.psh` PSRC override, screenshot-verified — v2.2 (ad-hoc 20, `e4f94a0f6`)
+- ✓ **FX-01/02** — particles + ribbons at parity (sticky-dot3 + blend-factors re-land), dual-renderer A/B — v2.2 (ad-hoc 21)
+- ✓ **GEO-01** — exterior geometry closed as no-real-distortion on settled captures; skeletal twin fixed earlier — v2.2 (ad-hoc 22)
+- ✓ **DPVS-01** — DPVS remeasured under D3D11; Option α REVISED (outdoor keep / indoor remove) — v2.2 (Phase 23)
 
 **v2.1 Decruft (shipped 2026-05-27) — dead-code removals re-applied to the MSBuild tree:**
 
@@ -223,6 +224,11 @@ be configured to read its data tree at runtime via `searchPath*` entries.
 | **v2.1 cleanup-first, risk-gradient ordering** (pure deletes → lib unlinks → live-source surgery) before v2.2 visual work | Re-establish the dual-renderer boot baseline on the low-risk deletes before the riskier Vivox/XPCOM source surgery; shrink surface area before upstream imports | ✓ Good — every removal step boot-verified; v2.1 closed clean (7/7 DECRUFT) |
 | **`/FORCE` link-grep gate** — grep link output for `unresolved external symbol` (==0), not just MSBuild exit 0 | SwgClient links under `/FORCE`, which downgrades unresolved externals to warnings and still emits a binary with exit 0 — exit 0 is NOT proof of a clean link | ✓ Good — caught 2 real Phase 12 defects (live `989crypt.lib` dep, orphaned ClientHeadTracking callers) |
 | **Ordinal-preserving placeholders** for deletions from positional enums/tables that mirror retail-TRE row indices | Mid-sequence enum deletes silently shift surviving ordinals off their datatable rows — a regression the link + boot gate cannot catch | ✓ Good — CR-01 (radial-menu ordinal shift from voice-enum delete) caught in code review + fixed with `RESERVED_*` placeholders (Phase 14) |
+| **Recompile `TAG_PSRC` source, never decompile/re-assemble PEXE** (v2.2 core approach) | Re-assembling asm just reproduces the D3D11-rejected D3D9 bytecode; the discarded PSRC text is the real source of truth | ✓ Good — asset-PS lane delivered char-select parity 9/9; the same PSRC-override recipe later fixed face tint, minimap, emissives |
+| **Reflection-driven constant upload (D3DReflect), not copied D3D9 register indices** | fxc assigns SM4 registers by first-use order — copied indices silently bind wrong slots (the purple/green bump-arm bug proved it) | ✓ Good — stage→SRV-slot remap + cbuffer offset discovery made multi-texture materials correct |
+| **Ad-hoc execution for Phases 19–22** (fix-to-advance debugging sessions instead of plan/execute cycles) | The remaining gaps were entangled runtime bugs best cracked by iterative RenderDoc-driven diagnosis; GSD artifacts would have lagged reality anyway | ✓ Good — all 8 remaining requirements closed in 5 days; milestone audit serves as the verification record. Cost: no per-phase PLAN/VERIFICATION artifacts, Nyquist gaps |
+| **Read the D3D9 reference sequence FIRST on any parity bug** (the reference IS the spec) | Symptom-chasing on the broken target invites guessing; diffing against the working renderer cracks it in one read (lighting flicker, blend factors, sticky dot3 all fell this way) | ✓ Good — adopted as default parity-work method (memory: feedback_parity_work_start_from_reference_sequence) |
+| **DPVS Option α REVISED, code untouched** (outdoor keep / indoor remove under D3D11) | Both Phase 10 verdicts flipped under the D3D11 driver-overhead profile; acting on a measurement belongs in its own change, not the measurement phase | — Pending — config-gate follow-up todo recorded (`2026-06-12-config-gate-dpvs-occlusion-per-phase-23-verdict`) |
 
 ## Evolution
 
@@ -242,4 +248,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 — **Phase 23 complete; all v2.2 roadmap phases (17–23) done.** DPVS D3D11 remeasure captured live; Option α REVISED (outdoor keep / indoor remove) in `docs/recon/23-dpvs-d3d11-profiling.md`; DPVS-01 closed. Milestone ready for audit/close (`/gsd-audit-milestone`). Prior: v2.2 Visual Parity STARTED 2026-05-27 (`/gsd-new-milestone`). Scope confirmed: full COMPARISON.md gap set (asset PS pipeline, gamma/lighting, minimap, multi-stage sampling, load-screen seam, geometry distortion, particles/ribbon, DPVS D3D11 remeasure). Sequencing: character-select beachhead first (textures + eyes), then open world. Phases continue from 16 → start at 17. Prior: v2.1 Decruft SHIPPED + tagged `v2.1` (Phases 12–16; 7/7 DECRUFT); roadmap/requirements archived to `milestones/v2.1-*`. Requirements being defined now via the milestone workflow (research → REQUIREMENTS.md → ROADMAP.md).*
+*Last updated: 2026-06-12 after v2.2 milestone — **v2.2 Visual Parity SHIPPED + tagged `v2.2`** (13/13 requirements; phases 17/18/23 via GSD, 19–22 ad-hoc with the milestone audit as verification record). D3D11 now matches the D3D9 baseline; DPVS Option α revised on paper (outdoor keep / indoor remove), config-gate follow-up pending. Archives: `milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`, `milestones/v2.2-MILESTONE-AUDIT.md`. Next: `/gsd-new-milestone`.*

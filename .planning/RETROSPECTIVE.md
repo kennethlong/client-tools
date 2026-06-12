@@ -2,6 +2,46 @@
 
 Living retrospective across milestones. Newest milestone first.
 
+## Milestone: v2.2 — Visual Parity
+
+**Shipped:** 2026-06-12
+**Phases:** 17–23 (17/18/23 via GSD, 19–22 ad-hoc) | **Plans:** 15 tracked | **Audit:** tech_debt (13/13 requirements, 13/13 integration WIRED, 0 blockers)
+
+### What Was Built
+D3D11 visual parity with the D3D9 baseline. Core: the asset pixel-shader pipeline (Phase 17) — recompile the discarded `TAG_PSRC` source instead of the D3D11-rejected PEXE bytecode, reconstruct PS input signatures against the VS skeleton (binds 0/9→9/9), upload constants reflection-driven. Then outward: load-screen seam (18), interior/world lighting parity + FFP combiner-cascade PS + per-pixel fog in all three PS lanes, gamma pre-Present curve pass, round minimap, terrain blend-factors re-land, particles/ribbons, exterior-geometry closure (ad-hoc 19–22), and the DPVS D3D11 remeasure (23) — both Phase 10 verdicts FLIPPED (outdoor keep / indoor remove), Option α revised on paper. Bonus: audio fully restored (missing `stage/miles/` redist), combat kill-crash fix, warning-flood perf drag eliminated.
+
+### What Worked
+- **The char-select beachhead strategy.** Proving the PS pipeline on a deterministic, bounded, isolated screen (9 shaders) before world-scale extension converted the milestone's biggest unknown into a measured, verified foundation everything else built on.
+- **Read the D3D9 reference sequence FIRST.** The single most productive diagnostic habit of the milestone: the reference renderer IS the spec. Lighting flicker, blend factors, sticky dot3, the Compare[]-table swap — each cracked by reading the D3D9 path, not by probing the broken D3D11 one.
+- **RenderDoc CLI/MCP as arbiter.** Pixel-history → draw → shader traces (Capture39 terrain trace, the magenta wall-light hunt) repeatedly converted "three AIs agree on a plausible wrong answer" into ground truth. Cross-renderer light-color dumps arbitrated the blue-face hunt the same way.
+- **The shader-override workflow** (`stage/override/` + searchPath > TREs, IFF rebuilder scripts, now git-tracked). Made per-shader fixes (face tint, minimap mask, emissives, tfcl hemispheric sun) shippable without TRE repacks — the milestone's workhorse delivery mechanism.
+- **Ad-hoc fix-to-advance for the 19–22 frontier.** The remaining gaps were entangled runtime bugs (a fix for "interior lighting" closed particles too); iterative RenderDoc-driven sessions with handoff docs as state beat plan/execute cycles. The milestone audit served as the verification record.
+- **MCP-driven client piloting** (keybd_event walks, 360° panoramas, in-client A/B captures) let verification sweeps run without burning Kenny's time on every check.
+
+### What Was Inefficient
+- **Correlated multi-AI consensus.** All three AIs (Claude+CODEX+Cursor) repeatedly converged on the SAME wrong hypothesis (cape-spike ring designs ×7, blue-face alpha/hemispheric/R↔B turns). The fix was de-anchoring re-tasks + an empirical arbiter (RenderDoc / sentinel writes / light-color dumps) — consensus ≠ correctness.
+- **The cape-spike hunt.** 7 dynamic-VB ring designs failed because the VB was never the variable (collide() corrupting the static INDEX buffer via D3D11's copy-out lock semantics). Lesson: characterize the actual GPU fetch window before redesigning a subsystem.
+- **ABI cascade traps.** Shared-header struct edits (17-01) crashed stale plugin DLLs twice (gl11 4 days stale; the Release boot-crash took 8 runtime experiments + 2 consult rounds to pin to an EXE/DLL offset mismatch). Rebuild ALL plugin vcxprojs on any shared-header touch.
+- **Artifact drift, again.** Phases 19–22 produced no GSD artifacts; REQUIREMENTS checkboxes vs traceability table disagreed; an earlier same-day audit went stale within hours of Phase 23 landing. Accepted cost — but the close required reconciliation passes.
+
+### Patterns Established
+- **Parity-work default:** characterize the reference sequence first, diff the target, THEN hypothesize.
+- **Three PS lanes** (native asset PS → 17-07 rewritten asset PS → generated fallback incl. FFP combiner cascade) with the magenta fallback kept as a visible diagnostic tombstone — magenta on screen = a shader failed PS-gen, go look.
+- **PSRC `//hlsl` override recipe** for any ps.1.1 tombstone (texren bakes, minimap mask, emissives): reauthor → IFF rebuild → `stage/override/pixel_program/`.
+- **Empirical arbiters over consensus:** RenderDoc capture-diff, cross-renderer state dumps, sentinel writes — break correlated-AI deadlocks with ground truth, not more opinions.
+
+### Key Lessons
+1. The reference implementation is the spec — read it before hypothesizing about the broken port.
+2. Multi-AI agreement is not evidence; an empirical arbiter is. Budget for capture/dump tooling early in any parity milestone.
+3. D3D9→D3D11 porting bug classes that recurred: copy-out lock semantics (collide IB corruption), partial-WRITE_DISCARD cbuffer tails, register-leak defaults (alpha-fade, sticky dot3), first-use-order SM4 register assignment vs fixed D3D9 stages, and blend ENABLE without blend FACTORS.
+4. Ad-hoc execution works when handoff docs carry state and a milestone audit closes the verification gap — but reconcile planning artifacts at close, not mid-flight.
+
+### Cost Observations
+- Model: Opus/Fable (quality profile) + 4-consultant crew (Cursor/Codex/Sonnet/Opus) on the hard walls; RenderDoc MCP + windows-mcp piloting reduced human-verify round-trips.
+- Timeline: 16 days (2026-05-27 → 06-12), 119 commits; the 19–22 frontier compressed into a 5-day fix-to-advance sprint.
+
+---
+
 ## Milestone: v2.1 — Decruft
 
 **Shipped:** 2026-05-27
@@ -80,3 +120,6 @@ A modern MSVC/C++20/MSBuild SWG client booting to character select and rendering
 |-----------|--------|-------|----------|
 | v2.0 Modernisation | 7–11 | tech_debt | MSVC/C++20/MSBuild client; D3D9+D3D11 selectable |
 | v2.1 Decruft | 12–16 | tech_debt | 5 dormant subsystems unlinked + deleted; client stays bootable both renderers |
+| v2.2 Visual Parity | 17–23 | tech_debt | D3D11 matches D3D9 baseline; asset-PS pipeline + 12 visual gaps closed; DPVS verdict revised |
+
+**Recurring trend:** every milestone closes `tech_debt` (never `gaps_found`, never pristine `passed`) — functional reality ships ahead of artifact hygiene, and the audit + close reconciliation absorbs the drift. Working as intended for a solo hobby cadence; the per-close reconciliation cost is stable (~1 session).

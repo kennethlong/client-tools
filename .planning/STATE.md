@@ -2,25 +2,25 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
-status: milestone_complete
-last_updated: "2026-06-12T17:13:55.647Z"
+status: completed
+last_updated: "2026-06-12T18:39:55.799Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 2
   total_plans: 15
   completed_plans: 13
-  percent: 43
+  percent: 87
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
+See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
-**Core value:** Every change must leave the client bootable to character select — and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
-**Current focus:** Phase 23 — dpvs-d3d11-remeasure
+**Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
+**Current focus:** Planning next milestone (`/gsd-new-milestone`)
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -51,11 +51,27 @@ Acknowledged and deferred at v2.0 milestone close (2026-05-25):
 
 Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` accumulated test-settings cleanup (after v2.2 visual parity); AR-15-01 future-TCG-revival re-evaluation (future v2.x). See `milestones/v2.1-MILESTONE-AUDIT.md`.
 
+## Deferred Items (acknowledged at v2.2 close)
+
+7 open artifacts acknowledged and deferred at v2.2 Visual Parity milestone close (2026-06-12). None block the close — both debug sessions are status `closed` (scanner lists them regardless), and all todos are known pre-existing or deliberately-deferred follow-ups:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | closed (pre-existing SOE engine quirk; not a regression) |
+| debug | safecast-null-cast | closed (resolved 2026-05-15) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low — workaround available |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational research |
+| todo | 2026-05-27-options-toolbar-cooldown-ui-data-mismatch-crash | medium — pre-existing Options-window FATAL (commit `d1b3c0eaf`), predates v2.2 |
+| todo | 2026-05-31-port-d3d9-shader-compile-to-d3dcompile | low — Fix A SEH guard already stops the crash |
+| todo | 2026-06-12-config-gate-dpvs-occlusion-per-phase-23-verdict | deliberate follow-up — acts on the Phase 23 REVISED Option α verdict |
+
+Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`): D-15 instrumentation removal, machine-specific stage/override + stage/miles paths, blend-factor scene-sweep risk, stale comment at Direct3d11_StaticShaderData.cpp:1655, missing Nyquist VALIDATIONs (18, 19–22), `stage/client_d.cfg` accumulated test-settings cleanup (now unblocked — visual parity complete).
+
 ## Current Position
 
-Phase: 23
-Plan: Not started
-Status: Milestone complete
+Phase: — (v2.2 SHIPPED 2026-06-12, tagged `v2.2`; next milestone not yet defined — phase numbering continues from 24)
+Plan: —
+Status: Between milestones — run `/gsd-new-milestone`
 Resume: None — Phase 23 DPVS D3D11 remeasure COMPLETE. Both occlusion verdicts FLIPPED vs Phase 10 D3D9: outdoor `remove→keep` (occlusion culls ~140 objects, now net-positive ON), indoor `keep→remove` (portals already bind the set, occlusion query is dead overhead). Option α (`remove` globally) premise REVISED under D3D11 — outdoor now prefers occlusion ON. Verdict recorded in `docs/recon/23-dpvs-d3d11-profiling.md`; shipped Option α `#else` branch UNTOUCHED (acting on the verdict — scene-aware split or outdoor-revert — is a follow-up for a future phase). DPVS-01 closed. This was the STRICTLY-LAST v2.2 requirement.
 Last activity: 2026-06-12
 
