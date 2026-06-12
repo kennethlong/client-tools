@@ -24,6 +24,8 @@
 #include "sharedMath/Cylinder.h"
 #include "sharedMath/ShapeUtils.h"
 
+#include "sharedFoundation/Os.h"
+
 #include "sharedObject/Object.h"
 #include "sharedObject/CellProperty.h"
 
@@ -317,9 +319,41 @@ ResolutionResult CollisionResolve::resolveCollisions(CollisionProperty * collide
 
 		Vector resetPos = moveSeg.getBegin(moveSeg.m_cellB);
 
+#ifdef _DEBUG
+		// CORNERSNAP instrumentation (cantina corner-snap todo) — the rewind
+		// to resetPos and the waypoint replay below each fire the portal-walk
+		// notification; record the object's cell before/after so a net cell
+		// change caused purely by collision resolution is visible in the log.
+		CellProperty const * const cornersnapCellBefore = objectA->getParentCell();
+		Vector const cornersnapPosBefore = objectA->getPosition_p();
+		DEBUG_REPORT_LOG(true, ("CORNERSNAP-RESOLVE: frame %d obj %s rewind (%.3f,%.3f,%.3f)->(%.3f,%.3f,%.3f) waypoints %d\n",
+			Os::getNumberOfUpdates(),
+			objectA->getNetworkId().getValueString().c_str(),
+			cornersnapPosBefore.x, cornersnapPosBefore.y, cornersnapPosBefore.z,
+			resetPos.x, resetPos.y, resetPos.z,
+			static_cast<int>(positions.size())));
+#endif
+
 		objectA->setPosition_p(resetPos);
 
 		moveObjectAlong(objectA,positions);
+
+#ifdef _DEBUG
+		CellProperty const * const cornersnapCellAfter = objectA->getParentCell();
+		if (cornersnapCellAfter != cornersnapCellBefore)
+		{
+			Vector const cornersnapPosAfter = objectA->getPosition_p();
+			DEBUG_REPORT_LOG(true, ("CORNERSNAP-CELLJUMP: frame %d obj %s cell '%s'(%d) -> '%s'(%d) pos (%.3f,%.3f,%.3f)->(%.3f,%.3f,%.3f)\n",
+				Os::getNumberOfUpdates(),
+				objectA->getNetworkId().getValueString().c_str(),
+				(cornersnapCellBefore && cornersnapCellBefore->getCellName()) ? cornersnapCellBefore->getCellName() : "<world>",
+				cornersnapCellBefore ? cornersnapCellBefore->getCellIndex() : -1,
+				(cornersnapCellAfter && cornersnapCellAfter->getCellName()) ? cornersnapCellAfter->getCellName() : "<world>",
+				cornersnapCellAfter ? cornersnapCellAfter->getCellIndex() : -1,
+				cornersnapPosBefore.x, cornersnapPosBefore.y, cornersnapPosBefore.z,
+				cornersnapPosAfter.x, cornersnapPosAfter.y, cornersnapPosAfter.z));
+		}
+#endif
 	}
 
 	return result;
