@@ -83,7 +83,14 @@ src/build/win32/.vs/*
 # cfgs, crash dumps, profiling CSVs, screenshots, runtime state. None of it is
 # a source of truth (the cfg template lives in src/cmake/config/). Supersedes
 # the old stage/shader-cache/ rule.
-stage/
+#
+# EXCEPTION (2026-06-11): stage/override/ IS a source of truth -- the loose
+# shader-override payload (//hlsl VS reauthors of //asm assets, PSRC-swapped
+# .psh IFFs for the texren/emissive families) that the D3D11 renderer depends
+# on via client.cfg searchPath_00_10. `stage/*` + negation (a bare `stage/`
+# dir-exclusion would prevent git from descending into the negated child).
+stage/*
+!stage/override/
 
 # ============================================================
 # Phase 11+ runtime / harness / tooling cruft (added 2026-05-21)

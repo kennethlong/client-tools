@@ -1,0 +1,5 @@
+# stage/override .psh files are BINARY IFF containers (FORM PSHP with a
+# //hlsl PSRC text chunk + the original PEXE bytecode preserved byte-for-byte
+# for D3D9). Any newline conversion corrupts the chunk sizes -- pin binary.
+# The .vsh overrides are plain text (raw //hlsl source) and stay default.
+stage/override/**/*.psh binary
