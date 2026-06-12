@@ -2303,15 +2303,37 @@ void Direct3d11_StateCache::setAlphaBlendFactors(D3D11_BLEND srcBlend,
 	// alpha implicitly tracking color (D3D9 default). D3D11 requires both
 	// sides set explicitly when independent-alpha-blend is OFF (which is our
 	// case -- D3D11_BLEND_DESC::IndependentBlendEnable defaults to FALSE).
+	// Blend-factors re-land (2026-06-12): the alpha side may NOT use the
+	// _COLOR factor variants (D3D11 CreateBlendState rejects them with
+	// E_INVALIDARG). Convert to the equivalent _ALPHA variant for the alpha
+	// side -- matches D3D9's implicit behavior where the alpha channel
+	// tracks the color factors' alpha component.
+	struct Local
+	{
+		static D3D11_BLEND alphaSide(D3D11_BLEND b)
+		{
+			switch (b)
+			{
+				case D3D11_BLEND_SRC_COLOR:      return D3D11_BLEND_SRC_ALPHA;
+				case D3D11_BLEND_INV_SRC_COLOR:  return D3D11_BLEND_INV_SRC_ALPHA;
+				case D3D11_BLEND_DEST_COLOR:     return D3D11_BLEND_DEST_ALPHA;
+				case D3D11_BLEND_INV_DEST_COLOR: return D3D11_BLEND_INV_DEST_ALPHA;
+				default:                         return b;
+			}
+		}
+	};
+	D3D11_BLEND const srcBlendAlpha  = Local::alphaSide(srcBlend);
+	D3D11_BLEND const destBlendAlpha = Local::alphaSide(destBlend);
+
 	D3D11_BLEND_DESC &desc = Direct3d11_StateCacheNamespace::ms_bsDesc;
 	D3D11_RENDER_TARGET_BLEND_DESC &rt = desc.RenderTarget[0];
 	bool changed = false;
-	if (rt.SrcBlend != srcBlend)         { rt.SrcBlend = srcBlend;             changed = true; }
-	if (rt.DestBlend != destBlend)       { rt.DestBlend = destBlend;           changed = true; }
-	if (rt.BlendOp != blendOp)           { rt.BlendOp = blendOp;               changed = true; }
-	if (rt.SrcBlendAlpha != srcBlend)    { rt.SrcBlendAlpha = srcBlend;        changed = true; }
-	if (rt.DestBlendAlpha != destBlend)  { rt.DestBlendAlpha = destBlend;      changed = true; }
-	if (rt.BlendOpAlpha != blendOp)      { rt.BlendOpAlpha = blendOp;          changed = true; }
+	if (rt.SrcBlend != srcBlend)              { rt.SrcBlend = srcBlend;             changed = true; }
+	if (rt.DestBlend != destBlend)            { rt.DestBlend = destBlend;           changed = true; }
+	if (rt.BlendOp != blendOp)                { rt.BlendOp = blendOp;               changed = true; }
+	if (rt.SrcBlendAlpha != srcBlendAlpha)    { rt.SrcBlendAlpha = srcBlendAlpha;   changed = true; }
+	if (rt.DestBlendAlpha != destBlendAlpha)  { rt.DestBlendAlpha = destBlendAlpha; changed = true; }
+	if (rt.BlendOpAlpha != blendOp)           { rt.BlendOpAlpha = blendOp;          changed = true; }
 	if (changed)
 		Direct3d11_StateCacheNamespace::ms_bsDirty = true;
 }

@@ -1664,6 +1664,24 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 				{
 					Direct3d11_StateCache::setAlphaBlendEnable(engPass->m_alphaBlendEnable);
 
+					// Per-pass blend FACTORS re-land (2026-06-12) -- the Iter-44C
+					// revert note below said "re-land once PS gen is correct";
+					// Phase 17 asset-PS + 17-09 SRV remap + the FFP cascade closed
+					// that gap. The forcing bug: TERRAIN layer passes are additive
+					// One/One (pass0 = layer0*(1-alpha), pass1 = layer1*alpha,
+					// blend=ADD reconstructs the lerp) but collapsed to the install
+					// default SrcAlpha/InvSrcAlpha; the terrain PS packs BLOOM (not
+					// coverage) in o0.a (~0), so every blend layer vanished and the
+					// pre-darkened base pass showed through = hard-edged dark
+					// terrain patches (Mos Eisley plaza A/B screenShot0366 vs 0367,
+					// Capture39 event 903/927 pixel trace). Mirrors D3D9's
+					// unconditional RSM(D3DRS_SRCBLEND/DESTBLEND/BLENDOP) per-pass
+					// writes (Direct3d9_ShaderImplementationData.cpp:259-261).
+					Direct3d11_StateCache::setAlphaBlendFactors(
+						translateBlend(engPass->m_alphaBlendSource),
+						translateBlend(engPass->m_alphaBlendDestination),
+						translateBlendOp(engPass->m_alphaBlendOperation));
+
 					// Plan 11-09.15 Iter-44B: per-pass ALPHA-TEST. D3D11 has
 					// no FFP alpha-test; we push enable + reference (0..1) into
 					// PS cbuffer slot 1 and the dynamic-generated PS reads it
