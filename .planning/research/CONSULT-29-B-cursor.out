@@ -1,0 +1,227 @@
+# CONSULT-29-B: Tri-STRIP skeletal read-past trace
+
+## Verdict
+
+| Question | Answer |
+|----------|--------|
+| **Is the tri-STRIP read-past hazard real in code?** | **YES** — strip indices are uncompacted; tri-list indices are compacted. |
+| **Is it LIVE for Jawa / dewback / robe spikes today?** | **NO** — no skeletal asset populates strips; `drawPartialIndexedTriangleStrip` never fires. |
+
+The CONSULT-24 read-past mechanism is **implemented but dormant** on all shipped skeletal IFF assets. The live spike is **not** explained by this path (handoff §4 agrees: tri-LIST `readPast=0`, no strip draws).
+
+---
+
+## 1. Do skeletal meshes actually use triangle strips?
+
+**No — not in practice.** The strip *render* path exists, but nothing in the skeletal mesh pipeline feeds it.
+
+**IFF loader only accepts tri-lists.** `SkeletalMeshGeneratorTemplate` defines `TAG_ITL` / `TAG_OITL` only; the primitive switch handles those two cases and fatals on anything else:
+
+```1466:1488:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+					case TAG_ITL:
+						{
+							IndexedTriListPrimitive *const drawPrimitive = new IndexedTriListPrimitive();
+							drawPrimitive->load_0002(iff, positions, m_positionIndices, zeroAreaTriCount);
+
+							m_drawPrimitives.push_back(drawPrimitive);
+						}
+						break;
+					case TAG_OITL:
+						{
+							OccludedIndexedTriListPrimitive *const drawPrimitive = new OccludedIndexedTriListPrimitive();
+							drawPrimitive->load_0002(iff, positions, m_positionIndices, zeroAreaTriCount);
+
+							m_drawPrimitives.push_back(drawPrimitive);
+						}
+						break;
+					default:
+						{
+							char buffer[5];
+
+							ConvertTagToString(iff.getCurrentName(), buffer);
+							FATAL(true, ("unsupported draw primitive [%s]", buffer));
+						}
+```
+
+**Strip population APIs have zero call sites** anywhere under `src/`:
+
+- `MeshConstructionHelper::addTriStrip` — defined at `MeshConstructionHelper.cpp:1036`
+- `MeshConstructionHelper::addTriStripVertex` — defined at `MeshConstructionHelper.cpp:1060`
+- Grep across all of `src/` finds **only** those definitions + headers; no callers.
+
+**`buildIndexBufferAndRenderCommands` branch selection** (`SoftwareBlendSkeletalShaderPrimitive.cpp:1469–1577`):
+
+| Condition | Emits |
+|-----------|-------|
+| `triListCount = mesh.getTriListCount(...)` > 0 | `RenderCommand::createTriList` → `Graphics::drawIndexedTriangleList` (`:267–275`, `:1537`) |
+| `triStripCount = mesh.getTriStripCount(...)` > 0 | `RenderCommand::createTriStrip` → `Graphics::drawIndexedTriangleStrip` (`:280–289`, `:1575`) |
+
+For all standard skeletal assets (Jawa, dewback, robes, every LOD loaded via `SkeletalMeshGeneratorTemplate`), `triStripCount == 0` always → only `createTriList` is emitted.
+
+**Runtime confirmation:** instrumented `drawPartialIndexedTriangleStrip` writes `cape-strip-probe.txt`; handoff reports **no output** → zero strip draws during Jawa/dewback spike sessions (`2026-06-07-cape-spike-softskin-ring-discard-renderdoc-next.md` §5).
+
+---
+
+## 2. Can raw tri-strip indices exceed `m_vertexCount - 1`?
+
+**YES — by construction, if strips were ever populated.**
+
+### Index compaction (tri-LIST — correct)
+
+`prepareForReading()` assigns compacted `m_shaderVertexIndex` ∈ `[0, m_usedVertexCount)` only to referenced vertices (`MeshConstructionHelper.cpp:543–567`).
+
+`getTriListTriangle()` remaps at IB-build time through that compacted index:
+
+```1479:1489:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+	//-- return fixed-up indices (tri indices were submitted assuming nothing was dropped out)
+	NOT_NULL(perShaderData);
+
+	const size_t  vertexDataIndex0 = perShaderData->m_vertexIndices[static_cast<size_t>((*m_indexedTriangles)[indexedTriangleIndex * 3 + 0])];
+	index0                         = m_vertexData->m_container[vertexDataIndex0].m_shaderVertexIndex;
+
+	const size_t  vertexDataIndex1 = perShaderData->m_vertexIndices[static_cast<size_t>((*m_indexedTriangles)[indexedTriangleIndex * 3 + 1])];
+	index1                         = m_vertexData->m_container[vertexDataIndex1].m_shaderVertexIndex;
+
+	const size_t  vertexDataIndex2 = perShaderData->m_vertexIndices[static_cast<size_t>((*m_indexedTriangles)[indexedTriangleIndex * 3 + 2])];
+	index2                         = m_vertexData->m_container[vertexDataIndex2].m_shaderVertexIndex;
+```
+
+### Strip path (uncompacted — hazard)
+
+`addTriStripVertex()` stores the **loose** slot index (into `perShaderData->m_vertexIndices`) directly, with no compaction:
+
+```1083:1085:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+	// add shader vertex index to strip
+	m_triStripIndices->m_container.push_back(static_cast<size_t>(shaderVertexIndex));
+	++triStripHeader.m_indexCount;
+```
+
+Validation permits any loose slot `< m_vertexIndices.size()` (`:1068`), **not** `< m_usedVertexCount`.
+
+`getTriStripVertexIndex()` returns that raw stored value — **no** `m_shaderVertexIndex` remap:
+
+```1426:1434:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+int MeshConstructionHelper::getTriStripVertexIndex(const TriStripHeader &triStripHeader, int vertexIndex) const
+{
+	NOT_NULL(m_triStripIndices);
+	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, vertexIndex, triStripHeader.m_indexCount);
+
+	const size_t indexIntoTriStripIndex = static_cast<size_t>(triStripHeader.m_firstTriStripIndex + vertexIndex);
+	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0U, indexIntoTriStripIndex, m_triStripIndices->m_container.size() ); //lint !e1703
+
+	return static_cast<int>(m_triStripIndices->m_container[indexIntoTriStripIndex]);
+}
+```
+
+Those raw values are copied straight into the IB (`SoftwareBlendSkeletalShaderPrimitive.cpp:1565–1566`).
+
+### vs `m_vertexCount`
+
+```1187:1188:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+	m_vertexCount = mesh.getVertexCount(meshPerShaderData);
+	DEBUG_FATAL(m_vertexCount < 1, ("there are no vertices!"));
+```
+
+```1234:1237:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+int MeshConstructionHelper::getVertexCount(const PerShaderData *perShaderData) const
+{
+	NOT_NULL(perShaderData);
+	return perShaderData->m_usedVertexCount;
+}
+```
+
+Render path writes exactly that many vertices:
+
+```754:758:D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+			m_dynamicStream->lock(m_vertexCount);
+			{
+				VertexBufferWriteIterator writeIterator = m_dynamicStream->begin();
+				skinData(transformCount, transformArray, writeIterator);
+			}
+```
+
+**Mismatch:** loose strip indices can be as large as `m_vertexIndices.size() - 1` (full per-shader slot table, including culled unused vertices), while only `m_usedVertexCount` vertices are written. Any loose index `>= m_usedVertexCount` would fetch past the locked slice.
+
+The in-tree `CAPE-INDEX-PROBE` at `SoftwareBlendSkeletalShaderPrimitive.cpp:1589–1633` checks `maxIdx >= capeVertexCount` (= `m_usedVertexCount`) across the combined IB; on tri-list-only assets this stays `overRead=0`.
+
+---
+
+## 3. D3D9 vs D3D11 strip draw with over-range index
+
+### Dispatch chain
+
+```
+RenderCommand::render()                    SoftwareBlendSkeletalShaderPrimitive.cpp:314
+  → Graphics::drawIndexedTriangleStrip()   Graphics.cpp:3340–3344
+    → D3D9: drawIndexedTriangleStrip()    Direct3d9.cpp:4517–4526
+    → D3D11: drawPartialIndexedTriangleStrip()  Direct3d11_StateCache.cpp:3457–3549
+```
+
+### D3D9 (`Direct3d9.cpp:4517–4526`, `:4157`)
+
+```4517:4526:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+void Direct3d9Namespace::drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+{
+#ifdef _DEBUG
+	if (!shouldDraw(true, primitiveCount))
+		return;
+
+	Direct3d9_Metrics::triangles += primitiveCount;
+	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += primitiveCount;
+#endif
+	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+}
+```
+
+`DrawIndexedPrimitive` receives **`MinVertexIndex`** and **`NumVertices`** (`minimumVertexIndex`, `numberOfVertices` from the render command = `minVbIndex` and `(maxVbIndex - minVbIndex) + 1`). D3D9 uses these to declare the vertex span the draw may reference. Neither API **clamps** out-of-range indices — behavior is undefined — but D3D9's declared span can still be very large if uncompacted strip maxima are large.
+
+On the shared dynamic ring, D3D9's tail often holds **stale non-zero geometry** from prior writes (CONSULT-24), so read-past may look like mild garbage rather than a clean collapse to origin.
+
+### D3D11 (`Direct3d11_StateCache.cpp:3457–3549`)
+
+```3546:3549:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(primitiveCount + 2),
+		static_cast<UINT>(startIndex),
+		static_cast<INT>(baseIndex));
+```
+
+**`minimumVertexIndex` and `numberOfVertices` are ignored** for the actual draw (only used inside the diagnostic probe). D3D11 `DrawIndexed` has no vertex-range bound. An index `>= m_vertexCount` fetches from the ring slice past the `lock(m_vertexCount)` write; staging probes show that tail is **zeroed** on WRITE_DISCARD generations → vertices collapse to `(0,0,0)` → origin fan / spike.
+
+### `cape-strip-probe` (lines 3462–3543)
+
+Built to mirror the tri-LIST staging probe for the **strip** path. On each sampled soft-skin strip draw (`stride==48`, `8 <= numberOfVertices <= 4000`):
+
+1. `CopySubresourceRegion` first 256 verts from the bound VB at draw offset
+2. Scans positions for longest run of identical `(x,y,z)` (threshold `1e-8`)
+3. Computes `ssMaxIndex = minimumVertexIndex + numberOfVertices - 1`
+4. Sets `readPast=1` when `longestRun >= 16` **and** `ssMaxIndex >= runStart` (collapse run extends into the declared vertex span)
+5. Logs to `cape-strip-probe.txt`: `COLLAPSE`/`HB`, call#, bound offset, minVtx, numVtx, maxIndex, runStart, readPast, longestRun, firstPos
+
+**Result:** no file produced → **no strip draws hit this path** during spike reproduction.
+
+---
+
+## 4. Is a degenerate strip a natural "radiating shard" producer?
+
+**Yes.** Triangle-strip topology fans each new vertex with the previous two strip vertices. If one strip index resolves to a collapsed/garbage position (e.g. ring zero-tail at origin) while neighbors are valid world-local positions, every subsequent strip triangle shares that bad vertex as one corner → thin triangles radiating from a point. That matches the observed "most verts collapse, a few stay correct, triangles fan out" look. Tri-LIST degeneracy tends to produce isolated bad triangles; **strip amplifies one bad vertex across many consecutive triangles**, which is why strip read-past is a particularly sharp spike mechanism.
+
+---
+
+## Summary table
+
+| Stage | Tri-LIST (live) | Tri-STRIP (dormant) |
+|-------|-----------------|---------------------|
+| IFF tags | `TAG_ITL`, `TAG_OITL` | None |
+| IB index source | `getTriListTriangle` → compacted `m_shaderVertexIndex` | `getTriStripVertexIndex` → raw loose slot |
+| Max index vs `m_vertexCount` | `≤ m_usedVertexCount - 1` | Can be `≥ m_usedVertexCount` |
+| Draw function | `drawPartialIndexedTriangleList` | `drawPartialIndexedTriangleStrip` |
+| D3D11 vertex bound | None (but indices in-range) | None + indices can be out-of-range |
+| Observed at runtime | Instrumented, `readPast=0` | Never called |
+
+---
+
+## Bottom line for CONSULT-24
+
+- **Code-level hazard:** YES — the strip IB path would read past the `lock(m_vertexCount)` slice in D3D11 because `getTriStripVertexIndex` (`MeshConstructionHelper.cpp:1434`) returns uncompacted loose indices while `m_vertexCount` (`SoftwareBlendSkeletalShaderPrimitive.cpp:1187`) is the compacted `m_usedVertexCount`.
+- **Live on Jawa / dewback / robes:** NO — `addTriStripVertex` has no callers; `triStripCount` is always 0; `cape-strip-probe.txt` is empty. These creatures spike via the **tri-LIST** soft-skin dynamic-ring path, which is index-clean. The spike cause remains the ring-discard invalidation hypothesis (handoff §3), not tri-STRIP read-past.

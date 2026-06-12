@@ -1,0 +1,251 @@
+# CONSULT-24 — Verdict: read-past mechanism is sound; tri-list garments need one runtime IB scan to close the loop
+
+Your leading hypothesis is **mechanically correct** given the CONSULT-24 gold-standard staging read-back. What remains open is whether garment draws actually have `IB[index] >= m_vertexCount`. Static code analysis says tri-list meshes *should not*, but there is a **confirmed tri-strip remapping bug** in the IB builder and a **D3D11 plugin gap** where the D3D9 vertex-window metadata is silently dropped.
+
+---
+
+## 1. Leading hypothesis: confirm / refute
+
+### CONFIRMED (mechanism)
+
+Given your proven facts:
+
+| Fact | Implication |
+|------|-------------|
+| `[0, numVerts)` correct and animating at draw | In-range fetches are good |
+| `[numVerts, …)` is pure `(0,0,0)` | Any index ≥ `numVerts` reads origin |
+| Per-draw `Map(READ)` flush, spikes persist | Not async race; deterministic read-past |
+| `lock(m_vertexCount)` writes only that many verts | Tail past slice is never skinned |
+
+Then: **`DrawIndexed` fetches `VB[boundOffset + IB[i] * stride]`. If any `IB[i] ≥ m_vertexCount`, those triangles read the zero tail → collapse to object-space origin → fan to a screen-space spike.**
+
+D3D11 draw path — no vertex-range metadata used:
+
+```3221:3362:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+{
+	// ...
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(primitiveCount * 3),
+		static_cast<UINT>(startIndex),
+		static_cast<INT>(baseIndex));
+}
+```
+
+Lock writes only `numberOfVertices * vertexSize` bytes; tail of the ring generation stays zero on fresh `WRITE_DISCARD`:
+
+```225:287:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+{
+	// ...
+	m_numberOfVertices = numberOfVertices;
+	m_offset           = ms_used / vertexSize;
+	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+	ms_used += length;
+	return sliceStart;
+}
+```
+
+Soft-skin path locks exactly `m_vertexCount`:
+
+```737:776:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+		m_dynamicStream->lock(m_vertexCount);
+		{
+			VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+			outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+		}
+		m_dynamicStream->unlock();
+```
+
+**If spikes are live while staging shows clean in-range data, the spike almost certainly comes from IB indices that reach into the zero tail — not from VB corruption, bind offset, or races.**
+
+### PARTIALLY REFUTED (automatic for all garments)
+
+For the **standard skeletal tri-list path** (what `SkeletalMeshGeneratorTemplate` actually builds — `TAG_ITL` / `TAG_OITL` only, no `addTriStripVertex` callers anywhere in `src/`), IB indices are compacted at build time and **should** satisfy `max(IB) ≤ m_vertexCount - 1`:
+
+```1468:1489:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+void MeshConstructionHelper::getTriListTriangle(..., int &index0, int &index1, int &index2) const
+{
+	// ...
+	const size_t vertexDataIndex0 = perShaderData->m_vertexIndices[static_cast<size_t>((*m_indexedTriangles)[indexedTriangleIndex * 3 + 0])];
+	index0 = m_vertexData->m_container[vertexDataIndex0].m_shaderVertexIndex;
+	// same for index1, index2
+}
+```
+
+```1194:1194:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+	m_vertexCount = mesh.getVertexCount(meshPerShaderData);
+```
+
+```1234:1237:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshConstructionHelper.cpp
+int MeshConstructionHelper::getVertexCount(const PerShaderData *perShaderData) const
+{
+	return perShaderData->m_usedVertexCount;
+}
+```
+
+`prepareForReading()` assigns `m_shaderVertexIndex` sequentially `0 … m_usedVertexCount-1` only to `m_isUsed` vertices; triangle verts are marked used in `addTriListTri`. So for tri lists, **`maxVbIndex` tracked at `:1528-1529` should equal `m_vertexCount - 1`**.
+
+**You have not yet proven runtime IB violation** — your staging probe scans the VB linearly and uses the RenderCommand *window* (`minVtx + numVtx - 1`), not the actual max value stored in the static IB. You need one more probe: at garment draw, scan `m_indexBuffer[startIndex … startIndex + primCount*3)` for `max(IB[i])` and compare to `m_vertexCount` / `runStart`.
+
+---
+
+## 2. Where can `IB[i] ≥ m_vertexCount` come from?
+
+### A. Tri-strip path — **confirmed code bug** (latent for skeletal meshes)
+
+Tri lists remap; tri strips do **not**:
+
+```1518:1573:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+	// tri list: uses getTriListTriangle → compact shaderVertexIndex
+	mesh.getTriListTriangle(meshPerShaderData, triListHeader, triIndex, index[0], index[1], index[2]);
+
+	// tri strip: uses raw m_vertexIndices slot — NOT compacted
+	const Index indexValue = static_cast<Index>(mesh.getTriStripVertexIndex(triStripHeader, triStripVertexIndex));
+	indexData[currentIndex] = indexValue;
+```
+
+`getTriStripVertexIndex` returns the raw slot in `m_triStripIndices` (a position in `perShaderData->m_vertexIndices`), while `m_vertexCount` is the **compacted** `m_usedVertexCount`. When `m_vertexIndices.size() > m_usedVertexCount` (unused verts culled in `prepareForReading`), strip indices can exceed `m_vertexCount - 1`.
+
+**However:** `addTriStripVertex` has **zero call sites** under `src/`. Skeletal IFF import only feeds tri lists. This bug is real but **probably not your Jawa robe path** unless another loader populates strips.
+
+### B. `m_shaderVertexIndex == -1` → `Index` 65535
+
+If a triangle ever referenced a vertex not marked `m_isUsed`, `getTriListTriangle` would emit `-1` → `unsigned short` 65535. `addTriListTri` marks all three corners used, so this shouldn't happen on the normal build path. The collide guard is defense-in-depth for **stale/corrupt IB during UAF**, not proof that render IB is normally out of range:
+
+```1037:1040:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+				if ((i0 < 0) || (i0 >= m_vertexCount) ||
+					(i1 < 0) || (i1 >= m_vertexCount) ||
+					(i2 < 0) || (i2 >= m_vertexCount))
+					continue;
+```
+
+### C. RenderCommand window ≠ lock count
+
+```1544:1544:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+RenderCommand::createTriList(static_cast<int>(minVbIndex), static_cast<int>((maxVbIndex - minVbIndex) + 1), firstTriListIndex, triCount);
+```
+
+`numberOfVertices` is `(maxVbIndex - minVbIndex) + 1`, **not** `m_vertexCount`. D3D9 receives this as a hint; D3D11 ignores it entirely. For correct tri-list data, `maxVbIndex + 1 ≤ m_vertexCount` still holds.
+
+### D. NOT the batch path for close soft-skin
+
+Close/large on-screen → `SM_softSkinning` and typically `!useBatcher` (`SkeletalAppearance2.cpp:1742, 1772`). Garment probes (stride 48, per-primitive static IB) match the **single SBSSP path**, not `FullGeometrySkeletalAppearanceBatchRenderer`'s dynamic IB.
+
+---
+
+## 3. If indices are truly bounded — what else?
+
+**If `max(IB[i]) < m_vertexCount` for every index in the draw, and staging confirms positions correct at those slots, the draw cannot geometrically spike from VB/IB fetch.** Full stop.
+
+Given CONSULT-24, the remaining honest possibilities are:
+
+1. **You haven't measured actual IB max yet** — most likely. CONSULT-23's "indices 0–122" was RenderDoc mesh export for one eid; your write probe shows `vc=110`. If any draw has `max(IB) ≥ 110`, mechanism is closed.
+2. **Probe samples the wrong draws** — filter `stride==48, primCount 60–700` may miss the exact spiking command, or a different primitive overlays the artifact.
+3. **Tri-strip command path** — `drawPartialIndexedTriangleStrip` still ignores `minimumVertexIndex`/`numberOfVertices` (`:3365`); if any mesh ever uses strips, that's an unguarded path.
+
+What is **ruled out** by CONSULT-24: VB overwrite, bind offset, async race, buffer-lifetime redesigns.
+
+---
+
+## 4. Discard inversion — explained
+
+The read-past is **constant** (IB indices ≥ written slice). Discard policy only changes **what occupies the tail** past `numVerts`:
+
+| Discard rate | Tail past `numVerts` | OOB index reads | Visual |
+|--------------|----------------------|-----------------|--------|
+| High (~370/frame, baseline) | Fresh `WRITE_DISCARD` → **zeros** | `(0,0,0)` | Catastrophic origin spikes |
+| Low (accounting fix, per-frame reset) | **Stale** ring bytes from prior draws | One repeated stale position | Still wrong; CONSULT-23 saw one replicated non-origin vertex |
+| Per-instance buffers | Didn't change IB range | Still OOB | Spikes persist |
+
+So "fixing discards" reshuffles tail **content**, not whether OOB fetches happen. That explains:
+
+- ms_used accounting fix → **worse** (more stale non-zero tail *or* different tail layout, but still OOB)
+- Per-buffer isolation → **no help** (indices still point past the written slice within whatever buffer is bound)
+- Serialization → **no help** (deterministic zero tail, not timing)
+
+---
+
+## 5. Why D3D11-only (corrected nuance)
+
+**Correction:** D3D9 `MinIndex`/`NumVertices` in `DrawIndexedPrimitive` are **driver preload hints, not hardware clip bounds**. D3D9 does **not** stop out-of-range vertex fetches either:
+
+```4157:4157:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+		HRESULT hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+```
+
+The real D3D11-only split:
+
+1. **Tail contents after partial write:** D3D11 `Map(WRITE_DISCARD)` on `D3D11_USAGE_DYNAMIC` tends to give a **zeroed/fresh** generation; your staging proves this. D3D9 `D3DLOCK_DISCARD` typically leaves **stale but non-zero** geometry in the same ring from earlier frame users.
+2. **OOB read symptom severity:** D3D11 OOB → `(0,0,0)` → maximal fan-to-origin spike. D3D9 OOB → stale vert → often less catastrophic (CONSULT-23's single replicated position).
+3. **Plugin gap:** D3D11 drops the vertex-window args that D3D9 at least passes through (even as hints).
+
+---
+
+## 6. Minimal fix — ranked
+
+### Do NOT ship: `lock(maxIndexUsed+1)` without writing those verts
+
+Padding the lock without skinning/copying those vertices **still leaves zeros** past the last written vert. Degenerate triangles at origin still draw. Same spike.
+
+### Do NOT ship: zero-fill tail as "guard"
+
+Same problem — you're drawing degenerate origin triangles.
+
+### Recommended (minimal, targeted)
+
+**Step 1 — 10-line diagnostic (closes the loop):** In `SoftwareBlendSkeletalShaderPrimitive::draw()` or the staging probe block, for the garment IB slice `[startIndex, startIndex + primCount*3)`, compute `maxIb = max(IB[i])`. Log `maxIb`, `m_vertexCount`, `readPast = (maxIb >= m_vertexCount)`. If `readPast=1` on spiking frames, hypothesis is **fully confirmed**.
+
+**Step 2a — If `maxIb >= m_vertexCount` on tri-strip meshes:** Fix `buildIndexBufferAndRenderCommands` strip loop (`:1572`) to remap through `m_shaderVertexIndex` the same way `getTriListTriangle` does. One-line pattern per index:
+
+```cpp
+// Instead of raw getTriStripVertexIndex:
+int raw = mesh.getTriStripVertexIndex(...);
+int compact = mesh.getVertexData(meshPerShaderData, raw).m_shaderVertexIndex; // or equivalent lookup
+```
+
+**Step 2b — If `maxIb >= m_vertexCount` on tri-list meshes:** That's a mesh-construction or asset bug (or `-1` index). Fix at source; add a debug `DEBUG_FATAL(maxIb < m_vertexCount)` in `buildIndexBufferAndRenderCommands` after IB build.
+
+**Step 3 — D3D11 plugin hardening (minimal, matches engine contract):** In `drawPartialIndexedTriangleList`, **use** `minimumVertexIndex` and `numberOfVertices` — at minimum add a debug assert that `minimumVertexIndex + numberOfVertices ≤ ms_currentVBVertexCount` (the bound slice's vertex count from `data->getNumberOfVertices()` at `:2281`). Longer term, mirror the collide guard: skip/truncate draws where the IB range exceeds the bound slice (engine-side is better).
+
+**Step 4 — Engine render-path guard (mirrors collide):** Before `RenderCommand::render()`, validate IB indices for that command's `[startIndex, primCount)` range against `m_vertexCount`. Skip out-of-range triangles. Cheap, matches existing collide precedent at `:1037`.
+
+---
+
+## 7. Direct answers to your three questions
+
+**Q1: Does the soft-skin IB actually reference indices ≥ `m_vertexCount`?**
+
+- **Not proven yet by your current probes** — you need actual IB max, not VB linear scan.
+- **Statically, for tri-list skeletal garments: should be NO** — `getTriListTriangle` compacts to `[0, m_usedVertexCount)`.
+- **Definite YES path exists for tri strips** (`:1572` vs `:1518`) — but strips appear unused in the skeletal IFF pipeline today.
+- **RenderCommand** stores `minVbIndex` and span `(max-min)+1` (`:1544`); if compaction is correct, `maxVbIndex = m_vertexCount - 1`.
+
+**Q2: If indices are bounded, what else spikes?**
+
+Nothing in the VB/IB fetch path. You'd be looking at wrong-draw attribution or a probe sampling gap. With bounded indices + CONSULT-24 staging, the garment draw **should** render correctly.
+
+**Q3: Minimal fix?**
+
+1. **Measure** actual `max(IB)` vs `m_vertexCount` at draw (decisive).
+2. **Fix IB build** if strips or bad mesh data (root cause).
+3. **Add render-path index guard** mirroring `:1037` (minimal safety net).
+4. **Do not** rely on lock-size changes or tail zeroing alone.
+
+---
+
+## 8. Suggested next probe (copy-paste ready concept)
+
+In `draw()`, before `RenderCommand::render()`:
+
+```cpp
+m_indexBuffer->lockReadOnly();
+Index const *ib = m_indexBuffer->beginReadOnly() + renderCommand->m_startIndexBufferIndex;
+int maxIb = 0;
+for (int t = 0; t < renderCommand->m_primitiveCount * 3; ++t)
+    maxIb = std::max(maxIb, (int)ib[t]);
+// log: maxIb, m_vertexCount, (maxIb >= m_vertexCount)
+m_indexBuffer->unlock();
+```
+
+If spiking frames show `maxIb >= m_vertexCount` while HB frames show `maxIb < m_vertexCount`, CONSULT-24 is closed and the fix is IB/range, not VB ring architecture.

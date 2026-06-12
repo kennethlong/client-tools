@@ -1,0 +1,2788 @@
+OpenAI Codex v0.133.0
+--------
+workdir: D:\Code\swg-client-v2
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e80d8-45b5-7dc0-9d53-22249b1c6035
+--------
+user
+# Consult: D3D11 world-view wholesale texture/geometry corruption
+
+## The bug
+A D3D11 renderer port (`gl11`, `rasterMajor=11`) of the Star Wars Galaxies client shows **wholesale wrong-texture + geometry corruption** on the open world (Mos Eisley). The legacy **D3D9 path (`gl05`) renders the identical scene/server/assets correctly** — it is a fully-working reference. We are porting D3D9 → D3D11; both plugins share the engine (clientGraphics) and load the same assets.
+
+## Symptoms (from screenshots)
+- Entire surfaces render with the **WRONG texture**: a recognizable lava/fire/circuit texture appears on stone buildings; large areas of terrain/ground render as a **solid saturated color** (blue, then magenta, then green, then yellow — changes frame to frame); white blocks.
+- **Floating disconnected geometry fragments** in some frames (wrong vertex positions), and one frame nearly all-black with colored shards.
+- **Near/foreground geometry renders FINE** (the player character, nearest building). Corruption is on **mid/far buildings** — strongly **distance / LOD correlated**.
+- It **flickers** (corrupt ↔ normal) fast, and some surfaces **latch** into a bad state and stay (e.g., a wall stuck blue even up close).
+- Worse on **occluded** geometry (a building behind a wall).
+
+## Empirical eliminations (hard test results, not hypotheses)
+1. **PS constant buffer b0 is NOT the cause.** Instrumented all 25 `float4` registers of the asset-PS `SwgVertexConstants` cbuffer @ b0, read from the final staging just before upload, across **282,404 draws** over a roam. Light direction (c0), light diffuse/specular (c1/c2), hemispheric terms (c3/c4), material (c5-c7), user constants (c8+) are all **sane and stable**; `d3.valid==1` on every draw (lights always written, never inherited). No saturated/garbage register.
+2. **SRV slot bindings are consistent.** Terrain draws bind **exactly 4 textures** (slots 0-3), no missing/null/swapped slots, across the whole roam.
+3. **Per-frame full GPU serialization does NOT fix it.** Added a per-frame `Flush()` + `D3D11_QUERY_EVENT` spin-wait after `Present` (CPU blocks until GPU finishes the frame). Corruption **unchanged** at 5 FPS. → not a render-thread vs GPU pipeline race.
+4. **Disabling the async loader does NOT fix it.** Set `SharedFile.runtimeDisableAsynchronousLoader` (loads synchronously on the main thread). Corruption **unchanged**. → not a loader-thread vs render-thread CPU race on resource uploads.
+5. **RenderDoc captures of the corrupt frames REPLAY CLEAN.** The live frame is visibly corrupt; pressing capture freezes on the corrupt image; but the captured command stream, replayed deterministically, produces a **correct** image. → the corruption is **not in the recorded D3D11 commands / pipeline state / bindings**. (RenderDoc presents un-tracked/uninitialized resources as zero on replay.)
+
+## Current leading hypothesis (not yet pinned to a defect)
+**Uninitialized / stale D3D11 resource CONTENT** (textures primarily, some vertex buffers). The recognizable lava texture on a building = **aliased GPU memory** — a resource created but not fully written, showing prior contents. Consistent with: replay-clean (RenderDoc zeros uninitialized resources), distance/LOD-only (LOD resources created/recreated constantly), latching (garbage persists until overwritten), and immunity to both GPU-serialization and loader-disable.
+
+## Relevant D3D11 code facts
+- Textures: BC/DXT block-compressed (BC1/BC2/BC3). Created `CreateTexture2D(desc, nullptr=no initial data, &tex)`, content uploaded later via the engine lock/unlock → `context->Map`/`UpdateSubresource` with `RowPitch` handling, per mip level. There is special handling for sub-4 BC mips (D3D11 rejects USAGE_STAGING < 4 for BC).
+- Static VB/IB: `USAGE_DEFAULT`, `CreateBuffer(desc, nullptr, &buf)`; `lock(write)` returns `operator new[](byteWidth)` (**uninitialized**); engine writes; `unlock` does `UpdateSubresource(buf, 0, nullptr, lockBuffer, 0, 0)` of the full width.
+- All uploads use the **immediate context**; no mutex anywhere (but threading is ruled out by test #4).
+- Device created without `SINGLETHREADED`; `createDeviceFlags=0` (+DEBUG in debug builds).
+
+## The question
+Given the eliminations — especially **replay-clean + immune to GPU-serialization + immune to loader-disable** — what **D3D11-specific mechanism** produces wholesale WRONG-texture (recognizable other-asset content) and wrong-geometry on distant/LOD surfaces, that the D3D9 path does not exhibit?
+1. What is the **most likely specific code defect** (texture creation/upload init gap? BC mip pitch? a resource pool / memory-block manager reuse? UpdateSubresource on USAGE_DEFAULT semantics? mip-chain partial upload? texture used before first upload?).
+2. What is the **single decisive next test** to pin it?
+3. Are we wrong that it's uninitialized content — is there a mechanism we've eliminated too hastily?
+
+Be skeptical; we are explicitly trying to avoid all three AIs converging on the same wrong hypothesis. Challenge the framing if warranted.
+
+codex
+I’ll ground this in the repo before answering, especially the handoff notes and the D3D11 upload paths. Since this is a consult rather than an edit, I’ll keep the investigation focused on mechanisms that match the hard eliminations.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content .planning/handoff/README.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"CreateTexture2D|UpdateSubresource|Map\\(|CreateBuffer|lockBuffer|USAGE_STAGING|D3D11_USAGE_DEFAULT|RowPitch|BC|DXT\" -S src tools -g \"*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+ succeeded in 1245ms:
+# Session handoffs
+
+## Active handoffs
+
+| File | Topic | Updated |
+| --- | --- | --- |
+| [swg-blender-import.md](swg-blender-import.md) | SWG Blender IFF pipeline; M16 tre_project WIP; abyssin_m io compare | 2026-05-29 |
+| [phase-17-char-select.md](phase-17-char-select.md) | Phase 17 D3D11 char-select beachhead; GAP-2/3 execution order | 2026-05-29 |
+
+ exited 124 in 14026ms:
+2026-06-01T01:42:41.447756Z ERROR codex_core::tools::router: error=Exit code: 124
+Wall time: 14 seconds
+Output:
+command timed out after 14026 milliseconds
+
+codex
+The broad code search timed out, so I’m narrowing it to the D3D11 plugin and graphics resource classes. The handoff index points at the D3D11 char-select stream, which is likely the relevant local context.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"CreateTexture2D|UpdateSubresource|Map\\(|CreateBuffer|lockBuffer|RowPitch|D3D11_USAGE|DXT|BC\" -S src/engine/client/application/Direct3d11 src/engine/client/library/clientGraphics src/engine/client/application/Direct3d9 -g \"*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content .planning/handoff/phase-17-char-select.md' in D:\Code\swg-client-v2
+ succeeded in 2556ms:
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:463:		stagingDesc.Usage          = D3D11_USAGE_STAGING;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:471:		HRESULT hr = device->CreateTexture2D(&stagingDesc, nullptr, staging.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:481:		hr = context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:491:		UINT const srcPitch = mapped.RowPitch;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:645:	// (Pitfall 2 -- D3D11_USAGE_DYNAMIC + Map/Unmap).
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:785:		CASE(D3DFMT_DXT1);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:786:		CASE(D3DFMT_DXT2);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:787:		CASE(D3DFMT_DXT3);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:788:		CASE(D3DFMT_DXT4);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:789:		CASE(D3DFMT_DXT5);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:11:// USAGE = D3D11_USAGE_DYNAMIC + D3D11_BIND_CONSTANT_BUFFER +
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:12:// D3D11_CPU_ACCESS_WRITE. Update via Map(D3D11_MAP_WRITE_DISCARD) ->
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:45:		desc.Usage          = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:51:		HRESULT hr = Direct3d11_Device::getDevice()->CreateBuffer(&desc, nullptr, out.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:52:		FATAL_DX_HR("Direct3d11_ConstantBuffer::install: CreateBuffer failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:73:		("Direct3d11_ConstantBuffer: installed %d VS slots + %d PS slots (each %d bytes; D3D11_USAGE_DYNAMIC)\n",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:79:	// root-cause-item-#6 rationale (Map(WRITE_DISCARD) yields UNDEFINED
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:163:	HRESULT hr = Direct3d11_Device::getContext()->Map(
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:184:	HRESULT hr = Direct3d11_Device::getContext()->Map(
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:42:	D3DFMT_DXT1,          // TF_DXT1,
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:43:	D3DFMT_DXT2,          // TF_DXT2,
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:44:	D3DFMT_DXT3,          // TF_DXT3,
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:45:	D3DFMT_DXT4,          // TF_DXT4,
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:46:	D3DFMT_DXT5,          // TF_DXT5,
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:290:	if (newEngineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:292:	else if (newEngineTexture.isVolumeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:425:		if (m_engineTexture.isVolumeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:453:			lockData.m_pitch = lockedBox.RowPitch;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:480:			if (m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:501:		FATAL(m_engineTexture.isVolumeMap(), ("Volume map not supported for format conversion (yet)"));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:505:		// DXT textures have a minimum width and height of 4
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:508:		if (lockData.getFormat() == TF_DXT1 || lockData.getFormat() == TF_DXT2 || lockData.getFormat() == TF_DXT3 || lockData.getFormat() == TF_DXT4 || lockData.getFormat() == TF_DXT5)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:530:			if (m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:586:		if (m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:613:		if (m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:618:		else if (m_engineTexture.isVolumeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:653:	if (m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:657:	else if (m_engineTexture.isVolumeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:667:	if (rhs_d3d->m_engineTexture.isCubeMap())
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:671:	else if (rhs_d3d->m_engineTexture.isVolumeMap())
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:7:// One process-wide ring buffer (D3D11_USAGE_DYNAMIC), allocated at
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ShaderCache.cpp:157:	// Trailing nulls disambiguate {ABC, DEF} from {ABCDEF, ""}.
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.h:34:	// Information about the DXTC compression scheme
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.h:10:// CreatePixelShader expects DXBC-format SM4.0+ bytecode and will reject
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.h:288:	// Plan 17-02 HIGH-2: retained DXBC blob from the recompile-lane
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:7:// USAGE = D3D11_USAGE_DEFAULT + UpdateSubresource on lock/unlock
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:9:// via lock() after CreateBuffer).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:63:	Index                                    *m_lockBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:272:	//   (iii) On success, outBytecodeBlob is assigned the compiled DXBC blob
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:388:		// HIGH-2: hand the compiled DXBC blob to the caller so the program-data
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:415:	// followed by version major/minor. D3D11 DXBC bytecode starts with
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:416:	// the literal "DXBC" magic in the first 4 bytes (0x43425844 LE).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:422:		// "DXBC" little-endian
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:1202:	// preamble). Check for DXBC magic (would indicate a future re-authored
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:1215:		// Future asset-pipeline path: exe[] is a DXBC blob; the high
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:1223:			("Direct3d11_PixelShaderProgramData: '%s' bytecode begins with DXBC magic -- future SM5 asset detected; size field not yet plumbed (Plan 11-06 work), leaving m_d3dPS NULL\n",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:1234:	// m_psBytecodeBlob retains the DXBC for downstream reflection, and the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp:1333:					// HIGH-2: retain the DXBC and reflect ONCE here so Plan 03's
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:7:// USAGE = D3D11_USAGE_DEFAULT + UpdateSubresource on lock/unlock (the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:8:// engine fills the buffer via lock() AFTER CreateBuffer, so true
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:67:	void                                      *m_lockBuffer;  // CPU staging for lock/unlock
+src/engine/client/library/clientGraphics\src\shared\ShaderEffectList.cpp:46:	ms_shaderEffectMap = new ShaderEffectMap();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:65:	DXGI_FORMAT_BC1_UNORM,          // TF_DXT1
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:66:	DXGI_FORMAT_UNKNOWN,            // TF_DXT2     -- premultiplied BC2; no native DXGI variant; engine promotes
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:67:	DXGI_FORMAT_BC2_UNORM,          // TF_DXT3
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:68:	DXGI_FORMAT_UNKNOWN,            // TF_DXT4     -- premultiplied BC3; no native DXGI variant; engine promotes
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:69:	DXGI_FORMAT_BC3_UNORM,          // TF_DXT5
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:84:// Identifies the block-compressed DXGI families (BC1..BC7). All BC formats
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:86:// rejects USAGE_STAGING CreateTexture2D/CreateTexture3D when Width or
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:89:// staging-texture descriptor up to the block boundary; the BC block grid
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:91:// dimensions are sub-block, so RowPitch / engine payload / unlock
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:95://   BC1_TYPELESS (70) .. BC5_SNORM (84)       -- BC1/BC2/BC3/BC4/BC5
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:96://   BC6H_TYPELESS (94) .. BC7_UNORM_SRGB (99) -- BC6H/BC7
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:97:// Values 85..93 are non-BC formats (B5G6R5, BGRA8, etc.) interleaved
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:98:// between the two BC ranges, so a single >= && <= check is incorrect.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:101:	return (fmt >= DXGI_FORMAT_BC1_TYPELESS && fmt <= DXGI_FORMAT_BC5_SNORM)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:102:	    || (fmt >= DXGI_FORMAT_BC6H_TYPELESS && fmt <= DXGI_FORMAT_BC7_UNORM_SRGB);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:263:	m_isCubeMap(newEngineTexture.isCubeMap()),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:264:	m_isVolumeMap(newEngineTexture.isVolumeMap()),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:289:	// UpdateSubresource path is the correct mapping; UpdateSubresource is
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:292:	D3D11_USAGE usage         = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:299:		usage     = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:304:		usage         = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:372:			lastResult = device->CreateTexture2D(&desc, nullptr, &tex2d);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:430:	// is ONLY {TF_ARGB_8888, TF_ARGB_4444} -- TF_DXT5 (the destFormat we
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:519:	// (font-atlas BGRA8 -> DXT5 mismatch) localized the bug here: the D3D9
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:565:	// For dynamic textures (USAGE_DYNAMIC), Map(WRITE_DISCARD) is legal
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:574:		HRESULT const hr = context->Map(
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:582:		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:644:		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:646:		// block-alignment rule (BC blocks are 4x4 in the X/Y plane only).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:662:		desc.Usage          = D3D11_USAGE_STAGING;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:672:		hr = context->Map(staging, 0,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:677:		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:683:		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:684:		// strict-rejects USAGE_STAGING CreateTexture2D when W or H is < 4 for
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:685:		// BC formats. Iter-15 diagnostic confirmed this fires at the bottom-
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:686:		// of-chain mips of BC3 textures: a 256x64 BC3 (DXT5) texture's mip 5
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:687:		// is 8x2, and CreateTexture2D returns E_INVALIDARG. D3D9 silently
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:688:		// tolerated sub-block dims. The BC block grid covers the same data
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:690:		// engine's RowPitch read and payload write are identical, and the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:693:		// changes -- both source and destination resolve to the same BC
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:711:		desc.Usage            = D3D11_USAGE_STAGING;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:717:		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:718:		FATAL_DX_HR("Direct3d11_TextureData::lock CreateTexture2D (staging) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:721:		hr = context->Map(staging, 0,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:726:		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:727:		lockData.m_slicePitch = static_cast<int>(mapped.RowPitch * lockData.getHeight());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:764:		desc.Usage            = D3D11_USAGE_STAGING;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:770:		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:771:		FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) CreateTexture2D failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:774:		hr = context->Map(staging, 0, D3D11_MAP_WRITE, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:783:		UINT const            dstRowPitch = mapped.RowPitch;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:788:			uint8_t * const       dstRow = dstBase + static_cast<size_t>(y) * static_cast<size_t>(dstRowPitch);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:871:			// CreateTexture2D no longer rejects sub-4 BC mips, but
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:874:			// "BC2_UNORM requires alignment of coordinates to
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:875:			// multiples of {4, 4, 1}" on every sub-4 BC mip lock
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:880:			// lock() so its BC block grid covers the same data;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:884:			// separate 3D code path above and are not BC-typical.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:894:					// srcBox.back stays as-is; BC block grid is {4,4,1}
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:206:	int ms_triangleFanIBCapacityVerts = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:218:	int ms_quadListIBCapacityQuads = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:294:	// Round 3 guidance: avoids dozens of Map(WRITE_DISCARD) per frame).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:435:		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:756:		// proved the font atlas IS correctly loaded as DXT5 with proper
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:900:	// vertices; false on cap-overflow or CreateBuffer failure (caller skips
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:915:		if (ms_triangleFanIB && vertCount <= ms_triangleFanIBCapacityVerts)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:919:		int newCapacity = ms_triangleFanIBCapacityVerts > 0
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:920:			? ms_triangleFanIBCapacityVerts
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:941:		bd.Usage          = D3D11_USAGE_IMMUTABLE;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:952:		HRESULT const hr = Direct3d11_Device::getDevice()->CreateBuffer(&bd, &srd, newIB.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:956:				("Direct3d11_StateCache::ensureTriangleFanIB: CreateBuffer failed (cap=%d, %d indices): %s\n",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:959:			// call retries. Don't FATAL -- a transient CreateBuffer failure
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:965:		ms_triangleFanIBCapacityVerts = newCapacity;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:986:		if (ms_quadListIB && numQuads <= ms_quadListIBCapacityQuads)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:989:		int newCapacity = ms_quadListIBCapacityQuads > 0
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:990:			? ms_quadListIBCapacityQuads
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1015:		bd.Usage          = D3D11_USAGE_IMMUTABLE;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1026:		HRESULT const hr = Direct3d11_Device::getDevice()->CreateBuffer(&bd, &srd, newIB.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1030:				("Direct3d11_StateCache::ensureQuadListIB: CreateBuffer failed (cap=%d, %d indices): %s\n",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1036:		ms_quadListIBCapacityQuads = newCapacity;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1489:	// on CreateBuffer.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1496:	ms_triangleFanIBCapacityVerts         = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1502:	// doesn't stall on CreateBuffer.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1506:	ms_quadListIBCapacityQuads            = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1517:		// CreateBuffer cleanly consumed the std::vector<uint16_t> source, the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1526:			ms_triangleFanIBCapacityVerts);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1580:	ms_triangleFanIBCapacityVerts = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1584:	ms_quadListIBCapacityQuads = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1747:	// write leaving 1056 bytes UNDEFINED via Map(WRITE_DISCARD), exactly
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2512:		return;  // > 65535 cap or CreateBuffer failure -> skip draw
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2785:					stagingDesc.Usage          = D3D11_USAGE_STAGING;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2793:					HRESULT hr = device->CreateTexture2D(&stagingDesc, nullptr, staging.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2799:						hr = context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2804:							uint8_t const *centerRow = static_cast<uint8_t const *>(mapped.pData) + cy * mapped.RowPitch;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2807:							UINT const bppGuess = (texDesc.Format == DXGI_FORMAT_BC1_UNORM ||
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2808:							                       texDesc.Format == DXGI_FORMAT_BC1_UNORM_SRGB) ? 2 : 4;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2810:							for (int k = 0; k < 16 && centerByteOffset + k < mapped.RowPitch; ++k)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2818:								uint8_t const *r = static_cast<uint8_t const *>(mapped.pData) + y * mapped.RowPitch;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2819:								for (UINT b = 0; b < mapped.RowPitch && totalNonZero < 100; ++b)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2826:								"centerNonZero=%d/16 totalNonZeroFirst100=%d RowPitch=%u",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2832:								centerNonZero, totalNonZero, mapped.RowPitch);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2849:							"Plan 11-09.15 Iter-15 staging CreateTexture2D failed hr=0x%08X format=%d",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2927:		return;  // > R16_UINT cap or CreateBuffer failure -- skip draw
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexShaderData.cpp:318:		fold(0);                                  // name terminator so "AB"+"C" != "A"+"BC"
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.cpp:23:	{  false,     true,      0,     0,  0,  0,  0, 0x00000000,  0x00000000, 0x00000000, 0x00000000, 4,          4,           8,            "TF_DXT1",       }, // TF_DXT1
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.cpp:24:	{  false,     true,      0,     0,  0,  0,  0, 0x00000000,  0x00000000, 0x00000000, 0x00000000, 4,          4,          16,            "TF_DXT2",       }, // TF_DXT2
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.cpp:25:	{  false,     true,      0,     0,  0,  0,  0, 0x00000000,  0x00000000, 0x00000000, 0x00000000, 4,          4,          16,            "TF_DXT3",       }, // TF_DXT3
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.cpp:26:	{  false,     true,      0,     0,  0,  0,  0, 0x00000000,  0x00000000, 0x00000000, 0x00000000, 4,          4,          16,            "TF_DXT4",       }, // TF_DXT4
+src/engine/client/library/clientGraphics\src\shared\TextureFormatInfo.cpp:27:	{  false,     true,      0,     0,  0,  0,  0, 0x00000000,  0x00000000, 0x00000000, 0x00000000, 4,          4,          16,            "TF_DXT5",       }, // TF_DXT5
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:12://   wrap            -> Map(D3D11_MAP_WRITE_DISCARD), reset used=0
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:13://   append          -> Map(D3D11_MAP_WRITE_NO_OVERWRITE), advance used
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:93:	bd.Usage          = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:98:	hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:99:	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (dynamic VB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:230:	HRESULT const hr = context->Map(ms_d3dRingBuffer.Get(), 0, mapType, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:270:	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_RenderTarget.cpp:114:	desc.Usage              = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_RenderTarget.cpp:119:	HRESULT hr = device->CreateTexture2D(&desc, nullptr, &ms_renderTargetTexture);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_RenderTarget.cpp:120:	FATAL_DX_HR("Direct3d11_RenderTarget: CreateTexture2D (baked) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:70:	m_lockBuffer(nullptr),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:80:	bd.Usage          = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:85:	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dIndexBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:86:	FATAL_DX_HR("Direct3d11_StaticIndexBufferData::CreateBuffer (static IB) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:93:	if (m_lockBuffer)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:95:		operator delete[](m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:96:		m_lockBuffer = nullptr;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:105:	DEBUG_FATAL(m_lockBuffer, ("static IB already locked"));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:108:	m_lockBuffer = static_cast<Index *>(operator new[](static_cast<size_t>(length)));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:112:		memset(m_lockBuffer, 0, static_cast<size_t>(length));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:114:	return m_lockBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:122:	NOT_NULL(m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:128:		context->UpdateSubresource(m_d3dIndexBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:131:	operator delete[](m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:132:	m_lockBuffer = nullptr;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:12://   wrap   -> Map(D3D11_MAP_WRITE_DISCARD)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:13://   append -> Map(D3D11_MAP_WRITE_NO_OVERWRITE)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.h:130:	// engine formats (TF_DXT2/4, TF_P_8) still FATAL until extended.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:99:	bd.Usage          = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:104:	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:105:	FATAL_DX_HR("Direct3d11_DynamicIndexBufferData::CreateBuffer (dynamic IB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:186:	HRESULT const hr = context->Map(ms_d3dRingBuffer.Get(), 0, mapType, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:8:// USAGE = D3D11_USAGE_DEFAULT + UpdateSubresource on lock/unlock. The
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:9:// engine fills the buffer via lock() AFTER CreateBuffer (Texture / mesh
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:12:// blits it into the GPU buffer via UpdateSubresource.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:81:	m_lockBuffer(nullptr),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:91:	bd.Usage          = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:97:	// CreateBuffer. UpdateSubresource on unlock writes the data.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:98:	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:99:	FATAL_DX_HR("Direct3d11_StaticVertexBufferData::CreateBuffer (static VB) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:106:	if (m_lockBuffer)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:108:		operator delete[](m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:109:		m_lockBuffer = nullptr;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:126:	DEBUG_FATAL(m_lockBuffer, ("static VB already locked"));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:129:	m_lockBuffer = operator new[](byteWidth);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:133:	// UpdateSubresource into the GPU buffer. For readOnly locks the data
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:139:		memset(m_lockBuffer, 0, byteWidth);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:142:	return m_lockBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:150:	NOT_NULL(m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:156:		context->UpdateSubresource(m_d3dBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:159:	operator delete[](m_lockBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:160:	m_lockBuffer = nullptr;
+src/engine/client/library/clientGraphics\src\shared\Dds.h:44:const DDS_PIXELFORMAT DDSPF_DXT1 = { sizeof(DDS_PIXELFORMAT), DDS_FOURCC, MakeFourCC('D','X','T','1'), 0, 0, 0, 0, 0 };
+src/engine/client/library/clientGraphics\src\shared\Dds.h:45:const DDS_PIXELFORMAT DDSPF_DXT2 = { sizeof(DDS_PIXELFORMAT), DDS_FOURCC, MakeFourCC('D','X','T','2'), 0, 0, 0, 0, 0 };
+src/engine/client/library/clientGraphics\src\shared\Dds.h:46:const DDS_PIXELFORMAT DDSPF_DXT3 = { sizeof(DDS_PIXELFORMAT), DDS_FOURCC, MakeFourCC('D','X','T','3'), 0, 0, 0, 0, 0 };
+src/engine/client/library/clientGraphics\src\shared\Dds.h:47:const DDS_PIXELFORMAT DDSPF_DXT4 = { sizeof(DDS_PIXELFORMAT), DDS_FOURCC, MakeFourCC('D','X','T','4'), 0, 0, 0, 0, 0 };
+src/engine/client/library/clientGraphics\src\shared\Dds.h:48:const DDS_PIXELFORMAT DDSPF_DXT5 = { sizeof(DDS_PIXELFORMAT), DDS_FOURCC, MakeFourCC('D','X','T','5'), 0, 0, 0, 0, 0 };
+src/engine/client/library/clientGraphics\src\shared\Texture.h:175:	bool                  isCubeMap() const;
+src/engine/client/library/clientGraphics\src\shared\Texture.h:176:	bool                  isVolumeMap() const;
+src/engine/client/library/clientGraphics\src\shared\Texture.h:375:inline bool Texture::isCubeMap() const
+src/engine/client/library/clientGraphics\src\shared\Texture.h:382:inline bool Texture::isVolumeMap() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:129:		dsDesc.Usage      = D3D11_USAGE_DEFAULT;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:133:		hr = ms_device->CreateTexture2D(&dsDesc, nullptr, &ms_depthStencilTex);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:134:		FATAL_DX_HR("ID3D11Device::CreateTexture2D (depth-stencil) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:358:		pzDesc.Usage              = D3D11_USAGE_IMMUTABLE;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:368:		HRESULT const pzHr = ms_device->CreateBuffer(&pzDesc, &pzInit, ms_phantomZeroBuffer.GetAddressOf());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:369:		FATAL_DX_HR("Direct3d11_Device: phantom zero buffer CreateBuffer failed: %s", pzHr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:19:// Per CONTEXT D-13: D3D11_USAGE_DYNAMIC + D3D11_CPU_ACCESS_WRITE; NO
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:141:	// values under Map(WRITE_DISCARD) (CODEX sixth hypothesis).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:148:	// Map(WRITE_DISCARD) -> memcpy a full kMaxCBufferBytes payload. The
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:150:	// item #6 (CODEX sixth hypothesis): Map(WRITE_DISCARD) does NOT zero
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:157:	// per-slot CreateBuffer loop; safe to call again at runtime when a
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:161:	// CPU-side update: Map(WRITE_DISCARD) -> memcpy -> Unmap. Per
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:115:	addConversion(TF_DXT1,      TF_DXT1);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:116:	addConversion(TF_DXT1,      TF_ARGB_1555);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:117:	addConversion(TF_DXT1,      TF_ARGB_8888);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:119:	addConversion(TF_DXT2,      TF_DXT2);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:120:	addConversion(TF_DXT2,      TF_ARGB_8888);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:122:	addConversion(TF_DXT3,      TF_DXT3);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:123:	addConversion(TF_DXT3,      TF_ARGB_8888);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:125:	addConversion(TF_DXT4,      TF_DXT4);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:126:	addConversion(TF_DXT4,      TF_ARGB_8888);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:128:	addConversion(TF_DXT5,      TF_DXT5);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:129:	addConversion(TF_DXT5,      TF_ARGB_8888);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:497:	// `verdana_14_000.dds` as TF_DXT5, but manual TRE extraction shows
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:578:			if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT1.dwFourCC)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:579:				sourceFormat = TF_DXT1;
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:580:			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT2.dwFourCC)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:581:				sourceFormat = TF_DXT2;
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:582:			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT3.dwFourCC)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:583:				sourceFormat = TF_DXT3;
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:584:			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT4.dwFourCC)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:585:				sourceFormat = TF_DXT4;
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:586:			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT5.dwFourCC)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:587:				sourceFormat = TF_DXT5;
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:638:	// so we can localize WHERE TF_DXT5 enters the runtime-format list for
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:641:	// Iter-30 shows the engine creates the texture as BC3 with
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:642:	// rtFormats=[11,0] = [TF_DXT5, TF_ARGB_8888] -- matching ms_conversions[TF_DXT5].
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:643:	// If THIS logger emits sourceFormat=TF_DXT5 for verdana_14_000.dds, the
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:689:			DEBUG_WARNING(!(sourceFormat == TF_DXT1 || sourceFormat == TF_DXT3 || sourceFormat == TF_DXT5), ("[%s] is not compressed (%d)", fileName, sourceFormat));
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:110:	m_materialMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:111:	m_textureDataMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:112:	m_textureCoordinateSetMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:113:	m_textureFactorMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:114:	m_textureScrollMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:115:	m_alphaTestReferenceValueMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShaderTemplate.cpp:116:	m_stencilReferenceValueMap(NULL),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:91:	m_materialMap(const_cast<StaticShaderTemplate::MaterialMap *>(staticShaderTemplate.m_materialMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:92:	m_textureDataMap(const_cast<StaticShaderTemplate::TextureDataMap *>(staticShaderTemplate.m_textureDataMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:93:	m_textureCoordinateSetMap(const_cast<StaticShaderTemplate::TextureCoordinateSetMap *>(staticShaderTemplate.m_textureCoordinateSetMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:94:	m_textureFactorMap(const_cast<StaticShaderTemplate::TextureFactorMap *>(staticShaderTemplate.m_textureFactorMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:95:	m_textureScrollMap(const_cast<StaticShaderTemplate::TextureScrollMap *>(staticShaderTemplate.m_textureScrollMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:96:	m_alphaTestReferenceValueMap(const_cast<StaticShaderTemplate::AlphaTestReferenceValueMap *>(staticShaderTemplate.m_alphaTestReferenceValueMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:97:	m_stencilReferenceValueMap(const_cast<StaticShaderTemplate::StencilReferenceValueMap *>(staticShaderTemplate.m_stencilReferenceValueMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:129:	m_materialMap(const_cast<StaticShaderTemplate::MaterialMap *>(staticShaderTemplate.m_materialMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:130:	m_textureDataMap(const_cast<StaticShaderTemplate::TextureDataMap *>(staticShaderTemplate.m_textureDataMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:131:	m_textureCoordinateSetMap(const_cast<StaticShaderTemplate::TextureCoordinateSetMap *>(staticShaderTemplate.m_textureCoordinateSetMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:132:	m_textureFactorMap(const_cast<StaticShaderTemplate::TextureFactorMap *>(staticShaderTemplate.m_textureFactorMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:133:	m_textureScrollMap(const_cast<StaticShaderTemplate::TextureScrollMap *>(staticShaderTemplate.m_textureScrollMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:134:	m_alphaTestReferenceValueMap(const_cast<StaticShaderTemplate::AlphaTestReferenceValueMap *>(staticShaderTemplate.m_alphaTestReferenceValueMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:135:	m_stencilReferenceValueMap(const_cast<StaticShaderTemplate::StencilReferenceValueMap *>(staticShaderTemplate.m_stencilReferenceValueMap)),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:167:	m_materialMap(staticShader.m_materialMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:168:	m_textureDataMap(staticShader.m_textureDataMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:169:	m_textureCoordinateSetMap(staticShader.m_textureCoordinateSetMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:170:	m_textureFactorMap(staticShader.m_textureFactorMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:171:	m_textureScrollMap(staticShader.m_textureScrollMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:172:	m_alphaTestReferenceValueMap(staticShader.m_alphaTestReferenceValueMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:173:	m_stencilReferenceValueMap(staticShader.m_stencilReferenceValueMap),
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:180:		m_materialMap = new StaticShaderTemplate::MaterialMap(*staticShader.m_materialMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:184:		m_textureDataMap = new StaticShaderTemplate::TextureDataMap(*staticShader.m_textureDataMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:192:		m_textureCoordinateSetMap = new StaticShaderTemplate::TextureCoordinateSetMap(*staticShader.m_textureCoordinateSetMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:195:		m_textureFactorMap = new StaticShaderTemplate::TextureFactorMap(*staticShader.m_textureFactorMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:198:		m_textureScrollMap = new StaticShaderTemplate::TextureScrollMap(*staticShader.m_textureScrollMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:201:		m_alphaTestReferenceValueMap = new StaticShaderTemplate::AlphaTestReferenceValueMap(*staticShader.m_alphaTestReferenceValueMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:204:		m_stencilReferenceValueMap = new StaticShaderTemplate::StencilReferenceValueMap(*staticShader.m_stencilReferenceValueMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:340:		m_materialMap = new StaticShaderTemplate::MaterialMap(*getStaticShaderTemplate().m_materialMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:369:		m_textureDataMap = new StaticShaderTemplate::TextureDataMap(*getStaticShaderTemplate().m_textureDataMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:411:		m_textureCoordinateSetMap = new StaticShaderTemplate::TextureCoordinateSetMap(*getStaticShaderTemplate().m_textureCoordinateSetMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:428:		m_alphaTestReferenceValueMap = new StaticShaderTemplate::AlphaTestReferenceValueMap(*getStaticShaderTemplate().m_alphaTestReferenceValueMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:445:		m_stencilReferenceValueMap = new StaticShaderTemplate::StencilReferenceValueMap(*getStaticShaderTemplate().m_stencilReferenceValueMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:466:		m_textureFactorMap = new StaticShaderTemplate::TextureFactorMap(*getStaticShaderTemplate().m_textureFactorMap);
+src/engine/client/library/clientGraphics\src\shared\StaticShader.cpp:493:		m_textureScrollMap = new StaticShaderTemplate::TextureScrollMap(*getStaticShaderTemplate().m_textureScrollMap);
+
+ succeeded in 9287ms:
+# Handoff: Phase 17 â€” char-select D3D11 beachhead
+
+**Updated:** 2026-05-30 (17-05 T4â€“5 DONE â†’ CHAR-01/02/03 = PASS; Phase 17 char-select verification COMPLETE)
+**Branch:** koogie-msvc-cpp20-base
+**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` â€” Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree with `& $env:MSBUILD <worktree>\src\build\win32\swg.sln /t:Direct3d11 /p:Configuration=Debug /p:Platform=Win32 /m /nodeReuse:false`. The worktree `stage` is a **junction â†’ main stage**, so the postbuild copy auto-deploys `gl11_d.dll` to `D:\Code\swg-client-v2\stage` (no manual copy; see memory `project_d3d11_worktree_stage_junction`).
+**Status:** 17-01..17-04 done Â· 17-05 T1â€“3 PARKED Â· 17-06a/06b done Â· 17-07/GAP-3 DONE (9/9 binds) Â· GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE `e1db7bf65` Â· **GAP-6 (bump sleeves/hands) FIXED+COMMITTED `a0d5ac80f` (pushed to origin)** â†’ char-select asset-PS renders LIT+textured for ALL parts (face/skin, tunic, pants, shoes, AND bump sleeves/hands). Â· 17-05 T4â€“5 (A/B + verdict) still pending.
+
+> ## â–¶ PHASE 17 char-select VERIFICATION COMPLETE (2026-05-30) â€” CHAR-01/02/03 = PASS
+>
+> **17-05 T4â€“5 DONE** (commit `bb4b13a00`). Matched-pair A/B captured on Kenny's host: D3D9
+> `screenShot0029` (rasterMajor=5 Release stack) vs D3D11 `screenShot0030` (rasterMajor=11) â†’
+> near-identical lit+textured char-select; only residual is a minor brightness/tone delta tracked
+> under **GAMMA-01 (Phase 19)**, out of CHAR scope. POST-gap metric set: `asset-PS bound=`**9**,
+> `COMPATIBLE`**9** / `INCOMPATIBLE`**0**, `id=342`=0, `PSRC recompile FAILED`=0 (asset-PS lane
+> delivering â€” the primary char-select visual driver). Verifier-produced `17-VERIFICATION.md`
+> supersedes the synthesized stand-in (`a20e828d8`); 4 evidence PNGs committed (D3D9 + preGap +
+> postGap + canonical alias); evidence/README.md Â§6 provenance corrected to the GAP-6 build.
+>
+> **GAP-1 closed.** No remaining char-select work. Possible next steps: push `bb4b13a00` to origin;
+> run `/gsd:verify-work 17` for the formal pass; close/audit the phase; or advance to the next
+> ROADMAP phase. NOTE: the 17-05-PLAN Task-5 acceptance criteria literally greps
+> `authored_by: claude-opus-4.7` â€” the doc honestly records `claude-opus-4.8` (the real author), so
+> that one stale literal-string gate will mismatch; the field's provenance intent is satisfied.
+>
+> _(Superseded resume blocks below â€” kept for the root-cause derivation history.)_
+>
+> ### Earlier resume: 17-05 Tasks 4â€“5 (now DONE)
+> capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack â€” see "D3D9 capture
+> workaround" below) + author `17-VERIFICATION.md`. Expect CHAR-01/02/03 PASS on pipeline/lighting and ALL
+> body parts now (bump parts included). Append the POST-gap build provenance (HEAD `a0d5ac80f` + gl11_d.dll
+> mtime) to evidence/README.md Â§6 before the A/B.
+>
+> ### How GAP-6 was actually fixed (the multi-stream theory was WRONG)
+> The purple/green bump arms were NOT a tangent/NaN problem. Full detail: memory
+> `project_d3d11_multitexture_srv_slot_swap`. Two parts:
+> 1. **Tangent**: the per-key VS texcoord-set variant (Fix A â€” `Direct3d11_VertexShaderData`/`VertexDeclarationMap`
+>    per-`textureCoordinateSetKey` recompile) gave the bump VS its real DOT3 tangent at TEXCOORD1. This did
+>    NOT require activating multi-stream â€” single-stream per-key remap sufficed, so the
+>    `SoftwareBlendSkeletalShaderPrimitive` multi-stream-activation rabbit hole was unnecessary.
+> 2. **The real culprit â€” TEXTURE-SLOT SWAP**: fxc assigns SM4 texture registers by first-USE order when
+>    splitting legacy `sampler2D`. specmap_bump samples `normalMap` before `diffuseMap` â†’ normalMap=t0,
+>    diffuseMap=t1, opposite the engine's D3D9 stage-index SRV bind â†’ the blue normal map was sampled as
+>    albedo. Fixed by a reflection-driven stageâ†’SRV-slot remap (`Direct3d11_PixelShaderProgramData::
+>    getSrvSlotForStage`, used in `Direct3d11_StaticShaderData::apply`). Also added the VS material c11â€“c15
+>    feed (`Direct3d11_StateCache::setVertexMaterialColors`, mirrors D3D9 `VSCR_material`). The VS-NaN that
+>    the old GAP-6 handoff (`gap6-bump-arms-vs-lighting-nan.md`) chased was already fixed by GAP-5 + the
+>    material feed â€” RenderDoc "Debug this Vertex" confirmed finite COLOR0/COLOR1.
+> The GAP-6 multi-stream infra (caps flip, VertexBufferDescriptorMap changes) committed in `e1db7bf65`
+> remains DORMANT/unused â€” harmless; revisit only if a true multi-stream asset ever needs it.
+>
+> _(Superseded GAP-4 design block below â€” kept for the root-cause derivation; GAP-4 is now DONE+committed.)_
+>
+> **17-07 / GAP-3 is DONE** (commits `f9e5ac569`â†’`d8cc1ca99`, SUMMARY `8639c5458`). The asset-PS bind
+> rate went 0/9 â†’ **9/9** (`path=rewritten`) via VS-signature RECONSTRUCTION (axis-b reorder was wrong â€”
+> the mismatch was a register-BASE offset: VS reserves o0=SV_Position, asset PS starts v0; reorder can't
+> add the +1 base, so we now rebuild the PS input sig to mirror the VS exactly + wrap the asset main).
+> Enabling the lane revealed **GAP-4: char-select body renders BLACK** â€” the asset PS reads zero lighting
+> constants.
+>
+> **GAP-4 fix is fully designed + dual-AI converged + census-gate UNBLOCKED** (codex+cursor:
+> `.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile*`; full design in memory
+> `project_17_07_ps_register_base_offset`). Root cause: asset PS reads `SwgVertexConstants`@b0 but the
+> light constants (c0-c4) are pushed to b0 by NOBODY (D3D11 LightManager only fills `LightingCB`@b3);
+> `StaticShaderData::apply` zero-inits b0 and clobbers it; engine userConstants go to b2. The c-index map
+> is IN-REPO at `Direct3d9_PixelShaderConstantRegisters.h` (`PSCR_dot3LightDirection=c0 ... userConstant=c8`),
+> matching the reflected b0 offsets â€” **no TRE .inc extraction needed.**
+>
+> **GAP-4 implementation (the converged plan):** a persistent D3D11 b0 shadow[400] fed by 3 producers:
+> (A) port `Direct3d11_LightManager` to push `pixelDot3Data` (5 float4s) â†’ shadow@c0 (from
+> `Direct3d9_LightManager.cpp:601`/~592-625; specPower packs into `dot3LightDirection.w`); (B)
+> `StaticShaderData::apply` RMW from the shared shadow (STOP the `staging(400,0)` zero-init) + patch
+> textureFactor/materialSpecularColor by reflected offset; (C) `setPixelShaderUserConstants_impl` â†’
+> shadow@`(PSCR_userConstant+i)*16` (offset 128+, NOT c0); upload merged shadow via `updatePS(0)`; keep
+> b2/fallback untouched. Instrument b0 c0.xyz/c1.rgb/c7/c8 at flush (pass = c0 nonzero + lit character).
+>
+> **Also still PENDING:** D-06 `rasterMajor=5` re-boot (gl11-only change â†’ D3D9 byte-for-byte; needed for
+> 17-05 Task 4's D3D9 re-capture). 17-05 Tasks 4â€“5 (POST-gap A/B + 17-VERIFICATION.md) best run AFTER
+> GAP-4 so they capture a LIT character, not the black interim â†’ CHAR-01/02/03 verdict.
+>
+> `gl11_d.dll` currently = HEAD `d8cc1ca99` (5/29 17:23, GAP-3). `SwgClient_d.exe` (5/28) unchanged/compatible.
+
+---
+
+_Historical (pre-execution 17-07 plan notes â€” SUPERSEDED by the GAP-4 resume block above; 17-07 is done):_
+
+> **RESUME HERE â†’ execute 17-07, then 17-05 Tasks 4â€“5.** 17-07 is the big one: HLSL parameter-list
+> parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
+> pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring
+> (native > rewritten > fallback) + `asset-PS bound=` log. Touches PSData.h + VertexShaderData.h â†’
+> STAGE-1 MUST rebuild ALL plugin .vcxprojs + relink SwgClient_d.exe (ABI cascade trap). Bump
+> D3D11_REWRITE_VERSION 21â†’22 at BOTH sites (PixelShaderProgramData.cpp:153 + :303). Do the built-in
+> COLOR0/TEXCOORD spike FIRST (de-risk the parser) before the full impl. After 17-07's combined build,
+> APPEND the "POST-gap build provenance" line (HEAD SHA + gl11_d.dll mtime) to evidence/README.md Â§6,
+> then run 17-05 Task 4 (POST-gap capture) + Task 5 (author real 17-VERIFICATION.md).
+
+> **Execution note (this session):** running inline/sequential (Kenny-in-the-loop), not parallel
+> worktrees â€” the executor cannot boot the client (no `.tre`), every capture is a host checkpoint.
+> Wave-only fallback ordering is in effect (orchestrator does not resolve named partial deps).
+
+## PRE-gap baseline (recorded for Task 5's PRE/POST table)
+
+Host boot 2026-05-29 12:55, `stage/d3d11-debug.log` (32,594 lines), HEAD `9f5db9c3f`:
+`id=342`=0 Â· `id=343`=27 Â· `PSRC recompile FAILED`=0 Â· `wroteDiffuse=1`=0 Â· `wroteEmissive=1`=0 Â·
+`wroteSpecular=1`=6 Â· `asset-PS bound=`=0 Â· `fallback-PS bound=`=0 Â· `Plan 17-07 COMPATIBLE/INCOMPATIBLE`=0/0 Â·
+native `Plan 17-04 Task 1 INCOMPATIBLE`=27 (real PRE fallback driver). PRE state: GAP-2 open (0
+diffuse/emissive writes), GAP-3 open (27 incompatible pairs, 0 asset-PS binds). PNGs at 1920Ã—1080:
+`evidence/char_default_d3d9_0003.png` + `evidence/char_default_d3d11_0003_preGap.png`.
+
+## D3D9 capture workaround (needed again for Task 4's D-06 re-boot)
+
+Current Debug binaries CANNOT boot D3D9 char-select (post-17-01 `SwgClient_d.exe` ABI-cascades with
+`gl05_d.dll` â€” parked Phase-17.X gl05 regression). **Capture D3D9 via the pre-17-01 Release stack:**
+`stage/SwgClient_r.exe` + `gl05_r.dll` (both 5/27). Release exe reads `stage/client.cfg`, which is
+edited (reversible) to `rasterMajor=5` + 1920Ã—1080 â€” **leave it** for Task 4's D3D9 re-boot; revert at
+phase close. Use the in-client **F12** key (back-buffer dump to `stage/screenshots/`), not the OS snip
+tool (fights fullscreen). jpgâ†’png transcode for canonical naming.
+
+---
+
+## Pick up here
+
+1. Read `.planning/STATE.md` and `.planning/phases/17-psrc-census-char-select-beachhead/17-VERIFICATION.md`.
+2. Execution order after 17-05 Task 3 (Round-5 review item 2 â€” 17-07 MUST build LAST; `depends_on` enforces 17-06b -> 17-07):
+   - **17-06a** (Wave 6, human checkpoint) â€” extend cbuffer discovery dump in `Direct3d11_StaticShaderData.cpp` (re-reflect via D3DReflect is MANDATORY â€” cached layout has no type info)
+   - **17-06b** (Wave 7, autonomous, `depends_on: 17-06a`) â€” `writeVarFloat4AtOffset` + diffuse/emissive writes from 06a evidence (evidence-backed offset ONLY; folklore-slot writes forbidden â€” take Case-C DEFERRED instead)
+   - **17-07** (Wave 7, human checkpoint, `depends_on: 17-04 + 17-05-task3 + 17-06b`) â€” PS parameter-list rewrite + StateCache bind path + per-VS cache + `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; touches PSData.{cpp,h} + StateCache.cpp + VertexShaderData.{h,cpp}; bumps `D3D11_REWRITE_VERSION` 21->22 (live is already 21); STAGE-1 all-plugin rebuild runs LAST so the post-gap gl11_d.dll contains BOTH 17-06b and 17-07 (GAP-3, **primary visual driver**)
+   - **17-05 Tasks 4â€“5** â€” POST-gap boot capture (hard-gated on the recorded 17-07 commit SHA + gl11_d.dll mtime in evidence/README.md) + CHAR verdict authoring
+3. Rebuild **all plugin vcxprojs** after any `Direct3d11_*.h` touch (stale gl11_d.dll trap).
+4. **Orchestrator contract for the `17-05-task3` named partial dependency (Round-5 review item 8):** 17-06a/06b/07 declare `depends_on` including `17-05-task3`, which is satisfied by Plan 17-05's Task-3 PRE-gap commit (the `## TASK 3 HANDOFF â€” PARK POINT` block, literal `17-05-task3`), NOT by 17-05 reaching its final task. If the orchestrator cannot resolve a named partial dependency, fall back to WAVE-ONLY ordering: Wave 5 (17-05 PRE-gap commit) -> Wave 6 (17-06a) -> Wave 7 (17-06b then 17-07) -> resume 17-05 Tasks 4â€“5. Either way 17-07 builds last in Wave 7.
+
+---
+
+## Gap inventory (char-select)
+
+| Gap | Plan | Delivers |
+| --- | --- | --- |
+| GAP-1 | 17-05 | Screenshot A/B evidence (D3D9 vs D3D11) |
+| GAP-2 | 17-06a/06b | Cbuffer diffuse/emissive **instrumentation** (`wroteDiffuse=1`) â€” **not** primary char-select visuals |
+| GAP-3 | 17-07 | Asset PS bind rate + `asset-PS bound=` log â€” **primary char-select visual driver** |
+
+Char-select PSes consume `textureFactor.rgb` + `COLOR0`, not cbuffer material colors (see `evidence/plan-17-04x-psrc-source-dump.txt`).
+
+---
+
+## Planning changes (uncommitted)
+
+| Change | Detail |
+| --- | --- |
+| Deleted | `17-06-PLAN.md` (monolithic) |
+| Added | `17-06a-PLAN.md` (discovery dump), `17-06b-PLAN.md` (offset writes) |
+| Rewritten | `17-07-PLAN.md` â€” parameter-list parser primary; touches StateCache + PSData.h + VertexShaderData.{h,cpp}; real compile+reflect Task-0 spike; `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; `D3D11_REWRITE_VERSION` 21->22 |
+| Updated | `17-05-PLAN.md` (token + build-provenance + orchestrator-contract), `17-06a` (re-reflect mandatory), `17-06b` (evidence-backed-offset-only), `17-RESEARCH.md`/`17-PATTERNS.md`/`17-VERIFICATION.md` (REWRITE_VERSION live=21, next=22) |
+
+Execute via GSD: `/gsd-execute-phase 17` or individual plan files.
+
+---
+
+## Boot gate
+
+Both `rasterMajor=5` and `rasterMajor=11` must boot to char-select. D3D9 path byte-for-byte unchanged.
+
+codex
+The local D3D11 texture path already contains prior fixes and comments around BC sub-4 mips, so I’m checking whether the current upload bridge can still leave a real texture subresource unwritten or partially written. I’m also checking static VB/IB lock behavior because your geometry symptom can have the same “created before initialized” shape.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp | Select-Object -Skip 250 -First 680' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp' in D:\Code\swg-client-v2
+ succeeded in 2326ms:
+// ======================================================================
+//
+// Direct3d11_StaticIndexBufferData.cpp
+// Phase 11 D3D11 renderer plugin -- static index buffer.
+// Plan 11-04. See header for rationale.
+//
+// ======================================================================
+
+#include "FirstDirect3d11.h"
+#include "Direct3d11_StaticIndexBufferData.h"
+
+#include "Direct3d11.h"
+#include "Direct3d11_Device.h"
+
+#include "sharedFoundation/MemoryBlockManager.h"
+
+#include <d3d11.h>
+#include <wrl/client.h>
+
+// ======================================================================
+
+using Microsoft::WRL::ComPtr;
+
+MemoryBlockManager *Direct3d11_StaticIndexBufferData::ms_memoryBlockManager;
+
+// ======================================================================
+
+void Direct3d11_StaticIndexBufferData::install()
+{
+	DEBUG_FATAL(ms_memoryBlockManager, ("Direct3d11_StaticIndexBufferData already installed"));
+	ms_memoryBlockManager = new MemoryBlockManager(
+		"Direct3d11_StaticIndexBufferData", true,
+		sizeof(Direct3d11_StaticIndexBufferData), 0, 0, 0);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticIndexBufferData::remove()
+{
+	delete ms_memoryBlockManager;
+	ms_memoryBlockManager = nullptr;
+}
+
+// ----------------------------------------------------------------------
+
+void *Direct3d11_StaticIndexBufferData::operator new(size_t size)
+{
+	UNREF(size);
+	NOT_NULL(ms_memoryBlockManager);
+	DEBUG_FATAL(size != sizeof(Direct3d11_StaticIndexBufferData), ("bad size"));
+	DEBUG_FATAL(size != static_cast<size_t>(ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+	return ms_memoryBlockManager->allocate();
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticIndexBufferData::operator delete(void *memory)
+{
+	NOT_NULL(ms_memoryBlockManager);
+	ms_memoryBlockManager->free(memory);
+}
+
+// ======================================================================
+
+Direct3d11_StaticIndexBufferData::Direct3d11_StaticIndexBufferData(const StaticIndexBuffer &indexBuffer)
+:
+	StaticIndexBufferGraphicsData(),
+	m_indexBuffer(indexBuffer),
+	m_d3dIndexBuffer(),
+	m_lockBuffer(nullptr),
+	m_lockedReadOnly(false)
+{
+	ID3D11Device * const device = Direct3d11_Device::getDevice();
+	NOT_NULL(device);
+
+	UINT const byteWidth = static_cast<UINT>(indexBuffer.getNumberOfIndices() * sizeof(Index));
+
+	D3D11_BUFFER_DESC bd = {};
+	bd.ByteWidth      = byteWidth;
+	bd.Usage          = D3D11_USAGE_DEFAULT;
+	bd.BindFlags      = D3D11_BIND_INDEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+	bd.MiscFlags      = 0;
+
+	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dIndexBuffer);
+	FATAL_DX_HR("Direct3d11_StaticIndexBufferData::CreateBuffer (static IB) failed: %s", hr);
+}
+
+// ----------------------------------------------------------------------
+
+Direct3d11_StaticIndexBufferData::~Direct3d11_StaticIndexBufferData()
+{
+	if (m_lockBuffer)
+	{
+		operator delete[](m_lockBuffer);
+		m_lockBuffer = nullptr;
+	}
+	m_d3dIndexBuffer.Reset();
+}
+
+// ----------------------------------------------------------------------
+
+Index *Direct3d11_StaticIndexBufferData::lock(bool readOnly)
+{
+	DEBUG_FATAL(m_lockBuffer, ("static IB already locked"));
+
+	int const length = m_indexBuffer.getNumberOfIndices() * static_cast<int>(sizeof(Index));
+	m_lockBuffer = static_cast<Index *>(operator new[](static_cast<size_t>(length)));
+	m_lockedReadOnly = readOnly;
+
+	if (readOnly)
+		memset(m_lockBuffer, 0, static_cast<size_t>(length));
+
+	return m_lockBuffer;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticIndexBufferData::unlock()
+{
+	NOT_NULL(m_d3dIndexBuffer);
+	NOT_NULL(m_lockBuffer);
+
+	if (!m_lockedReadOnly)
+	{
+		ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+		NOT_NULL(context);
+		context->UpdateSubresource(m_d3dIndexBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+	}
+
+	operator delete[](m_lockBuffer);
+	m_lockBuffer = nullptr;
+}
+
+// ======================================================================
+
+ succeeded in 2343ms:
+// ======================================================================
+//
+// Direct3d11_StaticVertexBufferData.cpp
+// Phase 11 D3D11 renderer plugin -- static vertex buffer.
+// Plan 11-04 (Wave 4 -- resource layer). Replaces createStaticVertexBufferData
+// scaffold_fatal_stub.
+//
+// USAGE = D3D11_USAGE_DEFAULT + UpdateSubresource on lock/unlock. The
+// engine fills the buffer via lock() AFTER CreateBuffer (Texture / mesh
+// load path), so USAGE_IMMUTABLE (which requires initial data on create)
+// is not workable. Engine lock() returns a CPU staging block; unlock()
+// blits it into the GPU buffer via UpdateSubresource.
+//
+// Per D-13: no D3DPOOL_MANAGED / OnLostDevice / OnResetDevice -- ComPtr
+// ownership; resource destroyed in destructor.
+//
+// ======================================================================
+
+#include "FirstDirect3d11.h"
+#include "Direct3d11_StaticVertexBufferData.h"
+
+#include "Direct3d11.h"
+#include "Direct3d11_Device.h"
+
+#include "sharedFoundation/MemoryBlockManager.h"
+
+#include <d3d11.h>
+#include <wrl/client.h>
+
+// ======================================================================
+
+using Microsoft::WRL::ComPtr;
+
+MemoryBlockManager *Direct3d11_StaticVertexBufferData::ms_memoryBlockManager;
+
+// ======================================================================
+
+void Direct3d11_StaticVertexBufferData::install()
+{
+	DEBUG_FATAL(ms_memoryBlockManager, ("Direct3d11_StaticVertexBufferData already installed"));
+	ms_memoryBlockManager = new MemoryBlockManager(
+		"Direct3d11_StaticVertexBufferData", true,
+		sizeof(Direct3d11_StaticVertexBufferData), 0, 0, 0);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticVertexBufferData::remove()
+{
+	delete ms_memoryBlockManager;
+	ms_memoryBlockManager = nullptr;
+}
+
+// ----------------------------------------------------------------------
+
+void *Direct3d11_StaticVertexBufferData::operator new(size_t size)
+{
+	UNREF(size);
+	NOT_NULL(ms_memoryBlockManager);
+	DEBUG_FATAL(size != sizeof(Direct3d11_StaticVertexBufferData), ("wrong new called"));
+	DEBUG_FATAL(size != static_cast<size_t>(ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+	return ms_memoryBlockManager->allocate();
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticVertexBufferData::operator delete(void *memory)
+{
+	NOT_NULL(ms_memoryBlockManager);
+	ms_memoryBlockManager->free(memory);
+}
+
+// ======================================================================
+
+Direct3d11_StaticVertexBufferData::Direct3d11_StaticVertexBufferData(const StaticVertexBuffer &vertexBuffer)
+:
+	StaticVertexBufferGraphicsData(),
+	m_vertexBuffer(vertexBuffer),
+	m_descriptor(Direct3d11_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+	m_d3dBuffer(),
+	m_lockBuffer(nullptr),
+	m_lockedReadOnly(false)
+{
+	ID3D11Device * const device = Direct3d11_Device::getDevice();
+	NOT_NULL(device);
+
+	UINT const byteWidth = static_cast<UINT>(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices());
+
+	D3D11_BUFFER_DESC bd = {};
+	bd.ByteWidth      = byteWidth;
+	bd.Usage          = D3D11_USAGE_DEFAULT;
+	bd.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+	bd.MiscFlags      = 0;
+
+	// No initial-data pointer -- engine fills via lock/unlock after
+	// CreateBuffer. UpdateSubresource on unlock writes the data.
+	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dBuffer);
+	FATAL_DX_HR("Direct3d11_StaticVertexBufferData::CreateBuffer (static VB) failed: %s", hr);
+}
+
+// ----------------------------------------------------------------------
+
+Direct3d11_StaticVertexBufferData::~Direct3d11_StaticVertexBufferData()
+{
+	if (m_lockBuffer)
+	{
+		operator delete[](m_lockBuffer);
+		m_lockBuffer = nullptr;
+	}
+	m_d3dBuffer.Reset();
+}
+
+// ----------------------------------------------------------------------
+
+const VertexBufferDescriptor &Direct3d11_StaticVertexBufferData::getDescriptor() const
+{
+	return m_descriptor;
+}
+
+// ----------------------------------------------------------------------
+
+void *Direct3d11_StaticVertexBufferData::lock(bool readOnly)
+{
+	NOT_NULL(m_d3dBuffer);
+	DEBUG_FATAL(m_lockBuffer, ("static VB already locked"));
+
+	UINT const byteWidth = static_cast<UINT>(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices());
+	m_lockBuffer = operator new[](byteWidth);
+	m_lockedReadOnly = readOnly;
+
+	// Engine writes vertex data into the returned pointer; on unlock we
+	// UpdateSubresource into the GPU buffer. For readOnly locks the data
+	// is undefined (D3D11 USAGE_DEFAULT buffers cannot be read back from
+	// the GPU directly -- the codebase only locks for write).
+	if (readOnly)
+	{
+		// Zero so callers don't read stale memory.
+		memset(m_lockBuffer, 0, byteWidth);
+	}
+
+	return m_lockBuffer;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StaticVertexBufferData::unlock()
+{
+	NOT_NULL(m_d3dBuffer);
+	NOT_NULL(m_lockBuffer);
+
+	if (!m_lockedReadOnly)
+	{
+		ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+		NOT_NULL(context);
+		context->UpdateSubresource(m_d3dBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+	}
+
+	operator delete[](m_lockBuffer);
+	m_lockBuffer = nullptr;
+}
+
+// ----------------------------------------------------------------------
+
+int Direct3d11_StaticVertexBufferData::getSortKey()
+{
+	return static_cast<int>(reinterpret_cast<uintptr_t>(m_d3dBuffer.Get()));
+}
+
+// ======================================================================
+
+ succeeded in 2741ms:
+// Construction -- create ID3D11Texture2D / Cube / Volume + SRV.
+// ======================================================================
+
+Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
+                                               const TextureFormat *runtimeFormats,
+                                               int numberOfRuntimeFormats)
+:
+	TextureGraphicsData(),
+	m_engineTexture(newEngineTexture),
+	m_texture(),
+	m_srv(),
+	m_destFormat(TF_RGB_555),
+	m_isCubeMap(newEngineTexture.isCubeMap()),
+	m_isVolumeMap(newEngineTexture.isVolumeMap()),
+	m_lockBridgeBuffer(),
+	m_lockBridgeFormat(TF_RGB_555),
+	m_lockBridgePitch(0),
+	m_lockBridgeWidth(0),
+	m_lockBridgeHeight(0),
+	m_lockBridgeActive(false)
+{
+	DEBUG_FATAL(!Os::isMainThread(), ("Creating texture from alternate thread"));
+
+	ID3D11Device * const device = Direct3d11_Device::getDevice();
+	NOT_NULL(device);
+
+	const bool isDynamic      = newEngineTexture.isDynamic();
+	const bool isRenderTarget = newEngineTexture.isRenderTarget();
+
+	// USAGE / BindFlags matrix (per PATTERNS Â§interfaces resource matrix):
+	//   render-target -> USAGE_DEFAULT + BIND_RENDER_TARGET|BIND_SHADER_RESOURCE
+	//   dynamic       -> USAGE_DYNAMIC + BIND_SHADER_RESOURCE + CPU_ACCESS_WRITE
+	//   static        -> USAGE_DEFAULT + BIND_SHADER_RESOURCE
+	//
+	// USAGE_IMMUTABLE would be ideal for static textures but requires
+	// initial data at create-time. The engine creates the resource here
+	// then writes via lock()/unlock() (Texture::loadSurface), so we cannot
+	// use IMMUTABLE without restructuring the load path. USAGE_DEFAULT +
+	// UpdateSubresource path is the correct mapping; UpdateSubresource is
+	// invoked via the lock/unlock virtuals below using a staging buffer.
+
+	D3D11_USAGE usage         = D3D11_USAGE_DEFAULT;
+	UINT        bindFlags     = D3D11_BIND_SHADER_RESOURCE;
+	UINT        cpuAccessFlags = 0;
+	UINT        miscFlags     = 0;
+
+	if (isRenderTarget)
+	{
+		usage     = D3D11_USAGE_DEFAULT;
+		bindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	}
+	else if (isDynamic)
+	{
+		usage         = D3D11_USAGE_DYNAMIC;
+		bindFlags     = D3D11_BIND_SHADER_RESOURCE;
+		cpuAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	}
+
+	if (m_isCubeMap)
+		miscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+	// Walk the engine-supplied runtime-format list in order; first format
+	// whose DXGI mapping is non-UNKNOWN AND CheckFormatSupport accepts wins.
+
+	HRESULT lastResult = E_FAIL;
+	for (int i = 0; !m_texture && i < numberOfRuntimeFormats; ++i)
+	{
+		TextureFormat const candidate = runtimeFormats[i];
+		DXGI_FORMAT     const native    = translationTable[candidate];
+		if (native == DXGI_FORMAT_UNKNOWN)
+			continue;
+
+		// Verify the device actually supports this format for the target
+		// resource type. CheckFormatSupport is the runtime equivalent of
+		// D3D9's CheckDeviceFormat used in install() above.
+		UINT support = 0;
+		if (FAILED(device->CheckFormatSupport(native, &support)))
+			continue;
+		if ((support & D3D11_FORMAT_SUPPORT_TEXTURE2D) == 0 && !m_isVolumeMap)
+			continue;
+		if (m_isVolumeMap && (support & D3D11_FORMAT_SUPPORT_TEXTURE3D) == 0)
+			continue;
+		if (isRenderTarget && (support & D3D11_FORMAT_SUPPORT_RENDER_TARGET) == 0)
+			continue;
+
+		m_destFormat = candidate;
+
+		if (m_isVolumeMap)
+		{
+			D3D11_TEXTURE3D_DESC desc = {};
+			desc.Width            = static_cast<UINT>(newEngineTexture.getWidth());
+			desc.Height           = static_cast<UINT>(newEngineTexture.getHeight());
+			desc.Depth            = static_cast<UINT>(newEngineTexture.getDepth());
+			desc.MipLevels        = static_cast<UINT>(newEngineTexture.getMipmapLevelCount());
+			desc.Format           = native;
+			desc.Usage            = usage;
+			desc.BindFlags        = bindFlags;
+			desc.CPUAccessFlags   = cpuAccessFlags;
+			desc.MiscFlags        = 0;  // no cube on 3D
+
+			ComPtr<ID3D11Texture3D> tex3d;
+			lastResult = device->CreateTexture3D(&desc, nullptr, &tex3d);
+			if (SUCCEEDED(lastResult))
+				m_texture = tex3d;
+		}
+		else
+		{
+			D3D11_TEXTURE2D_DESC desc = {};
+			desc.Width              = static_cast<UINT>(newEngineTexture.getWidth());
+			desc.Height             = static_cast<UINT>(newEngineTexture.getHeight());
+			desc.MipLevels          = static_cast<UINT>(newEngineTexture.getMipmapLevelCount());
+			desc.ArraySize          = m_isCubeMap ? 6 : 1;
+			desc.Format             = native;
+			desc.SampleDesc.Count   = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage              = usage;
+			desc.BindFlags          = bindFlags;
+			desc.CPUAccessFlags     = cpuAccessFlags;
+			desc.MiscFlags          = miscFlags;
+
+			ComPtr<ID3D11Texture2D> tex2d;
+			lastResult = device->CreateTexture2D(&desc, nullptr, &tex2d);
+			if (SUCCEEDED(lastResult))
+				m_texture = tex2d;
+		}
+	}
+
+	if (!m_texture)
+	{
+		char buffer[1024] = "";
+		for (int i = 0; i < numberOfRuntimeFormats; ++i)
+		{
+			strcat(buffer, TextureFormatInfo::getInfo(runtimeFormats[i]).name);
+			strcat(buffer, " ");
+		}
+		FATAL(true, ("Direct3d11_TextureData: failed to create texture for any runtime format (%s); last HRESULT=%s",
+		             buffer, Direct3d11Namespace::hresultString(lastResult)));
+	}
+
+	// Create the shader resource view paired with the texture. View
+	// dimension matches resource shape (Texture2D / Cube / Texture3D).
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = translationTable[m_destFormat];
+
+	if (m_isVolumeMap)
+	{
+		srvDesc.ViewDimension              = D3D11_SRV_DIMENSION_TEXTURE3D;
+		srvDesc.Texture3D.MostDetailedMip  = 0;
+		srvDesc.Texture3D.MipLevels        = static_cast<UINT>(newEngineTexture.getMipmapLevelCount());
+	}
+	else if (m_isCubeMap)
+	{
+		srvDesc.ViewDimension              = D3D11_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.MipLevels      = static_cast<UINT>(newEngineTexture.getMipmapLevelCount());
+	}
+	else
+	{
+		srvDesc.ViewDimension              = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip  = 0;
+		srvDesc.Texture2D.MipLevels        = static_cast<UINT>(newEngineTexture.getMipmapLevelCount());
+	}
+
+	HRESULT const hr = device->CreateShaderResourceView(m_texture.Get(), &srvDesc, &m_srv);
+	FATAL_DX_HR("Direct3d11_TextureData: CreateShaderResourceView failed: %s", hr);
+
+	// Plan 11-09.15 Iter-30 diagnostic: log every texture as it's loaded
+	// with filename + dimensions + DXGI format + SRV pointer. Cross-
+	// reference against Iter-29B routing log to identify what asset file
+	// the font atlas SRV points to (Iter-29C readback was unsafe -- crashed
+	// the first frame -- so we identify via creation-time metadata instead
+	// of GPU readback). One line per texture; capped at 500 entries to
+	// bound log size during long load sequences. Output via InfoQueue so
+	// it lands in d3d11-debug.log alongside the other diagnostics.
+	//
+	// Plan 11-09.15 Iter-31A: extended to also log the FIRST FOUR
+	// runtimeFormats[] candidates passed by the engine. CODEX+Cursor
+	// convergent consult identified that ms_conversions[TF_ARGB_8888]
+	// is ONLY {TF_ARGB_8888, TF_ARGB_4444} -- TF_DXT5 (the destFormat we
+	// see for verdana_14_000.dds) is not reachable through the standard
+	// Texture::load() path. Either the engine called createTextureData
+	// with a non-conversion-table runtimeFormats array OR m_graphicsData
+	// was pre-existing (constructed by an explicit-runtime ctor before
+	// load). Logging the actual passed array localizes which case fires.
+	{
+		static int s_iter30Count = 0;
+		if (s_iter30Count < 500)
+		{
+			++s_iter30Count;
+			if (ID3D11InfoQueue *iq30 = Direct3d11_Device::getInfoQueue())
+			{
+				char const *fn = newEngineTexture.getName();
+				if (!fn || !*fn) fn = "<unnamed>";
+				DXGI_FORMAT const nativeFmt = translationTable[m_destFormat];
+
+				// Iter-31A: stringify the first 4 runtime-format candidates.
+				char rtList[64] = "";
+				int const rtCount = (numberOfRuntimeFormats > 4) ? 4 : numberOfRuntimeFormats;
+				for (int rti = 0; rti < rtCount; ++rti)
+				{
+					char piece[12];
+					_snprintf_s(piece, sizeof(piece), _TRUNCATE, "%s%d",
+						(rti == 0 ? "" : ","),
+						static_cast<int>(runtimeFormats[rti]));
+					size_t const rem = sizeof(rtList) - strlen(rtList) - 1;
+					strncat_s(rtList, sizeof(rtList), piece, rem);
+				}
+				if (numberOfRuntimeFormats > 4)
+					strncat_s(rtList, sizeof(rtList), ",...", _TRUNCATE);
+
+				char buf30[640];
+				_snprintf_s(buf30, sizeof(buf30), _TRUNCATE,
+					"Plan 11-09.15 Iter-30 tex#%d SRV=0x%p file='%s' W=%d H=%d Mips=%d "
+					"destFormat=%d nativeDXGI=%d rtFormats(n=%d)=[%s] %s%s%s",
+					s_iter30Count,
+					static_cast<void *>(m_srv.Get()),
+					fn,
+					newEngineTexture.getWidth(),
+					newEngineTexture.getHeight(),
+					newEngineTexture.getMipmapLevelCount(),
+					static_cast<int>(m_destFormat),
+					static_cast<int>(nativeFmt),
+					numberOfRuntimeFormats,
+					rtList,
+					m_isCubeMap   ? "[cube]"   : "",
+					m_isVolumeMap ? "[volume]" : "",
+					isRenderTarget ? "[rt]"    : "");
+				iq30->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf30);
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+Direct3d11_TextureData::~Direct3d11_TextureData()
+{
+	// ComPtr handles Release().
+	m_srv.Reset();
+	m_texture.Reset();
+}
+
+// ----------------------------------------------------------------------
+
+TextureFormat Direct3d11_TextureData::getNativeFormat() const
+{
+	return m_destFormat;
+}
+
+// ----------------------------------------------------------------------
+// lock -- map staging-style write. D3D11 USAGE_DEFAULT textures cannot be
+// Mapped directly; we use a CPU-side staging texture, fill it via Map, and
+// CopySubresourceRegion on unlock. The LockData::m_reserved slot carries
+// the staging texture between lock/unlock (mirrors the D3D9 plugin's
+// "temporary offscreen surface" pattern).
+
+void Direct3d11_TextureData::lock(LockData &lockData)
+{
+	DEBUG_FATAL(lockData.getWidth() == 0, ("Locking 0 width area"));
+	DEBUG_FATAL(lockData.getHeight() == 0, ("Locking 0 height area"));
+	DEBUG_FATAL(lockData.getDepth() == 0, ("Locking 0 depth area"));
+
+	if (lockData.getFormat() == TF_Native)
+		lockData.m_format = m_destFormat;
+
+	// Plan 11-09.15 Iter-31A diagnostic: log first-lock-per-texture when
+	// lockData format != m_destFormat. CODEX+Cursor convergent consult
+	// (font-atlas BGRA8 -> DXT5 mismatch) localized the bug here: the D3D9
+	// sibling explicitly handles this case via D3DXLoadSurfaceFromSurface
+	// (Direct3d9_TextureData.cpp:518/603); the D3D11 path just creates a
+	// staging at lockData.getFormat() and CopySubresourceRegions into a
+	// possibly-incompatible m_destFormat dest. Logging the mismatch tells
+	// us WHICH textures hit it and confirms our hypothesis before
+	// committing to either an Option A (CPU-side conversion) or
+	// Option B (recreate at source format) fix. Capped at 50 logs total
+	// to bound log size; we expect ~1-5 mismatches per session if the
+	// hypothesis is right.
+	if (lockData.getFormat() != m_destFormat)
+	{
+		static int s_iter31aCount = 0;
+		if (s_iter31aCount < 50)
+		{
+			++s_iter31aCount;
+			if (ID3D11InfoQueue *iq31a = Direct3d11_Device::getInfoQueue())
+			{
+				char const *fn = m_engineTexture.getName();
+				if (!fn || !*fn) fn = "<unnamed>";
+				char buf31a[384];
+				_snprintf_s(buf31a, sizeof(buf31a), _TRUNCATE,
+					"Plan 11-09.15 Iter-31A FORMAT_MISMATCH#%d file='%s' "
+					"lockFmt=%d destFmt=%d lockIsReadOnly=%d lockIsDiscard=%d "
+					"isDynamic=%d isCubeMap=%d isVolumeMap=%d level=%d "
+					"w=%d h=%d",
+					s_iter31aCount, fn,
+					static_cast<int>(lockData.getFormat()),
+					static_cast<int>(m_destFormat),
+					lockData.isReadOnly() ? 1 : 0,
+					lockData.shouldDiscardContents() ? 1 : 0,
+					m_engineTexture.isDynamic() ? 1 : 0,
+					m_isCubeMap ? 1 : 0,
+					m_isVolumeMap ? 1 : 0,
+					lockData.getLevel(),
+					lockData.getWidth(), lockData.getHeight());
+				iq31a->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf31a);
+			}
+		}
+	}
+
+	ID3D11Device *        const device  = Direct3d11_Device::getDevice();
+	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+	NOT_NULL(device);
+	NOT_NULL(context);
+
+	// For dynamic textures (USAGE_DYNAMIC), Map(WRITE_DISCARD) is legal
+	// directly on the resource. For everything else, allocate a staging
+	// texture matching the locked region and map that.
+	const bool isDynamic = m_engineTexture.isDynamic();
+
+	if (isDynamic && !m_isVolumeMap && !m_isCubeMap)
+	{
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		UINT const subResource = static_cast<UINT>(lockData.getLevel());
+		HRESULT const hr = context->Map(
+			m_texture.Get(),
+			subResource,
+			lockData.shouldDiscardContents() ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE,
+			0, &mapped);
+		FATAL_DX_HR("Direct3d11_TextureData::lock (dynamic Map) failed: %s", hr);
+
+		lockData.m_pixelData  = mapped.pData;
+		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+		lockData.m_slicePitch = static_cast<int>(mapped.DepthPitch);
+		lockData.m_reserved   = nullptr;  // no staging needed
+		return;
+	}
+
+	// Staging path: create a USAGE_STAGING texture matching the locked
+	// region, Map it, hand the pointer to the engine, then CopySubresource
+	// on unlock.
+
+	DXGI_FORMAT const native = translationTable[lockData.getFormat()];
+	if (native == DXGI_FORMAT_UNKNOWN)
+	{
+		// Plan 11-09.9: lock-bridge for engine fill formats that have no
+		// DXGI counterpart but were already promoted to a wider DXGI format
+		// at create time (Plan 11-04 runtimeFormats walk). The engine fills
+		// at its narrow stride; we expand to the GPU surface's wider stride
+		// on unlock. Iter-1 covers TF_RGB_888 (24bpp BGR memory order) paired
+		// with TF_XRGB_8888 / TF_ARGB_8888 (32bpp DXGI BGRX/BGRA), which share
+		// memory byte order with the source -- straight 3->4 byte expansion,
+		// no channel swap.
+		DEBUG_FATAL(m_lockBridgeActive, ("Direct3d11_TextureData::lock: bridge already active -- double lock?"));
+		if (m_isCubeMap || m_isVolumeMap)
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge does not yet support cube/volume textures (lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+		if (lockData.isReadOnly())
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge does not yet support read-only locks (lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+		if (lockData.getFormat() != TF_RGB_888
+		    || (m_destFormat != TF_XRGB_8888 && m_destFormat != TF_ARGB_8888))
+		{
+			FATAL(true, ("Direct3d11_TextureData::lock: lock-bridge Iter-1 only handles TF_RGB_888 -> TF_XRGB_8888/TF_ARGB_8888 (got lockData format=%d, m_destFormat=%d) -- Plan 11-09.10 territory",
+			             static_cast<int>(lockData.getFormat()),
+			             static_cast<int>(m_destFormat)));
+		}
+
+		int  const width  = lockData.getWidth();
+		int  const height = lockData.getHeight();
+		UINT const pitch  = static_cast<UINT>(width) * 3u;
+
+		m_lockBridgeFormat = lockData.getFormat();
+		m_lockBridgePitch  = pitch;
+		m_lockBridgeWidth  = width;
+		m_lockBridgeHeight = height;
+		m_lockBridgeBuffer.assign(static_cast<size_t>(pitch) * static_cast<size_t>(height), 0);
+		m_lockBridgeActive = true;
+
+		lockData.m_pixelData  = m_lockBridgeBuffer.data();
+		lockData.m_pitch      = static_cast<int>(pitch);
+		lockData.m_slicePitch = static_cast<int>(pitch) * height;
+		lockData.m_reserved   = nullptr;  // unlock disambiguates via m_lockBridgeActive
+		return;
+	}
+
+	if (m_isVolumeMap)
+	{
+		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+		// strict-rejects USAGE_STAGING with sub-block W or H. Depth has no
+		// block-alignment rule (BC blocks are 4x4 in the X/Y plane only).
+		// See isBlockCompressedFormat() comment for the full rationale.
+		UINT stagingWidth  = static_cast<UINT>(lockData.getWidth());
+		UINT stagingHeight = static_cast<UINT>(lockData.getHeight());
+		if (isBlockCompressedFormat(native))
+		{
+			stagingWidth  = (stagingWidth  + 3u) & ~3u;
+			stagingHeight = (stagingHeight + 3u) & ~3u;
+		}
+
+		D3D11_TEXTURE3D_DESC desc = {};
+		desc.Width          = stagingWidth;
+		desc.Height         = stagingHeight;
+		desc.Depth          = static_cast<UINT>(lockData.getDepth());
+		desc.MipLevels      = 1;
+		desc.Format         = native;
+		desc.Usage          = D3D11_USAGE_STAGING;
+		desc.BindFlags      = 0;
+		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE | (lockData.isReadOnly() ? D3D11_CPU_ACCESS_READ : 0);
+		desc.MiscFlags      = 0;
+
+		ID3D11Texture3D *staging = nullptr;
+		HRESULT hr = device->CreateTexture3D(&desc, nullptr, &staging);
+		FATAL_DX_HR("Direct3d11_TextureData::lock CreateTexture3D (staging) failed: %s", hr);
+
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		hr = context->Map(staging, 0,
+			lockData.isReadOnly() ? D3D11_MAP_READ : D3D11_MAP_WRITE, 0, &mapped);
+		FATAL_DX_HR("Direct3d11_TextureData::lock Map (staging 3D) failed: %s", hr);
+
+		lockData.m_pixelData  = mapped.pData;
+		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+		lockData.m_slicePitch = static_cast<int>(mapped.DepthPitch);
+		lockData.m_reserved   = staging;  // released in unlock
+	}
+	else
+	{
+		// Pad BC-format staging dims up to the 4-pixel block boundary; D3D11
+		// strict-rejects USAGE_STAGING CreateTexture2D when W or H is < 4 for
+		// BC formats. Iter-15 diagnostic confirmed this fires at the bottom-
+		// of-chain mips of BC3 textures: a 256x64 BC3 (DXT5) texture's mip 5
+		// is 8x2, and CreateTexture2D returns E_INVALIDARG. D3D9 silently
+		// tolerated sub-block dims. The BC block grid covers the same data
+		// regardless of whether the logical mip dims are sub-block, so the
+		// engine's RowPitch read and payload write are identical, and the
+		// unlock CopySubresourceRegion (with pSrcBox = nullptr) copies the
+		// whole staging into the destination mip subresource without any
+		// changes -- both source and destination resolve to the same BC
+		// block grid. See isBlockCompressedFormat() comment for the full
+		// DXGI range coverage rationale.
+		UINT stagingWidth  = static_cast<UINT>(lockData.getWidth());
+		UINT stagingHeight = static_cast<UINT>(lockData.getHeight());
+		if (isBlockCompressedFormat(native))
+		{
+			stagingWidth  = (stagingWidth  + 3u) & ~3u;
+			stagingHeight = (stagingHeight + 3u) & ~3u;
+		}
+
+		D3D11_TEXTURE2D_DESC desc = {};
+		desc.Width            = stagingWidth;
+		desc.Height           = stagingHeight;
+		desc.MipLevels        = 1;
+		desc.ArraySize        = 1;
+		desc.Format           = native;
+		desc.SampleDesc.Count = 1;
+		desc.Usage            = D3D11_USAGE_STAGING;
+		desc.BindFlags        = 0;
+		desc.CPUAccessFlags   = D3D11_CPU_ACCESS_WRITE | (lockData.isReadOnly() ? D3D11_CPU_ACCESS_READ : 0);
+		desc.MiscFlags        = 0;
+
+		ID3D11Texture2D *staging = nullptr;
+		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
+		FATAL_DX_HR("Direct3d11_TextureData::lock CreateTexture2D (staging) failed: %s", hr);
+
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		hr = context->Map(staging, 0,
+			lockData.isReadOnly() ? D3D11_MAP_READ : D3D11_MAP_WRITE, 0, &mapped);
+		FATAL_DX_HR("Direct3d11_TextureData::lock Map (staging 2D) failed: %s", hr);
+
+		lockData.m_pixelData  = mapped.pData;
+		lockData.m_pitch      = static_cast<int>(mapped.RowPitch);
+		lockData.m_slicePitch = static_cast<int>(mapped.RowPitch * lockData.getHeight());
+		lockData.m_reserved   = staging;  // released in unlock
+	}
+}
+
+// ----------------------------------------------------------------------
+// unlock -- finalize the staging copy and release intermediate resource.
+
+void Direct3d11_TextureData::unlock(LockData &lockData)
+{
+	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+	NOT_NULL(context);
+
+	if (m_lockBridgeActive)
+	{
+		// Plan 11-09.9: bridge path -- engine filled m_lockBridgeBuffer at
+		// the narrow 24bpp stride; expand row-by-row into a freshly-allocated
+		// 32bpp staging texture at m_destFormat, then CopySubresourceRegion
+		// into the destination subresource. TF_RGB_888 byte order is BGR (per
+		// TextureFormatInfo rMask=0x00ff0000 -> R in byte index 2 on little-
+		// endian), same as DXGI BGRX/BGRA -- straight 3->4 byte expansion
+		// with 0xFF in byte 3 (X is unused; A is opaque).
+		ID3D11Device * const device = Direct3d11_Device::getDevice();
+		NOT_NULL(device);
+
+		DXGI_FORMAT const stagingFormat = translationTable[m_destFormat];
+		DEBUG_FATAL(stagingFormat == DXGI_FORMAT_UNKNOWN,
+		            ("Direct3d11_TextureData::unlock (bridge): m_destFormat %d has no DXGI mapping (translation table bug?)",
+		             static_cast<int>(m_destFormat)));
+
+		D3D11_TEXTURE2D_DESC desc = {};
+		desc.Width            = static_cast<UINT>(m_lockBridgeWidth);
+		desc.Height           = static_cast<UINT>(m_lockBridgeHeight);
+		desc.MipLevels        = 1;
+		desc.ArraySize        = 1;
+		desc.Format           = stagingFormat;
+		desc.SampleDesc.Count = 1;
+		desc.Usage            = D3D11_USAGE_STAGING;
+		desc.BindFlags        = 0;
+		desc.CPUAccessFlags   = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags        = 0;
+
+		ID3D11Texture2D *staging = nullptr;
+		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
+		FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) CreateTexture2D failed: %s", hr);
+
+		D3D11_MAPPED_SUBRESOURCE mapped = {};
+		hr = context->Map(staging, 0, D3D11_MAP_WRITE, 0, &mapped);
+		if (FAILED(hr))
+		{
+			staging->Release();
+			FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) Map failed: %s", hr);
+		}
+
+		uint8_t const * const srcBase = m_lockBridgeBuffer.data();
+		uint8_t * const       dstBase = static_cast<uint8_t *>(mapped.pData);
+		UINT const            dstRowPitch = mapped.RowPitch;
+
+		for (int y = 0; y < m_lockBridgeHeight; ++y)
+		{
+			uint8_t const * const srcRow = srcBase + static_cast<size_t>(y) * static_cast<size_t>(m_lockBridgePitch);
+			uint8_t * const       dstRow = dstBase + static_cast<size_t>(y) * static_cast<size_t>(dstRowPitch);
+
+			for (int x = 0; x < m_lockBridgeWidth; ++x)
+			{
+				dstRow[x * 4 + 0] = srcRow[x * 3 + 0];  // B
+				dstRow[x * 4 + 1] = srcRow[x * 3 + 1];  // G
+				dstRow[x * 4 + 2] = srcRow[x * 3 + 2];  // R
+				dstRow[x * 4 + 3] = 0xFF;               // X (TF_XRGB_8888) or A (TF_ARGB_8888) opaque
+			}
+		}
+
+		context->Unmap(staging, 0);
+
+		UINT const dstSubresource = static_cast<UINT>(lockData.getLevel());
+
+		D3D11_BOX srcBox = {};
+		srcBox.left   = 0;
+		srcBox.top    = 0;
+		srcBox.front  = 0;
+		srcBox.right  = static_cast<UINT>(m_lockBridgeWidth);
+		srcBox.bottom = static_cast<UINT>(m_lockBridgeHeight);
+		srcBox.back   = 1;
+
+		context->CopySubresourceRegion(
+			m_texture.Get(),
+			dstSubresource,
+			static_cast<UINT>(lockData.getX()),
+			static_cast<UINT>(lockData.getY()),
+			static_cast<UINT>(lockData.getZ()),
+			staging,
+			0,
+			&srcBox);
+
+		staging->Release();
+
+		m_lockBridgeBuffer.clear();
+		m_lockBridgeBuffer.shrink_to_fit();
+		m_lockBridgePitch  = 0;
+		m_lockBridgeWidth  = 0;
+		m_lockBridgeHeight = 0;
+		m_lockBridgeActive = false;
+
+		lockData.m_pixelData  = nullptr;
+		lockData.m_pitch      = 0;
+		lockData.m_slicePitch = 0;
+		lockData.m_reserved   = nullptr;
+		return;
+	}
+
+	if (!lockData.m_reserved)
+	{
+		// Dynamic texture path -- Unmap the resource directly.
+		context->Unmap(m_texture.Get(), static_cast<UINT>(lockData.getLevel()));
+	}
+	else
+	{
+		// Staging path: Unmap the staging texture, then copy its contents
+		// into the destination subresource.
+		ID3D11Resource * const staging = static_cast<ID3D11Resource *>(lockData.m_reserved);
+		context->Unmap(staging, 0);
+
+		// Skip copy for read-only locks (engine wanted to inspect, not modify).
+		if (!lockData.isReadOnly())
+		{
+			UINT const dstSubresource =
+				m_isCubeMap
+					? D3D11CalcSubresource(
+						static_cast<UINT>(lockData.getLevel()),
+						static_cast<UINT>(lockData.m_cubeFace),
+						static_cast<UINT>(m_engineTexture.getMipmapLevelCount()))
+					: static_cast<UINT>(lockData.getLevel());
+
+			D3D11_BOX srcBox = {};
+			srcBox.left   = 0;
+			srcBox.top    = 0;
+			srcBox.front  = 0;
+			srcBox.right  = static_cast<UINT>(lockData.getWidth());
+			srcBox.bottom = static_cast<UINT>(lockData.getHeight());
+			srcBox.back   = static_cast<UINT>(lockData.getDepth());
+
+			// Plan 11-08 Iter-1.8: pad srcBox dims to 4-aligned for
+			// block-compressed formats. Iter-15 (commit e4bdab17b)
+			// padded the staging-texture ALLOCATION dims so
+			// CreateTexture2D no longer rejects sub-4 BC mips, but
+			// the matching CopySubresourceRegion srcBox pad never
+			// landed. Pre-fix the D3D11 debug layer fires id=280
+			// "BC2_UNORM requires alignment of coordinates to
+			// multiples of {4, 4, 1}" on every sub-4 BC mip lock
+			// (lightsaberblade_lava_a + similar assets carry
+			// bottom-of-chain mips at 1x1 and 2x2; 96 hits captured
+			// per Iter-1.7's d3d11-debug.log session). The staging
+			// texture itself was already padded to 4-aligned in
+			// lock() so its BC block grid covers the same data;
+			// padding srcBox here makes the source coordinates
+			// block-aligned end-to-end, mirroring Iter-15's
+			// allocation pad pattern. Volume textures hit the
+			// separate 3D code path above and are not BC-typical.
+			Microsoft::WRL::ComPtr<ID3D11Texture2D> dstTex2d;
+			if (SUCCEEDED(m_texture.As(&dstTex2d)) && dstTex2d)
+			{
+				D3D11_TEXTURE2D_DESC dstDesc = {};
+				dstTex2d->GetDesc(&dstDesc);
+				if (isBlockCompressedFormat(dstDesc.Format))
+				{
+					srcBox.right  = (srcBox.right  + 3u) & ~3u;
+					srcBox.bottom = (srcBox.bottom + 3u) & ~3u;
+					// srcBox.back stays as-is; BC block grid is {4,4,1}
+					// with the depth axis byte-aligned to 1.
+				}
+			}
+
+			context->CopySubresourceRegion(
+				m_texture.Get(),
+				dstSubresource,
+				static_cast<UINT>(lockData.getX()),
+				static_cast<UINT>(lockData.getY()),
+				static_cast<UINT>(lockData.getZ()),
+				staging,
+				0,
+				&srcBox);
+		}
+
+		staging->Release();
+	}
+
+	lockData.m_pixelData  = nullptr;
+	lockData.m_pitch      = 0;
+	lockData.m_slicePitch = 0;
+	lockData.m_reserved   = nullptr;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_TextureData::copyFrom(int surfaceLevel,
+                                      TextureGraphicsData const &rhs,
+                                      int srcX, int srcY, int srcWidth, int srcHeight,
+                                      int dstX, int dstY, int dstWidth, int dstHeight)
+{
+	Direct3d11_TextureData const *src = static_cast<Direct3d11_TextureData const *>(&rhs);
+	FATAL(this == src, ("Direct3d11_TextureData::copyFrom() src & dst may not be the same texture"));
+
+	// D3D11 CopySubresourceRegion requires src and dst rect dimensions to
+	// match. Stretch-blit (different sizes) would require a render-target +
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"loadSurface|lock\\(|unlock\\(|mipmap|Mipmap|lockData\" src/engine/client/library/clientGraphics/src/shared/Texture.cpp src/engine/client/library/clientGraphics/src/shared -g \"Texture*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d9/src/win32/Direct3d9_TextureData.cpp | Select-Object -Skip 400 -First 260' in D:\Code\swg-client-v2
+ succeeded in 660ms:
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:190:	m_mipmapLevelCount(0),
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:215:	m_mipmapLevelCount(1),
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:224:	LockData lockData(sourceFormat, 0, 0, 0, 1, 1, true);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:225:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:227:		reinterpret_cast<uint32*>(lockData.getPixelData())[0] = (clamp(0, alpha, 255) << 24) | (clamp(0, red, 255) << 16) | (clamp(0, green, 255) << 8) | (clamp(0, blue, 255) << 0);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:229:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:254:	m_mipmapLevelCount(1),
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:261:	LockData lockData(newFormat, 0, 0, 0, 0, m_width, m_height, m_depth, true);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:262:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:266:		uint8                   *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:269:		if (lockData.getPitch() == pitch && lockData.getSlicePitch() == pitch * m_height)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:276:			for (int z = 0; z < m_depth; ++z, lockedSliceWrite += lockData.getSlicePitch())
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:279:				for (int y = 0; y < m_height; ++y, lockedDataWrite += lockData.getPitch(), readData += pitch)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:284:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:301:	m_mipmapLevelCount(numberOfMipMapLevels),
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:337:void Texture::loadSurface(TextureFormat format, CubeFace face, AbstractFile *fileInterface, int numberOfHighestMipmapLevelsToDiscard, int numberOfLowestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:339:	UNREF(numberOfHighestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:345:	for (int i = 0; i < numberOfHighestMipmapLevelsToDiscard + m_mipmapLevelCount + numberOfLowestMipmapLevelsToDiscard; ++i)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:351:		if (i < numberOfHighestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:353:			width  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:354:			height <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:355:			depth  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:359:			width >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:360:			height >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:361:			depth >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:389:		// determine whether to load or skip this mipmap
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:390:		if (i >= numberOfHighestMipmapLevelsToDiscard && i < numberOfHighestMipmapLevelsToDiscard+m_mipmapLevelCount)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:392:			LockData lockData(format, face, i - numberOfHighestMipmapLevelsToDiscard, 0, 0, 0, width, height, depth, m_dynamic); 
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:394:			lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:397:				int surfacePitch = lockData.getPitch();
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:406:				uint8 *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:418:			unlock(lockData);								
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:542:	m_mipmapLevelCount = static_cast<int>(ddsHeader.dwMipMapCount);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:543:	if (m_mipmapLevelCount == 0)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:544:		m_mipmapLevelCount = 1;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:548:		if (m_mipmapLevelCount > 1)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:550:			int minWidth = m_width >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:554:			int minHeight = m_height >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:558:			int minDepth = m_depth >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:562:			DEBUG_WARNING(minWidth > 1 || minHeight > 1 || minDepth > 1, ("Texture %s has too few mipmaps %dx%dx%d@%d (smallest map is %dx%dx%d)", fileName, m_width, m_height, m_depth, m_mipmapLevelCount, minWidth, minHeight, minDepth));
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:629:	// the radeon 8500 doesn't support mipmapped cube maps
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:630:	int numberOfLowestMipmapLevelsToDiscard = 0;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:631:	if (m_cube && m_mipmapLevelCount > 1 && !Graphics::supportsMipmappedCubeMaps())
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:633:		numberOfLowestMipmapLevelsToDiscard = m_mipmapLevelCount - 1;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:634:		m_mipmapLevelCount = 1;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:663:					"width=%d height=%d depth=%d mipmaps=%d preGD=%d\n",
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:674:					m_width, m_height, m_depth, m_mipmapLevelCount,
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:693:	// option to discard top mipmap levels for texture memory & performance
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:697:	int numberOfHighestMipmapLevelsToDiscard = clamp(0, pleaseDiscard, m_mipmapLevelCount - 1);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:698:	if (numberOfHighestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:703:			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 4))
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:704:				--numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:709:			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 1))
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:710:				--numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:713:		m_width >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:714:		m_height >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:715:		m_depth >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:716:		m_mipmapLevelCount -= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:725:			loadSurface(sourceFormat, static_cast<CubeFace>(i), fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:730:		loadSurface(sourceFormat, CF_none, fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:751: * Lock the entire texture at the specified Mipmap level
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:753: * @param lockData Specifies the requested region to lock.
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:757:void Texture::lock(LockData &lockData)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:759:	DEBUG_FATAL(lockData.m_pixelData, ("already locked"));
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:760:	lockData.m_readOnly = false;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:762:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:767: * Lock the entire texture at the specified Mipmap level for read-only access.
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:769: * @param lockData Specifies the requested region to lock.
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:773:void Texture::lockReadOnly(LockData &lockData) const
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:775:	DEBUG_FATAL(lockData.m_discardContents, ("cannot use lockReadOnly() and discardContents"));
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:776:	DEBUG_FATAL(lockData.m_pixelData, ("already locked"));
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:777:	lockData.m_readOnly = true;
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:779:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:784:void Texture::unlock(LockData &lockData) const
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:786:	DEBUG_FATAL(!lockData.m_pixelData, ("not locked"));
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:788:	m_graphicsData->unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:805:	LockData  lockData(TF_ARGB_8888, getMipmapLevelCount() - 1, 0, 0, 1, 1, false);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:806:	lockReadOnly(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:809:	void *pixelData = lockData.getPixelData();
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:818:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:845:	LockData lockData(sourceFormat, 0, 0, 0, 0, m_width, m_height, m_depth, true);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:846:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:850:	uint8                   *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:853:	if (lockData.getPitch() == pitch && lockData.getSlicePitch() == pitch * m_height)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:860:		for (int z = 0; z < m_depth; ++z, lockedSliceWrite += lockData.getSlicePitch())
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:863:			for (int y = 0; y < m_height; ++y, lockedDataWrite += lockData.getPitch(), readData += pitch)
+src/engine/client/library/clientGraphics/src/shared/Texture.cpp:868:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:24:	virtual Index *lock(int numberOfIndices) = 0;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:25:	virtual void   unlock() = 0;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:51:	void          lock(int numberOfIndices);
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:52:	void          unlock() const;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:119: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:122:inline void DynamicIndexBuffer::lock(int numberOfIndices)
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:131:	m_indexData = m_graphicsData->lock(m_numberOfIndices);
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:138: * @see lock()
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:142:inline void DynamicIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:148:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:26:	virtual void                          *lock(int numberOfVertices, bool forceDiscard) = 0;
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:27:	virtual void                           unlock() = 0;
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:28:	virtual void                           unlock(int numberOfVertices) = 0;
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:75:	void                  lock(int numberOfVertices, bool forceDiscard=false);
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:76:	void                  unlock();
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:77:	void                  unlock(int numberOfVertices);
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:183: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:186:inline void DynamicVertexBuffer::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:198:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(numberOfVertices, forceDiscard));
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:204: * @see lock()
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:207:inline void DynamicVertexBuffer::unlock()
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:214:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:221: * @see lock()
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:224:inline void DynamicVertexBuffer::unlock(int numberOfVertices)
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.h:231:	m_graphicsData->unlock(numberOfVertices);
+src/engine/client/library/clientGraphics/src/shared\RenderWorld.h:102:	static ProfilerBlock           &getDpvsQueryProfilerBlock();
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:24:	virtual Index *lock(bool readOnly) = 0;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:25:	virtual void   unlock() = 0;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:47:	DLLEXPORT void    lock();
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:49:	DLLEXPORT void    unlock() const;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:59:	void lock(bool readOnly) const;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:92:inline void StaticIndexBuffer::lock(bool readOnly) const 
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:96:	m_indexData = m_graphicsData->lock(m_readOnly);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:102: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:105:inline void StaticIndexBuffer::lock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:107:	lock(false);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:113: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:118:	lock(true);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:124: * @see lock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:128:inline void StaticIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:131:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:29:	virtual void                          *lock(bool readOnly) = 0;
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:30:	virtual void                           unlock() = 0;
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:68:	void                           lock();
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:70:	void                           unlock() const;
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:134: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:137:inline void StaticVertexBuffer::lock()
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:154:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(false));
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:161: * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:174:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(true));
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:180: * @see lock()
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:183:inline void StaticVertexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.h:191:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:190:	m_mipmapLevelCount(0),
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:215:	m_mipmapLevelCount(1),
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:224:	LockData lockData(sourceFormat, 0, 0, 0, 1, 1, true);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:225:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:227:		reinterpret_cast<uint32*>(lockData.getPixelData())[0] = (clamp(0, alpha, 255) << 24) | (clamp(0, red, 255) << 16) | (clamp(0, green, 255) << 8) | (clamp(0, blue, 255) << 0);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:229:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:254:	m_mipmapLevelCount(1),
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:261:	LockData lockData(newFormat, 0, 0, 0, 0, m_width, m_height, m_depth, true);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:262:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:266:		uint8                   *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:269:		if (lockData.getPitch() == pitch && lockData.getSlicePitch() == pitch * m_height)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:276:			for (int z = 0; z < m_depth; ++z, lockedSliceWrite += lockData.getSlicePitch())
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:279:				for (int y = 0; y < m_height; ++y, lockedDataWrite += lockData.getPitch(), readData += pitch)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:284:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:301:	m_mipmapLevelCount(numberOfMipMapLevels),
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:337:void Texture::loadSurface(TextureFormat format, CubeFace face, AbstractFile *fileInterface, int numberOfHighestMipmapLevelsToDiscard, int numberOfLowestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:339:	UNREF(numberOfHighestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:345:	for (int i = 0; i < numberOfHighestMipmapLevelsToDiscard + m_mipmapLevelCount + numberOfLowestMipmapLevelsToDiscard; ++i)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:351:		if (i < numberOfHighestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:353:			width  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:354:			height <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:355:			depth  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:359:			width >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:360:			height >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:361:			depth >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:389:		// determine whether to load or skip this mipmap
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:390:		if (i >= numberOfHighestMipmapLevelsToDiscard && i < numberOfHighestMipmapLevelsToDiscard+m_mipmapLevelCount)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:392:			LockData lockData(format, face, i - numberOfHighestMipmapLevelsToDiscard, 0, 0, 0, width, height, depth, m_dynamic); 
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:394:			lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:397:				int surfacePitch = lockData.getPitch();
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:406:				uint8 *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:418:			unlock(lockData);								
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:542:	m_mipmapLevelCount = static_cast<int>(ddsHeader.dwMipMapCount);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:543:	if (m_mipmapLevelCount == 0)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:544:		m_mipmapLevelCount = 1;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:548:		if (m_mipmapLevelCount > 1)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:550:			int minWidth = m_width >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:554:			int minHeight = m_height >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:558:			int minDepth = m_depth >> m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:562:			DEBUG_WARNING(minWidth > 1 || minHeight > 1 || minDepth > 1, ("Texture %s has too few mipmaps %dx%dx%d@%d (smallest map is %dx%dx%d)", fileName, m_width, m_height, m_depth, m_mipmapLevelCount, minWidth, minHeight, minDepth));
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:629:	// the radeon 8500 doesn't support mipmapped cube maps
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:630:	int numberOfLowestMipmapLevelsToDiscard = 0;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:631:	if (m_cube && m_mipmapLevelCount > 1 && !Graphics::supportsMipmappedCubeMaps())
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:633:		numberOfLowestMipmapLevelsToDiscard = m_mipmapLevelCount - 1;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:634:		m_mipmapLevelCount = 1;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:663:					"width=%d height=%d depth=%d mipmaps=%d preGD=%d\n",
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:674:					m_width, m_height, m_depth, m_mipmapLevelCount,
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:693:	// option to discard top mipmap levels for texture memory & performance
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:697:	int numberOfHighestMipmapLevelsToDiscard = clamp(0, pleaseDiscard, m_mipmapLevelCount - 1);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:698:	if (numberOfHighestMipmapLevelsToDiscard)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:703:			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 4))
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:704:				--numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:709:			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 1))
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:710:				--numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:713:		m_width >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:714:		m_height >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:715:		m_depth >>= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:716:		m_mipmapLevelCount -= numberOfHighestMipmapLevelsToDiscard;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:725:			loadSurface(sourceFormat, static_cast<CubeFace>(i), fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:730:		loadSurface(sourceFormat, CF_none, fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:751: * Lock the entire texture at the specified Mipmap level
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:753: * @param lockData Specifies the requested region to lock.
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:757:void Texture::lock(LockData &lockData)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:759:	DEBUG_FATAL(lockData.m_pixelData, ("already locked"));
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:760:	lockData.m_readOnly = false;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:762:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:767: * Lock the entire texture at the specified Mipmap level for read-only access.
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:769: * @param lockData Specifies the requested region to lock.
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:773:void Texture::lockReadOnly(LockData &lockData) const
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:775:	DEBUG_FATAL(lockData.m_discardContents, ("cannot use lockReadOnly() and discardContents"));
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:776:	DEBUG_FATAL(lockData.m_pixelData, ("already locked"));
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:777:	lockData.m_readOnly = true;
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:779:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:784:void Texture::unlock(LockData &lockData) const
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:786:	DEBUG_FATAL(!lockData.m_pixelData, ("not locked"));
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:788:	m_graphicsData->unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:805:	LockData  lockData(TF_ARGB_8888, getMipmapLevelCount() - 1, 0, 0, 1, 1, false);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:806:	lockReadOnly(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:809:	void *pixelData = lockData.getPixelData();
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:818:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:845:	LockData lockData(sourceFormat, 0, 0, 0, 0, m_width, m_height, m_depth, true);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:846:	lock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:850:	uint8                   *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:853:	if (lockData.getPitch() == pitch && lockData.getSlicePitch() == pitch * m_height)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:860:		for (int z = 0; z < m_depth; ++z, lockedSliceWrite += lockData.getSlicePitch())
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:863:			for (int y = 0; y < m_height; ++y, lockedDataWrite += lockData.getPitch(), readData += pitch)
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:868:	unlock(lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.h:98:	virtual void        lock(LockData &lockData) = 0;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:99:	virtual void        unlock(LockData &lockData) = 0;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:130:	int                                      m_mipmapLevelCount;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:155:	void                  loadSurface(TextureFormat format, CubeFace face, AbstractFile *fileInterface, int numberOfHighestMipmapLevelsToDiscard, int numberOfLowestMipmapLevelsToDiscard);
+src/engine/client/library/clientGraphics/src/shared\Texture.h:181:	int                   getMipmapLevelCount(void) const;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:184:	void                  lock(LockData &lockData);
+src/engine/client/library/clientGraphics/src/shared\Texture.h:185:	void                  lockReadOnly(LockData &lockData) const;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:186:	void                  unlock(LockData &lockData) const;
+src/engine/client/library/clientGraphics/src/shared\Texture.h:417:inline int Texture::getMipmapLevelCount(void) const
+src/engine/client/library/clientGraphics/src/shared\Texture.h:419:	return m_mipmapLevelCount;
+
+ succeeded in 804ms:
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_TextureData::lock(LockData &lockData)
+{
+	DEBUG_FATAL(lockData.getWidth() == 0, ("Locking 0 width area"));
+	DEBUG_FATAL(lockData.getHeight() == 0, ("Locking 0 height area"));
+	DEBUG_FATAL(lockData.getDepth() == 0, ("Locking 0 depth area"));
+
+	DWORD flags = 0;
+	if (lockData.isReadOnly()) 
+	{
+		flags |= D3DLOCK_READONLY;
+	}
+
+	if (lockData.getFormat() == TF_Native)
+		lockData.m_format = m_destFormat;
+
+	HRESULT hresult;
+
+	// handle locking in native format
+	if (lockData.getFormat() == m_destFormat)
+	{
+		if (m_engineTexture.isVolumeMap())
+		{
+			D3DLOCKED_BOX lockedBox;
+
+			D3DBOX box;
+			box.Left   = lockData.getX();
+			box.Top    = lockData.getY();
+			box.Right  = lockData.getX() + lockData.getWidth();
+			box.Bottom = lockData.getY() + lockData.getHeight();
+			box.Front  = lockData.getZ();
+			box.Back   = lockData.getZ() + lockData.getDepth();
+
+			const bool wholeTexture = (
+				   box.Left   ==0 
+				&& box.Top    ==0 
+				&& box.Front  ==0 
+				&& box.Right  ==unsigned(m_engineTexture.getWidth())
+				&& box.Bottom ==unsigned(m_engineTexture.getHeight())
+				&& box.Back   ==unsigned(m_engineTexture.getDepth())
+			);
+
+			D3DBOX *pBox = (wholeTexture) ? (D3DBOX *)0 : &box;
+
+			hresult = static_cast<IDirect3DVolumeTexture9*>(m_d3dTexture)->LockBox(lockData.getLevel(), &lockedBox, pBox, flags);
+			FATAL_DX_HR("LockBox failed %s", hresult);
+
+			// let the user know where and how to write
+			lockData.m_pixelData = lockedBox.pBits;
+			lockData.m_pitch = lockedBox.RowPitch;
+			lockData.m_slicePitch = lockedBox.SlicePitch;
+		}
+		else
+		{
+			D3DLOCKED_RECT lockedRect;
+
+			if (lockData.shouldDiscardContents())
+			{
+				flags |= D3DLOCK_DISCARD;
+			}
+
+			RECT r, *pr=&r;
+			r.left   = lockData.getX();
+			r.top    = lockData.getY();
+			r.right  = lockData.getX() + lockData.getWidth();
+			r.bottom = lockData.getY() + lockData.getHeight();
+
+			if (  r.left==0 
+				&& r.top==0 
+				&& r.right==m_engineTexture.getWidth() 
+				&& r.bottom==m_engineTexture.getHeight()
+				)
+			{
+				pr=0;
+			}
+
+			if (m_engineTexture.isCubeMap())
+			{
+				hresult = static_cast<IDirect3DCubeTexture9*>(m_d3dTexture)->LockRect(Direct3d9::getD3dCubeFace(lockData.m_cubeFace), lockData.getLevel(), &lockedRect, pr, flags);
+				FATAL_DX_HR("LockRect failed %s", hresult);
+			}
+			else
+			{
+				hresult = static_cast<IDirect3DTexture9*>(m_d3dTexture)->LockRect(lockData.getLevel(), &lockedRect, pr, flags);
+				FATAL_DX_HR("LockRect failed %s", hresult);
+			}
+
+			// let the user know where and how to write
+			lockData.m_pixelData = lockedRect.pBits;
+			lockData.m_pitch = lockedRect.Pitch;
+			lockData.m_slicePitch = lockedRect.Pitch * lockData.getHeight();
+		}
+
+		lockData.m_reserved = NULL;
+	}
+	else
+	{
+		FATAL(m_engineTexture.isVolumeMap(), ("Volume map not supported for format conversion (yet)"));
+
+		// the user wants to access the data in a non-native format.  This will not be cheap.
+
+		// DXT textures have a minimum width and height of 4
+		int width = lockData.getWidth();
+		int height = lockData.getHeight();
+		if (lockData.getFormat() == TF_DXT1 || lockData.getFormat() == TF_DXT2 || lockData.getFormat() == TF_DXT3 || lockData.getFormat() == TF_DXT4 || lockData.getFormat() == TF_DXT5)
+		{
+			if (width < 4)
+				width = 4;
+			if (height < 4)
+				height = 4;
+		}
+
+		// create a temporary surface of the format desired by the user
+		IDirect3DSurface9 * plainSurface = 0;
+		hresult = Direct3d9::getDevice()->CreateOffscreenPlainSurface(width, height, translationTable[lockData.getFormat()], D3DPOOL_SCRATCH, &plainSurface, NULL);
+		FATAL_DX_HR("CreateOffscreenPlainSurface failed %s", hresult);
+		NOT_NULL(plainSurface);
+
+		// record the temporary surface into the lock data
+		lockData.m_reserved = plainSurface;
+
+		// copy the original pixel bits back to the temporary surface if the contents aren't being discarded
+		if (!lockData.shouldDiscardContents())
+		{
+			// get the d3d surface containing the texture bits
+			IDirect3DSurface9 * surface = 0;
+			if (m_engineTexture.isCubeMap())
+			{
+				hresult = static_cast<IDirect3DCubeTexture9*>(m_d3dTexture)->GetCubeMapSurface(Direct3d9::getD3dCubeFace(lockData.m_cubeFace), lockData.getLevel(), &surface);
+				FATAL_DX_HR("GetCubeMapSurface failed %s", hresult);
+			}
+			else
+			{
+				hresult = static_cast<IDirect3DTexture9*>(m_d3dTexture)->GetSurfaceLevel(lockData.getLevel(), &surface);
+				FATAL_DX_HR("GetSurfaceLevel failed %s", hresult);
+			}
+
+			// we only want to copy the locked data back
+			RECT source;
+			source.left   = lockData.getX();
+			source.top    = lockData.getY();
+			source.right  = lockData.getX() + lockData.getWidth();
+			source.bottom = lockData.getY() + lockData.getHeight();
+
+			// copy and convert the texture bits
+			hresult = D3DXLoadSurfaceFromSurface(plainSurface, NULL, NULL, surface, NULL, &source, D3DX_FILTER_NONE, 0);
+			FATAL_DX_HR("D3DXLoadSurfaceFromSurface failed %s", hresult);
+
+			// release the d3d surface
+			surface->Release();
+		}
+
+		// lock the temporary surface for the user to write to
+		D3DLOCKED_RECT lockedRect;
+		RECT r;
+		r.left   = 0;
+		r.top    = 0;
+		r.right  = width;
+		r.bottom = height;
+		hresult = plainSurface->LockRect(&lockedRect, &r, flags);
+		FATAL_DX_HR("LockRect failed %s", hresult);
+
+		// let the user know where and how to write
+		lockData.m_pixelData = lockedRect.pBits;
+		lockData.m_pitch = lockedRect.Pitch;
+	}
+
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_TextureData::unlock(LockData &lockData)
+{
+	if (lockData.m_reserved)
+	{
+		// recover the source surface from the lock data and unlock it
+		IDirect3DSurface9 * plainSurface = reinterpret_cast<IDirect3DSurface9 *>(lockData.m_reserved);
+		HRESULT hresult = plainSurface->UnlockRect();
+		FATAL_DX_HR("UnlockRect failed %s", hresult);
+
+		// get the texture surface that we want to update
+		IDirect3DSurface9 * surface = 0;
+		if (m_engineTexture.isCubeMap())
+		{
+			hresult = static_cast<IDirect3DCubeTexture9*>(m_d3dTexture)->GetCubeMapSurface(Direct3d9::getD3dCubeFace(lockData.m_cubeFace), lockData.getLevel(), &surface);
+			FATAL_DX_HR("GetCubeMapSurface failed %s", hresult);
+		}
+		else
+		{
+			hresult = static_cast<IDirect3DTexture9*>(m_d3dTexture)->GetSurfaceLevel(lockData.getLevel(), &surface);
+			FATAL_DX_HR("GetSurfaceLevel failed %s", hresult);
+		}
+
+		// copy and convert the texture bits
+		RECT dest;
+		dest.left   = lockData.getX();
+		dest.top    = lockData.getY();
+		dest.right  = lockData.getX() + lockData.getWidth();
+		dest.bottom = lockData.getY() + lockData.getHeight();
+		hresult = D3DXLoadSurfaceFromSurface(surface, NULL, &dest, plainSurface, NULL, NULL, D3DX_FILTER_NONE, 0);
+		FATAL_DX_HR("D3DXLoadSurfaceFromSurface failed %s", hresult);
+
+		// free the resources
+		surface->Release();
+		plainSurface->Release();
+	}
+	else
+	{
+		// all we have to do is unlock
+		if (m_engineTexture.isCubeMap())
+		{
+			HRESULT result = static_cast<IDirect3DCubeTexture9*>(m_d3dTexture)->UnlockRect(Direct3d9::getD3dCubeFace(lockData.m_cubeFace), lockData.getLevel());
+			FATAL_DX_HR("failed to unlock rect %s", result);
+		}
+		else if (m_engineTexture.isVolumeMap())
+		{
+			HRESULT result = static_cast<IDirect3DVolumeTexture9*>(m_d3dTexture)->UnlockBox(lockData.getLevel());
+			FATAL_DX_HR("failed to unlock box %s", result);
+		}
+		else
+		{
+			// unlock the surface
+			HRESULT result = static_cast<IDirect3DTexture9*>(m_d3dTexture)->UnlockRect(lockData.getLevel());
+			FATAL_DX_HR("failed to unlock rect %s", result);
+		}
+	}
+
+	// clear out the lock data
+	lockData.m_pitch      = 0;
+	lockData.m_slicePitch = 0;
+	lockData.m_pixelData  = 0;
+	lockData.m_reserved   = NULL;
+}
+
+//----------------------------------------------------------------------
+
+void  Direct3d9_TextureData::copyFrom(int surfaceLevel, TextureGraphicsData const & rhs, int srcX, int srcY, int srcWidth, int srcHeight, int dstX, int dstY, int dstWidth, int dstHeight)
+{
+	Direct3d9_TextureData const * const rhs_d3d = safe_cast<Direct3d9_TextureData const *>(&rhs);
+
+	FATAL(this == rhs_d3d, ("Direct3d9_TextureData::copyFrom() src & dst may not be the same texture"));
+
+	RECT const rectDst = { dstX, dstY, dstX + dstWidth, dstY + dstHeight };
+	RECT const rectSrc = { srcX, srcY, srcX + srcWidth, srcY + srcHeight };
+
+	// get the texture surface that we want to update
+	IDirect3DSurface9 * surfaceSrc = 0;
+	IDirect3DSurface9 * surfaceDst = 0;
+
+	if (m_engineTexture.isCubeMap())
+	{
+		FATAL(true, ("Can't copy cube maps (yet)"));
+	}
+	else if (m_engineTexture.isVolumeMap())
+	{
+		FATAL(true, ("Can't copy volume maps (yet)"));
+	}
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"lockReadOnly|lock\\(true\\)|StaticVertexBuffer.*lock|StaticIndexBuffer.*lock|readOnly\" src/engine/client -g \"*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientGraphics/src/shared/Texture.cpp | Select-Object -Skip 520 -First 220' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientGraphics/src/shared/Texture.cpp | Select-Object -Skip 337 -First 95' in D:\Code\swg-client-v2
+ succeeded in 1629ms:
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.h:39:	virtual void                            *lock(bool readOnly);
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:19:MemoryBlockManager * Direct3d9_StaticVertexBufferData::ms_memoryBlockManager;
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:102:void *Direct3d9_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:107:	if (!readOnly)
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:112:	const HRESULT hresult = m_d3dVertexBuffer->Lock(0, 0, &data, readOnly ? D3DLOCK_READONLY : 0);
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:121:void Direct3d9_StaticVertexBufferData::unlock()
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.h:38:	virtual Index *lock(bool readOnly);
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:18:MemoryBlockManager *  Direct3d9_StaticIndexBufferData::ms_memoryBlockManager;
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:91:Index *Direct3d9_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:97:	if (!readOnly)
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:102:	const HRESULT hresult = m_d3dIndexBuffer->Lock(0, length, &data, readOnly ? D3DLOCK_READONLY : 0);
+src/engine/client\application\Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:110:void Direct3d9_StaticIndexBufferData::unlock()
+src/engine/client\application\MayaExporter\src\win32\MayaUtility.cpp:1136:		const uint8 *const sourceImageData = conversionImage->lockReadOnly();
+src/engine/client\application\MayaExporter\src\win32\MayaUtility.cpp:1241:		const uint8 *const sourceImageData = conversionImage->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\Texture.h:82:		bool           m_readOnly;
+src/engine/client\library\clientGraphics\src\shared\Texture.h:185:	void                  lockReadOnly(LockData &lockData) const;
+src/engine/client\library\clientGraphics\src\shared\Texture.h:216:	m_readOnly(false),
+src/engine/client\library\clientGraphics\src\shared\Texture.h:238:	m_readOnly(false),
+src/engine/client\library\clientGraphics\src\shared\Texture.h:260:	m_readOnly(false),
+src/engine/client\library\clientGraphics\src\shared\Texture.h:328:	return m_readOnly;
+src/engine/client\library\clientGraphics\src\shared\Texture.cpp:760:	lockData.m_readOnly = false;
+src/engine/client\library\clientGraphics\src\shared\Texture.cpp:773:void Texture::lockReadOnly(LockData &lockData) const
+src/engine/client\library\clientGraphics\src\shared\Texture.cpp:775:	DEBUG_FATAL(lockData.m_discardContents, ("cannot use lockReadOnly() and discardContents"));
+src/engine/client\library\clientGraphics\src\shared\Texture.cpp:777:	lockData.m_readOnly = true;
+src/engine/client\library\clientGraphics\src\shared\Texture.cpp:806:	lockReadOnly(lockData);
+src/engine/client\application\MayaExporter\src\shared\NormalMapUtility.cpp:223:	const uint8 *pixels = source.lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:29:	virtual void                          *lock(bool readOnly) = 0;
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:69:	void                           lockReadOnly() const;
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:137:inline void StaticVertexBuffer::lock()
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:164:inline void StaticVertexBuffer::lockReadOnly() const
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:174:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(true));
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.h:183:inline void StaticVertexBuffer::unlock() const
+src/engine/client\library\clientGraphics\src\shared\StaticVertexBuffer.cpp:19:MemoryBlockManager  *StaticVertexBuffer::ms_memoryBlockManager;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:24:	virtual Index *lock(bool readOnly) = 0;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:48:	void              lockReadOnly() const;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:59:	void lock(bool readOnly) const;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:73:	mutable bool                    m_readOnly;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:92:inline void StaticIndexBuffer::lock(bool readOnly) const 
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:95:	m_readOnly = readOnly;
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:96:	m_indexData = m_graphicsData->lock(m_readOnly);
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:105:inline void StaticIndexBuffer::lock()
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:116:inline void StaticIndexBuffer::lockReadOnly() const
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:118:	lock(true);
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:125: * @see lockReadOnly().
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:128:inline void StaticIndexBuffer::unlock() const
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:144:	DEBUG_FATAL(m_readOnly, ("IB locked read-only"));
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.h:157:	DEBUG_FATAL(m_readOnly, ("IB locked read-only"));
+src/engine/client\library\clientGraphics\src\shared\StaticIndexBuffer.cpp:27:	m_readOnly(false)
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:44:	virtual void                            *lock(bool readOnly);
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:34:MemoryBlockManager *Direct3d11_StaticVertexBufferData::ms_memoryBlockManager;
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:123:void *Direct3d11_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:130:	m_lockedReadOnly = readOnly;
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:133:	// UpdateSubresource into the GPU buffer. For readOnly locks the data
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:136:	if (readOnly)
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:147:void Direct3d11_StaticVertexBufferData::unlock()
+src/engine/client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:749:	m_vertexBuffer->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:881:	m_vertexBuffer->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:882:	m_indexBuffer->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1106:	pIndexBuffer->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1387:	m_vertexBuffer->lockReadOnly();
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:44:	virtual Index *lock(bool readOnly);
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:24:MemoryBlockManager *Direct3d11_StaticIndexBufferData::ms_memoryBlockManager;
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:103:Index *Direct3d11_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:109:	m_lockedReadOnly = readOnly;
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:111:	if (readOnly)
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:119:void Direct3d11_StaticIndexBufferData::unlock()
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp:3036:	// Direct3d11_StaticIndexBufferData::lock/unlock first --
+src/engine/client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp:3055:			"Direct3d11_StaticIndexBufferData::lock/unlock first per CODEX 11-09.15 Q3.";
+src/engine/client\application\MayaExporter\src\win32\StaticMeshBuilder.cpp:867:		worldNormalsPixels = worldNormalsImage->lockReadOnly();
+src/engine/client\application\MayaExporter\src\win32\StaticMeshBuilder.cpp:881:		tangentNormalsPixels = tangentNormalsImage->lockReadOnly();
+src/engine/client\application\MayaExporter\src\win32\StaticMeshBuilder.cpp:895:		scratchNormalsPixels = scratchNormalsImage->lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\DynamicIndexBuffer.h:139: * @see lockReadOnly().
+src/engine/client\library\clientGraphics\src\shared\DebugPrimitive.cpp:926:	m_vertexBuffer.lockReadOnly();
+src/engine/client\library\clientGraphics\src\shared\DebugPrimitive.cpp:992:	m_vertexBuffer.lockReadOnly();
+src/engine/client\application\Headless\src\shared\Headless_StaticVertexBufferData.h:13:	virtual void                          *lock(bool readOnly) = 0;
+src/engine/client\application\Headless\src\shared\Headless_StaticVertexBufferData.h:28:	virtual void                          *lock(bool readOnly);
+src/engine/client\application\Headless\src\shared\Headless_StaticVertexBufferData.cpp:15:void *Headless_StaticVertexBufferData::lock( bool )
+src/engine/client\application\Headless\src\shared\Headless_StaticVertexBufferData.cpp:27:void Headless_StaticVertexBufferData::unlock()
+src/engine/client\application\Headless\src\shared\Headless_StaticIndexBufferData.h:13:	virtual Index *lock(bool readOnly);
+src/engine/client\application\Headless\src\shared\Headless_StaticIndexBufferData.cpp:11:Index *Headless_StaticIndexBufferData::lock( bool )
+src/engine/client\application\Headless\src\shared\Headless_StaticIndexBufferData.cpp:23:void Headless_StaticIndexBufferData::unlock()
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:437:	bool readOnly=false;
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:443:		readOnly=p->m_descriptor.isReadOnly();
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:534:		if (readOnly)
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:551:		if (readOnly)
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:699:				if (readOnly)
+src/engine/client\application\UiBuilder\PropertyListControl.cpp:711:				if (readOnly)
+src/engine/client\library\clientGame\src\shared\test\DynamicNormalMapTest.cpp:615:		texture->lockReadOnly (lockData);
+src/engine/client\application\TextureBuilder\src\win32\TextureBakeView.cpp:199:	m_bakedTextureVertexBuffer->lockReadOnly();
+src/engine/client\library\clientTextureRenderer\src\shared\BlueprintTextureRendererTemplate.cpp:861:	ib.lockReadOnly();
+src/engine/client\library\clientTextureRenderer\src\shared\BlueprintTextureRendererTemplate.cpp:862:	vb.lockReadOnly();
+src/engine/client\library\clientUserInterface\src\shared\core\CuiCraftManager.cpp:102:		std::make_pair(Crafting::CE_readOnlyDraftSchematic,  &CuiStringIdsCraft::err_read_only_draft_schematic),
+src/engine/client\application\TerrainEditor\src\win32\BitmapPreviewView.cpp:119:	const uint8* data = image->lockReadOnly ();
+src/engine/client\application\TerrainEditor\src\win32\BitmapPreviewView.cpp:182:	const uint8* data = image.lockReadOnly ();
+src/engine/client\library\clientTerrain\src\shared\environment\EnvironmentBlock.cpp:90:		const uint8* data = image->lockReadOnly ();
+src/engine/client\application\TerrainEditor\src\win32\FormAffectorColorRampFractal.cpp:245:	const uint8* data = image->lockReadOnly ();
+src/engine/client\library\clientTerrain\src\shared\appearance\StarAppearance.cpp:86:		const uint8* data = image->lockReadOnly();
+src/engine/client\library\clientTerrain\src\shared\appearance\GroundEnvironment.cpp:1783:			texture->lockReadOnly (lockData);
+src/engine/client\application\TerrainEditor\src\win32\FormAffectorColorRampHeight.cpp:217:	const uint8* data = image->lockReadOnly ();
+src/engine/client\library\clientTerrain\src\shared\appearance\GradientSkyAppearance.cpp:146:					vertexBuffer->lockReadOnly ();
+src/engine/client\library\clientTerrain\src\shared\appearance\GradientSkyAppearance.cpp:164:					indexBuffer->lockReadOnly ();
+src/engine/client\library\clientTerrain\src\shared\appearance\ClientProceduralTerrainAppearance_Radar.cpp:198:					texture->lockReadOnly (lockData);
+src/engine/client\library\clientSkeletalAnimation\src\shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:220:		sourceIb->lockReadOnly();
+src/engine/client\application\TerrainEditor\src\win32\RadialTreeView.cpp:955:		texture->lockReadOnly(lockData);
+src/engine/client\application\TerrainEditor\src\win32\ShaderTreeView.cpp:969:		texture->lockReadOnly(lockData);
+src/engine/client\application\TemplateEditor\src\shared\BaseDialogEdit.h:36:	void             setTextLineEditReadOnly(bool const readOnly);
+src/engine/client\application\TemplateEditor\src\shared\BaseDialogEdit.cpp:41:void BaseDialogEdit::setTextLineEditReadOnly(bool const readOnly)
+src/engine/client\application\TemplateEditor\src\shared\BaseDialogEdit.cpp:43:	m_textLineEdit->setReadOnly(readOnly);
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:172:		staticIndexBuffer.lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:297:	vertexBuffer.lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:335:		inputVertexBuffer.lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:338:		inputIndexBuffer.lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:632:		inputVertexBuffer.lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearanceShaderSet.cpp:746:	m_vertexBuffer->lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearance.cpp:277:		m_shaderSet->getVertexBuffer()->lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\DynamicMeshAppearance.cpp:278:		m_shaderSet->getIndexBuffer()->lockReadOnly();
+src/engine/client\library\clientObject\src\shared\appearance\ShadowVolumeStreamerDetector.cpp:65:		vertexBuffer.lockReadOnly ();
+src/engine/client\library\clientObject\src\shared\appearance\ShadowVolumeStreamerDetector.cpp:80:		indexBuffer.lockReadOnly ();
+src/engine/client\library\clientObject\src\shared\appearance\ShadowVolume.cpp:1514:	indexBuffer->lockReadOnly ();
+src/engine/client\library\clientObject\src\shared\appearance\ShadowVolume.cpp:1529:	vertexBuffer->lockReadOnly ();
+src/engine/client\library\clientObject\src\shared\appearance\ShadowVolume.cpp:1530:	indexBuffer->lockReadOnly ();
+
+ succeeded in 1650ms:
+					if (b % 16 == 0) fprintf(fp, "\n  ");
+					fprintf(fp, "%02X ", hb[b]);
+				}
+				fprintf(fp, "\n");
+				fclose(fp);
+			}
+		}
+	}
+
+	// pixelformat flags in the DDS header are one of
+	// DDS_FOURCC, DDS_RGBA or DDS_RGB. For the RGB and RGBA
+	// format files, the bitcount and bitmasks are used to determine
+	// the appropriate pixelformat of the texture as it is represnted
+	// internally by the TextureFormat enumeration
+	m_height = static_cast<int>(ddsHeader.dwHeight);
+	m_width  = static_cast<int>(ddsHeader.dwWidth);
+
+	m_cube   = ddsHeader.dwComplexFlags & DDS::DDS_COMPLEX_FLAGS_CUBEMAP ? true : false;
+	m_volume = ddsHeader.dwComplexFlags & DDS::DDS_COMPLEX_FLAGS_VOLUMEMAP ? true : false;
+	m_depth = ddsHeader.dwHeaderFlags & DDS::DDS_HEADER_FLAGS_VOLUME ? static_cast<int>(ddsHeader.dwDepth) : 1;
+
+	m_mipmapLevelCount = static_cast<int>(ddsHeader.dwMipMapCount);
+	if (m_mipmapLevelCount == 0)
+		m_mipmapLevelCount = 1;
+
+#ifdef _DEBUG
+	{
+		if (m_mipmapLevelCount > 1)
+		{
+			int minWidth = m_width >> m_mipmapLevelCount;
+			if (minWidth == 0)
+				minWidth = 1;
+
+			int minHeight = m_height >> m_mipmapLevelCount;
+			if (minHeight == 0)
+				minHeight = 1;
+
+			int minDepth = m_depth >> m_mipmapLevelCount;
+			if (minDepth == 0)
+				minDepth = 1;
+
+			DEBUG_WARNING(minWidth > 1 || minHeight > 1 || minDepth > 1, ("Texture %s has too few mipmaps %dx%dx%d@%d (smallest map is %dx%dx%d)", fileName, m_width, m_height, m_depth, m_mipmapLevelCount, minWidth, minHeight, minDepth));
+		}
+	}
+#endif
+
+	// determine pixelformat
+	// Compressed formats
+	bool dxt = false;
+	if(ddsHeader.ddspf.dwFlags & DDS::DDS_FOURCC)
+	{
+		FATAL(m_volume, ("Compressed volume textures not supported (yet)"));
+		if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_PNM1.dwFourCC)
+			sourceFormat = TF_P_8;
+		else
+		{
+			dxt = true;
+			if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT1.dwFourCC)
+				sourceFormat = TF_DXT1;
+			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT2.dwFourCC)
+				sourceFormat = TF_DXT2;
+			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT3.dwFourCC)
+				sourceFormat = TF_DXT3;
+			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT4.dwFourCC)
+				sourceFormat = TF_DXT4;
+			else if(ddsHeader.ddspf.dwFourCC == DDS::DDSPF_DXT5.dwFourCC)
+				sourceFormat = TF_DXT5;
+			else
+				DEBUG_FATAL(true, ("Unknown 4cc texture format"));
+		}
+	}
+	// Component formats
+	else
+	{
+		// RGBA Formats
+		if (matches(ddsHeader.ddspf, DDS::DDSPF_A8R8G8B8))
+			sourceFormat = TF_ARGB_8888;
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_A1R5G5B5))
+			sourceFormat = TF_ARGB_1555;
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_A4R4G4B4))
+			sourceFormat = TF_ARGB_4444;
+		// RGB formats
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_R8G8B8))
+			sourceFormat = TF_RGB_888;
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_R5G6B5))
+			sourceFormat = TF_RGB_565;
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_R3G3B2))
+			sourceFormat = TF_RGB_565;
+
+		// Luminescence formats
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_L8))
+			sourceFormat = TF_L_8;
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_L8_WHACK))
+			sourceFormat = TF_L_8;
+
+		// Alpha formats
+		else if (matches(ddsHeader.ddspf, DDS::DDSPF_A8))
+			sourceFormat = TF_A_8;
+		else
+		{
+			delete fileInterface;
+
+			DEBUG_WARNING(true, ("Unknown component format for texture %s", fileName));
+			load(TextureList::getDefaultTextureName());
+			return;
+		}
+	}
+
+	// the radeon 8500 doesn't support mipmapped cube maps
+	int numberOfLowestMipmapLevelsToDiscard = 0;
+	if (m_cube && m_mipmapLevelCount > 1 && !Graphics::supportsMipmappedCubeMaps())
+	{
+		numberOfLowestMipmapLevelsToDiscard = m_mipmapLevelCount - 1;
+		m_mipmapLevelCount = 1;
+	}
+
+	// Plan 11-09.15 Iter-31A diagnostic: log DDS parse outcome for fonts
+	// so we can localize WHERE TF_DXT5 enters the runtime-format list for
+	// `verdana_14_000.dds`. Manual TRE extraction shows the source DDS in
+	// patch_05/06/12 is BGRA8 (DDPF_RGB|DDPF_ALPHAPIXELS, fourCC=0), yet
+	// Iter-30 shows the engine creates the texture as BC3 with
+	// rtFormats=[11,0] = [TF_DXT5, TF_ARGB_8888] -- matching ms_conversions[TF_DXT5].
+	// If THIS logger emits sourceFormat=TF_DXT5 for verdana_14_000.dds, the
+	// engine's DDS parser saw the FOURCC bit set on a file we believe is
+	// uncompressed. Logs are filtered to texture/font/* to keep noise low.
+	if (fileName && strstr(fileName, "texture/font/"))
+	{
+		static int s_iter31aTexCount = 0;
+		if (s_iter31aTexCount < 30)
+		{
+			++s_iter31aTexCount;
+			static bool s_iter31aFirstWrite = true;
+			char const * const mode = s_iter31aFirstWrite ? "wb" : "ab";
+			s_iter31aFirstWrite = false;
+			FILE *fp = nullptr;
+			fopen_s(&fp, "stage/iter31a-dds-parse.txt", mode);
+			if (fp)
+			{
+				fprintf(fp,
+					"font#%d file='%s' sourceFormat=%d dxt=%d "
+					"ddspf.dwFlags=0x%X dwFourCC=0x%X dwRGBBitCount=%u "
+					"rMask=0x%X gMask=0x%X bMask=0x%X aMask=0x%X "
+					"width=%d height=%d depth=%d mipmaps=%d preGD=%d\n",
+					s_iter31aTexCount, fileName,
+					static_cast<int>(sourceFormat),
+					dxt ? 1 : 0,
+					static_cast<unsigned>(ddsHeader.ddspf.dwFlags),
+					static_cast<unsigned>(ddsHeader.ddspf.dwFourCC),
+					static_cast<unsigned>(ddsHeader.ddspf.dwRGBBitCount),
+					static_cast<unsigned>(ddsHeader.ddspf.dwRBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwGBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwBBitMask),
+					static_cast<unsigned>(ddsHeader.ddspf.dwABitMask),
+					m_width, m_height, m_depth, m_mipmapLevelCount,
+					m_graphicsData ? 1 : 0);
+				fclose(fp);
+			}
+		}
+	}
+
+	bool const isNormalMapName = strstr(fileName, "_n.dds") != 0;
+
+#ifdef _DEBUG
+	if (DataLint::isEnabled())
+	{
+		if (isNormalMapName)
+			DEBUG_WARNING(sourceFormat != TF_ARGB_8888, ("[%s] has the normal map convention, but is not ARGB (%d != %d)", fileName, sourceFormat, TF_ARGB_8888));
+		else
+			DEBUG_WARNING(!(sourceFormat == TF_DXT1 || sourceFormat == TF_DXT3 || sourceFormat == TF_DXT5), ("[%s] is not compressed (%d)", fileName, sourceFormat));
+	}
+#endif
+
+	// option to discard top mipmap levels for texture memory & performance
+	int pleaseDiscard = ms_discardHighestMipMapLevels;
+	if (isNormalMapName != NULL && ms_discardHighestNormalMipMapLevels > ms_discardHighestMipMapLevels)
+		pleaseDiscard = ms_discardHighestNormalMipMapLevels;
+	int numberOfHighestMipmapLevelsToDiscard = clamp(0, pleaseDiscard, m_mipmapLevelCount - 1);
+	if (numberOfHighestMipmapLevelsToDiscard)
+	{
+		if (dxt)
+		{
+			// dxt compressed textures can be no smaller than 4x4
+			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 4) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 4))
+				--numberOfHighestMipmapLevelsToDiscard;
+		}
+		else
+		{
+			// normal textures can be no smaller than 1x1
+			while (((m_width >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_height >> numberOfHighestMipmapLevelsToDiscard) < 1) || ((m_depth >> numberOfHighestMipmapLevelsToDiscard) < 1))
+				--numberOfHighestMipmapLevelsToDiscard;
+		}
+	
+		m_width >>= numberOfHighestMipmapLevelsToDiscard;
+		m_height >>= numberOfHighestMipmapLevelsToDiscard;
+		m_depth >>= numberOfHighestMipmapLevelsToDiscard;
+		m_mipmapLevelCount -= numberOfHighestMipmapLevelsToDiscard;
+	}
+
+	if (!m_graphicsData)
+		m_graphicsData = Graphics::createTextureData(*this, ms_conversions[sourceFormat], ms_conversionCount[sourceFormat]);
+
+	if (m_cube)
+	{
+		for (int i = CF_positiveX; i <= CF_negativeZ; ++i)
+			loadSurface(sourceFormat, static_cast<CubeFace>(i), fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+	}
+	else
+	{
+		// NOTE: works for 2d and volume textures...
+		loadSurface(sourceFormat, CF_none, fileInterface, numberOfHighestMipmapLevelsToDiscard, numberOfLowestMipmapLevelsToDiscard);
+	}
+
+	delete fileInterface;
+}
+
+// ----------------------------------------------------------------------
+
+PackedArgb Texture::getRepresentativeColor() const
+{
+	if (m_representativeColorComputed < 5)
+
+ succeeded in 1479ms:
+{
+	UNREF(numberOfHighestMipmapLevelsToDiscard);
+
+	// get pixel size info from source format
+	const TextureFormatInfo &tfi = TextureFormatInfo::getInfo(format);
+
+	// lock the entire texture rectangle, move the bits into the gl managed memory
+	for (int i = 0; i < numberOfHighestMipmapLevelsToDiscard + m_mipmapLevelCount + numberOfLowestMipmapLevelsToDiscard; ++i)
+	{
+		int width  = m_width;
+		int height = m_height;
+		int depth  = m_depth;
+
+		if (i < numberOfHighestMipmapLevelsToDiscard)
+		{
+			width  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+			height <<= (numberOfHighestMipmapLevelsToDiscard - i);
+			depth  <<= (numberOfHighestMipmapLevelsToDiscard - i);
+		}
+		else
+		{
+			width >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+			height >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+			depth >>= (i - numberOfHighestMipmapLevelsToDiscard); //lint !e702 // Shift right of signed quantity
+
+			if (width == 0)
+				width = 1;
+			if (height == 0)
+				height = 1;
+			if (depth == 0)
+				depth = 1;
+		}
+
+		// figure out the pitch of a row in the file and how many rows there are in a slice
+		//   how many slices
+		int filePitch = 0;
+		int fileHeight = 0;
+		if (tfi.compressed)
+		{
+			// compressed files are in integral blocks
+			filePitch  = (width  + tfi.blockWidth  - 1) / tfi.blockWidth * tfi.blockSize;
+			fileHeight = (height + tfi.blockHeight - 1) / tfi.blockHeight;
+		}
+		else
+		{
+			filePitch  = width * tfi.pixelByteCount;
+			fileHeight = height;
+		}
+
+		int fileSlices = depth;
+
+		// determine whether to load or skip this mipmap
+		if (i >= numberOfHighestMipmapLevelsToDiscard && i < numberOfHighestMipmapLevelsToDiscard+m_mipmapLevelCount)
+		{
+			LockData lockData(format, face, i - numberOfHighestMipmapLevelsToDiscard, 0, 0, 0, width, height, depth, m_dynamic); 
+
+			lock(lockData);
+
+				// if the file and surface pitches are the same, we can do this all in a single read
+				int surfacePitch = lockData.getPitch();
+				if (filePitch == surfacePitch)
+				{
+					surfacePitch = filePitch *= fileHeight * fileSlices;
+					fileHeight = 1;
+					fileSlices = 1;
+				}
+
+				// read in all the data
+				uint8 *lockedDataWrite = reinterpret_cast<uint8*>(lockData.getPixelData());
+
+				for (int z = 0; z < fileSlices; ++z)
+				{
+					for (int y = 0; y < fileHeight; ++y, lockedDataWrite += surfacePitch)
+					{
+						const int bytesRead = fileInterface->read(lockedDataWrite, filePitch);
+						DEBUG_FATAL(bytesRead != filePitch, ("read failed"));
+						UNREF(bytesRead);
+					}
+				}
+
+			unlock(lockData);								
+		}
+		else
+		{
+			const bool result = fileInterface->seek(AbstractFile::SeekCurrent, filePitch * fileHeight * fileSlices);
+			DEBUG_FATAL(!result, ("seek failed"));
+			UNREF(result);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+inline static bool matches(const DDS::DDS_PIXELFORMAT &src, const DDS::DDS_PIXELFORMAT &dst)
+{
+
+codex
+One important D3D11-only asymmetry surfaced: static VB/IB `lockReadOnly()` does not read back existing contents in gl11; it returns zeroed CPU memory. D3D9 returns the actual buffer. That is a credible geometry-corruption source in any path that derives/streams/rebuilds LOD data from already-created buffers, but it does not directly explain recognizable wrong texture content.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp | Select-Object -Skip 2990 -First 95' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp | Select-Object -Skip 80 -First 55' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp | Select-Object -Skip 70 -First 55' in D:\Code\swg-client-v2
+ succeeded in 494ms:
+
+Direct3d9_StaticVertexBufferData::~Direct3d9_StaticVertexBufferData()
+{
+#ifdef _DEBUG
+	Direct3d9_Metrics::vertexBufferMemoryTotal -= m_memorySize;
+	Direct3d9_Metrics::vertexBufferMemoryDestroyed += m_memorySize;
+#endif
+
+	IGNORE_RETURN(m_vertexDeclaration->Release());
+	IGNORE_RETURN(m_d3dVertexBuffer->Release());
+}
+
+// ----------------------------------------------------------------------
+
+const VertexBufferDescriptor  &Direct3d9_StaticVertexBufferData::getDescriptor() const
+{
+	return m_descriptor;
+}
+
+// ----------------------------------------------------------------------
+
+void *Direct3d9_StaticVertexBufferData::lock(bool readOnly)
+{
+	NOT_NULL(m_d3dVertexBuffer);
+
+#ifdef _DEBUG
+	if (!readOnly)
+		Direct3d9_Metrics::vertexBufferMemoryModified += m_memorySize;
+#endif
+
+	void *data = NULL;
+	const HRESULT hresult = m_d3dVertexBuffer->Lock(0, 0, &data, readOnly ? D3DLOCK_READONLY : 0);
+	FATAL_DX_HR("Could not lock static vb %s", hresult);
+
+	NOT_NULL(data);
+	return data;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_StaticVertexBufferData::unlock()
+{
+	const HRESULT hresult = m_d3dVertexBuffer->Unlock();
+	FATAL_DX_HR("Could not unlock vb %s", hresult);
+}
+
+// ----------------------------------------------------------------------
+
+int Direct3d9_StaticVertexBufferData::getSortKey()
+{
+	return reinterpret_cast<int>(m_d3dVertexBuffer);
+}
+
+// ----------------------------------------------------------------------
+
+
+ succeeded in 522ms:
+	// device, restore the StateCache shadow's IB.
+	if (ms_currentIBValid && ms_currentIB)
+		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+}
+
+void Direct3d11_StateCache::drawIndexedPointList()
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+void Direct3d11_StateCache::drawIndexedLineList()
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+void Direct3d11_StateCache::drawIndexedLineStrip()
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+void Direct3d11_StateCache::drawIndexedTriangleList()
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+void Direct3d11_StateCache::drawIndexedTriangleStrip()
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+void Direct3d11_StateCache::drawIndexedTriangleFan()
+{
+	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): indexed-fan variants
+	// are still broken (TRIANGLELIST topology applied to fan-shaped indexed
+	// data). A real fix needs CPU-side index shadows in
+	// Direct3d11_StaticIndexBufferData::lock/unlock first --
+	// Direct3d11_StaticIndexBufferData.cpp:96 currently allocates a zeroed
+	// CPU buffer without reading GPU/engine indices back. Per CODEX Q3
+	// caveat, source search doesn't prove indexed fans are unused
+	// (ShaderPrimitiveSetTemplate.cpp:673 CAN dispatch
+	// SPSPT_indexedTriangleFan from asset data), so the diagnostic +
+	// counter pair tells smoke whether Plan 11-09.16 is required.
+	++ms_drawIndexedTriangleFanCalls;
+	static bool s_warnedOnce = false;
+	if (!s_warnedOnce)
+	{
+		s_warnedOnce = true;
+		// Plan 11-09.15 Iter-1 follow-up: DEBUG_REPORT_LOG_PRINT is invisible
+		// from GUI-exe launches per Plan 11-09.13 Iter-3 finding; route through
+		// ID3D11InfoQueue::AddApplicationMessage so the warning lands in
+		// stage/d3d11-debug.log.
+		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawIndexedTriangleFan called -- "
+			"STILL BROKEN (TRIANGLELIST topology applied to fan-shaped indexed data). "
+			"Plan 11-09.16 territory; needs CPU-side index shadows in "
+			"Direct3d11_StaticIndexBufferData::lock/unlock first per CODEX 11-09.15 Q3.";
+		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, msg);
+		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+	}
+
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+		return;
+	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+}
+
+// ------------------------------------------------------------------
+// Partial draw variants (engine supplies explicit ranges).
+
+void Direct3d11_StateCache::drawPartialPointList(int startVertex, int primitiveCount)
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+		return;
+	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount), static_cast<UINT>(startVertex));
+}
+
+void Direct3d11_StateCache::drawPartialLineList(int startVertex, int primitiveCount)
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+		return;
+	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount * 2), static_cast<UINT>(startVertex));
+}
+
+void Direct3d11_StateCache::drawPartialLineStrip(int startVertex, int primitiveCount)
+{
+	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+
+ succeeded in 546ms:
+#ifdef _DEBUG
+	Direct3d9_Metrics::indexBufferMemoryTotal += m_memorySize;
+	Direct3d9_Metrics::indexBufferMemoryCreated += m_memorySize;
+#endif
+}
+
+// ----------------------------------------------------------------------
+
+Direct3d9_StaticIndexBufferData::~Direct3d9_StaticIndexBufferData()
+{
+#ifdef _DEBUG
+	Direct3d9_Metrics::indexBufferMemoryTotal -= m_memorySize;
+	Direct3d9_Metrics::indexBufferMemoryDestroyed += m_memorySize;
+#endif
+
+	IGNORE_RETURN(m_d3dIndexBuffer->Release());
+}
+
+// ----------------------------------------------------------------------
+
+Index *Direct3d9_StaticIndexBufferData::lock(bool readOnly)
+{
+	const int numberOfIndices = m_indexBuffer.getNumberOfIndices();
+	const int length          = numberOfIndices * sizeof(Index);
+
+#ifdef _DEBUG
+	if (!readOnly)
+		Direct3d9_Metrics::indexBufferMemoryModified += m_memorySize;
+#endif
+
+	void *data = NULL;
+	const HRESULT hresult = m_d3dIndexBuffer->Lock(0, length, &data, readOnly ? D3DLOCK_READONLY : 0);
+	FATAL_DX_HR("Could not lock static IB %s", hresult);
+	NOT_NULL(data);
+	return reinterpret_cast<Index *>(data);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_StaticIndexBufferData::unlock()
+{
+	const HRESULT hresult = m_d3dIndexBuffer->Unlock();
+	FATAL_DX_HR("Could not unlock IB %s", hresult);
+}
+
+// ----------------------------------------------------------------------
+
+#ifdef _DEBUG
+
+bool Direct3d9_StaticIndexBufferData::firstTimeUsedThisFrame() const
+{
+	if (m_lastUsedFrameNumber == Direct3d9::getFrameNumber())
+		return false;
+
+	m_lastUsedFrameNumber = Direct3d9::getFrameNumber();
+
+codex
+The strongest fit is **uninitialized texture subresources, especially lower mip levels**, not bad bindings.
+
+Why: near geometry is fine, mid/far corrupt, and surfaces show recognizable other-asset content. That screams: correct SRV, correct shader, correct base mip, but the sampler chooses an uninitialized lower mip. RenderDoc replay-clean is especially consistent with this because the captured command stream can be correct while live undefined resource memory contains stale VRAM; replay tools often sanitize or reconstruct missing resource content.
+
+Most likely specific defect:
+
+`Direct3d11_TextureData` creates the full mip chain with `CreateTexture2D(..., nullptr, ...)`, then relies on later `lock/unlock` copies to initialize every mip. If any mip upload is skipped, rejected, copied with an invalid BC box, copied to the wrong subresource, or the texture is sampled before all mips are uploaded, the sampler can read stale VRAM. D3D9 masks this because `LockRect`/D3DX paths behave more like managed texture initialization/conversion and tolerate old DXT edge cases.
+
+The geometry symptom may be a second D3D11-only defect: static VB/IB `lockReadOnly()` currently returns zeroed scratch memory in gl11, while D3D9 returns real buffer contents. There are many engine call sites that read static buffers to build derived geometry/LOD/shadows. That can corrupt derived distant/LOD meshes. But it does **not** explain recognizable wrong texture content by itself.
+
+Single decisive next test:
+
+Add a temporary **poison initialization pass at resource creation**:
+
+- Immediately after every static `CreateTexture2D(... nullptr ...)`, initialize **every array slice and every mip** to a deterministic pattern before any real upload.
+- Use a different obvious pattern per mip, e.g. mip0 red, mip1 green, mip2 blue, mip3 yellow, or a per-texture hash color.
+- For BC formats, write valid BC blocks, not raw RGBA bytes.
+- Also temporarily zero/poison static VB/IB creation if you want to split geometry from texture.
+
+Then run Mos Eisley.
+
+Interpretation:
+
+- If bad distant surfaces show the poison mip colors: confirmed, the renderer is sampling uninitialized mip/subresource content.
+- If only lower-distance bands show poison while near is correct: specifically lower mip upload or mip use-before-upload.
+- If geometry stabilizes when VB/IB are initialized or CPU-shadowed, that is a separate static-buffer readback/derived-LOD bug.
+- If corruption is unchanged and no poison appears, revisit binding/state/shader/framebuffer hypotheses.
+
+I would not put `UpdateSubresource` itself high on the suspect list. `USAGE_DEFAULT + UpdateSubresource` is valid. The risk is **what bytes/subresources are supplied**, not the API contract. Also, “SRV slots are consistent” only proves the right resource view is bound; it says nothing about whether mip 5 of that SRV contains valid asset data.
+
+One challenge to the framing: “wrong texture” may be slightly misleading. This may not be the wrong SRV at all. It may be the right SRV sampling stale memory in one or more mips, which visually looks like another texture because the driver reused memory from another texture.
+tokens used
+74,259
+The strongest fit is **uninitialized texture subresources, especially lower mip levels**, not bad bindings.
+
+Why: near geometry is fine, mid/far corrupt, and surfaces show recognizable other-asset content. That screams: correct SRV, correct shader, correct base mip, but the sampler chooses an uninitialized lower mip. RenderDoc replay-clean is especially consistent with this because the captured command stream can be correct while live undefined resource memory contains stale VRAM; replay tools often sanitize or reconstruct missing resource content.
+
+Most likely specific defect:
+
+`Direct3d11_TextureData` creates the full mip chain with `CreateTexture2D(..., nullptr, ...)`, then relies on later `lock/unlock` copies to initialize every mip. If any mip upload is skipped, rejected, copied with an invalid BC box, copied to the wrong subresource, or the texture is sampled before all mips are uploaded, the sampler can read stale VRAM. D3D9 masks this because `LockRect`/D3DX paths behave more like managed texture initialization/conversion and tolerate old DXT edge cases.
+
+The geometry symptom may be a second D3D11-only defect: static VB/IB `lockReadOnly()` currently returns zeroed scratch memory in gl11, while D3D9 returns real buffer contents. There are many engine call sites that read static buffers to build derived geometry/LOD/shadows. That can corrupt derived distant/LOD meshes. But it does **not** explain recognizable wrong texture content by itself.
+
+Single decisive next test:
+
+Add a temporary **poison initialization pass at resource creation**:
+
+- Immediately after every static `CreateTexture2D(... nullptr ...)`, initialize **every array slice and every mip** to a deterministic pattern before any real upload.
+- Use a different obvious pattern per mip, e.g. mip0 red, mip1 green, mip2 blue, mip3 yellow, or a per-texture hash color.
+- For BC formats, write valid BC blocks, not raw RGBA bytes.
+- Also temporarily zero/poison static VB/IB creation if you want to split geometry from texture.
+
+Then run Mos Eisley.
+
+Interpretation:
+
+- If bad distant surfaces show the poison mip colors: confirmed, the renderer is sampling uninitialized mip/subresource content.
+- If only lower-distance bands show poison while near is correct: specifically lower mip upload or mip use-before-upload.
+- If geometry stabilizes when VB/IB are initialized or CPU-shadowed, that is a separate static-buffer readback/derived-LOD bug.
+- If corruption is unchanged and no poison appears, revisit binding/state/shader/framebuffer hypotheses.
+
+I would not put `UpdateSubresource` itself high on the suspect list. `USAGE_DEFAULT + UpdateSubresource` is valid. The risk is **what bytes/subresources are supplied**, not the API contract. Also, “SRV slots are consistent” only proves the right resource view is bound; it says nothing about whether mip 5 of that SRV contains valid asset data.
+
+One challenge to the framing: “wrong texture” may be slightly misleading. This may not be the wrong SRV at all. It may be the right SRV sampling stale memory in one or more mips, which visually looks like another texture because the driver reused memory from another texture.

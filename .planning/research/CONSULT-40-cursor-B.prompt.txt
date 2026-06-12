@@ -1,0 +1,24 @@
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11
+renderer port of Star Wars Galaxies (engine clientGraphics). Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-40-face-alpha-fade.md
+
+Then read the cited source to verify (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.h
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.h
+
+Answer ONLY section "6 — B (CURSOR, register/offset detail)" and produce the section-7 deliverable
+for your angle. You are explicitly invited to CONFIRM or REFUTE the candidate hypothesis in §5.
+The RenderDoc measurements in §2-§3 are ground truth; the b0 register mapping is NOT yet verified.
+
+Establish the EXACT PS b0 constant-buffer layout for the dot3 bump shader in D3D11: which 16-byte
+offset is packedRegister1, which is packedRegister2, and which source statement fills each .w channel
+(trace the staging buffer fill in Direct3d11_StaticShaderData.cpp and the Direct3d11_PixelDot3State
+field used). Cross-map to the D3D9 Dot3Data / PixelDot3Data register layout and confirm whether the
+D3D11 PixelDot3State field->register assignment is faithful to D3D9 for the two .a channels
+specifically. Cite file:line. Give the minimal D3D9-parity fix and its exact location.

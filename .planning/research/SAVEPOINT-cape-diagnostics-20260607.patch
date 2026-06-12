@@ -1,0 +1,1634 @@
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+index 41dd72ac5..38d4590a0 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+@@ -288,7 +288,13 @@ namespace Direct3d11Namespace
+ 
+ 	void update_impl(float /*elapsedTime*/)
+ 	{
+-		// no-op in scaffold; Wave 4+ wires per-frame timing bookkeeping
++		// DEDICATED SOFT-SKIN RING (2026-06-07): reset the soft-skin dynamic VB ring once per
++		// frame, here -- this is the gl_api update hook (ms_glApi.update), which fires once per
++		// frame BEFORE the first beginScene (NOT per-pass; per-pass reset tears geometry since
++		// draws defer across passes). First skinned lock of the frame then WRITE_DISCARDs a
++		// fresh generation and the rest of the frame appends, so the frame's skinned slices
++		// coexist and each deferred draw reads its own data. Main ring is untouched.
++		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+ 	}
+ 
+ 	// Plan 11-09.10: realize the design intent of the comment block at the
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+index cd935c62f..02c440cc8 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+@@ -865,27 +865,38 @@ bool Direct3d11_Device::present()
+ 	}
+ 	FATAL_DX_HR("IDXGISwapChain1::Present failed: %s", hr);
+ 
+-#if 0   // Phase 19 DIAGNOSTIC (REVERT -- set to 0): force full CPU<->GPU serialization
+-		// each frame to test the "RenderDoc replay is clean -> non-deterministic resource
+-		// content" hypothesis. Spins the CPU until the GPU finishes this frame's work. If the
+-		// bright flicker STOPS with this on, the bug is a CPU-upload / GPU-read RACE (a buffer
+-		// or texture read before its update completes -> fix = proper resource versioning/sync).
+-		// If it PERSISTS, it's UNINITIALIZED resource content (-> fix = init-on-create).
+-		// Intentionally kills pipelining (slow) -- diagnostic only, DO NOT SHIP.
++#if 0   // CONSULT-23 RACE TEST 2026-06-05 — RESULT: spikes PERSIST under full frame-level
++		// CPU<->GPU serialization => NOT a frame-level CPU-write/GPU-read race. Combined with the
++		// per-instance / per-generation / fenced N-buffer fixes (all removed ring sharing, all
++		// still spiked), the dynamic-VB data-and-timing hypothesis family is EXHAUSTED. Kept #if 0
++		// for the record; pivot is per-draw NON-geometry state (WVP constant buffer / deferred-pass
++		// binding). Original note below.
++		// force full
++		// CPU<->GPU serialization each frame to test whether the cape/garment "texture spikes"
++		// are a CPU-write/GPU-read RACE. Capture15 PROVED the torn draws' STORED vertex data is
++		// CLEAN (RenderDoc replays robe+boot meshes correct) while the LIVE frame spikes ->
++		// capture-invisible race; this is why 5 VB-data/lifetime fixes all failed (the data was
++		// never corrupt). If enabling this KILLS the spikes -> confirmed CPU/GPU race, fix = a
++		// targeted sync/ordering point (not buffer layout). If spikes PERSIST -> not a CPU/GPU
++		// race, pivot. Query created ONCE (static) to avoid the per-frame CreateQuery/Release
++		// churn that aggravates the intermittent nvwgf2um driver crash. Kills pipelining (slow)
++		// -- diagnostic only, DO NOT SHIP.
+ 	if (ms_context && ms_device)
+ 	{
+-		ms_context->Flush();
+-		D3D11_QUERY_DESC qd;
+-		qd.Query = D3D11_QUERY_EVENT;
+-		qd.MiscFlags = 0;
+-		ID3D11Query *q = nullptr;
+-		if (SUCCEEDED(ms_device->CreateQuery(&qd, &q)) && q)
++		static ComPtr<ID3D11Query> s_raceTestQuery;
++		if (!s_raceTestQuery)
+ 		{
+-			ms_context->End(q);
++			D3D11_QUERY_DESC qd = {};
++			qd.Query = D3D11_QUERY_EVENT;
++			ms_device->CreateQuery(&qd, &s_raceTestQuery);
++		}
++		if (s_raceTestQuery)
++		{
++			ms_context->Flush();
++			ms_context->End(s_raceTestQuery.Get());
+ 			BOOL done = FALSE;
+-			while (ms_context->GetData(q, &done, sizeof(done), 0) != S_OK)
+-			{ /* spin until the GPU reaches this point */ }
+-			q->Release();
++			while (ms_context->GetData(s_raceTestQuery.Get(), &done, sizeof(done), 0) != S_OK)
++			{ /* spin until the GPU finishes this frame */ }
+ 		}
+ 	}
+ #endif
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+index 33bb37616..63ad3b0c4 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+@@ -51,6 +51,39 @@
+ #define P19_THREAD_AUDIT 0
+ #define P19_DISCARD_ONLY 0
+ 
++// DECISIVE TEST (Kenny's shared-ring reconciliation, 2026-06-07): the cape/robe "black spikes"
++// hypothesis is that the spike GEOMETRY is stale TERRAIN verts read from the SHARED D3D11 skin
++// ring, drawn with the CREATURE's shader/texture -- because terrain (ClientTerrainSorter PNCT-36)
++// and the robe (SBSSP PNCT-36) co-mingle on ms_d3dSkinRingBuffer (both vSize!=28&&!=24).
++// When 1: STOP SHARING THE RING -- route EVERYTHING to the main ring (ms_d3dRingBuffer), i.e.
++// revert the D3D11-only skin ring entirely. Both lock() and getNumberOfLockableDynamicVertices()
++// are gated together so the vSize-based query and the lock pick the SAME ring (a query/lock split
++// previously caused screen-filling corruption -- see the lock() routing comment).
++//   Robe-textured terrain shards DIE  -> shared-ring cross-contamination CONFIRMED; fix = ring isolation.
++//   Shards PERSIST                     -> coherency is intrinsic to a single dynamic ring; pivot.
++// Flip back to 0 to restore the skin ring. DIAGNOSTIC -- revert when the verdict is in.
++// VERDICT 2026-06-07: ran it, spikes PERSISTED with the skin ring disabled -> shared-ring
++// cross-contamination FALSIFIED. The coherency problem is intrinsic to a single dynamic ring;
++// the spike is the tail BEYOND the robe's written verts (read-past into stale ring memory).
++// Reverted to 0. Next: per-lock WRITE_DISCARD + match the draw's vertex range, not ring isolation.
++#define P19_SKIN_RING_DISABLED 0
++
++// DISAMBIGUATOR 2026-06-07: the cape-dynvb-outlier scan proved the ONLY draws with real outlier
++// spikes in the CPU-written slice are the vSize=36 world-space TERRAIN draws (1647/2664 verts,
++// ClientTerrainSorter, stale cached tail primitives flung to [-2816,0,-6400]); the creature/robe
++// soft-skin writes CLEAN. When 1: collapse every detected outlier vert to its draw's centroid
++// BEFORE Unmap, so the terrain stale-tail spike VANISHES on the live screen.
++//   Spikes you see DISAPPEAR  -> the visible spike IS the terrain outlier draws (fix ClientTerrainSorter cache).
++//   Spikes you see PERSIST    -> the visible spike is NOT in the written outlier data (GPU-side / re-sim), terrain is separate.
++// Plugin-only, reversible. Flip to 0 when the verdict is in.
++#define P19_TERRAIN_SPIKE_CLAMP 1
++
++// 2026-06-07: the CONSULT-32 "force WRITE_DISCARD on every skin lock" diagnostic. Left ON for weeks,
++// it slammed every skinned draw to ring offset 0 (~36k renames/run) -- the worst case for the
++// deferred-draw-reads-a-renamed-generation hazard, and it polluted every measurement. OFF = baseline
++// append (WRITE_NO_OVERWRITE at distinct offsets). Flip to 1 only to re-run that specific A/B.
++#define P19_FORCE_SKIN_DISCARD 0
++
+ // ======================================================================
+ 
+ using Microsoft::WRL::ComPtr;
+@@ -60,6 +93,12 @@ int                               Direct3d11_DynamicVertexBufferData::ms_size;
+ int                               Direct3d11_DynamicVertexBufferData::ms_used;
+ ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dRingBuffer;
+ MemoryBlockManager *              Direct3d11_DynamicVertexBufferData::ms_memoryBlockManager;
++
++// DEDICATED SOFT-SKIN RING (2026-06-07).
++ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dSkinRingBuffer;
++int                               Direct3d11_DynamicVertexBufferData::ms_skinSize;
++int                               Direct3d11_DynamicVertexBufferData::ms_skinUsed;
++bool                              Direct3d11_DynamicVertexBufferData::ms_skinNewFrame;
+ int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+ int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+ int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+@@ -73,6 +112,8 @@ int                               Direct3d11_DynamicVertexBufferData::ms_discard
+ // in unlock(int). File-scope static because the ring buffer is shared; only
+ // one lock can be active at a time.
+ static void *s_lastLockedSliceCPUPtr = nullptr;
++// CONSULT-32 WHOLE-PATH PROBE: lock context captured for the unlock outlier probe to correlate.
++static int s_lastLockIsSkin = 0, s_lastLockDiscard = 0, s_lastLockOffset = 0, s_lastLockRingUsed = 0;
+ 
+ // ======================================================================
+ 
+@@ -119,6 +160,22 @@ void Direct3d11_DynamicVertexBufferData::install()
+ 	hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+ 	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (dynamic VB ring) failed: %s", hr);
+ 
++	// DEDICATED SOFT-SKIN RING (2026-06-07): a SECOND ring, same size, used ONLY by skinned
++	// dynamic VBs (vertexSize==48). One extra buffer created ONCE here -- NOT per-instance
++	// (so no nvwgf2um mass-CreateBuffer churn). CuiLayer's whole-ring WRITE_DISCARD hits only
++	// the main ring; the skin ring discards once/frame (beginFrameSkin) then appends, so a
++	// deferred skinned draw never reads a generation renamed by UI churn.
++	// 16 MB (vs the 2 MB main ring) so a frame's worth of ALL non-UI dynamic geometry cannot
++	// wrap it mid-frame -- a mid-frame WRITE_DISCARD would re-create the very hazard we are
++	// testing. Oversized ON PURPOSE for a clean experiment; size down once proven.
++	ms_skinSize = 16 * 1024 * 1024;
++	D3D11_BUFFER_DESC bdSkin = bd;
++	bdSkin.ByteWidth = static_cast<UINT>(ms_skinSize);
++	hr = device->CreateBuffer(&bdSkin, nullptr, &ms_d3dSkinRingBuffer);
++	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (soft-skin VB ring) failed: %s", hr);
++	ms_skinUsed     = 0;
++	ms_skinNewFrame = true;
++
+ 	ms_used     = 0;
+ 	ms_newFrame = true;
+ 	ms_locksSinceResourceCreation    = 0;
+@@ -134,6 +191,7 @@ void Direct3d11_DynamicVertexBufferData::install()
+ void Direct3d11_DynamicVertexBufferData::remove()
+ {
+ 	ms_d3dRingBuffer.Reset();
++	ms_d3dSkinRingBuffer.Reset();
+ 
+ 	delete ms_memoryBlockManager;
+ 	ms_memoryBlockManager = nullptr;
+@@ -141,6 +199,16 @@ void Direct3d11_DynamicVertexBufferData::remove()
+ 
+ // ----------------------------------------------------------------------
+ 
++void Direct3d11_DynamicVertexBufferData::beginFrameSkin()
++{
++	// Start the soft-skin ring on a fresh WRITE_DISCARD generation each frame. Called
++	// once/frame from the gl_api update hook (Direct3d11.cpp update_impl), BEFORE the first
++	// beginScene -- NOT per-pass (per-pass reset tears geometry: draws defer across passes).
++	ms_skinNewFrame = true;
++}
++
++// ----------------------------------------------------------------------
++
+ void Direct3d11_DynamicVertexBufferData::beginFrame()
+ {
+ 	// Wrap at the start of each frame so per-frame dynamic uploads don't
+@@ -157,6 +225,11 @@ ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getSharedRingBuffer()
+ 	return ms_d3dRingBuffer.Get();
+ }
+ 
++int Direct3d11_DynamicVertexBufferData::getDiscardsEver()
++{
++	return ms_discardsEver;
++}
++
+ // ----------------------------------------------------------------------
+ 
+ void *Direct3d11_DynamicVertexBufferData::operator new(size_t size)
+@@ -183,7 +256,8 @@ Direct3d11_DynamicVertexBufferData::Direct3d11_DynamicVertexBufferData(const Ver
+ 	DynamicVertexBufferGraphicsData(),
+ 	m_vertexBufferDescriptor(Direct3d11_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+ 	m_numberOfVertices(0),
+-	m_offset(0)
++	m_offset(0),
++	m_ringBuffer(nullptr)
+ {
+ }
+ 
+@@ -219,10 +293,37 @@ void Direct3d11_DynamicVertexBufferData::roundUpUsed() const
+ 
+ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+ {
+-	roundUpUsed();
+-
+ 	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+-	int const length     = numberOfVertices * vertexSize;
++
++	// DEDICATED SOFT-SKIN RING routing. (Count-based `numberOfVertices < 16384` was tried and
++	// REVERTED: it broke the whole-ring lockers -- CuiLayer/ShadowVolume/Reticle call
++	// getNumberOfLockableDynamicVertices() [vSize-based, returns MAIN] then lock; when that lock
++	// was small it routed to SKIN, splitting query from lock -> screen-filling corruption.)
++	// Back to the vSize discriminator as the known baseline for the draw-time readback diagnostic.
++#if P19_SKIN_RING_DISABLED
++	bool const           isSkin       = false;  // TEST: everything -> main ring (no skin ring)
++#else
++	bool const           isSkin       = (vertexSize != 28) && (vertexSize != 24);
++#endif
++	int                 &ringUsed     = isSkin ? ms_skinUsed     : ms_used;
++	int const            ringSize     = isSkin ? ms_skinSize     : ms_size;
++	bool                &ringNewFrame = isSkin ? ms_skinNewFrame : ms_newFrame;
++	ID3D11Buffer * const ringBuffer   = isSkin ? ms_d3dSkinRingBuffer.Get() : ms_d3dRingBuffer.Get();
++
++	// CONSULT-32 TEST (diagnostic): force WRITE_DISCARD on every skin-ring lock. 2026-06-07: this
++	// diagnostic was LEFT ON and was polluting every measurement -- cape-draw-probe showed EVERY
++	// skin draw binding offset 0 (forced rename) with ~36k discards/run, the worst case for a
++	// deferred-draw-reads-renamed-generation hazard. Turned OFF to restore baseline append
++	// (WRITE_NO_OVERWRITE at distinct offsets) so the next measurement reflects reality, not the probe.
++#if P19_FORCE_SKIN_DISCARD
++	if (isSkin)
++		forceDiscard = true;
++#endif
++
++	// round used up to vertexSize alignment (inlined roundUpUsed for the selected ring)
++	ringUsed = ((ringUsed + vertexSize - 1) / vertexSize) * vertexSize;
++
++	int const length = numberOfVertices * vertexSize;
+ 
+ #if P19_THREAD_AUDIT
+ 	if (!Os::isMainThread())
+@@ -247,28 +348,28 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
+ #if P19_DISCARD_ONLY
+ 	forceDiscard = true;  // diagnostic: rename every lock (kills intra-frame reuse hazard)
+ #endif
+-	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
++	if (ringNewFrame || forceDiscard || ringUsed + length > ringSize)
+ 	{
+-		ms_newFrame = false;
++		ringNewFrame = false;
+ 		++ms_discardsSinceBeginFrame;
+ 		++ms_discardsSinceResourceCreation;
+ 		++ms_discardsEver;
+ 		discard = 1;
+ 
+-		DEBUG_FATAL(length > ms_size, ("Too many vertices %d/%d", numberOfVertices, ms_size / vertexSize));
++		DEBUG_FATAL(length > ringSize, ("Too many vertices %d/%d", numberOfVertices, ringSize / vertexSize));
+ 
+ 		mapType = D3D11_MAP_WRITE_DISCARD;
+-		ms_used = 0;
++		ringUsed = 0;
+ 	}
+ 
+ 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+ 	NOT_NULL(context);
+ 
+ 	D3D11_MAPPED_SUBRESOURCE mapped = {};
+-	HRESULT const hr = context->Map(ms_d3dRingBuffer.Get(), 0, mapType, 0, &mapped);
++	HRESULT const hr = context->Map(ringBuffer, 0, mapType, 0, &mapped);
+ 	FATAL(FAILED(hr),
+ 		("Could not lock dynamic vb %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards",
+-		 HRESULT_CODE(hr), discard, ms_used, length,
++		 HRESULT_CODE(hr), discard, ringUsed, length,
+ 		 ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver,
+ 		 ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+ 	NOT_NULL(mapped.pData);
+@@ -276,14 +377,30 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
+ 	// Track this lock's slice. The engine writes into the byte range
+ 	// [m_offset, m_offset + length); after Unmap the GPU sees the writes.
+ 	m_numberOfVertices = numberOfVertices;
+-	m_offset           = ms_used / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
++	m_offset           = ringUsed / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
++	m_ringBuffer       = ringBuffer;             // bind from THIS ring (main or skin)
++
++	void * const sliceStart = static_cast<char *>(mapped.pData) + ringUsed;
+ 
+-	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+-	ms_used += length;
++	// CONSULT-32 WHOLE-PATH PROBE C: capture which ring + offset + discard this lock used, so the
++	// unlock outlier probe (Probe B) can report the lock context for each spiking dynamic-VB slice.
++	s_lastLockIsSkin   = isSkin ? 1 : 0;
++	s_lastLockDiscard  = discard;
++	s_lastLockOffset   = m_offset;
++	s_lastLockRingUsed = ringUsed;
++
++	ringUsed += length;
+ 
+ 	// Plan 11-09.15 Iter-4 (Test A): stash for unlock-time snapshot.
+ 	s_lastLockedSliceCPUPtr = sliceStart;
+ 
++	// CONSULT-32 SENTINEL (skin ring only): fill the slice with 0x7F (~3.4e38) BEFORE the engine
++	// writes. Probe B (unlock) checks whether the SPIKE verts still hold the sentinel (= nobody wrote
++	// them -> read-past / lock>write) or hold real garbage (= a stray write landed there). Decides the
++	// last fork. Skin ring is plenty big; sentinel-filling the locked slice is cheap.
++	if (isSkin)
++		memset(sliceStart, 0x7F, static_cast<size_t>(length));
++
+ 	return sliceStart;
+ }
+ 
+@@ -341,13 +458,164 @@ void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
+ 				}
+ 			}
+ 		}
++
++		// CAPE-COLLAPSE D3D11-SIDE PROBE 2026-06-06 (DIAGNOSTIC -- REMOVE after).
++		// The engine-side probe PROVED the CPU skin computes distinct positions,
++		// yet the GPU VB (Capture15 eid 2497) has 98/123 verts collapsed to ONE
++		// point. This reads back the just-written D3D11 slice (BEFORE Unmap) for
++		// garment-sized skinned locks and detects an identical-position run.
++		// COLLAPSE here => the write/copy INTO the D3D11 buffer already landed
++		// collapsed (stride/format/iterator mismatch). No collapse here => the
++		// collapse appears later (offset/discard/bind/GPU read). Position read at
++		// slice byte offset 0 (xyz floats; sanity-check the logged pos vs the
++		// engine probe's object-space values). Writes stage/cape-d3d11-probe.txt.
++		{
++			int const cdVertexSize = m_vertexBufferDescriptor.vertexSize;
++			if (s_lastLockedSliceCPUPtr && numberOfVertices >= 64 && numberOfVertices <= 300 && cdVertexSize >= 24)
++			{
++				static int s_capeD3DLogged = 0;
++				static int s_capeD3DCall   = 0;
++				++s_capeD3DCall;
++				if (s_capeD3DLogged < 500)
++				{
++					uint8_t const *cdVb = static_cast<uint8_t const *>(s_lastLockedSliceCPUPtr);
++					float cdPpx = *reinterpret_cast<float const *>(cdVb + 0);
++					float cdPpy = *reinterpret_cast<float const *>(cdVb + 4);
++					float cdPpz = *reinterpret_cast<float const *>(cdVb + 8);
++					int   cdCurRun = 1, cdCurStart = 0, cdLongRun = 1, cdLongStart = 0;
++					float cdLongX = cdPpx, cdLongY = cdPpy, cdLongZ = cdPpz;
++					for (int cdV = 1; cdV < numberOfVertices; ++cdV)
++					{
++						uint8_t const *cdSrc = cdVb + cdV * cdVertexSize;
++						float cdCx = *reinterpret_cast<float const *>(cdSrc + 0);
++						float cdCy = *reinterpret_cast<float const *>(cdSrc + 4);
++						float cdCz = *reinterpret_cast<float const *>(cdSrc + 8);
++						float cdDx = cdCx - cdPpx, cdDy = cdCy - cdPpy, cdDz = cdCz - cdPpz;
++						if ((cdDx * cdDx + cdDy * cdDy + cdDz * cdDz) < 1e-8f)
++						{
++							++cdCurRun;
++							if (cdCurRun > cdLongRun) { cdLongRun = cdCurRun; cdLongStart = cdCurStart; cdLongX = cdCx; cdLongY = cdCy; cdLongZ = cdCz; }
++						}
++						else { cdCurRun = 1; cdCurStart = cdV; }
++						cdPpx = cdCx; cdPpy = cdCy; cdPpz = cdCz;
++					}
++					bool const cdCollapse = (cdLongRun >= 16);
++					bool const cdSampled  = (s_capeD3DCall <= 80) || (s_capeD3DCall % 25 == 0);
++					if (cdCollapse || cdSampled)
++					{
++						++s_capeD3DLogged;
++						static bool s_capeD3DFirst = true;
++						FILE *cdFp = nullptr;
++						fopen_s(&cdFp, "cape-d3d11-probe.txt", s_capeD3DFirst ? "wb" : "ab");
++						s_capeD3DFirst = false;
++						if (cdFp)
++						{
++							fprintf(cdFp,
++								"%s call=%d numVerts=%d vSize=%d longestRun=%d runStart=%d pos=[%.4f %.4f %.4f] firstPos=[%.4f %.4f %.4f] offsetVerts=%d discards=%d\n",
++								cdCollapse ? "COLLAPSE" : "HB", s_capeD3DCall, numberOfVertices, cdVertexSize,
++								cdLongRun, cdLongStart, cdLongX, cdLongY, cdLongZ,
++								*reinterpret_cast<float const *>(cdVb + 0), *reinterpret_cast<float const *>(cdVb + 4), *reinterpret_cast<float const *>(cdVb + 8),
++								m_offset, ms_discardsEver);
++							fclose(cdFp);
++						}
++					}
++				}
++			}
++		}
++
++		// CONSULT-31 DYNAMIC-VB OUTLIER SCAN (DIAGNOSTIC -- remove after). Reads the COPIED dynamic VB
++		// (copy output, post systemStream->dynamic). Computes centroid and flags verts flung far from it
++		// = spikes. Pairs with the systemStream skin probe (fillVertexBuffer cape-skin-spike.txt): if the
++		// SAME spike shows here (dynamic) but NOT in the skin probe (systemStream), the COPY introduced
++		// it (Kenny's "after skinning"). If it shows in BOTH, skinning is the source. Logs cape-dynvb-outlier.txt.
++		{
++			int const olVertexSize = m_vertexBufferDescriptor.vertexSize;
++			if (s_lastLockedSliceCPUPtr && numberOfVertices >= 32 && numberOfVertices < 8192 && olVertexSize >= 24)
++			{
++				uint8_t const *olVb = static_cast<uint8_t const *>(s_lastLockedSliceCPUPtr);
++				// SENTINEL-AWARE: classify verts as sentinel (unwritten, |comp|>1e30) vs written.
++				// Centroid/outliers computed over WRITTEN verts only.
++				double cx = 0, cy = 0, cz = 0; int written = 0;
++				int senCount = 0, senFirstIdx = -1;
++				for (int v = 0; v < numberOfVertices; ++v)
++				{
++					float const *p = reinterpret_cast<float const *>(olVb + v * olVertexSize);
++					bool const sentinel = (p[0] > 1e30f) || (p[0] < -1e30f) || (p[1] > 1e30f) || (p[2] > 1e30f);
++					if (sentinel) { ++senCount; if (senFirstIdx < 0) senFirstIdx = v; }
++					else          { cx += p[0]; cy += p[1]; cz += p[2]; ++written; }
++				}
++				float const fcx = static_cast<float>(cx / (written ? written : 1));
++				float const fcy = static_cast<float>(cy / (written ? written : 1));
++				float const fcz = static_cast<float>(cz / (written ? written : 1));
++				double meanDist = 0;
++				for (int v = 0; v < numberOfVertices; ++v)
++				{
++					float const *p = reinterpret_cast<float const *>(olVb + v * olVertexSize);
++					if ((p[0] > 1e30f) || (p[0] < -1e30f) || (p[1] > 1e30f) || (p[2] > 1e30f)) continue;
++					float const dx = p[0]-fcx, dy = p[1]-fcy, dz = p[2]-fcz;
++					meanDist += sqrt(static_cast<double>(dx*dx + dy*dy + dz*dz));
++				}
++				meanDist /= (written ? written : 1);
++				float const thresh = static_cast<float>(8.0 * meanDist + 50.0);
++				int olCount = 0, olFirstIdx = -1; float olFx = 0, olFy = 0, olFz = 0, olMaxD = 0;
++				for (int v = 0; v < numberOfVertices; ++v)
++				{
++					float const *p = reinterpret_cast<float const *>(olVb + v * olVertexSize);
++					if ((p[0] > 1e30f) || (p[0] < -1e30f) || (p[1] > 1e30f) || (p[2] > 1e30f)) continue; // skip sentinel (counted separately)
++					float const dx = p[0]-fcx, dy = p[1]-fcy, dz = p[2]-fcz;
++					float const d = sqrt(dx*dx + dy*dy + dz*dz);
++					if (d > thresh)
++					{
++						if (olFirstIdx < 0) { olFirstIdx = v; olFx = p[0]; olFy = p[1]; olFz = p[2]; }
++						++olCount; if (d > olMaxD) olMaxD = d;
++					}
++				}
++				static int s_olLogged = 0;
++				if ((olCount > 0 || senCount > 0) && s_olLogged < 15000)
++				{
++					++s_olLogged;
++					static bool s_olFirst = true;
++					FILE *olFp = nullptr;
++					fopen_s(&olFp, "cape-dynvb-outlier.txt", s_olFirst ? "wb" : "ab");
++					s_olFirst = false;
++					if (olFp)
++					{
++						fprintf(olFp,
++							"%s numVerts=%d vSize=%d outliers=%d firstIdx=%d firstPos=[%.1f %.1f %.1f] maxD=%.0f UNWRITTEN(sentinel)=%d senFirstIdx=%d centroid=[%.1f %.1f %.1f] offsetVerts=%d ring=%s discard=%d lockOff=%d\n",
++							senCount > 0 ? "TAIL-UNWRITTEN" : "OUTLIER",
++							numberOfVertices, olVertexSize, olCount, olFirstIdx, olFx, olFy, olFz, olMaxD,
++							senCount, senFirstIdx,
++							fcx, fcy, fcz, m_offset,
++							s_lastLockIsSkin ? "SKIN" : "MAIN", s_lastLockDiscard, s_lastLockOffset);
++						fclose(olFp);
++					}
++				}
++
++#if P19_TERRAIN_SPIKE_CLAMP
++				// DISAMBIGUATOR: collapse the detected outlier verts to this draw's centroid BEFORE Unmap,
++				// so the terrain stale-tail spike vanishes on the live screen. See P19_TERRAIN_SPIKE_CLAMP.
++				if (olCount > 0 && written > 0)
++				{
++					uint8_t *wVb = static_cast<uint8_t *>(s_lastLockedSliceCPUPtr);
++					for (int v = 0; v < numberOfVertices; ++v)
++					{
++						float *wp = reinterpret_cast<float *>(wVb + v * olVertexSize);
++						if ((wp[0] > 1e30f) || (wp[0] < -1e30f) || (wp[1] > 1e30f) || (wp[2] > 1e30f)) continue;
++						float const dxx = wp[0]-fcx, dyy = wp[1]-fcy, dzz = wp[2]-fcz;
++						if (sqrtf(dxx*dxx + dyy*dyy + dzz*dzz) > thresh) { wp[0]=fcx; wp[1]=fcy; wp[2]=fcz; }
++					}
++				}
++#endif
++			}
++		}
++
+ 		s_lastLockedSliceCPUPtr = nullptr;
+ 	}
+ 
+ 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+ 	NOT_NULL(context);
+ 
+-	context->Unmap(ms_d3dRingBuffer.Get(), 0);
++	context->Unmap(m_ringBuffer ? m_ringBuffer : ms_d3dRingBuffer.Get(), 0);
+ 
+ 	m_numberOfVertices = numberOfVertices;
+ 	// Note: ms_used was already advanced in lock(); we don't re-adjust
+@@ -361,8 +629,17 @@ void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
+ 
+ int Direct3d11_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool withDiscard)
+ {
++	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
++#if !P19_SKIN_RING_DISABLED
++	if ((vertexSize != 28) && (vertexSize != 24))
++	{
++		// dedicated (non-UI) ring -- match lock() routing
++		ms_skinUsed = ((ms_skinUsed + vertexSize - 1) / vertexSize) * vertexSize;
++		return (ms_skinSize - (withDiscard ? 0 : ms_skinUsed)) / vertexSize;
++	}
++#endif
+ 	roundUpUsed();
+-	return (ms_size - (withDiscard ? 0 : ms_used)) / m_vertexBufferDescriptor.vertexSize;
++	return (ms_size - (withDiscard ? 0 : ms_used)) / vertexSize;
+ }
+ 
+ // ----------------------------------------------------------------------
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
+index e8355d0eb..8bd4d7471 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
+@@ -41,6 +41,18 @@ public:
+ 
+ 	static ID3D11Buffer *getSharedRingBuffer();
+ 
++	// DEDICATED SOFT-SKIN RING 2026-06-07: per-frame WRITE_DISCARD reset for the soft-skin
++	// ring. Call ONCE per frame from the gl_api update hook (before the first beginScene,
++	// NOT per-pass) so the skin ring starts each frame on a fresh generation and then
++	// appends (NO_OVERWRITE) within the frame -- a frame's skinned slices coexist at
++	// distinct offsets, so each DEFERRED draw reads its own data.
++	static void beginFrameSkin();
++
++	// CAPE-COLLAPSE diagnostic 2026-06-06: lifetime WRITE_DISCARD count, so the draw
++	// probe (StateCache) can compare discards-at-draw vs discards-at-write for a garment
++	// slice. A large gap proves the deferred draw reads a later buffer generation.
++	static int getDiscardsEver();
++
+ public:
+ 
+ 	explicit Direct3d11_DynamicVertexBufferData(const VertexBuffer &vertexBuffer);
+@@ -57,6 +69,11 @@ public:
+ 	int getVertexSize() const;
+ 	int getOffset() const;
+ 
++	// The ring buffer this instance's most recent lock() actually used (main ring or the
++	// dedicated soft-skin ring). The bind sites MUST use this, not getSharedRingBuffer(),
++	// so a skinned slice is bound from the same buffer it was written into.
++	ID3D11Buffer *getRingBuffer() const;
++
+ private:
+ 
+ 	void roundUpUsed() const;
+@@ -76,6 +93,13 @@ private:
+ 	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dRingBuffer;
+ 	static MemoryBlockManager                   *ms_memoryBlockManager;
+ 
++	// DEDICATED SOFT-SKIN RING (2026-06-07). Second dynamic ring used ONLY by skinned
++	// dynamic VBs (vertexSize==48). Isolated from CuiLayer's whole-ring WRITE_DISCARD.
++	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dSkinRingBuffer;
++	static int                                   ms_skinSize;
++	static int                                   ms_skinUsed;
++	static bool                                  ms_skinNewFrame;
++
+ 	static int                                   ms_locksSinceBeginFrame;
+ 	static int                                   ms_discardsSinceBeginFrame;
+ 	static int                                   ms_locksSinceResourceCreation;
+@@ -87,6 +111,7 @@ private:
+ 	const VertexBufferDescriptor    &m_vertexBufferDescriptor;
+ 	int                              m_numberOfVertices;
+ 	int                              m_offset;     // byte offset into ring at last lock
++	ID3D11Buffer                    *m_ringBuffer; // which ring (main/skin) the last lock used
+ };
+ 
+ // ======================================================================
+@@ -103,6 +128,15 @@ inline int Direct3d11_DynamicVertexBufferData::getOffset() const
+ 	return m_offset;
+ }
+ 
++// ----------------------------------------------------------------------
++
++inline ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getRingBuffer() const
++{
++	// Fall back to the main ring if this instance has never been locked (defensive; a bind
++	// without a prior lock would otherwise pass null and skip the draw).
++	return m_ringBuffer ? m_ringBuffer : ms_d3dRingBuffer.Get();
++}
++
+ // ======================================================================
+ 
+ #endif
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+index d34c557c4..061845a2f 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+@@ -274,6 +274,13 @@ namespace Direct3d11_StateCacheNamespace
+ 	                                      0.0f, 0.0f, 0.0f, 1.0f);
+ 	XMFLOAT4   s_cachedCameraPos = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+ 
++	// CONSULT-27 diagnostic: per-call sequence + last translation passed to the W-setter, so the
++	// draw-time probe can tell whether each spiking soft-skin draw actually set its world transform
++	// (seq advances, translation identity => SBSSP/engine passed identity) or used a stale default
++	// (seq flat across draws => the draw never called the W-setter).
++	int        s_owtSeq    = 0;
++	float      s_owtLastTx = 0.0f, s_owtLastTy = 0.0f, s_owtLastTz = 0.0f;
++
+ 	// Plan 17-08 (GAP-4) Producer A: the raw orthonormal object->world
+ 	// Transform (NOT scale-composed like s_cachedWorld) so we can reuse the
+ 	// engine's own Transform::rotate_p2l to map a world light direction into
+@@ -1948,6 +1955,11 @@ void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &o
+ 		static_cast<float>(m[2][0]) * scale.z, static_cast<float>(m[2][1]) * scale.z, static_cast<float>(m[2][2]) * scale.z, static_cast<float>(m[2][3]),
+ 		0.0f, 0.0f, 0.0f, 1.0f);
+ 
++	++s_owtSeq;   // CONSULT-27: track per-call sequence + translation for the draw-time probe
++	s_owtLastTx = static_cast<float>(m[0][3]);
++	s_owtLastTy = static_cast<float>(m[1][3]);
++	s_owtLastTz = static_cast<float>(m[2][3]);
++
+ 	composeSlot0Shadow();
+ 	s_anyMatrixWritten = true;   // Kept for back-compat; Fix C uses s_slot0Dirty instead
+ 
+@@ -2262,7 +2274,7 @@ void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
+ 			safe_cast<Direct3d11_DynamicVertexBufferData const *>(dvb->m_graphicsData);
+ 		if (!data)
+ 			return;
+-		ms_currentVB             = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
++		ms_currentVB             = data->getRingBuffer();  // dedicated soft-skin ring vs main ring
+ 		ms_currentVBStride       = static_cast<UINT>(data->getVertexSize());
+ 		// Plan 11-09.12 Iter-1: Direct3d11_DynamicVertexBufferData::getOffset()
+ 		// returns the slice's VERTEX index (Direct3d11_DynamicVertexBufferData.cpp
+@@ -3218,20 +3230,328 @@ void Direct3d11_StateCache::drawPartialIndexedLineStrip(int baseIndex, int /*min
+ 		static_cast<INT>(baseIndex));
+ }
+ 
+-void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
++void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+ {
+ 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+ 		return;
++
++	// CAPE-COLLAPSE DRAW-OFFSET PROBE v2 2026-06-06 (DIAGNOSTIC -- REMOVE after).
++	// Engine skin + D3D11 write are PROVEN clean (cape-collapse-probe / cape-d3d11-probe);
++	// the GPU draw reads collapsed. v1 gated on the SINGLE-stream state (ms_currentVBValid)
++	// and never fired -- SBSSP binds via setVertexBufferVector (the VECTOR path:
++	// ms_currentVBVectorActive=true, ms_currentVBValid=false). This logs the VECTOR stream-0
++	// bound offset at the garment draw and compares to the write offset (cape-d3d11-probe
++	// offsetVerts). boundVertOffset == write offset => bind matches => OVERWRITE/rename of the
++	// slice between write and the deferred draw. boundVertOffset != write offset => MISREAD
++	// (deferred draw binds the wrong offset). Read AFTER applyPreDrawState so the bind state is
++	// settled. stride 48 = the skinned garment format. Writes stage/cape-draw-probe.txt.
++	{
++		bool const cdVec    = ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0;
++		UINT const cdStride = cdVec ? ms_currentVBVectorStrides[0] : ms_currentVBStride;
++		UINT const cdOffset = cdVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
++		ID3D11Buffer * const cdBuf = cdVec ? ms_currentVBVectorBuffers[0] : ms_currentVB;
++		if (cdBuf && cdStride == 48 && primitiveCount >= 60 && primitiveCount <= 700)
++		{
++			static int s_capeDrawLogged = 0;
++			static int s_capeDrawCall   = 0;
++			++s_capeDrawCall;
++			bool const capeDrawSampled = (s_capeDrawCall <= 120) || (s_capeDrawCall % 20 == 0);
++			if (capeDrawSampled && s_capeDrawLogged < 500)
++			{
++				++s_capeDrawLogged;
++				bool const capeIsRing = (cdBuf == Direct3d11_DynamicVertexBufferData::getSharedRingBuffer());
++				static bool s_capeDrawFirst = true;
++				FILE *capeDrawFp = nullptr;
++				fopen_s(&capeDrawFp, "cape-draw-probe.txt", s_capeDrawFirst ? "wb" : "ab");
++				s_capeDrawFirst = false;
++				if (capeDrawFp)
++				{
++					// CONSULT-35 READ-PAST CHECK (Cursor+Opus+Codex+render-tree convergence): D3D11 DrawIndexed
++					// drops D3D9's MinVertexIndex/NumVertices fetch bound. If the per-sub-draw declared window
++					// max index (minVtx+numVtx-1) >= the bound slice vertex count, the GPU fetches PAST the
++					// written slice into the prior WRITE_NO_OVERWRITE same-creature slice (same UVs -> texture
++					// correct; stale positions -> shards). readPast=1 on a spiking draw = root cause confirmed.
++					int const maxIdxWin  = minimumVertexIndex + numberOfVertices - 1;
++					int const sliceVtx   = static_cast<int>(ms_currentVBVertexCount);
++					int const readPast    = (maxIdxWin >= sliceVtx) ? 1 : 0;
++					fprintf(capeDrawFp,
++						"DRAW call=%d vec=%d ring=%d boundVertOffset=%d boundByteOffset=%u stride=%u streams=%d startIndex=%d baseIndex=%d primCount=%d minVtx=%d numVtx=%d maxIdxWin=%d sliceVtx=%d readPast=%d discards=%d\n",
++						s_capeDrawCall, cdVec ? 1 : 0, capeIsRing ? 1 : 0,
++						static_cast<int>(cdOffset / 48u), cdOffset, cdStride, ms_currentVBVectorStreamCount,
++						startIndex, baseIndex, primitiveCount,
++						minimumVertexIndex, numberOfVertices, maxIdxWin, sliceVtx, readPast,
++						Direct3d11_DynamicVertexBufferData::getDiscardsEver());
++					fclose(capeDrawFp);
++				}
++			}
++		}
++	}
++
++	// CAPE-COLLAPSE STAGING READ-BACK 2026-06-06 (DIAGNOSTIC -- REMOVE after). GOLD STANDARD:
++	// copy the BOUND ring region to a CPU-readable staging buffer right before DrawIndexed and
++	// scan what the GPU is actually about to fetch at the (correct) bound offset. COLLAPSE here
++	// => the ring slice IS overwritten by draw time (overwrite proven + the culprit value shown
++	// in collapsedPos; compare firstPos to the write probe's garment firstPos). Clean here => the
++	// GPU reads good data, look elsewhere. Map(READ) stalls the GPU -> tightly sampled.
++	{
++		bool const csVec    = ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0;
++		UINT const csStride = csVec ? ms_currentVBVectorStrides[0] : ms_currentVBStride;
++		UINT const csOffset = csVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
++		ID3D11Buffer * const csBuf = csVec ? ms_currentVBVectorBuffers[0] : ms_currentVB;
++		// Broadened 2026-06-07: was csStride==48-only (missed the vSize-32 robe + the 324/frame
++		// vSize-28 skinned slices, i.e. the ACTUAL spikers) and scanned a fixed 256-vert tail
++		// (mostly past the drawn range). Now: ALL soft-skin strides, stride-generic addressing,
++		// and the collapse scan + nearZero count run ONLY over the drawn range [0,numVtx).
++		if (csBuf && csStride >= 24 && csStride <= 56 && primitiveCount >= 30 && primitiveCount <= 1200)
++		{
++			static int s_csLogged = 0;
++			static int s_csCall   = 0;
++			++s_csCall;
++			bool const csSampled = /* exclude camera-relative player (identity-W ~ owtTrans 0); aim at real-W NPCs */ !(s_owtLastTx > -2.0f && s_owtLastTx < 2.0f && s_owtLastTz > -2.0f && s_owtLastTz < 2.0f);  /* log EVERY real-W NPC draw to catch the flicker */
++			int  const csVerts     = (numberOfVertices > 1 && numberOfVertices < 300) ? numberOfVertices : 300;
++			UINT const csCopyBytes = static_cast<UINT>(csVerts) * csStride;
++			if (csSampled && s_csLogged < 20000)
++			{
++				ID3D11Device        *csDev = Direct3d11_Device::getDevice();
++				ID3D11DeviceContext *csCtx = Direct3d11_Device::getContext();
++				static Microsoft::WRL::ComPtr<ID3D11Buffer> s_csStaging;  // fixed max 300 verts * 56 bytes
++				if (csDev && csCtx && !s_csStaging)
++				{
++					D3D11_BUFFER_DESC csd = {};
++					csd.ByteWidth      = 300u * 56u;
++					csd.Usage          = D3D11_USAGE_STAGING;
++					csd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
++					csDev->CreateBuffer(&csd, nullptr, s_csStaging.GetAddressOf());
++				}
++				D3D11_BUFFER_DESC csBufDesc = {};
++				csBuf->GetDesc(&csBufDesc);
++				if (csDev && csCtx && s_csStaging && (csOffset + csCopyBytes) <= csBufDesc.ByteWidth)
++				{
++					D3D11_BOX csBox = {};
++					csBox.left = csOffset; csBox.right = csOffset + csCopyBytes;
++					csBox.top = 0; csBox.bottom = 1; csBox.front = 0; csBox.back = 1;
++					csCtx->CopySubresourceRegion(s_csStaging.Get(), 0, 0, 0, 0, csBuf, 0, &csBox);
++					D3D11_MAPPED_SUBRESOURCE csm = {};
++					// Map(READ) blocks the CPU until the GPU drains all prior work == the forced
++					// semaphore stall. If the spike vanishes while this runs -> CPU/GPU ordering hazard.
++					if (SUCCEEDED(csCtx->Map(s_csStaging.Get(), 0, D3D11_MAP_READ, 0, &csm)) && csm.pData)
++					{
++						uint8_t const *csVb = static_cast<uint8_t const *>(csm.pData);
++						float const csFx = *reinterpret_cast<float const *>(csVb + 0);
++						float const csFy = *reinterpret_cast<float const *>(csVb + 4);
++						float const csFz = *reinterpret_cast<float const *>(csVb + 8);
++						float csPx = csFx, csPy = csFy, csPz = csFz;
++						int csCurRun = 1, csCurStart = 0, csLongRun = 1, csLongStart = 0;
++						float csLx = csFx, csLy = csFy, csLz = csFz;
++						DirectX::XMFLOAT4X4 const &csM = s_slot0Shadow.objectWorldCameraProjectionMatrix;
++						float csMinW = csFx*csM._14 + csFy*csM._24 + csFz*csM._34 + csM._44;
++						int   csMinWVert = 0, csNearZero = 0;
++						for (int csV = 1; csV < csVerts; ++csV)   // DRAWN range only
++						{
++							uint8_t const *csS = csVb + csV * csStride;   // stride-generic
++							float const csCx = *reinterpret_cast<float const *>(csS + 0);
++							float const csCy = *reinterpret_cast<float const *>(csS + 4);
++							float const csCz = *reinterpret_cast<float const *>(csS + 8);
++							float const csVW = csCx*csM._14 + csCy*csM._24 + csCz*csM._34 + csM._44;
++							if (csVW < csMinW) { csMinW = csVW; csMinWVert = csV; }
++							if (csVW < 0.1f) ++csNearZero;
++							float const csDx = csCx - csPx, csDy = csCy - csPy, csDz = csCz - csPz;
++							if ((csDx * csDx + csDy * csDy + csDz * csDz) < 1e-8f)
++							{
++								++csCurRun;
++								if (csCurRun > csLongRun) { csLongRun = csCurRun; csLongStart = csCurStart; csLx = csCx; csLy = csCy; csLz = csCz; }
++							}
++							else { csCurRun = 1; csCurStart = csV; }
++							csPx = csCx; csPy = csCy; csPz = csCz;
++						}
++						csCtx->Unmap(s_csStaging.Get(), 0);
++						++s_csLogged;
++						// drawnCollapseRun>=16 == the GPU READS collapsed VB data within this draw's
++						// own range => VB-data bug. Small run + high nearZero => VB clean, transform/clip.
++						bool const csCollapse = (csLongRun >= 16);
++						// CONSULT-27 disambiguation (Opus G + Cursor F): the shader computes clip.w as
++						// pos . col3 of the uploaded (transposed) matrix. The camera-depth constant (~+20)
++						// belongs in col3. clipW_c3 = what the shader gets; clipW_r3 = pos . row3 (the
++						// OTHER transpose convention). +20 in r3 not c3 => WVP mis-transposed; +20 nowhere
++						// => world translation dropped/stale (s_cachedWorld). Wtrans_c/_r = where W keeps
++						// its translation; proj33/34/43 = projection z->w (perspective vs collapsed).
++						float const csClipW   = csFx*csM._14 + csFy*csM._24 + csFz*csM._34 + csM._44;
++						float const csClipWr3 = csFx*csM._41 + csFy*csM._42 + csFz*csM._43 + csM._44;
++						float const csWtx = s_cachedWorld._14, csWty = s_cachedWorld._24, csWtz = s_cachedWorld._34;
++						float const csWrx = s_cachedWorld._41, csWry = s_cachedWorld._42, csWrz = s_cachedWorld._43;
++						// render-target width: rule out a minimap/preview sub-render (small RT) vs the main scene
++						UINT csRtW = 0;
++						{
++							ID3D11RenderTargetView *csRtv = nullptr;
++							csCtx->OMGetRenderTargets(1, &csRtv, nullptr);
++							if (csRtv)
++							{
++								ID3D11Resource *csRes = nullptr;
++								csRtv->GetResource(&csRes);
++								if (csRes)
++								{
++									ID3D11Texture2D *csTex = nullptr;
++									if (SUCCEEDED(csRes->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void **>(&csTex))) && csTex)
++									{
++										D3D11_TEXTURE2D_DESC csTd = {};
++										csTex->GetDesc(&csTd);
++										csRtW = csTd.Width;
++										csTex->Release();
++									}
++									csRes->Release();
++								}
++								csRtv->Release();
++							}
++						}
++						static bool s_csFirst = true;
++						FILE *csFp = nullptr;
++						fopen_s(&csFp, "cape-stage-probe.txt", s_csFirst ? "wb" : "ab");
++						s_csFirst = false;
++						if (csFp)
++						{
++							fprintf(csFp,
++								"%s call=%d stride=%u numVtx=%d rtW=%u clipW_c3=%.4f clipW_r3=%.4f nearZero=%d/%d "
++								"Wtrans_c=[%.1f %.1f %.1f] owtSeq=%d owtTrans=[%.1f %.1f %.1f] proj43=%.4f "
++								"firstPos=[%.4f %.4f %.4f]\n",
++								csCollapse ? "COLLAPSE" : "HB", s_csCall, csStride,
++								numberOfVertices, csRtW, csClipW, csClipWr3, csNearZero, csVerts,
++								csWtx, csWty, csWtz, s_owtSeq, s_owtLastTx, s_owtLastTy, s_owtLastTz,
++								s_cachedProj._43,
++								csFx, csFy, csFz);
++							fclose(csFp);
++						}
++						// One-shot FULL matrix dump for the first few spiking draws (Opus G table input):
++						// composite WVP + s_cachedWorld (full) + view translation + projection diag.
++						{
++							static int s_csMatDump = 0;
++							if ((csNearZero * 2 >= csVerts) && s_csMatDump < 200)
++							{
++								++s_csMatDump;
++								FILE *mf = nullptr;
++								fopen_s(&mf, "cape-wvp-matrix.txt", (s_csMatDump == 1) ? "wb" : "ab");
++								if (mf)
++								{
++									fprintf(mf, "=== spiking #%d call=%d stride=%u firstPos=[%.4f %.4f %.4f] clipW_c3=%.4f clipW_r3=%.4f ===\n",
++										s_csMatDump, s_csCall, csStride, csFx, csFy, csFz, csClipW, csClipWr3);
++									fprintf(mf, "WVP uploaded(transposed):\n  [%.4f %.4f %.4f %.4f]\n  [%.4f %.4f %.4f %.4f]\n  [%.4f %.4f %.4f %.4f]\n  [%.4f %.4f %.4f %.4f]\n",
++										csM._11,csM._12,csM._13,csM._14, csM._21,csM._22,csM._23,csM._24,
++										csM._31,csM._32,csM._33,csM._34, csM._41,csM._42,csM._43,csM._44);
++									fprintf(mf, "s_cachedWorld (engine pre-transpose):\n  [%.2f %.2f %.2f %.2f]\n  [%.2f %.2f %.2f %.2f]\n  [%.2f %.2f %.2f %.2f]\n  [%.2f %.2f %.2f %.2f]\n",
++										s_cachedWorld._11,s_cachedWorld._12,s_cachedWorld._13,s_cachedWorld._14,
++										s_cachedWorld._21,s_cachedWorld._22,s_cachedWorld._23,s_cachedWorld._24,
++										s_cachedWorld._31,s_cachedWorld._32,s_cachedWorld._33,s_cachedWorld._34,
++										s_cachedWorld._41,s_cachedWorld._42,s_cachedWorld._43,s_cachedWorld._44);
++									fprintf(mf, "view trans c=[%.1f %.1f %.1f] r=[%.1f %.1f %.1f] cameraPos=[%.1f %.1f %.1f]\n",
++										s_cachedView._14,s_cachedView._24,s_cachedView._34,
++										s_cachedView._41,s_cachedView._42,s_cachedView._43,
++										s_cachedCameraPos.x, s_cachedCameraPos.y, s_cachedCameraPos.z);
++									fprintf(mf, "proj _11=%.4f _22=%.4f _33=%.4f _34=%.4f _43=%.4f _44=%.4f\n\n",
++										s_cachedProj._11,s_cachedProj._22,s_cachedProj._33,s_cachedProj._34,s_cachedProj._43,s_cachedProj._44);
++									fclose(mf);
++								}
++							}
++						}
++					}
++				}
++			}
++		}
++	}
++
+ 	Direct3d11_Device::getContext()->DrawIndexed(
+ 		static_cast<UINT>(primitiveCount * 3),
+ 		static_cast<UINT>(startIndex),
+ 		static_cast<INT>(baseIndex));
+ }
+ 
+-void Direct3d11_StateCache::drawPartialIndexedTriangleStrip(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
++void Direct3d11_StateCache::drawPartialIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+ {
+ 	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+ 		return;
++
++	// CAPE-COLLAPSE STRIP READ-PAST PROBE 2026-06-07 (DIAGNOSTIC -- REMOVE after). CONSULT-24:
++	// tri-LIST draws are in-range (readPast=0). Strips use getTriStripVertexIndex() = the RAW
++	// un-compacted index while m_vertexCount is the COMPACTED count -> strip indices CAN exceed
++	// m_vertexCount-1 -> DrawIndexed fetches the ZERO tail past the locked slice -> collapse to
++	// origin -> spike. This mirrors the tri-list staging read-back for the STRIP path. Writes
++	// stage/cape-strip-probe.txt. readPast=1 on a strip draw => CONFIRMED.
++	{
++		bool const ssVec    = ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0;
++		UINT const ssStride = ssVec ? ms_currentVBVectorStrides[0] : ms_currentVBStride;
++		UINT const ssOffset = ssVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
++		ID3D11Buffer * const ssBuf = ssVec ? ms_currentVBVectorBuffers[0] : ms_currentVB;
++		if (ssBuf && ssStride == 48 && numberOfVertices >= 8 && numberOfVertices <= 4000)
++		{
++			static int s_ssLogged = 0;
++			static int s_ssCall   = 0;
++			++s_ssCall;
++			bool const ssSampled = (s_ssCall <= 60) || (s_ssCall % 30 == 0);
++			UINT const ssCopyBytes = 256u * 48u;
++			if (ssSampled && s_ssLogged < 200 && (ssOffset + ssCopyBytes) <= (2u * 1024u * 1024u))
++			{
++				ID3D11Device        *ssDev = Direct3d11_Device::getDevice();
++				ID3D11DeviceContext *ssCtx = Direct3d11_Device::getContext();
++				static Microsoft::WRL::ComPtr<ID3D11Buffer> s_ssStaging;
++				if (ssDev && ssCtx && !s_ssStaging)
++				{
++					D3D11_BUFFER_DESC ssd = {};
++					ssd.ByteWidth      = ssCopyBytes;
++					ssd.Usage          = D3D11_USAGE_STAGING;
++					ssd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
++					ssDev->CreateBuffer(&ssd, nullptr, s_ssStaging.GetAddressOf());
++				}
++				if (ssDev && ssCtx && s_ssStaging)
++				{
++					D3D11_BOX ssBox = {};
++					ssBox.left = ssOffset; ssBox.right = ssOffset + ssCopyBytes;
++					ssBox.top = 0; ssBox.bottom = 1; ssBox.front = 0; ssBox.back = 1;
++					ssCtx->CopySubresourceRegion(s_ssStaging.Get(), 0, 0, 0, 0, ssBuf, 0, &ssBox);
++					D3D11_MAPPED_SUBRESOURCE ssm = {};
++					if (SUCCEEDED(ssCtx->Map(s_ssStaging.Get(), 0, D3D11_MAP_READ, 0, &ssm)) && ssm.pData)
++					{
++						uint8_t const *ssVb = static_cast<uint8_t const *>(ssm.pData);
++						float ssPx = *reinterpret_cast<float const *>(ssVb + 0);
++						float ssPy = *reinterpret_cast<float const *>(ssVb + 4);
++						float ssPz = *reinterpret_cast<float const *>(ssVb + 8);
++						int ssCurRun = 1, ssCurStart = 0, ssLongRun = 1, ssLongStart = 0;
++						for (int ssV = 1; ssV < 256; ++ssV)
++						{
++							uint8_t const *ssS = ssVb + ssV * 48;
++							float const ssCx = *reinterpret_cast<float const *>(ssS + 0);
++							float const ssCy = *reinterpret_cast<float const *>(ssS + 4);
++							float const ssCz = *reinterpret_cast<float const *>(ssS + 8);
++							float const ssDx = ssCx - ssPx, ssDy = ssCy - ssPy, ssDz = ssCz - ssPz;
++							if ((ssDx * ssDx + ssDy * ssDy + ssDz * ssDz) < 1e-8f)
++							{
++								++ssCurRun;
++								if (ssCurRun > ssLongRun) { ssLongRun = ssCurRun; ssLongStart = ssCurStart; }
++							}
++							else { ssCurRun = 1; ssCurStart = ssV; }
++							ssPx = ssCx; ssPy = ssCy; ssPz = ssCz;
++						}
++						ssCtx->Unmap(s_ssStaging.Get(), 0);
++						++s_ssLogged;
++						int const ssMaxIndex = minimumVertexIndex + numberOfVertices - 1;
++						bool const ssCollapse = (ssLongRun >= 16);
++						int const ssReadPast = (ssCollapse && ssMaxIndex >= ssLongStart) ? 1 : 0;
++						static bool s_ssFirst = true;
++						FILE *ssFp = nullptr;
++						fopen_s(&ssFp, "cape-strip-probe.txt", s_ssFirst ? "wb" : "ab");
++						s_ssFirst = false;
++						if (ssFp)
++						{
++							fprintf(ssFp,
++								"%s STRIP call=%d boundVertOffset=%u minVtx=%d numVtx=%d maxIndex=%d runStart=%d readPast=%d longestRun=%d firstPos=[%.4f %.4f %.4f]\n",
++								ssCollapse ? "COLLAPSE" : "HB", s_ssCall, ssOffset / 48u,
++								minimumVertexIndex, numberOfVertices, ssMaxIndex, ssLongStart, ssReadPast, ssLongRun,
++								*reinterpret_cast<float const *>(ssVb + 0), *reinterpret_cast<float const *>(ssVb + 4), *reinterpret_cast<float const *>(ssVb + 8));
++							fclose(ssFp);
++						}
++					}
++				}
++			}
++		}
++	}
++
+ 	Direct3d11_Device::getContext()->DrawIndexed(
+ 		static_cast<UINT>(primitiveCount + 2),
+ 		static_cast<UINT>(startIndex),
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+index 52a73b3e5..74918ec5e 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+@@ -332,6 +332,8 @@ Direct3d11_StaticShaderData::Direct3d11_StaticShaderData(StaticShader const &sha
+ 	m_implementation(shader.getStaticShaderTemplate().m_effect->m_implementation),
+ 	m_passVS(),
+ 	m_passPS(),
++	m_passVSSlot(),  // UAF fix: live-deref slots (see header)
++	m_passPSSlot(),  // UAF fix: live-deref slots (see header)
+ 	m_passStages()  // Plan 11-09.14 (slot 0) / Plan 11-09.15 Iter-44E (all 8 stages)
+ {
+ 	construct(shader);
+@@ -369,6 +371,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
+ 	//   - ShaderImplementation.h  (Direct3d11_StaticShaderData for m_pass)
+ 	m_passVS.clear();
+ 	m_passPS.clear();
++	m_passVSSlot.clear();   // UAF fix: live-deref slots
++	m_passPSSlot.clear();   // UAF fix: live-deref slots
+ 	m_passTexcoordKey.clear();   // Plan 17-09
+ 	m_passStages.clear();
+ 	m_passMaterial.clear();
+@@ -380,6 +384,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
+ 	size_t const passCount = passes.size();
+ 	m_passVS.assign(passCount, nullptr);
+ 	m_passPS.assign(passCount, nullptr);
++	m_passVSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
++	m_passPSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
+ 	m_passTexcoordKey.assign(passCount, 0u);   // Plan 17-09
+ 	{
+ 		PerPassStages emptyStages;
+@@ -415,6 +421,10 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
+ 		{
+ 			m_passVS[passIndex] = static_cast<Direct3d11_VertexShaderData const *>(
+ 				pass->m_vertexShader->m_graphicsData);
++			// UAF fix: store the ADDRESS of the engine owner's m_graphicsData slot so
++			// apply() can re-read it LIVE (it is freed+recreated on graphics-data
++			// restore; the cast snapshot above would dangle). See header.
++			m_passVSSlot[passIndex] = &pass->m_vertexShader->m_graphicsData;
+ 
+ 			// Plan 17-09: compute this pass's texcoord-set key, mirroring
+ 			// Direct3d9_StaticShaderData::Pass::construct:550-578. Each VS texcoord
+@@ -450,6 +460,10 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
+ 		{
+ 			m_passPS[passIndex] = static_cast<Direct3d11_PixelShaderProgramData const *>(
+ 				pass->m_pixelShader->m_program->m_graphicsData);
++			// UAF fix: store the ADDRESS of the engine owner's m_graphicsData slot so
++			// apply() can re-read it LIVE (it is freed+recreated on graphics-data
++			// restore; the cast snapshot above would dangle -> the boot crash). See header.
++			m_passPSSlot[passIndex] = &pass->m_pixelShader->m_program->m_graphicsData;
+ 		}
+ 
+ 		// Plan 17-03 SR-1: per-pass MATERIAL + TEXTUREFACTOR source-data
+@@ -755,11 +769,30 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
+ 		if (passNumber >= 0 && static_cast<size_t>(passNumber) < m_passVS.size())
+ 		{
+ 			size_t const idx = static_cast<size_t>(passNumber);
++
++			// UAF FIX (release boot-crash 2026-06-02): re-derive the per-pass VS/PS
++			// graphics-data pointers LIVE from the stable engine-owner slots, instead
++			// of trusting the construct-time snapshot (m_passVS/m_passPS), which dangles
++			// after a device graphics-data remove/restore frees+recreates *m_graphicsData.
++			// D3D9 reads m_graphicsData live at apply for exactly this reason
++			// (Direct3d9_StaticShaderData.cpp:829). Use liveVS/livePS for every deref
++			// below; the snapshot vectors are kept only for construct-time work + the
++			// usesVertexShader() presence check (a stale-but-non-null entry still
++			// correctly answers "this pass has a VS/PS").
++			Direct3d11_VertexShaderData const * const liveVS =
++				(idx < m_passVSSlot.size() && m_passVSSlot[idx] && *m_passVSSlot[idx])
++					? static_cast<Direct3d11_VertexShaderData const *>(*m_passVSSlot[idx])
++					: nullptr;
++			Direct3d11_PixelShaderProgramData const * const livePS =
++				(idx < m_passPSSlot.size() && m_passPSSlot[idx] && *m_passPSSlot[idx])
++					? static_cast<Direct3d11_PixelShaderProgramData const *>(*m_passPSSlot[idx])
++					: nullptr;
++
+ 			// Plan 17-09: hand the StateCache BOTH the VS data and this pass's
+ 			// resolved texcoord-set key, so it binds the correct per-key variant
+ 			// (and passes the key explicitly into layout creation -- never ambient).
+-			Direct3d11_StateCache::setCurrentVSData(m_passVS[idx], m_passTexcoordKey[idx]);
+-			Direct3d11_StateCache::setCurrentPSData(m_passPS[idx]);
++			Direct3d11_StateCache::setCurrentVSData(liveVS, m_passTexcoordKey[idx]);
++			Direct3d11_StateCache::setCurrentPSData(livePS);
+ 
+ 			// Plan 17-09 (GAP-5): feed materialSpecularPower into the VS b0 shadow
+ 			// (lightData[25].w). Mirrors D3D9 applyLights_vertexShader:577 reading
+@@ -795,12 +828,12 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
+ 			// Direct3d9_StaticShaderData.cpp:835-897 per-pass apply semantics).
+ 			// R3-03b: !pm.m_materialValid passes upload ZERO material so stale
+ 			// data does NOT bleed into a subsequent material pass.
+-			if (m_passPS[idx] && idx < m_passMaterial.size())
++			if (livePS && idx < m_passMaterial.size())
+ 			{
+ 				PerPassMaterial const &pm = m_passMaterial[idx];
+ 				Direct3d11_PerMaterialCB & shadow = Direct3d11Namespace::getPerMaterialShadow();
+ 				std::vector<Direct3d11_ReflectedPSCbufferLayout> const &layouts =
+-					m_passPS[idx]->getReflectedCbufferLayouts();
++					livePS->getReflectedCbufferLayouts();
+ 
+ 				// R3-03b: read source XMFLOAT4s for THIS pass. If !m_materialValid,
+ 				// source values are ZERO (so the eventual updatePS call uploads zero
+@@ -1217,7 +1250,7 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
+ 									DEBUG_REPORT_LOG_PRINT(true, ("%s\n", m06a));
+ 								};
+ 
+-								ID3DBlob *const psBlob06a = (m_passPS[idx] ? m_passPS[idx]->getPsBytecode() : nullptr);
++								ID3DBlob *const psBlob06a = (livePS ? livePS->getPsBytecode() : nullptr);
+ 								if (psBlob06a)
+ 								{
+ 									ID3D11ShaderReflection *refl06a = nullptr;
+@@ -1549,7 +1582,7 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
+ 			// confirmed correct in the RenderDoc capture; only the texture diverged.
+ 			// Build the SRV slot array FIRST so an absent stage cannot clear a slot a
+ 			// present stage remapped its SRV into (the slots are a permutation).
+-			Direct3d11_PixelShaderProgramData const * const psData = m_passPS[idx];
++			Direct3d11_PixelShaderProgramData const * const psData = livePS;   // UAF fix: live, not the stale snapshot
+ 			ID3D11ShaderResourceView * srvForSlot[kMaxStages] = {};
+ 			for (int slotIdx = 0; slotIdx < kMaxStages; ++slotIdx)
+ 			{
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h
+index 3b406590f..aabc2b7d5 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h
+@@ -52,6 +52,8 @@ class Direct3d11_TextureData;
+ class Direct3d11_VertexShaderData;
+ class MemoryBlockManager;
+ class ShaderImplementation;
++class ShaderImplementationPassVertexShaderGraphicsData;       // UAF fix: live-deref slot base type
++class ShaderImplementationPassPixelShaderProgramGraphicsData; // UAF fix: live-deref slot base type
+ class StaticShader;
+ 
+ #include "clientGraphics/StaticShader.h"
+@@ -129,6 +131,25 @@ private:
+ 	std::vector<Direct3d11_VertexShaderData const *>          m_passVS;
+ 	std::vector<Direct3d11_PixelShaderProgramData const *>    m_passPS;
+ 
++	// UAF FIX (release boot-crash 2026-06-02, ROOT-CAUSED via full /ma dump):
++	// the m_passVS/m_passPS pointers ABOVE are the construct-time SNAPSHOT of the
++	// derived Direct3d11_*Data graphics-data pointers. A device-level graphics-data
++	// remove/restore during boot FREES and RECREATES *m_graphicsData (the gl11
++	// per-program object goes back to its 0x50-byte MemoryBlockManager freelist),
++	// so the snapshot DANGLES -> apply() iterating getReflectedCbufferLayouts() on a
++	// freed/reused block -> c0000005 (crash moved across PPEM + UI shaders because
++	// EVERY snapshot is stale; it was misdiagnosed as a layout-sensitive Heisenbug).
++	//
++	// The D3D9 sibling is immune because it NEVER caches the derived pointer -- it
++	// reads m_graphicsData LIVE at apply (Direct3d9_StaticShaderData.cpp:829 for VS;
++	// PS binds via the impl's live Direct3d9_ShaderImplementationData::apply). Mirror
++	// that with the SAME double-indirection pattern already used for Stage::m_texture
++	// (see comment above): store the ADDRESS of the engine owner's m_graphicsData
++	// slot -- stable for our lifetime (only the pointed-to sub-object is recreated on
++	// restore) -- and deref it live in apply(). 1:1 with m_passVS/m_passPS.
++	std::vector<ShaderImplementationPassVertexShaderGraphicsData       * const *> m_passVSSlot;
++	std::vector<ShaderImplementationPassPixelShaderProgramGraphicsData * const *> m_passPSSlot;
++
+ 	// Plan 17-09: per-pass texcoord-set key (each shader texcoord tag -> the mesh
+ 	// set index that feeds it, 3 bits/tag), computed in construct() exactly like
+ 	// Direct3d9_StaticShaderData::Pass::construct. apply() resolves the per-key VS
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+index 1fe194902..54a053ed7 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+@@ -140,7 +140,7 @@ void Direct3d11_VertexBufferVectorData::bind(VertexBufferVector const & vbVector
+ 						safe_cast<Direct3d11_DynamicVertexBufferData const *>(dvb->m_graphicsData);
+ 					if (!data)
+ 						break;
+-					buffers[stream] = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
++					buffers[stream] = data->getRingBuffer();  // dedicated soft-skin ring vs main ring
+ 					strides[stream] = static_cast<UINT>(data->getVertexSize());
+ 					offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+ 					sliceVertexCount = data->getNumberOfVertices();
+diff --git a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+index fc12b2c33..378e418e8 100644
+--- a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
++++ b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+@@ -562,7 +562,123 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ 	const int                 transformCount = skeleton.getTransformCount();
+ 	const PoseModelTransform *transformArray = skeleton.getBindPoseModelToRootTransforms();
+ 
++	// ----------------------------------------------------------------------
++	// CAPE-COLLAPSE PROBE v2 2026-06-06 (DIAGNOSTIC -- REMOVE after diagnosis).
++	// Branch-INDEPENDENT: ms_useMultiStreamVertexBuffers=0 at runtime (config
++	// disableMultiStreamCfg), so the v1 probe in the multi-stream branch below
++	// NEVER ran. The D3D11 cape spikes = ~98/123 skinned verts collapsed to ONE
++	// position (Capture15 eid 2497). Here we replicate fillVertexBuffer's position
++	// blend straight from m_sourceVectors + the bone transforms (no buffer/path
++	// dependency), detect a long run of identical skinned positions, and report
++	// the run-start vertex's primary bone. FIRES -> collapse is in the CPU skin
++	// (mechanism B): rotUnitXmag~0 = degenerate/zero-rotation bone, or badIdx>0 =
++	// out-of-range bone index. NEVER fires while spikes render -> collapse is
++	// introduced in the D3D11 buffer path (mechanism i). stage/cape-collapse-probe.txt.
++	{
++		static int s_capeProbeCount = 0;
++		if (s_capeProbeCount < 600 && m_sourceVectors && m_vertexCount >= 32)
++		{
++			const SourceVertex  *capeSv = m_sourceVectors;
++			const TransformData *capeXd = m_transformData;
++			Vector capePrev(0.0f, 0.0f, 0.0f);
++			Vector capeLongPos(0.0f, 0.0f, 0.0f);
++			int capeCurRun = 1, capeCurStart = 0, capeLongRun = 1, capeLongStart = 0;
++			int capeBadIdx = 0;
++			for (int capeI = 0; capeI < m_vertexCount; ++capeI, ++capeSv)
++			{
++				const Vector        &capeSrc = capeSv->m_position;
++				const TransformData &capeFtd = capeSv->m_firstTransformData;
++				Vector capeBlend(0.0f, 0.0f, 0.0f);
++				if (capeFtd.m_transformIndex >= 0 && capeFtd.m_transformIndex < transformCount)
++					capeBlend = transformArray[capeFtd.m_transformIndex].rotateTranslate_l2p(capeSrc) * capeFtd.m_transformWeight;
++				else
++					++capeBadIdx;
++				for (int capeJ = capeSv->m_extraTransformDataCount; capeJ > 0; --capeJ, ++capeXd)
++				{
++					if (capeXd->m_transformIndex >= 0 && capeXd->m_transformIndex < transformCount)
++						capeBlend += transformArray[capeXd->m_transformIndex].rotateTranslate_l2p(capeSrc) * capeXd->m_transformWeight;
++					else
++						++capeBadIdx;
++				}
++
++				if (capeI == 0)
++				{
++					capePrev = capeBlend;
++					capeLongPos = capeBlend;
++				}
++				else
++				{
++					if ((capeBlend - capePrev).magnitude() < 0.0001f)
++					{
++						++capeCurRun;
++						if (capeCurRun > capeLongRun) { capeLongRun = capeCurRun; capeLongStart = capeCurStart; capeLongPos = capeBlend; }
++					}
++					else
++					{
++						capeCurRun = 1;
++						capeCurStart = capeI;
++					}
++					capePrev = capeBlend;
++				}
++			}
++
++			// Heartbeat: log COLLAPSE always; otherwise sample (first 80 calls + every
++			// 25th after) so an EMPTY-of-collapse result is PROVEN (probe ran on
++			// garment-sized SBSSP draws) rather than assumed. Garment LOD ~123 verts.
++			static int s_capeCall = 0;
++			++s_capeCall;
++			bool const capeCollapse = (capeLongRun >= 16 || capeBadIdx >= 16);
++			bool const capeSampled  = (s_capeCall <= 80) || (s_capeCall % 25 == 0);
++			if (capeCollapse || capeSampled)
++			{
++				++s_capeProbeCount;
++				int const capeFirstXform = m_sourceVectors[capeLongStart].m_firstTransformData.m_transformIndex;
++				float capeRotMag = -1.0f;
++				if (capeFirstXform >= 0 && capeFirstXform < transformCount)
++					capeRotMag = transformArray[capeFirstXform].rotate_l2p(Vector(1.0f, 0.0f, 0.0f)).magnitude();
++
++				static bool s_capeProbeFirst = true;
++				FILE *capeFp = nullptr;
++				fopen_s(&capeFp, "cape-collapse-probe.txt", s_capeProbeFirst ? "wb" : "ab");
++				s_capeProbeFirst = false;
++				if (capeFp)
++				{
++					fprintf(capeFp,
++						"%s call=%d this=%p lod=%d vc=%d longestRun=%d runStart=%d badIdx=%d "
++						"pos=[%.4f %.4f %.4f] firstXform=%d rotUnitXmag=%.5f xformCount=%d\n",
++						capeCollapse ? "COLLAPSE" : "HB", s_capeCall,
++						static_cast<void *>(const_cast<SoftwareBlendSkeletalShaderPrimitive *>(this)),
++						m_lodIndex, m_vertexCount, capeLongRun, capeLongStart, capeBadIdx,
++						static_cast<float>(capeLongPos.x), static_cast<float>(capeLongPos.y), static_cast<float>(capeLongPos.z),
++						capeFirstXform, capeRotMag, transformCount);
++					fclose(capeFp);
++				}
++			}
++		}
++	}
++
+ 	//-- Setup which vertex buffers will be used for rendering and compute vertex buffer data.
++	// CONSULT-32 PATH LOG: which path does each big mesh take? (the spike mesh evaded the single-stream
++	// Probe A/D). Logs cape-trace-path.txt for big meshes so we stop inferring the path.
++	if (m_vertexCount >= 1000)
++	{
++		static int s_pathLogged = 0;
++		if (s_pathLogged < 300)
++		{
++			++s_pathLogged;
++			static bool s_pathFirst = true;
++			FILE *pfp = nullptr;
++			fopen_s(&pfp, "cape-trace-path.txt", s_pathFirst ? "wb" : "ab");
++			s_pathFirst = false;
++			if (pfp)
++			{
++				fprintf(pfp, "PATH vc=%d multiStream=%d hasSystemStream=%d skinMode=%d hasDot3=%d\n",
++					m_vertexCount, ms_useMultiStreamVertexBuffers ? 1 : 0, m_systemStream ? 1 : 0,
++					(int)m_skinningMode, m_hasDot3Vector ? 1 : 0);
++				fclose(pfp);
++			}
++		}
++	}
+ 	if (ms_useMultiStreamVertexBuffers)
+ 	{
+ 		// STATE: Using multi streaming.
+@@ -572,6 +688,73 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ 		VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+ 		skinData(transformCount, transformArray, writeIterator);
+ 
++		// ------------------------------------------------------------------
++		// CAPE-COLLAPSE PROBE 2026-06-06 (DIAGNOSTIC -- REMOVE after diagnosis).
++		// The D3D11 cape/garment "texture spikes" = ~98/123 dynamic-VB verts
++		// collapsed to ONE position (capture-confirmed: Capture15 eid 2497).
++		// The systemStream->dynamicStream copy is a faithful contiguous memcpy,
++		// so a clean source cannot yield a collapsed dest -- the collapse must
++		// already be in m_systemStream the instant skinData() returns IF this is
++		// a skinning/bone defect (mechanism B). This probe scans the freshly
++		// skinned systemStream for a long run of identical positions; when found
++		// it logs the primary bone's rotation magnitude (rotate_l2p(unitX) ~0
++		// proves a zero-rotation/degenerate transform = collapse cause). If this
++		// NEVER fires while spikes render in-world, the collapse is introduced
++		// AFTER skinData in the D3D11 copy/buffer path (mechanism i). Writes
++		// stage/cape-collapse-probe.txt (cwd is stage/ at runtime).
++		{
++			static int s_capeProbeCount = 0;
++			int const capeN = m_systemStream->getNumberOfVertices();
++			if (s_capeProbeCount < 400 && capeN >= 32 && m_sourceVectors)
++			{
++				VertexBufferReadIterator capeScan = m_systemStream->beginReadOnly();
++				Vector capePrev = capeScan.getPosition();
++				int capeCurRun = 1, capeCurStart = 0, capeLongRun = 1, capeLongStart = 0;
++				Vector capeLongPos = capePrev;
++				for (int capeVi = 1; capeVi < capeN; ++capeVi)
++				{
++					++capeScan;
++					Vector const capeCur = capeScan.getPosition();
++					if ((capeCur - capePrev).magnitude() < 0.0001f)
++					{
++						++capeCurRun;
++						if (capeCurRun > capeLongRun) { capeLongRun = capeCurRun; capeLongStart = capeCurStart; capeLongPos = capeCur; }
++					}
++					else
++					{
++						capeCurRun = 1;
++						capeCurStart = capeVi;
++					}
++					capePrev = capeCur;
++				}
++
++				if (capeLongRun >= 16)
++				{
++					++s_capeProbeCount;
++					int const capeFirstXform = m_sourceVectors[capeLongStart].m_firstTransformData.m_transformIndex;
++					float capeRotMag = -1.0f;
++					if (capeFirstXform >= 0 && capeFirstXform < transformCount)
++						capeRotMag = transformArray[capeFirstXform].rotate_l2p(Vector(1.0f, 0.0f, 0.0f)).magnitude();
++
++					static bool s_capeProbeFirst = true;
++					FILE *capeFp = nullptr;
++					fopen_s(&capeFp, "cape-collapse-probe.txt", s_capeProbeFirst ? "wb" : "ab");
++					s_capeProbeFirst = false;
++					if (capeFp)
++					{
++						fprintf(capeFp,
++							"COLLAPSE this=%p lod=%d vc=%d longestRun=%d runStart=%d "
++							"pos=[%.4f %.4f %.4f] firstXform=%d rotUnitXmag=%.5f xformCount=%d\n",
++							static_cast<void *>(const_cast<SoftwareBlendSkeletalShaderPrimitive *>(this)),
++							m_lodIndex, capeN, capeLongRun, capeLongStart,
++							static_cast<float>(capeLongPos.x), static_cast<float>(capeLongPos.y), static_cast<float>(capeLongPos.z),
++							capeFirstXform, capeRotMag, transformCount);
++						fclose(capeFp);
++					}
++				}
++			}
++		}
++
+ 		m_dynamicStream->lock(m_vertexCount);
+ 		{
+ 			VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+@@ -606,6 +789,48 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ 			VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+ 			skinData(transformCount, transformArray, writeIterator);
+ 
++			// CONSULT-32 WHOLE-PATH PROBE A (systemStream, post-skin pre-copy). Reads the ACTUAL written
++			// systemStream POSITION bytes -- covers BOTH the soft fill AND the hard/SSE fill (the
++			// blendPosition probe only saw soft). If a mesh spikes HERE, the skin fill is the source; if
++			// sane HERE while the dynamic VB (Probe B) spikes for the same numVerts, the copy/ring/offset
++			// is. Tagged by numVerts to correlate with Probe B. Logs cape-trace-systemstream.txt.
++			{
++				int const ssN = m_systemStream->getNumberOfVertices();
++				if (ssN >= 1000 && ssN < 8192)
++				{
++					// DIRECT MEASUREMENT (unconditional for big meshes): vert0, last vert, and the
++					// FARTHEST vert from vert0 with its index. If maxDist is small (tight), systemStream
++					// is sane and the spike enters after; if it shows [-2816,...], the skin source HAS it.
++					VertexBufferReadIterator ssRefIt = m_systemStream->beginReadOnly();
++					Vector const ssRef = ssRefIt.getPosition();
++					VertexBufferReadIterator ssEnd = m_systemStream->endReadOnly();
++					int ssIdx = 0, ssMaxIdx = -1; float ssMaxD = 0; Vector ssMaxPos, ssLast = ssRef;
++					for (VertexBufferReadIterator s = m_systemStream->beginReadOnly(); s != ssEnd; ++s, ++ssIdx)
++					{
++						Vector const p = s.getPosition();
++						ssLast = p;
++						float const d = (p - ssRef).magnitude();
++						if (d > ssMaxD) { ssMaxD = d; ssMaxIdx = ssIdx; ssMaxPos = p; }
++					}
++					static int s_ssTraceLogged = 0;
++					if (s_ssTraceLogged < 4000)
++					{
++						++s_ssTraceLogged;
++						static bool s_ssTraceFirst = true;
++						FILE *ssFp = nullptr;
++						fopen_s(&ssFp, "cape-trace-systemstream.txt", s_ssTraceFirst ? "wb" : "ab");
++						s_ssTraceFirst = false;
++						if (ssFp)
++						{
++							fprintf(ssFp, "%s numVerts=%d maxDist=%.0f maxIdx=%d maxPos=[%.1f %.1f %.1f] vert0=[%.1f %.1f %.1f] lastVert=[%.1f %.1f %.1f] mode=%d\n",
++								ssMaxD > 200.0f ? "SS-HAS-SPIKE" : "ss-tight", ssN, ssMaxD, ssMaxIdx,
++								ssMaxPos.x, ssMaxPos.y, ssMaxPos.z, ssRef.x, ssRef.y, ssRef.z, ssLast.x, ssLast.y, ssLast.z, (int)m_skinningMode);
++							fclose(ssFp);
++						}
++					}
++				}
++			}
++
+ 			// Copy the system vertex buffer in one chunk into the dynamic vertex buffer that we render with.
+ 			// This is how the geometry gets into a buffer readable by the GPU.  We can't render out of system
+ 			// VBs, we don't want to store a GPU-renderable VB for every shader prim, and we do want a fast
+@@ -614,6 +839,33 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ 			m_dynamicStream->lock(m_vertexCount);
+ 			{
+ 				VertexBufferWriteIterator outIt = m_dynamicStream->begin();
++				// CONSULT-32 PROBE D: lock reserves m_vertexCount; copy writes systemStream count. If
++				// they differ, the dynamic slice tail [copyN, m_vertexCount) is NEVER written -> on the
++				// D3D11 skin ring that tail is uninitialized fresh-WRITE_DISCARD memory (prev generation,
++				// world-space) -> spike. Probe B showed the spike tail starts at firstIdx == copyN.
++				{
++					int const lockN = m_vertexCount;
++					int const copyN = m_systemStream->getNumberOfVertices();
++					if (lockN >= 256 && lockN < 8192)
++					{
++						static int s_pdLogged = 0;
++						bool const mismatch = (lockN != copyN);
++						if ((mismatch || s_pdLogged < 60) && s_pdLogged < 15000)
++						{
++							++s_pdLogged;
++							static bool s_pdFirst = true;
++							FILE *pdFp = nullptr;
++							fopen_s(&pdFp, "cape-trace-copycount.txt", s_pdFirst ? "wb" : "ab");
++							s_pdFirst = false;
++							if (pdFp)
++							{
++								fprintf(pdFp, "%s lockN(m_vertexCount)=%d copyN(systemStream)=%d tailUnwritten=%d\n",
++									mismatch ? "MISMATCH" : "ok", lockN, copyN, lockN - copyN);
++								fclose(pdFp);
++							}
++						}
++					}
++				}
+ 				outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+ 			}
+ 			m_dynamicStream->unlock();
+@@ -621,9 +873,14 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ 	}
+ 
+ 	//-- set the vb and ib to the shadow system
+-	if (ShadowManager::getEnabled() 
+-		&& ShadowManager::getAllowed() 
+-		&& ShadowManager::getSkeletalShadowsVolumetric() 
++	// CAPE-SPIKE TEST 2026-06-07: force-disable the skeletal shadow-volume build+render to
++	// test whether the soft-skin "texture spikes" are a degenerate shadow-volume extrusion
++	// (Kenny: angle/FOV-dependent, per-figure, soft-skin-only -> fits a shadow volume).
++	// Revert the `false &&` if shadows are exonerated.
++	if (false
++		&& ShadowManager::getEnabled()
++		&& ShadowManager::getAllowed()
++		&& ShadowManager::getSkeletalShadowsVolumetric()
+ 		&& ShadowVolume::getEnabled() 
+ 		&& m_shader->getShaderTemplate().castsShadows() 
+ 		&& (m_appearance.getFadeState() == SkeletalAppearance2::FS_notFading)
+@@ -661,6 +918,7 @@ void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+ void SoftwareBlendSkeletalShaderPrimitive::draw() const
+ {
+ 	NP_PROFILER_AUTO_BLOCK_DEFINE("SoftwareBlendSkeletalShaderPrimitive::draw");
++
+ 	std::for_each(m_renderCommands->begin(), m_renderCommands->end(), VoidMemberFunction(&RenderCommand::render));
+ }
+ 
+@@ -1418,8 +1676,55 @@ void SoftwareBlendSkeletalShaderPrimitive::buildIndexBufferAndRenderCommands(con
+ 	}
+ 	*/
+ 
++	//-- CAPE-INDEX-PROBE (temporary 2026-06-07): the D3D11 deferred DrawIndexed reads
++	//   vertices [0, maxIndex] but the render path only lock(m_vertexCount)+writes
++	//   m_vertexCount verts. If this index buffer references any index >= m_vertexCount,
++	//   D3D11 fetches past the written slice into a stale tail -> collapse-to-one-point
++	//   spike (capture-proven on the dewback: 169 written, indices to 2630). Log it.
++	{
++		// m_vertexCount is not assigned until AFTER this function returns (ctor @~1194),
++		// so read the authoritative per-shader vertex count straight from the mesh -- the
++		// exact value m_vertexCount will be set to and that the render path lock()s+writes.
++		const int capeVertexCount = mesh.getVertexCount(meshPerShaderData);
++		static int s_capeIdxLogged = 0;
++		int capeMaxIndex = -1;
++		int capeMinIndex = 0x7fffffff;
++		for (int capeI = 0; capeI < currentIndex; ++capeI)
++		{
++			const int capeIdx = static_cast<int>(indexData[capeI]);
++			if (capeIdx > capeMaxIndex) capeMaxIndex = capeIdx;
++			if (capeIdx < capeMinIndex) capeMinIndex = capeIdx;
++		}
++		if (currentIndex <= 0) capeMinIndex = 0;
++		const bool capeReadPast = (capeMaxIndex >= capeVertexCount);
++		if ((capeReadPast || (s_capeIdxLogged < 400)) && (s_capeIdxLogged < 4000))
++		{
++			++s_capeIdxLogged;
++			const char *capeShader = mesh.getShaderTemplateName(meshPerShaderData).getString();
++			const auto *const capeAppT = m_appearance.getAppearanceTemplate();
++			const char *capeAppName = capeAppT ? capeAppT->getName() : "<noAppT>";
++			FILE *capeFp = nullptr;
++			fopen_s(&capeFp, "cape-index-probe.txt", (s_capeIdxLogged == 1) ? "wb" : "ab");
++			if (capeFp)
++			{
++				fprintf(capeFp,
++					"%-8s this=%p lod=%d shaderIdx=%d vtxCount=%d idxCount=%d minIdx=%d maxIdx=%d overRead=%d "
++					"triLists=%d triStrips=%d app=%s shader=%s%s\n",
++					capeReadPast ? "READPAST" : "ok",
++					static_cast<void *>(this),
++					m_lodIndex, perShaderDataIndex, capeVertexCount, currentIndex,
++					capeMinIndex, capeMaxIndex, (capeMaxIndex - capeVertexCount) + 1,
++					triListCount, triStripCount,
++					capeAppName ? capeAppName : "<null>",
++					capeShader ? capeShader : "<null>",
++					capeReadPast ? "  <-- READ-PAST (maxIdx >= vtxCount)" : "");
++				fclose(capeFp);
++			}
++		}
++	}
++
+ 	m_indexBuffer->unlock();
+-	
++
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -1692,10 +1997,18 @@ void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount,
+ 			const Vector        &sourcePosition = sourceVectors->m_position;
+ 			const Vector        &sourceNormal   = sourceVectors->m_normal;
+ 
++			// CONSULT-30 PROBE+GUARD (DIAGNOSTIC -- remove after). The release build makes
++			// VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE a no-op, so an out-of-range m_transformIndex reads
++			// transformArray[] OOB -> garbage bone -> spike. Count any OOB index this vertex hits and
++			// clamp it (prevents the spike; a clamped vert mis-skins to the last bone, far better than
++			// reading random memory). Log offenders for big meshes via the file-static counters below.
++			int olBadCount = 0;
++
+ 			// initialize first position and vector
+ 			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+-			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
++			int fti = firstTransformData.m_transformIndex;
++			if (fti < 0 || fti >= transformCount) { ++olBadCount; fti = (transformCount > 0) ? transformCount - 1 : 0; }
++			const PoseModelTransform     &firstTransform = transformArray[fti];
+ 
+ 			Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+ 			Vector blendNormal   = firstTransform.rotate_l2p(sourceNormal)            * firstTransformData.m_transformWeight;
+@@ -1704,14 +2017,56 @@ void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount,
+ 			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+ 			{
+ 				// get transform data
+-				VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, transformData->m_transformIndex, transformCount);
++				int xti = transformData->m_transformIndex;
++				if (xti < 0 || xti >= transformCount) { ++olBadCount; xti = (transformCount > 0) ? transformCount - 1 : 0; }
+ 
+ 				// apply it
+-				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
++				const PoseModelTransform &transform = transformArray[xti];
+ 				blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+ 				blendNormal   += transform.rotate_l2p(sourceNormal)            * transformData->m_transformWeight;
+ 			}
+ 
++			// CONSULT-31 SPIKE CAPTURE (DIAGNOSTIC). Cursor refuted the pointer-desync; Kenny suspects the
++			// spike enters AFTER skinning. Decisive: log only verts whose skinned blendPosition is FAR
++			// (>100u) from THIS mesh's vertex-0 (the bulk). If a spike mesh logs SPIKE lines here, the
++			// skinning IS the source. If the on-screen spike mesh logs NOTHING (all blendPositions sane)
++			// then the spike enters later (copy / D3D11 VB). Per-spike gating dodges the log cap.
++			{
++				static Vector s_dbgRef0;
++				static int    s_dbgRefSet = 0;
++				if (i == 0) { s_dbgRef0 = blendPosition; s_dbgRefSet = 1; }
++				if (s_dbgRefSet)
++				{
++					float const ddx = blendPosition.x - s_dbgRef0.x;
++					float const ddy = blendPosition.y - s_dbgRef0.y;
++					float const ddz = blendPosition.z - s_dbgRef0.z;
++					float const dd  = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
++					if (dd > 100.0f)
++					{
++						static int s_skLogged = 0;
++						if (s_skLogged < 15000)
++						{
++							++s_skLogged;
++							Vector const ftTrans = firstTransform.rotateTranslate_l2p(Vector::zero);
++							static bool s_skFirst = true;
++							FILE *skFp = nullptr;
++							fopen_s(&skFp, "cape-skin-spike.txt", s_skFirst ? "wb" : "ab");
++							s_skFirst = false;
++							if (skFp)
++							{
++								fprintf(skFp,
++									"SPIKE vtx=%d/%d delta=%.0f firstIdx=%d wasOOB=%d extra=%d tc=%d firstW=%.3f boneTrans=[%.1f %.1f %.1f] ref0=[%.1f %.1f %.1f] blendPos=[%.1f %.1f %.1f]\n",
++									i, m_vertexCount, dd, firstTransformData.m_transformIndex, olBadCount,
++									sourceVectors->m_extraTransformDataCount, transformCount, firstTransformData.m_transformWeight,
++									ftTrans.x, ftTrans.y, ftTrans.z, s_dbgRef0.x, s_dbgRef0.y, s_dbgRef0.z,
++									blendPosition.x, blendPosition.y, blendPosition.z);
++								fclose(skFp);
++							}
++						}
++					}
++				}
++			}
++
+ 			//-- Write out render geometry.
+ 			destVertexIt.setPosition(blendPosition);
+ 			destVertexIt.setNormal(blendNormal);
+diff --git a/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp b/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp
+index 823f1602c..1941b9e24 100644
+--- a/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp
++++ b/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp
+@@ -181,6 +181,8 @@ void FullGeometrySkeletalAppearanceBatchRendererNamespace::renderBuffers(bool al
+ 	int  vertexCount       = 0;
+ 	int  indexCount        = 0;
+ 	int  copiedVertexCount = 0;
++	int  capeMaxRebasedIndex = -1; // CAPE-BATCH-PROBE (temporary 2026-06-07)
++	int  capeCopiedIndexCount = 0; // CAPE-BATCH-PROBE
+ 
+ 	getBufferCounts(beginIndex, endIndex, vertexCount, indexCount);
+ 	DEBUG_FATAL(vertexCount < 1, ("skel mesh batcher: bad vertex count [%d].", vertexCount));
+@@ -235,7 +237,12 @@ void FullGeometrySkeletalAppearanceBatchRendererNamespace::renderBuffers(bool al
+ 		//-- Copy adjusted indices.
+ 		Index const *const sourceIbEndIt = sourceIb->endReadOnly();
+ 		for (Index const *sourceIbIt = sourceIb->beginReadOnly(); sourceIbIt != sourceIbEndIt; ++sourceIbIt, ++destIbIt)
++		{
++			const int capeRebased = static_cast<int>(*sourceIbIt) + copiedVertexCount; // CAPE-BATCH-PROBE
++			if (capeRebased > capeMaxRebasedIndex) capeMaxRebasedIndex = capeRebased;   // CAPE-BATCH-PROBE
++			++capeCopiedIndexCount;                                                     // CAPE-BATCH-PROBE
+ 			*destIbIt = static_cast<unsigned short>(*sourceIbIt + copiedVertexCount);
++		}
+ 
+ 		//-- Unlock applicable source buffers.
+ 		sourceIb->unlock();
+@@ -244,6 +251,35 @@ void FullGeometrySkeletalAppearanceBatchRendererNamespace::renderBuffers(bool al
+ 		copiedVertexCount += sourceVertexCount;
+ 	}
+ 
++	//-- CAPE-BATCH-PROBE (temporary 2026-06-07): the spiking draw is this combined batch
++	//   DrawIndexed. If lockedVtx != writtenVtx, or maxRebasedIdx >= lockedVtx, or
++	//   maxRebasedIdx > 65535 (unsigned-short index overflow at the rebase above), that
++	//   is the "169 written vs 2631 indexed" read-past source.
++	{
++		static int s_capeBatchLogged = 0;
++		const bool capeBad = (copiedVertexCount != vertexCount)
++		                  || (capeMaxRebasedIndex >= vertexCount)
++		                  || (capeCopiedIndexCount != indexCount)
++		                  || (capeMaxRebasedIndex > 65535);
++		if ((capeBad || (s_capeBatchLogged < 400)) && (s_capeBatchLogged < 2000))
++		{
++			++s_capeBatchLogged;
++			FILE *capeFp = nullptr;
++			fopen_s(&capeFp, "cape-batch-probe.txt", (s_capeBatchLogged == 1) ? "wb" : "ab");
++			if (capeFp)
++			{
++				fprintf(capeFp,
++					"%-4s begin=%d end=%d subMeshes=%d lockedVtx=%d writtenVtx=%d lockedIdx=%d writtenIdx=%d maxRebasedIdx=%d allowDiscard=%d%s\n",
++					capeBad ? "BAD" : "ok",
++					beginIndex, endIndex, endIndex - beginIndex,
++					vertexCount, copiedVertexCount, indexCount, capeCopiedIndexCount,
++					capeMaxRebasedIndex, allowDiscard ? 1 : 0,
++					capeBad ? "  <-- MISMATCH" : "");
++				fclose(capeFp);
++			}
++		}
++	}
++
+ 	//-- Unlock dest buffers.
+ 	s_batchIndexBuffer->unlock();
+ 	s_batchVertexBuffer->unlock();

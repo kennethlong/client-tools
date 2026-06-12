@@ -1,0 +1,636 @@
+OpenAI Codex v0.133.0
+--------
+workdir: D:\Code\swg-client-v2
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e798c-0655-7900-8e58-36e014b472db
+--------
+user
+# CONSULT: GAP-6 fix — D3D11 VS recompile must replicate D3D9's per-mesh texcoord-set remap
+
+You are a senior graphics/engine engineer doing an independent design review. I need a concrete
+verdict on a proposed fix — is the approach right, is the scope right, what will bite us. Be specific,
+flag wrong assumptions, propose a simpler path if one exists. No repo access; everything is below.
+
+## System context
+
+Star Wars Galaxies (SOE) client being ported from a D3D9 fixed-function/VSPS renderer to a new D3D11
+renderer plugin (`gl11_d.dll`, runtime-loaded via a C API vtable). We are proving the "asset pixel
+shader pipeline" on the deterministic character-select screen as a beachhead. Vertex/pixel shaders ship
+as IFF assets carrying their ORIGINAL D3D9-era HLSL (`//hlsl vs_2_0` etc.) in a retained chunk; our lane
+RECOMPILES that HLSL to `vs_4_0`/`ps_4_0` at load via `D3DCompile` (with backwards-compat). The lighting
++ asset-PS pipeline (prior gaps GAP-3/4/5) is PROVEN; ~95% of the character renders correctly. The
+remaining defect is the **bump-shader parts (sleeves/hands)** rendering wrong (NaN vertex colors).
+
+## What is CONFIRMED (RenderDoc + in-engine input-layout dumps this session — do NOT re-derive)
+
+The bump skeletal mesh part is drawn with a recompiled `vs_4_0` whose **input signature** (from
+`D3DReflect`) is:
+
+```
+TEXCOORD0  float2   (textureCoordinateSetMAIN  — diffuse UV)
+TEXCOORD1  float2   (textureCoordinateSetNRML  — normal-map UV; USED: output to PS)
+TEXCOORD2  float4   (textureCoordinateSetDOT3  — per-vertex tangent/DOT3; USED for per-pixel light)
+```
+
+The bump VS body (the asset `//hlsl`, paraphrased):
+
+```hlsl
+outputVertex.tcs_MAIN = inputVertex.textureCoordinateSetMAIN;   // TEXCOORD0
+outputVertex.tcs_NRML = inputVertex.textureCoordinateSetNRML;   // TEXCOORD1  (used)
+outputVertex.directionToLight_t = calculateDot3LightDirection_t(normal, inputVertex.textureCoordinateSetDOT3); // TEXCOORD2
+outputVertex.halfAngle_t        = calculateHalfAngle_t(position, normal, inputVertex.textureCoordinateSetDOT3); // TEXCOORD2
+```
+
+The skeletal mesh provides only **two** vertex texcoord sets: one 2D UV + one 4D DOT3 (tangent). The
+D3D11 input-layout builder maps mesh texcoord sets to consecutive `TEXCOORD` semantic indices (a global
+running counter that already mirrors D3D9's `Direct3d9_VertexDeclarationMap` `textureCoordinate++`). So
+the layout the engine feeds is:
+
+```
+TEXCOORD0  float2  <- mesh UV        (slot 0)
+TEXCOORD1  float4  <- mesh DOT3      (slot 1)     << the 4D tangent lands here
+TEXCOORD2  float4  <- (nothing) -> phantom zero-buffer (slot 15)   << VS reads tangent HERE
+```
+
+RenderDoc on the failing draw confirms: at a vertex, `TEXCOORD1` holds the tangent (non-zero 4D) and
+`TEXCOORD2` is all `0.0`. So the recompiled VS reads its DOT3 tangent from `TEXCOORD2`, which is
+phantom-zeroed -> `normalize(0)` -> NaN -> `COLOR0/COLOR1` NaN -> wrong sleeves/hands. (A NaN guard keeps
+it from going fully black; the part renders underlit/"purple".)
+
+## THE ROOT CAUSE (newly found — this is the crux)
+
+D3D9 does **not** use a fixed `TEXCOORD0/1/2` mapping. `Direct3d9_VertexShaderData::createVertexShader`
+**recompiles the VS per-mesh** from a `textureCoordinateSetKey` (each shader texcoord TAG -> the mesh set
+index that feeds it, 3 bits per tag). It emits remap macros, e.g.:
+
+```cpp
+// for each tag i:
+int const set = (key >> (i*3)) & 7;
+int const dim = (tag[i] == TAG_DOT3) ? 4 : 2;
+// #define textureCoordinateSet<TAG>  textureCoordinateSet<set>
+// and accumulate DECLARE_textureCoordinateSets:
+//   floatD textureCoordinateSet<set> : TEXCOORD<set> : register(v<base+set>);
+```
+
+The key is computed in `Direct3d9_StaticShaderData::Pass::construct` via
+`shader.getTextureCoordinateSet(tag, &setIndex)` (the StaticShader knows the shader-tag -> mesh-set
+mapping), then `vertexShaderData->getVertexShader(key)`.
+
+For our 1-UV + DOT3 mesh, D3D9's key maps MAIN->set0, **NRML->set0 (aliased to the same UV)**, DOT3->set1.
+So D3D9 emits a VS that declares only **two** real inputs — `TEXCOORD0` (2D, used by BOTH MAIN and NRML)
+and `TEXCOORD1` (4D DOT3) — and reads the tangent from `TEXCOORD1`. That matches the compacted vertex
+declaration exactly. **That is why D3D9 renders these arms correctly.**
+
+Our D3D11 asset-PS VS recompile **skips this entirely**. The code has a literal comment:
+`Direct3d11_VertexShaderData.cpp` — *"We do NOT yet add textureCoordinateSet defines (Plan 11-06 …)."*
+It compiles the `//hlsl` with the source's DEFAULT macros (MAIN->0, NRML->1, DOT3->2), producing the
+3-input signature that the 2-set mesh can't satisfy. There is **no** `textureCoordinateSetKey` anywhere
+in the D3D11 plugin, and the D3D11 VS is compiled **once** (not per-key).
+
+## PROPOSED FIX A (the one I want reviewed): replicate D3D9's per-key VS recompile in D3D11
+
+Current `Direct3d11_VertexShaderData` compiles once in its constructor and holds a single
+`{ID3D11VertexShader, ID3DBlob bytecode, uint64 bytecodeHash, vector<ReflectedVSInput>,
+vector<ReflectedVSOutput>}`. Proposed:
+
+1. **Parse texcoord-set tags** from the VS source at construction (scan for `textureCoordinateSet<TAG>` /
+   `vTextureCoordinateSet<TAG>` tokens; mirror `Direct3d9_VertexShaderData`). Store the ordered tag list;
+   add `getTextureCoordinateSetTags()`.
+2. **Restructure to per-key variants:** `std::map<uint32 key, Variant>` where `Variant` =
+   `{ComPtr<ID3D11VertexShader>, ComPtr<ID3DBlob>, uint64 hash, vector<ReflectedVSInput>,
+   vector<ReflectedVSOutput>}`. Compile lazily on first request of a key. The remap macros (per-tag
+   `#define` + `DECLARE_textureCoordinateSets`, mirroring D3D9) are injected into the `D3DCompile`
+   `D3D_SHADER_MACRO` list (which already feeds an FNV-1a source+defines cache key, so different keys
+   naturally cache as different bytecode).
+3. **Getters take a `key`:** `getVertexShader(key)`, `getBytecode(key)`, `getBytecodeHash(key)`,
+   `getReflectedInputs(key)`, `getReflectedOutputs(key)`, `computeOutputSignatureHash(key)`.
+4. **Compute the key in `Direct3d11_StaticShaderData`** (mirror `Direct3d9_StaticShaderData::Pass::
+   construct`: loop the VS's tags, `shader.getTextureCoordinateSet(tag,&idx)`, pack 3 bits each). Store
+   `m_textureCoordinateSetKey`.
+5. **Plumb the key to the bind path:** `Direct3d11_StateCache` tracks the current key alongside the
+   current VS-data pointer (set when the pass binds), and passes it to (a) the getters and (b) the
+   input-layout cache `getOrCreate*` (which calls `getBytecode/Hash/ReflectedInputs`). The input-layout
+   cache is already keyed by `(VBFormat flags, vsBytecodeHash)`; since per-key variants have distinct
+   bytecode hashes, this composes without a cache-key change.
+6. **PS reconstruction** (`Direct3d11_PixelShaderProgramData`, our GAP-3 lane) consumes the paired VS's
+   reflected OUTPUTS + `computeOutputSignatureHash` to reconstruct the PS input signature; it must use
+   the same key's variant.
+7. Bump `D3D11_REWRITE_VERSION` to invalidate stale cached `.cso`.
+
+All six files are **inside the gl11 plugin** (no shared-header/cross-DLL ABI cascade): `Direct3d11_
+VertexShaderData.{h,cpp}`, `Direct3d11_StaticShaderData.{h,cpp}`, `Direct3d11_StateCache.cpp`,
+`Direct3d11_VertexDeclarationMap.cpp`, `Direct3d11_PixelShaderProgramData.cpp`.
+
+**Net effect:** the recompiled VS reads DOT3 at `TEXCOORD1`, MAIN/NRML aliased to `TEXCOORD0` — byte-
+identical input behavior to D3D9, for every texcoord-tag arrangement. The vertex layout + the global
+counter need ZERO change.
+
+## The alternative I rejected (FIX B) — tell me if I'm wrong to reject it
+
+Make the D3D11 input-layout builder reflection-aware: bind the mesh's 4D DOT3 element to the VS's 4D
+texcoord input index (`TEXCOORD2`), and alias the 2D UV element to the VS's 2D inputs (`TEXCOORD0` +
+`TEXCOORD1`). gl11-layout-only, ~1 file, no per-key recompile. It renders THIS case correctly. I rejected
+it as a heuristic that compensates for an un-remapped VS (diverges from D3D9; positional 2D assignment may
+misorder for shaders with multiple distinct UV sets / DTLA-DTLB-MASK tag sets).
+
+## Questions (answer each concretely)
+
+1. **Is Fix A the right call over Fix B**, or is the layout-side compensation actually sufficient and far
+   cheaper for a beachhead? Where does the dimension/positional heuristic of Fix B actually break?
+2. **Per-key variant map vs other structures.** D3D9 keeps only a 1-entry "last key" cache and recompiles
+   on key change. D3D11 has downstream caches (input-layout keyed by bytecode-hash; PS-reconstruction
+   keyed by VS-output-sig hash) that need bytecode/reflection to be STABLE per key. Is a per-key map the
+   right structure, or is there a cleaner ownership model (e.g., key folded into VS-data identity at
+   creation — note the engine creates VS-data once per VS asset, not per material/key)?
+3. **Key plumbing.** Tracking "current key" in the StateCache (set at pass bind, read by async layout-
+   cache misses + PS reconstruction) — is that race-free given the single-threaded D3D11 immediate
+   context, or is there a hazard (e.g., layout creation deferred past the next pass bind)? Safer to pass
+   the key explicitly through `getOrCreate*` call args (which I plan) vs StateCache state?
+4. **PS-reconstruction coupling.** The PS input-sig reconstruction depends on the VS OUTPUT signature.
+   Does changing the VS INPUT remap (texcoord set indices) change the VS OUTPUT signature at all? (The
+   outputs are `tcs_MAIN/tcs_NRML/directionToLight_t/halfAngle_t/COLOR0/COLOR1` — fixed semantics.) If
+   outputs are unaffected, the PS lane only needs the right key to fetch the same outputs — confirm.
+5. **Anything simpler I'm missing** — e.g., a way to make `D3DCompile` honor the asset's own
+   `DECLARE_textureCoordinateSets` such that the unused/aliased inputs collapse without us reconstructing
+   the key? Or a vs_4_0 input-signature rewrite (we already rewrite PS input sigs in this codebase)?
+6. **Failure modes / blast radius:** with the per-key recompile live, what regresses for the
+   already-working shaders (UI 2D passthrough; non-bump skeletal with no DOT3; static props)? Their key
+   would map tags 1:1 to sets — does the macro path reduce to identity for them, or do we risk perturbing
+   working bytecode?
+
+Give a recommended approach (A vs B vs other), the cleanest ownership/plumbing model, and the top 3 risks.
+
+codex
+**Verdict**
+
+Fix A is the right architectural fix. Fix B is an acceptable emergency render hack for this one character-select defect, but it is solving the symptom at the wrong layer. The real contract in D3D9 is “shader texcoord tags are remapped per material/mesh pass before compilation.” If D3D11 recompiles the original asset HLSL without that remap, then the VS bytecode is not equivalent to D3D9. The input-layout builder should not be asked to infer semantic aliasing that the shader compiler was supposed to see.
+
+I would implement Fix A, but make one ownership adjustment: avoid relying on “current key” as ambient state for anything that can be cached or lazily created. Store the key on the D3D11 pass/program binding object and pass it explicitly into VS bytecode/reflection/layout/PS-reconstruction paths.
+
+---
+
+**1. Fix A vs Fix B**
+
+Fix A is the correct call.
+
+D3D9’s behavior is not “compact mesh elements into TEXCOORD slots and hope the shader matches.” It is:
+
+```text
+shader tags + material/mesh mapping -> textureCoordinateSetKey -> remapped VS source -> compiled VS
+```
+
+Your D3D11 path currently skips the middle step. That means the D3D11 VS input signature is wrong before the input layout ever sees it.
+
+Fix B breaks whenever “dimension + position” is not enough to uniquely recover the tag mapping. Examples:
+
+- Two or more 2D UV sets:
+  - `MAIN -> set0`
+  - `NRML -> set0`
+  - `MASK -> set1`
+  - `DTLA -> set2`
+
+  A layout heuristic sees several `float2 TEXCOORDn` inputs and several 2D mesh UVs. It cannot know which shader tag should alias which mesh set unless it reproduces the same tag-to-set key logic anyway.
+
+- Aliased UV tags:
+  - `MAIN` and `NRML` both intentionally read set 0.
+  - The unremapped VS asks for `TEXCOORD0` and `TEXCOORD1`.
+  - Binding the same VB element to both may work only if the input-layout layer explicitly duplicates/aliases the element. That is already a hidden shader remap, just implemented in the wrong abstraction.
+
+- Mixed 2D and 4D sets with nontrivial order:
+  - DOT3 being 4D lets this specific case be guessed.
+  - If another shader has multiple 4D-ish tangent/detail/lightmap conventions, dimension matching stops being reliable.
+  - Even if today only DOT3 is 4D, the heuristic bakes in an asset-format assumption outside the shader/material code.
+
+- Shaders using tags that do not correspond to default numeric order:
+  - The source default macros are only a fallback convention.
+  - D3D9’s material pass mapping is authoritative.
+
+So yes: reject Fix B as the real fix. It is cheaper, but it preserves a wrong VS and makes the layout layer compensate by guessing semantic intent.
+
+---
+
+**2. Per-key Variant Map**
+
+A per-key variant map inside `Direct3d11_VertexShaderData` is a good structure.
+
+The D3D11 renderer has more downstream identity tied to compiled bytecode than D3D9 did:
+
+- input layout depends on actual VS input signature / bytecode;
+- PS reconstruction depends on reflected VS outputs;
+- bytecode hash participates in layout cache identity;
+- compiled `.cso` cache needs define/version identity.
+
+A one-entry “last key” cache is riskier in D3D11 because callers may ask for stable bytecode/reflection associated with a previous key while another pass has already changed the active key. Even on one thread, it invites stale-reference mistakes unless every consumer is perfectly synchronous and immediate.
+
+Recommended model:
+
+```cpp
+Direct3d11_VertexShaderData
+  owns source-level asset data
+  owns map<uint32, Variant>
+
+Variant
+  owns compiled VS
+  owns bytecode
+  owns reflected inputs
+  owns reflected outputs
+  owns bytecode hash
+  owns output signature hash
+```
+
+Compile lazily through something like:
+
+```cpp
+Variant const & getVariant(uint32 textureCoordinateSetKey);
+```
+
+Then most getters become thin wrappers or disappear:
+
+```cpp
+auto const &variant = vsData->getVariant(key);
+```
+
+That is cleaner than `getBytecode(key)`, `getReflectedInputs(key)`, etc. scattered everywhere.
+
+Folding the key into VS-data identity would also be clean in theory, but you said the engine creates VS-data once per VS asset, not per material/pass. Given that constraint, the internal variant map is the least invasive ownership model.
+
+---
+
+**3. Key Plumbing**
+
+Do not depend on `StateCache` ambient “current key” except maybe as a diagnostic/bind-time convenience.
+
+The immediate D3D11 context is single-threaded, so you probably do not have a CPU data race if all layout creation and PS reconstruction happen inline during draw setup. But the design is still fragile because cache misses are semantically about a specific draw/pass, not “whatever key is current when this helper happens to run.”
+
+Safer rule:
+
+```text
+Pass bind computes/stores key.
+Draw/layout creation receives key explicitly.
+VS variant lookup receives key explicitly.
+PS reconstruction receives key explicitly.
+```
+
+Use explicit call arguments for:
+
+- `getOrCreateInputLayout(..., vsData, key, ...)`
+- `getBytecode` / `getVariant`
+- `getReflectedInputs`
+- `getReflectedOutputs`
+- `computeOutputSignatureHash`
+- PS-program reconstruction that pairs PS with VS outputs
+
+The `StateCache` may track `(vsData*, key)` as current bound state, but cache construction should not read the key implicitly from mutable global-ish state. This avoids future hazards if someone later defers layout creation, batches state resolution, adds worker-thread compilation, or reorders PS reconstruction.
+
+---
+
+**4. PS-Reconstruction Coupling**
+
+Changing the VS input remap should not change the VS output signature for this class of shaders, assuming the HLSL output struct and output semantic declarations are unchanged.
+
+In your bump case, the outputs remain the same conceptual values and semantics:
+
+```text
+tcs_MAIN
+tcs_NRML
+directionToLight_t
+halfAngle_t
+COLOR0
+COLOR1
+```
+
+The remap changes where input data comes from:
+
+```text
+NRML reads TEXCOORD0 instead of TEXCOORD1
+DOT3 reads TEXCOORD1 instead of TEXCOORD2
+```
+
+It should not change which output semantics exist.
+
+However, two cautions:
+
+- If the macro-generated `DECLARE_textureCoordinateSets` changes input declaration text only, output signature hash should remain stable.
+- If any shader uses preprocessor conditionals tied to declared texcoord sets, then output signature could theoretically differ per key. I would not assume impossible unless you have audited the asset shader include/macro system.
+
+So the PS lane should fetch outputs from the same key’s VS variant because that is the correct pairing. In most cases the output signature hash will be identical across keys, but the code should not rely on that as a universal invariant.
+
+---
+
+**5. Simpler Options**
+
+I do not see a cleaner way than reconstructing D3D9’s key/remap behavior.
+
+Making `D3DCompile` “honor the asset’s own `DECLARE_textureCoordinateSets`” only works if you feed it the same macros D3D9 fed it. The original source default macros are the problem: they encode default tag ordering, not the pass-specific material/mesh remap.
+
+A vs_4_0 input-signature rewrite is possible in theory, but I would avoid it:
+
+- You would need to rewrite bytecode/signature metadata and possibly adjust input references consistently.
+- Aliasing `NRML` to `MAIN` is not just changing declaration metadata if the compiled code has already read `v1` and `v2`.
+- You would be patching compiled shader behavior that was straightforwardly controlled at source-preprocessor time in D3D9.
+
+PS input-signature reconstruction is different because PS linkage can often be adapted at the signature boundary. Here the bug is inside VS execution: it reads the wrong input register and normalizes zero. Source-level recompile is the right place.
+
+---
+
+**6. Failure Modes / Blast Radius**
+
+For already-working shaders, the macro path should reduce to identity only if your generated macros exactly match the old defaults for identity mappings.
+
+Main regression risks:
+
+1. Macro generation subtly differs from D3D9.
+
+   This is the biggest risk. You need to match:
+   - tag discovery order;
+   - key packing;
+   - duplicate/aliased tags;
+   - dimensions, especially DOT3 = 4 and ordinary UV = 2;
+   - generated `DECLARE_textureCoordinateSets` text;
+   - register/semantic numbering assumptions.
+
+   If D3D9 declares only unique set indices, D3D11 should do the same. If two tags map to set 0, do not emit duplicate conflicting declarations for `textureCoordinateSet0`.
+
+2. Identity shaders get different source than before.
+
+   UI passthrough, non-bump skeletal, and static props may still compile and render correctly, but their bytecode hashes will change if you now inject explicit identity macros. That is okay if `D3D11_REWRITE_VERSION` is bumped, but you should expect cache churn.
+
+   To reduce perturbation, you can choose:
+   - always use the remap macro path for consistency; or
+   - only inject when tags exist / key differs from default.
+
+   I would prefer always using the D3D9-equivalent path for asset shaders with texcoord tags. It makes behavior uniform and exposes issues earlier.
+
+3. Missing mapping fallback.
+
+   What happens when `shader.getTextureCoordinateSet(tag, &idx)` fails? D3D9 behavior must be mirrored exactly. If D3D9 defaults missing tags to their source/default index, do that. If it asserts or omits, mirror that. Do not invent a D3D11-only fallback unless logged loudly, because silent fallback will recreate this class of bug.
+
+---
+
+**Recommended Implementation Shape**
+
+Use Fix A.
+
+Concretely:
+
+- Parse VS texcoord tags once from source.
+- In `Direct3d11_StaticShaderData::Pass`, compute and store `textureCoordinateSetKey` exactly like D3D9.
+- Add `Direct3d11_VertexShaderData::getVariant(uint32 key)`.
+- Make `Variant` the owner of shader, bytecode, reflection, bytecode hash, and output signature hash.
+- Pass `key` explicitly through layout creation and PS reconstruction.
+- Keep the input-layout cache keyed by bytecode hash; no need to add key separately if hash includes source + remap macros.
+- Bump `D3D11_REWRITE_VERSION`.
+- Add logging for variant compile:
+  - VS asset name;
+  - key;
+  - tag list;
+  - tag -> set mapping;
+  - reflected input signature.
+
+Top 3 risks:
+
+1. Not exactly matching D3D9 macro/tag/key semantics, especially aliasing and duplicate set declarations.
+2. Ambient key plumbing causing the wrong variant’s bytecode/reflection to be used during lazy cache creation.
+3. Identity-path perturbation exposing compile/signature differences in shaders that were previously working by accident.
+
+Bottom line: Fix A is not over-scoped for this bug. The bug is direct evidence that per-mesh VS remapping is part of the original renderer’s shader ABI. Reimplement that contract in the D3D11 shader-data/pass layer; do not teach the vertex declaration layer to guess it.
+tokens used
+26,105
+**Verdict**
+
+Fix A is the right architectural fix. Fix B is an acceptable emergency render hack for this one character-select defect, but it is solving the symptom at the wrong layer. The real contract in D3D9 is “shader texcoord tags are remapped per material/mesh pass before compilation.” If D3D11 recompiles the original asset HLSL without that remap, then the VS bytecode is not equivalent to D3D9. The input-layout builder should not be asked to infer semantic aliasing that the shader compiler was supposed to see.
+
+I would implement Fix A, but make one ownership adjustment: avoid relying on “current key” as ambient state for anything that can be cached or lazily created. Store the key on the D3D11 pass/program binding object and pass it explicitly into VS bytecode/reflection/layout/PS-reconstruction paths.
+
+---
+
+**1. Fix A vs Fix B**
+
+Fix A is the correct call.
+
+D3D9’s behavior is not “compact mesh elements into TEXCOORD slots and hope the shader matches.” It is:
+
+```text
+shader tags + material/mesh mapping -> textureCoordinateSetKey -> remapped VS source -> compiled VS
+```
+
+Your D3D11 path currently skips the middle step. That means the D3D11 VS input signature is wrong before the input layout ever sees it.
+
+Fix B breaks whenever “dimension + position” is not enough to uniquely recover the tag mapping. Examples:
+
+- Two or more 2D UV sets:
+  - `MAIN -> set0`
+  - `NRML -> set0`
+  - `MASK -> set1`
+  - `DTLA -> set2`
+
+  A layout heuristic sees several `float2 TEXCOORDn` inputs and several 2D mesh UVs. It cannot know which shader tag should alias which mesh set unless it reproduces the same tag-to-set key logic anyway.
+
+- Aliased UV tags:
+  - `MAIN` and `NRML` both intentionally read set 0.
+  - The unremapped VS asks for `TEXCOORD0` and `TEXCOORD1`.
+  - Binding the same VB element to both may work only if the input-layout layer explicitly duplicates/aliases the element. That is already a hidden shader remap, just implemented in the wrong abstraction.
+
+- Mixed 2D and 4D sets with nontrivial order:
+  - DOT3 being 4D lets this specific case be guessed.
+  - If another shader has multiple 4D-ish tangent/detail/lightmap conventions, dimension matching stops being reliable.
+  - Even if today only DOT3 is 4D, the heuristic bakes in an asset-format assumption outside the shader/material code.
+
+- Shaders using tags that do not correspond to default numeric order:
+  - The source default macros are only a fallback convention.
+  - D3D9’s material pass mapping is authoritative.
+
+So yes: reject Fix B as the real fix. It is cheaper, but it preserves a wrong VS and makes the layout layer compensate by guessing semantic intent.
+
+---
+
+**2. Per-key Variant Map**
+
+A per-key variant map inside `Direct3d11_VertexShaderData` is a good structure.
+
+The D3D11 renderer has more downstream identity tied to compiled bytecode than D3D9 did:
+
+- input layout depends on actual VS input signature / bytecode;
+- PS reconstruction depends on reflected VS outputs;
+- bytecode hash participates in layout cache identity;
+- compiled `.cso` cache needs define/version identity.
+
+A one-entry “last key” cache is riskier in D3D11 because callers may ask for stable bytecode/reflection associated with a previous key while another pass has already changed the active key. Even on one thread, it invites stale-reference mistakes unless every consumer is perfectly synchronous and immediate.
+
+Recommended model:
+
+```cpp
+Direct3d11_VertexShaderData
+  owns source-level asset data
+  owns map<uint32, Variant>
+
+Variant
+  owns compiled VS
+  owns bytecode
+  owns reflected inputs
+  owns reflected outputs
+  owns bytecode hash
+  owns output signature hash
+```
+
+Compile lazily through something like:
+
+```cpp
+Variant const & getVariant(uint32 textureCoordinateSetKey);
+```
+
+Then most getters become thin wrappers or disappear:
+
+```cpp
+auto const &variant = vsData->getVariant(key);
+```
+
+That is cleaner than `getBytecode(key)`, `getReflectedInputs(key)`, etc. scattered everywhere.
+
+Folding the key into VS-data identity would also be clean in theory, but you said the engine creates VS-data once per VS asset, not per material/pass. Given that constraint, the internal variant map is the least invasive ownership model.
+
+---
+
+**3. Key Plumbing**
+
+Do not depend on `StateCache` ambient “current key” except maybe as a diagnostic/bind-time convenience.
+
+The immediate D3D11 context is single-threaded, so you probably do not have a CPU data race if all layout creation and PS reconstruction happen inline during draw setup. But the design is still fragile because cache misses are semantically about a specific draw/pass, not “whatever key is current when this helper happens to run.”
+
+Safer rule:
+
+```text
+Pass bind computes/stores key.
+Draw/layout creation receives key explicitly.
+VS variant lookup receives key explicitly.
+PS reconstruction receives key explicitly.
+```
+
+Use explicit call arguments for:
+
+- `getOrCreateInputLayout(..., vsData, key, ...)`
+- `getBytecode` / `getVariant`
+- `getReflectedInputs`
+- `getReflectedOutputs`
+- `computeOutputSignatureHash`
+- PS-program reconstruction that pairs PS with VS outputs
+
+The `StateCache` may track `(vsData*, key)` as current bound state, but cache construction should not read the key implicitly from mutable global-ish state. This avoids future hazards if someone later defers layout creation, batches state resolution, adds worker-thread compilation, or reorders PS reconstruction.
+
+---
+
+**4. PS-Reconstruction Coupling**
+
+Changing the VS input remap should not change the VS output signature for this class of shaders, assuming the HLSL output struct and output semantic declarations are unchanged.
+
+In your bump case, the outputs remain the same conceptual values and semantics:
+
+```text
+tcs_MAIN
+tcs_NRML
+directionToLight_t
+halfAngle_t
+COLOR0
+COLOR1
+```
+
+The remap changes where input data comes from:
+
+```text
+NRML reads TEXCOORD0 instead of TEXCOORD1
+DOT3 reads TEXCOORD1 instead of TEXCOORD2
+```
+
+It should not change which output semantics exist.
+
+However, two cautions:
+
+- If the macro-generated `DECLARE_textureCoordinateSets` changes input declaration text only, output signature hash should remain stable.
+- If any shader uses preprocessor conditionals tied to declared texcoord sets, then output signature could theoretically differ per key. I would not assume impossible unless you have audited the asset shader include/macro system.
+
+So the PS lane should fetch outputs from the same key’s VS variant because that is the correct pairing. In most cases the output signature hash will be identical across keys, but the code should not rely on that as a universal invariant.
+
+---
+
+**5. Simpler Options**
+
+I do not see a cleaner way than reconstructing D3D9’s key/remap behavior.
+
+Making `D3DCompile` “honor the asset’s own `DECLARE_textureCoordinateSets`” only works if you feed it the same macros D3D9 fed it. The original source default macros are the problem: they encode default tag ordering, not the pass-specific material/mesh remap.
+
+A vs_4_0 input-signature rewrite is possible in theory, but I would avoid it:
+
+- You would need to rewrite bytecode/signature metadata and possibly adjust input references consistently.
+- Aliasing `NRML` to `MAIN` is not just changing declaration metadata if the compiled code has already read `v1` and `v2`.
+- You would be patching compiled shader behavior that was straightforwardly controlled at source-preprocessor time in D3D9.
+
+PS input-signature reconstruction is different because PS linkage can often be adapted at the signature boundary. Here the bug is inside VS execution: it reads the wrong input register and normalizes zero. Source-level recompile is the right place.
+
+---
+
+**6. Failure Modes / Blast Radius**
+
+For already-working shaders, the macro path should reduce to identity only if your generated macros exactly match the old defaults for identity mappings.
+
+Main regression risks:
+
+1. Macro generation subtly differs from D3D9.
+
+   This is the biggest risk. You need to match:
+   - tag discovery order;
+   - key packing;
+   - duplicate/aliased tags;
+   - dimensions, especially DOT3 = 4 and ordinary UV = 2;
+   - generated `DECLARE_textureCoordinateSets` text;
+   - register/semantic numbering assumptions.
+
+   If D3D9 declares only unique set indices, D3D11 should do the same. If two tags map to set 0, do not emit duplicate conflicting declarations for `textureCoordinateSet0`.
+
+2. Identity shaders get different source than before.
+
+   UI passthrough, non-bump skeletal, and static props may still compile and render correctly, but their bytecode hashes will change if you now inject explicit identity macros. That is okay if `D3D11_REWRITE_VERSION` is bumped, but you should expect cache churn.
+
+   To reduce perturbation, you can choose:
+   - always use the remap macro path for consistency; or
+   - only inject when tags exist / key differs from default.
+
+   I would prefer always using the D3D9-equivalent path for asset shaders with texcoord tags. It makes behavior uniform and exposes issues earlier.
+
+3. Missing mapping fallback.
+
+   What happens when `shader.getTextureCoordinateSet(tag, &idx)` fails? D3D9 behavior must be mirrored exactly. If D3D9 defaults missing tags to their source/default index, do that. If it asserts or omits, mirror that. Do not invent a D3D11-only fallback unless logged loudly, because silent fallback will recreate this class of bug.
+
+---
+
+**Recommended Implementation Shape**
+
+Use Fix A.
+
+Concretely:
+
+- Parse VS texcoord tags once from source.
+- In `Direct3d11_StaticShaderData::Pass`, compute and store `textureCoordinateSetKey` exactly like D3D9.
+- Add `Direct3d11_VertexShaderData::getVariant(uint32 key)`.
+- Make `Variant` the owner of shader, bytecode, reflection, bytecode hash, and output signature hash.
+- Pass `key` explicitly through layout creation and PS reconstruction.
+- Keep the input-layout cache keyed by bytecode hash; no need to add key separately if hash includes source + remap macros.
+- Bump `D3D11_REWRITE_VERSION`.
+- Add logging for variant compile:
+  - VS asset name;
+  - key;
+  - tag list;
+  - tag -> set mapping;
+  - reflected input signature.
+
+Top 3 risks:
+
+1. Not exactly matching D3D9 macro/tag/key semantics, especially aliasing and duplicate set declarations.
+2. Ambient key plumbing causing the wrong variant’s bytecode/reflection to be used during lazy cache creation.
+3. Identity-path perturbation exposing compile/signature differences in shaders that were previously working by accident.
+
+Bottom line: Fix A is not over-scoped for this bug. The bug is direct evidence that per-mesh VS remapping is part of the original renderer’s shader ABI. Reimplement that contract in the D3D11 shader-data/pass layer; do not teach the vertex declaration layer to guess it.

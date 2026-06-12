@@ -1,0 +1,147 @@
+## 6 — B (CURSOR): Register / offset detail
+
+### Authoritative layouts
+
+**VS `VertexSlot0CB` @ b0** (`Direct3d11_ConstantBuffer.h:213-234`, `Direct3d9_VertexShaderConstantRegisters.h:28-45`):
+
+| `lightData[i]` | c-reg | `LightData` field (D3D9) | Bytes |
+|---|---|---|---|
+| [0] | **c16** | `ambient` | 256 |
+| [1..3] | **c17–c19** | `parallelSpecular[0]` dir / diffuse / specular | 272–304 |
+| [4..5] | **c20–c21** | `parallel[0]` dir / diffuse | 320–336 |
+| [6..7] | **c22–c23** | `parallel[1]` dir / diffuse | 352–368 |
+| [8..23] | c24–c39 | point lights | … |
+| [24..27] | **c40–c43** | `dot3` camPos / localDir / diffuse / specular | 640–688 |
+
+| `extendedLightData[i]` | c-reg | `HemisphericLightData` field | Bytes |
+|---|---|---|---|
+| [0] | **c60** | `backColor` | 960 |
+| [1] | **c61** | `tangentColor` | 976 |
+| [2] | **c62** | `tangentMinusBackColor` | 992 |
+| [3] | **c63** | `tangentMinusDiffuseColor` | 1008 |
+
+**Correction to CONSULT-41 §5:** dot3 diffuse/spec land at **c42–c43** (`lightData[26–27]`), not c26–c27. c26–c27 are `pointSpecular[0].attenuation` / `specularColor`.
+
+**PS `SwgVertexConstants` @ b0** (`Direct3d11_LegacyPSConstants.h:54-58`, `Direct3d9_PixelShaderConstantRegisters.h:23-27`):
+
+| c-reg | byte offset | `PixelDot3Data` field |
+|---|---|---|
+| **c0** | 0 | `localDirection` (.w = spec power) |
+| **c1** | 16 | `diffuseColor` |
+| **c2** | 32 | `specularColor` |
+| **c3** | 48 | `tangentMinusDiffuseColor` |
+| **c4** | 64 | `tangentMinusBackColor` |
+
+---
+
+### D3D11 fill → D3D9 origin map
+
+| D3D11 write site | Register | D3D9 equivalent | Getter / formula |
+|---|---|---|---|
+| `LightManager.cpp:117-120` → `s_pixelDot3State.ambient` (`:243`) | VS c16 | `selectLights` ambient sum (`Direct3d9_LightManager.cpp:412-418`) | `getScaledDiffuseColor()` per `T_ambient` |
+| `StateCache.cpp:391-393` | VS c17–c19 | `applyLights_vertexShader` `parallelSpecular[0]` (`:545-562`) | sun dir negated; `getScaledDiffuse/SpecularColor()` |
+| `StateCache.cpp:428-429` | VS c20–c23 | `parallel[0..1]` (`:630-647`) | fill/bounce: `-getObjectFrameK_w()`, `getScaledDiffuseColor()` |
+| `StateCache.cpp:405-408` | VS c40–c43 | `lightData.dot3` (`:567-584`) | `-rotate_p2l(dir)`, cam local, sun diffuse/spec |
+| `StateCache.cpp:411-414` | VS c60–c63 | `_vsps_setExtendedLightData` (`:732-760`) | see below |
+| `LightManager.cpp:193-200` | PS c1–c4 snapshot | `PixelDot3Data` (`:592-601`) | same sun getters |
+| `StaticShaderData.cpp:962-985` | PS c0–c4 upload | `applyLights_vertexShader_dot3` (`:823-830`) | object-local dir; c1/c2 `.a` = fade state |
+
+**Hemispheric snapshot in `setLights` (`Direct3d11_LightManager.cpp:186-200`):**
+
+```186:200:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+		VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
+		VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
+		// ...
+		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+			tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
+		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+			tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
+		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+```
+
+D3D9 mirror (`Direct3d9_LightManager.cpp:739-759`): identical getters, identical RGB deltas.
+
+**Extended upload (`Direct3d11_StateCache.cpp:410-414`):**
+
+```410:414:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+				s_slot0Shadow.extendedLightData[0] = d3.backColor;
+				s_slot0Shadow.extendedLightData[1] = d3.tangentColor;
+				s_slot0Shadow.extendedLightData[2] = d3.tangentMinusBackColor;
+				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
+```
+
+Matches `HemisphericLightData` field order in `Direct3d9_LightManager.h:138-144` and `VCSR_extendedLightData = 60`.
+
+---
+
+### Sky/up vs ground/down channel assignment
+
+From the asset VS (`diffuse.inc:19-24`) and environment producer (`GroundEnvironment.cpp:1073-1079`):
+
+| Semantic role | Engine source | VS register | PS register | How it weights |
+|---|---|---|---|---|
+| **Sky/up floor** (unconditional add) | `getScaledDiffuseTangentColor()` → `mainTangentColor` | **c61** `tangentColor` | implicit via **c1+c3 = tangent** | VS line 20: `add r7, tangentColor, r7` |
+| **Sun-facing blend** | `tangent − diffuse` | **c63** | **c3** | VS line 22: `-tangentMinusDiffuse * max(N·L,0)`; PS: `-front * c3` |
+| **Ground/back hemisphere** | `tangent − back` from `getScaledDiffuseBackColor()` | **c62** | **c4** | VS line 24: `+tangentMinusBack * min(N·L,0)`; PS: `+back_ts * c4` |
+| Raw **backColor** | `getScaledDiffuseBackColor()` | **c60** (stored, not read by `diffuse.inc`) | — | Only enters through c62/c4 delta |
+
+**Up/sky color lands in `tangentColor` (c61), not `backColor` (c60).**  
+**Down/ground color enters only through the `tangentMinusBack` delta (c62/c4), not as a raw slot swap.**
+
+D3D11 hemispheric weighting matches D3D9: same registers, same getters, same delta math, same VS/PS modulation structure.
+
+---
+
+### Swap / wrong-slot / wrong-getter audit
+
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| tangent ↔ back swapped in extended c60–c61 | **REFUTED** | `[0]=back`, `[1]=tangent` in both plugins; matches struct + shader names |
+| sky ↔ ground swapped in PS c3/c4 | **REFUTED** | c3=`tangentMinusDiffuse`, c4=`tangentMinusBack` in both (`LegacyPSConstants.h:57-58`, `StaticShaderData.cpp:984-985`) |
+| wrong getter (back where tangent expected) | **REFUTED** | `:186-187` uses same `getScaledDiffuse{Back,Tangent}Color()` as D3D9 `:739-749` |
+| ambient in wrong slot | **REFUTED** | `lightData[0]`/c16 in both |
+| fill/bounce in wrong parallel slots | **REFUTED** | cascade `:131-143` mirrors D3D9 `:423-437`; compose `:428-429` mirrors `:638-647` |
+
+**One non-RGB parity gap (not the blue-face root cause):**
+
+- D3D9 `tangentMinusDiffuseColor.a` = `bloomEnabled` (`Direct3d9_LightManager.cpp:759`)
+- D3D11 `tangentMinusDiffuseColor.a` = `tangent.a − diffuse.a` (`Direct3d11_LightManager.cpp:195-196`)
+
+PS hemispheric disasm (§3) uses `.xyz` only; this does not explain B>R on forehead RGB.
+
+---
+
+## 7 — Deliverable (angle B)
+
+### (1) Finding
+
+**Register layout and hemispheric slot assignment are D3D9-parity correct.** No tangent/back swap, no sky/ground channel inversion, no wrong getter at any cited fill site.
+
+RenderDoc ground truth (§3) shows **v1 is already blue** `(0.524, 0.537, 0.707)` before PS c1/c3/c4 act — so the visible wash is seeded in **VS vertex lighting** (c16 ambient + c61 tangent floor + c17–c19 sun N·L + c20–c23 fill/bounce), then PS applies a second hemispheric pass on the same correctly-mapped constants.
+
+### (2) §4 hemispheric theory — CONFIRM mechanism, REFUTE swap sub-theory
+
+**CONFIRM:** Face (up-facing) vs shoulder (side-facing) under the same shader is classic hemispheric/normal-dependent behavior. `tangentColor` (sky/up floor at c61) and fill parallel (c20–c21) weight differently by world normal.
+
+**REFUTE as root cause:** “tangent/back swapped or wrong slot” — the mapping is 1:1 with D3D9 at every write site above.
+
+### (3) Minimal D3D9-parity fix + location
+
+**No register permutation fix is indicated.** Swapping c60↔c61 or c3↔c4 would *break* D3D9 parity.
+
+If D3D11 forehead is bluer than D3D9 with identical scene data, the fix is **not** in slot reassignment but in **which values reach the already-correct slots** — specifically the sun `psSlot` snapshot at `Direct3d11_LightManager.cpp:181-200` (scaled `mainTangentColor` / `mainBackColor` from `GroundEnvironment.cpp:1073-1079`) and the VS parallel fill at `StateCache.cpp:417-430`. Angle A (dataflow) / D (numeric back-solve) must identify the diverging float.
+
+Optional `.a`-channel parity (orthogonal to RGB blue):
+
+```cpp
+// Direct3d11_LightManager.cpp:195-196
+// Set tangentMinusDiffuseColor.w = bloomEnabled (mirror D3d9_LightManager.cpp:759)
+// Set tangentMinusBackColor.w    = currentTime   (mirror D3d9_LightManager.cpp:599)
+```
+
+### (4) Risk other angles miss
+
+**Fixing PS c1/c3/c4 alone cannot warm the forehead** when v1 is already blue-dominant — that is a VS-side composition problem. A separate trap: D3D11 has **no `setFullAmbientOn` equivalent** (`Direct3d9_StaticShaderData.cpp:955` has it; D3D11 grep is empty). That affects precalc/full-ambient shaders, not this specific face-vs-shoulder split, but it is a real ambient-slot value gap at c16 for other draws.
+
+**Decisive dump for draw 687:** VS b0 `lightData[0]` (c16), `extendedLightData[1]` (c61 tangent), `extendedLightData[2-3]` (c62–c63 deltas), `lightData[4-7]` (c20–c23 fill/bounce), plus PS b0 c1/c3/c4 — compare each to D3D9 `LightData` + `PixelDot3Data` for the same frame. If registers match but forehead v1 is bluer, the bug is upstream value production, not layout.

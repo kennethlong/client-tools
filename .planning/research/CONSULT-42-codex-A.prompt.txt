@@ -1,0 +1,19 @@
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11 renderer
+port of Star Wars Galaxies. Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-42-which-state-lands-on-face.md
+
+Then read the cited source (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+
+Answer ONLY section "5 — A (CODEX, dataflow/order trace)" and the section-6 deliverable for your angle.
+The light COLORS are identical D3D9-vs-D3D11 (proven, §2) — do NOT chase a color/swap bug. The question is
+WHICH lighting STATE is active when her dot3 skinned-character FACE draws, and why D3D11 lands a blue state
+where D3D9 lands a warm one. Trace the ORDER of setLights vs the character draw and the per-object refresh.
+State the first source line where D3D11 diverges from D3D9 such that a blue state survives onto her face.
+Cite file:line. Give the minimal D3D9-parity fix + exact location that does NOT regress the CONSULT-38
+black-walls snapshot persistence or the 3-directional black-walls feed.

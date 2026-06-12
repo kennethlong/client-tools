@@ -1,0 +1,42 @@
+# Handoff 2026-06-08 — Cape spike RESOLVED + world lighting parity (ambient+directional) shipped; precalc buildings NEXT
+
+Branch: `koogie-msvc-cpp20-base` (THE renderer checkout). Build: `$MSBUILD` (in settings.json env) on
+`src/engine/client/application/Direct3d11/build/win32/Direct3d11.vcxproj -p:Configuration=Release -p:Platform=Win32 -nologo -m -nodeReuse:false -v:minimal`.
+Postbuild stages `gl11_r.dll` to `stage/`; if the client is running the copy silently no-ops, so always
+`cp -f src/compile/win32/Direct3d11/Release/gl11_r.dll stage/gl11_r.dll` and verify md5. Boot `SwgClient_r.exe`
+(reads `client.cfg`, `rasterMajor=11`). A running client locks the DLL — FULLY RESTART to load a new build.
+RenderDoc MCP is OFF this session per Kenny ("can't use MCP to drive RenderDoc") — use runtime file-logging
+(`fopen_s` to `stage/cape-*.txt`) instead, OR get RenderDoc back for the building work (strongly recommended).
+
+## SHIPPED THIS SESSION (committed + pushed)
+1. **Cape/Jawa "texture spike" smear — RESOLVED.** Commit `3089299ca`. Root cause: `SoftwareBlendSkeletalShaderPrimitive::collide()` (HUD/mouse ray-test) at `SoftwareBlendSkeletalShaderPrimitive.cpp:876` calls the WRITABLE `m_indexBuffer->lock()` to only READ indices. D3D11 can't Map-read a `DEFAULT` IB, so `Direct3d11_StaticIndexBufferData::lock(false)` returns a fresh UNINITIALIZED `operator new[]` buffer; `unlock()` then `UpdateSubresource`s that garbage into the live GPU static index buffer → indices up to ~65520 vs 40–1900 verts → undefined-VRAM fetch → screen-spanning smear. D3D9-safe (its lock returns a ptr INTO the live IB). Camera-angle-dependent (collide = mouse pick). FIX: gave `Direct3d11_StaticIndexBufferData` a CPU **shadow** of the last-uploaded indices so reads get real data + any re-upload writes valid data. See [[project_d3d11_cape_spike_skinning_regression]] (RESOLVED block at top). Runtime-verified.
+2. **D3D11 release UAF on pass shader slots** — commit `3ccd36f7f` (was sitting uncommitted; the m_passVS/PS live-deref slot fix).
+3. **World lighting parity (ambient + directional)** — commit `3b977c98a`. Two D3D9-parity fixes in `Direct3d11_LightManager.cpp` + `.h` + `Direct3d11_StateCache.cpp`:
+   - **Ambient was crushed 8×.** `setLights` did `cb.ambientColor += color * intensity` (0.130×0.130=0.0169≈4/255=black). D3D9 (`Direct3d9_LightManager.cpp:412-418`) sums color with NO intensity. Dropped the multiply → ambient floor now correct ~0.130.
+   - **Only 1 of 3 directionals was fed.** Outdoor scenes have main(sun)+fill+bounce (`GroundEnvironment.cpp:2152-2168`). D3D9 `selectLights` routes sun (highest specular)→parallelSpecular[0]/dot3, next two by diffuse→parallel[0]/parallel[1]. The world VS's MAIN diffuse reads `lightData.parallel[0]+parallel[1]` (c20-23 = fill+bounce), NOT the sun. D3D11 captured only the first T_parallel and never filled parallel[0..1] → VS diffuse 0 → ambient-only → black. Now `setLights` runs D3D9's exact specular/diffuse cascade; `Direct3d11_PixelDot3State` gained `parallelDirectionWorld[2]/parallelDiffuseColor[2]/parallelCount`; `composeSlot0Shadow` fills c20-c23 from fill+bounce. Verified vs D3D9 source + in-game (broad scene now matches D3D9). See [[project_d3d11_black_walls_full_ambient]].
+
+## CURRENT VISUAL STATE
+Broad outdoor scene + most cantina interior now lit correctly, matching D3D9 (was mostly black/near-black before). Three classes of geometry remain wrong — each a SEPARATE, deeper bug:
+
+### REMAINING #1 (PRIMARY / Kenny's target) — Precalc-vertex-lit BUILDINGS render black
+- DECISIVE DATA (`cape-lights.txt` log, since removed): black buildings call `setLights` with an EMPTY light list (`listSz=0` → ambient/sun/all = 0 → pure black). Lit objects get `listSz=3` (ambient 0.130 + sun + 1 fill). The empty list is the signature of **precalculated-vertex-lighting** geometry (lighting BAKED into vertex colors; no dynamic lights assigned — `ShaderPrimitiveSorter` uses a separate "WithPrecalculatedVertexLighting" bitset pool).
+- D3D9 handles this with `setFullAmbientOn(shader.containsPrecalculatedVertexLighting())` (`Direct3d9_StaticShaderData.cpp:776,955` → `Direct3d9_LightManager.h:201-216` → `ms_fullAmbient=(1,1,1,0)` seeded into `selectLights:404`). Full-white ambient × the BAKED VERTEX COLORS = the baked appearance.
+- **Why the naive fix FAILED (tried + reverted this session):** forcing `lightData[0]=(1,1,1)` for precalc shaders made buildings flat-WHITE (not baked-looking), made character FACES too white, and exposed LOD-thrash flicker. ROOT REASON: the **D3D11 asset world VS has NO COLOR vertex input** (inputs are pos/normal/uv/uv/tangent only — verified via VS disasm `46c05cc8`). So it literally cannot read the baked vertex lighting; `(1,1,1)` ambient just floods flat-white.
+- **REAL FIX (next session):** add a `COLOR` vertex input to the asset VS path + ensure the VB provides the baked vertex colors, so precalc geometry multiplies baked-color × full-ambient like D3D9. This is a VS-signature + input-layout + VB-format change (bigger than a constant tweak). Confirm first WHICH shaders are precalc (`StaticShader::containsPrecalculatedVertexLighting()`, public DLLEXPORT) and whether their VB carries a color stream. Compare the D3D9 asset VS (it DOES read vertex color/COLOR0). **A RenderDoc capture of one black building draw (gl05 vs gl11) would show the VB color stream + VS input sig in one look** — get RenderDoc back for this.
+
+### REMAINING #2 — Specific shadow-facing dot3 walls still dark
+- Kenny's original outdoor "wall" is dynamic-lit (NOT precalc) but faces away from the sun, so it gets only the 0.130 ambient → dark. D3D9 lifts shadow-facing dot3 surfaces via the **hemispheric** (sky tangent / ground back) terms. `composeSlot0Shadow` fills `extendedLightData` (c60-63) + dot3 c40-43 from `d3.backColor/tangentColor` (captured from the sun via `getScaledDiffuseBackColor/TangentColor`, same getters D3D9 uses). Verify those hemispheric values actually reach the dot3 PS and that the bump N·L (object-local light dir `lightData[25]`, tangent-space `o4`) is correct. Likely a smaller fix than #1.
+
+### REMAINING #3 — Close furniture LOD-thrash flicker
+- Cantina furniture (booths/tables ~5m) flickers between two colors as the camera moves. PRE-EXISTING (the lighting work just made it briefly visible). `DetailAppearance::_chooseDetailLevel` (`DetailAppearance.cpp:380`, distance-based, `:419`) swaps among child appearances with DIFFERENT shaders per LOD; at a boundary it can thrash frame-to-frame, and the LOD-transition fade routes through `addWithAlphaFadeOpacity` (`MeshAppearance.cpp:260` → `ShaderPrimitiveSet.cpp:399`) — a different submission path. Suspect a hysteresis gap or the fade-opacity blend wiring in D3D11. Lower priority.
+
+## KEY METHODOLOGY NOTES
+- **Reference-first WON repeatedly.** Every lighting fix came from reading the D3D9 `Direct3d9_LightManager`/`selectLights`/`applyLights_vertexShader` and matching it EXACTLY. See [[feedback_parity_work_start_from_reference_sequence]].
+- **The consultant crew cracked the hard ones.** The lateral agent found the collide() spike bug (the trace agent missed it); a 2-agent fan-out nailed the 3-directional distribution + the LOD-shader-swap. Differentiated, non-leading prompts; consensus ≠ correctness ([[feedback_renderdoc_d3d9_vs_d3d11_is_the_diagnostic]]).
+- **Blind iteration has a cost.** The full-ambient regression (white faces + flicker) came from guessing without GPU inspection. RenderDoc is the tool that turns these into one-look answers; it was off this session. Re-enable it for #1/#2.
+- Diagnostic technique that worked w/o RenderDoc: `fopen_s` per-draw logs of the lighting state (`d3.valid`, `ambient`, `parallelCount`, light-list size) keyed in `setLights`/`setStaticShader`. The `listSz=0` finding was decisive.
+
+## DO-NOT-REDO (dead ends this session)
+- DON'T re-try "force VS ambient (1,1,1) for precalc" — it's architecturally wrong (no VS color input) → flat white + flicker. Reverted.
+- DON'T chase the spike as a dynamic-VB ring problem — it was the static INDEX buffer via collide(). RESOLVED.
+- The lighting INPUTS (ambient, sun, fill/bounce, dot3 c0-c4, hemispheric) are all verified FED now (`isLegacyB0=1`, `d3valid=1`, `pCount` correct). Remaining darkness is NOT a missing-feed; it's (#1) no VS color input for baked lighting, (#2) shadow-facing hemispheric, (#3) LOD thrash.

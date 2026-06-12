@@ -1,0 +1,277 @@
+# CONSULT-25 — Independent Analysis (Cursor)
+
+I read the ring allocator, SBSSP prepare/draw path, CuiLayer whole-ring locks, and the staging probe in `Direct3d11_StateCache.cpp`. Below is my best independent take, trusting your measurements over prior consult consensus.
+
+---
+
+## Executive summary
+
+**I agree with the intra-frame CPU-write / GPU-read aliasing characterization** on the shared `D3D11_USAGE_DYNAMIC` ring, with one refinement: the decisive failure mode is **byte-range reuse within the same backing generation before the GPU has retired prior draws**, not “stale bind,” not “read-past indices,” and not “write-then-discard between prepare and draw” (all correctly eliminated).
+
+**Minimal fix:** GPU-retire ring byte ranges with `ID3D11Query` `D3D11_QUERY_EVENT` — wait in `lock()` before any `Map` that would touch an in-flight range. Use **2–3 install-time ring buffers** rotated only after that buffer’s queries complete. Do **not** mass-create per-instance buffers.
+
+**Why prior fence/N-buffer attempts likely failed:** they flipped buffers or frames without **per-slice byte-range retirement** and/or signaled queries before deferred ring draws actually executed.
+
+---
+
+## 1. What is the correct, minimal fix?
+
+### Root mechanism (as I read the evidence)
+
+The RenderDoc signature — **prefix correct, suffix one identical stale position** — is exactly what you get when:
+
+1. A draw’s indices are in-range and the CPU write is correct (proven).
+2. The GPU later fetches vertex slots whose backing bytes were **reused/overwritten** by a subsequent `Map(WRITE_NO_OVERWRITE)` (or a `WRITE_DISCARD` that did not fully isolate as expected) while an **earlier-submitted** draw on the same physical backing is still in flight.
+
+The discard inversion is the smoking gun:
+
+| Accounting | Discards/frame | Result |
+|---|---|---|
+| D3D11 baseline (charge at lock, CuiLayer whole-ring) | ~370 | Fewer spikes (accidental rename protection) |
+| D3D9-faithful (charge at unlock) | Fewer | Dramatically worse (more same-generation reuse) |
+
+That pattern is almost impossible to explain except as **reuse-before-GPU-retirement**.
+
+### Concrete fix (minimal, no mass allocation)
+
+**A. Ring byte-range GPU retirement (correct version of the failed fence work)**
+
+**Where:**
+
+| Location | Change |
+|---|---|
+| `Direct3d11_StateCache.cpp` — all draw entry points that can consume the shared ring (`drawPartialIndexedTriangleList`, fan/strip variants, UI draws) | After `DrawIndexed`, if stream 0 is `getSharedRingBuffer()`, record byte range and `End(query)` |
+| `Direct3d11_DynamicVertexBufferData::lock()` (~225) | Before `Map`, wait until requested `[ms_used, ms_used+length)` does not overlap any in-flight retired range |
+| On `WRITE_DISCARD` / buffer rotation | Wait until **all** outstanding queries on that physical buffer complete |
+
+**How:**
+
+```cpp
+// Pseudocode — 2-3 buffers created once at install()
+struct RingRetirement {
+    UINT byteStart, byteEnd;          // slice in current physical buffer
+    ComPtr<ID3D11Query> query;        // EVENT ended after the draw
+    int bufferIndex;
+};
+
+static RingRetirement s_inflight[kMaxInflight];  // small fixed queue
+
+// After DrawIndexed on ring VB:
+ctx->End(query);
+record(byteOffset, byteOffset + stride * vertsUsed, currentBufferIndex, query);
+
+// In lock(), before Map:
+waitForOverlapping(byteStart, byteEnd);   // spin GetData on overlapping queries
+if (needDiscard) {
+    waitForAllOnBuffer(currentBufferIndex);
+    rotateToNextBuffer();                 // 2-3 preallocated rings
+    ms_used = 0;
+}
+Map(...);
+```
+
+**Key details prior attempts probably missed:**
+
+1. **Query must be issued after the specific `DrawIndexed`**, not at frame boundaries or buffer flip.
+2. **Retirement is byte-range overlap**, not “frame N uses buffer N.”
+3. **2–3 fixed `ID3D11Buffer`s at `install()`** — rotate only when that buffer’s queries are done. No per-mesh `CreateBuffer`.
+4. Apply the same pattern to `Direct3d11_DynamicIndexBufferData` if any dynamic-IB draws share the hazard (SBSSP uses static IB; lower risk).
+
+**B. Surgical alternative (even smaller blast radius)**
+
+Give soft-skin its **own** 2-buffer fenced ring (install-time only, ~2–4 MB total):
+
+- `SoftwareBlendSkeletalShaderPrimitive::draw()` locks a `SkinnedDynamicRing`, not the CuiLayer-shared ring.
+- CuiLayer keeps trashing the main ring with ~370 discards/frame; skinning stops competing with it.
+
+This is the smallest change that addresses the measured common factor without re-architecting all dynamic VB users.
+
+**C. Necessary but not sufficient: wire `beginFrame()`**
+
+`Direct3d11_DynamicVertexBufferData::beginFrame()` exists but is **never called** — `update_impl()` is a no-op at `Direct3d11.cpp:289`, while D3D9 calls it from `beginScene()` at `Direct3d9.cpp:2485`. Wiring this alone failed in CONSULT-22 and cannot fix intra-frame reuse; include it as hygiene, not as the fix.
+
+**Do not re-propose:** per-instance buffers, per-draw rebind only, deferred-write only, D3D9 unlock accounting alone, Present-only sync.
+
+---
+
+## 2. Do I agree it’s an intra-frame CPU-write / GPU-read hazard?
+
+**Yes — with high confidence.** The measurement chain is internally consistent and falsifies the two prior wrong consensus answers:
+
+| Eliminated | Evidence |
+|---|---|
+| Rebind/offset | Correct bound offset; still spikes |
+| Read-past indices | 400-primitive probe: `maxIndex == vertexCount-1`, `overRead=0` |
+| CPU skin / D3D11 write | Probes clean before `Unmap` |
+| Inter-generational stale bind | Deferred write in `draw()` immediately before `DrawIndexed`; still spikes |
+| Frame-level race | Present `EVENT` spin; no-op |
+
+**RenderDoc stale tail (one repeated value, not NaN)** matches **uninitialized/reused ring bytes**, not transform blow-up or IB OOB.
+
+### If I were to challenge it, what alternative?
+
+The only credible alternative left is **“the staging probe’s `CopySubresourceRegion` + `Map(READ)` changes timing for sampled draws, and the unsampled corruption is still ring-related but triggered differently.”** That still lands on the same fix (retire before reuse); it doesn’t resurrect rebind or read-past.
+
+**Single falsification test for the hazard:**
+
+> Remove the staging probe’s sampling filter and insert a **lightweight `End(EVENT)` + `GetData` wait only in `lock()`** (no readback). If spikes vanish without changing write/bind/draw order, the hazard is confirmed and the production fix is query-based retirement, not readback.
+
+**Single falsification test for any remaining non-ring theory:**
+
+> Run the staging readback on **every** soft-skin `DrawIndexed` (dewback-sized included). If all spikes vanish, the root cause is definitively “GPU read before bytes are retired,” regardless of whether the stale value is zero or non-zero.
+
+---
+
+## 3. Why per-draw drain masks, but Present-sync and write-immediately-before-draw do not
+
+### Per-draw drain (`CopySubresourceRegion` → `Map(READ)` before sampled draws)
+
+From `Direct3d11_StateCache.cpp:3269–3376`:
+
+```3269:3274:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+	// CAPE-COLLAPSE STAGING READ-BACK 2026-06-06 (DIAGNOSTIC -- REMOVE after). GOLD STANDARD:
+	// copy the BOUND ring region to a CPU-readable staging buffer right before DrawIndexed and
+	// scan what the GPU is actually about to fetch at the (correct) bound offset. COLLAPSE here
+	// => the ring slice IS overwritten by draw time (overwrite proven + the culprit value shown
+	// in collapsedPos; compare firstPos to the write probe's garment firstPos). Clean here => the
+	// GPU reads good data, look elsewhere. Map(READ) stalls the GPU -> tightly sampled.
+```
+
+This **drains the command stream up to that point** for the ring resource. It forces all **prior** in-flight ring reads/writes to complete before the readback sees coherent bytes. Sampled draws then execute against a fully retired prefix.
+
+**Crucially:** the probe only runs on a **subset** of draws (stride 48, `primitiveCount` 60–700). The dewback spike draw (2631 verts) is mostly **not** drained. Sampled draws look clean in logs **and** likely render clean; the scene still looks broken because the majority of draws are unstalled.
+
+### Per-frame Present sync (failed)
+
+`Direct3d11_Device::present()` `EVENT` spin (now `#if 0` at `:868–902`) waits at **frame end**. The hazard is **intra-frame**:
+
+```
+Pass A: write slice @ offset X
+Pass B: ring wraps / NO_OVERWRITE reuses byte range overlapping X
+Pass C: draw deferred from Pass A still in GPU queue → reads stomped bytes
+```
+
+End-of-frame sync does not insert ordering **between** Pass B’s write and Pass A’s eventual GPU execution **within the same frame**.
+
+### Write immediately before draw (failed)
+
+`SoftwareBlendSkeletalShaderPrimitive::draw()` now does lock → copy → unlock → bind → draw adjacently (`:835–851`). That only guarantees:
+
+> No **other CPU `lock()`** runs between this primitive’s write and its `DrawIndexed` submit.
+
+It does **not** guarantee:
+
+> No **earlier-submitted draw** is still asynchronously reading bytes that a **later** `lock()` will overwrite in the same backing generation.
+
+```
+T0: Draw A submitted (reads ring bytes [X, X+size))
+T1: Draw B's lock() NO_OVERWRITE writes bytes [Y, Y+size) — OK if disjoint
+T2: Ring fills; ms_used wraps within SAME generation
+T3: Draw C's lock() writes byte range X again (same backing, GPU hasn't finished A)
+T4: GPU executes A → stale tail at X+partial
+```
+
+Deferred-write fixes the CPU ordering of **one** primitive. It cannot fix **cross-primitive GPU lifetime** on a shared ring with CPU-only `ms_used`.
+
+### What the asymmetry tells you
+
+| Intervention | What it serializes | What it leaves racy |
+|---|---|---|
+| Per-draw drain | All prior GPU ring access before **this** draw | Unsampled draws |
+| Present sync | Frame N vs frame N+1 | Intra-frame reuse |
+| Write-before-draw | CPU write vs **this** draw’s submit | Earlier draws still in flight on reused bytes |
+
+The true root cause is **slice lifetime on the GPU timeline**, not slice lifetime on the CPU timeline.
+
+---
+
+## 4. D3D9 immunity — is it `MinIndex` / `NumVertices`?
+
+### Short answer
+
+**Not for your current measurements.** With indices provably in `[0, vertexCount)`, `DrawIndexedPrimitive`’s `NumVertices` window is redundant — D3D11 would fetch the same vertices if the VB bytes were correct.
+
+D3D9’s draw call **does** carry an explicit vertex window:
+
+```4157:4157:D:\Code\swg-client-v2\src\engine\client\application\Direct3d9\src\win32\Direct3d9.cpp
+		HRESULT hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+```
+
+D3D11 ignores `minimumVertexIndex` / `numberOfVertices`:
+
+```3378:3381:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(primitiveCount * 3),
+		static_cast<UINT>(startIndex),
+		static_cast<INT>(baseIndex));
+```
+
+That difference **would** matter if indices exceeded the locked/written vertex count (CONSULT-24’s read-past story). **CONSULT-25’s index probe killed that.** The dewback “169 real + stale tail” is **not** “indices past 169” — it’s **VB bytes past 169 are stale ring content while indices still reference them**.
+
+### What actually makes D3D9 survive
+
+Three mechanisms, in order of importance:
+
+**1. Stronger implicit GPU retirement on `D3DLOCK_NOOVERWRITE`**
+
+The D3D9 runtime/driver pairing for `D3DPOOL_DEFAULT` dynamic VB has years of “don’t overwrite in-flight regions” tuning. D3D11’s `Map(WRITE_NO_OVERWRITE)` on a single shared buffer with hundreds of deferred draws per frame is a harder stress case; your `ms_used` bookkeeping is CPU-only and does not communicate GPU completion to the driver.
+
+**2. Different effective discard cadence / pass boundaries**
+
+D3D9 calls `DynamicVertexBufferData::beginFrame()` from `beginScene()` (per render pass), forcing `ms_newFrame → DISCARD` on the first lock of each pass. D3D11 never calls its `beginFrame()` — ring state carries across passes and frames until CuiLayer overflow forces discard:
+
+```62:68:D:\Code\swg-client-v2\src\engine\client\library\clientUserInterface\src\shared\core\CuiLayerRenderer.cpp
+void CuiLayerRendereNamespace::lockDynamicVertexBuffer()
+{
+	s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+	if (s_maxNumberOfVertices < 128)
+		s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(true);
+
+	s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+That ~370 discard/frame “protection” is an accidental substitute for real fences — fragile, as the D3D9-faithful regression proved.
+
+**3. D3D9 unlock-time `ms_used` charging**
+
+```231:244:D:\Code\swg-client-v2\src\engine\client\application\Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp
+void Direct3d9_DynamicVertexBufferData::unlock(int numberOfVertices)
+{
+	// ...
+	ms_used += length;  // actual, at unlock
+}
+```
+
+vs D3D11 charging at lock (`:287`). This changes reuse pressure; on D3D11 it made things worse because it reduced protective discards without adding GPU retirement. D3D9’s driver/runtime apparently tolerates the resulting reuse pattern; D3D11’s does not.
+
+### D3D9-style fix implication for D3D11
+
+**Do not** mirror only the `NumVertices` parameter — that fixes read-past, which you’ve eliminated.
+
+**Do** mirror what D3D9 effectively provides: **“no CPU Map may touch byte range R until all draws referencing R have retired.”**
+
+Implement that explicitly in D3D11 because the API no longer carries the vertex-window safety net *and* the driver’s implicit dynamic-buffer tracking is failing under your load.
+
+---
+
+## Recommended implementation order
+
+1. **Proof gate:** `End(EVENT)` in `lock()` only (no staging readback). Spikes should disappear if the hazard model is right.
+2. **Production:** byte-range retirement queue + 2–3 install-time ring buffers.
+3. **Optional isolation:** dedicated fenced skin ring so CuiLayer’s whole-ring locks stop perturbing soft-skin.
+4. **Hygiene:** wire `Direct3d11_DynamicVertexBufferData::beginFrame()` from the real once-per-frame hook (`update_impl`), not per-pass `beginScene`.
+
+---
+
+## Why I’m not endorsing prior consensus answers
+
+| Prior consensus | Status per CONSULT-25 |
+|---|---|
+| Rebind at draw | Falsified — offset correct, still spikes |
+| Read-past / `NumVertices` | Falsified — 400-primitive index probe clean |
+| Deferred-write closes the gap | Falsified this run |
+| “Per-draw drain doesn’t help” (CONSULT-24) | **Superseded** — drain masks **sampled** draws; unsampled majority still corrupt |
+
+The hazard characterization in your prompt is the first one consistent with **all** measurements, including the discard inversion and the probe-selection asymmetry.
+
+If you want, I can sketch the exact `waitForOverlapping()` logic against the current `ms_used` / `m_offset` fields in `Direct3d11_DynamicVertexBufferData` and the vector-bind path in `Direct3d11_VertexBufferVectorData.cpp:143–146` — still in Ask mode, so guidance only unless you switch to Agent.

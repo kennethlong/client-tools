@@ -1,0 +1,248 @@
+## Bottom line
+
+**For the same clip-space coordinates, this repo does not configure D3D9 to clip more aggressively than D3D11.** There is no engine-side w-clamp or near-plane guard in either path. The practical reason D3D9 looks clean while D3D11 spikes is almost certainly that **D3D11 is feeding broken WVP constants** (CONSULT-27), so only D3D11 actually reaches `clip.w ≈ 0 / negative` — not because gl05 has extra clipping gl11 omitted.
+
+If you forced both APIs to receive identical degenerate clip coordinates, spec-level behavior is similar: both clip the canonical view volume in homogeneous space; D3D11’s guard band can still rasterize huge post-divide coordinates as screen-spanning shards.
+
+---
+
+## (a) Spec-level: near plane, w≤0, guard band
+
+### Homogeneous clipping (both APIs)
+
+Both D3D9 and D3D10/11 require **clip-space clipping before perspective divide** against the canonical D3D view volume:
+
+- `-w ≤ x ≤ w`
+- `-w ≤ y ≤ w`
+- `0 ≤ z ≤ w` (near at `z = 0`, far at `z = w`)
+
+**MS docs:**
+- D3D11 rasterizer / clipping: [Rasterizer Stage — Guard Bands and Clipping](https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-rasterizer-stage)
+- D3D11 `DepthClipEnable`: [`D3D11_RASTERIZER_DESC`](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_rasterizer_desc)
+
+### What happens when `w ≤ 0` or `w ≈ 0`
+
+| Case | Spec behavior | Visual result |
+|------|---------------|---------------|
+| **`w ≤ 0`** (on/behind eye plane) | Frustum tests are ill-conditioned; mixed-sign triangles should be clipped against the eye plane (`w → 0⁺`). Fully invalid primitives should be discarded. | Usually invisible, not spikes |
+| **`w → 0⁺`** (tiny positive) | Passes `0 ≤ z ≤ w`; after divide, `x/w`, `y/w` → ±∞ | **Classic “spike / radial shard”** |
+| **`w → 0⁻`** | Similar blow-up after divide if anything survives | Same shard class |
+
+**Guard band does not replace near-plane clipping.** It applies **after** clip-space frustum clipping and viewport mapping: primitives partly outside the viewport but inside the guard band may still be rasterized. A vertex with `w ≈ 0⁺` produces enormous NDC coordinates; if any edge survives clipping, it can land inside D3D11’s guard band and draw as a screen-spanning triangle.
+
+**D3D9 also has a guard band** — reported in `D3DCAPS9.GuardBandLeft/Top/Right/Bottom` and `D3DPMISCCAPS_CLIPTLVERTS` (“device will clip post-transformed vertex primitives”). It is **not** a D3D9-only near-plane clamp.
+
+### D3D9 vs D3D11 clipping controls (spec mapping)
+
+| Concept | D3D9 | D3D11 |
+|---------|------|-------|
+| Homogeneous frustum clip | Always (hardware) | Always (mandatory pipeline stage) |
+| Viewport / screen clip toggle | `D3DRS_CLIPPING` | No equivalent; always on |
+| Depth range clip after projection | `D3DRS_ZENABLE` + `D3DRS_ZFUNC` | `DepthClipEnable` + depth-stencil state |
+| User clip planes | `D3DRS_CLIPPLANEENABLE` | `SV_ClipDistance` (shader) |
+| Guard band | Device caps, driver-internal | Fixed minimum per spec |
+
+**`D3DRS_CLIPPING` is not a w-clamp.** MS documents it as enabling/disabling Direct3D primitive clipping to the viewport — supplementary to the fixed-function/programmable clip volume, not a substitute for near-plane handling of `w ≤ 0`.
+
+**`DepthClipEnable = TRUE` in D3D11** is the analog of D3D9’s depth test enable — it clips **post-projection Z to [0,1]**, not homogeneous `w`.
+
+---
+
+## (b) Repo configuration: gl05 vs gl11
+
+### D3D9 (`Direct3d9_StateCache.cpp`) — clipping-relevant defaults
+
+```91:103:src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.cpp
+	RS(D3DRS_CLIPPING,                          TRUE);
+	// ...
+	RS(D3DRS_CLIPPLANEENABLE,                   0);
+```
+
+Also relevant:
+
+```57:61:src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.cpp
+	RS(D3DRS_LASTPIXEL,                         TRUE);
+	// ...
+	RS(D3DRS_CULLMODE,                          D3DCULL_CCW);
+```
+
+```122:122:src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.cpp
+	RS(D3DRS_SCISSORTESTENABLE,                 FALSE);
+```
+
+- **`D3DRS_CLIPPING = TRUE`**: only at `install()` / `restoreDevice()` — never toggled elsewhere in the plugin.
+- **`D3DRS_CLIPPLANEENABLE = 0`**: no user clip planes.
+- **`D3DRS_LASTPIXEL = TRUE`**: top-left pixel fill rule — unrelated to near-plane.
+- **`D3DRS_SCISSORTESTENABLE = FALSE`**: scissor off by default.
+
+Viewport (beginScene + per-camera):
+
+```1657:1657:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+	setViewport(0, 0, ms_width, ms_height, 0.0, 1.0);
+```
+
+```3217:3236:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+void Direct3d9Namespace::setViewport(int x, int y, int viewportWidth, int viewportHeight, float minZ, float maxZ)
+{
+	// ...
+	viewport.MinZ   = minZ;
+	viewport.MaxZ   = maxZ;
+	const HRESULT hresult = ms_device->SetViewport(&viewport);
+```
+
+Scissor when enabled:
+
+```3253:3266:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+void Direct3d9Namespace::setScissorRect(bool enabled, int x, int y, int width, int height)
+{
+	Direct3d9_StateCache::setRenderState(D3DRS_SCISSORTESTENABLE, enabled);
+	if (enabled)
+	{
+		RECT const r = { x, y, x+width, y+height };
+		HRESULT const hresult = ms_device->SetScissorRect(&r);
+```
+
+**Guard band / `CLIPTLVERTS`:** `GetDeviceCaps` is called (`Direct3d9.cpp:1540`) but **`GuardBand*` and `D3DPMISCCAPS_CLIPTLVERTS` are never read or configured** — only stream offsets, dynamic textures, shader versions, scissor cap, etc.
+
+### D3D11 (`Direct3d11_StateCache.cpp`) — clipping-relevant defaults
+
+```749:757:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+		ms_rsDesc.FillMode              = D3D11_FILL_SOLID;
+		ms_rsDesc.CullMode              = D3D11_CULL_BACK;       // D3DCULL_CCW analog
+		ms_rsDesc.FrontCounterClockwise = FALSE;
+		// ...
+		ms_rsDesc.DepthClipEnable       = TRUE;
+		ms_rsDesc.ScissorEnable         = FALSE;
+```
+
+Depth-stencil mirrors D3D9 Z-test defaults:
+
+```807:809:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+		ms_dssDesc.DepthEnable    = TRUE;
+		ms_dssDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		ms_dssDesc.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
+```
+
+Applied per draw in `applyPreDrawState`:
+
+```1446:1450:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+		if (ms_rsDirty)
+		{
+			ID3D11RasterizerState *rs = getOrCreateRS(ms_rsDesc);
+			if (rs) ctx->RSSetState(rs);
+```
+
+Viewport (beginScene):
+
+```701:701:src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+	Direct3d11_StateCache::setViewport(0, 0, ms_width, ms_height, 0.0f, 1.0f);
+```
+
+```1716:1728:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setViewport(int x, int y, int width, int height, real minZ, real maxZ)
+{
+	// ...
+	vp.MinDepth = static_cast<float>(minZ);
+	vp.MaxDepth = static_cast<float>(maxZ);
+	ctx->RSSetViewports(1, &vp);
+```
+
+Render-target viewport override (same Z range):
+
+```273:275:src/engine/client/application/Direct3d11/src/win32/Direct3d11_RenderTarget.cpp
+	vp.MinDepth = 0.0f;
+	vp.MaxDepth = 1.0f;
+	context->RSSetViewports(1, &vp);
+```
+
+Scissor implementation exists; capability is **advertised as false**:
+
+```215:215:src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+	bool supportsScissorRect_impl()          { return false; }
+```
+
+```1771:1790:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setScissorRect(bool enabled, int x, int y, int width, int height)
+{
+	// ...
+		ms_rsDesc.ScissorEnable = enabled ? TRUE : FALSE;
+	// ...
+		ctx->RSSetScissorRects(1, &r);
+```
+
+**No guard-band configuration anywhere in gl11** — API defaults only.
+
+### Side-by-side: state D3D9 sets that D3D11 does not (clipping-relevant)
+
+| State | gl05 | gl11 | Notes |
+|-------|------|------|-------|
+| `D3DRS_CLIPPING = TRUE` | ✅ install | ❌ no equivalent | D3D11 always clips clip volume; not a “more aggressive” D3D9 mode |
+| `D3DRS_CLIPPLANEENABLE = 0` | ✅ | N/A (no user planes) | Same effective behavior |
+| `D3DRS_LASTPIXEL = TRUE` | ✅ | N/A | Edge pixel rule only |
+| `DepthClipEnable = TRUE` | via `D3DRS_ZENABLE` | ✅ explicit | Equivalent depth clipping |
+| Viewport MinZ/MaxZ | 0.0 / 1.0 | 0.0 / 1.0 | **Identical** |
+| Scissor default | OFF | OFF | D3D11 falsely reports `supportsScissorRect = false` |
+| Guard band | caps queried, never set | never set | Both use driver defaults |
+
+**No smoking-gun render-state divergence** explains “D3D9 clips near-w, D3D11 doesn’t.”
+
+---
+
+## (4) Per-vertex w-clamp or near-plane guard in engine/shaders?
+
+**No — neither path has one.**
+
+Vertex transform is bare WVP multiply:
+
+```15:15:.planning/research/vsh-extract/transform.inc
+m4x4 oPos, vPosition, cObjectWorldCameraProjectionMatrix
+```
+
+D3D11 fallback VS matches:
+
+```198:198:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexShaderData.cpp
+		"    o.position = mul(float4(input.position, 1.0f), objectWorldCameraProjectionMatrix);\n"
+```
+
+- No `max(w, ε)`, no `clip()` on `w`, no `SV_ClipDistance` in asset VS.
+- D3D11 `Direct3d11_HlslRewrite.cpp` adds NaN guards for specular `pow()` (Rule F), not near-plane / w guards.
+- D3D11 PS `clip()` is alpha-test only (`Direct3d11_PixelShaderProgramData.cpp`), not w-related.
+
+---
+
+## Guard band and the spike mechanism
+
+For a vertex with **`clip.w ≈ 0⁺`** and moderate `clip.x`:
+
+1. Homogeneous near test `0 ≤ z ≤ w` may pass (barely).
+2. Perspective divide: `NDC.x = x/w → ±∞`.
+3. If the triangle edge survives frustum clip, coordinates can fall **inside D3D11’s guard band** (which extends well beyond `[-1,1]` in x/y).
+4. Rasterizer emits a **long screen-spanning triangle** — the observed radial spike.
+
+D3D9 would do the same **if it received the same clip coordinates**. The guard band is not “D3D11-only”; D3D11’s is just **documented and fixed-minimum**, while D3D9’s is cap-reported per device.
+
+---
+
+## Reconciling with your probes
+
+CONSULT-27 established that for the same object-local vertices, **D3D11 uploads a wrong WVP** → `clip.w ≈ 0 / negative`, while D3D9 gets ~`+cameraDistance`. That means:
+
+- **Identical at draw time:** object-local VB ✅  
+- **Not identical at draw time:** clip-space output ❌ (different constant buffers)
+
+So D3D9 likely **never sees** the degenerate `clip.w` on those draws. It looks “bounded/clean” because the transform lands geometry in front of the near plane, not because gl05 clamps w.
+
+The D3D11 spike is therefore **primarily a transform/WVP divergence** (matrix upload / transpose / object-world composition — see `Direct3d11_StateCache.cpp:336–362` vs `Direct3d9.cpp:4034–4038`), with **standard rasterization behavior amplifying** any surviving near-w geometry via perspective divide + guard band.
+
+---
+
+## Direct answer to “does D3D9 clamp/clip this and D3D11 not?”
+
+| Question | Answer |
+|----------|--------|
+| Does gl05 enable clipping gl11 omits? | **No meaningful difference.** `D3DRS_CLIPPING` has no D3D11 twin; gl11 has `DepthClipEnable=TRUE` matching gl05 Z-test. |
+| Does D3D9 w-clamp near-w geometry? | **Not in this repo.** No shader or state does it. |
+| Would guard band explain D3D9 clean / D3D11 spike for *identical* clip coords? | **Partially** — guard band allows huge post-divide coords to rasterize as shards in **both** APIs; it doesn’t explain why D3D9 alone looks clean unless clip coords differ. |
+| Most likely divergence for this bug | **WVP constants differ between plugins** (CONSULT-27), not clipping state. |
+
+**MS doc anchors for guard band / clipping:** [D3D11 Rasterizer Stage](https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-rasterizer-stage), [`D3DRS_CLIPPING`](https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3drenderstatetype), [`D3D11_RASTERIZER_DESC.DepthClipEnable`](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_rasterizer_desc).

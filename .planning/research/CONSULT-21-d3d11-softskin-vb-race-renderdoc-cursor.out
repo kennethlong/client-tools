@@ -1,0 +1,247 @@
+# CONSULT-21 Independent Review
+
+**Verdict:** The prior consensus is half-right and half-wrong. The ring *is* the failure surface, but **per-generation buffers were the wrong fix**. The real D3D11 gap is not “missing ring buffers” — it is **(1) broken `ms_used` accounting that D3D9 does not have**, **(2) `CuiLayerRenderer`’s lock-all-remaining pattern interacting with that accounting**, and **(3) D3D11’s `Map(WRITE_NO_OVERWRITE)` lacking the implicit GPU fencing D3D9 `Lock` historically provided**. Frequent `WRITE_DISCARD` on one resource is protective because it triggers D3D11’s **per-resource rename chain**; your per-generation build broke that contract and introduced a **deterministic lifetime bug**.
+
+---
+
+## 1. Resolving the D3D9 vs D3D11 contradiction
+
+**The premise “D3D9 has the same ~370 discards/frame” is false.** That discard storm is D3D11-specific, caused by accounting divergence.
+
+### D3D9 (works): advance `ms_used` on unlock by actual count
+
+```172:219:src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+void *Direct3d9_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+{
+	// ...
+	m_offset = ms_used / vertexSize;
+	return data;   // ms_used NOT advanced here
+}
+```
+
+```231:244:src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+void Direct3d9_DynamicVertexBufferData::unlock(int numberOfVertices)
+{
+	// ...
+	ms_used += length;   // actual used count
+}
+```
+
+### D3D11 (broken): advance `ms_used` on lock by upper bound
+
+```279:282:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	m_offset           = ms_used / vertexSize;
+	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+	ms_used += length;   // upper-bound reservation — never corrected in unlock
+```
+
+```352:357:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	m_numberOfVertices = numberOfVertices;
+	// Note: ms_used was already advanced in lock(); we don't re-adjust here.
+```
+
+### `CuiLayerRenderer` turns that into ~370 discards/frame
+
+```62:68:src/engine/client/library/clientUserInterface/src/shared/core/CuiLayerRenderer.cpp
+	s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+	if (s_maxNumberOfVertices < 128)
+		s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(true);
+	s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+On D3D11, one UI lock **instantly charges `ms_used` for the entire remaining ring** (~74k verts / 2 MB), writes a handful of quads, then unlocks without correcting `ms_used`. Every subsequent lock wraps → `WRITE_DISCARD` cascade.
+
+On D3D9, the same UI lock charges only the **actual** quad count on unlock → ring stays mostly empty → **~1 discard/frame** when the ring eventually fills.
+
+So D3D9 is not “magically surviving the same hazard.” It is running a **different, much healthier discard profile** because accounting is correct.
+
+### What D3D9 `Lock(offset, length)` does that D3D11 `Map` does not
+
+| Mechanism | D3D9 | D3D11 |
+|---|---|---|
+| Subrange lock | `Lock(ms_used, length, …)` — explicit byte range | `Map(whole buffer)` + manual `pData + ms_used` |
+| `NO_OVERWRITE` GPU contract | Runtime historically **blocked or fenced** conflicting locks | **No implicit sync** — caller must not overwrite GPU-in-flight regions |
+| Per-frame reset | `beginFrame()` wired in `beginScene()` (`Direct3d9.cpp:2484-2486`) | `beginFrame()` exists (`Direct3d11_DynamicVertexBufferData.cpp:144`) but **zero callers**; `update_impl` is no-op (`Direct3d11.cpp:289`) |
+| Default discard-at-frame-start | `false` on both (`ConfigDirect3d9.cpp:85`, `ConfigDirect3d11.cpp:53`) | same |
+
+The bind/draw offset math is **not** the differentiator — both paths use stream byte offsets + `BaseVertexLocation=0`:
+
+```3855:3858:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+					if (ms_supportsStreamOffsets)
+					{
+						byteOffset = data->getOffset() * vertexSize;
+```
+
+```143:145:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+					buffers[stream] = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
+					offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+```
+
+**Bottom line:** D3D11 needs ~370 discards/frame to be “merely playable” because the over-charge accounting **manufactures** a discard storm that accidentally mimics aggressive GPU fencing. D3D9 never enters that regime.
+
+---
+
+## 2. Capture-invisible → capture-deterministic: yes, that is the key clue
+
+**Yes — this transition strongly argues the per-generation build introduced a deterministic binding/lifetime bug, not that it “unmasked” the race.**
+
+| Signature | Meaning |
+|---|---|
+| Baseline: live tears, RenderDoc replays clean | Classic **async CPU-write / GPU-read** hazard (RenderDoc serializes execution) |
+| Per-gen build: tears identically in replay | **Recorded commands reference wrong/stale memory at submit time** — synchronous bug |
+
+A genuine race should replay clean *regardless of which mitigation you tried*, because RenderDoc’s replay model serializes CPU/GPU. Deterministic dirty replay means the capture contains **wrong `IASetVertexBuffers` (buffer, offset) pairs or buffer contents that are already wrong when the command is recorded**.
+
+Likely per-generation failure modes (any one suffices):
+
+1. **Generation/buffer recycled before deferred draw** — N=4 buffers with high discard rate cycles faster than GPU latency.
+2. **`beginFrame()` flip in `update_impl` invalidates slices** prepared earlier in the same frame but drawn after a generation advance.
+3. **Slice stores generation buffer A, but bind path still hits shared ring** (if any code path missed the per-slice `getVertexBuffer()` change).
+4. **Multiple slices on same generation buffer via `WRITE_NO_OVERWRITE` without fencing** — now deterministic overlap instead of probabilistic.
+
+The RenderDoc mesh evidence (~21% garbage, clumpy, uninitialized-float pattern) fits **partially overwritten or never-written ring bytes being read**, which is consistent with both race *and* lifetime bug — but the replay behavior discriminates: **lifetime bug wins**.
+
+---
+
+## 3. Why frequent `WRITE_DISCARD` protects (and per-generation made it worse)
+
+### (a) ~370 discards/frame on **one** `ID3D11Buffer` — playable
+
+Each `Map(WRITE_DISCARD)` on the **same resource** asks the driver for a fresh physical allocation while **retaining old allocations for in-flight draws** on that resource. This is the documented D3D11 dynamic-buffer rename model. Your discard storm accidentally keeps slices isolated in separate rename generations **without you implementing fencing**.
+
+The over-charge ensures discards fire constantly, so skinned slices rarely survive long enough in one physical page for GPU lag to catch up with CPU reuse.
+
+### (b) ~1 discard/frame or per-generation buffers — broken
+
+**Correct accounting:** ring fills once, many `WRITE_NO_OVERWRITE` appends share **one physical page** for most of the frame. D3D11 does **not** fence those appends against in-flight GPU reads the way D3D9 `Lock` did → widespread corruption.
+
+**Per-generation (N=4):** this is **not** the same as per-resource rename. With high discard pressure you cycle 4 buffers faster than GPU latency. A slice bound to `buffer[gen%4]` at `prepareToDraw` can have that buffer **reused for a later slice** before the draw executes — deterministic garbage, RenderDoc-capturable. You traded D3D11’s deep per-resource rename chain for a shallow 4-buffer pool with **no fence**.
+
+**Why per-generation ≠ protective discard storm:**
+
+```
+One buffer, 370 DISCARD/frame:
+  Resource R → rename chain R₀, R₁, R₂ … (driver keeps all alive for in-flight draws)
+
+N=4 generation pool:
+  Gen0 written → Gen1 written → … → Gen0 RECYCLED (only 4 deep)
+  Draw still references Gen0 slice → reads recycled memory → deterministic corruption
+```
+
+---
+
+## 4. Deferred draws across passes — correct D3D11 discipline
+
+First, clarify what the engine actually does on CPU:
+
+```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp
+		shaderPrimitive.prepareToDraw();   // lock, skin, setVertexBufferVector
+		// ...
+		for (int i = 0; i < numberOfPasses; ++i)
+		{
+			// ...
+			shaderPrimitive.draw();          // DrawIndexed via RenderCommand
+```
+
+`prepareToDraw` and `draw()` are **paired per primitive** in the same `Phase::draw()` loop. Soft-skin specifically writes and binds in `prepareToDraw`:
+
+```575:652:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+		m_dynamicStream->lock(m_vertexCount);
+		{ /* skin / copy */ }
+		m_dynamicStream->unlock();
+	// ...
+	Graphics::setVertexBuffer(*m_vertexBufferVector);
+```
+
+The deferral hazard is **not** “CPU prepares in pass 1, CPU draws in pass 5” for skeletal meshes. It is:
+
+1. **GPU async lag** — `DrawIndexed` is recorded while GPU may still be consuming earlier ring slices.
+2. **Cross-`beginScene` RT switches** — D3D11 `beginScene` does not reset the ring (correct — resetting per-pass *is* catastrophic, as you proved). Bytes must survive from `Unmap` until GPU consumes the draw.
+3. **`CuiLayerRenderer` long-lived lock** — holds the global dynamic lock across many `render()` calls (`CuiLayerRenderer.cpp:170-176`), serializing with scene locks via `ms_dynamicGlobalLocked` (`DynamicVertexBuffer.h:190`), but its **over-charged reservation** poisons `ms_used` for everyone afterward.
+
+**Correct D3D11 discipline without 370-discard thrash:**
+
+1. **D3D9-faithful accounting** — `ms_used` advances on `unlock(actual)`, not `lock(upperBound)`.
+2. **Isolate UI** — `CuiLayerRenderer` must not use lock-all-remaining on the shared skinned-mesh ring.
+3. **Fence before ring wrap** — when `ms_used + length > ms_size` forces `WRITE_DISCARD`, `Flush()` + fence/query wait (or `ID3D11DeviceContext4::Signal`/`Wait`) so GPU finishes prior slices.
+4. **Wire `beginFrame()` once per frame** from `update_impl` (`Direct3d11.cpp:289`) — parity with D3D9, but with default `discardDynamicBuffersAtBeginningOfFrame=false` this only resets counters; it is necessary not sufficient.
+5. **Do not reset ring per `beginScene`** — you already proved this shreds geometry.
+
+---
+
+## 5. Minimal correct fix (ranked, with exact changes)
+
+**Do not ship per-generation ring buffers.** The capture-invisible → deterministic transition is strong evidence that approach is wrong.
+
+### Fix A (minimum blast radius — do these two first)
+
+**A1. Mirror D3D9 accounting** in `Direct3d11_DynamicVertexBufferData.cpp`:
+
+- **Remove** `ms_used += length` from `lock()` (line 282).
+- **Add** to `unlock(int numberOfVertices)`:
+  ```cpp
+  ms_used = (m_offset + numberOfVertices) * vertexSize;
+  ```
+  matching `Direct3d9_DynamicVertexBufferData.cpp:237-244`.
+
+**A2. Stop `CuiLayerRenderer` from nuking the ring** — pick one:
+
+- **Preferred:** give UI its own non-shared `ID3D11Buffer` (dedicated `DynamicVertexBuffer` instance whose `m_graphicsData` does **not** alias `ms_d3dRingBuffer`), **or**
+- **Minimal:** cap `lockDynamicVertexBuffer()` to a fixed batch size (e.g. 512–2048 verts) instead of `getNumberOfLockableDynamicVertices(false)` at `CuiLayerRenderer.cpp:64`.
+
+A1 alone fixes the false discard storm. A2 stops UI from being a ring adversary. Together they should drop you to D3D9-like discard rates (~1/frame) **without** needing 370 renames.
+
+### Fix B (if A alone still shows close-range soft-skin tears)
+
+**Fence before `WRITE_DISCARD` wrap** in `lock()` when `ms_used + length > ms_size`:
+
+```cpp
+// Before mapType = D3D11_MAP_WRITE_DISCARD:
+Direct3d11_Device::getContext()->Flush();
+// wait on frame fence / query until GPU completes prior ring slices
+```
+
+This supplies the synchronization D3D9 `Lock` gave you implicitly.
+
+### Fix C (structural, if B is insufficient)
+
+**Dedicated dynamic buffer for soft-skin stream** — `SoftwareBlendSkeletalShaderPrimitive`’s `m_dynamicStream` gets a per-primitive `ID3D11Buffer` (or per-lock `WRITE_DISCARD` single-slice buffer), **not** a slice of the shared ring. Static stream stays shared/static. This matches the data lifetime: each primitive prepares and draws in one sorter pass, so a private buffer is sufficient and eliminates cross-mesh ring interference entirely.
+
+### Fix D (wire but don’t rely on alone)
+
+In `Direct3d11.cpp:289` `update_impl`, call:
+
+```cpp
+Direct3d11_DynamicVertexBufferData::beginFrame();
+Direct3d11_DynamicIndexBufferData::beginFrame();
+```
+
+with `beginFrame` setting `ms_newFrame = ConfigDirect3d11::getDiscardDynamicBuffersAtBeginningOfFrame()` (mirror D3D9 `Direct3d9_DynamicVertexBufferData.cpp:84-88`). Parity only — default config is `false`.
+
+### What NOT to do
+
+| Approach | Why |
+|---|---|
+| Per-generation N-buffer pool | Proven worse; deterministic lifetime bug |
+| Per-pass ring reset in `beginScene` | Proven catastrophic |
+| Larger ring alone | Delays wrap; doesn’t fix NO_OVERWRITE fencing gap |
+| Keep over-charge accounting | Accidentally “works” via discard storm; not a fix |
+
+---
+
+## Answering your specific mesh evidence
+
+RenderDoc eid 3803: VS `POSITION, NORMAL, TEXCOORD` (no weights) confirms **soft-skin multi-stream path** — garbage must be stream-1 dynamic positions. ~21% clumpy uninitialized verts is consistent with **reading ring bytes that were reserved but never written** (CuiLayerRenderer over-charge tail) or **NO_OVERWRITE overlap** without fence — not stride mismatch (you ruled that out correctly).
+
+Distance dependence (`SkeletalAppearance2.cpp:1737`) is expected: close → `SM_softSkinning` → dynamic ring path; far → `SM_noSkinning` / hard skin → no CPU dynamic VB.
+
+---
+
+## Recommended execution order
+
+1. **A1 + A2** together (accounting + UI isolation/cap).
+2. Re-test close-range Jawa; capture in RenderDoc — should replay clean if race-only, or show improvement if fencing was also needed.
+3. **B** (fence-before-wrap) if residual tearing.
+4. **C** (per-primitive soft-skin buffer) only if shared ring is still untenable after A+B.
+
+The prior “per-generation ring buffers” consensus was wrong because it confused **D3D11 per-resource rename** (deep, driver-managed) with **app-managed shallow buffer pooling** (4 deep, no fence, deterministic corruption). D3D9 is ground truth for **accounting** and **UI coexistence**; D3D11 needs an explicit **fence at wrap** that D3D9 got from `Lock`.

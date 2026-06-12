@@ -1,0 +1,175 @@
+## Framing challenges (read these first)
+
+**1. The crashing shader is almost certainly not `ui_planet_sel_ordmantel_as8.sht`.**  
+The stack is `PostProcessingEffectsManager::postSceneRender` → `Graphics::setStaticShader(*ms_copyShader)` at line 252, and `ms_copyShader` is `shader/2d_texture.sht` (see `PostProcessingEffectsManager.cpp:144`). The `.txt` line `ShaderTemplate_Iff: shader/ui_planet_sel_*` comes from `ShaderTemplateList::create()`’s global “last loaded template” breadcrumb (`ShaderTemplateList.cpp:542`), not from the active draw. That matches prior project notes (e.g. `.planning/todos/resolved/2026-05-31-current-tree-d3d9-boot-crash-17xx-wip.md:34`).
+
+**2. “Freed MemoryBlockManager block” is plausible but not fully proven from the bytes alone.**  
+`m_passPSSlot[0] = 0x21250030` implies the **program object base is `0x21250000`** (because `m_graphicsData` is at `+0x30` in `ShaderImplementationPassPixelShaderProgram`). The stored value `*slot == 0x21250000` means **`m_graphicsData` points at the program object base**, not at a separate pool object. That is equally consistent with:
+
+- PS-data was freed, `m_graphicsData` was **not** nulled, and that address was **reused** for a new `Program` (or its `PersistentCrcString`/map nodes), or  
+- `m_graphicsData` was never a valid `Direct3d11_PixelShaderProgramData*` for this program (corruption / stale program pointer on the pass).
+
+Do not treat “live-deref fixes stale cache” as relevant; your dump already falsified that.
+
+**3. The falsified UAF story (device remove/restore recreates PS-data) is a red herring for this dump.**  
+`Direct3d11::flushResources` is still a no-op (`Direct3d11.cpp:267-269`). D3D11 does not implement a D3D9-style mid-boot graphics teardown that recreates all `*m_graphicsData` while leaving `StaticShaderData` snapshots stale. The comment in `Direct3d11_StaticShaderData.cpp:776` describes a hypothesis, not observed behavior on this path.
+
+---
+
+## 1. Lifecycle: is PS-data created for PPEM / who writes `m_graphicsData`?
+
+**PPEM path (actual crash):**
+
+| Step | Location | What happens |
+|------|----------|----------------|
+| Enable | `PostProcessingEffectsManager.cpp:101-109` | `deviceRestored()` runs immediately |
+| Fetch copy shader | `:144` | `fetchModifiableShader("shader/2d_texture.sht")` |
+| GL wrapper | `StaticShader.cpp:112-150` | `createGlData()` → `Graphics::createStaticShaderGraphicsData` |
+| Factory | `Direct3d11.cpp:804-807` | `new Direct3d11_StaticShaderData(shader)` |
+| Per-pass cache | `Direct3d11_StaticShaderData.cpp:457-466` | If `pass->m_pixelShader->m_program->m_graphicsData` non-null, cache slot + snapshot |
+
+**Pixel program graphics data (all shaders, including `pixel_program/2d_texture.psh`):**
+
+| Step | Location | What happens |
+|------|----------|----------------|
+| Program ctor | `ShaderImplementation.cpp:2754-2770` | `m_graphicsData(NULL)` then, if capability ≥ (1,1), `load(iff)` + `m_graphicsData = Graphics::createPixelShaderProgramData(*this)` |
+| Factory | `Direct3d11.cpp:666-669` | `return new Direct3d11_PixelShaderProgramData(pixelShaderProgram)` |
+| Pass wiring | `ShaderImplementation.cpp:2638` | `m_program = Program::fetch(buffer)` (creates/retains singleton) |
+
+There is **no separate** PPEM-only path for `m_program->m_graphicsData`. PPEM uses the same engine chain as every other `StaticShader`.
+
+**`ui_planet_sel_*` is irrelevant to PPEM** except as async preload noise in the crash `.txt`.
+
+**Order at crash:** program singleton already exists → `StaticShader` for `2d_texture` constructed → `construct()` saw non-null `m_graphicsData == 0x21250000` → first `postSceneRender` → `apply()` reads that pointer.
+
+---
+
+## 2. Free + reuse: what frees PS-data while `m_program->m_graphicsData` stays non-null?
+
+**Normal free paths for `Direct3d11_PixelShaderProgramData`:**
+
+| Path | Code | Nulls `m_graphicsData`? |
+|------|------|-------------------------|
+| Program dtor | `ShaderImplementation.cpp:2792` | N/A (whole program destroyed) |
+| Program `reload()` | `:2842-2847` | **Yes** (`= 0` after delete) |
+| `operator delete` | `Direct3d11_PixelShaderProgramData.cpp:1188-1191` | Pool `free()` after dtor |
+
+**Who can leave a live program with a dangling non-null `m_graphicsData`?**
+
+1. **`delete m_graphicsData` without assigning null on a surviving program** — only `reload()` and dtor do the delete; `reload()` nulls. Dtor doesn’t need to null if the program is gone. So the interesting case is: **something deleted PS-data while the program object at `0x2124ffd0` (or `0x21250000`) is still alive and still referenced by `2d_texture` passes.**
+
+2. **Program object UAF** — `ShaderImplementationPassPixelShader` stores `m_program` from `Program::fetch()` (`:2638`) and `~ShaderImplementationPassPixelShader` calls `m_program->release()` (`:2594`). If async or boot code drives **program refcount to 0**, destroys the program, and **later reuses the same address** for a new program/CrcString/map node, then:
+   - `pass->m_program` may still point at old memory, and/or  
+   - `m_graphicsData` may still hold `0x21250000` from the old PS-data block now overlaid with program/CrcString data (matches your `.psh` / list-node pattern).
+
+   Async hook: `ShaderImplementation.cpp:2697-2714` (`asynchronousLoaderRelease` → `program->release()`).
+
+3. **Pool free without engine null** — `MemoryBlockManager::Allocator::free()` (`MemoryBlockManager.cpp:267-272`) does **not** call destructors; only C++ `delete` on `PixelShaderProgramData` does. So a raw `free()` without `delete` would be a separate bug (not seen in normal code). **`Direct3d11_PixelShaderProgramData::remove()`** deletes the whole manager at plugin unload (`Direct3d11.cpp:252`) — not expected ~1s into boot.
+
+**Most likely engine-level bug (fits dump + RELEASE-only):**
+
+> PS-data for `pixel_program/2d_texture.psh` (or its program) was destroyed; **`ShaderImplementationPassPixelShaderProgram::m_graphicsData` was left pointing at `0x21250000`**; that address was reused for program/CrcString/map storage; `construct()` and `apply()` both faithfully read the same bad engine pointer.
+
+The dangling pointer lives in **`ShaderImplementationPassPixelShaderProgram::m_graphicsData` in clientGraphics**, not in `StaticShaderData`’s cache. The live-deref change only re-reads the bad slot.
+
+---
+
+## 3. Why DEBUG works, RELEASE crashes
+
+| Hypothesis | Evidence |
+|------------|----------|
+| **Heap timing / reuse** | DEBUG CRT often delays reuse; RELEASE reuses the PS pool block immediately for heap/map/CrcString → deterministic `begin=0x1` |
+| **Ordering** | Same init order in source; no RELEASE-only skip of `createPixelShaderProgramData` (`ShaderImplementation.cpp:2765-2770`) |
+| **`PRODUCTION == 0` reload helpers** | `reloadPixelShader` is debug-only (`:2097-2108`) — not the release path |
+| **Config** | Worth diffing `client_d.cfg` vs `client_r.cfg` (e.g. `psrcCensus`, async) but code path for `m_graphicsData` creation is the same |
+
+**How to tell in the next dump:**
+
+1. On the faulting `StaticShaderData` (`this=0x0a9705e0`), walk `m_implementation` → pass 0 → `m_pixelShader->m_program`:
+   - Is `program` a valid `ShaderImplementationPassPixelShaderProgram` (filename `pixel_program/2d_texture.psh`)?
+   - Does `program->m_graphicsData == 0x21250000` still hold?
+2. On `livePS=0x21250000`, check **round-trip**: does `(Direct3d11_PixelShaderProgramData*)livePS)->m_program` equal that same program pointer? (Use `getFileName()` / offset of `m_program` at `+0` in the PS-data layout from `Direct3d11_PixelShaderProgramData.h:285`.)
+3. If `m_program` inside “PS-data” does not match the pass’s program → **type confusion / reuse**, not “stale cache.”
+4. Compare **DEBUG vs RELEASE** dumps at the same breakpoint on first `postSceneRender` for the same three pointers.
+
+---
+
+## 4. Right fix (lifecycle first; principled guard second)
+
+### A. Lifecycle (preferred)
+
+1. **Audit refcount / async unload for `.psh` during boot**  
+   Break on `ShaderImplementationPassPixelShaderProgram::release` when refcount hits 0 for `2d_texture.psh` before first PPEM draw. If it fires, find who called `asynchronousLoaderRelease` or an extra `release()` without a matching `fetch()` on the pass/shader side.
+
+2. **Harden engine ownership after PS-data delete**  
+   - `reload()` already nulls (`:2847`).  
+   - Consider nulling in dtor after `delete m_graphicsData` for symmetry.  
+   - Stronger: add `ShaderImplementationPassPixelShaderProgram::getGraphicsData()` that asserts `m_graphicsData->ownsProgram(this)` (see guard below).
+
+3. **Do not rely on live-deref** — keep it harmless, but it does not fix a bad engine pointer.
+
+### B. Interim guard in `Direct3d11_StaticShaderData::apply` (principled, not `ptr < 0x10000`)
+
+Before the material loop (`:831-857`), require a **bidirectional ownership invariant**:
+
+```cpp
+// Pseudocode — needs a small accessor on PixelShaderProgramData for m_program
+ShaderImplementationPassPixelShaderProgram const * const engProgram =
+    pass->m_pixelShader->m_program;
+Direct3d11_PixelShaderProgramData const * const ps =
+    static_cast<Direct3d11_PixelShaderProgramData const *>(livePS);
+
+bool const psValid =
+    engProgram != nullptr
+    && engProgram->m_graphicsData == livePS          // engine slot agrees
+    && ps->getProgram() == engProgram;               // gl11 object agrees
+
+if (!psValid) {
+    // skip reflection/material upload; fall back to StateCache magenta / per-VS PS
+    // log once per (engProgram, livePS) pair
+}
+```
+
+This is not a magic address threshold; it checks the **intended invariant** of the factory at `Direct3d11.cpp:669` (`m_program` points back to the owning `ShaderImplementationPassPixelShaderProgram`).
+
+Optional extra sanity (secondary): skip if `layouts` would iterate with `begin() < 0x10000` **only after** ownership fails, or cap iteration using `layout.TotalSize` (you already cap at 64KiB at `:878`).
+
+### C. Product / parity note
+
+D3D9 `apply` delegates to `Direct3d9_ShaderImplementationData::apply(pass)` (`Direct3d9_StaticShaderData.cpp:1055`) and does **not** run the D3D11 Plan 17-03 reflection/material staging loop. D3D11 added that loop for all shaders with non-null `livePS` (`Direct3d11_StaticShaderData.cpp:831-857`). A valid guard skips bad uploads; a full parity fix may also treat “no valid reflected PS” like D3D9 (constants via implementation/fallback only).
+
+---
+
+## 5. Should PPEM go through `StaticShaderData::construct` / `apply`?
+
+**Yes — same as D3D9.** PPEM has always used `Graphics::setStaticShader(*ms_copyShader)` (`PostProcessingEffectsManager.cpp:250`). D3D9 uses the same entry (`Direct3d9_StateCache` / `setStaticShader`). What changed in D3D11 is **extra work inside `Direct3d11_StaticShaderData::apply`** (Plan 17-03 reflection upload), which assumes `livePS` is a real `Direct3d11_PixelShaderProgramData`. The bug is not “PPEM shouldn’t use StaticShaderData”; it’s “**`m_program->m_graphicsData` is invalid for `2d_texture`’s pixel program at first draw**.”
+
+---
+
+## Cheap verification (next dump / live session)
+
+1. **Confirm shader:** `kn` → `gl11_r!Direct3d11_StaticShaderData::getActiveStaticShaderName` or read `ms_active` → should be `shader/2d_texture.sht`, not `ui_planet_sel_*`.
+2. **Engine slot:** `pass->m_pixelShader->m_program` → `dt` program → `m_fileName` string → expect `pixel_program/2d_texture.psh`.
+3. **Invariant:** `? program->m_graphicsData` and `dt -n Direct3d11_PixelShaderProgramData <addr>` — should show a real PS-data object; at `+0x10` vector begin/end should be both null (empty) or a valid heap pair (e.g. trace showed `TotalSize==400` for char-select hlsl PS), **never `begin=0x1`**.
+4. **Round-trip:** PS-data `m_program` (offset 0) must equal program pointer from pass.
+5. **After a fix:** first `postSceneRender` in RELEASE — same checks; optional `stage/d3d11-debug.log` line `PS-cbuffer shader='pixel_program/2d_texture.psh' ...` from ctor (`Direct3d11_PixelShaderProgramData.cpp:1393-1399`) if hlsl recompile ran.
+
+RenderDoc is low value here (crash before meaningful frame); **cdb + full memory dump** on `2d_texture` program + `m_graphicsData` is the right tool.
+
+---
+
+## Recommended root cause (one sentence)
+
+**At first PPEM draw, `ShaderImplementationPassPixelShaderProgram::m_graphicsData` for `2d_texture`’s pixel program is a non-null dangling pointer (very likely to a freed `Direct3d11_PixelShaderProgramData` block at `0x21250000` that was reused/overlaid with program/CrcString memory); `StaticShaderData::construct` and `apply` both read that engine value faithfully, so the Plan 17-03 `getReflectedCbufferLayouts()` loop walks garbage (`begin=0x1`).** The falsified “stale StaticShaderData snapshot vs recreated PS-data” theory does not match `snapshot == live`.
+
+---
+
+## Still wrong / underspecified in current framing
+
+- Blaming **planet-select UI shaders** or **PPEM using the wrong shader** — stack + `ms_copyShader` refute that.  
+- Assuming **device graphics-data remove/restore** without evidence on gl11 boot.  
+- Treating **live-deref** as a fix — falsified.  
+- Calling **only** “MemoryBlockManager UAF” without checking whether `0x21250000` is actually the **program object** with `m_graphicsData == base` (self-relative / reuse).  
+- **Value-threshold guards** — already failed; use ownership + engine lifecycle.
+
+I’m in **Ask mode** only; if you want the ownership guard or engine nulling implemented, switch to Agent mode.

@@ -1,0 +1,22 @@
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11 renderer
+port of Star Wars Galaxies. Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-42-which-state-lands-on-face.md
+
+Then read the cited source (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.h
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+
+Answer ONLY section "5 — B (CURSOR, sticky-snapshot detail)" and the section-6 deliverable for your angle.
+The light COLORS are identical D3D9-vs-D3D11 (proven) — the bug is WHICH state is active at her dot3
+skinned-character FACE draw. Pin the EXACT lines where the D3D11 dot3 snapshot `s_pixelDot3State` (and the
+ambient c16 / parallel fill c20-23 it feeds via composeSlot0Shadow) PERSISTS vs UPDATES across an empty or
+sunless `setLights({})`. Can a PRIOR blue interior light's parallelDiffuseColor/ambient remain on the
+snapshot and be read by her face draw in `StaticShaderData::apply`? Contrast with D3D9 `selectLights`
+which CLEARS ms_currentLights to NULL every call (Direct3d9_LightManager.cpp:380-391) then refills. Cite
+file:line. Give the minimal D3D9-parity fix + exact location that does NOT regress the CONSULT-38 black-walls
+persistence (which exists because the sorter emits transient empty setLights at cell boundaries).

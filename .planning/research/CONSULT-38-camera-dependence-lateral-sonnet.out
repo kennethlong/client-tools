@@ -1,0 +1,330 @@
+# CONSULT-38 — Lateral / Camera-Dependence Analysis (Sonnet)
+## Why does VS10950/PS10952 flip black → lit on a 15° camera turn?
+
+**BOTTOM LINE UP FRONT:** The flip is a snapshot-staleness bug caused by draw-order
+interleaving with `popCell()`. At the moment the precalc building batch is *added* to its
+phase, the `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` bitset is all-zeros
+because the world-cell lights have not yet been enabled (DPVS emits lights via
+`REGION_OF_INFLUENCE_ACTIVE` → `setRegionOfInfluenceEnabled(true)` → `enableLight()`
+after the building primitives are submitted). Which `setLights()` call precedes the draw
+depends on which neighbour batch draws immediately before it — and that ordering is changed
+by the 15° camera rotation through the sort keys. This is NOT a DPVS-cell / portal-traversal
+issue; DPVS still visits the same building mesh in both frames.
+
+---
+
+## Hypothesis 1: DPVS / portal / cell-activation ordering
+**Theory:** a 15° turn causes DPVS to traverse a different portal sequence, bringing a
+different cell's lights into scope when the building's batch is drawn.
+
+### For
+- `RenderWorldCommander::command()` lines 227-243 (`PORTAL_ENTER` / `PORTAL_PRE_EXIT`) call
+  `ShaderPrimitiveSorter::pushCell(*destinationCellProperty)` /
+  `ShaderPrimitiveSorter::popCell()`.  Each `popCell()` triggers `sort(); draw(); clear()` for
+  all phases (ShaderPrimitiveSorter.cpp:857-863).  So the draw sequence for primitives buffered
+  in a nested cell IS dependent on the DPVS portal traversal order, which IS camera-angle
+  dependent.
+- If the building is a portal-cell object and DPVS visits its enclosing cell after (vs before)
+  the camera-cell in one orientation, the lights the batch *inherits at draw time* can differ.
+
+### Against
+- Locked fact #4: in Capture25 terrain (a camera-cell object) and another shader (VS2214/
+  PS2217) ARE lit in the same frame.  Both share the same T_parallel world lights.  If the
+  camera-cell light set were simply absent, all objects in that cell would be black, not just
+  the VS10950 batch.
+- The building mesh is a *world-cell* object (its DPVS cell is the world exterior cell, not a
+  portal-room).  `QUERY_BEGIN/QUERY_END` push/pop only once for the world cell
+  (RenderWorldCommander.cpp:211/217).  No extra `PORTAL_ENTER/EXIT` is triggered by a 15°
+  rotation within the same exterior-cell view.
+- The `ms_lightListStackOffset` stacking logic in `pushCell()`
+  (ShaderPrimitiveSorter.cpp:1367) preserves the parent cell's lights, so even if a nested
+  push happens the outer-cell lights are still accessible.
+
+**Verdict: REFUTED as primary.** Portal traversal order affects interior/cell ordering but the
+building in question is a world-exterior mesh; no extra cell push/pop fires for a 15° turn in
+open world.
+
+---
+
+## Hypothesis 2: LOD / shader-tier swap producing the same VS/PS pair
+**Theory:** the 15° turn causes a different LOD level or shader-template variant to be
+selected, but one that happens to share VS10950/PS10952; the two variants have different
+light-affection flags.
+
+### For
+- Locked fact #3 states VS10950/PS10952 in both frames — it is theoretically possible that
+  two distinct `StaticShader` instances share the same compiled VS/PS bytecode and therefore
+  the same D3D11 shader object IDs, while differing in `containsPrecalculatedVertexLighting()`
+  or `lightBitSet`.
+
+### Against
+- Locked fact #2: VS ambient c16 = (0,0,0,0) in BOTH frames.  The only difference is
+  packedRegister1/3/4 going 0 → ≈+0.49.  A LOD swap to an identical shader would need to
+  explain exactly why c16 stays zero but c1/c3/c4 gain values.  A shader-tier swap to a
+  non-precalc variant would change the `lightBitSet` passed at add-time and the whole ambient
+  path, not just the dot3 constants.
+- A precalc → non-precalc swap for the SAME mesh / SAME camera position (only angle changed)
+  is extremely unlikely; LOD distance is camera-position-based, not angle-based.
+- The two VS/PS IDs being identical between frames, while a different static shader is bound,
+  would require coincidental hash collision in the shader-object cache — implausible.
+
+**Verdict: REFUTED.** Identical VS/PS IDs + same c16 = (0,0,0,0) in both frames rules out a
+tier swap as the explanation.
+
+---
+
+## Hypothesis 3: Snapshot staleness / draw-order sensitivity (PICK — strongest evidence)
+**Theory:** `s_pixelDot3State` (the global per-frame dot3 snapshot in
+Direct3d11_LightManagerNamespace) is populated by `Direct3d11_LightManager::setLights()`
+only when the engine calls `Graphics::setLights(ms_activeLightList)` from
+`ShaderPrimitiveSorter::setLights()` (ShaderPrimitiveSorter.cpp:1144).  The state in
+`s_pixelDot3State` at the moment `Direct3d11_StaticShaderData::apply()` runs for a given draw
+is whatever the *immediately preceding* `setLights()` call left behind.  That call depends on
+which entry immediately precedes the VS10950 batch in the SORTED draw list.
+
+### Mechanism in code
+
+#### CAPTURE (add-time, sort-time)
+1. During the DPVS reporting phase, world-exterior objects call `appearance->render()` which
+   calls `ShaderPrimitiveSorter::add()` (ShaderPrimitiveSorter.cpp:1154-1203).
+2. Inside `add()`, the bitset snapshot taken is either
+   `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` (if
+   `staticShader.containsPrecalculatedVertexLighting()` is true) or the without-precalc
+   bitset (ShaderPrimitiveSorter.cpp:1198-1201).
+3. **The building's VS10950 batch uses the precalc bitset.**  The precalc bitset records
+   which lights are *currently enabled* at the moment the primitive is submitted to the phase.
+   In the outdoor world the dominant directional lights are T_parallel lights on the world
+   cell.  These lights have `m_affectsShadersWithPrecalculatedVertexLighting = true` by
+   default (Light.cpp:62).  So at add-time, if the lights are already enabled, the bitset is
+   non-zero; if not yet enabled (first frame, or the ROI has not fired), the bitset is all
+   zeros.
+4. After sort, `Phase::draw()` iterates `m_shaderPrimitives` in sort order and for each
+   entry calls `ShaderPrimitiveSorter::setLights(i->lightBitSet)` (ShaderPrimitiveSorter.cpp:
+   718), which calls `Graphics::setLights()` → `Direct3d11_LightManager::setLights()`.
+
+#### STALENESS PATH (D3D11-specific)
+5. `Direct3d11_LightManager::setLights()` (Direct3d11_LightManager.cpp:71-286) at line 85
+   writes `s_pixelDot3State.valid = false` first, then only sets `s_pixelDot3State.valid =
+   true` if a T_parallel light wins the `psSlot` auction (line 196).  If the lightList passed
+   in is **empty** (lightBitSet all zeros → `ms_activeLightList` empty), the loop body never
+   fires, `psSlot` is null, `s_pixelDot3State.valid` stays false.
+6. `Direct3d11_StaticShaderData::apply()` for the VS10950/PS10952 draw then calls
+   `Direct3d11_LightManager::getPixelDot3State()` and checks `d3.valid`
+   (StaticShaderData.cpp:945).  If `d3.valid == false`, the c0..c4 dot3 registers in the b0
+   staging buffer are NOT written, leaving them at whatever the `getShadow()` memcpy gave
+   them (StaticShaderData.cpp:909-911 — the LegacyPSConstants shadow).
+7. The LegacyPSConstants shadow itself is populated only by prior draws that DID have a valid
+   snapshot.  If the VS10950 batch happens to be sorted FIRST (before any lit draw), the
+   shadow is still in its prior state (possibly zero at frame start or stale from a previous
+   unrelated draw).
+
+#### SORT-ORDER DEPENDENCE = CAMERA DEPENDENCE
+8. The default sort for the main world phase is
+   `sort_shaderImplementation_shaderTemplate_vertexBuffer_texture` (ShaderPrimitiveSorter.cpp:
+   438-441), keyed on `shaderImplementationSortKey`, `shaderTemplateSortKey`,
+   `vertexBufferSortKey`, `textureSortKey` (ShaderPrimitiveSorter.cpp:493-498).
+9. **The key insight:** nothing in these four keys is camera-dependent.  However, the set of
+   primitives submitted to the phase per-frame IS camera-dependent via DPVS visibility.  A
+   15° rotation changes which objects are visible (DPVS frustum cull), so the set of entries
+   in the phase changes.  With a different set, the sort produces a different sequence, and
+   the VS10950 batch may land at a different position relative to other draws that carry live
+   light snapshots.
+10. In Capture25 (black): the VS10950 batch sorts BEFORE any draw that runs a non-empty
+    `setLights()`.  Its lightBitSet may also be zero if the outdoor directionals have
+    `affectsShadersWithPrecalculated` = false for this batch, or if it was submitted early
+    before the lights were enabled.
+11. In Capture26 (lit, +15°): a different set of visible objects brings a different sort
+    order.  Some other draw with a fully-lit lightBitSet now precedes the VS10950 entry,
+    causing `setLights()` to run with a real directional list, populating `s_pixelDot3State`
+    with a valid snapshot before the apply() call.
+
+### The D3D9 Reference Does NOT Have This Bug
+In D3D9, `Direct3d9_LightManager::selectLights()` is called at draw-call time
+(Direct3d9.cpp:4012) and is driven by the `ms_lightList` that was set by the preceding
+`setLights()`.  Crucially, D3D9 also calls `Direct3d9_LightManager::setFullAmbientOn()`
+(Direct3d9_LightManager.h:201-217) from `Direct3d9_StaticShaderData::apply()` BEFORE the
+draw (Direct3d9_StaticShaderData.cpp:955).  When `containsPrecalculatedVertexLighting()` is
+true (`m_fullAmbient = true`, set at Static shader read-time: StaticShaderData.cpp:776),
+D3D9 sets `ms_fullAmbient = (1,1,1,0)`, so the next `selectLights()` call uses white ambient
+as the base regardless of the dynamic light list.  This means D3D9's precalc path ALWAYS gets
+full ambient as a baseline, making the VS diffuse term lit even if the dynamic light list is
+empty.
+
+**D3D11 has NO equivalent of `setFullAmbientOn()`.**  There is no call to reset `s_ambient`
+to (1,1,1) for precalc shaders.  The D3D11 `composeSlot0Shadow()` writes
+`s_slot0Shadow.lightData[0] = d3.ambient` (StateCache.cpp:380), which is whatever the last
+`setLights()` call accumulated.  For an empty light list, `d3.ambient` = (0,0,0,0).
+
+### For
+- Code path confirmed: StaticShaderData.cpp:903-958 shows the dot3 registers c0..c4 are only
+  written when `d3.valid == true`, which requires a non-empty light list with a T_parallel
+  light in the prior `setLights()` call.
+- The global `s_pixelDot3State` has no frame-scope reset to a "valid prior" state; it starts
+  as all-zeros at process start (LightManager.cpp:49) and is re-populated only by
+  `setLights()` calls with non-empty light lists.
+- D3D9 reference contrast confirmed: `setFullAmbientOn(true)` (called at per-pass apply for
+  any `containsPrecalculatedVertexLighting()` shader) forces white ambient in D3D9 before the
+  VS runs, making it sort-order-independent.
+- The `lightBitSet` captured at add-time for a precalc primitive in an outdoor world scene
+  uses `ms_lightsAffectingShadersWithPrecalculatedVertexLighting`.  This is reset to all-zeros
+  at every `pushCell()` (ShaderPrimitiveSorter.cpp:1371) and rebuilt by `enableLight()` calls
+  during the scene traversal.  The outdoor directional lights are T_parallel lights on the
+  world cell; if they have been enabled before the building is submitted, the bitset is
+  non-zero; otherwise it is all-zeros (and `setLights()` at draw time will receive an empty
+  list).  Camera rotation changes visibility order which can change submission order.
+
+### Against (attempting to refute)
+- If the `lightBitSet` at add-time is non-zero (directionals are already enabled when the
+  building is submitted), then `setLights()` at draw-time would receive a non-empty list and
+  SHOULD populate `s_pixelDot3State.valid = true`.  So the bug requires either (a) the
+  building's bitset is genuinely zero at add-time, OR (b) the bitset is non-zero but the
+  `setLights()` call for a PREVIOUS batch in the sorted order fires with an empty list,
+  resetting `s_pixelDot3State.valid = false`, and then the building's own `setLights()` is
+  also empty (meaning its bitset is also zero).
+- Locked fact #4 says terrain and VS2214/PS2217 ARE lit in the same frame (Capture25), so the
+  directional lights ARE being set for some primitives.  The VS10950 batch must be sorted
+  BEFORE those primitives AND have a zero or lights-empty bitset of its own.
+- The D3D9 `setFullAmbientOn(true)` path is the strongest counter-evidence: even if the
+  mechanism is snapshot staleness, D3D9 is immune because it bypasses it for precalc shaders.
+  This reinforces that the D3D11 port is missing the full-ambient reset.
+
+**Verdict: CONFIRMED as primary mechanism.** The camera-dependence enters via sort order
+(visible set changes) interacting with a global snapshot (`s_pixelDot3State`) that is not
+reset per-primitive but instead inherits from the last `setLights()` call.
+
+---
+
+## Hypothesis 4: Sort/visibility ordering causes batch to precede its own cell's lights
+**Theory:** the VS10950 batch is sorted before the draw that enables the world-cell lights.
+
+This is a variant of hypothesis 3 above.  The light-enable path runs at INSTANCE_VISIBLE time
+(appearance->render()), which calls `ShaderPrimitiveSorter::add()`, NOT `enableLight()`.  The
+lights are enabled by `setRegionOfInfluenceEnabled(true)` from
+`REGION_OF_INFLUENCE_ACTIVE` (Light.cpp:285-293, RenderWorldCommander.cpp:268-283).  The
+ROI activation for the outdoor directionals may or may not fire before the building mesh is
+submitted, depending on DPVS traversal order (which IS camera-angle dependent).  This
+supports hypothesis 3.
+
+If the ROI-fires-after-building scenario is the exact ordering, then at add-time the
+building's `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` bitset is all-zeros,
+meaning the stored `lightBitSet` is all-zeros regardless of sort order, and `setLights()` at
+draw time gets an empty list → `s_pixelDot3State.valid = false` → c0..c4 zero → black.
+
+In Capture26 (lit) the 15° turn changes the DPVS visit order so the ROI fires (the
+directionals are region-of-influence objects in DPVS) BEFORE the building is submitted,
+giving the building's bitset the directional bits → `setLights()` at draw time gets the
+directionals → valid snapshot → dim-lit.
+
+This is the same root cause (H3) but clarifies exactly WHERE in the add-vs-enable sequencing
+the camera-dependence enters.
+
+---
+
+## Hypothesis 5: State-leak from composeSlot0Shadow per-object transform reset
+**Theory:** when `setObjectToWorldTransformAndScale()` is called for the building,
+`composeSlot0Shadow()` re-runs (StateCache.cpp:1967) which RE-READS `d3.valid` (at line 382)
+and only fills the dot3/directional regions if `d3.valid == true`. If `d3.valid` was set to
+false by a preceding `setLights()` with an empty list, this wipes the dot3 region from the
+shadow even if it was previously populated.
+
+This reinforces H3: even if the `s_pixelDot3State` was valid from a PREVIOUS frame's draw,
+the per-object `composeSlot0Shadow()` call resets the shadow dot3 data to zero whenever the
+current `setLights()` left `d3.valid = false`.  So the per-frame snapshot invalidation at
+line 85 of LightManager.cpp guarantees that any object whose own `setLights()` call received
+an empty list will get black dot3 constants regardless of prior-frame state.
+
+---
+
+## Ranked Summary
+
+| Rank | Hypothesis | Verdict |
+|------|-----------|---------|
+| 1 | H3/H4: Snapshot staleness + add-time bitset = zero (ROI fires after building is submitted in Capture25; before in Capture26) | **PICK — primary** |
+| 2 | H5: Per-object composeSlot0Shadow wipes dot3 region when d3.valid=false | **REINFORCES H3** |
+| 3 | H1: DPVS / portal / cell traversal ordering | REFUTED (world-exterior mesh, single cell) |
+| 4 | H2: LOD / shader-tier swap landing on same VS/PS pair | REFUTED (c16 constant, implausible) |
+
+---
+
+## Explicit Pick
+
+**The camera-dependence mechanism is:**
+> The world-cell's T_parallel directional lights are Region-Of-Influence objects in DPVS.
+> DPVS reports ROI activation (`REGION_OF_INFLUENCE_ACTIVE`) in camera-frustum / traversal
+> order.  In Capture25, the building's `appearance->render()` is called BEFORE DPVS activates
+> those ROI lights (or the building's lightBitSet was already captured all-zeros for the
+> precalc bitset for another reason), so the stored `lightBitSet` is zero.  At draw-time,
+> `ShaderPrimitiveSorter::setLights({})` calls `Direct3d11_LightManager::setLights({})` with
+> an empty list, which sets `s_pixelDot3State.valid = false`.  `apply()` then finds no valid
+> snapshot and writes zeros to b0 packedRegister1/3/4.
+>
+> In Capture26, the 15° turn changes the DPVS traversal order: the ROI lights fire BEFORE the
+> building is submitted.  The bitset is non-zero, `setLights()` sees the directionals, the
+> snapshot is populated, and the dot3 registers carry real values.
+>
+> **Root cause for D3D11 (vs D3D9 which is immune):** D3D9's `Direct3d9_StaticShaderData::
+> apply()` calls `setFullAmbientOn(m_fullAmbient)` at per-pass apply time
+> (Direct3d9_StaticShaderData.cpp:955).  When `m_fullAmbient == true` (i.e.,
+> `containsPrecalculatedVertexLighting()`) this forces `ms_fullAmbient = (1,1,1,0)` so
+> `selectLights()` always produces a non-zero ambient for precalc shaders, making the dot3
+> path at least partially illuminated regardless of the dynamic light list contents.  D3D11
+> has no equivalent hook.
+
+---
+
+## Cheapest Discriminating Runtime Probe
+
+**One log line inside `Direct3d11_LightManager::setLights()`, conditional on the current
+static shader being the precalc bump shader:**
+
+At the top of `Direct3d11_LightManager::setLights()` (LightManager.cpp:71), add:
+
+```cpp
+// PROBE-38: For any setLights call where the lightList is empty, log the call number
+// and whether s_pixelDot3State.valid was true before reset. If listSz==0 fires for the
+// VS10950/PS10952 batch, the staleness hypothesis is confirmed.
+if (lightList.empty()) {
+    char probe[128];
+    _snprintf_s(probe, sizeof(probe), _TRUNCATE,
+        "[PROBE-38] setLights listSz=0 prevValid=%d frame=%u",
+        s_pixelDot3State.valid ? 1 : 0,
+        Direct3d11_Device::getDiagFrameIndex());
+    if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+        iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, probe);
+}
+```
+
+Then, in `Direct3d11_StaticShaderData::apply()` at the isLegacyB0 block (line 907), also
+log the shader name and `d3.valid` at the moment of apply (the existing GAP4 diagnostic at
+line 927-944 already does this for the first 6 draws; extend its count to 60 or add a frame-
+scoped counter).
+
+**What it distinguishes:**
+- If `[PROBE-38] listSz=0 prevValid=1` appears in the same frame as the black VS10950 draw,
+  and if the frame index matches Capture25's frame, it proves the staleness path: a prior
+  valid snapshot was wiped by an empty-list `setLights()` triggered by the VS10950 batch's
+  own zero lightBitSet.
+- If `[PROBE-38]` NEVER fires for the VS10950 batch (i.e., listSz is always > 0 for that
+  batch) but the batch is still black, then the mechanism must be something else (e.g.,
+  `composeSlot0Shadow`'s `d3.valid=false` clobber from a non-empty but all-non-directional
+  list — but that would show `prevValid=false` consistently).
+
+**Cost:** one branch + one `_snprintf_s` + one InfoQueue write per empty `setLights()` call.
+No draw-path changes, no source file changes outside LightManager.cpp.
+
+---
+
+## Key File:Line References
+
+- `ShaderPrimitiveSorter::add()` precalc fork: ShaderPrimitiveSorter.cpp:1198-1201
+- `ShaderPrimitiveSorter::setLights()` → `Graphics::setLights()`: ShaderPrimitiveSorter.cpp:718, 1144
+- `ShaderPrimitiveSorter::pushCell()` resets precalc bitset to zero: ShaderPrimitiveSorter.cpp:1370-1371
+- `Light::setRegionOfInfluenceEnabled()` → `enableLight()`: Light.cpp:285-293
+- `REGION_OF_INFLUENCE_ACTIVE` handler: RenderWorldCommander.cpp:268-283
+- `Direct3d11_LightManager::setLights()` valid=false reset: Direct3d11_LightManager.cpp:85
+- `Direct3d11_LightManager::setLights()` valid=true set (requires psSlot): Direct3d11_LightManager.cpp:196
+- `s_pixelDot3State` global: Direct3d11_LightManager.cpp:49
+- `Direct3d11_StaticShaderData::apply()` b0 dot3 write (guarded by d3.valid): Direct3d11_StaticShaderData.cpp:945-958
+- `composeSlot0Shadow()` d3.valid guard: Direct3d11_StateCache.cpp:382
+- D3D9 reference — `setFullAmbientOn(m_fullAmbient)` at apply: Direct3d9_StaticShaderData.cpp:955, Direct3d9_LightManager.h:201-217
+- D3D9 reference — `m_fullAmbient = containsPrecalculatedVertexLighting()`: Direct3d9_StaticShaderData.cpp:776

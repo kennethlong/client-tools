@@ -1,0 +1,249 @@
+CONSULT-28-G — Near-plane (w-plane) clipping spec: D3D9 vs D3D11
+Why near-w geometry renders bounded under D3D9 but explodes into radial shards under D3D11
+
+Author: GPU rasterization-spec consult (Opus 4.8)
+Date: 2026-06-07
+Confidence legend: [HIGH] spec-cited verbatim / [MED] strong inference from spec + corroborating sources / [LOW] plausible, needs runtime confirmation
+
+=====================================================================
+EXECUTIVE ANSWER (read this first)
+=====================================================================
+
+The pixels-to-infinity / radial-shards symptom is the canonical signature of a
+triangle that has a vertex with w <= 0 (or w ~ +epsilon) which is NOT being
+clipped against the near/w plane before the perspective divide. After
+divide-by-w, (x/w, y/w) for a near-zero or negative w explodes to +/-huge NDC,
+and the rasterizer draws a triangle edge sweeping across the whole screen
+(the "shard"). [HIGH — this is the textbook divide-by-tiny-w failure]
+
+BOTH D3D9 and D3D11 *specify* mandatory "0 < w" clipping. So if the spec were
+the whole story, neither would explode. The fact that D3D9 renders the same
+mesh bounded and D3D11 explodes means the near/w clip is effectively NOT
+happening on the D3D11 path in this port. The single most likely reason
+(ranked in section 5) is NOT a difference in the documented clip algorithm but
+a difference in WHICH path produces SV_Position and whether the projection it
+emits actually yields a sane sign/magnitude of w — i.e. the bug is upstream of
+the rasterizer (the VS / WVP it feeds), and D3D9's fixed-function or T&L clip
+stage was masking a projection that already had degenerate w. (See section 5.)
+
+=====================================================================
+1. NEAR-PLANE (w-PLANE) CLIPPING — WHEN/HOW IT HAPPENS
+=====================================================================
+
+Both APIs clip in homogeneous clip space, *after* the vertex shader emits
+SV_Position and *before* the perspective divide. The canonical clip volume
+(D3D convention, z in [0,w]) is:
+
+    0 < w
+    -w <= x <= w   (or wider, if a guard band is used — see section 2)
+    -w <= y <= w   (or wider, if a guard band is used)
+    0 <= z <= w
+
+Source — D3D11_RASTERIZER_DESC, DepthClipEnable member, verbatim:
+"The hardware always performs x and y clipping of rasterized coordinates. When
+DepthClipEnable is set to the default - TRUE, the hardware also clips the z
+value (that is, the hardware performs the last step of the following
+algorithm).
+    0 < w
+    -w <= x <= w (or arbitrarily wider range if implementation uses a guard
+                  band to reduce clipping burden)
+    -w <= y <= w (or arbitrarily wider range ...)
+    0 <= z <= w
+When you set DepthClipEnable to FALSE, the hardware skips the z clipping ...
+However, the hardware still performs the '0 < w' clipping."
+[HIGH] https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_rasterizer_desc
+
+Key consequence: the "0 < w" plane is the near/w clip. It is listed as
+mandatory and is NOT gated by DepthClipEnable. So in spec terms, a D3D11
+triangle with one vertex at w<=0 and two at w>0 is supposed to be CLIPPED to
+the w>0 boundary — the offending vertex is replaced by new vertices generated
+on the near/w plane, attributes interpolated, and the result is a BOUNDED
+polygon. It should never reach rasterization with a w<=0 vertex intact.
+[HIGH for the spec; the open question is whether the runtime path you built
+actually exercises this — see section 5.]
+
+What "escape" looks like: if a vertex with w ~ 0+ (tiny positive) survives
+clipping (it passes 0<w because it is technically positive), then x/w and y/w
+become enormous but FINITE. The guard band (section 2) determines whether that
+enormous-but-finite projected triangle is then clipped/discarded or rasterized
+as a shard. This is the realistic failure mode for "w slightly positive":
+it passes the 0<w test, projects huge, and if it also slips past the guard
+band it rasterizes as a shard. [MED]
+
+D3D9 fixed-function / T&L vs programmable — the historical difference:
+- In the D3D9 fixed-function and software/hardware T&L pipeline, Direct3D's own
+  clipper runs as a defined pipeline stage and clips primitives to the frustum
+  (including the near plane) for vertices it transforms, controlled by
+  D3DRS_CLIPPING (default TRUE). [HIGH]
+  https://learn.microsoft.com/en-us/windows/win32/direct3d9/primitive-clipping-state
+- For a programmable VS (vs_x_x) the GPU still performs frustum/near clipping in
+  hardware — but the practical point is that D3D9 + its drivers leaned on a
+  generously-sized guard band AND a mandatory near clip, and the D3D9 reference
+  rasterizer was conservative about near-w. [MED]
+
+=====================================================================
+2. GUARD BAND & VIEWPORT
+=====================================================================
+
+Guard band = a rectangle in screen/NDC space POTENTIALLY MUCH LARGER than the
+viewport, to which the clipper clips X and Y instead of clipping to the
+viewport itself. Triangles fully inside the guard band but outside the viewport
+are accepted and trim-rasterized (pixels outside the viewport/scissor are
+dropped) rather than geometrically clipped — this avoids generating new
+vertices. Triangles that exceed the guard band trigger true geometric clipping.
+Source (driver docs, verbatim):
+"A guard band is a rectangle that is potentially larger than the viewport (and
+even the render target), to which vertices can be clipped automatically by the
+driver. The Microsoft Direct3D clipping code clips to this rectangle instead of
+to the viewport. By allowing the driver to specify potentially large guard band
+rectangles, the need to generate new vertices due to clipping is reduced. One
+example is a hardware device that can correctly render as long as screen x and y
+coordinates fall in the range -2048 through 2047."
+[HIGH] https://learn.microsoft.com/en-us/windows-hardware/drivers/display/guard-band-clipping
+
+Critical clarification for the explosion question:
+- The guard band is an X/Y optimization ONLY. The "0 < w" near clip is
+  orthogonal and (per section 1) always runs. The guard band never lets a
+  w<=0 vertex through; it only changes whether large *finite* X/Y projections
+  are geometrically clipped or just pixel-trimmed. [HIGH inference from both
+  specs: the D3D11 algorithm lists guard band as a widening of the X/Y rows
+  only, with "0 < w" on its own un-widened row.]
+- A vertex with tiny-positive w projects to a GIGANTIC but finite (x/w, y/w).
+  That coordinate is far OUTSIDE any practical guard band (e.g. >> 2048 / >>
+  32K depending on HW). So such a triangle SHOULD hit true geometric clipping
+  and be bounded — UNLESS the projected magnitude overflows the rasterizer's
+  fixed-point coordinate range and wraps/saturates, OR the clip is being
+  skipped. The shard look is exactly an edge that swept to the fixed-point
+  coordinate limit. [MED]
+
+D3D9 guard band: exposed to the app via D3DCAPS9.GuardBandLeft/Top/Right/Bottom
+(float), so D3D9 apps could test a mesh's screen-space bbox against the guard
+band and skip subdividing/clipping. D3D9 drivers commonly advertised large
+guard bands AND the Direct3D runtime clipper backed them up. The relevant
+difference vs a naive D3D11 port is NOT "D3D9 had a bigger guard band" — it is
+that D3D9 had a documented, on-by-default *runtime clipper* (D3DRS_CLIPPING,
+ProcessVertices, CLIPTLVERTS) as a safety net for the transform stage. [MED]
+https://developer.download.nvidia.com/assets/gamedev/docs/Guard_Band_Clipping.pdf
+http://doc.51windows.net/directx9_sdk/graphics/reference/d3d/structures/d3dcaps9.htm
+
+=====================================================================
+3. D3DRS_CLIPPING / CLIP CONTROL — AND THE D3D11 EQUIVALENT
+=====================================================================
+
+D3D9:
+- D3DRS_CLIPPING (default TRUE) enables/disables Direct3D's primitive clipping
+  for geometry the pipeline transforms. [HIGH]
+  https://learn.microsoft.com/en-us/windows/win32/direct3d9/primitive-clipping-state
+- D3DPMISCCAPS_CLIPTLVERTS (PrimitiveMiscCaps): if set, the device clips
+  post-transformed (T&L) vertex data to Z and to the X/Y viewport extents. If
+  NOT set, the *application* is responsible for clipping T&L vertices it sends.
+  In software vertex processing the device is always capable of clipping T&L
+  verts. [HIGH]
+  https://learn.microsoft.com/en-us/windows-hardware/drivers/display/clipping-transformed-vertices
+- Important nuance: Direct3D does NOT clip pre-transformed (XYZRHW / from a
+  vertex buffer) vertices unless they come through ProcessVertices. So for
+  fixed-function/T&L *model-space* geometry (the normal case), D3DRS_CLIPPING
+  TRUE gives you a robust near-plane clip; for app-pretransformed verts you owe
+  the clip yourself. [HIGH]
+
+D3D11 equivalent:
+- There is NO "D3DRS_CLIPPING on/off" master switch in D3D11. Frustum clipping
+  in X/Y/W is implicit and mandatory (you cannot turn off the "0 < w" or X/Y
+  clip). The ONLY app-facing clip toggle is
+  D3D11_RASTERIZER_DESC.DepthClipEnable, which controls Z clipping only
+  (default TRUE). [HIGH] (rasterizer_desc source above)
+- Therefore a port CANNOT reproduce the explosion by "forgetting to enable
+  D3D11 clipping" the way one might fear — X/Y/W clipping is not optional in
+  D3D11. This means the shards are NOT caused by a missing D3DRS_CLIPPING
+  analogue. (This rules OUT the most superficially-attractive hypothesis.)
+  [HIGH — this is an important negative result for the investigation.]
+
+=====================================================================
+4. DepthClipEnable — WHAT IT ACTUALLY CLIPS
+=====================================================================
+
+DepthClipEnable clips Z, not W. Specifically it toggles only the final
+"0 <= z <= w" row of the algorithm. With DepthClipEnable = TRUE (default),
+geometry crossing the near/far DEPTH planes is depth-clipped. With it FALSE,
+depth clipping is skipped (useful for stencil shadow volumes / skyboxes) but
+"the hardware still performs the '0 < w' clipping." [HIGH] (rasterizer_desc)
+
+Bottom line on Depth vs the near-w explosion: DepthClipEnable does NOT cause and
+does NOT cure the near-w shard explosion. Even DepthClipEnable=FALSE keeps the
+mandatory w>0 clip. The explosion is a W-space / projection problem, not a
+Z-clip problem. Do not chase DepthClipEnable for this symptom. [HIGH]
+
+=====================================================================
+5. BOTTOM LINE — RANKED MOST-LIKELY SINGLE DIFFERENCE
+=====================================================================
+
+Because BOTH APIs mandate "0 < w" clipping, a true spec-conformant D3D11
+rasterizer would also bound the mesh. The explosion therefore implies the
+SV_Position w reaching the D3D11 clipper is degenerate in a way it was NOT on
+the D3D9 path. Ranked causes:
+
+RANK 1 [MED-HIGH] — The D3D11 VS emits a DIFFERENT (degenerate) w than the D3D9
+path. Most likely a projection / WVP matrix issue: row-major vs column-major
+mismatch, a missing transpose, or an un-fed/zero cbuffer producing w == 0 for
+many vertices. Your codebase already has a documented D3D11 cbuffer-transpose
+quirk (col-vec engine vs row-vec bytecode). If the WVP fed to a //asm-VS
+fallback or a reauthored VS is transposed/zeroed, the .w (4th row dot) collapses
+to ~0 for whole swaths of a mesh -> tiny/zero w -> divide explosion. This is the
+single most probable real cause given the port context. The D3D9 fixed-function
+/ T&L path computed w with the engine's known-good projection, so it stayed
+sane. ACTION: capture SV_Position.w in RenderDoc for the exploding draw under
+gl11 and compare to gl05; look for w ~ 0 or sign flips.
+
+RANK 2 [MED] — The exploding geometry is fed through a path where the D3D9
+client relied on the RUNTIME clipper (D3DRS_CLIPPING TRUE / ProcessVertices /
+CLIPTLVERTS) to clip near-plane-straddling geometry, and the D3D11 port has no
+equivalent runtime pre-clip. If the mesh is effectively pre-transformed
+(XYZRHW-style, UI / billboards / sky) or the //asm-VS fallback bypasses proper
+projection, the near-w vertices that D3D9's transform-stage clipper would have
+trimmed now flow straight into the D3D11 rasterizer. Even though D3D11's HW
+"0<w" should catch true w<=0, a w == +epsilon survivor projects huge and shards.
+ACTION: identify whether the exploding mesh is the //asm-VS fallback geometry
+(interiors/sky from the phase-19 work) or pretransformed UI.
+
+RANK 3 [LOW-MED] — Tiny-positive-w survivors slipping past the guard band and
+overflowing the rasterizer's fixed-point X/Y coordinate range, wrapping to the
+opposite screen edge (classic "radial shard" wrap). This is a downstream
+manifestation of RANK 1/2, not an independent root cause; fixing w fixes it.
+
+RANK 4 [LOW] — A genuine half-open vs near-plane convention difference (D3D9
+clipped at the near plane with a slightly different epsilon / the D3D9 REF
+rasterizer was more conservative about near-w). Possible but weak; D3D11's
+mandatory 0<w makes a pure convention gap an unlikely sole cause.
+
+DEFINITELY-NOT (negative results, do not pursue):
+- "Missing D3DRS_CLIPPING equivalent in D3D11" as a literal toggle — there is
+  none; X/Y/W clipping is non-optional in D3D11. [HIGH]
+- DepthClipEnable — clips Z only; irrelevant to the w explosion. [HIGH]
+- Guard-band size differences — guard band is X/Y-only and never passes w<=0;
+  not a root cause. [HIGH]
+
+ONE-LINE VERDICT:
+The shards are a w-space (perspective-divide) failure, almost certainly because
+the D3D11 VS/WVP emits w ~ 0 (transpose/zeroed-cbuffer/projection bug) for
+near-plane geometry that D3D9's fixed-function/T&L runtime clipper used to trim;
+verify by reading SV_Position.w in a gl11-vs-gl05 RenderDoc capture of the
+offending draw. Chase the projection/WVP feeding SV_Position, NOT DepthClipEnable
+or any clip-enable toggle.
+
+=====================================================================
+SOURCES
+=====================================================================
+- D3D11_RASTERIZER_DESC (DepthClipEnable, clip algorithm, "0 < w" always):
+  https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_rasterizer_desc
+- Primitive Clipping State (D3D9, D3DRS_CLIPPING default TRUE):
+  https://learn.microsoft.com/en-us/windows/win32/direct3d9/primitive-clipping-state
+- Clipping Transformed Vertices / D3DPMISCCAPS_CLIPTLVERTS (driver docs):
+  https://learn.microsoft.com/en-us/windows-hardware/drivers/display/clipping-transformed-vertices
+- Guard Band Clipping (driver docs, guard-band = rectangle larger than viewport):
+  https://learn.microsoft.com/en-us/windows-hardware/drivers/display/guard-band-clipping
+- Rasterizer Stage (D3D11 overview):
+  https://learn.microsoft.com/en-us/windows/win32/direct3d11/d3d10-graphics-programming-guide-rasterizer-stage
+- NVIDIA, "Guard Band Clipping in Direct3D" (Sim Dietrich):
+  https://developer.download.nvidia.com/assets/gamedev/docs/Guard_Band_Clipping.pdf
+- D3DCAPS9 (GuardBandLeft/Top/Right/Bottom):
+  http://doc.51windows.net/directx9_sdk/graphics/reference/d3d/structures/d3dcaps9.htm

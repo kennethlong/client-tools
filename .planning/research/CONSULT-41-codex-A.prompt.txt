@@ -1,0 +1,22 @@
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11
+renderer port of Star Wars Galaxies (engine clientGraphics). Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-41-hemispheric-blue-face.md
+
+Then read the cited source to verify (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.h
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+  src/engine/client/library/clientTerrain/src/shared/appearance/GroundEnvironment.cpp
+
+Answer ONLY section "6 — A (CODEX, dataflow trace)" and produce the section-7 deliverable for your
+angle. You may CONFIRM or REFUTE the §4 hemispheric theory. RenderDoc measurements in §3 are ground
+truth; the cause of the blue is NOT yet established — that is your job.
+
+Trace where the blue in the VS vertex lighting v1=(0.524,0.537,0.707) and in the PS dot3 hemispheric
+c1/c3/c4 originates in BOTH renderers (light/ambient/GroundEnvironment producers -> cbuffer write).
+State the FIRST source line where D3D11 diverges from D3D9 in a way that injects blue (a blue ambient,
+a blue fill/bounce directional dominating upward normals, a swapped/wrong sky-vs-ground color, etc.).
+Cite file:line. Give the minimal D3D9-parity fix and its exact location.

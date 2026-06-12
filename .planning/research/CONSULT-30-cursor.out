@@ -1,0 +1,236 @@
+## Verdict
+
+**No** — for the default D3D11 soft-skin path (`disableMultiStreamVertexBuffers=true`, single-stream dynamic VB), the input layout does **not** bind to declared-format byte ranges in the dynamic slice that the engine permanently leaves unwritten at draw time.
+
+Every offset declared in `dynamicFormat` is written before `memcpy` into the ring slice. Input-layout `AlignedByteOffset` values match engine `VertexBufferDescriptor` offsets, and IA stride equals `vertexSize`. Standard skeletal VSes use **POSITION only** for `SV_Position`; normals/tangents/texcoords do not feed the position transform.
+
+The spike signature (clean offset-0 position on CPU readback, garbage elsewhere live, zero on replay) is **not explained** by “VS reads a declared component the skin path never writes.” More plausible classes: **index read-past** (whole stale vertices), **ring reuse / GPU–CPU timing**, or reads **outside** the locked `[0, m_vertexCount)` slice — not a format offset mismatch within a written vertex.
+
+---
+
+## 1. `dynamicFormat` construction
+
+Runtime path: `ms_useMultiStreamVertexBuffers=false` because `ConfigClientGraphics::disableMultiStreamVertexBuffers` defaults **true** (`ConfigClientGraphics.cpp:104`), and code comments confirm this at runtime (`SoftwareBlendSkeletalShaderPrimitive.cpp:567-568`).
+
+### Single-stream (runtime default)
+
+```1246:1274:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	VertexBufferFormat  dynamicFormat;
+
+	// Dynamic always contains position and normal.
+	dynamicFormat.setPosition(true);
+	dynamicFormat.setNormal(true);
+
+	if (!multiStream)
+	{
+		dynamicFormat.setColor0(hasArgb);
+		dynamicFormat.setNumberOfTextureCoordinateSets(tcSetCount);
+		{
+			for (int i = 0; i < tcSetCount; ++i)
+			{
+				const int dimensionality = mesh.getTextureCoordinateDimensionality(meshPerShaderData, i);
+				dynamicFormat.setTextureCoordinateSetDimension(i, dimensionality);
+			}
+		}
+	}
+	// ...
+	m_dynamicStream = new DynamicVertexBuffer(dynamicFormat);
+```
+
+`m_systemStream` uses the **same** `dynamicFormat` (`SoftwareBlendSkeletalShaderPrimitive.cpp:1399-1416`).
+
+**Declared components:** position, normal, optional COLOR0, 0–N texture sets (2D UV and/or final 4D dot3/tangent set). **No blend weights** in the VB — weights live in CPU-side `SourceVertex` / `m_transformData` (`SoftwareBlendSkeletalShaderPrimitive.cpp:1338-1381`).
+
+### Byte layout (engine + D3D11 share this order)
+
+From `Direct3d11_VertexBufferDescriptorMap::getDescriptor` / `buildInputElementDescForStream` (`Direct3d11_VertexBufferDescriptorMap.cpp:57-131, 162-169, 218-270`):
+
+| Order | Component | Size |
+|-------|-----------|------|
+| 1 | POSITION (float3) | 12 |
+| 2 | NORMAL (float3) | 12 |
+| 3 | COLOR0 (uint32 BGRA) | 4 (if `hasArgb`) |
+| 4..N | TEXCOORD sets (float×dim each) | 4×dim per set |
+
+**No padding** between components; `vertexSize` = sum of declared parts.
+
+### Multi-stream (if config enabled — not runtime default)
+
+```1264:1271:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	else
+	{
+		if (m_hasDot3Vector)
+		{
+			dynamicFormat.setNumberOfTextureCoordinateSets(1);
+			dynamicFormat.setTextureCoordinateSetDimension(0, 4);
+		}
+	}
+```
+
+Dynamic stream: position + normal + optional one 4D dot3 set. Color and non-dot3 UVs go in `constantFormat` on `m_staticStream` (`SoftwareBlendSkeletalShaderPrimitive.cpp:1191-1240, 1388-1401`).
+
+---
+
+## 2. What the engine writes vs `dynamicFormat`
+
+### `fillConstantVertexBufferData` — once at init
+
+```1646:1707:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+void SoftwareBlendSkeletalShaderPrimitive::fillConstantVertexBufferData(...)
+{
+	// ...
+		for (int tcSetIndex = 0; tcSetIndex < tcSetCount; ++tcSetIndex)
+		{
+			switch (tcCount)
+			{
+			case 2:
+				// writes destVertexIt.setTextureCoordinates(tcSetIndex, ...)
+				break;
+			case 4:
+			{
+				// Extract the dot3 coordinate — saves to m_sourceDot3Vectors
+				// DOES NOT write destVertexIt for this 4D set
+			}	break;
+```
+
+**Writes:** COLOR0 (if present), all **2D** texcoord sets.  
+**Does not write:** 4D dot3/tangent set (extracted to `m_sourceDot3Vectors` only).  
+**Never writes:** position, normal (those come from `skinData`).
+
+Called once into `m_systemStream` at init (`SoftwareBlendSkeletalShaderPrimitive.cpp:1409-1411`). `SystemVertexBuffer` allocates with `new byte[...]` and **no memset** (`SystemVertexBuffer.cpp:190`).
+
+### `skinData` → `fillVertexBuffer` (soft skinning) — each skin frame
+
+```1747:1750:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+		case SM_softSkinning:
+		{
+			fillVertexBuffer(transformCount, transformArray, iterator);
+```
+
+```1902:1938:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+		//-- Skin position and normal.
+		// ...
+			destVertexIt.setPosition(blendPosition);
+			destVertexIt.setNormal(blendNormal);
+```
+
+With dot3 (`1848-1887`): also `setTextureCoordinates(m_dot3TextureCoordinateSetIndex, blendDot3.x, y, z, flip)`.
+
+**Writes per frame:** position, normal, dot3 TC set (if `m_hasDot3Vector`).  
+**Does not touch:** color, 2D UVs (left from `fillConstant` in `m_systemStream`).
+
+### Per-frame path into dynamic VB
+
+```766:781:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+			VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+			skinData(transformCount, transformArray, writeIterator);
+			m_dynamicStream->lock(m_vertexCount);
+			{
+				VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+				outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+			}
+			m_dynamicStream->unlock();
+```
+
+`copy` is a full-vertex `memcpy` of `vertexSize × count` (`VertexBufferIterator.h:878-884`).
+
+**At draw time (normal path):** every byte in `dynamicFormat` is populated — constants from init + skinned fields from this frame’s `skinData`, then copied wholesale.
+
+### Only transient gap (not at draw)
+
+Between `SystemVertexBuffer` alloc and **first** `skinData`, the **4D dot3 slot** is uninitialized (`fillConstant` case 4 skips VB write). That is closed in the same `prepareToDraw()` before `copy`/`setVertexBuffer`.
+
+`skinData` early-return paths (`1717-1742`) skip writes but then copy **stale** prior-frame data, not fresh undefined memory.
+
+---
+
+## 3. Representative byte-maps (single-stream, runtime default)
+
+### A) Position + normal only — stride **24**
+
+| Offset | Component | Written by engine? | Read by input layout? |
+|--------|-----------|-------------------|----------------------|
+| 0–11 | POSITION float3 | Yes — `skinData` each frame | Yes — `POSITION` @0 |
+| 12–23 | NORMAL float3 | Yes — `skinData` each frame | Yes — `NORMAL` @12 |
+
+### B) + COLOR0 — stride **28**
+
+| Offset | Component | Written? | Read? |
+|--------|-----------|----------|-------|
+| 0–11 | POSITION | Yes — `skinData` | Yes |
+| 12–23 | NORMAL | Yes — `skinData` | Yes |
+| 24–27 | COLOR0 | Yes — `fillConstant` once | Yes — `COLOR` @24 |
+
+### C) + COLOR0 + 2× UV2 + dot3 (common bump mesh) — stride **60**
+
+Example: `hasArgb`, TC0=2D, TC1=2D, TC2=4D dot3, `m_dot3TextureCoordinateSetIndex=2`.
+
+| Offset | Component | Written? | Read? |
+|--------|-----------|----------|-------|
+| 0–11 | POSITION | Yes — `skinData` | Yes |
+| 12–23 | NORMAL | Yes — `skinData` | Yes |
+| 24–27 | COLOR0 | Yes — `fillConstant` | Yes |
+| 28–35 | TEXCOORD0 (UV) | Yes — `fillConstant` | Yes — `TEXCOORD0` @28 |
+| 36–43 | TEXCOORD1 (UV) | Yes — `fillConstant` | Yes — `TEXCOORD1` @36 |
+| 44–59 | TEXCOORD2 (dot3 xyz + flip) | Yes — `skinData` (not `fillConstant`) | Yes — `TEXCOORD2` @44 |
+
+**No declared offset is permanently unwritten at draw.**
+
+### D3D11 input layout ↔ engine offsets
+
+`buildInputElementDescForStream` mirrors `getDescriptor` byte-for-byte (`Direct3d11_VertexBufferDescriptorMap.cpp:156-174`). Engine writes use the same `offsetPosition`, `offsetNormal`, etc. (`VertexBufferIterator.h:655-874`).
+
+**Stride consistency:**  
+- Lock: `length = numberOfVertices * vertexSize` (`Direct3d11_DynamicVertexBufferData.cpp:277`)  
+- Bind: `strides[] = data->getVertexSize()` (`Direct3d11_VertexBufferVectorData.cpp:144`)  
+- Layout: implicit per-stream stride = final running offset = `vertexSize`
+
+Single-stream bind uses `getOrCreate(ms_currentVBFormat, vsVariant)` (`Direct3d11_StateCache.cpp:1163-1164`) where `ms_currentVBFormat` is the bound dynamic VB’s format.
+
+### Phantom elements (not “unwritten dynamic bytes”)
+
+VS inputs not covered by `dynamicFormat` get **InputSlot=15**, stride-0 zero buffer (`Direct3d11_VertexBufferDescriptorMap.cpp:276-290, 346-400`). Those are intentional zeros, not undefined bytes in the dynamic ring slice.
+
+---
+
+## 4. Does the VS consume unwritten bytes for `SV_Position`?
+
+**No** for the standard skeletal VS family.
+
+D3D9 asm path:
+
+```12:15:D:\Code\swg-client-v2\.planning\research\vsh-extract\transform.inc
+// transform vertex to projection space
+m4x4 oPos, vPosition, cObjectWorldCameraProjectionMatrix
+```
+
+HLSL path (`a_simple_vs20_for_ps20.vsh`):
+
+```30:31:D:\Code\swg-client-v2\.planning\research\vsh-extract\a_simple_vs20_for_ps20.vsh
+	// transform vertex
+	outputVertex.position = transform3d(inputVertex.position);
+```
+
+`transform3d` is `mul(vertexPosition_o, objectWorldCameraProjectionMatrix)` (`inc_functions.inc:10-12`). Skinning is **CPU-side**; the VS has no bone-weight inputs. Normal/tangent/texcoord affect lighting/PS outputs, not `SV_Position`.
+
+Even if NORMAL or dot3 were garbage, **position spikes from undefined non-position components would not flow through `transform3d`** in these shaders.
+
+---
+
+## Summary table
+
+| Question | Answer |
+|----------|--------|
+| Declared `dynamicFormat` bytes left unwritten at draw? | **No** (single-stream default) |
+| Input layout offset mismatch vs engine writes? | **No** — same descriptor table |
+| IA stride mismatch? | **No** — same `vertexSize` everywhere |
+| VS reads unwritten declared bytes for `SV_Position`? | **No** — POSITION only |
+| Named undefined component + offset for spikes? | **None** within declared stride at draw |
+
+### Closest “almost yes” cases (ruled out for draw-time spikes)
+
+1. **Dot3 slot between alloc and first `skinData`** — uninitialized transiently (`fillConstant` case 4 @1688-1700); fixed before `copy` in `prepareToDraw`.
+2. **Index read-past** — indices ≥ `m_vertexCount` fetch **whole vertices** of stale ring data, not a single unwritten component within stride (`SoftwareBlendSkeletalShaderPrimitive.cpp:1589-1634` cape-index probe).
+3. **Phantom slot-15** — zeros, not undefined dynamic-slice bytes.
+
+**Refutation of leading idea:** The soft-skin VS input layout does **not** read declared vertex bytes that the CPU skin path never writes into the dynamic slice at draw time. Offset-0 position being clean while geometry shreds points away from “unwritten tangent/normal at offset X in the declared layout” and toward **wrong vertices** (index/ring) or **GPU seeing different memory than the CPU staging read**, not a format-vs-write hole inside a correctly indexed vertex.

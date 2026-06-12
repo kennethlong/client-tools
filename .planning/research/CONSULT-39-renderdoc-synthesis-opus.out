@@ -1,0 +1,85 @@
+# CONSULT-39 — RenderDoc synthesis (Opus / math)
+
+**BOTTOM LINE:** The black bump draws are NOT a skipped-apply or stale-b0 bug — every legacy-b0 draw DOES get a fresh `updatePS(0,...)` with `d3.valid==1`. The divergence is in the *value* the snapshot carries: for black draws the snapshotted sun's **`tangentColor` (`getScaledDiffuseTangentColor()`) is exactly 0**, and the dot3-bump PS base term algebraically reduces to `v1 + (c1 + c3) = v1 + tangentColor = v1 + 0 = 0` (and v1=0 on precalc world geometry). Lit draws read a sun whose `tangentColor ≠ 0`. Same shader, same frame, different snapshot value — the snapshot's sun varies per cell/draw-order because `Direct3d11_LightManager::setLights` re-selects `psSlot` from each cell's light list.
+
+---
+
+## 1. The bump PS math (decoded from the actual bytecode)
+
+PS `ResourceId::10819` hash `88fafe9d-aa8bc600-203712ff-08ec32e3` (black draw 4475) and PS `ResourceId::11822` hash `f225c298-...` (lit draw 6911) are the **same dot3-bump algorithm** (11822 just drops detailMap). Bytecode (get_shader, eventId 4475):
+
+```
+0: add  r0.xyz, v1.xyz, packedRegister3.xyz      ; r0 = v1 + c3   (c3 = TangentMinusDiffuse)
+1: add  r0.xyz, r0.xyz, packedRegister1.xyz      ; r0 = v1 + c3 + c1  (c1 = dot3LightDiffuse)
+2-4: unpack normalMap → tangent-space N
+5: dp3  r0.w, v4.xyz, r1.xyz                       ; N·L
+6: max  r1.x, r0.w, 0      7: min r0.w, r0.w, 0    ; split front/back
+8: mad  r0.xyz, -r1.x, packedRegister3.xyz, r0.xyz; -front·c3 + base
+9: mad_sat r0.xyz, r0.w, packedRegister4.xyz, r0.xyz ; +back·c4 (c4 = TangentMinusBack)
+10-13: × diffuseMap × detailMap → o0
+```
+
+The base ambient term is **`v1 + c1 + c3`**. Since by construction `c3 = tangent − diffuse` and `c1 = diffuse`, the sum is **`c1 + c3 = tangentColor`**. So the bump base term is exactly **`v1 + tangentColor`**.
+
+## 2. RenderDoc per-pixel proof (Capture30.rdc)
+
+- **BLACK draw eventId 4475** (PS 10819, px 1450,175), debug_pixel trace:
+  inputs `v1=(0,0,0)`, `v4`(normal)=`(0.665,0.701,-0.172)` valid. **After instr 0 `r0` stayed `[0,0,0]` and after instr 1 still `[0,0,0]`** ⇒ `c3≈0` AND `c1≈0` in the bound b0 (clean zero, not epsilon). diffuseMap sample (instr10) = (0.97,0.91,0.80), detailMap (instr12) = (0.83,0.80,0.73) — **textures are fine**; o0=0 purely because the lighting term is 0. Final `o0 = (0,0,0,...)`.
+- **LIT draw eventId 6911** (PS 11822, px 1545,214): same `v1=(0,0,0)`, but **instr 1 `r0 = v1+c3+c1 = (-0.437,-0.406,-0.339)` NONZERO** ⇒ `c1+c3 = tangentColor ≠ 0`. Final `o0=(0.352,0.287,0.206)` — lit.
+- Wall meshes **4597 / 4621** (same PS 10819, scene RT `ResourceId::323`) also o0=0 — the whole bump-building block is black. Pipeline state of 4451/4475/4499/4523/4597/4621 is identical: VS 10820 / PS 10819 / depth `ResourceId::46` / RT `ResourceId::323`.
+
+So: same algorithm, both v1=0, the **only** difference is the b0 cbuffer's c1/c3 (= tangentColor). Black ⇒ tangentColor=0; lit ⇒ tangentColor≠0.
+
+## 3. Why b0 differs per draw — it is NOT a missed write (source + runtime logs)
+
+The b0 `SwgVertexConstants` is `bindPoint 0, byteSize 400` (get_bindings 4475) — the `isLegacyB0` path (`layout.TotalSize == kShadowBytes == 400`, `Direct3d11_StaticShaderData.cpp:903-905`). It is a single shared Map(WRITE_DISCARD) buffer; `updatePS(0, staging, 400)` runs **unconditionally** at `Direct3d11_StaticShaderData.cpp:1427` for every such draw. So **no draw skips its b0 write** — RenderDoc resource-usage on a stable b0 id is moot (WRITE_DISCARD re-backs it each draw; there is no single resource to diff).
+
+The dot3 constants c0..c4 are written from the snapshot only inside `if (d3.valid)` (`apply():968-981`):
+```
+c1 (PSCR_dot3LightDiffuseColor=1)             ← d3.diffuseColor
+c3 (PSCR_dot3LightTangentMinusDiffuseColor=3) ← d3.tangentMinusDiffuseColor
+c4 (PSCR_dot3LightTangentMinusBackColor=4)    ← d3.tangentMinusBackColor
+```
+(register map: `Direct3d11_LegacyPSConstants.h:54-58`.)
+
+The SAME-SESSION runtime probe logs (`stage/p38b_apply.log`, `p38c_layout.log`, captured 2026-06-08 15:16 — the exact draw-time d3 values) prove:
+- **`d3valid=0` count = 0** across the whole frame — the snapshot is ALWAYS valid (the CONSULT-38 sticky-persistence fix at `Direct3d11_LightManager.cpp:98-107` works; the snapshot is never invalidated by empty `setLights({})` cell-boundary calls). **Axiom #2 confirmed: not a d3.valid failure.**
+- Distinct draw-time dot3 values (p38b):
+  - **LIT, 24683 draws:** `diffuse=(1.029,0.975,0.852) tangent=(0.592,0.569,0.514) tmd=(-0.437,-0.406,-0.339)` → c1+c3 = tangent = (0.592,...). (tmd here = (-0.437,..) matches the lit-6911 trace base sign/magnitude.)
+  - **BLACK, 5556 draws:** `tangent=(0.000,0.000,0.000)` — e.g. `diffuse=(1.000,1.000,1.000) tmd=(-1.000,-1.000,-1.000)` (4304), `diffuse=(0.244,0.244,0.244) tmd=(-0.244,...)` (520), `diffuse=(0.351,0.343,0.329) tmd=(-0.351,...)` (419). In every black case **c1 + c3 = tangent = (0,0,0) EXACTLY** (diffuse and tmd cancel).
+
+This is a **clean, structural zero, not a stale value**: c1 and c3 ARE written (d3.valid=1), to a sun whose `tangentColor==0`, so they sum to zero by construction.
+
+## 4. Math check (axiom verification)
+
+- Lit b0: `c1 ≈ (1.029,0.975,0.852)` — yes, the sun hemispheric diffuse set (≈ the (1.03,0.98,0.85) the brief cites). `c3 = tangent − diffuse = (0.592−1.029, ...) = (-0.437,...)` — internally consistent. `c1+c3 = tangent`.
+- Black b0: `c1=(1,1,1)`, `c3=(-1,-1,-1)` ⇒ sum **clean 0** (not epsilon — the trace r0 held bit-exact 0 through instr 0 and 1). The dp3 directional term (instr 5→9) then `mad_sat`s onto a zero base and saturates to 0 on this back/perp facing → o0=0.
+
+So the brief's "BLACK draw b0 c1/c3 = 0" is literally true at the GPU, and it is a **clean zero produced by writing a tangentColor-0 sun**, not by skipping the write and inheriting zero-init.
+
+## 5. Source attribution
+
+The responsible value is set in **`Direct3d11_LightManager::setLights`** (`Direct3d11_LightManager.cpp:198-218`):
+```
+VectorArgb const &tangent = psSlot->getScaledDiffuseTangentColor();   // :204
+...
+s_pixelDot3State.diffuseColor             = diffuse;                                 // :210  → c1
+s_pixelDot3State.tangentMinusDiffuseColor = (tangent - diffuse);                     // :212  → c3
+s_pixelDot3State.tangentColor             = tangent;                                 // :217
+```
+`c1 + c3 = diffuse + (tangent − diffuse) = tangent`. When the cell's selected `psSlot` sun is a light with **`getScaledDiffuseTangentColor() == 0`** (the full-white ambient-style directional the engine hands precalc/interior objects — diffuse=(1,1,1), tangent=0, dominant in the black set; also assorted furniture/glass/decal/prop shaders, see p38b breakdown), the bump base term is forced to zero.
+
+The per-draw divergence is therefore **draw-order/cell selection in `setLights`**: it re-runs per cell (the ShaderPrimitiveSorter emits a `setLights` per primitive batch), and `psSlot` is picked as the highest-specular `T_parallel` in *that* cell's list (`:140-162`). Cells whose active directional carries a real dot3 tangent color → lit bump; cells whose directional is the tangent-0 white-ambient light → black bump. The black-walls handoff's "precalc-vertex-lit BUILDINGS black / white-full-ambient" note (memory `project_d3d11_black_walls_full_ambient`) is the same root: those objects get the (1,1,1)/tangent-0 light, which lights a Gouraud VS fine but produces a zero dot3-bump base in the PS.
+
+### The fix is NOT in apply()/StateCache (b0 plumbing is correct)
+- `StaticShaderData::apply` already writes c0..c4 every draw with the valid snapshot; `updatePS(0)` is unconditional. No skipped-apply path to patch.
+- The real gap: when `psSlot`'s `tangentColor` is zero, the D3D11 bump PS has **no ambient/tangent floor**, so the base term collapses. D3D9 parity reference: check `Direct3d9_LightManager::applyLights_vertexShader_dot3` (cited at `apply():921`, :777-830) for what tangent/diffuse the D3D9 path feeds these same precalc objects — if D3D9 derives a non-zero tangent floor (or these objects don't take the dot3 path at all in D3D9), mirror that selection in `setLights` (`:198-218`). The lever is the **light-to-`psSlot` selection + `tangentColor` source**, not the cbuffer upload.
+
+---
+
+### Citations
+- Bytecode: get_shader eventId 4475 (PS 10819) / 6911 (PS 11822).
+- Per-pixel: debug_pixel trace 4475 (1450,175) o0=0, c1/c3=0; 6911 (1545,214) o0=(0.352,0.287,0.206), c1+c3≠0; summaries 4597/4451.
+- Bindings: get_bindings 4475 → b0 SwgVertexConstants 400B; get_pipeline_state 4451/4475/4499/4523/4597/4621 identical (VS10820/PS10819/RT323/Depth46).
+- Source: `Direct3d11_StaticShaderData.cpp:903-905` (isLegacyB0), `:968-981` (c0..c4 write under d3.valid), `:1427` (unconditional updatePS). `Direct3d11_LegacyPSConstants.h:54-58` (register map). `Direct3d11_LightManager.cpp:98-107` (sticky persistence), `:140-162` (psSlot selection), `:198-218` (tangentColor → c1/c3).
+- Runtime (same session): `stage/p38b_apply.log` — d3valid=0 count = 0; LIT 24683× tangent=(0.592,0.569,0.514); BLACK 5556× tangent=(0,0,0). `stage/p38_probe.log` — sun first appears sl#10, persists sticky.

@@ -1,0 +1,2554 @@
+OpenAI Codex v0.137.0
+--------
+workdir: D:\Code\swg-client-v2
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019eac8c-a781-7a43-9070-376fd3a25ba9
+--------
+user
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11 renderer
+port of Star Wars Galaxies. Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-42-which-state-lands-on-face.md
+
+Then read the cited source (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+
+Answer ONLY section "5 — A (CODEX, dataflow/order trace)" and the section-6 deliverable for your angle.
+The light COLORS are identical D3D9-vs-D3D11 (proven, §2) — do NOT chase a color/swap bug. The question is
+WHICH lighting STATE is active when her dot3 skinned-character FACE draws, and why D3D11 lands a blue state
+where D3D9 lands a warm one. Trace the ORDER of setLights vs the character draw and the per-object refresh.
+State the first source line where D3D11 diverges from D3D9 such that a blue state survives onto her face.
+Cite file:line. Give the minimal D3D9-parity fix + exact location that does NOT regress the CONSULT-38
+black-walls snapshot persistence or the 3-directional black-walls feed.
+
+codex
+I’ll use the repo instructions and the consult brief first, then trace only the requested source paths. Since the workspace is read-only here, I’ll produce the review answer from source rather than patching.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/README.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/research/CONSULT-42-which-state-lands-on-face.md' in D:\Code\swg-client-v2
+ succeeded in 737ms:
+# Session handoffs
+
+## Active handoffs
+
+| File | Topic | Updated |
+| --- | --- | --- |
+| [swg-blender-import.md](swg-blender-import.md) | SWG Blender IFF pipeline; M16 tre_project WIP; abyssin_m io compare | 2026-05-29 |
+| [phase-17-char-select.md](phase-17-char-select.md) | Phase 17 D3D11 char-select beachhead; GAP-2/3 execution order | 2026-05-29 |
+
+ succeeded in 771ms:
+# CONSULT-42 â€” D3D11 NPC face BLUE, D3D9 PINK, with IDENTICAL light colors. Which state lands on her face?
+
+Date 2026-06-09. Branch `koogie-msvc-cpp20-base` (D:\Code\swg-client-v2). Plugin: Direct3d11; ref: Direct3d9.
+You are one of 4 independent consultants. Read SOURCE; reach your OWN conclusion. The Â§4 candidates are
+to be confirmed/refuted, not assumed. RenderDoc + runtime dumps below are locked ground truth.
+
+## 1. SYMPTOM
+NPC (cantina) face renders bluish in D3D11; warm/pink (correct, matches her shoulders) in D3D9. Body
+is correct in both. Same NPC, same spot.
+
+## 2. WHAT IS ALREADY RULED OUT (by hardware/runtime data â€” do NOT revisit)
+- NOT alpha/translucency (fixed + verified, CONSULT-40).
+- NOT a Red<->Blue channel swap, NOT a light-COLOR bug. A runtime dump of the per-draw light snapshot
+  in BOTH renderers shows the interior cantina light colors are **byte-for-byte IDENTICAL**:
+    medical light: sun=(0.298,0.422,0.425) ambient=(0.202,0.355,0.413) fill0=(0.005,0.187,0.227)
+    cell fill:     sun=(0.244,0.244,0.244) ambient=(0.344,0.342,0.345) fill0=(0.106,0.159,0.220)
+  Both D3D9 (`Direct3d9_LightManager` selectLights dump) and D3D11 (`Direct3d11_StaticShaderData::apply`
+  per-dot3-draw dump) produce these same values. So the light DATA is shared and identical.
+- NOT the PS dot3 hemispheric c1/c3/c4 (CONSULT-41 Opus: PS add is ~+0.03 warm; blue is in VS `v1`).
+- NOT a register/slot swap (CONSULT-41 Cursor: all D3D9-parity).
+
+## 3. LOCKED GROUND TRUTH
+- Her face draw (RenderDoc Capture34, D3D11): VS=2208/PS=2224 (dot3 skinned char). PS input
+  **v1 (VS vertex lighting) = (0.524, 0.537, 0.707)** â€” blue-dominant. diffuse texel warm (0.97,0.94,0.94).
+  Output = texel x v1 = (0.506,0.502,0.660) blue.
+- Available lighting STATES this session (same in both renderers): warm terrain/exterior sun (~0.90,0.87,0.88,
+  R>B), the cyan medical light (0.298,0.422,0.425), and the gray-sun+blue-fill state (sun 0.244 gray,
+  fill0=(0.106,0.159,0.220) blue).
+- D3D9 face = PINK => its `v1` is warm. D3D11 face = BLUE => its `v1` is from a blue/cyan state.
+- So: **same light data, but a different lighting STATE is active when her face draws** â€” D3D9 warm, D3D11 blue.
+
+## 4. CANDIDATE MECHANISMS (confirm/refute; the light colors are NOT the bug)
+(a) **Snapshot stickiness** â€” CONSULT-38 made the D3D11 dot3 snapshot `s_pixelDot3State` PERSIST across
+    empty/sunless `setLights({})` calls (needed for black walls). A nearby BLUE interior light's snapshot
+    could stay "stuck" and be read by her face draw, where D3D9 refreshes lighting per-object.
+    Key D3D11: `Direct3d11_LightManager.cpp` setLights (~:71-236, the `if(psSlot)` persistence at
+    :84-90 dot3 + :207-235 parallel), getPixelDot3State; `Direct3d11_StaticShaderData::apply` reads d3.
+(b) **Selection cascade** â€” D3D11 selectLights cascade (black-walls fix, `Direct3d11_LightManager.cpp:100-175`)
+    picks the cyan medical light into psSlot/parallel for her cell where D3D9 `selectLights`
+    (`Direct3d9_LightManager.cpp:404-440`) picks the warm sun. (Same light list, different winner.)
+(c) **Neither** â€” her face's OWN cell lights are genuinely the blue-fill state in BOTH, and D3D9 differs
+    elsewhere: cell assignment, full-ambient (`Direct3d9_StaticShaderData.cpp:776,955` setFullAmbientOn â€”
+    NO D3D11 equivalent), or the VS vertex-light path (D3D11 HLSL `if(!dot3)` skip per CONSULT-41 Sonnet).
+
+## 5. YOUR ANGLE (answer ONLY your section)
+### A â€” CODEX (dataflow/order trace)
+Trace the ORDER of setLights vs the character/skin DRAW in D3D11 vs D3D9. Does the snapshot her face reads
+come from HER object's lights or a PRIOR object's (sticky)? State the first line where D3D11's per-object
+lighting refresh diverges from D3D9's, such that a blue state survives onto her face.
+### B â€” CURSOR (sticky-snapshot detail)
+Pin the exact lines where `s_pixelDot3State` (and the parallel/ambient it feeds c16/c20-23) PERSISTS vs
+UPDATES across an empty/sunless `setLights`. Can a prior blue interior light's parallelDiffuseColor/ambient
+remain and be read by her face draw? Contrast with D3D9's per-object `selectLights` rebuild
+(`Direct3d9_LightManager.cpp:380-477` clears ms_currentLights each call). Cite file:line.
+### C â€” SONNET (lateral/refute)
+Try to REFUTE stickiness. Enumerate: (a) sticky, (b) cascade, (c) her legit cell-light is blue + D3D9
+differs via full-ambient/cell-assignment/VS-path. Which survives the Â§2/Â§3 facts? Is there a 4th mechanism?
+### D â€” OPUS (numeric)
+From v1=(0.524,0.537,0.707) and the three candidate states (warm sun ~0.90,0.87,0.88; cyan medical
+0.298,0.422,0.425; gray-sun+blue-fill 0.244 / fill 0.106,0.159,0.220), back-solve WHICH state (and which
+combo of ambient+parallel-fill+dot3-sun) produces v1. Identify her face's actual active state, and whether
+it is a state that should NOT be on her face (=> sticky/wrong-selection) vs her legit cell light.
+
+## 6. DELIVERABLE (per angle)
+(1) finding w/ file:line; (2) confirm/refute each Â§4 candidate; (3) minimal D3D9-parity fix + exact location
+(must NOT regress the CONSULT-38 black-walls stickiness or the 3-directional black-walls feed); (4) the one
+decisive measurement (e.g. log the active snapshot AT the skinned-character draw specifically in both).
+
+codex
+The brief narrows this to state lifetime and draw order, not light values. I’m now reading the active handoffs only to respect the repo startup context, then I’ll inspect the four source files with line numbers.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/phase-17-char-select.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }'` rejected: blocked by policy
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }'` rejected: blocked by policy
+2026-06-09T13:23:51.644914Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }'` rejected: blocked by policy
+2026-06-09T13:23:51.644952Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; '"'{0,5}: {1}' -f "'$i,$_ }'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/swg-blender-import.md' in D:\Code\swg-client-v2
+ succeeded in 670ms:
+# Handoff: SWG Blender IFF pipeline
+
+**Updated:** 2026-05-29 (M16 tre_project ready to commit; roundtrip smoke green)
+**Branch:** koogie-msvc-cpp20-base (ahead 63, **swg_blender WIP staged for commit**)
+**Worktree:** D:\Code\swg-client-v2
+**Status:** Phases 0â€“15 + Phase 7 done Â· Creature **io-parity compare validated** (abyssin_m) Â· **M16 tre_project roundtrip smoke PASS** (creature + building Blender) Â· MCP **blender-mcp 1.5.6** / Blender **5.1.2**
+
+---
+
+## Pick up here (restart)
+
+1. Read AGENTS.md â€” **never use Cursor Write on `tools/swg_blender/**/*.py` or `.planning/handoff/*.md`** (UTF-16 corruption on Windows).
+2. Read this file; if resuming D3D11 char-select work read [phase-17-char-select.md](phase-17-char-select.md).
+3. `cd tools/swg_blender; python -m pytest tests/ -q` â€” last run **191 passed, 8 skipped** (~165s).
+4. **Roundtrip smoke (host, 2026-05-29):**
+   - `python scripts/run_creature_roundtrip_check.py` â€” 12/12 LOD `.mgn` OK
+   - `python scripts/run_building_roundtrip_check.py` â€” 41/41 `.msh` Python + Blender OK (~45s)
+5. **M16 modules** (commit as one slice):
+   - `swg_pipeline/creature_graph.py`, `building_graph.py`, `tre_project*.py` â€” workspace materialize + export
+   - Addon **Creature project** / **Building project** panels + operators in `swg_blender_addon/`
+   - `load_skeletal_mesh_io_parity()` + compare scripts under `tools/swg_blender/scripts/`
+   - Spec: `docs/research/tre-project-roundtrip-SPEC.md`
+5. **Creature compare** (visual parity validated):
+   - Workspace: `C:\Users\kenne\AppData\Local\Temp\swg_creature_compare_oubiscla`
+   - Script: `tools/swg_blender/scripts/compare_creature_io_scene_bpy.py`
+   - io_scene (patched): `D:\Code\io_scene_swg_msh\io_scene_swg\`
+   - User confirmed **matching** after NIDX fix + Y-offset + zero blend shapes
+6. **MCP:** Cursor mcp.json uses `cmd /c uvx blender-mcp` + DISABLE_TELEMETRY. PyPI **1.5.6**. Chunk heavy imports â€” do not one-shot full runpy over MCP.
+
+---
+
+## Session 2026-05-29 â€” M16 TRE project (WIP, uncommitted)
+
+### Goal
+
+Vertical slice: extract creature/building DAG from TRE â†’ Blender workspace (`swg_tre_project.json`) â†’ edit â†’ export back â†’ optional pack.
+
+### New modules (untracked / modified)
+
+| Area | Files |
+| --- | --- |
+| Creature graph | `swg_pipeline/creature_graph.py`, `tre_project.py`, `tre_project_bpy.py` |
+| Building graph | `swg_pipeline/building_graph.py`, `tre_project_building.py`, `tre_project_bpy_building.py` |
+| Floor/portal import | `swg_blender/import_floor.py`, `import_portal.py`, `export_floor.py`, `export_portal.py` |
+| POB cells | `swg_scene/pob_cells.py` |
+| Addon UI | `operators.py` â€” `SWG_OT_import/export_creature_project`, building project ops |
+| Tests | `test_creature_graph.py`, `test_building_graph.py`, `test_tre_project.py`, `test_skeletal_io_scene_parity.py` |
+| Smoke scripts | `scripts/run_creature_roundtrip_check.py`, `run_building_roundtrip_check.py`, `run_creature_client_smoke.py` |
+
+### CLI (from SKILL.md)
+
+```powershell
+python -m swg_pipeline.tre_project import-creature --workspace W --sat appearance/abyssin_m.sat [--tre X.tre] [--blender]
+python -m swg_pipeline.tre_project export-creature --workspace W [--blender] [--rebuild-rsp]
+python -m swg_pipeline.tre_project import-building --workspace W --pob appearance/echo_base_pob.pob [--blender]
+```
+
+Golden refs: `appearance/abyssin_m.sat` (creature), `appearance/echo_base_pob.pob` (building).
+
+### Next for M16
+
+1. ~~Commit once roundtrip smoke passes~~ **done** (2026-05-29).
+2. **M16 client smoke** â€” pack creature TRE, load in client (Blender geometry parity already validated).
+3. Decide addon **creature import** UX: SAT+rotation vs io-parity MGN path (`docs/research/sat-lmg-ux-comparison.md`).
+4. **`rebuild_appearance=True` hang** on some building `.msh` (e.g. `echo_base_pob_r11_r11`) â€” building Blender export uses `rebuild_appearance=False` to match parity tests; root cause in appearance rebuild still open.
+
+---
+
+## Session 2026-05-29 â€” abyssin_m compare (swg_blender vs io_scene_swg_msh)
+
+### Default compare behavior
+
+| Flag | Meaning |
+| --- | --- |
+| *(default)* | **io-parity MGN** â€” 3 LOD0 files (`abyssin_m_l0`, `body_l0`, `arms_l0`) |
+| `--use-sat-import` | Old full SAT + armature path |
+| `--torso-only` | Only `abyssin_m_body_l0.mgn` |
+| `--offset 2.5` | **Y-axis** separation (swg at -Y, io at +Y) |
+
+Background (stable, no MCP):
+
+```powershell
+blender -b --python D:\Code\swg-client-v2\tools\swg_blender\scripts\compare_creature_io_scene_bpy.py -- --workspace C:\Users\kenne\AppData\Local\Temp\swg_creature_compare_oubiscla --io-scene-dir D:\Code\io_scene_swg_msh\io_scene_swg --offset 2.5
+```
+
+### Root causes fixed
+
+| Symptom | Fix |
+| --- | --- |
+| Opposite facing | Offset on **Y** not X |
+| io "fat" belly | `_zero_blend_shape_keys()` on io side |
+| Geometry mismatch | Default **io-parity** loader (not SAT) |
+| Splotchy swg shading | **NIDX** in `load_skeletal_mesh_io_parity()` |
+| MCP disconnect | Chunked MCP or `blender -b` |
+
+### Verification
+
+Per-mesh evaluated vertex delta = **0.0** for `abyssin_m_l0`, `abyssin_m_body_l0`, `abyssin_m_arms_l0`.
+
+### Code touched
+
+| File | Change |
+| --- | --- |
+| `scripts/compare_creature_io_scene_bpy.py` | io-parity default, Y offset, neutral mats, zero blends |
+| `swg_scene/mesh_skeletal.py` | `load_skeletal_mesh_io_parity()`, IoParityFace + NIDX |
+
+---
+
+## Blender MCP stability
+
+| Item | Detail |
+| --- | --- |
+| **PyPI** | blender-mcp **1.5.6** |
+| **Cursor config** | `C:\Users\kenne\.cursor\mcp.json` â€” `cmd /c uvx blender-mcp`, DISABLE_TELEMETRY=true |
+| **Blender** | **5.1.2** |
+| **Rule** | Only one MCP instance; chunk heavy imports |
+
+---
+
+## Pipeline status
+
+| Phase | Status |
+| --- | --- |
+| 0â€“15 | Done |
+| 7 (client gate) | Done |
+| M16 tre_project | **Roundtrip smoke PASS** â€” client smoke next |
+
+---
+
+## Test status
+
+Run: `cd tools/swg_blender; python -m pytest tests/ -q`
+
+**191 passed, 8 skipped** (2026-05-29). Skips: pack tests without TreeFileBuilder, swg-main retail paths without SWG_MAIN.
+
+---
+
+## Gotchas
+
+See AGENTS.md (UTF-16, VTXA tag, use_auto_smooth removed in Blender 4+, import rotation on **object** not vertices).
+
+ succeeded in 688ms:
+# Handoff: Phase 17 â€” char-select D3D11 beachhead
+
+**Updated:** 2026-05-30 (17-05 T4â€“5 DONE â†’ CHAR-01/02/03 = PASS; Phase 17 char-select verification COMPLETE)
+**Branch:** koogie-msvc-cpp20-base
+**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` â€” Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree with `& $env:MSBUILD <worktree>\src\build\win32\swg.sln /t:Direct3d11 /p:Configuration=Debug /p:Platform=Win32 /m /nodeReuse:false`. The worktree `stage` is a **junction â†’ main stage**, so the postbuild copy auto-deploys `gl11_d.dll` to `D:\Code\swg-client-v2\stage` (no manual copy; see memory `project_d3d11_worktree_stage_junction`).
+**Status:** 17-01..17-04 done Â· 17-05 T1â€“3 PARKED Â· 17-06a/06b done Â· 17-07/GAP-3 DONE (9/9 binds) Â· GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE `e1db7bf65` Â· **GAP-6 (bump sleeves/hands) FIXED+COMMITTED `a0d5ac80f` (pushed to origin)** â†’ char-select asset-PS renders LIT+textured for ALL parts (face/skin, tunic, pants, shoes, AND bump sleeves/hands). Â· 17-05 T4â€“5 (A/B + verdict) still pending.
+
+> ## â–¶ PHASE 17 char-select VERIFICATION COMPLETE (2026-05-30) â€” CHAR-01/02/03 = PASS
+>
+> **17-05 T4â€“5 DONE** (commit `bb4b13a00`). Matched-pair A/B captured on Kenny's host: D3D9
+> `screenShot0029` (rasterMajor=5 Release stack) vs D3D11 `screenShot0030` (rasterMajor=11) â†’
+> near-identical lit+textured char-select; only residual is a minor brightness/tone delta tracked
+> under **GAMMA-01 (Phase 19)**, out of CHAR scope. POST-gap metric set: `asset-PS bound=`**9**,
+> `COMPATIBLE`**9** / `INCOMPATIBLE`**0**, `id=342`=0, `PSRC recompile FAILED`=0 (asset-PS lane
+> delivering â€” the primary char-select visual driver). Verifier-produced `17-VERIFICATION.md`
+> supersedes the synthesized stand-in (`a20e828d8`); 4 evidence PNGs committed (D3D9 + preGap +
+> postGap + canonical alias); evidence/README.md Â§6 provenance corrected to the GAP-6 build.
+>
+> **GAP-1 closed.** No remaining char-select work. Possible next steps: push `bb4b13a00` to origin;
+> run `/gsd:verify-work 17` for the formal pass; close/audit the phase; or advance to the next
+> ROADMAP phase. NOTE: the 17-05-PLAN Task-5 acceptance criteria literally greps
+> `authored_by: claude-opus-4.7` â€” the doc honestly records `claude-opus-4.8` (the real author), so
+> that one stale literal-string gate will mismatch; the field's provenance intent is satisfied.
+>
+> _(Superseded resume blocks below â€” kept for the root-cause derivation history.)_
+>
+> ### Earlier resume: 17-05 Tasks 4â€“5 (now DONE)
+> capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack â€” see "D3D9 capture
+> workaround" below) + author `17-VERIFICATION.md`. Expect CHAR-01/02/03 PASS on pipeline/lighting and ALL
+> body parts now (bump parts included). Append the POST-gap build provenance (HEAD `a0d5ac80f` + gl11_d.dll
+> mtime) to evidence/README.md Â§6 before the A/B.
+>
+> ### How GAP-6 was actually fixed (the multi-stream theory was WRONG)
+> The purple/green bump arms were NOT a tangent/NaN problem. Full detail: memory
+> `project_d3d11_multitexture_srv_slot_swap`. Two parts:
+> 1. **Tangent**: the per-key VS texcoord-set variant (Fix A â€” `Direct3d11_VertexShaderData`/`VertexDeclarationMap`
+>    per-`textureCoordinateSetKey` recompile) gave the bump VS its real DOT3 tangent at TEXCOORD1. This did
+>    NOT require activating multi-stream â€” single-stream per-key remap sufficed, so the
+>    `SoftwareBlendSkeletalShaderPrimitive` multi-stream-activation rabbit hole was unnecessary.
+> 2. **The real culprit â€” TEXTURE-SLOT SWAP**: fxc assigns SM4 texture registers by first-USE order when
+>    splitting legacy `sampler2D`. specmap_bump samples `normalMap` before `diffuseMap` â†’ normalMap=t0,
+>    diffuseMap=t1, opposite the engine's D3D9 stage-index SRV bind â†’ the blue normal map was sampled as
+>    albedo. Fixed by a reflection-driven stageâ†’SRV-slot remap (`Direct3d11_PixelShaderProgramData::
+>    getSrvSlotForStage`, used in `Direct3d11_StaticShaderData::apply`). Also added the VS material c11â€“c15
+>    feed (`Direct3d11_StateCache::setVertexMaterialColors`, mirrors D3D9 `VSCR_material`). The VS-NaN that
+>    the old GAP-6 handoff (`gap6-bump-arms-vs-lighting-nan.md`) chased was already fixed by GAP-5 + the
+>    material feed â€” RenderDoc "Debug this Vertex" confirmed finite COLOR0/COLOR1.
+> The GAP-6 multi-stream infra (caps flip, VertexBufferDescriptorMap changes) committed in `e1db7bf65`
+> remains DORMANT/unused â€” harmless; revisit only if a true multi-stream asset ever needs it.
+>
+> _(Superseded GAP-4 design block below â€” kept for the root-cause derivation; GAP-4 is now DONE+committed.)_
+>
+> **17-07 / GAP-3 is DONE** (commits `f9e5ac569`â†’`d8cc1ca99`, SUMMARY `8639c5458`). The asset-PS bind
+> rate went 0/9 â†’ **9/9** (`path=rewritten`) via VS-signature RECONSTRUCTION (axis-b reorder was wrong â€”
+> the mismatch was a register-BASE offset: VS reserves o0=SV_Position, asset PS starts v0; reorder can't
+> add the +1 base, so we now rebuild the PS input sig to mirror the VS exactly + wrap the asset main).
+> Enabling the lane revealed **GAP-4: char-select body renders BLACK** â€” the asset PS reads zero lighting
+> constants.
+>
+> **GAP-4 fix is fully designed + dual-AI converged + census-gate UNBLOCKED** (codex+cursor:
+> `.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile*`; full design in memory
+> `project_17_07_ps_register_base_offset`). Root cause: asset PS reads `SwgVertexConstants`@b0 but the
+> light constants (c0-c4) are pushed to b0 by NOBODY (D3D11 LightManager only fills `LightingCB`@b3);
+> `StaticShaderData::apply` zero-inits b0 and clobbers it; engine userConstants go to b2. The c-index map
+> is IN-REPO at `Direct3d9_PixelShaderConstantRegisters.h` (`PSCR_dot3LightDirection=c0 ... userConstant=c8`),
+> matching the reflected b0 offsets â€” **no TRE .inc extraction needed.**
+>
+> **GAP-4 implementation (the converged plan):** a persistent D3D11 b0 shadow[400] fed by 3 producers:
+> (A) port `Direct3d11_LightManager` to push `pixelDot3Data` (5 float4s) â†’ shadow@c0 (from
+> `Direct3d9_LightManager.cpp:601`/~592-625; specPower packs into `dot3LightDirection.w`); (B)
+> `StaticShaderData::apply` RMW from the shared shadow (STOP the `staging(400,0)` zero-init) + patch
+> textureFactor/materialSpecularColor by reflected offset; (C) `setPixelShaderUserConstants_impl` â†’
+> shadow@`(PSCR_userConstant+i)*16` (offset 128+, NOT c0); upload merged shadow via `updatePS(0)`; keep
+> b2/fallback untouched. Instrument b0 c0.xyz/c1.rgb/c7/c8 at flush (pass = c0 nonzero + lit character).
+>
+> **Also still PENDING:** D-06 `rasterMajor=5` re-boot (gl11-only change â†’ D3D9 byte-for-byte; needed for
+> 17-05 Task 4's D3D9 re-capture). 17-05 Tasks 4â€“5 (POST-gap A/B + 17-VERIFICATION.md) best run AFTER
+> GAP-4 so they capture a LIT character, not the black interim â†’ CHAR-01/02/03 verdict.
+>
+> `gl11_d.dll` currently = HEAD `d8cc1ca99` (5/29 17:23, GAP-3). `SwgClient_d.exe` (5/28) unchanged/compatible.
+
+---
+
+_Historical (pre-execution 17-07 plan notes â€” SUPERSEDED by the GAP-4 resume block above; 17-07 is done):_
+
+> **RESUME HERE â†’ execute 17-07, then 17-05 Tasks 4â€“5.** 17-07 is the big one: HLSL parameter-list
+> parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
+> pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring
+> (native > rewritten > fallback) + `asset-PS bound=` log. Touches PSData.h + VertexShaderData.h â†’
+> STAGE-1 MUST rebuild ALL plugin .vcxprojs + relink SwgClient_d.exe (ABI cascade trap). Bump
+> D3D11_REWRITE_VERSION 21â†’22 at BOTH sites (PixelShaderProgramData.cpp:153 + :303). Do the built-in
+> COLOR0/TEXCOORD spike FIRST (de-risk the parser) before the full impl. After 17-07's combined build,
+> APPEND the "POST-gap build provenance" line (HEAD SHA + gl11_d.dll mtime) to evidence/README.md Â§6,
+> then run 17-05 Task 4 (POST-gap capture) + Task 5 (author real 17-VERIFICATION.md).
+
+> **Execution note (this session):** running inline/sequential (Kenny-in-the-loop), not parallel
+> worktrees â€” the executor cannot boot the client (no `.tre`), every capture is a host checkpoint.
+> Wave-only fallback ordering is in effect (orchestrator does not resolve named partial deps).
+
+## PRE-gap baseline (recorded for Task 5's PRE/POST table)
+
+Host boot 2026-05-29 12:55, `stage/d3d11-debug.log` (32,594 lines), HEAD `9f5db9c3f`:
+`id=342`=0 Â· `id=343`=27 Â· `PSRC recompile FAILED`=0 Â· `wroteDiffuse=1`=0 Â· `wroteEmissive=1`=0 Â·
+`wroteSpecular=1`=6 Â· `asset-PS bound=`=0 Â· `fallback-PS bound=`=0 Â· `Plan 17-07 COMPATIBLE/INCOMPATIBLE`=0/0 Â·
+native `Plan 17-04 Task 1 INCOMPATIBLE`=27 (real PRE fallback driver). PRE state: GAP-2 open (0
+diffuse/emissive writes), GAP-3 open (27 incompatible pairs, 0 asset-PS binds). PNGs at 1920Ã—1080:
+`evidence/char_default_d3d9_0003.png` + `evidence/char_default_d3d11_0003_preGap.png`.
+
+## D3D9 capture workaround (needed again for Task 4's D-06 re-boot)
+
+Current Debug binaries CANNOT boot D3D9 char-select (post-17-01 `SwgClient_d.exe` ABI-cascades with
+`gl05_d.dll` â€” parked Phase-17.X gl05 regression). **Capture D3D9 via the pre-17-01 Release stack:**
+`stage/SwgClient_r.exe` + `gl05_r.dll` (both 5/27). Release exe reads `stage/client.cfg`, which is
+edited (reversible) to `rasterMajor=5` + 1920Ã—1080 â€” **leave it** for Task 4's D3D9 re-boot; revert at
+phase close. Use the in-client **F12** key (back-buffer dump to `stage/screenshots/`), not the OS snip
+tool (fights fullscreen). jpgâ†’png transcode for canonical naming.
+
+---
+
+## Pick up here
+
+1. Read `.planning/STATE.md` and `.planning/phases/17-psrc-census-char-select-beachhead/17-VERIFICATION.md`.
+2. Execution order after 17-05 Task 3 (Round-5 review item 2 â€” 17-07 MUST build LAST; `depends_on` enforces 17-06b -> 17-07):
+   - **17-06a** (Wave 6, human checkpoint) â€” extend cbuffer discovery dump in `Direct3d11_StaticShaderData.cpp` (re-reflect via D3DReflect is MANDATORY â€” cached layout has no type info)
+   - **17-06b** (Wave 7, autonomous, `depends_on: 17-06a`) â€” `writeVarFloat4AtOffset` + diffuse/emissive writes from 06a evidence (evidence-backed offset ONLY; folklore-slot writes forbidden â€” take Case-C DEFERRED instead)
+   - **17-07** (Wave 7, human checkpoint, `depends_on: 17-04 + 17-05-task3 + 17-06b`) â€” PS parameter-list rewrite + StateCache bind path + per-VS cache + `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; touches PSData.{cpp,h} + StateCache.cpp + VertexShaderData.{h,cpp}; bumps `D3D11_REWRITE_VERSION` 21->22 (live is already 21); STAGE-1 all-plugin rebuild runs LAST so the post-gap gl11_d.dll contains BOTH 17-06b and 17-07 (GAP-3, **primary visual driver**)
+   - **17-05 Tasks 4â€“5** â€” POST-gap boot capture (hard-gated on the recorded 17-07 commit SHA + gl11_d.dll mtime in evidence/README.md) + CHAR verdict authoring
+3. Rebuild **all plugin vcxprojs** after any `Direct3d11_*.h` touch (stale gl11_d.dll trap).
+4. **Orchestrator contract for the `17-05-task3` named partial dependency (Round-5 review item 8):** 17-06a/06b/07 declare `depends_on` including `17-05-task3`, which is satisfied by Plan 17-05's Task-3 PRE-gap commit (the `## TASK 3 HANDOFF â€” PARK POINT` block, literal `17-05-task3`), NOT by 17-05 reaching its final task. If the orchestrator cannot resolve a named partial dependency, fall back to WAVE-ONLY ordering: Wave 5 (17-05 PRE-gap commit) -> Wave 6 (17-06a) -> Wave 7 (17-06b then 17-07) -> resume 17-05 Tasks 4â€“5. Either way 17-07 builds last in Wave 7.
+
+---
+
+## Gap inventory (char-select)
+
+| Gap | Plan | Delivers |
+| --- | --- | --- |
+| GAP-1 | 17-05 | Screenshot A/B evidence (D3D9 vs D3D11) |
+| GAP-2 | 17-06a/06b | Cbuffer diffuse/emissive **instrumentation** (`wroteDiffuse=1`) â€” **not** primary char-select visuals |
+| GAP-3 | 17-07 | Asset PS bind rate + `asset-PS bound=` log â€” **primary char-select visual driver** |
+
+Char-select PSes consume `textureFactor.rgb` + `COLOR0`, not cbuffer material colors (see `evidence/plan-17-04x-psrc-source-dump.txt`).
+
+---
+
+## Planning changes (uncommitted)
+
+| Change | Detail |
+| --- | --- |
+| Deleted | `17-06-PLAN.md` (monolithic) |
+| Added | `17-06a-PLAN.md` (discovery dump), `17-06b-PLAN.md` (offset writes) |
+| Rewritten | `17-07-PLAN.md` â€” parameter-list parser primary; touches StateCache + PSData.h + VertexShaderData.{h,cpp}; real compile+reflect Task-0 spike; `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; `D3D11_REWRITE_VERSION` 21->22 |
+| Updated | `17-05-PLAN.md` (token + build-provenance + orchestrator-contract), `17-06a` (re-reflect mandatory), `17-06b` (evidence-backed-offset-only), `17-RESEARCH.md`/`17-PATTERNS.md`/`17-VERIFICATION.md` (REWRITE_VERSION live=21, next=22) |
+
+Execute via GSD: `/gsd-execute-phase 17` or individual plan files.
+
+---
+
+## Boot gate
+
+Both `rasterMajor=5` and `rasterMajor=11` must boot to char-select. D3D9 path byte-for-byte unchanged.
+
+codex
+The shell policy rejected my first line-number formatting command, so I’m switching to simpler read/search commands. I need exact `file:line` citations, so I’ll gather line numbers with `rg -n` and narrow reads.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "setLights|selectLights|getPixelDot3State|s_pixelDot3State|parallel|ambient|ms_currentLights|draw|StaticShaderData::apply|setVertex|setPixel|Lighting" src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "setLights|selectLights|getPixelDot3State|s_pixelDot3State|parallel|ambient|ms_currentLights|draw|StaticShaderData::apply|setVertex|setPixel|Lighting" src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "getPixelDot3State|setLights|selectLights|LightManager|StaticShaderData::apply|dot3|Lighting|set.*Shader|commit|draw|Draw" src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "getPixelDot3State|setLights|selectLights|LightManager|dot3|Lighting|set.*Shader|commit|draw|Draw|apply" src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp' in D:\Code\swg-client-v2
+ succeeded in 746ms:
+42:bool                                        Direct3d9_LightManager::ms_setLightsOncePerFrame;
+51:Direct3d9_LightManager::SelectedLights      Direct3d9_LightManager::ms_currentLights;
+90:	if (ambient != rhs.ambient)
+95:			if (parallelSpecular[i] != rhs.parallelSpecular[i])
+101:			if (parallel[i] != rhs.parallel[i])
+125:	ambient = rhs.ambient;
+129:			parallelSpecular[i] = rhs.parallelSpecular[i];
+134:			parallel[i] = rhs.parallel[i];
+173:	DebugFlags::registerFlag(ms_setLightsOncePerFrame,   "Direct3d9", "setLightsOncePerFrame");
+201:		case Light::T_parallel:
+273:		case Light::T_ambient:
+312:void Direct3d9_LightManager::setLights(const LightList &lightList)
+368:void Direct3d9_LightManager::selectLights()
+374:		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::selectLights");
+377:		ms_currentLights.obeysLightScale = ms_obeysLightScale;
+380:				ms_currentLights.parallelSpecular[i] = NULL;
+384:				ms_currentLights.parallel[i] = NULL;
+388:				ms_currentLights.pointSpecular[i] = NULL;
+392:				ms_currentLights.point[i] = NULL;
+398:			ms_currentLights.ambient.r = 1.0f;
+399:			ms_currentLights.ambient.g = 1.0f;
+400:			ms_currentLights.ambient.b = 1.0f;
+401:			ms_currentLights.ambient.a = 1.0f;
+406:			ms_currentLights.ambient = ms_fullAmbient;
+414:					case Light::T_ambient:
+416:						// collapse all ambient lights into a single value
+418:						ms_currentLights.ambient.r += diffuseColor.r;
+419:						ms_currentLights.ambient.g += diffuseColor.g;
+420:						ms_currentLights.ambient.b += diffuseColor.b;
+425:					case Light::T_parallel:
+430:								if (!ms_currentLights.parallelSpecular[i] || (light->*getPossiblyScaledSpecularIntensity)() > (ms_currentLights.parallelSpecular[i]->*getPossiblyScaledSpecularIntensity)())
+431:									swap(ms_currentLights.parallelSpecular[i], light);
+437:								if (!ms_currentLights.parallel[i] || (light->*getPossiblyScaledDiffuseIntensity)() > (ms_currentLights.parallel[i]->*getPossiblyScaledDiffuseIntensity)())
+438:									swap(ms_currentLights.parallel[i], light);
+451:								if (!ms_currentLights.pointSpecular[i] || (light->*getPossiblyScaledSpecularIntensity)() > (ms_currentLights.pointSpecular[i]->*getPossiblyScaledSpecularIntensity)())
+452:									swap(ms_currentLights.pointSpecular[i], light);
+460:								if (!ms_currentLights.point[i] || (light->*getPossiblyScaledDiffuseIntensity)() > (ms_currentLights.point[i]->*getPossiblyScaledDiffuseIntensity)())
+461:									swap(ms_currentLights.point[i], light);
+482:		if (ms_setLightsOncePerFrame)
+492:	// D3D11 blueface-draw probe so the SAME cantina cell's light colors can be compared D3D9 vs D3D11.
+494:	// genuinely-blue (D3D9 also blue). Value-deduped on sun+ambient; logs to stage/blueface-d9.txt.
+499:		{ auto const &c = ms_currentLights.ambient; ar=c.r; ag=c.g; ab=c.b; }
+500:		if (const Light *ps = ms_currentLights.parallelSpecular[0]) { auto const &c = ps->getScaledDiffuseColor(); sr=c.r; sg=c.g; sb=c.b;
+503:		if (const Light *p0 = ms_currentLights.parallel[0]) { auto const &c = p0->getScaledDiffuseColor(); f0r=c.r; f0g=c.g; f0b=c.b; }
+504:		if (const Light *p1 = ms_currentLights.parallel[1]) { auto const &c = p1->getScaledDiffuseColor(); f1r=c.r; f1g=c.g; f1b=c.b; }
+516:				fprintf(fp,"#%03d sun=(%.3f,%.3f,%.3f) ambient=(%.3f,%.3f,%.3f) fill0=(%.3f,%.3f,%.3f) "
+535:					ms_currentLights != ms_lastLights)
+550:				ms_currentLights != ms_lastLights)
+556:	ms_lastLights = ms_currentLights;
+571:		lightData.ambient = ms_currentLights.ambient;
+577:			const Light *light = ms_currentLights.parallelSpecular[i];
+580:				ParallelSpecularData &parallelSpecular = lightData.parallelSpecular[i];
+583:				parallelSpecular.direction.x = -direction.x;
+584:				parallelSpecular.direction.y = -direction.y;
+585:				parallelSpecular.direction.z = -direction.z;
+588:				parallelSpecular.diffuseColor.r = diffuseColor.r;
+589:				parallelSpecular.diffuseColor.g = diffuseColor.g;
+590:				parallelSpecular.diffuseColor.b = diffuseColor.b;
+591:				parallelSpecular.diffuseColor.a = diffuseColor.a;
+594:				parallelSpecular.specularColor.r = specularColor.r;
+595:				parallelSpecular.specularColor.g = specularColor.g;
+596:				parallelSpecular.specularColor.b = specularColor.b;
+597:				parallelSpecular.specularColor.a = specularColor.a;
+616:					lightData.dot3.diffuseColor     = parallelSpecular.diffuseColor;
+618:					lightData.dot3.specularColor = parallelSpecular.specularColor;
+623:					HemisphericLightData &extendedParallelSpecular = extendedLightData.parallelSpecular[i];
+636:					Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5);
+638:					//Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &lightData.dot3.localDirection, 3);
+639:					//Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightTangentMinusDiffuseColor, &extendedParallelSpecular.tangentMinusDiffuseColor, 1);
+640:					//Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightTangentMinusBackColor, &extendedParallelSpecular.tangentMinusBackColor, 1);
+659:					Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5);
+668:			const Light *light = ms_currentLights.parallel[i];
+671:				ParallelData &parallel = lightData.parallel[i];
+674:				parallel.direction.x = -direction.x;
+675:				parallel.direction.y = -direction.y;
+676:				parallel.direction.z = -direction.z;
+679:				parallel.diffuseColor.r = diffuseColor.r;
+680:				parallel.diffuseColor.g = diffuseColor.g;
+681:				parallel.diffuseColor.b = diffuseColor.b;
+682:				parallel.diffuseColor.a = diffuseColor.a;
+690:			const Light *light = ms_currentLights.pointSpecular[i];
+728:			const Light *light = ms_currentLights.point[i];
+758:	Direct3d9_StateCache::setVertexShaderConstants(VSCR_lightData, &lightData, sizeof(LightData) / (4 * sizeof(float)));
+760:	Direct3d9_StateCache::setVertexShaderConstants(VCSR_extendedLightData, &extendedLightData, sizeof(ExtendedLightData) / (4 * sizeof(float)));
+805:	const Light *light = ms_currentLights.parallelSpecular[0];
+852:			HemisphericLightData &extendedParallelSpecular = extendedLightData.parallelSpecular[0];
+865:			Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5); // last field ignored.
+870:			Direct3d9_StateCache::setVertexShaderConstants(vertexDot3Register, &dot3Data, 4);
+872:			const int VSCR_tangentMinusDiffuseColor = VCSR_extendedLightData + FIELD_OFFSET(ExtendedLightData, parallelSpecular[0].tangentMinusDiffuseColor)/16;
+873:			Direct3d9_StateCache::setVertexShaderConstants(VSCR_tangentMinusDiffuseColor, &extendedLightData.parallelSpecular[0].tangentMinusDiffuseColor, 1);
+879:			Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &dot3Data.localDirection, 1);
+880:			Direct3d9_StateCache::setVertexShaderConstants(vertexDot3Register, &dot3Data, 2);
+903:			HemisphericLightData &extendedParallelSpecular = extendedLightData.parallelSpecular[0];
+916:			Direct3d9_StateCache::setPixelShaderConstants(PSCR_pixelAlphaFadeBloomUpdate, &pixelDot3Data.diffuseColor, 4); // last field ignored.
+922:			Direct3d9_StateCache::setVertexShaderConstants(VSCR_vertexAlphaFadeBloomUpdate, &dot3Data.diffuseColor, 2);
+924:			const int VSCR_tangentMinusDiffuseColor = VCSR_extendedLightData + FIELD_OFFSET(ExtendedLightData, parallelSpecular[0].tangentMinusDiffuseColor)/16;
+925:			Direct3d9_StateCache::setVertexShaderConstants(VSCR_tangentMinusDiffuseColor, &extendedLightData.parallelSpecular[0].tangentMinusDiffuseColor, 1);
+943:		ms_currentLights.parallelSpecular,
+944:		ms_currentLights.parallel,
+945:		ms_currentLights.pointSpecular,
+946:		ms_currentLights.point
+959:		(clamp(0U, static_cast<uint>(ms_currentLights.ambient.r * 255.0f), 255U) << 16) |
+960:		(clamp(0U, static_cast<uint>(ms_currentLights.ambient.g * 255.0f), 255U) <<  8) |
+961:		(clamp(0U, static_cast<uint>(ms_currentLights.ambient.b * 255.0f), 255U) <<  0)));
+
+ succeeded in 753ms:
+8:// in spirit (Light::Type filter, ambient accumulation, point-light
+44:	// Reserved cbuffer slot used by VS + PS for the LightingCB (slots
+46:	constexpr int kLightingCBSlot = 3;
+49:	Direct3d11_PixelDot3State s_pixelDot3State = {};
+57:	// No process-wide state to initialize. setLights populates the
+71:void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lightList)
+73:	Direct3d11_LightingCB cb = {};
+75:	// Defaults: zero ambient, no directional, no point lights.
+76:	cb.ambientColor          = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+84:	// CONSULT-38 FIX (2026-06-08): do NOT invalidate the dot3 snapshot on every setLights call.
+85:	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+87:	// any bump/dot3 draw submitted before the next sun-bearing call. D3D9's PS dot3 constants are
+90:	// sunless/empty list leaves the previous sun intact.  (Was: s_pixelDot3State.valid = false;)
+92:	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
+94:	// parallelSpecular slot (-> dot3/specular); the next two by DIFFUSE intensity fill
+95:	// parallel[0..1] (the fill + bounce lights the world VS's main diffuse term reads). D3D11
+96:	// previously kept only the first T_parallel -> walls lit by fill/bounce rendered black.
+97:	Light const *psSlot   = nullptr;            // parallelSpecular[0] (the sun)
+98:	Light const *pSlot[2] = { nullptr, nullptr }; // parallel[0..1] (fill, bounce) by diffuse
+109:			case Light::T_ambient:
+110:				// Accumulate ambient contribution. Black-walls fix (2026-06-08): sum the ambient
+112:				// selectLights (:412-418 `ambient += getPossiblyScaledDiffuseColor()`). D3D11 was
+114:				// the Mos Eisley daytime ambient to 1/8 of D3D9's 0.130 -> shadow-side surfaces
+115:				// rendered black. The ambient light's color already encodes its level; the separate
+117:				cb.ambientColor.x += color.r;
+118:				cb.ambientColor.y += color.g;
+119:				cb.ambientColor.z += color.b;
+120:				cb.ambientColor.w  = 1.0f;
+123:			case Light::T_parallel:
+125:				// Black-walls fix (2026-06-08): D3D9 selectLights cascade (:423-440). A directional
+130:				// lands in parallel[]. Captured into the snapshot after the loop.
+171:			case Light::T_OBSOLETE_parallelPoint:
+178:	// Direct3d9_LightManager::applyLights_vertexShader. The sun (parallelSpecular[0]) feeds the
+179:	// dot3 PS path + the LightingCB directional; the fill+bounce (parallel[0..1]) feed the world
+192:		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+193:		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+194:		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+195:		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+197:		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+199:		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+200:		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+201:		s_pixelDot3State.valid = true;
+204:	// fill + bounce -> parallel[0..1] (the world VS's main diffuse term). Mirror D3D9
+210:	// ShaderPrimitiveSorter emits transient empty/sunless setLights({}) calls at cell boundaries
+211:	// (popCell). Unconditionally zeroing parallelDiffuseColor[0..1] on those wiped the world VS's
+212:	// main diffuse register (c20-c23) for any fill/bounce-lit draw submitted before the next
+213:	// sun-bearing call -> brightness flicker / momentary darkening. psSlot is the FIRST parallel
+215:	// sunless/empty list leaves the previous parallel[] intact (D3D9-sticky parity). Within a real
+216:	// directional update we still clear slots with no light (D3D9 selectLights rebuilds from NULL).
+219:		s_pixelDot3State.parallelCount = 0;
+226:				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(d.x, d.y, d.z, 0.0f);
+227:				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(c.r, c.g, c.b, c.a);
+228:				++s_pixelDot3State.parallelCount;
+232:				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+233:				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+240:	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS
+242:	// body keeps an ambient floor even when no directional light is present.
+243:	s_pixelDot3State.ambient = cb.ambientColor;
+247:	Direct3d11_ConstantBuffer::updateVS(kLightingCBSlot, &cb, sizeof(cb));
+248:	Direct3d11_ConstantBuffer::bindVS(kLightingCBSlot);
+249:	Direct3d11_ConstantBuffer::updatePS(kLightingCBSlot, &cb, sizeof(cb));
+250:	Direct3d11_ConstantBuffer::bindPS(kLightingCBSlot);
+254:	// setLights call saw, in iteration order, plus what the snapshot kept. Logs
+255:	// the first few setLights calls per frame to bound volume. NEUTRAL: it does
+271:					"[P19DUMP] f=%u setLights#%d listSz=%d dirKept=%d ambient=(%.3f,%.3f,%.3f) "
+275:					cb.ambientColor.x, cb.ambientColor.y, cb.ambientColor.z,
+291:					bool const isFirstDir = (!markedFirstDir && light->getType() == Light::T_parallel);
+308:Direct3d11_PixelDot3State const &Direct3d11_LightManager::getPixelDot3State()
+310:	return s_pixelDot3State;
+
+ succeeded in 703ms:
+5:// + draw-call dispatch + state-setter slot bodies. Plan 11-06 (Wave 6).
+14://     struct; the actual state object is fetched / created at draw time
+15://     in applyPreDrawState.
+19://   * Pitfall 5: cbuffer flush per draw via Direct3d11_ConstantBuffer.
+22://     applyPreDrawState DOES NOT call PSSetShader -- D3D11 leaves
+34:#include "Direct3d11_LightManager.h"   // Plan 17-08 (GAP-5): VS vertex-lighting fill in composeSlot0Shadow
+117:	// state objects on draw via applyPreDrawState.
+149:	// single-stream state. resolveShaders + applyPreDrawState branch
+178:	int ms_drawCallCount      = 0;
+180:	int ms_skippedDrawsNullVS = 0;
+181:	int ms_skippedDrawsNullLayout = 0;
+183:	// Plan 11-09.14: lifetime count of applyPreDrawState flushes where
+189:	int ms_drawsWithSRV0Bound = 0;
+193:	// drawTriangleFan + drawPartialTriangleFan bind this IB after
+194:	// applyPreDrawState and issue DrawIndexed with the canonical fan-to-list
+210:	// engine-renders-only-postfx-blit symptom identified drawQuadList as
+220:	int ms_drawTriangleFanCalls               = 0;
+221:	int ms_drawPartialTriangleFanCalls        = 0;
+225:	// Plan 11-09.15 Iter-27: drawQuadList counters parallel to fan counters.
+226:	int ms_drawQuadListCalls                  = 0;
+235:	int ms_drawIndexedTriangleFanCalls        = 0;
+236:	int ms_drawPartialIndexedTriangleFanCalls = 0;
+248:	// Iter-18 BSOD root-cause analysis (the never-committed minimum-WVP
+253:	// here + primeDefaults at install), #5 (per-draw flush+bind via
+254:	// applyPreDrawState's existing bindVS(0)), #7 (full-fill mandatory:
+258:	// Identity-initialized at file scope so the first applyPreDrawState
+261:	// belt-and-suspenders sentinel for the first-draw race guard.
+280:	// object-local space EXACTLY as Direct3d9_LightManager does
+282:	// if a draw never set an object transform, rotate_p2l is a pass-through
+290:	// setVertexShaderUserConstants_impl AND Plan 11-08's first-draw race
+293:	// shadow is uploaded ONCE per applyPreDrawState (lazy flush per CODEX
+304:	// Direct port of D3D9 plugin's draw-time site at Direct3d9.cpp:4034
+324:	// the next applyPreDrawState flushes. Other shadow regions (c9..c71)
+328:	// to flushSlot0IfDirty (called once per draw).
+367:		// applyLights_vertexShader's lightData upload (Direct3d9_LightManager.cpp:
+368:		// 530-628 / 723 + the dot3 path :768-846). Object-local dir + camera pos
+371:		// parallelSpecular[0] (c17-c19, WORLD dir) AND dot3 (c40-c43, OBJECT-LOCAL)
+376:			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+379:			// directional light). Mirrors D3D9 applyLights_vertexShader's lightData.ambient upload.
+395:				// dot3 @ lightData[24..27] (c40-c43): OBJECT-LOCAL (localCameraPosition,
+398:				// materialSpecularPower (mirror D3D9 applyLights_vertexShader:577
+399:				// `dot3.localDirection.w = getSpecularPower()`). The pre-17-09 stub
+400:				// left .w = 0.0f, but calculateDiffuseSpecularLighting's pow() lowers
+420:			// parallelSpecular[0]/dot3). GAP-5 never filled parallel[] -> the VS diffuse was 0 ->
+422:			// in setLights (direction negated to toward-light, mirroring D3D9 applyLights_vertexShader
+424:			// sun): a scene can have fill/bounce without the sun winning the dot3 path.
+439:		// lights' constant attenuation k0=1 (Direct3d9_LightManager.cpp:685 + :717),
+458:	// setVertexShaderConstants(register, data, count). Used by
+459:	// setVertexShaderUserConstants_impl (Direct3d11.cpp) to land user constants
+503:	// applyPreDrawState. Replaces Plan 11-08's first-draw race guard +
+518:		// world draws collapse to a radial fan = bad WVP math = stale or
+550:			// know which prepareToDraw to instrument next. ms_currentVSData
+551:			// is updated when the shader binds (well before applyPreDrawState
+552:			// calls flushSlot0IfDirty), so it reflects THIS draw's VS.
+617:			// engine resets V/P to identity during UI/billboard draws (which
+621:			// from world draws between those bursts. So the gate has to be
+774:		// Direct3d11_ShaderImplementationData::apply() is a documented
+780:		// Direct3d11_StaticShaderData::apply.
+782:		// Safety: opaque draws output alpha=1, so SrcAlpha=1 + InvSrcAlpha=0
+795:		// Direct3d11_ShaderImplementationData::apply() so the engine's
+917:	// the draw). CODEX Q2: R16_UINT; cap 65535; doubling growth from initial
+926:				("Direct3d11_StateCache::ensureTriangleFanIB: requested %d verts > R16_UINT cap %d; skipping draw.\n",
+976:			// shouldn't kill the client, just drop the fan draw.
+997:				("Direct3d11_StateCache::ensureQuadListIB: requested %d quads > R16_UINT cap %d; skipping draw.\n",
+1072:	// applyPreDrawState's flush block (StateCache.cpp:672-673). So the
+1073:	// diagnostic always saw the previous draw's state, not the state for the
+1074:	// upcoming draw -- it reported sampler0=NULL on the very first per-VS
+1100:	// (VS*, PS*, path) triple so the log doesn't flood per draw; dual-route
+1144:	// then skips the draw).
+1178:	// Apply pending bindings to the GPU pipeline before issuing the draw.
+1179:	// Order mirrors RESEARCH "Pre-draw setup" enumeration in 11-06-PLAN.md.
+1181:	// Phase 19 cell-shell diagnostic: thousands of draws/session are skipped
+1197:			"[P19SKIP] draw skipped (%s) shader='%s'", reason, sn ? sn : "(null)");
+1203:	bool applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY topology)
+1210:		// draw. Replaces Plan 11-08's first-draw race guard pattern. Any
+1211:		// matrix setter OR setVSConstants call between draws marks shadow
+1219:			++ms_skippedDrawsNullVS;
+1228:			++ms_skippedDrawsNullVS;
+1238:			++ms_skippedDrawsNullLayout;
+1279:		// 4. IB (only for indexed draws -- caller passes topology that
+1364:		// Direct3d11.cpp's setVertexShaderUserConstants_impl /
+1365:		// setPixelShaderUserConstants_impl land on the GPU here. The
+1378:			++ms_drawsWithSRV0Bound;
+1380:		// Plan 11-09.15 Iter-26: log ALL draws (transformed + non-transformed)
+1381:		// for the first applyPreDrawState invocations. Iter-25 only
+1382:		// captured isTransformed() draws and saw nothing but the post-FX
+1384:		// (clip-space verts) -- this iter captures every draw so we see
+1388:		// bumped cap from 200 -> 500 to cover the world-content draw
+1391:		// flows through drawIndexedTriangleList / drawTriangleList / etc.
+1392:		// (NOT drawQuadList, so Iter-29B's UI-focused logger doesn't catch
+1393:		// it). All world draws still go through applyPreDrawState here, so
+1394:		// enhancing this single logger covers every draw path.
+1399:		// showed all xform=1 (UI), so world content draws AFTER the boot
+1425:				int const drawNum = isXformed ? s_iter26CountUI : s_iter26CountWorld;
+1426:				char const * const drawTag = isXformed ? "UI" : "WORLD";
+1442:						drawTag, drawNum, static_cast<int>(topology),
+1478:		++ms_drawCallCount;
+1480:		// Plan 11-09 Iter-2.7f (CODEX Round 6): mark frame as having draw
+1483:		// beginScene (avoiding the D3D11 flip-model wipe-after-draw hazard).
+1484:		Direct3d11_Device::setFrameHasDrawActivity();
+1531:	// calls mutate the shadow + mark dirty; flushSlot0IfDirty uploads at draw
+1548:	ms_drawCallCount = ms_stateObjectCreates = 0;
+1549:	ms_skippedDrawsNullVS = ms_skippedDrawsNullLayout = 0;
+1550:	ms_drawsWithSRV0Bound = 0;  // Plan 11-09.14
+1553:	// initial capacity so the first world-load drawTriangleFan doesn't stall
+1555:	ms_drawTriangleFanCalls               = 0;
+1556:	ms_drawPartialTriangleFanCalls        = 0;
+1559:	ms_drawIndexedTriangleFanCalls        = 0;
+1560:	ms_drawPartialIndexedTriangleFanCalls = 0;
+1566:	// quad-list IB at the initial capacity so the first splash draw
+1568:	ms_drawQuadListCalls                  = 0;
+1606:		"Direct3d11_StateCache: shutdown stats stateObjectCreates=%d skippedNullVS=%d skippedNullLayout=%d drawsWithSRV0Bound=%d "
+1607:		"drawTriangleFanCalls=%d drawPartialTriangleFanCalls=%d triangleFanIBRebuilds=%d triangleFanMaxVertices=%d "
+1608:		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d "
+1609:		"drawQuadListCalls=%d quadListIBRebuilds=%d quadListMaxQuads=%d",
+1610:		ms_stateObjectCreates, ms_skippedDrawsNullVS, ms_skippedDrawsNullLayout, ms_drawsWithSRV0Bound,
+1611:		ms_drawTriangleFanCalls, ms_drawPartialTriangleFanCalls, ms_triangleFanIBRebuilds, ms_triangleFanMaxVertices,
+1612:		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls,
+1613:		ms_drawQuadListCalls, ms_quadListIBRebuilds, ms_quadListMaxQuads);
+1665:	ms_drawCallCount = 0;
+1666:	ms_skippedDrawsNullVS = 0;
+1667:	ms_skippedDrawsNullLayout = 0;
+1756:	// into this shared clip-map constant ONCE (D-02: central, not per-draw fudge).
+1854:	// change propagates to GPU on next applyPreDrawState. Pre-Fix-C
+1921:	// CONSULT-39 (2026-06-08): same b0 zero-tail clobber as setAlphaFadeOpacity -- drop the apply()
+1922:	// cache so the dot3 block is re-uploaded on the next setStaticShader.
+1975:	// world mesh draw. If we see N draws on the Iter-26/33B WORLD log but
+1977:	// (N - M) draws.
+2008:	// Mirrors Direct3d9_LightManager::applyLights_vertexShader_dot3:
+2030:	// CONSULT-40 (2026-06-08): RECORD the engine's alpha-fade state; the dot3 b0 packing in
+2031:	// Direct3d11_StaticShaderData::apply reads it back (getAlphaFadeEnabled/Opacity) and writes
+2032:	// c1.a = enabled?1:0 and c2.a = opacity -- exactly D3D9 applyLights_vertexShader (:582,584).
+2035:	// the asset dot3 PS never reads for alpha (it reads c1.a/c2.a). Worse, c0 holds the dot3
+2039:	// c2.a instead, forcing every dot3-shaded surface (faces, bump walls) into the PS fade branch
+2043:	// Force the next setStaticShader to be an apply() cache MISS so the per-draw dot3 staging fill
+2057:	// blend cache entry dirty so the next applyPreDrawState picks up a
+2062:	// flip this to TRUE via their per-pass apply() call. Opaque world
+2064:	// after a UI draw).
+2080:	// the dss cache dirty. Cache lookup at applyPreDrawState picks up the
+2116:	// lives at caller (StaticShaderData::apply); see CODEX caveat about
+2133:	// clip()s. Dirty-skip when already-current to avoid per-draw cbuffer
+2228:// Plan 11-09.14: per-pass PS resource binding setters. Direct3d11_StaticShaderData::
+2229:// apply() routes the per-pass diffuse SRV + sampler through these
+2231:// the lazy-bind model where applyPreDrawState's single flush writes all
+2232:// 16 slots per draw).
+2234:void Direct3d11_StateCache::setPixelShaderResource(int slot, ID3D11ShaderResourceView *srv)
+2241:void Direct3d11_StateCache::setPixelShaderSampler(int slot, D3D11_SAMPLER_DESC const &desc)
+2252:void Direct3d11_StateCache::setPixelShaderSampler(int slot, ID3D11SamplerState *sampler)
+2257:	// the next draw's flush doesn't push a null pointer at PSSetSamplers
+2269:	// the single-stream path below). resolveShaders + applyPreDrawState
+2314:		// BaseVertexIndex on the draw call -- a separate option here, but
+2330:// stride + format, and passes them in. resolveShaders + applyPreDrawState
+2362:	// Mirror Direct3d9.cpp:3773 / 3824 slice tracking. Engine draw calls
+2363:	// use these to compute the BaseVertexLocation for indexed draws +
+2410:void Direct3d11_StateCache::setBadVertexShaderStaticShader(StaticShader const * /*shader*/)
+2419:void Direct3d11_StateCache::setStaticShader(StaticShader const &shader, int pass)
+2423:	// apply(pass); StaticShaderData::apply wires ms_currentVSData /
+2429:	// "zero draws reach the GPU" diagnostic (setStaticShader never wired
+2430:	// ms_currentVSData, so applyPreDrawState's resolveShaders always
+2440:	IGNORE_RETURN(d3dShader->apply(pass));
+2445:void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs, uint32 textureCoordinateSetKey)
+2447:	// Plan 11-09 Iter-1: Direct3d11_StaticShaderData::apply calls this
+2448:	// once per draw with the per-pass VS pointer. Trip ms_geometryRebindNeeded
+2449:	// so the next applyPreDrawState reselects the input layout against the
+2455:	// change must also rebind the layout. resolveShaders / applyPreDrawState
+2472:	// (dot3.localDirection.w). Store it (composeSlot0Shadow uses it) AND patch the
+2474:	// composeSlot0Shadow re-runs this draw. Reject 0 / NaN / wild values (they make
+2484:	// Also mirror D3D9's dot3.localDirection.w (c41.w) for the PS dot3 path.
+2497:	// `setVertexShaderConstants(VSCR_material, &m_material, 5)` (VSCR_material=11).
+2518:void Direct3d11_StateCache::setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps)
+2521:	// 11-05 PEXE caveat -- applyPreDrawState's PS-NULL guard at the
+2539:// Draw-call dispatch
+2542:void Direct3d11_StateCache::drawPointList()
+2544:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+2546:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2549:void Direct3d11_StateCache::drawLineList()
+2551:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+2553:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2556:void Direct3d11_StateCache::drawLineStrip()
+2558:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+2560:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2563:void Direct3d11_StateCache::drawTriangleList()
+2565:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2567:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2570:void Direct3d11_StateCache::drawTriangleStrip()
+2572:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+2574:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2577:void Direct3d11_StateCache::drawTriangleFan()
+2580:	// topology. Bind the reusable fan-to-list IB and issue DrawIndexed
+2582:	// D3DPT_TRIANGLEFAN expansion. Mirror of D3D9 drawQuadList shape at
+2584:	// rendered half of every fan-drawn quad (SkyBox face, sprite, beam,
+2592:	++ms_drawTriangleFanCalls;
+2597:		return;  // > 65535 cap or CreateBuffer failure -> skip draw
+2599:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2602:	// Plan 11-09.15 Iter-3 diagnostic: sample fan-draw state at intervals
+2619:				"Plan 11-09.15 Iter-3 fan-draw#%d state: vertCount=%d triCount=%d "
+2639:	// as the Iter-3 fan-draw-state diagnostic (first 5 + every 500th).
+2774:	// runs once per session at the first transformed-vert fan draw with a
+2783:		// the first 10 transformed-vert fan draws. Tells us whether SRV0
+2784:		// is stable (same wrong texture for every draw -> something is
+2786:		// (different textures per draw -> the binding logic is wrong
+2787:		// for this specific shader/draw class).
+2803:				// draw time, UI is rendering to a different target (e.g.,
+2805:				// to confirm where UI draws are landing.
+2959:		ctx->Draw(static_cast<UINT>(vertCount), 0);
+2968:	ctx->DrawIndexed(
+2973:	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind after our DrawIndexed.
+2974:	// CODEX Q4 said "next indexed draw rebinds via applyPreDrawState's existing
+2983:void Direct3d11_StateCache::drawQuadList()
+2985:	// Plan 11-09.15 Iter-27: implementation of the stubbed drawQuadList.
+2990:	// -> Graphics::drawQuadList -> the stub here -> silent drop.
+2992:	// Mirrors Plan 11-09.15's fan-list IB pattern (drawTriangleFan):
+2994:	// 4N+3) per quad. Bind IB, applyPreDrawState(TRIANGLELIST), issue
+2995:	// DrawIndexed(numQuads * 6, 0, 0). Defensive IB rebind matches the
+3007:	++ms_drawQuadListCalls;
+3012:		return;  // > R16_UINT cap or CreateBuffer failure -- skip draw
+3014:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3024:	// name + VS filename + SRV0 + vertCount per drawQuadList call for
+3026:	// localize whether font draws hit shader/uicanvas_filtered.sht (the
+3061:	// font atlas SRV from inside drawQuadList interfered with the active draw
+3066:	// AddRef'ing it during drawQuadList for later use, and run in a
+3067:	// CallbackEnd-equivalent slot rather than mid-draw.
+3069:	ctx->DrawIndexed(
+3081:void Direct3d11_StateCache::drawIndexedPointList()
+3083:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3085:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3088:void Direct3d11_StateCache::drawIndexedLineList()
+3090:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3092:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3095:void Direct3d11_StateCache::drawIndexedLineStrip()
+3097:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3099:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3102:void Direct3d11_StateCache::drawIndexedTriangleList()
+3104:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3106:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3109:void Direct3d11_StateCache::drawIndexedTriangleStrip()
+3111:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3113:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3116:void Direct3d11_StateCache::drawIndexedTriangleFan()
+3128:	++ms_drawIndexedTriangleFanCalls;
+3137:		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawIndexedTriangleFan called -- "
+3146:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3148:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3152:// Partial draw variants (engine supplies explicit ranges).
+3154:void Direct3d11_StateCache::drawPartialPointList(int startVertex, int primitiveCount)
+3156:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3158:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount), static_cast<UINT>(startVertex));
+3161:void Direct3d11_StateCache::drawPartialLineList(int startVertex, int primitiveCount)
+3163:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3165:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount * 2), static_cast<UINT>(startVertex));
+3168:void Direct3d11_StateCache::drawPartialLineStrip(int startVertex, int primitiveCount)
+3170:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3172:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount + 1), static_cast<UINT>(startVertex));
+3175:void Direct3d11_StateCache::drawPartialTriangleList(int startVertex, int primitiveCount)
+3177:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3179:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount * 3), static_cast<UINT>(startVertex));
+3182:void Direct3d11_StateCache::drawPartialTriangleStrip(int startVertex, int primitiveCount)
+3184:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3186:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount + 2), static_cast<UINT>(startVertex));
+3189:void Direct3d11_StateCache::drawPartialTriangleFan(int startVertex, int primitiveCount)
+3198:	++ms_drawPartialTriangleFanCalls;
+3205:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3214:	ctx->DrawIndexed(
+3219:	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind (see drawTriangleFan).
+3227:void Direct3d11_StateCache::drawPartialIndexedPointList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3229:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3231:	Direct3d11_Device::getContext()->DrawIndexed(
+3237:void Direct3d11_StateCache::drawPartialIndexedLineList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3239:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3241:	Direct3d11_Device::getContext()->DrawIndexed(
+3247:void Direct3d11_StateCache::drawPartialIndexedLineStrip(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3249:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3251:	Direct3d11_Device::getContext()->DrawIndexed(
+3257:void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3259:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3261:	Direct3d11_Device::getContext()->DrawIndexed(
+3267:void Direct3d11_StateCache::drawPartialIndexedTriangleStrip(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3269:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3271:	Direct3d11_Device::getContext()->DrawIndexed(
+3277:void Direct3d11_StateCache::drawPartialIndexedTriangleFan(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3279:	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): see drawIndexedTriangleFan
+3281:	++ms_drawPartialIndexedTriangleFanCalls;
+3287:		// drawIndexedTriangleFan).
+3288:		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawPartialIndexedTriangleFan called -- "
+3296:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3298:	Direct3d11_Device::getContext()->DrawIndexed(
+
+ succeeded in 724ms:
+21:#include "Direct3d11_LightManager.h"   // Plan 17-08 (GAP-4) Producer A: per-frame dot3 light snapshot
+45:// Direct3d11_LightManager.cpp. Set to 0 / delete the guarded block to remove.
+75:	// Pair with Direct3d11_StateCache::ms_drawsWithSRV0Bound at shutdown to
+76:	// answer "did this run actually feed SRV0 through StaticShaderData::apply?"
+281:	// Direct3d11_StateCache::ms_drawsWithSRV0Bound to attribute id=353 residue.
+302:// CONSULT-39 (2026-06-08): see header. Forces the next setStaticShader->apply() to be a cache
+303:// miss so the full b0 (incl. dot3 c0..c4) is re-uploaded, undoing a partial updatePS(0) clobber.
+441:			// tag (MAIN/NRML/DOT3/...) maps to the mesh set index the StaticShader
+484:		// at draw time. Defensive defaults mirror the D3D9 sibling's
+560:		// dropped, leaving the slot at whatever-the-last-draw-set-it-to or
+716:	// If the active shader is us, drop the cache so the next draw rebinds.
+740:	// setStaticShader -> apply(). Used by Direct3d11_StateCache::drawQuadList
+742:	// we can determine whether font draws hit shader/uicanvas_filtered.sht
+753:bool Direct3d11_StaticShaderData::apply(int passNumber) const
+755:	// Plan 11-09 Iter-1: per-draw VS + PS binding via the per-pass extraction
+764:	// stale device state (PSSetSamplers runs late in applyPreDrawState);
+820:				// setVertexShaderConstants(VSCR_material, &m_material, 5). The asset VS
+871:					// build of this code path (commit 6777c3328 + post-build link
+881:					// setStaticShader call chain has an uninitialized-memory or
+892:							("Direct3d11_StaticShaderData::apply: skipping suspicious layout.TotalSize=%u (cap=%u) for shader '%s' layoutName='%s' bindPoint=%u",
+908:					// the dot3 light constants (c0..c4, Producer A) AND user constants
+923:						// Plan 17-08 (GAP-4) Producer A (write site): compute the dot3
+930:						// Direct3d9_LightManager::applyLights_vertexShader_dot3 (:777-830):
+932:						Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+934:							// is NOT captured in d3d11-debug.log). First few b0 draws report whether
+963:							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+966:							// light's own diffuse/specular alpha. The asset dot3 PS computes its output alpha as
+969:							// alphaFadeOpacity (Direct3d9_LightManager.cpp:582,584). D3D11 was copying d3.diffuse-
+972:							// (>0) forced the fade branch on EVERY dot3-shaded draw and emitted ~0.6 as alpha ->
+975:							// per-draw, from the engine's recorded fade state so non-fading objects take the opaque
+978:							DirectX::XMFLOAT4 dot3Diffuse  = d3.diffuseColor;
+979:							DirectX::XMFLOAT4 dot3Specular = d3.specularColor;
+980:							dot3Diffuse.w  = Direct3d11_StateCache::getAlphaFadeEnabled() ? 1.0f : 0.0f;
+981:							dot3Specular.w = Direct3d11_StateCache::getAlphaFadeOpacity();
+982:							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &dot3Diffuse,                sizeof(DirectX::XMFLOAT4));
+983:							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &dot3Specular,               sizeof(DirectX::XMFLOAT4));
+984:							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
+985:							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
+987:							// CONSULT-41 per-draw probe (TEMP -- REMOVE after blue-face root cause confirmed).
+988:							// The setLights dump captured only boot-time lighting; this fires PER dot3 DRAW with
+989:							// the SHADER NAME, so the NPC's head/face draw appears with the EXACT light snapshot
+999:								static int   s_drawDump = 0;
+1006:								if (changed && s_drawDump < 200)
+1011:									if (fopen_s(&fp, "blueface-draw.txt", "a") == 0 && fp)
+1017:											s_drawDump, (sn && *sn) ? sn : "(empty)",
+1025:										++s_drawDump;
+1032:						// dot3 bytes about to be uploaded for THIS draw (what the GPU sees),
+1033:						// read back from staging. Logs the first b0 draws each frame. NEUTRAL:
+1037:						// the setLights dump says why). REVERT after the question is answered.
+1048:								std::memcpy(&upDir,  staging.data() + PSCR_dot3LightDirection    * 16, sizeof(upDir));
+1049:								std::memcpy(&upDiff, staging.data() + PSCR_dot3LightDiffuseColor  * 16, sizeof(upDiff));
+1050:								std::memcpy(&upSpec, staging.data() + PSCR_dot3LightSpecularColor * 16, sizeof(upSpec));
+1111:					// vs emissive. The secondary source of truth -- setPixelShaderUserConstants_impl
+1182:					// constants here flip in a tightening commit.
+1201:					//              setPixelShaderConstants destination)
+1308:							// + eye), NEVER per draw. Recursion capped at depth 2. Output
+1416:					// Mirror writes into the shared shadow so setPixelShaderUserConstants_impl's
+1435:					// pre-draw bind loop there.
+1438:					// non-zero c5..c24) per isLegacyB0 draw, capped per frame. Goal: find the
+1441:					// draw that doesn't overwrite c8+ inherits the prior draw's bright value). Logs
+1442:					// every draw in-process, so it catches the leak whenever it occurs regardless of
+1456:								bool const p19d3v = Direct3d11_LightManager::getPixelDot3State().valid;
+1490:							Direct3d11_LegacyPSConstants::logShadow("StaticShaderData::apply b0 flush");
+1541:				// HIGH-2 non-fatal path), there is no upload this draw. Acceptable for
+1551:			// called per draw from StateCache::draw*. Reads pass.m_alphaBlendEnable
+1596:					// Iter-44A every D3D11 draw used the install() defaults
+1636:			// shadow writes here are flushed at the next applyPreDrawState's
+1673:				Direct3d11_StateCache::setPixelShaderResource(slotIdx, srvForSlot[slotIdx]);
+1677:					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
+1681:			// Phase 19 (19-04 Task 0b) DEV-ONLY: the ACTUAL SRVs bound for THIS draw,
+1761:			// applyPreDrawState's null-VS guard skips the draw rather than
+1768:				Direct3d11_StateCache::setPixelShaderResource(slotIdx, nullptr);
+
+codex
+The relevant shape is visible now: D3D11 snapshots are read during `StaticShaderData::apply`, then VS constants are composed at `applyPreDrawState`, while D3D9 rebuilds selected lights in its `applyLights_*` path. I’m pulling the exact blocks around those sites to identify the first divergence line.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp | Select-Object -Skip 312 -First 260' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp | Select-Object -Skip 920 -First 120' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp | Select-Object -Skip 70 -First 180' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp | Select-Object -Skip 360 -First 90' in D:\Code\swg-client-v2
+ succeeded in 713ms:
+							Direct3d11_LegacyPSConstants::kShadowBytes);
+
+						// Plan 17-08 (GAP-4) Producer A (write site): compute the dot3
+						// light constants in OBJECT-LOCAL space (the asset PS lights
+						// against the object-space normal_o) from the per-frame snapshot
+						// + the current object transform, and write c0..c4 into the
+						// staging by reflected byte offset (c-index * 16; the reflected
+						// vars are generic packedRegister0..4 so we map by OFFSET, not
+						// name -- consult-validated). Mirrors
+						// Direct3d9_LightManager::applyLights_vertexShader_dot3 (:777-830):
+						// localDirection = -rotate_p2l(worldDir), .w = materialSpecularPower.
+						Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+							// Plan 17-08 (GAP-4) VISIBLE diagnostic via InfoQueue (DEBUG_REPORT_LOG_PRINT
+							// is NOT captured in d3d11-debug.log). First few b0 draws report whether
+							// Producer A fed lights. d3valid=0 => no T_parallel light at char-select
+							// -> c0..c4 zero -> BLACK (prime suspect). d3valid=1 + black => value/space bug.
+							{
+								static int s_gap4DiagCount = 0;
+								if (s_gap4DiagCount < 6)
+								{
+									++s_gap4DiagCount;
+									char const *sn = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+									char gap4[400];
+									_snprintf_s(gap4, sizeof(gap4), _TRUNCATE,
+										"Plan 17-08 GAP4 b0 #%d shader='%s' d3valid=%d worldDir=(%.3f,%.3f,%.3f) "
+										"diffuse=(%.3f,%.3f,%.3f) specPow=%.3f",
+										s_gap4DiagCount, (sn && *sn) ? sn : "(empty)",
+										d3.valid ? 1 : 0,
+										d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z,
+										d3.diffuseColor.x, d3.diffuseColor.y, d3.diffuseColor.z, pm.m_power);
+									if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+										iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, gap4);
+								}
+							}
+						if (d3.valid)
+						{
+							using namespace Direct3d11_LegacyPSConstantRegisters;
+							Vector const worldDir(
+								d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z);
+							Vector const localDir = Direct3d11_StateCache::worldDirectionToObjectLocal(worldDir);
+
+							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
+							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+
+							// CONSULT-40 (2026-06-08): pack the alpha-fade control into c1.a/c2.a, NOT the
+							// light's own diffuse/specular alpha. The asset dot3 PS computes its output alpha as
+							//   o0.w = (c1.a > 0) ? c2.a : luminanceBloom
+							// where D3D9 sets c1.a = alphaFadeOpacityEnabled (0 when NOT fading) and c2.a =
+							// alphaFadeOpacity (Direct3d9_LightManager.cpp:582,584). D3D11 was copying d3.diffuse-
+							// Color.a / d3.specularColor.a here -- the SUN light's scaled alphas (diffuse.a == 1.0
+							// from PackedRgb::convert default, specular.a == mainSpecularColorScale ~0.6). c1.a==1.0
+							// (>0) forced the fade branch on EVERY dot3-shaded draw and emitted ~0.6 as alpha ->
+							// faces/bump surfaces rendered translucent/washed (the vertex-lit body shader ignores
+							// c1/c2, so it stayed opaque -- the face-wrong/body-right signature). Override .a here,
+							// per-draw, from the engine's recorded fade state so non-fading objects take the opaque
+							// luminance branch exactly like D3D9. Local copies: the snapshot's .a (used by the VS
+							// lightData path in composeSlot0Shadow) is left untouched.
+							DirectX::XMFLOAT4 dot3Diffuse  = d3.diffuseColor;
+							DirectX::XMFLOAT4 dot3Specular = d3.specularColor;
+							dot3Diffuse.w  = Direct3d11_StateCache::getAlphaFadeEnabled() ? 1.0f : 0.0f;
+							dot3Specular.w = Direct3d11_StateCache::getAlphaFadeOpacity();
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &dot3Diffuse,                sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &dot3Specular,               sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
+
+							// CONSULT-41 per-draw probe (TEMP -- REMOVE after blue-face root cause confirmed).
+							// The setLights dump captured only boot-time lighting; this fires PER dot3 DRAW with
+							// the SHADER NAME, so the NPC's head/face draw appears with the EXACT light snapshot
+							// it renders under. Dumps the sun (c1/c42), ambient (c16), fill/bounce parallel
+							// (c20-23) and hemispheric tangent(sky)/back(ground). Find the head/face/skin shader
+							// rows and read whether the blue (B>R) lives in the sun, fill, ambient, or sky -- or
+							// nowhere (which would mean the blue is NOT in the light feed at all). Logs first 200.
+							{
+								// VALUE-DEDUP gate (release-safe: no frame counter, no shader-name guess).
+								// Log only when the lighting STATE changes (sun or ambient differs from the last
+								// logged), so every distinct lighting context -- including the NPC's cell when she
+								// renders -- is captured exactly once. Tagged with the first shader to use it.
+								static int   s_drawDump = 0;
+								static float s_lastKey[6] = { -99,-99,-99,-99,-99,-99 };
+								float const key[6] = {
+									d3.diffuseColor.x, d3.diffuseColor.y, d3.diffuseColor.z,
+									d3.ambient.x,      d3.ambient.y,      d3.ambient.z };
+								bool changed = false;
+								for (int k = 0; k < 6; ++k) { if (key[k] != s_lastKey[k]) { changed = true; } }
+								if (changed && s_drawDump < 200)
+								{
+									for (int k = 0; k < 6; ++k) s_lastKey[k] = key[k];
+									char const *sn = (m_shader ? m_shader->getStaticShaderTemplate().getName().getString() : "(null)");
+									FILE *fp = nullptr;
+									if (fopen_s(&fp, "blueface-draw.txt", "a") == 0 && fp)
+									{
+										std::fprintf(fp,
+											"#%03d sh='%s' sun=(%.3f,%.3f,%.3f) ambient=(%.3f,%.3f,%.3f) "
+											"fill0=(%.3f,%.3f,%.3f) fill1=(%.3f,%.3f,%.3f) "
+											"sky=(%.3f,%.3f,%.3f) ground=(%.3f,%.3f,%.3f)\n",
+											s_drawDump, (sn && *sn) ? sn : "(empty)",
+											d3.diffuseColor.x, d3.diffuseColor.y, d3.diffuseColor.z,
+											d3.ambient.x, d3.ambient.y, d3.ambient.z,
+											d3.parallelDiffuseColor[0].x, d3.parallelDiffuseColor[0].y, d3.parallelDiffuseColor[0].z,
+											d3.parallelDiffuseColor[1].x, d3.parallelDiffuseColor[1].y, d3.parallelDiffuseColor[1].z,
+											d3.tangentColor.x, d3.tangentColor.y, d3.tangentColor.z,
+											d3.backColor.x, d3.backColor.y, d3.backColor.z);
+										std::fclose(fp);
+										++s_drawDump;
+									}
+								}
+							}
+						}
+#if P19_LIGHTDUMP
+						// Phase 19 (19-04 Task 0) DEV-ONLY neutral b0 upload dump: the ACTUAL
+						// dot3 bytes about to be uploaded for THIS draw (what the GPU sees),
+						// read back from staging. Logs the first b0 draws each frame. NEUTRAL:
+						// reads the uploaded values regardless of d3.valid, so a value STABLE
+						// across frames while pixels still cycle REFUTES the light-feed story,
+						// and a value that JUMPS while the camera is still implicates it (and
+						// the setLights dump says why). REVERT after the question is answered.
+						{
+							static unsigned s_lastFrame = 0xFFFFFFFFu;
+							static int      s_b0ThisFrame = 0;
+
+ succeeded in 727ms:
+{
+	ms_lightList = lightList;
+	ms_dirty = true;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_LightManager::setObeysLightScale(const bool obeysLightScale)
+{
+	ms_obeysLightScale = obeysLightScale;
+	if (ms_obeysLightScale)
+	{
+		getPossiblyScaledDiffuseIntensity   = &Light::getScaledDiffuseIntensity;
+		getPossiblyScaledDiffuseColor       = &Light::getScaledDiffuseColor;
+		getPossiblyScaledDiffuseBackColor   = &Light::getScaledDiffuseBackColor;
+		getPossiblyScaledDiffuseTangentColor= &Light::getScaledDiffuseTangentColor;
+		getPossiblyScaledSpecularIntensity  = &Light::getScaledSpecularIntensity;
+		getPossiblyScaledSpecularColor      = &Light::getScaledSpecularColor;
+	}
+	else
+	{
+		getPossiblyScaledDiffuseIntensity   = &Light::getDiffuseIntensity;
+		getPossiblyScaledDiffuseColor       = &Light::getDiffuseColor;
+		getPossiblyScaledDiffuseBackColor   = &Light::getDiffuseBackColor;
+		getPossiblyScaledDiffuseTangentColor= &Light::getDiffuseTangentColor;
+		getPossiblyScaledSpecularIntensity  = &Light::getSpecularIntensity;
+		getPossiblyScaledSpecularColor      = &Light::getSpecularColor;
+	}
+	ms_dirty = true;	
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_LightManager::beginFrame()
+{
+#if PRODUCTION == 0
+	ms_newFrame = true;
+#endif
+
+	ms_lastLights.dirty = true;
+	for (int i = 0; i < 8; ++i)
+		ms_fixedFunctionPipelineLight[i] = NULL;
+}
+
+// ----------------------------------------------------------------------
+
+inline void swap(Light const *&a, Light const *&b)
+{
+	Light const * swapTemporary = a;
+	a = b;
+	b = swapTemporary;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d9_LightManager::selectLights()
+{
+	if (!ms_dirty)
+		return;
+
+	{
+		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::selectLights");
+
+		// all the previous lights are whack.  bling bling!
+		ms_currentLights.obeysLightScale = ms_obeysLightScale;
+		{
+			for (int i = 0; i < ParallelSpecularCount; ++i)
+				ms_currentLights.parallelSpecular[i] = NULL;
+		}
+		{
+			for (int i = 0; i < ParallelCount; ++i)
+				ms_currentLights.parallel[i] = NULL;
+		}
+		{
+			for (int i = 0; i < PointSpecularCount; ++i)
+				ms_currentLights.pointSpecular[i] = NULL;
+		}
+		{
+			for (int i = 0; i < PointCount; ++i)
+				ms_currentLights.point[i] = NULL;
+		}
+
+#if PRODUCTION == 0
+		if (ms_useOnlyfullAmbient)
+		{
+			ms_currentLights.ambient.r = 1.0f;
+			ms_currentLights.ambient.g = 1.0f;
+			ms_currentLights.ambient.b = 1.0f;
+			ms_currentLights.ambient.a = 1.0f;
+		}
+		else
+#endif
+		{
+			ms_currentLights.ambient = ms_fullAmbient;
+
+			LightList::iterator iEnd = ms_lightList.end();
+			for (LightList::iterator i = ms_lightList.begin(); i != iEnd; ++i)
+			{
+				const Light *light = *i;
+				switch (light->getType())
+				{
+					case Light::T_ambient:
+					{
+						// collapse all ambient lights into a single value
+						const VectorArgb &diffuseColor = (light->*getPossiblyScaledDiffuseColor)();
+						ms_currentLights.ambient.r += diffuseColor.r;
+						ms_currentLights.ambient.g += diffuseColor.g;
+						ms_currentLights.ambient.b += diffuseColor.b;
+						light = NULL;
+						break;
+					}
+
+					case Light::T_parallel:
+					{
+						// try to fit the light in a specular slot
+						{
+							for (int i = 0; light && i < ParallelSpecularCount; ++i)
+								if (!ms_currentLights.parallelSpecular[i] || (light->*getPossiblyScaledSpecularIntensity)() > (ms_currentLights.parallelSpecular[i]->*getPossiblyScaledSpecularIntensity)())
+									swap(ms_currentLights.parallelSpecular[i], light);
+						}
+
+						// non-specular light, or all specular slots were full
+						{
+							for (int i = 0; light && i < ParallelCount; ++i)
+								if (!ms_currentLights.parallel[i] || (light->*getPossiblyScaledDiffuseIntensity)() > (ms_currentLights.parallel[i]->*getPossiblyScaledDiffuseIntensity)())
+									swap(ms_currentLights.parallel[i], light);
+						}
+
+						break;
+					}
+
+					case Light::T_point:
+					case Light::T_point_multicell:
+					{
+						// try to fit the light in a specular slot
+						{
+							for (int i = 0; light && i < PointSpecularCount; ++i)
+							{
+								if (!ms_currentLights.pointSpecular[i] || (light->*getPossiblyScaledSpecularIntensity)() > (ms_currentLights.pointSpecular[i]->*getPossiblyScaledSpecularIntensity)())
+									swap(ms_currentLights.pointSpecular[i], light);
+							}
+						}
+
+						// non-specular light, or all specular slots were full
+						{
+							for (int i = 0; light && i < PointCount; ++i)
+							{
+								if (!ms_currentLights.point[i] || (light->*getPossiblyScaledDiffuseIntensity)() > (ms_currentLights.point[i]->*getPossiblyScaledDiffuseIntensity)())
+									swap(ms_currentLights.point[i], light);
+							}
+						}
+						break;
+					}
+
+					case Light::T_spot:
+					{
+						// discard all spot lights
+						break;
+					}
+
+					default:
+					{
+						DEBUG_FATAL(true, ("bad light type %d", static_cast<int>(light->getType())));
+					}
+				}
+			}
+		}
+
+#if PRODUCTION == 0
+		if (ms_setLightsOncePerFrame)
+		{
+			if (!ms_newFrame)
+				return;
+			ms_newFrame = false;
+		}
+#endif
+	}
+
+	// CONSULT-41 D3D9-side comparison dump (TEMP -- REMOVE after blue-face confirmed). Mirrors the
+	// D3D11 blueface-draw probe so the SAME cantina cell's light colors can be compared D3D9 vs D3D11.
+	// Resolves swap (D3D9 fill == reverse of D3D11 blue) vs selection (different warm light) vs
+	// genuinely-blue (D3D9 also blue). Value-deduped on sun+ambient; logs to stage/blueface-d9.txt.
+	{
+		static int   s_d9dump = 0;
+		static float s_d9last[6] = { -99,-99,-99,-99,-99,-99 };
+		float sr=0,sg=0,sb=0, ar=0,ag=0,ab=0, f0r=0,f0g=0,f0b=0, f1r=0,f1g=0,f1b=0, tr=0,tg=0,tb=0, br=0,bg=0,bb=0;
+		{ auto const &c = ms_currentLights.ambient; ar=c.r; ag=c.g; ab=c.b; }
+		if (const Light *ps = ms_currentLights.parallelSpecular[0]) { auto const &c = ps->getScaledDiffuseColor(); sr=c.r; sg=c.g; sb=c.b;
+			{ auto const &t = ps->getScaledDiffuseTangentColor(); tr=t.r; tg=t.g; tb=t.b; }
+			{ auto const &k = ps->getScaledDiffuseBackColor();    br=k.r; bg=k.g; bb=k.b; } }
+		if (const Light *p0 = ms_currentLights.parallel[0]) { auto const &c = p0->getScaledDiffuseColor(); f0r=c.r; f0g=c.g; f0b=c.b; }
+		if (const Light *p1 = ms_currentLights.parallel[1]) { auto const &c = p1->getScaledDiffuseColor(); f1r=c.r; f1g=c.g; f1b=c.b; }
+		float const key[6] = { sr,sg,sb, ar,ag,ab };
+		bool changed = false; for (int k=0;k<6;++k) if (key[k]!=s_d9last[k]) changed = true;
+		// Skip the empty (all-zero) popCell calls AND the flat (1,1,1) char-select/loading default,
+		// so the 200-line budget survives to the cantina interior lighting (the dedup was thrashing
+		// on the empty<->white toggle and filling up during char-select before the world loaded).
+		bool const empty  = (sr+sg+sb+ar+ag+ab+f0r+f0g+f0b) < 0.005f;
+		bool const flatWhite = (sr>0.999f && sg>0.999f && sb>0.999f && f0r>0.999f && f0g>0.999f && f0b>0.999f);
+		if (changed && !empty && !flatWhite && s_d9dump < 200) {
+			for (int k=0;k<6;++k) s_d9last[k]=key[k];
+			FILE *fp=nullptr;
+			if (fopen_s(&fp,"blueface-d9.txt","a")==0 && fp) {
+				fprintf(fp,"#%03d sun=(%.3f,%.3f,%.3f) ambient=(%.3f,%.3f,%.3f) fill0=(%.3f,%.3f,%.3f) "
+					"fill1=(%.3f,%.3f,%.3f) sky=(%.3f,%.3f,%.3f) ground=(%.3f,%.3f,%.3f)\n",
+					s_d9dump, sr,sg,sb, ar,ag,ab, f0r,f0g,f0b, f1r,f1g,f1b, tr,tg,tb, br,bg,bb);
+				fclose(fp); ++s_d9dump;
+			}
+		}
+	}
+
+	{
+		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::applyLights");
+#if defined(FFP) && defined(VSPS)
+		if (ms_usingVertexShaderProgram)
+#endif
+#ifdef VSPS
+		{
+			if (
+#if PRODUCTION == 0
+					ms_disableLightCaching || 
+#endif
+					ms_currentLights != ms_lastLights)
+				applyLights_vertexShader();
+			else
+				applyLights_vertexShader_dot3();
+		}
+#endif
+#if defined(FFP) && defined(VSPS)
+		else
+#endif
+#ifdef FFP
+		{
+			if (
+#if PRODUCTION == 0
+				ms_disableLightCaching || 
+#endif
+				ms_currentLights != ms_lastLights)
+				applyLights_fixedFunctionPipeline();
+		}
+#endif
+	}
+
+	ms_lastLights = ms_currentLights;
+}
+
+// ----------------------------------------------------------------------
+
+#ifdef VSPS
+
+void Direct3d9_LightManager::applyLights_vertexShader()
+{
+	LightData lightData;
+	Zero(lightData);
+	ExtendedLightData extendedLightData;
+	Zero(extendedLightData);
+
+	{
+		lightData.ambient = ms_currentLights.ambient;
+	}
+
+ succeeded in 780ms:
+void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lightList)
+{
+	Direct3d11_LightingCB cb = {};
+
+	// Defaults: zero ambient, no directional, no point lights.
+	cb.ambientColor          = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+	cb.directionalDir        = XMFLOAT4(0.0f, -1.0f, 0.0f, 0.0f);
+	cb.directionalColor      = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	cb.pointLightCountPad    = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	int pointLightCount = 0;
+
+	// Plan 17-08 (GAP-4) Producer A: dot3 snapshot of the primary directional.
+	// CONSULT-38 FIX (2026-06-08): do NOT invalidate the dot3 snapshot on every setLights call.
+	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+	// boundaries (popCell); the old unconditional `valid = false` left the snapshot invalid for
+	// any bump/dot3 draw submitted before the next sun-bearing call. D3D9's PS dot3 constants are
+	// STICKY (the register file persists until a real light change), so persist last-good here:
+	// the snapshot is only UPDATED by the psSlot block below when a directional is present; a
+	// sunless/empty list leaves the previous sun intact.  (Was: s_pixelDot3State.valid = false;)
+
+	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
+	// distribution (:423-440). The sun (highest SPECULAR intensity) wins the single
+	// parallelSpecular slot (-> dot3/specular); the next two by DIFFUSE intensity fill
+	// parallel[0..1] (the fill + bounce lights the world VS's main diffuse term reads). D3D11
+	// previously kept only the first T_parallel -> walls lit by fill/bounce rendered black.
+	Light const *psSlot   = nullptr;            // parallelSpecular[0] (the sun)
+	Light const *pSlot[2] = { nullptr, nullptr }; // parallel[0..1] (fill, bounce) by diffuse
+
+	for (Light const *light : lightList)
+	{
+		if (!light)
+			continue;
+
+		VectorArgb const &color = light->getScaledDiffuseColor();
+		float const intensity = light->getScaledDiffuseIntensity();
+		switch (light->getType())
+		{
+			case Light::T_ambient:
+				// Accumulate ambient contribution. Black-walls fix (2026-06-08): sum the ambient
+				// light's color with NO intensity multiply, matching Direct3d9_LightManager::
+				// selectLights (:412-418 `ambient += getPossiblyScaledDiffuseColor()`). D3D11 was
+				// doing color*intensity = 0.130*0.130 = 0.0169 (â‰ˆ4/255 = visually black), crushing
+				// the Mos Eisley daytime ambient to 1/8 of D3D9's 0.130 -> shadow-side surfaces
+				// rendered black. The ambient light's color already encodes its level; the separate
+				// intensity must NOT be re-applied here (the directional still carries intensity).
+				cb.ambientColor.x += color.r;
+				cb.ambientColor.y += color.g;
+				cb.ambientColor.z += color.b;
+				cb.ambientColor.w  = 1.0f;
+				break;
+
+			case Light::T_parallel:
+			{
+				// Black-walls fix (2026-06-08): D3D9 selectLights cascade (:423-440). A directional
+				// first contends for the single specular slot (by specular intensity); the light it
+				// displaces then contends for the two diffuse slots (by diffuse intensity). The swap
+				// semantics flow the displaced light down so each ends in its correct slot, and the
+				// sun (only light with specular) is consumed by the specular slot and never also
+				// lands in parallel[]. Captured into the snapshot after the loop.
+				Light const *l = light;
+				if (!psSlot || l->getScaledSpecularIntensity() > psSlot->getScaledSpecularIntensity())
+				{
+					Light const *t = psSlot; psSlot = l; l = t;
+				}
+				if (l && (!pSlot[0] || l->getScaledDiffuseIntensity() > pSlot[0]->getScaledDiffuseIntensity()))
+				{
+					Light const *t = pSlot[0]; pSlot[0] = l; l = t;
+				}
+				if (l && (!pSlot[1] || l->getScaledDiffuseIntensity() > pSlot[1]->getScaledDiffuseIntensity()))
+				{
+					Light const *t = pSlot[1]; pSlot[1] = l; l = t;
+				}
+				break;
+			}
+
+			case Light::T_point:
+			case Light::T_point_multicell:
+				if (pointLightCount < 8)
+				{
+					Vector const pos = light->getPosition_w();
+					cb.pointLightPos[pointLightCount]   = XMFLOAT4(pos.x, pos.y, pos.z, light->getRange());
+					cb.pointLightColor[pointLightCount] = XMFLOAT4(color.r, color.g, color.b, intensity);
+					++pointLightCount;
+				}
+				break;
+
+			case Light::T_spot:
+				// Spot-light support deferred -- Plan 11-07 smoke surfaces
+				// whether target scenes use spot lights (cantina sconces
+				// might). For now treated as point light if room remains.
+				if (pointLightCount < 8)
+				{
+					Vector const pos = light->getPosition_w();
+					cb.pointLightPos[pointLightCount]   = XMFLOAT4(pos.x, pos.y, pos.z, light->getRange());
+					cb.pointLightColor[pointLightCount] = XMFLOAT4(color.r, color.g, color.b, intensity);
+					++pointLightCount;
+				}
+				break;
+
+			case Light::T_OBSOLETE_parallelPoint:
+			default:
+				break;
+		}
+	}
+
+	// Black-walls fix (2026-06-08): process the directional slots after the cascade, mirroring
+	// Direct3d9_LightManager::applyLights_vertexShader. The sun (parallelSpecular[0]) feeds the
+	// dot3 PS path + the LightingCB directional; the fill+bounce (parallel[0..1]) feed the world
+	// VS's main diffuse term via the snapshot, which composeSlot0Shadow writes to c20-c23.
+	if (psSlot)
+	{
+		Vector    const dir      = psSlot->getObjectFrameK_w();
+		VectorArgb const &diffuse  = psSlot->getScaledDiffuseColor();
+		VectorArgb const &specular = psSlot->getScaledSpecularColor();
+		VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
+		VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
+
+		cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, psSlot->getScaledDiffuseIntensity());
+		cb.directionalColor = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, 1.0f);
+
+		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+			tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
+		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+			tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
+		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+		s_pixelDot3State.valid = true;
+	}
+
+	// fill + bounce -> parallel[0..1] (the world VS's main diffuse term). Mirror D3D9
+	// applyLights_vertexShader :630-650: direction is the raw light direction (negated at the
+	// fill site, matching the c20/c21 packing in composeSlot0Shadow), color is the diffuse.
+	//
+	// CONSULT-39 (Sonnet's find, 2026-06-08): GATE this update on `if (psSlot)` -- the SAME
+	// persistence fix the CONSULT-38 dot3 snapshot above already applies. The shared
+	// ShaderPrimitiveSorter emits transient empty/sunless setLights({}) calls at cell boundaries
+	// (popCell). Unconditionally zeroing parallelDiffuseColor[0..1] on those wiped the world VS's
+	// main diffuse register (c20-c23) for any fill/bounce-lit draw submitted before the next
+	// sun-bearing call -> brightness flicker / momentary darkening. psSlot is the FIRST parallel
+	// light filled by the cascade, so `psSlot != null` == "this call carried a directional"; a
+	// sunless/empty list leaves the previous parallel[] intact (D3D9-sticky parity). Within a real
+	// directional update we still clear slots with no light (D3D9 selectLights rebuilds from NULL).
+	if (psSlot)
+	{
+		s_pixelDot3State.parallelCount = 0;
+		for (int i = 0; i < 2; ++i)
+		{
+			if (pSlot[i])
+			{
+				Vector     const d = pSlot[i]->getObjectFrameK_w();
+				VectorArgb const &c = pSlot[i]->getScaledDiffuseColor();
+				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(d.x, d.y, d.z, 0.0f);
+				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(c.r, c.g, c.b, c.a);
+				++s_pixelDot3State.parallelCount;
+			}
+			else
+			{
+				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+			}
+		}
+	}
+
+	cb.pointLightCountPad.x = static_cast<float>(pointLightCount);
+
+	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS
+	// vertex-lighting fill (lightData[0] @ c16). Set unconditionally so the
+	// body keeps an ambient floor even when no directional light is present.
+	s_pixelDot3State.ambient = cb.ambientColor;
+
+	// Flush + bind on both VS and PS stages -- shader passes may sample
+	// lighting on either side.
+	Direct3d11_ConstantBuffer::updateVS(kLightingCBSlot, &cb, sizeof(cb));
+	Direct3d11_ConstantBuffer::bindVS(kLightingCBSlot);
+	Direct3d11_ConstantBuffer::updatePS(kLightingCBSlot, &cb, sizeof(cb));
+	Direct3d11_ConstantBuffer::bindPS(kLightingCBSlot);
+
+ succeeded in 791ms:
+		// (c9 = viewportData, c10 = fog -- preserved from setFog calls).
+		s_slot0Shadow.c8_to_c10[0] = s_cachedCameraPos;
+
+		// Plan 17-08 (GAP-5): fill the VS vertex-lighting region so the VS emits a
+		// real COLOR0 (vertexDiffuse) / COLOR1 (vertexSpecular) instead of NaN ->
+		// fixes the dark-body residual after GAP-4. Mirrors D3D9
+		// applyLights_vertexShader's lightData upload (Direct3d9_LightManager.cpp:
+		// 530-628 / 723 + the dot3 path :768-846). Object-local dir + camera pos
+		// are derived from the cached object->world transform exactly as D3D9 does
+		// (ms_objectToWorldTransform.rotate_p2l / rotateTranslate_p2l). We fill BOTH
+		// parallelSpecular[0] (c17-c19, WORLD dir) AND dot3 (c40-c43, OBJECT-LOCAL)
+		// so whichever the VS reads is populated. extendedLightData (c60-c63) carries
+		// the hemispheric colors. VSCR layout: lightData[28]@c16, ext[8]@c60 (see
+		// Direct3d9_VertexShaderConstantRegisters.h + the VertexSlot0CB static_asserts).
+		{
+			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+
+			// ambient @ lightData[0] (c16) -- the real accumulated ambient (always, even with no
+			// directional light). Mirrors D3D9 applyLights_vertexShader's lightData.ambient upload.
+			s_slot0Shadow.lightData[0] = d3.ambient;
+
+			if (d3.valid)
+			{
+				Vector const worldDir(
+					d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z);
+				Vector const localDir = s_cachedObjectToWorldTransform.rotate_p2l(worldDir);
+				Vector const camWorld(s_cachedCameraPos.x, s_cachedCameraPos.y, s_cachedCameraPos.z);
+				Vector const localCam = s_cachedObjectToWorldTransform.rotateTranslate_p2l(camWorld);
+
+				// parallelSpecular[0] @ lightData[1..3] (c17-c19): WORLD dir (negated), colors.
+				s_slot0Shadow.lightData[1] = DirectX::XMFLOAT4(-worldDir.x, -worldDir.y, -worldDir.z, 0.0f);
+				s_slot0Shadow.lightData[2] = d3.diffuseColor;
+				s_slot0Shadow.lightData[3] = d3.specularColor;
+
+				// dot3 @ lightData[24..27] (c40-c43): OBJECT-LOCAL (localCameraPosition,
+				// localDirection=-rotate_p2l(dir), diffuseColor, specularColor).
+				// Plan 17-09 (GAP-5 specular-power fix): lightData[25].w carries
+				// materialSpecularPower (mirror D3D9 applyLights_vertexShader:577
+				// `dot3.localDirection.w = getSpecularPower()`). The pre-17-09 stub
+				// left .w = 0.0f, but calculateDiffuseSpecularLighting's pow() lowers
+				// to exp2(power * log2(N.H)); with power=0 AND N.H<=0 (back/perp
+				// vertices, common on arms) that is exp2(0 * -INF) = exp2(NaN) = NaN,
+				// poisoning COLOR0/COLOR1 -> the purple/green bump arms. 32 = D3D9's
+				// default specular power; the real per-material value is fed below.
+				s_slot0Shadow.lightData[24] = DirectX::XMFLOAT4(localCam.x, localCam.y, localCam.z, 1.0f);
+				s_slot0Shadow.lightData[25] = DirectX::XMFLOAT4(-localDir.x, -localDir.y, -localDir.z, ms_specularPower);
+				s_slot0Shadow.lightData[26] = d3.diffuseColor;
+				s_slot0Shadow.lightData[27] = d3.specularColor;
+
+				// extendedLightData @ [0..3] (c60-c63): hemispheric back/tangent + deltas.
+				s_slot0Shadow.extendedLightData[0] = d3.backColor;
+				s_slot0Shadow.extendedLightData[1] = d3.tangentColor;
+				s_slot0Shadow.extendedLightData[2] = d3.tangentMinusBackColor;
+				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
+			}
+
+			// parallel[0..1] @ lightData[4..7] (c20-c23): THE BLACK-WALLS FIX (2026-06-08).
+			// The world VS's MAIN diffuse term sums lightData.parallel[0] (c20-21) + parallel[1]
+			// (c22-23) -- the FILL + BOUNCE directionals, NOT the sun (the sun is in
+			// parallelSpecular[0]/dot3). GAP-5 never filled parallel[] -> the VS diffuse was 0 ->
+			// surfaces lit by fill/bounce went black. Feed the diffuse-sorted directionals captured
+			// in setLights (direction negated to toward-light, mirroring D3D9 applyLights_vertexShader
+			// :638-647 `parallel.direction = -getObjectFrameK_w()`). Independent of d3.valid (the
+			// sun): a scene can have fill/bounce without the sun winning the dot3 path.
+			for (int pi = 0; pi < 2; ++pi)
+			{
+				DirectX::XMFLOAT4 const &pd = d3.parallelDirectionWorld[pi];
+				s_slot0Shadow.lightData[4 + pi * 2] = DirectX::XMFLOAT4(-pd.x, -pd.y, -pd.z, 0.0f);
+				s_slot0Shadow.lightData[5 + pi * 2] = d3.parallelDiffuseColor[pi];
+			}
+		}
+
+		// Plan 17-09 (GAP-5, THE bump-arm fix): the VS light loops process a FIXED
+		// (unrolled) set of point lights; each computes distanceAttenuation =
+		// 1 / dot(attenuationCoeffs, factors). For an UNUSED point light whose coeffs
+		// are (0,0,0,0) that is 1/0 = INF, and INF * 0(color) = NaN -> NaN COLOR0/
+		// COLOR1 -> the PS NaN-guard zeroes diffuse -> only the normal-map bump term
+		// renders -> the purple/green arms. D3D9 avoids this by setting unused point
+		// lights' constant attenuation k0=1 (Direct3d9_LightManager.cpp:685 + :717),
+		// making denom>=1. We never fill point lights, so ALL are unused -> set every
+		// point attenuation.k0 (the .x) = 1. Indices from the D3D9 LightData layout:
+		// pointSpecular.attenuation = lightData[10]; point[0..3].attenuation =
+		// lightData[14/17/20/23] (PointSpecularData=4 regs, PointData=3 regs).
+		s_slot0Shadow.lightData[10].x = 1.0f;   // pointSpecular[0].attenuation.k0
+		s_slot0Shadow.lightData[14].x = 1.0f;   // point[0].attenuation.k0
+		s_slot0Shadow.lightData[17].x = 1.0f;   // point[1].attenuation.k0
+		s_slot0Shadow.lightData[20].x = 1.0f;   // point[2].attenuation.k0
+		s_slot0Shadow.lightData[23].x = 1.0f;   // point[3].attenuation.k0
+
+		// Plan 11-09 Iter-2.7 Fix C: defer GPU upload to flushSlot0IfDirty.
+
+codex
+At this point the candidate fix is also taking shape: preserve CONSULT-38 persistence for real cell-boundary empty calls, but force a per-object refresh for dot3 skinned draws before `StaticShaderData::apply`/VS slot0 composition reads the snapshot. I’m checking where D3D11 `setLights` is called from versus D3D9 so the proposed location is exact rather than hypothetical.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"LightManager::selectLights|selectLights\\(\" src/engine/client/application/Direct3d9 src/engine/client/application -g \"*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"Direct3d11_LightManager::setLights|setLights\\(\" src/engine/client/application/Direct3d11 src/engine/client/application/Direct3d9 src/engine/client/application -g \"*.cpp\" -g \"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_LightManager.cpp | findstr /r \""'^8[0-9]: ''^9[0-9]: ''^1[0-9][0-9]: ''^2[0-4][0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d9\\src\\win32\\Direct3d9_LightManager.cpp | findstr /r \""'^31[0-9]: ''^37[0-9]: ''^38[0-9]: ''^41[0-9]: ''^48[0-9]: ''^53[0-9]: ''^55[0-9]:"' in D:\Code\swg-client-v2
+ succeeded in 2252ms:
+80:
+81:	int pointLightCount = 0;
+82:
+83:	// Plan 17-08 (GAP-4) Producer A: dot3 snapshot of the primary directional.
+84:	// CONSULT-38 FIX (2026-06-08): do NOT invalidate the dot3 snapshot on every setLights call.
+85:	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+86:	// boundaries (popCell); the old unconditional `valid = false` left the snapshot invalid for
+87:	// any bump/dot3 draw submitted before the next sun-bearing call. D3D9's PS dot3 constants are
+88:	// STICKY (the register file persists until a real light change), so persist last-good here:
+89:	// the snapshot is only UPDATED by the psSlot block below when a directional is present; a
+90:	// sunless/empty list leaves the previous sun intact.  (Was: s_pixelDot3State.valid = false;)
+91:
+92:	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
+93:	// distribution (:423-440). The sun (highest SPECULAR intensity) wins the single
+94:	// parallelSpecular slot (-> dot3/specular); the next two by DIFFUSE intensity fill
+95:	// parallel[0..1] (the fill + bounce lights the world VS's main diffuse term reads). D3D11
+96:	// previously kept only the first T_parallel -> walls lit by fill/bounce rendered black.
+97:	Light const *psSlot   = nullptr;            // parallelSpecular[0] (the sun)
+98:	Light const *pSlot[2] = { nullptr, nullptr }; // parallel[0..1] (fill, bounce) by diffuse
+99:
+100:	for (Light const *light : lightList)
+101:	{
+102:		if (!light)
+103:			continue;
+104:
+105:		VectorArgb const &color = light->getScaledDiffuseColor();
+106:		float const intensity = light->getScaledDiffuseIntensity();
+107:		switch (light->getType())
+108:		{
+109:			case Light::T_ambient:
+110:				// Accumulate ambient contribution. Black-walls fix (2026-06-08): sum the ambient
+111:				// light's color with NO intensity multiply, matching Direct3d9_LightManager::
+112:				// selectLights (:412-418 `ambient += getPossiblyScaledDiffuseColor()`). D3D11 was
+113:				// doing color*intensity = 0.130*0.130 = 0.0169 (?4/255 = visually black), crushing
+114:				// the Mos Eisley daytime ambient to 1/8 of D3D9's 0.130 -> shadow-side surfaces
+115:				// rendered black. The ambient light's color already encodes its level; the separate
+116:				// intensity must NOT be re-applied here (the directional still carries intensity).
+117:				cb.ambientColor.x += color.r;
+118:				cb.ambientColor.y += color.g;
+119:				cb.ambientColor.z += color.b;
+120:				cb.ambientColor.w  = 1.0f;
+121:				break;
+122:
+123:			case Light::T_parallel:
+124:			{
+125:				// Black-walls fix (2026-06-08): D3D9 selectLights cascade (:423-440). A directional
+126:				// first contends for the single specular slot (by specular intensity); the light it
+127:				// displaces then contends for the two diffuse slots (by diffuse intensity). The swap
+128:				// semantics flow the displaced light down so each ends in its correct slot, and the
+129:				// sun (only light with specular) is consumed by the specular slot and never also
+130:				// lands in parallel[]. Captured into the snapshot after the loop.
+131:				Light const *l = light;
+132:				if (!psSlot || l->getScaledSpecularIntensity() > psSlot->getScaledSpecularIntensity())
+133:				{
+134:					Light const *t = psSlot; psSlot = l; l = t;
+135:				}
+136:				if (l && (!pSlot[0] || l->getScaledDiffuseIntensity() > pSlot[0]->getScaledDiffuseIntensity()))
+137:				{
+138:					Light const *t = pSlot[0]; pSlot[0] = l; l = t;
+139:				}
+140:				if (l && (!pSlot[1] || l->getScaledDiffuseIntensity() > pSlot[1]->getScaledDiffuseIntensity()))
+141:				{
+142:					Light const *t = pSlot[1]; pSlot[1] = l; l = t;
+143:				}
+144:				break;
+145:			}
+146:
+147:			case Light::T_point:
+148:			case Light::T_point_multicell:
+149:				if (pointLightCount < 8)
+150:				{
+151:					Vector const pos = light->getPosition_w();
+152:					cb.pointLightPos[pointLightCount]   = XMFLOAT4(pos.x, pos.y, pos.z, light->getRange());
+153:					cb.pointLightColor[pointLightCount] = XMFLOAT4(color.r, color.g, color.b, intensity);
+154:					++pointLightCount;
+155:				}
+156:				break;
+157:
+158:			case Light::T_spot:
+159:				// Spot-light support deferred -- Plan 11-07 smoke surfaces
+160:				// whether target scenes use spot lights (cantina sconces
+161:				// might). For now treated as point light if room remains.
+162:				if (pointLightCount < 8)
+163:				{
+164:					Vector const pos = light->getPosition_w();
+165:					cb.pointLightPos[pointLightCount]   = XMFLOAT4(pos.x, pos.y, pos.z, light->getRange());
+166:					cb.pointLightColor[pointLightCount] = XMFLOAT4(color.r, color.g, color.b, intensity);
+167:					++pointLightCount;
+168:				}
+169:				break;
+170:
+171:			case Light::T_OBSOLETE_parallelPoint:
+172:			default:
+173:				break;
+174:		}
+175:	}
+176:
+177:	// Black-walls fix (2026-06-08): process the directional slots after the cascade, mirroring
+178:	// Direct3d9_LightManager::applyLights_vertexShader. The sun (parallelSpecular[0]) feeds the
+179:	// dot3 PS path + the LightingCB directional; the fill+bounce (parallel[0..1]) feed the world
+180:	// VS's main diffuse term via the snapshot, which composeSlot0Shadow writes to c20-c23.
+181:	if (psSlot)
+182:	{
+183:		Vector    const dir      = psSlot->getObjectFrameK_w();
+184:		VectorArgb const &diffuse  = psSlot->getScaledDiffuseColor();
+185:		VectorArgb const &specular = psSlot->getScaledSpecularColor();
+186:		VectorArgb const &back     = psSlot->getScaledDiffuseBackColor();
+187:		VectorArgb const &tangent  = psSlot->getScaledDiffuseTangentColor();
+188:
+189:		cb.directionalDir   = XMFLOAT4(dir.x, dir.y, dir.z, psSlot->getScaledDiffuseIntensity());
+190:		cb.directionalColor = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, 1.0f);
+191:
+192:		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+193:		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+194:		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+195:		s_pixelDot3State.tangentMinusDiffuseColor = XMFLOAT4(
+196:			tangent.r - diffuse.r, tangent.g - diffuse.g, tangent.b - diffuse.b, tangent.a - diffuse.a);
+197:		s_pixelDot3State.tangentMinusBackColor    = XMFLOAT4(
+198:			tangent.r - back.r, tangent.g - back.g, tangent.b - back.b, tangent.a - back.a);
+199:		s_pixelDot3State.backColor    = XMFLOAT4(back.r, back.g, back.b, back.a);
+200:		s_pixelDot3State.tangentColor = XMFLOAT4(tangent.r, tangent.g, tangent.b, tangent.a);
+201:		s_pixelDot3State.valid = true;
+202:	}
+203:
+204:	// fill + bounce -> parallel[0..1] (the world VS's main diffuse term). Mirror D3D9
+205:	// applyLights_vertexShader :630-650: direction is the raw light direction (negated at the
+206:	// fill site, matching the c20/c21 packing in composeSlot0Shadow), color is the diffuse.
+207:	//
+208:	// CONSULT-39 (Sonnet's find, 2026-06-08): GATE this update on `if (psSlot)` -- the SAME
+209:	// persistence fix the CONSULT-38 dot3 snapshot above already applies. The shared
+210:	// ShaderPrimitiveSorter emits transient empty/sunless setLights({}) calls at cell boundaries
+211:	// (popCell). Unconditionally zeroing parallelDiffuseColor[0..1] on those wiped the world VS's
+212:	// main diffuse register (c20-c23) for any fill/bounce-lit draw submitted before the next
+213:	// sun-bearing call -> brightness flicker / momentary darkening. psSlot is the FIRST parallel
+214:	// light filled by the cascade, so `psSlot != null` == "this call carried a directional"; a
+215:	// sunless/empty list leaves the previous parallel[] intact (D3D9-sticky parity). Within a real
+216:	// directional update we still clear slots with no light (D3D9 selectLights rebuilds from NULL).
+217:	if (psSlot)
+218:	{
+219:		s_pixelDot3State.parallelCount = 0;
+220:		for (int i = 0; i < 2; ++i)
+221:		{
+222:			if (pSlot[i])
+223:			{
+224:				Vector     const d = pSlot[i]->getObjectFrameK_w();
+225:				VectorArgb const &c = pSlot[i]->getScaledDiffuseColor();
+226:				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(d.x, d.y, d.z, 0.0f);
+227:				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(c.r, c.g, c.b, c.a);
+228:				++s_pixelDot3State.parallelCount;
+229:			}
+230:			else
+231:			{
+232:				s_pixelDot3State.parallelDirectionWorld[i] = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+233:				s_pixelDot3State.parallelDiffuseColor[i]   = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+234:			}
+235:		}
+236:	}
+237:
+238:	cb.pointLightCountPad.x = static_cast<float>(pointLightCount);
+239:
+240:	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS
+241:	// vertex-lighting fill (lightData[0] @ c16). Set unconditionally so the
+242:	// body keeps an ambient floor even when no directional light is present.
+243:	s_pixelDot3State.ambient = cb.ambientColor;
+244:
+245:	// Flush + bind on both VS and PS stages -- shader passes may sample
+246:	// lighting on either side.
+247:	Direct3d11_ConstantBuffer::updateVS(kLightingCBSlot, &cb, sizeof(cb));
+248:	Direct3d11_ConstantBuffer::bindVS(kLightingCBSlot);
+249:	Direct3d11_ConstantBuffer::updatePS(kLightingCBSlot, &cb, sizeof(cb));
+
+ succeeded in 2416ms:
+310:// ----------------------------------------------------------------------
+311:
+312:void Direct3d9_LightManager::setLights(const LightList &lightList)
+313:{
+314:	ms_lightList = lightList;
+315:	ms_dirty = true;
+316:}
+317:
+318:// ----------------------------------------------------------------------
+319:
+370:	if (!ms_dirty)
+371:		return;
+372:
+373:	{
+374:		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::selectLights");
+375:
+376:		// all the previous lights are whack.  bling bling!
+377:		ms_currentLights.obeysLightScale = ms_obeysLightScale;
+378:		{
+379:			for (int i = 0; i < ParallelSpecularCount; ++i)
+380:				ms_currentLights.parallelSpecular[i] = NULL;
+381:		}
+382:		{
+383:			for (int i = 0; i < ParallelCount; ++i)
+384:				ms_currentLights.parallel[i] = NULL;
+385:		}
+386:		{
+387:			for (int i = 0; i < PointSpecularCount; ++i)
+388:				ms_currentLights.pointSpecular[i] = NULL;
+389:		}
+410:			{
+411:				const Light *light = *i;
+412:				switch (light->getType())
+413:				{
+414:					case Light::T_ambient:
+415:					{
+416:						// collapse all ambient lights into a single value
+417:						const VectorArgb &diffuseColor = (light->*getPossiblyScaledDiffuseColor)();
+418:						ms_currentLights.ambient.r += diffuseColor.r;
+419:						ms_currentLights.ambient.g += diffuseColor.g;
+480:
+481:#if PRODUCTION == 0
+482:		if (ms_setLightsOncePerFrame)
+483:		{
+484:			if (!ms_newFrame)
+485:				return;
+486:			ms_newFrame = false;
+487:		}
+488:#endif
+489:	}
+530:		{
+531:			if (
+532:#if PRODUCTION == 0
+533:					ms_disableLightCaching || 
+534:#endif
+535:					ms_currentLights != ms_lastLights)
+536:				applyLights_vertexShader();
+537:			else
+538:				applyLights_vertexShader_dot3();
+539:		}
+550:				ms_currentLights != ms_lastLights)
+551:				applyLights_fixedFunctionPipeline();
+552:		}
+553:#endif
+554:	}
+555:
+556:	ms_lastLights = ms_currentLights;
+557:}
+558:
+559:// ----------------------------------------------------------------------
+
+ succeeded in 3754ms:
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4012:	Direct3d9_LightManager::selectLights();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_LightManager.h:48:	static void selectLights();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_LightManager.cpp:368:void Direct3d9_LightManager::selectLights()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_LightManager.cpp:374:		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::selectLights");
+src/engine/client/application\Direct3d11\src\win32\Direct3d11_LightManager.cpp:92:	// Black-walls fix (2026-06-08): mirror Direct3d9_LightManager::selectLights' directional
+src/engine/client/application\Direct3d9\src\win32\Direct3d9_LightManager.h:48:	static void selectLights();
+src/engine/client/application\Direct3d9\src\win32\Direct3d9_LightManager.cpp:368:void Direct3d9_LightManager::selectLights()
+src/engine/client/application\Direct3d9\src\win32\Direct3d9_LightManager.cpp:374:		PROFILER_AUTO_BLOCK_DEFINE("Direct3d9_LightManager::selectLights");
+src/engine/client/application\Direct3d9\src\win32\Direct3d9.cpp:4012:	Direct3d9_LightManager::selectLights();
+
+ succeeded in 3741ms:
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_LightManager.h:41:	static void setLights(const LightList &lightList);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_LightManager.h:123:	static void setLights(stdvector<Light const *>::fwd const &lightList);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_LightManager.cpp:71:void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lightList)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_LightManager.cpp:85:	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_LightManager.cpp:210:	// ShaderPrimitiveSorter emits transient empty/sunless setLights({}) calls at cell boundaries
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_LightManager.cpp:312:void Direct3d9_LightManager::setLights(const LightList &lightList)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1067:	ms_glApi.setLights                     = Direct3d11_LightManager::setLights;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:346:	void                               setLights(const stdvector<const Light*>::fwd &lightList);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3622:void Direct3d9Namespace::setLights(const stdvector<const Light*>::fwd &lightList)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3629:	Direct3d9_LightManager::setLights(lightList);
+src/engine/client/application\Direct3d9\src\win32\Direct3d9_LightManager.h:41:	static void setLights(const LightList &lightList);
+src/engine/client/application\Direct3d9\src\win32\Direct3d9_LightManager.cpp:312:void Direct3d9_LightManager::setLights(const LightList &lightList)
+src/engine/client/application\Direct3d9\src\win32\Direct3d9.cpp:346:	void                               setLights(const stdvector<const Light*>::fwd &lightList);
+src/engine/client/application\Direct3d9\src\win32\Direct3d9.cpp:3622:void Direct3d9Namespace::setLights(const stdvector<const Light*>::fwd &lightList)
+src/engine/client/application\Direct3d9\src\win32\Direct3d9.cpp:3629:	Direct3d9_LightManager::setLights(lightList);
+src/engine/client/application\Direct3d11\src\win32\Direct3d11.cpp:1067:	ms_glApi.setLights                     = Direct3d11_LightManager::setLights;
+src/engine/client/application\Direct3d11\src\win32\Direct3d11_LightManager.cpp:71:void Direct3d11_LightManager::setLights(stdvector<Light const *>::fwd const &lightList)
+src/engine/client/application\Direct3d11\src\win32\Direct3d11_LightManager.cpp:85:	// The shared ShaderPrimitiveSorter emits transient empty setLights({}) calls at cell
+src/engine/client/application\Direct3d11\src\win32\Direct3d11_LightManager.cpp:210:	// ShaderPrimitiveSorter emits transient empty/sunless setLights({}) calls at cell boundaries
+src/engine/client/application\Direct3d11\src\win32\Direct3d11_LightManager.h:123:	static void setLights(stdvector<Light const *>::fwd const &lightList);
+
+codex
+One important ordering difference is now confirmed by source: D3D9’s API `setLights` only marks dirty, and the selected-light rebuild occurs at render draw time; D3D11 mutates the global dot3 snapshot immediately in `setLights` and later every draw consumes that global snapshot. I’m grabbing the D3D9 draw wrapper lines to cite that ordering directly.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_StaticShaderData.cpp | findstr /r \""'^92[0-9]: ''^93[0-9]: ''^96[0-9]: ''^97[0-9]: ''^98[0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d9\\src\\win32\\Direct3d9.cpp | findstr /r \""'^400[0-9]: ''^401[0-9]: ''^402[0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_StateCache.cpp | findstr /r \""'^37[0-9]: ''^38[0-9]: ''^39[0-9]: ''^40[0-9]: ''^41[0-9]: ''^42[0-9]: ''^43[0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp | Select-Object -Skip 3990 -First 40' in D:\Code\swg-client-v2
+ succeeded in 813ms:
+920:							Direct3d11_LegacyPSConstants::getShadow(),
+921:							Direct3d11_LegacyPSConstants::kShadowBytes);
+922:
+923:						// Plan 17-08 (GAP-4) Producer A (write site): compute the dot3
+924:						// light constants in OBJECT-LOCAL space (the asset PS lights
+925:						// against the object-space normal_o) from the per-frame snapshot
+926:						// + the current object transform, and write c0..c4 into the
+927:						// staging by reflected byte offset (c-index * 16; the reflected
+928:						// vars are generic packedRegister0..4 so we map by OFFSET, not
+929:						// name -- consult-validated). Mirrors
+930:						// Direct3d9_LightManager::applyLights_vertexShader_dot3 (:777-830):
+931:						// localDirection = -rotate_p2l(worldDir), .w = materialSpecularPower.
+932:						Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+933:							// Plan 17-08 (GAP-4) VISIBLE diagnostic via InfoQueue (DEBUG_REPORT_LOG_PRINT
+934:							// is NOT captured in d3d11-debug.log). First few b0 draws report whether
+935:							// Producer A fed lights. d3valid=0 => no T_parallel light at char-select
+936:							// -> c0..c4 zero -> BLACK (prime suspect). d3valid=1 + black => value/space bug.
+937:							{
+938:								static int s_gap4DiagCount = 0;
+939:								if (s_gap4DiagCount < 6)
+960:							Vector const localDir = Direct3d11_StateCache::worldDirectionToObjectLocal(worldDir);
+961:
+962:							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
+963:							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+964:
+965:							// CONSULT-40 (2026-06-08): pack the alpha-fade control into c1.a/c2.a, NOT the
+966:							// light's own diffuse/specular alpha. The asset dot3 PS computes its output alpha as
+967:							//   o0.w = (c1.a > 0) ? c2.a : luminanceBloom
+968:							// where D3D9 sets c1.a = alphaFadeOpacityEnabled (0 when NOT fading) and c2.a =
+969:							// alphaFadeOpacity (Direct3d9_LightManager.cpp:582,584). D3D11 was copying d3.diffuse-
+970:							// Color.a / d3.specularColor.a here -- the SUN light's scaled alphas (diffuse.a == 1.0
+971:							// from PackedRgb::convert default, specular.a == mainSpecularColorScale ~0.6). c1.a==1.0
+972:							// (>0) forced the fade branch on EVERY dot3-shaded draw and emitted ~0.6 as alpha ->
+973:							// faces/bump surfaces rendered translucent/washed (the vertex-lit body shader ignores
+974:							// c1/c2, so it stayed opaque -- the face-wrong/body-right signature). Override .a here,
+975:							// per-draw, from the engine's recorded fade state so non-fading objects take the opaque
+976:							// luminance branch exactly like D3D9. Local copies: the snapshot's .a (used by the VS
+977:							// lightData path in composeSlot0Shadow) is left untouched.
+978:							DirectX::XMFLOAT4 dot3Diffuse  = d3.diffuseColor;
+979:							DirectX::XMFLOAT4 dot3Specular = d3.specularColor;
+980:							dot3Diffuse.w  = Direct3d11_StateCache::getAlphaFadeEnabled() ? 1.0f : 0.0f;
+981:							dot3Specular.w = Direct3d11_StateCache::getAlphaFadeOpacity();
+982:							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &dot3Diffuse,                sizeof(DirectX::XMFLOAT4));
+983:							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &dot3Specular,               sizeof(DirectX::XMFLOAT4));
+984:							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, sizeof(DirectX::XMFLOAT4));
+985:							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    sizeof(DirectX::XMFLOAT4));
+986:
+987:							// CONSULT-41 per-draw probe (TEMP -- REMOVE after blue-face root cause confirmed).
+988:							// The setLights dump captured only boot-time lighting; this fires PER dot3 DRAW with
+989:							// the SHADER NAME, so the NPC's head/face draw appears with the EXACT light snapshot
+
+ succeeded in 821ms:
+370:		// (ms_objectToWorldTransform.rotate_p2l / rotateTranslate_p2l). We fill BOTH
+371:		// parallelSpecular[0] (c17-c19, WORLD dir) AND dot3 (c40-c43, OBJECT-LOCAL)
+372:		// so whichever the VS reads is populated. extendedLightData (c60-c63) carries
+373:		// the hemispheric colors. VSCR layout: lightData[28]@c16, ext[8]@c60 (see
+374:		// Direct3d9_VertexShaderConstantRegisters.h + the VertexSlot0CB static_asserts).
+375:		{
+376:			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+377:
+378:			// ambient @ lightData[0] (c16) -- the real accumulated ambient (always, even with no
+379:			// directional light). Mirrors D3D9 applyLights_vertexShader's lightData.ambient upload.
+380:			s_slot0Shadow.lightData[0] = d3.ambient;
+381:
+382:			if (d3.valid)
+383:			{
+384:				Vector const worldDir(
+385:					d3.localDirectionWorld.x, d3.localDirectionWorld.y, d3.localDirectionWorld.z);
+386:				Vector const localDir = s_cachedObjectToWorldTransform.rotate_p2l(worldDir);
+387:				Vector const camWorld(s_cachedCameraPos.x, s_cachedCameraPos.y, s_cachedCameraPos.z);
+388:				Vector const localCam = s_cachedObjectToWorldTransform.rotateTranslate_p2l(camWorld);
+389:
+390:				// parallelSpecular[0] @ lightData[1..3] (c17-c19): WORLD dir (negated), colors.
+391:				s_slot0Shadow.lightData[1] = DirectX::XMFLOAT4(-worldDir.x, -worldDir.y, -worldDir.z, 0.0f);
+392:				s_slot0Shadow.lightData[2] = d3.diffuseColor;
+393:				s_slot0Shadow.lightData[3] = d3.specularColor;
+394:
+395:				// dot3 @ lightData[24..27] (c40-c43): OBJECT-LOCAL (localCameraPosition,
+396:				// localDirection=-rotate_p2l(dir), diffuseColor, specularColor).
+397:				// Plan 17-09 (GAP-5 specular-power fix): lightData[25].w carries
+398:				// materialSpecularPower (mirror D3D9 applyLights_vertexShader:577
+399:				// `dot3.localDirection.w = getSpecularPower()`). The pre-17-09 stub
+400:				// left .w = 0.0f, but calculateDiffuseSpecularLighting's pow() lowers
+401:				// to exp2(power * log2(N.H)); with power=0 AND N.H<=0 (back/perp
+402:				// vertices, common on arms) that is exp2(0 * -INF) = exp2(NaN) = NaN,
+403:				// poisoning COLOR0/COLOR1 -> the purple/green bump arms. 32 = D3D9's
+404:				// default specular power; the real per-material value is fed below.
+405:				s_slot0Shadow.lightData[24] = DirectX::XMFLOAT4(localCam.x, localCam.y, localCam.z, 1.0f);
+406:				s_slot0Shadow.lightData[25] = DirectX::XMFLOAT4(-localDir.x, -localDir.y, -localDir.z, ms_specularPower);
+407:				s_slot0Shadow.lightData[26] = d3.diffuseColor;
+408:				s_slot0Shadow.lightData[27] = d3.specularColor;
+409:
+410:				// extendedLightData @ [0..3] (c60-c63): hemispheric back/tangent + deltas.
+411:				s_slot0Shadow.extendedLightData[0] = d3.backColor;
+412:				s_slot0Shadow.extendedLightData[1] = d3.tangentColor;
+413:				s_slot0Shadow.extendedLightData[2] = d3.tangentMinusBackColor;
+414:				s_slot0Shadow.extendedLightData[3] = d3.tangentMinusDiffuseColor;
+415:			}
+416:
+417:			// parallel[0..1] @ lightData[4..7] (c20-c23): THE BLACK-WALLS FIX (2026-06-08).
+418:			// The world VS's MAIN diffuse term sums lightData.parallel[0] (c20-21) + parallel[1]
+419:			// (c22-23) -- the FILL + BOUNCE directionals, NOT the sun (the sun is in
+420:			// parallelSpecular[0]/dot3). GAP-5 never filled parallel[] -> the VS diffuse was 0 ->
+421:			// surfaces lit by fill/bounce went black. Feed the diffuse-sorted directionals captured
+422:			// in setLights (direction negated to toward-light, mirroring D3D9 applyLights_vertexShader
+423:			// :638-647 `parallel.direction = -getObjectFrameK_w()`). Independent of d3.valid (the
+424:			// sun): a scene can have fill/bounce without the sun winning the dot3 path.
+425:			for (int pi = 0; pi < 2; ++pi)
+426:			{
+427:				DirectX::XMFLOAT4 const &pd = d3.parallelDirectionWorld[pi];
+428:				s_slot0Shadow.lightData[4 + pi * 2] = DirectX::XMFLOAT4(-pd.x, -pd.y, -pd.z, 0.0f);
+429:				s_slot0Shadow.lightData[5 + pi * 2] = d3.parallelDiffuseColor[pi];
+430:			}
+431:		}
+432:
+433:		// Plan 17-09 (GAP-5, THE bump-arm fix): the VS light loops process a FIXED
+434:		// (unrolled) set of point lights; each computes distanceAttenuation =
+435:		// 1 / dot(attenuationCoeffs, factors). For an UNUSED point light whose coeffs
+436:		// are (0,0,0,0) that is 1/0 = INF, and INF * 0(color) = NaN -> NaN COLOR0/
+437:		// COLOR1 -> the PS NaN-guard zeroes diffuse -> only the normal-map bump term
+438:		// renders -> the purple/green arms. D3D9 avoids this by setting unused point
+439:		// lights' constant attenuation k0=1 (Direct3d9_LightManager.cpp:685 + :717),
+
+ succeeded in 851ms:
+
+	return true;
+}
+
+#endif
+
+// ----------------------------------------------------------------------
+
+inline bool Direct3d9::drawPrimitive()
+{
+	DEBUG_FATAL(!ms_currentShader, ("No shader set -- did you create a new shader and not another?"));
+
+#if DEBUG_LEVEL == DEBUG_LEVEL_DEBUG
+	if (ms_drawCall < ms_allowDrawCallBegin || ms_drawCall > ms_allowDrawCallEnd)
+	{
+		++ms_drawCall;
+		return false;
+	}
+	++ms_drawCall;
+#endif
+
+	Direct3d9_LightManager::selectLights();
+
+#if defined(FFP) && defined(VSPS)
+	if (ms_usingVertexShader)
+#endif
+#ifdef VSPS
+	{
+#ifdef FFP
+		Direct3d9_StateCache::resetTextureCoordinateIndices();
+#endif
+
+		// @todo work around bug in nvidia drivers when using vertex shaders with fog
+		Direct3d9_StateCache::setRenderState(D3DRS_FOGVERTEXMODE, D3DFOG_NONE);
+
+		if (ms_transformDirty)
+		{
+			D3DXMATRIX matrices[2];
+
+#ifdef FFP
+
+ succeeded in 860ms:
+4000:{
+4001:	DEBUG_FATAL(!ms_currentShader, ("No shader set -- did you create a new shader and not another?"));
+4002:
+4003:#if DEBUG_LEVEL == DEBUG_LEVEL_DEBUG
+4004:	if (ms_drawCall < ms_allowDrawCallBegin || ms_drawCall > ms_allowDrawCallEnd)
+4005:	{
+4006:		++ms_drawCall;
+4007:		return false;
+4008:	}
+4009:	++ms_drawCall;
+4010:#endif
+4011:
+4012:	Direct3d9_LightManager::selectLights();
+4013:
+4014:#if defined(FFP) && defined(VSPS)
+4015:	if (ms_usingVertexShader)
+4016:#endif
+4017:#ifdef VSPS
+4018:	{
+4019:#ifdef FFP
+4020:		Direct3d9_StateCache::resetTextureCoordinateIndices();
+4021:#endif
+4022:
+4023:		// @todo work around bug in nvidia drivers when using vertex shaders with fog
+4024:		Direct3d9_StateCache::setRenderState(D3DRS_FOGVERTEXMODE, D3DFOG_NONE);
+4025:
+4026:		if (ms_transformDirty)
+4027:		{
+4028:			D3DXMATRIX matrices[2];
+4029:
+
+codex
+The subtle source-level order issue is not just “what values exist,” it is where the renderer samples them. D3D11 samples the global dot3 state from shader apply and slot0 composition; D3D9 samples selected lights from `drawPrimitive()` immediately before the draw, after the engine has finished staging object state.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp | Select-Object -Skip 1200 -First 180' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_StateCache.cpp | findstr /r \""'^241[0-9]: ''^242[0-9]: ''^243[0-9]: ''^244[0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_StateCache.cpp | findstr /r \""'^120[0-9]: ''^121[0-9]: ''^122[0-9]: ''^123[0-9]: ''^124[0-9]: ''^125[0-9]: ''^136[0-9]: ''^137[0-9]: ''^147[0-9]:"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "findstr /n \".*\" src\\engine\\client\\application\\Direct3d11\\src\\win32\\Direct3d11_StateCache.cpp | findstr /r \""'^256[0-9]: ''^310[0-9]: ''^325[0-9]:"' in D:\Code\swg-client-v2
+ succeeded in 762ms:
+#endif
+
+	bool applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY topology)
+	{
+		ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+		if (!ctx)
+			return false;
+
+		// Plan 11-09 Iter-2.7 Fix C: lazy upload of slot 0 shadow once per
+		// draw. Replaces Plan 11-08's first-draw race guard pattern. Any
+		// matrix setter OR setVSConstants call between draws marks shadow
+		// dirty; this flush uploads the full 1152 bytes (Plan 11-08 full-
+		// fill mandate) and clears the dirty flag.
+		flushSlot0IfDirty();
+
+		// 1. Shaders
+		if (!resolveShaders())
+		{
+			++ms_skippedDrawsNullVS;
+#if P19_SKIP_AUDIT
+			p19LogSkipOnce("resolveShaders-fail");
+#endif
+			return false;
+		}
+		ID3D11VertexShader *vs = ms_currentVSData->getVariant(ms_currentVSKey).d3dVS.Get();   // Plan 17-09: per-key variant
+		if (!vs)
+		{
+			++ms_skippedDrawsNullVS;
+#if P19_SKIP_AUDIT
+			p19LogSkipOnce("VS-null-asm-or-compilefail");
+#endif
+			return false;       // //asm VS or compile failure -- skip
+		}
+
+		// 2. Input layout (depends on VBFormat + VS bytecode -- Pitfall 6)
+		if (!ms_currentInputLayout)
+		{
+			++ms_skippedDrawsNullLayout;
+			return false;
+		}
+
+		ctx->IASetInputLayout(ms_currentInputLayout);
+		ctx->IASetPrimitiveTopology(topology);
+
+		// 3. VB -- Plan 11-09.7 multi-stream path takes precedence.
+		if (ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0)
+		{
+			ctx->IASetVertexBuffers(
+				0,
+				static_cast<UINT>(ms_currentVBVectorStreamCount),
+				ms_currentVBVectorBuffers,
+				ms_currentVBVectorStrides,
+				ms_currentVBVectorOffsets);
+		}
+		else if (ms_currentVBValid && ms_currentVB)
+		{
+			ID3D11Buffer *vbs[1] = { ms_currentVB };
+			UINT strides[1]      = { ms_currentVBStride };
+			UINT offsets[1]      = { ms_currentVBOffset };
+			ctx->IASetVertexBuffers(0, 1, vbs, strides, offsets);
+		}
+
+		// Plan 11-09.8: phantom zero buffer at slot 15. Backs reflection-
+		// driven phantom-element InputSlot=15 entries that
+		// VertexBufferDescriptorMap::augmentWithPhantomElements appended
+		// for VS-declared inputs the VBFormat doesn't cover (vs_4_0
+		// signature strictness). Stride=0 means every vertex reads the
+		// same zero value. Cheaper to bind unconditionally than to gate
+		// per-VS (CODEX 11-09.8 consult Q4); D3D11 is fine with unused-
+		// but-bound slots.
+		{
+			ID3D11Buffer *phantomVB    = Direct3d11_Device::getPhantomZeroBuffer();
+			UINT          phantomStride = 0;
+			UINT          phantomOffset = 0;
+			if (phantomVB)
+				ctx->IASetVertexBuffers(15, 1, &phantomVB, &phantomStride, &phantomOffset);
+		}
+
+		// 4. IB (only for indexed draws -- caller passes topology that
+		// implies indexed; we always bind if valid to avoid driver state).
+		if (ms_currentIBValid && ms_currentIB)
+			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+
+		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3 / 17-04 Task 1:
+		// VS<->PS signature pair validation gates the asset-PS bind so D3D11
+		// register-position-strict linkage is honored. When incompatible,
+		// route through selectFallbackPSForVS whose buildHlslForVSOutputs-built
+		// PS mirrors the VS output signature register-for-register).
+		ctx->VSSetShader(vs, nullptr, 0);
+
+		// Plan 17-04 Task 1: validate the (VS, PS) pair signature compatibility
+		// before letting the Plan 17-02-bound asset PS win. Pre-17-04 this gate
+		// was implicit (any non-null ms_currentPSData->getPixelShader() won
+		// unconditionally), which produced id=343 x 24K per char-select boot
+		// because asset PS input register positions didn't match the VS output
+		// the recompile lane assigned independently. isCompatibleWithVS returns
+		// true for the safe-bind path (matched semantics + registers + types +
+		// mask-subset) and false on any mismatch (route through the VS-matched
+		// per-VS PS instead). See Direct3d11_PixelShaderProgramData::
+		// isCompatibleWithVS for the validation contract + per-pair logging.
+		// Plan 17-07 (HIGH-2 + Round-5 item 10): bind priority is
+		// native-asset-PS > rewritten-cached-PS > dynamic-fallback-PS.
+		ID3D11PixelShader *psToBind = nullptr;
+		char const *bindPath = "none";
+		// Phase 19: when the VS is the generic //asm FALLBACK (isAssembly), it
+		// emits only SV_Position + TEXCOORD0 + const-white COLOR0 -- NOT the
+		// asm-computed varyings the asset PS expects. Skip the native/rewritten
+		// asset-PS lanes entirely and route straight to selectFallbackPSForVS,
+		// whose buildHlslForVSOutputs PS mirrors the fallback VS output sig
+		// (textured-passthrough). Binding an asset PS here would read undeclared
+		// varyings -> wrong/magenta. See Direct3d11_VertexShaderData::isAssembly.
+		bool const vsIsFallback = ms_currentVSData && ms_currentVSData->isAssembly();
+		if (vsIsFallback)
+		{
+			// fall through to the fallback-PS selection block below
+		}
+		else if (ms_currentPSData && ms_currentPSData->getPixelShader()
+			&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS(ms_currentVSData, ms_currentVSKey, ms_currentPSData))
+		{
+			// 1. Native asset PS validated by the unchanged ctor-time validator.
+			psToBind = ms_currentPSData->getPixelShader();
+			bindPath = "native";
+		}
+		else if (ms_currentPSData)
+		{
+			// 2. Plan 17-07: native asset PS was INCOMPATIBLE (register-position
+			// mismatch). Try the per-VS rewritten cache (the retained //hlsl PSRC
+			// main() parameter list reordered into the bound VS's output-register
+			// layout) BEFORE the dynamic fallback. Validate the rewritten PS via
+			// its OWN per-VS reflected inputs (HIGH-6) so the native ctor-time
+			// m_reflectedPSInputs cache doesn't false-reject it.
+			std::pair<ID3D11PixelShader *, std::vector<Direct3d11_ReflectedPSInputSig> const *> const rewritten =
+				ms_currentPSData->tryGetOrBuildRewrittenPSForVS(ms_currentVSData, ms_currentVSKey);
+			if (rewritten.first && rewritten.second
+				&& Direct3d11_PixelShaderProgramData::isCompatibleWithVS_withExplicitPSInputs(
+					ms_currentVSData, ms_currentVSKey, *rewritten.second, static_cast<void const *>(rewritten.first)))
+			{
+				psToBind = rewritten.first;
+				bindPath = "rewritten";
+			}
+		}
+		if (!psToBind)
+		{
+			// 3. Plan 11-09.13 Iter-3 / 17-04 Task 1 safety net: VS-matched per-VS
+			// PS (Variant T textured-passthrough) when the bound VS's reflected
+			// output signature is stage-linkage compatible, else Variant M
+			// (magenta). Owns the residual 0-1/9 pair the asset lane can't satisfy.
+			if (ID3D11PixelShader *fallback = selectFallbackPSForVS(ms_currentVSData, ms_currentVSKey))
+			{
+				psToBind = fallback;
+				bindPath = "fallback";
+			}
+		}
+		if (psToBind)
+		{
+			ctx->PSSetShader(psToBind, nullptr, 0);
+			// Plan 17-07 (Round-4 MEDIUM): prove WHICH lane delivered the bind --
+			// `asset-PS bound=` (path=native|rewritten) vs `fallback-PS bound=`.
+			// One-shot per (VS, PS, path); Plan 17-05 Task 4 greps these counts.
+			emitPlan1707BindAttribution(ms_currentVSData, ms_currentPSData, psToBind, bindPath);
+		}
+
+		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by
+		// Direct3d11.cpp's setVertexShaderUserConstants_impl /
+		// setPixelShaderUserConstants_impl land on the GPU here. The
+		// ConstantBuffer API binds the cbuffer to slot 1 / slot 2 per
+		// Plan 11-05 convention; updateVS/updatePS callers (the per-frame
+		// transform setters in this file) update slot 0.
+		Direct3d11_ConstantBuffer::bindVS(0);
+		Direct3d11_ConstantBuffer::bindVS(1);
+		Direct3d11_ConstantBuffer::bindPS(0);
+		Direct3d11_ConstantBuffer::bindPS(2);
+
+		// 7. SRVs + samplers (Pitfall 4 split)
+		ctx->PSSetShaderResources(0, kMaxSRVs, ms_boundSRV);
+		ctx->PSSetSamplers(0, kMaxSamplers, ms_boundSampler);
+		if (ms_boundSRV[0])
+			++ms_drawsWithSRV0Bound;
+
+		// Plan 11-09.15 Iter-26: log ALL draws (transformed + non-transformed)
+
+ succeeded in 799ms:
+2410:void Direct3d11_StateCache::setBadVertexShaderStaticShader(StaticShader const * /*shader*/)
+2411:{
+2412:	// Diagnostic-only in D3D9 plugin. Plan 11-06 records the slot bound
+2413:	// but does not consume it -- Plan 11-07 smoke surfaces whether the
+2414:	// engine relies on this for debugging.
+2415:}
+2416:
+2417:// ----------------------------------------------------------------------
+2418:
+2419:void Direct3d11_StateCache::setStaticShader(StaticShader const &shader, int pass)
+2420:{
+2421:	// Plan 11-09 Iter-1: the canonical port of Direct3d9.cpp:3044-3072. Cast
+2422:	// shader.m_graphicsData -> Direct3d11_StaticShaderData const * and call
+2423:	// apply(pass); StaticShaderData::apply wires ms_currentVSData /
+2424:	// ms_currentPSData via the new setCurrentVSData/setCurrentPSData
+2425:	// setters below.
+2426:	//
+2427:	// Plan 11-06's original "no-op record" comment is OBSOLETE -- treating
+2428:	// this slot as a no-op was the root cause of Plan 11-08's post-Task-3b
+2429:	// "zero draws reach the GPU" diagnostic (setStaticShader never wired
+2430:	// ms_currentVSData, so applyPreDrawState's resolveShaders always
+2431:	// short-circuited). Confirmed by CODEX post-implementation consult.
+2432:	//
+2433:	// shader.m_graphicsData was populated by Graphics::createStaticShader
+2434:	// GraphicsData -> Direct3d11::createStaticShaderGraphicsData (Plan 11-06)
+2435:	// -> new Direct3d11_StaticShaderData(shader). It is non-null for every
+2436:	// StaticShader the engine asks us to bind.
+2437:	Direct3d11_StaticShaderData const * d3dShader =
+2438:		static_cast<Direct3d11_StaticShaderData const *>(shader.m_graphicsData);
+2439:	NOT_NULL(d3dShader);
+2440:	IGNORE_RETURN(d3dShader->apply(pass));
+2441:}
+2442:
+2443:// ----------------------------------------------------------------------
+2444:
+2445:void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs, uint32 textureCoordinateSetKey)
+2446:{
+2447:	// Plan 11-09 Iter-1: Direct3d11_StaticShaderData::apply calls this
+2448:	// once per draw with the per-pass VS pointer. Trip ms_geometryRebindNeeded
+2449:	// so the next applyPreDrawState reselects the input layout against the
+
+ succeeded in 694ms:
+2560:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2561:}
+2562:
+2563:void Direct3d11_StateCache::drawTriangleList()
+2564:{
+2565:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2566:		return;
+2567:	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2568:}
+2569:
+3100:}
+3101:
+3102:void Direct3d11_StateCache::drawIndexedTriangleList()
+3103:{
+3104:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3105:		return;
+3106:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3107:}
+3108:
+3109:void Direct3d11_StateCache::drawIndexedTriangleStrip()
+3250:		return;
+3251:	Direct3d11_Device::getContext()->DrawIndexed(
+3252:		static_cast<UINT>(primitiveCount + 1),
+3253:		static_cast<UINT>(startIndex),
+3254:		static_cast<INT>(baseIndex));
+3255:}
+3256:
+3257:void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3258:{
+3259:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+
+ succeeded in 695ms:
+1200:	}
+1201:#endif
+1202:
+1203:	bool applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY topology)
+1204:	{
+1205:		ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+1206:		if (!ctx)
+1207:			return false;
+1208:
+1209:		// Plan 11-09 Iter-2.7 Fix C: lazy upload of slot 0 shadow once per
+1210:		// draw. Replaces Plan 11-08's first-draw race guard pattern. Any
+1211:		// matrix setter OR setVSConstants call between draws marks shadow
+1212:		// dirty; this flush uploads the full 1152 bytes (Plan 11-08 full-
+1213:		// fill mandate) and clears the dirty flag.
+1214:		flushSlot0IfDirty();
+1215:
+1216:		// 1. Shaders
+1217:		if (!resolveShaders())
+1218:		{
+1219:			++ms_skippedDrawsNullVS;
+1220:#if P19_SKIP_AUDIT
+1221:			p19LogSkipOnce("resolveShaders-fail");
+1222:#endif
+1223:			return false;
+1224:		}
+1225:		ID3D11VertexShader *vs = ms_currentVSData->getVariant(ms_currentVSKey).d3dVS.Get();   // Plan 17-09: per-key variant
+1226:		if (!vs)
+1227:		{
+1228:			++ms_skippedDrawsNullVS;
+1229:#if P19_SKIP_AUDIT
+1230:			p19LogSkipOnce("VS-null-asm-or-compilefail");
+1231:#endif
+1232:			return false;       // //asm VS or compile failure -- skip
+1233:		}
+1234:
+1235:		// 2. Input layout (depends on VBFormat + VS bytecode -- Pitfall 6)
+1236:		if (!ms_currentInputLayout)
+1237:		{
+1238:			++ms_skippedDrawsNullLayout;
+1239:			return false;
+1240:		}
+1241:
+1242:		ctx->IASetInputLayout(ms_currentInputLayout);
+1243:		ctx->IASetPrimitiveTopology(topology);
+1244:
+1245:		// 3. VB -- Plan 11-09.7 multi-stream path takes precedence.
+1246:		if (ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0)
+1247:		{
+1248:			ctx->IASetVertexBuffers(
+1249:				0,
+1250:				static_cast<UINT>(ms_currentVBVectorStreamCount),
+1251:				ms_currentVBVectorBuffers,
+1252:				ms_currentVBVectorStrides,
+1253:				ms_currentVBVectorOffsets);
+1254:		}
+1255:		else if (ms_currentVBValid && ms_currentVB)
+1256:		{
+1257:			ID3D11Buffer *vbs[1] = { ms_currentVB };
+1258:			UINT strides[1]      = { ms_currentVBStride };
+1259:			UINT offsets[1]      = { ms_currentVBOffset };
+1360:			emitPlan1707BindAttribution(ms_currentVSData, ms_currentPSData, psToBind, bindPath);
+1361:		}
+1362:
+1363:		// 6. cbuffer flush (Pitfall 5). The shadow buffers maintained by
+1364:		// Direct3d11.cpp's setVertexShaderUserConstants_impl /
+1365:		// setPixelShaderUserConstants_impl land on the GPU here. The
+1366:		// ConstantBuffer API binds the cbuffer to slot 1 / slot 2 per
+1367:		// Plan 11-05 convention; updateVS/updatePS callers (the per-frame
+1368:		// transform setters in this file) update slot 0.
+1369:		Direct3d11_ConstantBuffer::bindVS(0);
+1370:		Direct3d11_ConstantBuffer::bindVS(1);
+1371:		Direct3d11_ConstantBuffer::bindPS(0);
+1372:		Direct3d11_ConstantBuffer::bindPS(2);
+1373:
+1374:		// 7. SRVs + samplers (Pitfall 4 split)
+1375:		ctx->PSSetShaderResources(0, kMaxSRVs, ms_boundSRV);
+1376:		ctx->PSSetSamplers(0, kMaxSamplers, ms_boundSampler);
+1377:		if (ms_boundSRV[0])
+1378:			++ms_drawsWithSRV0Bound;
+1379:
+1470:		}
+1471:		if (ms_dssDirty)
+1472:		{
+1473:			ID3D11DepthStencilState *dss = getOrCreateDSS(ms_dssDesc);
+1474:			if (dss) ctx->OMSetDepthStencilState(dss, 0);
+1475:			ms_dssDirty = false;
+1476:		}
+1477:
+1478:		++ms_drawCallCount;
+1479:
+
+codex
+### 5 — A (CODEX, dataflow/order trace)
+
+D3D9 refreshes lighting at draw time. `setLights()` only stores the list and marks dirty at `Direct3d9_LightManager.cpp:312-315`; every primitive then calls `Direct3d9_LightManager::selectLights()` immediately before drawing at `Direct3d9.cpp:4012`. That rebuild clears prior selected lights at `Direct3d9_LightManager.cpp:379-389`, refills ambient/parallel state from the current list at `414-440`, applies VS/dot3 constants when changed at `535-538`, then snapshots `ms_lastLights` at `556`.
+
+D3D11 does not have that draw-time per-object rebuild. `setLights()` immediately mutates the global `s_pixelDot3State`, but the CONSULT-38 persistence path explicitly keeps the old snapshot across empty/sunless calls at `Direct3d11_LightManager.cpp:84-90`. The dot3 sun state only updates under `if (psSlot)` at `181`, and the 3-directional fill state only updates under `if (psSlot)` at `217`; otherwise the prior directional/fill snapshot survives. The face draw later consumes that global snapshot in two places: PS dot3 constants read it in `Direct3d11_StaticShaderData.cpp:932` and write c0..c4 at `963`/`982-985`; VS vertex lighting reads it in `Direct3d11_StateCache.cpp:376` and writes c16/c17/c20..c23 at `380-429`, before the draw call path such as `drawIndexedTriangleList()` at `3104-3106`.
+
+So the face is not guaranteed to read her object’s freshly selected lights in D3D11. It reads whatever global dot3 snapshot survived until her shader/draw. Given the locked facts, that surviving state is the prior blue/cyan directional/fill state; D3D9 instead rebuilds selected lights at the face draw and lands the warm state.
+
+First divergent source line: `Direct3d11_LightManager.cpp:84` starts the “do not invalidate” persistence policy, but the first executable gate that lets the blue directional survive is `Direct3d11_LightManager.cpp:181` (`if (psSlot)`) and then `217` for the fill/parallel feed. D3D9’s contrasting draw-time reset begins at `Direct3d9_LightManager.cpp:379`.
+
+### 6 Deliverable
+
+1. Finding: sticky prior-object lighting is confirmed for this angle. D3D11’s face draw consumes `s_pixelDot3State` from `Direct3d11_StaticShaderData.cpp:932` / `Direct3d11_StateCache.cpp:376`; that state persists across sunless/empty `setLights()` because updates are gated at `Direct3d11_LightManager.cpp:181` and `217`.
+
+2. §4 candidates:
+   - (a) Snapshot stickiness: confirmed.
+   - (b) Selection cascade: refuted as primary for this angle. The D3D11 cascade mirrors D3D9’s slot logic; the problem is lifetime/order of the selected snapshot.
+   - (c) Neither / legit blue cell / color path: refuted by the D3D9 draw-time rebuild plus locked identical light colors.
+
+3. Minimal D3D9-parity fix: add a D3D11 draw-time light refresh analogous to D3D9 `drawPrimitive()->selectLights()`, but preserve CONSULT-38 persistence only for true empty/sunless cell-boundary calls. Exact location: call the new refresh at the top of `Direct3d11_StateCache::applyPreDrawState()`, before `flushSlot0IfDirty()` at `Direct3d11_StateCache.cpp:1214`, so c16/c20..c23 and dot3 constants are composed from the current object’s light state for this draw. Do not remove the existing 3-directional feed at `Direct3d11_LightManager.cpp:217-235`.
+
+4. Decisive measurement: log, for the specific skinned-character face draw, the immediately preceding `setLights()` sequence plus the snapshot consumed at `StaticShaderData::apply` and `composeSlot0Shadow`: shader name, draw index, `psSlot` present, `d3.diffuseColor`, `d3.ambient`, `parallelDiffuseColor[0..1]`. Compare to D3D9’s `selectLights()` output at `Direct3d9.cpp:4012` for the same draw.
+tokens used
+102,737
+### 5 — A (CODEX, dataflow/order trace)
+
+D3D9 refreshes lighting at draw time. `setLights()` only stores the list and marks dirty at `Direct3d9_LightManager.cpp:312-315`; every primitive then calls `Direct3d9_LightManager::selectLights()` immediately before drawing at `Direct3d9.cpp:4012`. That rebuild clears prior selected lights at `Direct3d9_LightManager.cpp:379-389`, refills ambient/parallel state from the current list at `414-440`, applies VS/dot3 constants when changed at `535-538`, then snapshots `ms_lastLights` at `556`.
+
+D3D11 does not have that draw-time per-object rebuild. `setLights()` immediately mutates the global `s_pixelDot3State`, but the CONSULT-38 persistence path explicitly keeps the old snapshot across empty/sunless calls at `Direct3d11_LightManager.cpp:84-90`. The dot3 sun state only updates under `if (psSlot)` at `181`, and the 3-directional fill state only updates under `if (psSlot)` at `217`; otherwise the prior directional/fill snapshot survives. The face draw later consumes that global snapshot in two places: PS dot3 constants read it in `Direct3d11_StaticShaderData.cpp:932` and write c0..c4 at `963`/`982-985`; VS vertex lighting reads it in `Direct3d11_StateCache.cpp:376` and writes c16/c17/c20..c23 at `380-429`, before the draw call path such as `drawIndexedTriangleList()` at `3104-3106`.
+
+So the face is not guaranteed to read her object’s freshly selected lights in D3D11. It reads whatever global dot3 snapshot survived until her shader/draw. Given the locked facts, that surviving state is the prior blue/cyan directional/fill state; D3D9 instead rebuilds selected lights at the face draw and lands the warm state.
+
+First divergent source line: `Direct3d11_LightManager.cpp:84` starts the “do not invalidate” persistence policy, but the first executable gate that lets the blue directional survive is `Direct3d11_LightManager.cpp:181` (`if (psSlot)`) and then `217` for the fill/parallel feed. D3D9’s contrasting draw-time reset begins at `Direct3d9_LightManager.cpp:379`.
+
+### 6 Deliverable
+
+1. Finding: sticky prior-object lighting is confirmed for this angle. D3D11’s face draw consumes `s_pixelDot3State` from `Direct3d11_StaticShaderData.cpp:932` / `Direct3d11_StateCache.cpp:376`; that state persists across sunless/empty `setLights()` because updates are gated at `Direct3d11_LightManager.cpp:181` and `217`.
+
+2. §4 candidates:
+   - (a) Snapshot stickiness: confirmed.
+   - (b) Selection cascade: refuted as primary for this angle. The D3D11 cascade mirrors D3D9’s slot logic; the problem is lifetime/order of the selected snapshot.
+   - (c) Neither / legit blue cell / color path: refuted by the D3D9 draw-time rebuild plus locked identical light colors.
+
+3. Minimal D3D9-parity fix: add a D3D11 draw-time light refresh analogous to D3D9 `drawPrimitive()->selectLights()`, but preserve CONSULT-38 persistence only for true empty/sunless cell-boundary calls. Exact location: call the new refresh at the top of `Direct3d11_StateCache::applyPreDrawState()`, before `flushSlot0IfDirty()` at `Direct3d11_StateCache.cpp:1214`, so c16/c20..c23 and dot3 constants are composed from the current object’s light state for this draw. Do not remove the existing 3-directional feed at `Direct3d11_LightManager.cpp:217-235`.
+
+4. Decisive measurement: log, for the specific skinned-character face draw, the immediately preceding `setLights()` sequence plus the snapshot consumed at `StaticShaderData::apply` and `composeSlot0Shadow`: shader name, draw index, `psSlot` present, `d3.diffuseColor`, `d3.ambient`, `parallelDiffuseColor[0..1]`. Compare to D3D9’s `selectLights()` output at `Direct3d9.cpp:4012` for the same draw.

@@ -1,0 +1,175 @@
+# CONSULT-26-A — RenderDoc fidelity for a single shared DYNAMIC vertex ring (NO_OVERWRITE/DISCARD, deferred draws)
+
+Date: 2026-06-07
+Researcher role: graphics-debugging reference researcher
+Scope: RenderDoc (renderdoc.org/docs + baldurk/renderdoc GitHub issues). API of interest: D3D11.
+Confidence convention: [DOC] = quoted from official docs; [ISSUE] = quoted from a GitHub issue (often by maintainer baldurk); [INFERRED] = reasoned from cited sources, not a verbatim statement; [UNCERTAIN] = could not confirm in a primary source.
+
+---
+
+## Scenario being analyzed
+
+A single `ID3D11Buffer` (`D3D11_USAGE_DYNAMIC`, vertex buffer) is used as a shared ring. Per frame, many consumers each:
+`Map(WRITE_NO_OVERWRITE)` to append a slice (or `Map(WRITE_DISCARD)` on wrap) -> write vertices -> `Unmap()` -> bind at a byte offset -> `DrawIndexed`. Critically, **some consumers write their slice early but issue their `DrawIndexed` later**, after other consumers have Mapped/written the same buffer.
+
+The core question is whether RenderDoc's Mesh Output / Buffer viewer shows, for a given draw, the bytes that were actually in the buffer **at that draw**, or some other generation.
+
+---
+
+## 1. How RenderDoc reconstructs vertex data for a given draw — and Map serialization
+
+### 1a. Replay is verbatim and in-order; state at an EID is the state produced by all serialised chunks up to that EID
+
+RenderDoc does **not** snapshot a buffer once and show that snapshot for every draw. It stores the frame as an ordered, chunk-based command stream and **re-executes it** up to the selected event.
+
+> "the initial section of the capture (up to the beginning of the frame) is read and executed verbatim." — [DOC] How RenderDoc works (https://renderdoc.org/docs/behind_scenes/how_works.html)
+
+> "a chunk-based representation" ... "Resources which did not have a serialised initial state (e.g. gbuffer textures) have an initial state saved before the first replay of the frame, and this is restored." — [DOC] How RenderDoc works (https://renderdoc.org/docs/behind_scenes/how_works.html)
+
+During background (non-active) capture RenderDoc tracks creation/deletion and **data-upload calls**:
+
+> "data-upload calls can sometimes be serialised." — [DOC] How RenderDoc works (https://renderdoc.org/docs/behind_scenes/how_works.html)
+
+[INFERRED] Because the active frame is replayed chunk-by-chunk in serialised order, a `Map/Unmap` is a chunk in that stream just like a draw. When you select a draw's EID, RenderDoc has replayed every chunk up to (and including the state-setup for) that draw, including each preceding `Map/Unmap` write to the dynamic ring. Therefore the Mesh Output / Buffer viewer for that draw reflects the buffer contents **as produced by the Map/Unmap writes that were serialised before that draw's EID** — i.e. the contents *as of that draw*, not end-of-frame and not "the most recent Map" in wall-clock terms. This is the mechanism that makes a correctly-recorded `WRITE_NO_OVERWRITE` ring replay correctly: each slice's write chunk lands before the draw that consumes it.
+
+### 1b. How Map(NO_OVERWRITE) vs Map(DISCARD) are captured (D3D11 specifically)
+
+On D3D11/OpenGL, RenderDoc intercepts the pointer returned by `Map()` and records the bytes the application writes by reading them back on `Unmap()` (or via an intermediate/shadow buffer):
+
+> "There are also slight differences to the interception of Map() calls as they may go through an intermediate buffer to be captured." — [DOC] FAQ (https://renderdoc.org/docs/getting_started/faq.html)
+
+> "this is only supported on D3D11 and OpenGL currently, since Vulkan and D3D12 are lower overhead and do not have the infrastructure to intercept map writes." — [DOC] FAQ (https://renderdoc.org/docs/getting_started/faq.html)
+
+[INFERRED] The mapping mode (`WRITE_DISCARD` vs `WRITE_NO_OVERWRITE`) is itself part of the serialised `Map` chunk, and the *written bytes* are recorded per Map/Unmap. On replay these are applied in order to the (single) buffer resource. So:
+- A `WRITE_NO_OVERWRITE` map writes only its slice's bytes into the buffer; bytes outside that slice retain whatever a prior chunk left there.
+- A `WRITE_DISCARD` map (on wrap) is, at the API level, a promise that the old contents may be thrown away. **The application only writes the bytes it intends to use after a discard.** [INFERRED] RenderDoc records exactly the bytes the app wrote for that Map; any region of the buffer the app did *not* write after a discard has no defined source value at replay time (see §4).
+
+### 1c. The critical caveat for "write early, draw late"
+
+[INFERRED — high confidence] For the deferred-draw pattern to replay faithfully, the only requirement is that the application's `Map/Unmap` that wrote a given slice is serialised *before* the draw that consumes it (which is true if it really happened earlier in the frame). The danger is the inverse, documented as an outright capture failure when a Map spans a Present boundary:
+
+> "if you start a Map() before a Present() call and then call Unmap() after the Present() during a frame RenderDoc wants to capture, RenderDoc won't have intercepted [the relevant] call and so will fail to capture this frame." — [DOC] FAQ, paraphrased in search; underlying text on Map interception (https://renderdoc.org/docs/getting_started/faq.html)
+
+[INFERRED] Within a single frame (no Present in between), the write-early/draw-late ordering is preserved by serialisation, so the Mesh/Buffer view for the late draw should show the slice written by that consumer's earlier Map — *provided the application's offsets and ranges are honest* (see §2/§4 for where this breaks).
+
+---
+
+## 2. Documented cases where Mesh/Buffer view DIVERGES from what the GPU rasterized
+
+These are the concrete, source-backed divergence modes relevant to a dynamic discard-cycled ring:
+
+### D-1. Empty / under-reported written range on Unmap -> bytes recorded as ZERO (the headline failure)
+RenderDoc records what the application *declares* it wrote. If the app under-reports the modified range, RenderDoc records (and thus replays) the unreported bytes as not-written — which surfaces as zeroes.
+
+> "RenderDoc is behaving consistently with the calls the application is making. When those buffers are unmapped, the `pWrittenRange` passed in is empty: `Begin = End = 0` so no bytes are recorded." — [ISSUE] baldurk, #2323 (https://github.com/baldurk/renderdoc/issues/2323)
+
+> "tooling like RenderDoc that uses this parameter expects it to be a bound on the modified range ... If you can't determine the written range you can pass NULL which indicates the whole resource is written." — [ISSUE] baldurk, #2323
+
+> "Capturing a DX12 application and then replaying it shows some of the (staging) buffer contents as zeroes ... replaying isn't usable, since it works on a different set of data." — [ISSUE] reporter (kvark), #2323
+
+Note: #2323 is D3D12 (which uses an explicit `pWrittenRange` on `Unmap`). [INFERRED] The *class* of bug — "RenderDoc shows the bytes the app declared, which can be zero/stale when the app's declared range is wrong" — is general. D3D11's `Map/Unmap` has no `pWrittenRange`, so RenderDoc must determine the modified bytes itself via interception/shadow buffer (§1b); the analogous failure on D3D11 is any case where the actual GPU write didn't go through the intercepted CPU pointer.
+
+### D-2. GPU-side / persistent-mapped writes are NOT reflected in the live program, and can mismatch the viewer
+When memory is written by the GPU (or via a persistent coherent mapping that bypasses the intercepted Unmap), the intercept path can miss it.
+
+> "It seems like buffer writes in shaders are simply ignored when I run it in RenderDoc ... Oddly enough when I actually do a capture and view the buffer contents I can see the correct value." — [ISSUE] reporter, #677 "GPU-writes to persistent mapped buffers have no effect" (https://github.com/baldurk/renderdoc/issues/677)
+
+[INFERRED] This shows the two paths (live intercepted memory vs the captured/replayed buffer) can disagree. For a CPU-written DYNAMIC vertex ring this specific GPU-write case does not apply, but it confirms the general principle: *the viewer shows RenderDoc's recorded/serialised version of the buffer, which is only as good as the interception of the writes.*
+
+### D-3. Vertex-fetch-from-structured-buffer makes the Mesh INPUT view unusable
+If geometry is pulled by the shader from an SRV/structured buffer rather than via the input-assembler vertex-buffer binding, the Mesh Viewer's input stage has nothing to reflect.
+
+> "we've moved from using vertex attributes to dynamic fetches from a shader storage buffer, and that makes RenderDoc's mesh input view unusable." — [ISSUE] reporter, #894 "Buffer Contents Mesh Preview" (https://github.com/baldurk/renderdoc/issues/894)
+
+[INFERRED] Not your pattern (you bind a real VB), but relevant if any consumer later switches to vertex-pulling.
+
+### D-4. Mesh OUTPUT view vs vertex-shader debugger can disagree
+There is a tracked discrepancy class between the Mesh Viewer's VS Output and the result of debugging the same vertex shader.
+
+> Issue title: "Discrepancy between Mesh Viewer VS Output and corresponding Vertex Shader debug output" — [ISSUE] #1604 (https://github.com/baldurk/renderdoc/issues/1604)
+
+[UNCERTAIN] Did not fetch the full thread; flag as a known potential divergence between the two reconstructions of the same draw.
+
+### D-5. Mesh-output preview clipping/degenerate-primitive handling
+The preview does not always discard primitives the way the rasterizer would (e.g. w<=0 handling), so the visual preview can differ from what was rasterized even when the data is correct.
+
+> Issue title: "Mesh output preview doesn't discard primitives whose all vertices have a zero W component set in clip space" — [ISSUE] #431 (https://github.com/baldurk/renderdoc/issues/431)
+
+[INFERRED] Directly relevant to a "collapse to one point" appearance: degenerate/zeroed vertices that the GPU would have culled may still be drawn (or drawn collapsed) in the preview.
+
+### D-6. SV_VertexID / indexing edge cases under DrawIndexed
+> Issue title: "The value of SV_VertexID seems to be wrong in renderdoc when used with ID3D11DeviceContext::DrawIndexed" — [ISSUE] #1862 (https://github.com/baldurk/renderdoc/issues/1862)
+
+[UNCERTAIN] Listed for completeness; could perturb reconstructed indexing for an indexed draw off a shared VB. Did not read full thread.
+
+---
+
+## 3. Authoritative way to inspect the EXACT bytes a specific draw consumed
+
+1. **Select the draw's EID first.** RenderDoc state is event-relative; replay has executed all chunks up to that EID, so every viewer reflects the buffer *as of that draw*. (Mechanism: §1a.) [DOC/INFERRED]
+
+2. **Mesh Viewer (VS In / VS Out).** Shows per-vertex data "pulled from the relevant stage of the pipeline - shader input or output, or vertex input attributes," with instance selection. — [DOC] Mesh Viewer (https://renderdoc.org/docs/window/mesh_viewer.html). For an indexed draw off the shared ring, the VS Input tab is the IA's view of the bound VB at the bound offset for that draw.
+
+3. **Raw Buffer Viewer at the bound offset.** Open the bound vertex buffer as a raw buffer; you can set "the visible range to be interpreted, given a byte offset and length." — [DOC] Buffer Viewer (https://renderdoc.org/docs/window/buffer_viewer.html). [INFERRED] Set the byte offset to the consumer's slice offset to read exactly the bytes that draw's IA fetched. This is the most direct way to confirm slice contents independent of IA-layout reconstruction.
+
+4. **Pipeline State -> Input Assembler / VS bindings.** Confirms the *actual* bound buffer, byte offset, and stride for that EID, so you know which slice the draw read. — [DOC] Pipeline State (https://renderdoc.org/docs/window/pipeline_state.html).
+
+5. **Resource Inspector / `get_resource_usage`.** Lists, per resource, every EID and usage (where this buffer was bound/written/read) — lets you correlate which Map/Unmap chunks preceded the draw. [INFERRED from API: Replay Analysis / resources docs.]
+
+6. **`Verify Buffer Access` capture option (D3D11/OpenGL).** Re-capture with it enabled to *prove* whether the app's map writes are honest (see §4). This is the authoritative way to catch a slice that was bound/drawn but never actually written, or written out of bounds.
+
+7. **Python API.** `decode_mesh` example shows programmatic extraction of the reconstructed mesh for a draw. — [DOC] Decoding Mesh Data (https://renderdoc.org/docs/python_api/examples/renderdoc/decode_mesh.html).
+
+---
+
+## 4. Zeros / repeated marker value in unwritten regions -> apparent "collapse to one point"
+
+Yes — this phenomenon is documented and directly explains a transform-to-a-single-point visual.
+
+### 4a. Under-written / never-written regions read as ZERO
+Per §D-1, any buffer region RenderDoc did not record as written replays as zero.
+
+> "no bytes are recorded" -> contents "replayed as zeroes" — [ISSUE] baldurk + reporter, #2323 (https://github.com/baldurk/renderdoc/issues/2323)
+
+[INFERRED] After a `WRITE_DISCARD`, the entire buffer is conceptually fresh; only the bytes the consumer writes are valid. If RenderDoc reconstructs a *different* slice/offset (e.g. a deferred draw whose recorded slice was overwritten or never recorded) the reconstructed positions can be all-zero. **All-zero positions after a perspective/WVP transform collapse to a single clip-space point** (origin), which is exactly the "collapse to one point" / spike-from-one-vertex signature.
+
+### 4b. Explicit marker fill of undefined contents: 0xdddddddd
+RenderDoc can deliberately fill *uninitialised* buffer memory with a marker so undefined-content use is visible rather than coincidentally-zero:
+
+> "It will also initialise any buffers with undefined contents after creation with a marker value to catch use of undefined contents that may not always be zero." — [DOC] Capture Dialog / `Verify Buffer Access` (https://renderdoc.org/docs/window/capture_attach.html)
+
+> "This option adds checking to any Map() calls that adds a boundary marker after any Map() pointer returned during a captured frame. These markers are checked on Unmap() and if they have been modified a message box will pop up ... This option is only supported on D3D11 and OpenGL." — [DOC] Capture Dialog (https://renderdoc.org/docs/window/capture_attach.html)
+
+The specific marker value:
+> uninitialised buffers are initialised to **`0xdddddddd`** — [UNCERTAIN / search-snippet] reported in a web search summary of the FAQ/capture docs; **NOT** quoted verbatim from a page I fetched. Treat the byte pattern as likely-correct but verify in-tool. The *existence* of a marker fill is [DOC]-confirmed above.
+
+[INFERRED] If you see a reconstructed slice that is uniformly `0xdddddddd` (or its float interpretation, a large negative-exponent NaN-ish/garbage value), that region was **never written by the app for that draw** — RenderDoc is telling you the draw consumed undefined memory. A uniform garbage/zero position set transforms to a degenerate point/spike, matching the cape-spike "black spikes from one origin" class.
+
+### 4c. Practical reading for this scenario
+- **Uniform zero positions in the reconstructed slice** => RenderDoc recorded no write for those bytes at this EID (D-1): either the app's slice for this deferred draw wasn't serialised before the draw, or a later `WRITE_DISCARD`/`NO_OVERWRITE` to the shared ring changed what the offset points at on replay vs what the GPU saw live.
+- **Uniform `0xdddddddd` positions** => undefined-contents marker; the draw is reading memory the app never wrote (turn on `Verify Buffer Access` to confirm). [DOC for marker existence; value UNCERTAIN]
+- Either way, a single-buffer ring with deferred draws is precisely the topology where RenderDoc's serialised replay can show a *different generation* of the slice than the GPU rasterized — **only if** the app's map ranges/offsets don't honestly bound what each draw consumes, or a write/draw ordering assumption (NO_OVERWRITE) is violated. When the app is honest and in-order, replay is faithful (§1a).
+
+---
+
+## Bottom line (for the cape-spike / shared-ring investigation)
+
+- RenderDoc shows the buffer **as of the selected draw's EID**, reconstructed by replaying all serialised Map/Unmap chunks before it — NOT end-of-frame, NOT a single global snapshot. [DOC mechanism + INFERRED application]
+- The known way this LIES: RenderDoc only knows the bytes the app *declared/intercepted* as written. Under-written ranges, discard regions the app didn't write, or writes that bypass the intercepted CPU pointer replay as **zero** (or as the `0xdddddddd` undefined-marker). A uniform zero/garbage position set transforms to a single point — the "collapse / spike" signature. [ISSUE #2323, #677; DOC marker]
+- To get ground truth: select the EID, read the raw buffer at the *bound byte offset* (Pipeline State -> IA gives the offset), cross-check VS Input vs the raw bytes, and re-capture with **Verify Buffer Access** (D3D11-supported) to detect out-of-bounds/undefined map access directly. [DOC]
+- This is a live-only vs replay divergence class: it matches the project memory note that the cape spikes are "capture-invisible/live-only (undefined-memory-zero-on-replay class)."
+
+## Sources
+- How RenderDoc works — https://renderdoc.org/docs/behind_scenes/how_works.html
+- FAQ — https://renderdoc.org/docs/getting_started/faq.html
+- Capture Dialog (Verify Buffer Access) — https://renderdoc.org/docs/window/capture_attach.html
+- Mesh Viewer — https://renderdoc.org/docs/window/mesh_viewer.html
+- Buffer Viewer — https://renderdoc.org/docs/window/buffer_viewer.html
+- Pipeline State — https://renderdoc.org/docs/window/pipeline_state.html
+- Decoding Mesh Data (Python) — https://renderdoc.org/docs/python_api/examples/renderdoc/decode_mesh.html
+- Issue #2323 Mapped buffer contents replayed as zeroes (D3D12) — https://github.com/baldurk/renderdoc/issues/2323
+- Issue #677 GPU-writes to persistent mapped buffers have no effect — https://github.com/baldurk/renderdoc/issues/677
+- Issue #894 Buffer Contents Mesh Preview (vertex-pull -> mesh input unusable) — https://github.com/baldurk/renderdoc/issues/894
+- Issue #1604 Mesh Viewer VS Output vs VS debug discrepancy — https://github.com/baldurk/renderdoc/issues/1604
+- Issue #431 Mesh output preview doesn't discard w<=0 primitives — https://github.com/baldurk/renderdoc/issues/431
+- Issue #1862 SV_VertexID wrong with DrawIndexed — https://github.com/baldurk/renderdoc/issues/1862

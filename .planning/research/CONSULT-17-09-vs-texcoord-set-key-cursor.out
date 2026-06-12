@@ -1,0 +1,207 @@
+## Verdict
+
+**Fix A is the right call.** Fix B is not a cheaper equivalent — for every case that actually needs remapping, it still needs the same `textureCoordinateSetKey` knowledge D3D9 uses. Without that key, dimension/position heuristics are guessing. Fix A restores the actual D3D9 contract: **shader tags remap to mesh set indices, and VS input semantics index equals mesh set index (with aliasing collapsing duplicate sets).** That is why your current D3D11 layout builder can stay unchanged.
+
+---
+
+## 1. Fix A vs Fix B
+
+### Why Fix B is insufficient (not just “less pure”)
+
+Fix B tries to compensate for an un-remapped VS by making the input layout “smart.” That only works when:
+
+- the un-remapped VS’s semantic layout accidentally matches mesh compact order, **or**
+- you already know tag→set mapping well enough to assign the right mesh stream to the right **VS input semantic index**.
+
+The failing bump case proves the second point: mesh layout is correct for D3D9 semantics (`TEXCOORD0`=UV, `TEXCOORD1`=DOT3), but the un-remapped VS reads DOT3 from `TEXCOORD2`. Fix B can patch *this* draw by pointing layout `TEXCOORD2` at the mesh DOT3 buffer and aliasing UV into both `TEXCOORD0` and `TEXCOORD1`. That is already a partial reimplementation of the key — just in layout instead of HLSL macros.
+
+### Where Fix B’s heuristic actually breaks
+
+**Case A — aliasing (your bug):**  
+`MAIN→0, NRML→0, DOT3→1`, mesh has 2 sets.  
+D3D9 VS inputs: `TEXCOORD0` (2D, shared), `TEXCOORD1` (4D).  
+Un-remapped VS expects 3 inputs at 0/1/2. Any layout-only scheme must alias UV to two semantics *and* move DOT3 from layout slot 1 to VS semantic 2. Doable, but it is key-driven layout surgery, not a dimension heuristic.
+
+**Case B — non-contiguous / permuted 2D sets:**  
+`MAIN→0, NRML→2, DOT3→1`  
+Mesh compact layout: `TEXCOORD0`=2D(set0), `TEXCOORD1`=4D(set1), `TEXCOORD2`=2D(set2).  
+Un-remapped VS wants: semantic0=MAIN(2D), semantic1=NRML(2D), semantic2=DOT3(4D).
+
+A “assign 4D mesh slot to VS 4D semantic, fill 2D semantics in encounter order” rule assigns:
+- VS semantic2 ← mesh slot1 (DOT3) ✓
+- VS semantic0 ← first 2D mesh slot (set0 MAIN) ✓
+- VS semantic1 ← second 2D mesh slot (set2 NRML) ✓
+
+That *can* work — but only because you implicitly encoded `MAIN=set0, NRML=set2, DOT3=set1`. That **is** the key. Without it, if you have three 2D tags (`DTLA/DTLB/MASK`) and one DOT3, encounter-order assignment can permute 2D semantics relative to shader tag meaning whenever mesh compact order ≠ default macro order.
+
+**Case C — tag order ≠ set order ≠ dimension order:**  
+Multi-UV static shaders with tags like `DTLA`, `DTLB`, `MASK`, `NRML`, `DOT3` are exactly where D3D9’s per-tag remap exists. Positional 2D assignment without tag identity is not recoverable from reflection alone: VS reflection gives you parameter names (`textureCoordinateSetNRML`), but the mesh only has “set 0/1/2/…” with types/dims — the **StaticShader** owns tag→set, not the VB format alone.
+
+**Case D — phantom slot behavior diverges:**  
+Fix B keeps bloated VS input signatures (unused semantics fed by zero buffers or aliased offsets). Functionally workable, but unlike D3D9 you retain dead inputs, harder debugging, and layout special cases forever.
+
+### Beachhead argument
+
+Fix B is ~1 file and fixes one screen symptom. Fix A is ~6 plugin files but closes the class of bugs permanently and matches proven D3D9 behavior. For a renderer port, Fix A is the beachhead-appropriate fix: you are not done until tag remap exists somewhere; putting it in layout is the wrong layer and still needs the key.
+
+**Recommendation:** A, decisively.
+
+---
+
+## 2. Per-key map vs ownership model
+
+### What D3D9’s “last key cache” implies
+
+D3D9 recompiles on `getVertexShader(key)` because VS bytecode **is** the remapped program. Keys are not per-draw; they are per **pass/material shader configuration** (`Pass::construct` computes once from `shader.getTextureCoordinateSet(tag, …)`). For a given bump pass, the key is stable: `MAIN→0, NRML→0, DOT3→1`.
+
+So you likely do **not** need unbounded variants in practice — usually **one key per pass** (occasionally a few if the same VS asset is reused across passes with different StaticShader tag maps).
+
+### Best structure
+
+**Keep one `Direct3d11_VertexShaderData` per VS asset**, with:
+
+```cpp
+std::unordered_map<uint32, Variant> m_variants; // lazy compile
+```
+
+That matches engine ownership (VS asset created once) and D3D9 semantics (same asset, different keys).
+
+**Cleaner than a global map alone:** treat `(VertexShaderData*, key)` as the logical shader identity at bind time. Pass owns `m_textureCoordinateSetKey`; bind path uses `(vsData, key)` everywhere.
+
+**Even simpler subset (worth considering):** eager compile in `Direct3d11_StaticShaderData::Pass::construct` for that pass’s key only, store `ComPtr<ID3D11VertexShader>` (or bytecode hash) on the Pass. Fall back to lazy map inside `VertexShaderData` only if the same VS asset is shared with multiple keys. That avoids widening every getter to key-based API if Pass already knows its one variant.
+
+Do **not** fold key into VS-data creation at asset load unless the engine starts creating VS-data per pass — that is an unnecessary upstream change.
+
+Downstream caches composing with bytecode hash is correct: aliased-key variants have **fewer/different VS inputs**, different bytecode, different hash — input-layout cache stays coherent without a separate key dimension.
+
+---
+
+## 3. Key plumbing and races
+
+### Immediate context, synchronous path
+
+If input-layout creation happens synchronously on the same thread during draw/bind, StateCache “current key” is probably fine for `getVertexShader()` at bind time.
+
+### The real hazard
+
+You called out async layout-cache misses. **Any deferred layout build must not read mutable StateCache state.** Between queue and execution, the next pass can bind a different `(vs, key)`.
+
+**Safer model:**
+
+1. Pass stores `m_textureCoordinateSetKey` (immutable after construct).
+2. Bind records `(vsData, key, bytecodeHash)` for the active pass.
+3. `getOrCreateInputLayout(...)` takes **`key` (or bytecodeHash) explicitly** in its arguments/job payload.
+4. StateCache may mirror current bind for convenience, but **layout/PS jobs must capture key/hash at enqueue time**.
+
+Explicit args > implicit StateCache for anything cached or async.
+
+Also watch **PS reconstruction timing**: if it runs off VS bind and reads “current” key while VS-data pointer updates, same hazard. Pass `(vsData, key)` as a pair into reconstruction.
+
+---
+
+## 4. PS reconstruction coupling
+
+**VS input remap does not change VS output signature** for your bump shader.
+
+Outputs (`tcs_MAIN`, `tcs_NRML`, `directionToLight_t`, `halfAngle_t`, `COLOR0`, `COLOR1`) are determined by the output struct and assignments in HLSL. Input macros only change:
+
+- which `register(vN)` / `TEXCOORDn` **inputs** exist,
+- aliasing (`NRML` reads same input as `MAIN`).
+
+`tcs_NRML` is still written and still reflected as the same output semantic/type. D3DReflect output signature should be stable across keys.
+
+**Caveats to verify in implementation (not architectural blockers):**
+
+- `computeOutputSignatureHash` must hash **outputs only**, not inputs or blob hash (blob hash differs per key — that is for layout cache, not PS pairing).
+- Ensure PS reconstruction selects the variant by **output signature hash** (stable) or explicitly by key — both work if outputs are identical; key is simpler and already available on the pass.
+- If a future VS key ever `#ifdef`-gates an output (unlikely in SOE static shaders), coupling would matter — not relevant to described bump case.
+
+**Confirm:** PS lane needs the correct variant object for bookkeeping/cache keys, not because outputs change, but because you must not accidentally pair PS with wrong VS bytecode metadata paths.
+
+---
+
+## 5. Anything simpler?
+
+| Alternative | Assessment |
+|---|---|
+| Trust asset `DECLARE_textureCoordinateSets` as-is | No — source defaults are `MAIN=0, NRML=1, DOT3=2`; D3D9 never used that unmodified for mismatched meshes. |
+| Post-compile VS input-signature rewrite (like your PS sig rewrite) | No practical general path on D3D11 for VS without recompilation/shader patching; VS input signature is embedded in bytecode. |
+| Reflection-only layout without key | Insufficient — see §1. |
+| Hardcode bump shader key | Beachhead hack only; next multi-UV static shader breaks. |
+| Change layout builder global counter | Wrong direction — it already matches D3D9 `VertexDeclarationMap`; the bug is VS-side. |
+
+**One simplification short of full map API churn:** implement D3D9 macro injection, but compile **only the pass key** at `Pass::construct` and store result on Pass. Same macro logic, less surface area than key-parameterized getters everywhere.
+
+There is no magic `D3DCompile` flag that collapses aliased texcoords without defines.
+
+---
+
+## 6. Blast radius / identity-key behavior
+
+For shaders whose tag→set mapping is identity (`MAIN→0, NRML→1, DOT3→2, … contiguous):
+
+- D3D9 macros should reduce to the same `DECLARE_textureCoordinateSets` as defaults.
+- Bytecode **should** match existing working path (possibly identical hash).
+
+Expected no regressions:
+
+| Shader class | Expected key | Risk |
+|---|---|---|
+| UI 2D passthrough | single tag → set0 | Low — one input declared |
+| Non-bump skeletal (UV only) | MAIN→0 | Low |
+| Static props, 1:1 UV sets | identity | Low if macro emitter mirrors D3D9 exactly |
+| Already-working bump-like with 3 mesh sets matching defaults | identity | Low |
+
+**Real regression vectors:**
+
+1. **Macro emitter divergence** from D3D9 (tag scan order, DOT3 dim=4, duplicate-set collapsing, `register(v base+set)` base).
+2. **Tag parsing misses** alternate spellings (`vTextureCoordinateSet*` vs `textureCoordinateSet*`).
+3. **Stale `.cso` cache** if `D3D11_REWRITE_VERSION` not bumped.
+4. **First-use hitch** from lazy compile (pass warm-up issue, not correctness).
+5. **Accidentally hashing/lookuping wrong variant** in PS or layout caches during transition.
+
+Identity keys should not perturb working bytecode if emission is faithful. Aliasing keys **should** change bytecode (fewer inputs) — that is the fix, not a regression.
+
+---
+
+## Recommended approach
+
+### Primary: **Fix A (D3D9 macro remap + per-key VS variants)**
+
+Implement D3D9-equivalent:
+
+```cpp
+#define textureCoordinateSetMAIN textureCoordinateSet0
+#define textureCoordinateSetNRML   textureCoordinateSet0  // aliased
+#define textureCoordinateSetDOT3   textureCoordinateSet1
+// DECLARE unique sets only → TEXCOORD0 float2, TEXCOORD1 float4
+```
+
+### Ownership / plumbing (cleanest)
+
+1. **`Direct3d11_StaticShaderData::Pass`**: compute and store `m_textureCoordinateSetKey` at construct (mirror D3D9).
+2. **`Direct3d11_VertexShaderData`**: lazy `map<key, Variant>`, macro injection at compile.
+3. **Bind path**: pass `(vsData, key)` explicitly.
+4. **Input layout cache**: continue keying by `vsBytecodeHash`; pass explicit key/hash into `getOrCreate*`.
+5. **PS reconstruction**: pass same key for variant lookup; output sig should be unchanged.
+6. **Bump `D3D11_REWRITE_VERSION`**.
+
+Optional scope trim: eager single-variant compile on Pass if profiling shows map/API overhead is unnecessary.
+
+### Reject Fix B except as a temporary debug shim
+
+It fixes one symptom without the key in general, and a key-driven layout hack is strictly harder to reason about than a key-driven VS recompile you already know works in D3D9.
+
+---
+
+## Top 3 risks
+
+1. **Macro/tag parity drift from D3D9** — wrong tag order, missing alias collapse, or DOT3 dim handling recreates subtle multi-UV bugs. Mitigation: port D3D9 logic literally; golden-test bytecode/input-signature for known keys (identity + bump alias key).
+
+2. **Key lifetime bugs in cached/async paths** — layout or PS jobs reading stale StateCache key. Mitigation: explicit `(vsData, key)` or `bytecodeHash` captured at request enqueue; never implicit global for cache misses.
+
+3. **Variant selection regressions during rollout** — callers still using default/no-key getters compile identity macros and silently break aliased meshes again. Mitigation: assert in debug when VS has >1 potential key path; make pass bind require key; bump rewrite version.
+
+---
+
+**Bottom line:** The root-cause analysis is correct. The missing piece is not layout logic — it is **per-key VS recompilation with D3D9 remap macros**. Fix A scope is right (plugin-only, six files is reasonable). Shrink it by compiling the pass key eagerly on Pass if you want less API churn, but do not substitute Fix B for production.

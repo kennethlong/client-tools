@@ -1,0 +1,220 @@
+# CONSULT-37 — VS light register map (D3D9 vs D3D11)
+
+## Pipeline: who writes what
+
+Both backends ultimately feed the **same HLSL/asm register layout** (`LightData` @ **c16**, `extendedLightData` @ **c60**), defined in `Direct3d9_VertexShaderConstantRegisters.h:28,45` and mirrored in `Direct3d11_ConstantBuffer.h:198-234`.
+
+| Stage | D3D9 | D3D11 |
+|-------|------|-------|
+| Light list → selection | `setLights` stores list (`Direct3d9_LightManager.cpp:310-313`); **`selectLights` per draw** (`Direct3d9.cpp:4012`) selects slots + accumulates ambient (`:404-418`) | **`setLights` per draw** (`ShaderPrimitiveSorter.cpp:718` → `Direct3d11_LightManager.cpp:71`) selects slots + accumulates ambient (`:104-116`) |
+| Precalc full-ambient seed | `Pass::apply` → `setFullAmbientOn(m_fullAmbient)` (`Direct3d9_StaticShaderData.cpp:776,955`); when on, `ms_fullAmbient=(1,1,1,0)` (`Direct3d9_LightManager.h:201-208`) | **No equivalent** — grep over `Direct3d11/**` finds zero `fullAmbient` / `setFullAmbientOn` / `containsPrecalculatedVertexLighting` |
+| VS constant upload | `applyLights_vertexShader` → `setVertexShaderConstants(VSCR_lightData, …)` + `VCSR_extendedLightData` (`Direct3d9_LightManager.cpp:723-725`) | `setLights` → `s_pixelDot3State`; **`composeSlot0Shadow`** copies into `s_slot0Shadow.lightData[]` / `extendedLightData[]` (`Direct3d11_StateCache.cpp:329-431`) |
+| Material (feeds VS base term) | `setVertexShaderConstants(VSCR_material, …, 5)` @ c11–c15 (`Direct3d9_StaticShaderData.cpp:862`) | `setVertexMaterialColors` @ c11,c13,c14 + `setSpecularPower` @ c15.x,c41.w (`Direct3d11_StaticShaderData.cpp:806-819`; `Direct3d11_StateCache.cpp:2448-2493`) |
+
+**Layout reference** (from `registers.inc` in vsh-extract, matching `LightData` struct in `Direct3d9_LightManager.h:128-136`):
+
+| Register | Field |
+|----------|-------|
+| **c16** | `lightData.ambient` |
+| **c17–c19** | `parallelSpecular[0]` dir / diffuse / specular |
+| **c20–c21** | `parallel[0]` dir / diffuse |
+| **c22–c23** | `parallel[1]` dir / diffuse |
+| **c24–c27** | `pointSpecular[0]` |
+| **c28–c30** | `point[0]` |
+| **c31–c33** | `point[1]` |
+| **c34–c36** | `point[2]` |
+| **c37–c39** | `point[3]` |
+| **c40–c43** | `dot3` (camera, localDir+specPower, diffuse, specular) |
+| **c60–c63** | `extendedLightData` back / tangent / Δback / Δdiffuse |
+
+World VS final diffuse (asm path, `diffuse.inc`):
+
+```143:144:.planning/research/vsh-extract/diffuse.inc
+add r7, r7, cMaterial_emissiveColor
+mov oD0, r7
+```
+
+where `r7` starts as **`vColor0`** (`c_ambient.inc:16`), then += hemispheric(c17+c60–63) + parallel(c20–23) + points + emissive(c14).
+
+HLSL `a_simple` path (`a_simple_vs20_for_ps20.vsh:40-41`):
+
+```40:41:.planning/research/vsh-extract/a_simple_vs20_for_ps20.vsh
+	outputVertex.diffuse =  lightData.ambient.ambientColor;
+	outputVertex.diffuse += calculateDiffuseLighting(true, inputVertex.position, inputVertex.normal_o);
+```
+
+which seeds from **c16**, then adds emissive(c14) + directionals.
+
+---
+
+## Full register table — light-path writes only
+
+Legend: **Z** = zero from `Zero(lightData)` / `{}`-init; **k0=1** = attenuation guard for unused point slots.
+
+### c16 — ambient
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **Source** | `selectLights`: `ambient = ms_fullAmbient` then `+= T_ambient color` (no intensity) (`:404-418`); uploaded `:536` | `setLights`: `cb.ambientColor += color` (no intensity, `:104-115`); snapshot `:225`; `composeSlot0Shadow` → `lightData[0]` (`StateCache.cpp:380`) |
+| **Non-precalc, list=3** | `(0,0,0,0) + ~0.13` ≈ **(0.13,0.13,0.13,0)** | **(0.13,0.13,0.13,1.0)** — `.w` differs (1.0 forced, `:115`) |
+| **Precalc, list=0** | **`(1,1,1,0)`** (fullAmbient seed, no T_ambient in list) | **`(0,0,0,0)`** — no seed (`setLights :76`, no `setFullAmbientOn`) |
+| **Precalc, list=3** | **`(1.13,1.13,1.13,0)`** ≈ (1,1,1)+ambient | **(0.13,0.13,0.13,1.0)** only |
+
+**Divergence: CRITICAL for precalc** — D3D9 always seeds white; D3D11 never does.
+
+---
+
+### c17–c19 — parallelSpecular[0] (sun / dot3 diffuse-specular)
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **When filled** | Sun wins specular slot in `selectLights` (`:423-429`); `applyLights` negated world dir + colors (`:542-562`, `:639-647`) | Sun wins same cascade (`LightManager.cpp:127-138`, `:176-197`); `composeSlot0Shadow` if `d3.valid` (`StateCache.cpp:382-393`) |
+| **list=0** | Z | Z (`d3.valid=false`, `:382`) |
+| **list=3 (sun present)** | `-sunDir`, sun diffuse/specular | Same (negated world dir, `:391-393`) |
+
+**Divergence: none when sun present; both zero when no directionals.**
+
+---
+
+### c20–c23 — parallel[0..1] (fill + bounce — **main VS diffuse term**)
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **Source** | Next two directionals by diffuse intensity (`selectLights :434-436`); negated dir + diffuse color (`applyLights :631-647`) | Same cascade (`LightManager.cpp:131-138`, `:199-218`); negated at fill (`StateCache.cpp:425-429`) |
+| **list=0** | Z | Z |
+| **list=3** | fill+bounce dirs/colors | fill+bounce dirs/colors (post 2026-06-08 fix) |
+
+**Divergence: none (after recent fix) when directionals are in the list.**
+
+---
+
+### c24–c39 — point lights
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **Filled slots** | Up to 1 spec + 4 diffuse points from list (`selectLights :442-461`, `applyLights :652-719`) | Up to 8 points packed into **LightingCB slot 3** (`LightManager.cpp:142-164`) — **not copied into cb0 lightData** |
+| **Unused attenuation** | `k0=1.0` (`:685`, `:717`) | `lightData[10/14/17/20/23].x = 1.0f` (`StateCache.cpp:444-448`) |
+| **Position/color in cb0** | Written when lights selected | **Always Z** — `composeSlot0Shadow` never fills point positions/colors |
+
+**Divergence: HIGH if scene uses point lights in VS loop; LOW for typical outdoor building draws (no points). Attenuation guard matches.**
+
+---
+
+### c40–c43 — dot3 (object-local)
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **When filled** | Only if `parallelSpecular[0]` exists (`applyLights :564-584`) | Only if `d3.valid` (`StateCache.cpp:405-408`) |
+| **c41.w (spec power)** | `getSpecularPower()` (`:577`) | `ms_specularPower` from `setSpecularPower` (`:406`, `:2465`) |
+| **Alpha-fade in c42.a / c43.a** | `getAlphaFadeAndBloomSettings()` (`:579-584`) | **Not patched** — raw `d3.diffuseColor/specularColor` copied (`:407-408`) |
+
+**Divergence: minor (alpha-fade channels); both zero when no sun.**
+
+---
+
+### c60–c63 — extended hemispheric
+
+| | D3D9 | D3D11 |
+|---|------|-------|
+| **When filled** | `_vsps_setExtendedLightData` when sun present (`:588-589`, `:732-759`) | `d3.backColor/tangentColor/…` when `d3.valid` (`StateCache.cpp:411-414`) |
+| **list=0** | Z | Z |
+| **list=3** | back/tangent from sun getters | Same getters (`LightManager.cpp:181-195`) |
+
+**Divergence: none when sun present; both zero when list has no directionals.**
+
+---
+
+### c11–c15 — material (not LightManager, but VS color seed)
+
+| Register | D3D9 | D3D11 |
+|----------|------|-------|
+| **c11** diffuse | Pass material (`StaticShaderData.cpp:862`) | `setVertexMaterialColors` (`StateCache.cpp:2490`) |
+| **c12** ambient | Uploaded with material | **Left zero** (`StateCache.cpp:2486-2488`) — no asset VS reads it per comment |
+| **c13** specular | Uploaded | `setVertexMaterialColors` |
+| **c14 emissive** | Uploaded | `setVertexMaterialColors` — **VS diffuse seed** (`inc_functions.inc:168`) |
+| **c15.x spec power** | `setSpecularPower` via Pass | `setSpecularPower` (`StateCache.cpp:2463`) |
+
+**Divergence: c12 only; likely irrelevant for world VS diffuse path.**
+
+---
+
+### D3D11-only: LightingCB @ **cbuffer slot 3** (320 B)
+
+Written entirely in `setLights` (`LightManager.cpp:229-232`): ambient, one directional, up to 8 points. **Separate from cb0 slot 0.** Asset world VS reads **`cb0[16…]`** (slot 0), not slot 3 — so this cbuffer is **not** the register-map target for standard world draws.
+
+---
+
+## Scenario diffs
+
+### A) Precalc draw, **empty light list** (`listSz=0`)
+
+Engine routes precalc geometry through `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` (`ShaderPrimitiveSorter.cpp:1198-1199`), which can yield an empty active list (`setLights :1132-1144`).
+
+| Register | D3D9 @ draw | D3D11 @ draw | VS impact |
+|----------|-------------|--------------|-----------|
+| **c16** | **(1,1,1,0)** | **(0,0,0,0)** | HLSL `a_simple`: base term **1.0 vs 0** |
+| **c17–c23** | Z | Z | No dynamic parallel contribution |
+| **c40–c43, c60–c63** | Z | Z | No hemispheric/dot3 |
+| **c14 emissive** | material | material (if valid) | Both add emissive — explains **“dark but not black”** if emissive > 0 |
+| **vColor0** (stream) | read by asm `tfcl`/`c_simple` | D3D11 asset VS may **not declare COLOR** (handoff note; separate from register writes) | asm path: baked color still present in D3D9; may be absent in D3D11 IL |
+
+**Where D3D11 goes to zero that D3D9 does not:** **`c16` full-ambient seed.** That is the sole light-register divergence for `listSz=0`. Everything else is either matched (k0=1 guards, zero directionals) or outside the light path (vertex stream / IL).
+
+For **`a_simple`-style VS**: D3D9 COLOR0 ≈ `(1,1,1) + emissive`; D3D11 ≈ `emissive` only → ~**emissive/1.0** brightness (dark, not black if c14 > 0).
+
+For **asm `tfcl`**: base is **`vColor0`**, not c16 — c16 divergence is **inert**; darkness then implicates missing COLOR stream (not a register-write gap).
+
+---
+
+### B) Dynamic-lit draw, **list=3** (ambient + sun + fill)
+
+| Register | D3D9 | D3D11 | Match? |
+|----------|------|-------|--------|
+| **c16** | ~0.13 (non-precalc) | ~0.13 | ✓ (after ambient intensity fix, `LightManager.cpp:104-115`) |
+| **c20–c23** | fill+bounce | fill+bounce | ✓ (post 2026-06-08 cascade + `composeSlot0Shadow :417-430`) |
+| **c17–c19, c40–c43, c60–c63** | sun + hemispheric | same if `d3.valid` | ✓ |
+| **c16 precalc shaders** | **(1,1,1)+0.13** | **0.13 only** | ✗ **8× floor missing** |
+
+---
+
+## Ranked divergences (likelihood → black/dark output)
+
+| Rank | Divergence | Registers | Why it darkens |
+|------|------------|-----------|----------------|
+| **1** | **No `setFullAmbientOn` for precalc** | **c16** | D3D9 seeds `(1,1,1,0)` before any list lights (`selectLights:404`, `setFullAmbientOn:205-208`); D3D11 never seeds (`setLights:76`). For HLSL VS using c16 as base, removes ~1.0 RGB floor. **Confirmed in source.** |
+| **2** | **Empty light list on precalc draws** | c17–c23, c40–c63 all Z | Not a D3D9/D3D11 *difference* — both zero directionals — but combined with #1 leaves only emissive. Explains dark-not-black when c14 > 0. |
+| **3** | **Point lights not mapped into cb0** | c24–c39 | D3D11 leaves positions/colors zero; only k0 guard matches. Irrelevant for outdoor walls, critical for point-lit interiors. |
+| **4** | **Dot3 alpha-fade `.w` channels not mirrored** | c42.a, c43.a | D3D9 patches fade/bloom (`applyLights:581-584`); D3D11 copies raw colors (`StateCache:407-408`). Unlikely primary wall darkness. |
+| **5** | **Ambient `.w` channel** | c16.w | D3D9 leaves 0; D3D11 forces 1.0 (`LightManager:115`). Only matters if VS reads `.w`. |
+| **6** | **No `setObeysLightScale` in D3D11** | all light colors | D3D9 toggles scaled vs raw getters (`Direct3d9_LightManager.cpp:318-339`); D3D11 always uses `getScaledDiffuseColor()`. Secondary. |
+
+---
+
+## Fact-check on your “Observed facts”
+
+| Claim | Verdict |
+|-------|---------|
+| D3D9 precalc → `m_fullAmbient` @ `StaticShaderData.cpp:776,955` | **Accurate** |
+| `ms_fullAmbient=(1,1,1,0)` seeded in `selectLights:404` | **Accurate** (seed is in `selectLights`; `setFullAmbientOn` sets the static prior to that, per draw, in `Pass::apply`) |
+| D3D11 has no full-ambient equivalent | **Accurate** — zero matches under `Direct3d11/**` |
+| Dark draws get empty light list; lit get list=3 | **Plausible and consistent with code** — precalc uses a separate light bitset (`ShaderPrimitiveSorter.cpp:1198-1199`, `enableLight :1103-1106`); I cannot verify your runtime logs from source alone |
+| “Dark but not black” ⇒ some term still contributes | **Consistent with register map** — **c14 emissive** (`setVertexMaterialColors`) and/or **vColor0** (D3D9 asm path) can remain non-zero while **c16 and directionals are zero** |
+| Empty list alone fully explains darkness | **Overstated** — for precalc on D3D9, **`c16=(1,1,1,0)` still provides a large floor even with list=0**; D3D11 does not. Empty list is the *trigger*; missing full-ambient seed is the *register-level gap* |
+| Forcing `(1,1,1)` into c16 is the complete fix | **Incomplete** — handoff documents it caused flat-white faces because D3D11 asset VS lacks COLOR input to multiply baked vertex lighting; architectural fix is VS IL + VB color stream, **in addition to** matching D3D9’s full-ambient semantics |
+
+---
+
+## Bottom line (register-map angle)
+
+For a **precalc static-shader draw with `listSz=0`**, the decisive register divergence is:
+
+```
+D3D9  c16 = (1, 1, 1, 0)     ← ms_fullAmbient via setFullAmbientOn + selectLights:404
+D3D11 c16 = (0, 0, 0, 0)     ← setLights default + no precalc hook
+```
+
+All other light registers (c17–c43, c60–c63) are **zero on both paths** when the list is empty. D3D11 matches D3D9 on unused-point **k0=1** guards (`Direct3d9_LightManager.cpp:685,717` ↔ `Direct3d11_StateCache.cpp:444-448`).
+
+For **dynamic-lit draws with a full list**, the June 8 cascade fix aligned **c20–c23**; the remaining precalc-specific gap is still **c16’s missing `(1,1,1,0)` seed** even when ambient lights *are* in the list (~**8×** RGB difference on c16 alone).
+
+The register map alone cannot explain darkness on **asm `tfcl` shaders** that base on **`vColor0`** rather than **c16** — that path needs the vertex COLOR stream / input-layout question, which is adjacent to but not part of the light-constant upload map.

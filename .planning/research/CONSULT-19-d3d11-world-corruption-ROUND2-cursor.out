@@ -1,0 +1,217 @@
+Your elimination set is strong enough to treat Round-1 (BC padded-staging) as dead. Below is an adversarial pass on the *timing* reframe, with mechanisms tied to this codebase and tests that falsify fastest.
+
+---
+
+## 0. Logical tension you should not hand-wave away
+
+TEST 8 exports the **swapchain backbuffer at `Present`** from the `.rdc` and it is **clean**, while F12 screenshots from the same roam are **corrupt**.
+
+That implies one of:
+
+| Branch | Meaning |
+|--------|---------|
+| **A. Frame mismatch** | Captures are not the same frames as corrupt screenshots (flicker bias). |
+| **B. Display ≠ backbuffer** | The D3D11 image you rendered is correct; what you *see* is wrong (scanout / compositor / flip timing). |
+| **C. Replay rehydration** | Recorded stream + serialized initial contents reproduce a good image even when live GPU memory at record time was wrong (less likely if export-at-Present is truly from replayed commands, not a live readback). |
+
+**Timing is not the only way to get “RenderDoc clean + live dirty.”** Branches A and B are non-timing and still fit TESTs 1–8. Do not let “Heisenbug” become the default before killing A and B.
+
+F12 goes through `screenShot_impl` → `CopyResource` from `getBackBufferRTV()` — same backbuffer family the capture exports at Present, not a separate compositor path:
+
+```431:478:src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+	bool screenShot_impl(GlScreenShotFormat format, int quality, char const *fileName)
+	{
+		// ...
+		context->CopyResource(staging.Get(), backBuffer.Get());
+```
+
+So if **F12 is corrupt in the same frame as a clean Present export**, that is a serious contradiction and points at **capture selection (A)** or a methodology bug, not GPU races.
+
+---
+
+## 1. Concrete D3D11 mechanisms (single immediate context, default MT protection)
+
+Multithread protection only serializes **individual** `ID3D11DeviceContext` calls. It does **not** make these logical sequences safe:
+
+### 1a. **Intra-frame `WRITE_NO_OVERWRITE` on the shared dynamic VB/IB ring** (highest code-specific suspect)
+
+Path: `Direct3d11_DynamicVertexBufferData::lock` → default `D3D11_MAP_WRITE_NO_OVERWRITE`, advance `ms_used`, return slice; draws use `BaseVertexLocation` / offsets; later locks reuse/overlap regions **in the same frame** while earlier draws may still be in flight on the GPU.
+
+```199:244:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
+	// ...
+	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
+	{
+		mapType = D3D11_MAP_WRITE_DISCARD;
+		ms_used = 0;
+	}
+	// ...
+	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+	ms_used += length;
+```
+
+**Why distance/LOD:** far terrain/mesh draws add more ring pressure per frame → more `NO_OVERWRITE` wraps → more hazard surface.
+
+**Why flicker/latch:** hazard is probabilistic (GPU depth vs CPU fill rate); once bad verts/indices are drawn, they stay until the chunk redraws.
+
+**Why floating shards:** classic garbage vertices/indices, not “wrong lava texture.”
+
+**Why TEST 3 (Flush + event after `Present`) may not kill it:** you only drain the GPU **between frames**. Hazards are **within** one frame’s command stream. By Present, the GPU has consumed the corrupted composition; replay of that same stream should still look corrupt — **unless** you captured a clean frame (branch A).
+
+**Why RenderDoc can look clean:** slower replay + different scheduling often means each draw completes before the next Map overwrites its slice (Heisenbug-shaped, but replay-faithful).
+
+**Why MT lock doesn’t help:** one thread, legal API order, illegal **GPU lifetime** of subranges.
+
+**Why D3D9 tolerates:** D3D9 dynamic `Lock` behavior/driver sync was more forgiving; D3D11 `NO_OVERWRITE` is explicit and strict.
+
+### 1b. **`Map(WRITE_DISCARD)` partial `memcpy` on PS/VB constant buffers** (non-timing order bug)
+
+`Direct3d11_ConstantBuffer::updatePS` always discards the **whole** slot, then copies only `sizeBytes`:
+
+```174:190:src/engine/client/application/Direct3d11/src/win32/Direct3d11_ConstantBuffer.cpp
+	HRESULT hr = Direct3d11_Device::getContext()->Map(
+		ms_psBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+	// ...
+	std::memcpy(mapped.pData, data, sizeBytes);
+```
+
+`setFog` pushes **16 bytes** into PS slot 0:
+
+```1843:1855:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+	XMFLOAT4 fog(r, g, b, a);
+	Direct3d11_ConstantBuffer::updatePS(0, &fog, sizeof(fog));
+```
+
+TEST 1 instrumented **legacy b0 staging at `StaticShaderData` flush** (full 400 B). Terrain / multi-pass / fog ordering may not be what you measured. Solid terrain colors shifting frame-to-frame fit **undefined PS constants** better than wrong SRV.
+
+**RenderDoc clean:** capture frame may have draw order where full `updatePS(..., layout.TotalSize)` always runs after partial updates.
+
+### 1c. **`USAGE_DEFAULT` textures created with `nullptr` initial data, drawn before upload completes**
+
+```372:375:src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp
+			lastResult = device->CreateTexture2D(&desc, nullptr, &tex2d);
+```
+
+Upload is later via `Texture::loadSurface` → `lock`/`unlock`. Any bind/draw between create and final mip unlock sees **undefined GPU texels** (not padded-staging garbage — TEST 6 correctly falsified *that* path).
+
+**Why LOD/distance:** streaming tiles / impostors / far LODs are exactly “create → bind early → upload late.”
+
+**Why TEST 7 doesn’t help:** leaking resources doesn’t initialize them.
+
+**Why RenderDoc clean:** capture serializes resource contents **after** uploads for resources touched in the capture; replay starts from defined data.
+
+### 1d. **CPU shadow state bugs (not GPU races)**
+
+`Direct3d11_LegacyPSConstants::writeShadowBack` + partial merges (your own P19 comment at `StaticShaderData.cpp` ~1326) can inherit prior draw material across passes. That is **deterministic draw-order** corruption, not context threading.
+
+**RenderDoc clean:** if the captured frame’s ordering doesn’t hit the bad inheritance chain, replay is clean while live roam flickers as sort order changes with camera/LOD.
+
+### 1e. **Format-mismatch lock path** (`lockData.getFormat() != m_destFormat`)
+
+Logged in `lock()`; D3D9 had explicit conversion, D3D11 may `CopySubresourceRegion` between incompatible interpretations. That is **wrong content in a real resource** — should replay wrong **if** that texture is sampled in the capture. Still worth one log grep on Mos Eisley sessions.
+
+### What is *unlikely* given TEST 8
+
+- Wrong **recorded** SRV slot at draw time (TEST 2 + clean replay).
+- **UAF** on freed textures (TEST 7).
+- **BC padded-staging garbage** (TEST 6).
+- Naive **two-thread `PSSetShaderResources` race** (no deferred contexts; MT lock).
+
+---
+
+## 2. Is “replay clean” consistent with intermittent capture? What discriminates?
+
+**Yes.** With flicker, random `.rdc` pulls are a biased sample toward good frames unless you trigger on corruption.
+
+**Best capture-side discriminator**
+
+1. Hotkey capture only while a **latched** corrupt surface is on screen (not mid-flicker).
+2. Export Present backbuffer from **that** `.rdc`.
+3. On the **same** frame in replay: pick a draw that covers corrupt screen pixels (terrain or building), **readback bound PS SRV mip0** (RenderDoc API / texture inspection).
+
+| Observation | Conclusion |
+|-------------|------------|
+| Replay Present **corrupt**, SRV texels **wrong** | In-stream content/upload bug (not timing). |
+| Replay Present **corrupt**, SRV texels **correct** | Shading/constants (partial cbuffer, wrong VS, fog, etc.). |
+| Replay Present **clean**, live latched corrupt | Frame mismatch **or** display path (A/B), not hidden GPU stream. |
+
+**Second single test:** same instant, **F12 readback** vs **Windows.Graphics.Capture / PrintWindow** vs RenderDoc export. If OS capture is corrupt but D3D readback/F12 is clean → branch **B** (display/compositor).
+
+---
+
+## 3. If timing — most likely producer in *this* SWG port
+
+Ordered by fit to symptoms + code:
+
+1. **Dynamic VB/IB `WRITE_NO_OVERWRITE` ring** (1a) — explains geometry shards + terrain instability; MT lock irrelevant.
+2. **Draw before texture upload completes** (1c) — explains “whole surface wrong recognizable texture” on streamed LODs; async loader off doesn’t force synchronous **GPU** upload before first draw on the render thread.
+3. **Partial `updatePS` / fog / non-legacy terrain PS paths** (1b) — explains saturated terrain colors; TEST 1 may not have covered those draws.
+4. **Worker thread calling `Graphics`/`lock`/`unlock`** — only main thread is asserted for **texture create**, not for VB lock or draw:
+
+```273:273:src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp
+	DEBUG_FATAL(!Os::isMainThread(), ("Creating texture from alternate thread"));
+```
+
+Audit still needed: `StaticVertexBufferData::unlock` → `UpdateSubresource`, `Texture::lock`, terrain chunk builders.
+
+**What MT protection does not save:** logical transactions spanning multiple calls; CPU `StateCache` shadows; GPU lifetime of ring-buffer slices.
+
+**Why D3D9 same engine “works”:** different upload model (LockRect sub-block mips), different dynamic VB sync, `SetPixelShaderConstantF` without whole-buffer discard, and no `CopySubresourceRegion` staging dance.
+
+---
+
+## 4. Single decisive next test (fastest falsifiers)
+
+If you only run **one** experiment:
+
+### **Force `D3D11_MAP_WRITE_DISCARD` on every dynamic VB/IB `lock` (disable `NO_OVERWRITE` for one session)**
+
+- ~10-line diagnostic in `Direct3d11_DynamicVertexBufferData.cpp` / `Direct3d11_DynamicIndexBufferData.cpp`.
+- **If corruption vanishes:** intra-frame GPU ring hazard confirmed (kills comfortable “thread race on context” story).
+- **If unchanged:** demote 1a; prioritize **latched capture + SRV readback** (section 2) and **`MaxLOD = 0` on all samplers/SRVs** (not in your table — still the fastest mip falsifier).
+
+If you want one **capture-side** test instead: **latched-corruption-triggered `.rdc` + Present export** as in section 2.
+
+If you want one **non-timing** test: same-frame **F12 vs RenderDoc Present export hash** while staring at latched corrupt — falsifies display-path hypothesis in minutes.
+
+---
+
+## 5. Non-timing mechanisms consistent with TESTs 1–8
+
+You are **not** forced into timing. These fit all eliminations:
+
+| Mechanism | Fits tests | Notes |
+|-----------|------------|-------|
+| **Capture/flicker bias** | 5, 8 | Clean `.rdc` ≠ corrupt screenshot frame. |
+| **Display scanout / flip / MPO / fullscreen optimizations** | 3, 5, 8 | GPU stream clean; monitor wrong. Flip model: `DXGI_SWAP_EFFECT_FLIP_DISCARD`, 2 buffers. |
+| **Intra-frame ring buffer hazard** | 3, 5, 7, 8 | Not a “thread” bug; end-of-frame GPU finish irrelevant. |
+| **Partial PS `WRITE_DISCARD`** | 1?, 5, 8 | TEST 1 may not cover terrain/fog ordering. |
+| **Bind-before-upload on DEFAULT textures** | 6, 7, 8 | Distinct from padded staging; leak doesn’t init. |
+| **CPU draw-order / `writeShadowBack` inheritance** | 1, 5 | Deterministic; camera/LOD changes order. |
+| **Engine LOD mesh/index selection (CPU)** | 5, 8 | Same assets on D3D9 weakens this unless D3D11 enables different `ShaderCapability` paths — terrain does branch on capability. |
+
+**Under-weighted:** branch **B** (display ≠ backbuffer) and **partial cbuffer** (1b). **Over-weighted:** BC mips (dead), texture UAF (dead), end-of-frame GPU race (TEST 3 already weakens it for *inter-frame* races).
+
+---
+
+## Where the timing framing is probably wrong
+
+1. **TEST 8 is the anchor.** Clean Present export is hard to reconcile with “the recorded stream is wrong but replay fixes it.” It pushes you toward **A (wrong frame)** or **B (display path)** before **GPU Heisenbug**.
+
+2. **TEST 3 never ruled out intra-frame `NO_OVERWRITE`.** It only ruled out “GPU still busy from *previous frame* when we start uploading.”
+
+3. **TEST 6 falsified a specific upload bug, not all upload bugs.** Uninitialized **DEFAULT** surfaces and **format mismatch** remain.
+
+4. **`MaxLOD = 0` is still absent from your elimination table.** Do it once; if distant corruption unchanged, de-prioritize mip sampling for the *texture* part of the symptom (geometry shards may remain VB).
+
+---
+
+## Recommended order (fastest to falsify the reframe)
+
+1. **Dynamic VB: DISCARD-only** (code, one run).  
+2. **`MaxLOD = 0`** global (code, one run) — if not already done post-TEST-6.  
+3. **Latched corrupt capture + SRV mip0 readback at draw** (capture).  
+4. **Same-frame F12 vs RenderDoc export while latched corrupt** (methodology).  
+5. **`CreateTexture2D` init fill `0xCDCDCDCD`** on all DEFAULT textures (code) — if corruption becomes solid magenta blocks, bind-before-upload wins over timing.
+
+I would bet **(1) ring buffer** or **(A/B) capture/display** before **two threads fighting over the immediate context**. Your falsification discipline is right: design the next test to kill the comfortable story, not defend it.

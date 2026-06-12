@@ -1,0 +1,426 @@
+# CONSULT-37 — Falsify-frame angle: Dark walls/buildings in D3D11
+# Consultant: Claude Sonnet 4.6 (skeptic / lateral)
+# Date: 2026-06-08
+
+---
+
+## The claim under scrutiny
+
+"Dark walls are precalculated-vertex-lit geometry. They get empty dynamic light list (size 0).
+D3D9 renders them via full-white ambient (1,1,1,0) × baked vertex colors; D3D11 lacks that
+path AND its asset world VS has no COLOR vertex input → too dark."
+
+My job: actively refute this, find alternative root causes, stress-test every assumption.
+
+---
+
+## 1. IS THE PRECALC FRAMING STRUCTURALLY CORRECT?
+
+### 1a. Does the `listSz=0` observation actually correlate with `containsPrecalculatedVertexLighting()`?
+
+The prevailing explanation ASSUMES the dark draws are the ones that shaderPrimitiveSorter
+routes through `ms_lightsAffectingShadersWithPrecalculatedVertexLighting`. Let's examine
+whether that bitset is genuinely empty for buildings.
+
+`ShaderPrimitiveSorter.cpp:1362-1371` shows that on every `pushCell()` call both bitsets are
+reset. The builds are registered per-light at `enableLight()` (line 1103-1106) based on
+`light.affectsShadersWithPrecalculatedVertexLighting()`. `Light.cpp:61-62` confirms the
+default for BOTH flags is `true`. So by default, ALL lights affect both primitive categories.
+
+**Key finding:** Unless some world-loading code explicitly calls
+`light->setAffectsShadersWithPrecalculatedVertexLighting(false)`, the precalc bitset is
+identical to the non-precalc bitset. `listSz=0` for precalc primitives would ONLY happen if
+`listSz=0` also happens for non-precalc primitives in the same cell.
+
+Implication: If some buildings get `listSz=0` but other objects in the same cell get 3
+lights, the cause is NOT precalc routing — it would have to be a different code path
+altogether. Let me verify whether any world code explicitly gates precalc lights.
+
+`CellObject.cpp:149-221` creates interior lights from PortalPropertyTemplateCellLight data.
+I did not find any `setAffectsShadersWithPrecalculatedVertexLighting(false)` call in the
+world load path (the grep over all engine source found it only in Light.h inline setters
+and Light.cpp ghost-light copy). So unless precalc-vertex-lit geometry ends up in a
+DIFFERENT CELL than the lights, both bitsets receive identical light sets.
+
+**PARTIAL REFUTATION:** The `listSz=0` observation does NOT uniquely imply precalc routing.
+It could equally mean: (a) the geometry is in a cell with genuinely no lights registered,
+or (b) there is a DPVS / cell-stack / popCell ordering bug that clears the light list before
+the buildings draw.
+
+### 1b. The D3D11 `setLights(empty_list)` effect on `composeSlot0Shadow`
+
+When `setLights` is called with `listSz=0`:
+- `Direct3d11_LightManager.cpp:85`: `s_pixelDot3State.valid = false` — dot3 snapshot invalidated
+- Line 225: `s_pixelDot3State.ambient = cb.ambientColor = (0,0,0,0)` — ambient zeroed
+
+Then in `Direct3d11_StateCache.cpp:380` (`composeSlot0Shadow`):
+```
+s_slot0Shadow.lightData[0] = d3.ambient;  // = (0,0,0,0) when listSz=0
+```
+
+So yes — with an empty list, the ambient c16 register goes to zero. ALL directional slots
+(c17-c23) also remain zero (the `if (d3.valid)` block at line 382 is skipped).
+
+**This would produce pure BLACK output from the VS** (diffuse = color0 + 0 + 0 + 0 + emissive).
+But the observed symptom is "dark but NOT pure black" — some light is reaching it.
+
+### 1c. The "dark but not black" clue contradicts the `listSz=0` story
+
+If `listSz=0` → all cbuffer registers zero → VS diffuse = color0 + emissive ≈ dark material
+emissive. But the memo says "dark but not black, some light reaches it." This is
+INCONSISTENT with truly empty light upload in the cbuffer. Either:
+
+(A) The cbuffer is NOT being re-uploaded per-draw for buildings (stale from previous draw),
+(B) `listSz=0` is not universally true for all dark draws (some have partial light),
+(C) The "dark" observation is not pure darkness but reduced brightness from a different cause.
+
+**CRITICAL FINDING: cbuffer staleness as an alternative explanation.**
+
+`composeSlot0Shadow` is called from `setObjectToWorldTransformAndScale` — i.e., only when the
+object-to-world transform is updated (per object, each draw). But `setLights` is called by
+`ShaderPrimitiveSorter::Phase::draw()` at line 718, which calls `ShaderPrimitiveSorter::setLights`
+which calls `Graphics::setLights` which calls `Direct3d11_LightManager::setLights`. So lights
+ARE updated per draw. BUT: the `s_pixelDot3State` (dot3 snapshot) set during `setLights` is
+what gets consumed by `composeSlot0Shadow`. If `setLights` fires BEFORE `composeSlot0Shadow`,
+the snapshot is fresh. If the ORDER differs per draw, a building draw could consume a stale
+snapshot from the PREVIOUS draw's character/terrain lights.
+
+**This is a real alternative: draw-order / state-leak from prior frame.**
+
+The `setLights` call zeroes `s_pixelDot3State.valid`, then `composeSlot0Shadow` reads it.
+If setLights fires with `listSz=3` for character draws, sets a good snapshot, then the
+building draw fires with `listSz=0`, `setLights` zeroes the snapshot but `composeSlot0Shadow`
+then reads the NOW-STALE zero snapshot. "Dark but not black" could be explained by the
+cbuffer containing the PREVIOUS FRAME's ambient value (0.13 carried over) while the
+directionals are zeroed in the current call.
+
+Actually wait — `s_pixelDot3State.ambient` is set unconditionally at line 225 to
+`cb.ambientColor`. When `listSz=0`, `cb.ambientColor` is (0,0,0,0). So the ambient IS zeroed.
+The "dark not black" cannot come from ambient surviving.
+
+Let me reconsider: could the observed "dark not black" come from the EMISSIVE term in the VS?
+In `functions.inc:168`: `float4 result = material.emissiveColor;` — that is the seed value
+before any lighting is added. If the material has a non-zero emissive (which building
+materials often don't, but some might), that alone would produce "not black" with zero lights.
+The `Direct3d11_StateCache.cpp` composeSlot0Shadow writes material at c11 from
+`s_slot0Shadow` which is filled by `setVertexMaterialColors` from the `PerPassMaterial`.
+If material emissive = 0 AND lights = 0 AND color0 = baked dark value → near-black.
+
+So "dark not black" could come from: vertex color0 being non-zero (baked ambient already
+baked into vertex color) rather than any dynamic light term.
+
+---
+
+## 2. THE VB COLOR STREAM — DOES IT ACTUALLY EXIST?
+
+The prevailing explanation claims: "the D3D11 world VS has no COLOR input." Let me check.
+
+`tfcl.vsh` (stage/override/vertex_program/tfcl.vsh:32): `float4 color0 : COLOR0 : register(v5);`
+`tfcsl.vsh` (stage/override/vertex_program/tfcsl.vsh:31): `float4 color0 : COLOR0 : register(v5);`
+
+Both world VSes DECLARE color0 as an input. So the VS DOES have a COLOR input.
+
+The question is whether the VBFormat for building meshes actually carries a COLOR0 stream.
+`Direct3d11_VertexBufferDescriptorMap.cpp:241-242`: if `format.hasColor0()`, it emits
+`add("COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, sizeof(uint32))`. If the mesh's VBFormat does
+NOT have hasColor0(), then no COLOR element is in the input layout — but the VS still
+DECLARES it as an input (`float4 color0 : COLOR0`).
+
+Under D3D11's strict input-assembly validation: if a VS input is not covered by the input
+layout, `augmentWithPhantomElements` (VertexBufferDescriptorMap.cpp:346-400) adds a phantom
+element at slot 15 with stride=0 — reading constant ZERO from the phantom zero buffer
+(Direct3d11_Device.cpp:368, StateCache.cpp:1263-1268). So the VS gets `color0 = (0,0,0,0)`.
+
+**The prevailing explanation is PARTIALLY WRONG about "no COLOR input."** The //hlsl world
+VSes DO have a COLOR input (v5 / COLOR0). What may be missing is that the VBFormat for
+precalculated-vertex-lit buildings might not carry the color0 stream — yielding phantom
+zeros. That IS different from "the VS has no COLOR input declaration."
+
+**Alternative hypothesis:** The building mesh VBFormat DOES carry color0, but the baked
+vertex lighting has values like (0.13, 0.13, 0.13) for shadowed faces (the baked ambient
+contribution), making the base term already dark. The prevailing explanation's claim of
+"(1,1,1,0) × baked vertex colors" for D3D9 full-ambient would MULTIPLY that by white —
+exposing the full baked-vertex intensity. Without the full-ambient multiply, D3D11 sees only
+the baked vertex value (≈0.13) × directional lighting. If the directionals are also missing
+(listSz=0), the VS outputs only color0 which is the baked-ambient value ≈ 0.13 — exactly
+"dark but not pure black."
+
+**This is the strongest alternative:** The D3D11 buildings are rendering the baked-vertex
+color directly (color0 ≈ 0.13–0.3) without the dynamic lighting terms, because the empty
+light list zeroes both the directional + parallel cbuffer entries. The "dark not black" is
+the baked vertex color itself, not ambient or emissive.
+
+---
+
+## 3. ALTERNATIVE ROOT CAUSES (RANKED)
+
+### Root cause A (MOST LIKELY): setLights called with empty list → `s_pixelDot3State` zeroed
+→ `composeSlot0Shadow` writes zero to lightData[0..7] (c16-c23) → VS diffuse = color0 + 0.
+
+The VS output for a dark building draw with `listSz=0`:
+```
+oD0 = color0 + calculateDiffuseLighting(false, pos, nrm)
+    = color0 + 0 (all lightData zero)
+    = color0   (baked vertex color, ≈ 0.1 to 0.3 for shadowed world geometry)
+```
+
+D3D9 with precalc and `listSz=0`:
+```
+ambient = ms_fullAmbient = (1,1,1,0)   // forced regardless of list
+ms_currentLights.ambient = (1,1,1,0)   // at selectLights:404
+// VS receives c16=(1,1,1,0)
+// r7 = vColor0 (from c_ambient.inc: mov r7, vColor0)
+// diffuse.inc: dp3 on parallel lights → zero (no lights)
+// output = vColor0 + ambient (=1,1,1,0)
+// But WAIT — diffuse.inc doesn't add ambient: it starts from r7=vColor0
+// and MADs parallel lights onto r7. Ambient is vColor0 (baked baked light).
+// The full-ambient path seeds LIGHT_AMBIENT_COLOR = (1,1,1,0) into c16,
+// which in the older //asm shader reads from cLightData_ambient (c16),
+// NOT from vColor0. In the //hlsl tfcl.vsh the ambient is:
+//   diffuse = saturate(color0 + calculateDiffuseLighting(...))
+// = saturate(vColor0 + emissive + lightData.parallelSpecular + parallel[0] + parallel[1] + ...)
+// The ambient (c16) is NOT added in calculateDiffuseLighting() -- it is just
+// the initial result = material.emissiveColor (not ambient).
+```
+
+WAIT — this is a critical finding. Looking at `functions.inc:166-221`:
+`calculateDiffuseLighting` starts with `result = material.emissiveColor` (NOT ambient). The
+ambient constant at c16 is NOT consumed at all in the //hlsl `calculateDiffuseLighting` function.
+The old //asm `c_ambient.inc` just did `mov r7, vColor0` (vertex color IS the ambient term).
+
+So for the //hlsl-reauthored VSes (tfcl/tfcsl), the "ambient" cbuffer constant (c16) is
+NEVER READ by the VS. The vertex color0 (baked vertex data) is the ambient/base term.
+
+**This means the D3D9 `setFullAmbientOn(1,1,1,0)` is IRRELEVANT for the //hlsl VSes.**
+It would only matter for the old //asm shaders (which D3D11 handles via the fallback VS, which
+emits const-white COLOR0 anyway). For the //hlsl shaders, the ambient term is vertex color0.
+
+So the CORRECT analysis of what D3D9 does for precalc + empty lights:
+- vColor0 is read from VB (baked vertex data)
+- c_ambient.inc: `mov r7, vColor0`
+- diffuse.inc: all light dp3s produce 0 (no lights)
+- output oD0 = vColor0 + material_emissive
+
+And D3D11 tfcl.vsh with empty lights:
+- color0 read from VB (or phantom-zero if VBFormat lacks it)
+- calculateDiffuseLighting = emissive (all lights = 0)
+- output diffuse = saturate(color0 + emissive) = saturate(color0) = color0
+
+**If VBFormat has color0, the D3D9 and D3D11 outputs are IDENTICAL for precalc + empty lights.**
+**If VBFormat lacks color0, D3D11 gets color0=zero → black; D3D9 gets real baked value → correct.**
+
+This means the TRUE question is: **do the building mesh VBFormats carry the color0 stream?**
+
+### Root cause B: VBFormat missing COLOR0 for buildings
+Buildings' mesh VBFormats may not carry color0. The //asm VSes declared `dcl_color0 vColor0`
+at a specific register (v5), which D3D9 would supply from the VBFormat. If the VBFormat
+`hasColor0()` is false, the D3D9 //asm VS would get zero for v5 too — unless D3D9's
+flexible vertex format handling falls back differently. Under D3D9 //asm vertex shaders, a
+declared-but-unbound register receives 0. So D3D9 also gets color0=0 for buildings without
+the stream. This would mean the //asm D3D9 shader outputs:
+```
+r7 = 0     // vColor0 = 0 (no stream)
++ lights   // empty → 0
++ emissive // typically 0 for world geo
+= 0        // → BLACK
+```
+But D3D9 is said to display buildings correctly. So either: (a) the building VBFormats DO
+carry color0, or (b) D3D9's full-ambient path is the difference. Since
+`setFullAmbientOn(true)` sets `ms_fullAmbient=(1,1,1,0)` which seeds the AMBIENT ACCUMULATOR
+at `selectLights:404`, and since the //asm `diffuse.inc` uses `cLightData_parallelSpecular_0`
+etc. but NOT `cLightData_ambient` directly — the full-ambient actually goes into
+`ms_currentLights.ambient` which is uploaded to `c16` (lightData.ambient). The //asm shader
+(c_ambient.inc) only does `mov r7, vColor0` — it does NOT read c16. So D3D9 full-ambient
+→ c16=(1,1,1,0) but that c16 value is NEVER CONSUMED by the //asm tfcl/tfcsl world shaders.
+
+**CONCLUSION: The D3D9 full-ambient mechanism does NOT help buildings rendered via //asm
+tfcl/tfcsl shaders. The ambient c16 register is only consumed by the older //asm `c_ambient.inc`
+which is NOT included in tfcl/tfcsl — those include `c_ambient.inc` for cell-based ambient
+(vColor0), then `diffuse.inc` for dynamic lights. Cell ambient = vColor0, NOT c16.**
+
+The c16 (LightData.ambient) register IS consumed by some other shaders — specifically any
+//asm shader that explicitly reads `cLightData_ambient` (c16). Let me check
+`vertex_shader_constants.inc:88-90`: `LightData lightData : register(c16)` where
+`LightData.ambient.ambientColor` is the first field = c16. The `calculateDiffuseLighting`
+in functions.inc does NOT add ambient from the cbuffer. So ambient c16 is consumed only
+by shaders that directly reference `lightData.ambient` — the base `c_ambient.inc` does NOT;
+it just reads vColor0.
+
+So the full-ambient seeding path (D3D9:955 `setFullAmbientOn`) seeds c16=(1,1,1,0), but
+tfcl/tfcsl don't read c16 for ambient. They read vColor0 which is the baked vertex data.
+
+**This makes the full-ambient path a RED HERRING for tfcl/tfcsl geometry.** For those
+shaders, D3D9 and D3D11 should produce identical results IF the VBFormat carries color0 and
+IF the light list is equally empty/non-empty.
+
+### Root cause C: The `listSz=0` may be a CONSEQUENCE of a CELL-STACK bug
+When `ShaderPrimitiveSorter::popCell()` fires (line 1419-1435), it:
+1. Clears activeLightList and calls `Graphics::setLights(empty)`
+2. Erases lights from `ms_lightList`
+3. Resets both bitsets
+
+If a building draw happens AFTER a `popCell` but before a new `enableLight` cycle (e.g.
+the DPVS visitor fires popCell early or the building is in the world cell that gets lit
+before scene rendering begins), then `ms_lightsAffectingShadersWithPrecalculatedVertexLighting`
+would be empty → `lightBitSet` stored in the Phase::Entry is all-zeros → `setLights` called
+with empty → `Graphics::setLights` receives empty → D3D11 `setLights` zeros the snapshot.
+
+**This is an alternative to "precalc routing" and applies equally to all primitives in the
+cell with an empty light bitset — including non-precalc ones.**
+
+### Root cause D: N·L back-face / normal-space mismatch producing near-zero diffuse
+
+For the directional lights that DO reach the buildings (in the non-empty-list case), the
+dot product `max(dot(normal_w, light.direction), 0)` could produce near-zero for all vertices
+if the normal transform is wrong. The `calculateDiffuseParallelLight` in functions.inc:70
+uses: `float3 normal_w = normalize(mul(vertexNormal_o, (float3x3)objectWorldMatrix))`.
+
+If `objectWorldMatrix` in the cbuffer contains the TRANSPOSED matrix when the shader expects
+the non-transposed form (or vice versa), `mul(vertexNormal_o, M_T)` ≠ `M * normal_o` would
+produce a rotated normal. If the result is approximately perpendicular to the light direction,
+N·L ≈ 0 → dark output without being pure black. "Dark but not black" matches this exactly.
+
+The world VS multiplies normal as a row vector: `mul(nrm_o, (float3x3)objectWorldMatrix)`.
+For correct world-space transform, this should be equivalent to `objectWorldMatrix^T * nrm_col`.
+The cbuffer stores `W_t = XMMatrixTranspose(W)` per StateCache.cpp:353-355. So the shader
+reads `M_transposed`, and computes `nrm_o * M_transposed = M * nrm_col` which IS correct for
+column-vector conventions. But only if the original W was in column-vector convention. This
+is verified in the codebase. However, there is a known pitfall: if the world matrix for a
+specific building object is fed incorrectly (e.g. a camera-locked object, mentioned in the
+handoff), the normal transform would fail for that specific object.
+
+**This is a strong alternative for camera-position-dependent "dark" objects.** It would not
+be fixed by the full-ambient path and would not correlate with precalc routing.
+
+### Root cause E: The //asm fallback VS for REMAINING //asm shaders emits const-white COLOR0
+The fallback VS (VertexShaderData.cpp:176-178) explicitly emits `COLOR0 = (1,1,1,1)` and
+doesn't read VB color. For buildings still using //asm shaders that hit the fallback path,
+the fallback PS (t0 * COLOR0 = t0 * 1 = texture) would render at full texture brightness
+with no lighting → OVER-BRIGHT, not dark. This eliminates the fallback path as the cause
+of darkness for those buildings.
+
+### Root cause F: Missing `obeysLightScale` propagation
+D3D9 has `Direct3d9_LightManager::setObeysLightScale(bool)` which switches between
+`getScaledDiffuseColor()` and `getDiffuseColor()` (unscaled). D3D11's `setLights` always
+calls `getScaledDiffuseColor()` (line 100). If the engine is calling
+`setObeysLightScale(false)` for certain building draws, D3D9 uses unscaled colors while
+D3D11 always uses scaled colors. For a typical scene with scale factor < 1, scaled colors
+are dimmer → D3D11 could be systematically darker. This is a small but real divergence.
+
+---
+
+## 4. THE DISCRIMINATING EXPERIMENT
+
+**Single cheapest experiment:** In `Direct3d11_StateCache::composeSlot0Shadow`, after the
+lighting fill block, add one log line (or RenderDoc marker) that dumps:
+- `d3.ambient` (what c16 actually receives)
+- `d3.parallelDiffuseColor[0..1]` (what c21/c23 receive)
+- The current vertex format flags (hasColor0 yes/no)
+
+Then compare for a building draw vs a character draw. If:
+- Building has `d3.ambient=(0,0,0,0)` AND `parallelDiffuse[0..1]=(0,0,0,0)` AND `hasColor0=true`
+  → Root cause A confirmed: empty-list zeroes cbuffer, vertex color survives but lights gone
+- Building has `d3.ambient=(0,0,0,0)` AND `hasColor0=false`
+  → Root cause B confirmed: no VB color stream → true black
+- Building has non-zero ambient/parallel but still dark
+  → Root cause D confirmed: normal-space mismatch or wrong light direction
+
+**Alternative one-shot experiment (no code change, uses existing RenderDoc MCP):**
+Capture a frame and compare pixel_history on a dark building wall. In the VS output, check
+the COLOR0 value. If COLOR0 ≈ 0.13 (dark but non-zero) → vertex color exists, is correct,
+dynamic lighting is zero → Root cause A. If COLOR0 ≈ 0 → VB missing color0 (Root cause B)
+or normal-dot-zero issue (Root cause D, check with normal direction output).
+
+---
+
+## 5. VERDICT ON THE PRECALC FRAMING
+
+**The precalc framing PARTIALLY survives but is imprecise:**
+
+1. The `containsPrecalculatedVertexLighting()` flag is a read-once asset attribute (from
+   ShaderEffect IFF TAG_DATA at load time) that correctly routes primitives to
+   `ms_lightsAffectingShadersWithPrecalculatedVertexLighting`. However, unless a scene
+   explicitly creates lights with `setAffectsShadersWithPrecalculatedVertexLighting(false)`,
+   this bitset is identical to the non-precalc one → `listSz=0` implies no lights in the
+   cell at all, not "precalc routing dropped the lights."
+
+2. The D3D9 full-ambient seeding (`setFullAmbientOn` → c16=(1,1,1,0)) is a real divergence
+   but it's a RED HERRING for tfcl/tfcsl shaders: those shaders do NOT read c16 for ambient.
+   They read vColor0 (baked vertex data). The full-ambient path was designed for older //asm
+   shaders that DID read c16 for ambient accumulation — a different shader family.
+
+3. The "D3D11 world VS has no COLOR input" claim is WRONG. The //hlsl reauthored tfcl/tfcsl
+   VSes explicitly declare `float4 color0 : COLOR0` (tfcl.vsh:32, tfcsl.vsh:31). The
+   question is whether the VBFormat supplies it. If it does, D3D11 reads it fine. If it
+   doesn't, the phantom-zero mechanism zero-fills it.
+
+4. The "dark not black" observation is the key discriminator:
+   - If `listSz=0` and `VBFormat.hasColor0()=true`: output = vertex_color0 (baked data)
+     ≈ 0.13 → dark not black ✓ consistent with Root cause A
+   - If `listSz=0` and `VBFormat.hasColor0()=false`: output = emissive ≈ 0 → near-black,
+     which does NOT match "dark not black"
+   - If `listSz=3` but dark: normal-space bug → Root cause D
+
+5. The most likely scenario: buildings are in a cell with `listSz=0` (world/outdoor lights
+   not being fed to the precalc bitset OR a popCell ordering issue) AND the VBFormat carries
+   color0 (baked vertex data). The VS outputs color0 alone ≈ 0.13 → dark not black.
+   The D3D9 full-ambient path would add c16=(1,1,1,0) for OTHER shader families — but for
+   tfcl/tfcsl it's irrelevant. The REAL D3D9 parity for these shaders is: feed the dynamic
+   lights (the 3 lights that the handoff says correctly-lit objects receive) to the buildings
+   too, so `max(N·L, 0) * light.diffuseColor` terms are non-zero.
+
+**Bottom line:** The precalc framing correctly identifies THAT buildings are getting fewer
+lights, but incorrectly identifies the mechanism. The fix is NOT to add a full-ambient path
+for precalc geometry (that would do nothing for tfcl/tfcsl). The fix is to understand WHY
+the building draws see `listSz=0` when the character draws see `listSz=3` — i.e., are they
+in a different cell or using a different light bitset? That is the actual divergence from D3D9.
+
+---
+
+## 6. LIGHT-CULLING / RANGE / DPVS ALTERNATIVES
+
+The `ShaderPrimitiveSorter::enableLight` function (line 1095-1106) simply adds any light
+that `addToWorld()` fires. There is no range-culling at this layer. Range/attenuation is
+done in the VS itself. DPVS controls which OBJECTS are visible, not which lights are enabled.
+So DPVS dropping the building from the scene would make it NOT DRAW AT ALL, not just dark.
+
+**However:** If the building is in a DIFFERENT CELL than the lights, `enableLight` fires for
+lights in cell A and the building draws in cell B after `popCell`. The popCell at line 1434
+resets `ms_lightsAffectingShadersWithPrecalculatedVertexLighting.reset()`. If this reset
+fires before the building's Phase::draw iterates its entries (which were sorted with the
+pre-popCell light bitset), the entry itself is OK (bitset is IN the Entry struct, copied at
+sort time, line 404). But `ShaderPrimitiveSorter::setLights` (line 1130-1144) uses
+`ms_lightList` offset + the entry's bitset — if `ms_lightList` was ALSO pruned by popCell
+(lines 1432), the indices might not match. This is a subtle bug that could produce
+`listSz=0` for cross-cell geometry.
+
+---
+
+## 7. SUMMARY TABLE: HYPOTHESES RANKED
+
+| Rank | Hypothesis | Mechanism | Evidence For | Evidence Against |
+|------|-----------|-----------|-------------|-----------------|
+| 1 | listSz=0 → cbuffer zeroed; vertex color0 ≈ 0.13 survives | Empty light list zeros c16-c23; VS output = color0 | Matches "dark not black"; code path verified | Needs VBFormat confirmation |
+| 2 | VBFormat missing COLOR0 for buildings | Phantom-zero replaces baked data | Would produce near-black | Should be pure black not "dark" |
+| 3 | Normal-space mismatch (N·L ≈ 0) | Wrong objectWorldMatrix in VS | Explains camera-angle-dependent darkness | Doesn't explain listSz=0 observation |
+| 4 | Cell-stack popCell race / wrong cell for lights | Building in world cell, lights in portal cell | Would explain listSz=0 deterministically | Needs per-cell light list trace |
+| 5 | D3D9 full-ambient path (precalc framing) | c16=(1,1,1,0) seeds ambient | D3D9 code path confirmed | c16 NOT READ by tfcl/tfcsl; red herring for these shaders |
+| 6 | ObeysLightScale divergence | D3D11 always scales; D3D9 doesn't for some geometry | Real code divergence | Would be a uniform dimming, not darkness |
+
+---
+
+## SINGLE DISCRIMINATING EXPERIMENT
+
+**RenderDoc pixel history on a dark building wall + VS output inspection.**
+
+1. Capture a frame with the MCP.
+2. Navigate to a dark building wall draw call.
+3. Use `mcp__renderdoc-mcp__debug_vertex` on a vertex of the dark surface.
+4. Inspect the COLOR0 output:
+   - If COLOR0 ≈ (0.13, 0.12, 0.11) → vertex color baked data flowing through (Root cause A)
+   - If COLOR0 ≈ (0, 0, 0) or very near black → either VBFormat missing color0 (B) or N·L=0 (D)
+5. Check the cbuffer b0 lightData[0] (c16, ambient) and lightData[4..7] (c20-23, parallel):
+   - If all zero → confirms empty-list cbuffer hypothesis (A)
+   - If non-zero parallel but dark output → N·L mismatch (D)
+
+No code change required. Takes 2 minutes with the RenderDoc MCP already installed.

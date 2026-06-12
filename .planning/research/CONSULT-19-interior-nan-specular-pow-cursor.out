@@ -1,0 +1,200 @@
+# Consult: Interior/NPC black — specular `pow()` NaN
+
+## Root cause (confirmed, with one refinement)
+
+**Confirmed:** The black interior pixel is **`o0 = NaN` born in the per-pixel specular `pow()`**, lowered by `fxc` to `exp2(materialSpecularPower * log2(saturate(dot(H,N))))`, exactly as your RenderDoc disassembly shows.
+
+**Refined trigger (both conditions required):**
+
+| Condition | Role |
+|-----------|------|
+| `saturate(dot(halfAngle, normal)) == 0` | `log2(0) → -∞` |
+| `materialSpecularPower == 0` (exactly) | `0.0 × (-∞) → NaN` (IEEE 754 indeterminate form) |
+| `exp2(NaN) → NaN` | Specular term NaN |
+| `result.rgb = diffuseLit + allSpecular` | **NaN poisons the whole pixel** even when diffuse is valid |
+
+**IEEE chain on D3D11 / `ps_4_0`:**
+
+```
+nh = saturate(dot(H,N)) = 0
+t  = log2(nh) = -INF
+t  = t * materialSpecularPower = 0 * (-INF) = NaN   ← only when power == 0
+dot3SpecularIntensity = exp2(NaN) = NaN
+```
+
+If **`materialSpecularPower > 0`** (even `0.001`), then `power * (-INF) = -INF` and **`exp2(-INF) = 0`** — no NaN on back-facing pixels. So your matte-material hypothesis is **correct for the NaN path**, but it is **not** “NaN on the whole surface” — it is “NaN on every pixel where **H·N = 0** while power is 0,” and because specular NaN is **added** to diffuse, those pixels go fully black. On matte materials that can be most of the visible area.
+
+**Challenge to framing:** Do not trust the source-level guard:
+
+```311:314:D:/Code/swg-client-v2/.planning/phases/17-psrc-census-char-select-beachhead/evidence/plan-17-04x-psrc-source-dump.txt
+	//light per-pixel specular -- (H.N)^power
+	float dot3SpecularIntensity = 0;
+	if (dot3LightIntensity >= 0)
+		dot3SpecularIntensity = pow(saturate(dot(halfAngle_o, normal_o)), materialSpecularPower);
+```
+
+`dot3LightIntensity` is already `saturate(L·N)`, so **`>= 0` is always true**. The compiler removes the branch; your disassembly has **no branch** before `log`/`exp`. That guard never protected `H·N == 0`.
+
+**Cheapest confirmation in RenderDoc (draw 1612):**  
+Read **`SwgVertexConstants` @ b0**, first `float4` (**`packedRegister0` / `dot3LightDirection`**), **`.w` = `materialSpecularPower`**. Expect **`0.0`** on matte interior/NPC materials. If `.w > 0` at a NaN pixel, the trigger is something else (e.g. bad half-angle varyings) — but your asm implicating `packedRegister0.w` strongly points at **power = 0**.
+
+---
+
+## D3D9 vs D3D11 divergence (file:line)
+
+### Same asset file, different GPU programs
+
+| Path | What runs | Where |
+|------|-----------|--------|
+| **D3D9 (`gl05`)** | Prebuilt **`ps_2_0` bytecode** from `pixelShaderProgram.m_exe` | ```34:35:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_PixelShaderProgramData.cpp``` |
+| **D3D11 (`gl11`)** | **`//hlsl` PSRC recompiled** via `D3DCompile` → **`ps_4_0`**, after `Direct3d11_HlslRewrite` (cbuffer wrap) + Plan 17-07 VS-mirror wrapper | ```75:75:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp```, ```1228:1276:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp```, ```810:967:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp``` |
+
+So “same `a_specmap_pp_ps20.psh`” means **same HLSL source on disk**, not the same ISA. D3D9 never recompiles that source at runtime; D3D11 does, with stricter `log2`/`exp2` IEEE behavior than legacy **`ps_2_0`** bytecode.
+
+### `materialSpecularPower` upload — same intent, one D3D11 asymmetry
+
+**Material capture (both):** `material.getSpecularPower()` → stored per pass.
+
+```486:486:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+					pm.m_power    = material.getSpecularPower();
+```
+
+```619:619:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticShaderData.cpp
+			m_material.material.Power      = material.getSpecularPower();
+```
+
+**D3D9 PS constant (no clamp):**
+
+```864:864:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticShaderData.cpp
+			Direct3d9_StateCache::setSpecularPower(m_material.material.Power);
+```
+
+```428:430:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h
+inline void Direct3d9_StateCache::setSpecularPower(float power)
+{
+	ms_specularPower = power;
+```
+
+Fed into PS dot3 block as **`localDirection.w`**:
+
+```577:577:D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+					lightData.dot3.localDirection.w = Direct3d9_StateCache::getSpecularPower(); // materialSpecularPower stored in localDirection.w
+```
+
+**D3D11 PS constant (raw `pm.m_power`, no clamp):**
+
+```919:920:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
+							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+```
+
+Slot mapping:
+
+```54:54:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_LegacyPSConstants.h
+	constexpr int PSCR_dot3LightDirection               = 0;   // .xyz = object-local light dir, .w = materialSpecularPower
+```
+
+**D3D11 VS only (clamped — does not fix PS NaN):** Plan 17-09 GAP-5 clamps **vertex** specular power to 32 when `power <= 0`, but **PS still gets raw 0**:
+
+```2392:2409:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setSpecularPower(float power)
+{
+	// ...
+	float const safe = (power > 0.0f && power < 1.0e6f) ? power : 32.0f;
+	// ...
+	Direct3d11_StateCacheNamespace::s_slot0Shadow.lightData[25].w = safe;
+```
+
+```773:773:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+				Direct3d11_StateCache::setSpecularPower(pmPower.m_materialValid ? pmPower.m_power : 32.0f);
+```
+
+**Conclusion:** D3D9 and D3D11 both **can** feed **`materialSpecularPower = 0`** to the PS. The live divergence is **`ps_2_0` bytecode vs `ps_4_0` recompile + `pow` lowering**, not “D3D11 clamps power and D3D9 doesn’t.” On D3D9, **`pow(x, 0)` with matte materials likely yields 0** (legacy SM2 behavior), which matches “specular off”; on D3D11, **`pow(x, 0)` is 1 for `x > 0` and NaN for `x = 0`** — doubly wrong for matte.
+
+**Interior/NPC vs exterior:** Plausible **if** those assets use **`specularPower == 0`** (matte walls, skin/cloth) **and** shaders in the `*_specmap_*` / `h_spec_pp` family. Exterior shiny materials with **power > 0** avoid the NaN path on back faces (`exp2(-∞) = 0`). That correlation is **material + shader family**, not “interior” as a separate renderer bug.
+
+---
+
+## Scope: how many shaders use this pattern?
+
+From the char-select PSRC dump (**22 unique HLSL PS**), **7** contain the same specular idiom (`dot3SpecularIntensity = 0; if (dot3LightIntensity >= 0) pow(saturate(dot(halfAngle…))…)`):
+
+| Shader |
+|--------|
+| `a_specmap_pp_ps20.psh` |
+| `h_specmap_cbmp_ps20.psh` |
+| `h_envmask_specmap_ps20.psh` |
+| `h_color2_specmap_cbmp_ps20.psh` |
+| `h_spec_pp_ps20.psh` |
+| `h_color2_specmap_bump_ps20.psh` |
+| `h_color2_specmap_bump_aniso_ps20.psh` |
+
+That covers **armor (`a_*`)**, **human body (`h_*`)**, and **POB-style specmap** paths — aligned with interiors + NPCs + char-select.
+
+`Direct3d11_HlslRewrite.cpp` has **no `pow`-specific rule** today; fixing only `a_specmap_pp` in one place would miss the other six unless you patch **pre-compile PSRC** globally.
+
+Other hazards (`rsq` on zero-length `normalize`, `/` in attenuation) exist elsewhere (see VS handoff in `.planning/handoff/gap6-bump-arms-vs-lighting-nan.md`) but are **not** what your PS disassembly shows for event 1612 — **NORMAL / half-angle normalize completed before the NaN `log`**.
+
+---
+
+## Ranked minimal fixes (D3D9 parity)
+
+### 1. **Recommended: fix the specular idiom in the recompile lane (all asset PSRC)**
+
+Replace the dead `if (dot3LightIntensity >= 0)` block with something that matches **matte-off + no NaN**:
+
+```hlsl
+float nh = saturate(dot(halfAngle_o, normal_o));
+dot3SpecularIntensity = (materialSpecularPower > 0.0f && nh > 0.0f)
+    ? pow(nh, materialSpecularPower)
+    : 0.0f;
+```
+
+**Where:** text substitution in `Direct3d11_PixelShaderProgramData.cpp` (before `D3DCompile`, alongside the Plan 17-07 wrapper) **or** a new rule in `Direct3d11_HlslRewrite.cpp`.  
+**Why:** covers all 7 templates; **`power == 0 → 0`** matches D3D9 matte intent; **`nh == 0 → 0`** matches safe specular off back-faces; does not change **`power > 0`** exterior specular where `nh > 0`.  
+**Verify:** bump `D3D11_REWRITE_VERSION`, one interior pixel → finite `o0`, diffuse visible.
+
+### 2. **Do not: clamp `materialSpecularPower` to ≥ 1 at upload only**
+
+Using `setSpecularPower`’s safe value in PS `c0.w` (line 919) would stop NaN but turn matte into **`pow(nh, 32)`** on lit pixels — **not** D3D9 matte (where **`pow(*, 0)` ≈ 0**). Worse than (1).
+
+### 3. **Weaker: `pow(max(nh, 1e-8), max(power, 1e-8))`**
+
+Avoids NaN but changes **all** specular falloff and **`power == 0`** semantics; poor D3D9 match.
+
+### 4. **Post-hoc NaN sanitize on specular only**
+
+e.g. `dot3SpecularIntensity = isnan(x) ? 0 : x` — stops black but leaves wrong **`pow(nh,0)==1`** on front-facing pixels; band-aid.
+
+### 5. **Wrapper `isnan` on COLOR0/COLOR1** (already there)
+
+```944:951:D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_PixelShaderProgramData.cpp
+				// NaN GUARD: if a residual NaN slips through ...
+				char arg[72]; _snprintf_s(arg, sizeof(arg), _TRUNCATE,
+					"(any(isnan(i1707.f_%d)) ? 0 : i1707.f_%d)", paramToVs[k], paramToVs[k]);
+```
+
+Does **not** fix **internally generated** specular NaN (your finding #7).
+
+---
+
+## Cheapest verification checklist
+
+1. **RenderDoc → draw 1612 → PS → CB b0 → `packedRegister0.w`** (or legacy offset **12–15** in first 16 bytes): expect **`0.0`** on matte interior.  
+2. **Same draw → PS disassembly / debug**: confirm `mul … packedRegister0.w` uses that **0**.  
+3. **One-line experiment:** patch only `a_specmap_pp` PSRC as in fix (1), bump rewrite version, rebuild `gl11` — interior wall should show **diffuse only** (not black), matching D3D9 matte.  
+4. **Negative test:** force `c0.w = 32` in a debug build — NaN should disappear but surfaces may look **too shiny** (confirms power=0 is the trigger, not lights).
+
+---
+
+## Bottom line
+
+| Question | Answer |
+|----------|--------|
+| **Trigger?** | **`pow(0, 0)` via `exp2(0 * log2(0))`** when **`materialSpecularPower == 0`** and **`saturate(H·N) == 0`**. Inspect **`packedRegister0.w` / `PSCR_dot3LightDirection` .w**. |
+| **Why D3D9 OK?** | **Frozen `ps_2_0` bytecode** + legacy **`pow(x,0)` ≈ 0** behavior; **not** different material upload. |
+| **Why D3D11 black?** | **`ps_4_0` recompile** + strict **`log2`/`exp2`** + **NaN specular added to diffuse**. |
+| **Minimal fix?** | Global PSRC rewrite: **`(power > 0 && nh > 0) ? pow(nh, power) : 0`** in the recompile lane; **7** char-select shaders, same pattern in full world specmap family. |
+| **Avoid?** | PS-only power clamp to 32; epsilon `pow` without guarding **`power == 0`**. |
+
+I can implement fix (1) in Agent mode if you want that wired into `Direct3d11_HlslRewrite` / `PixelShaderProgramData` with a version bump and a short verification note for `capture1.rdc`.

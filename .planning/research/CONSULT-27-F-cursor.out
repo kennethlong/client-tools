@@ -1,0 +1,274 @@
+# Object-local transform flow: D3D9 vs D3D11
+
+## Executive summary
+
+There is **no separate per-skeletal-draw “camera-in-object-space” view computation** in engine code. Both plugins use the same model:
+
+- **Vertices** stay in object space (CPU soft-skin writes object-local positions).
+- **Per frame:** global view `V` and projection `P` come from `Camera::applyState()`.
+- **Per draw:** object-to-world `W` comes from `prepareToDraw()` → `Graphics::setObjectToWorldTransformAndScale()`.
+- **Shader:** `transform3d()` does `mul(pos_o, objectWorldCameraProjectionMatrix)` where `WVP = P × V × W`.
+
+“Object-local” means vertices are not world-transformed on the CPU; depth still enters through **`W`’s translation** (and/or equivalently through `V×W`). Neither plugin subtracts camera position into a per-object view matrix for skeletal draws.
+
+---
+
+## 1. Engine-side: where object transform enters
+
+### Appearance → world transform (upstream of skeletal draw)
+
+| Step | File:line | What happens |
+|------|-----------|--------------|
+| Owner object position fed to appearance | `RenderWorldCommander.cpp:344` or `:409` | `ourAppearance->setTransform_w(ourObject->getTransform_o2w())` before render |
+| Appearance storage | `Appearance.cpp:448-450` | `m_appearanceToWorld = t` |
+| SBSSP sort key / position | `SoftwareBlendSkeletalShaderPrimitive.cpp:457,464` | Uses `m_appearance.getTransform_w().getPosition_p()` |
+
+### SBSSP `prepareToDraw()` — the skeletal soft-skin path
+
+```483:491:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+{
+	// ...
+	const Transform &transform_apw = m_appearance.getTransform_w();
+	Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111);
+```
+
+**Answer to Q1:** Yes — `prepareToDraw()` passes the **full appearance-to-world transform** (not identity) into `Graphics::setObjectToWorldTransformAndScale`. The plugin then combines that `W` with the cached global `V` and `P`. It does **not** separately transform the camera into object space.
+
+Contrast — batch skeletal path (far LOD, world-space verts):
+
+```326:329:src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp
+void ...::LocalShaderPrimitive::prepareToDraw() const
+{
+	// Vertices are in world space, so set object to world to identity.
+	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+```
+
+### Graphics dispatch
+
+```1486:1489:src/engine/client/library/clientGraphics/src/win32/Graphics.cpp
+void Graphics::setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale)
+{
+	ms_api->setObjectToWorldTransformAndScale(objectToWorld, scale);
+```
+
+### Draw scheduling (when `prepareToDraw` meets `draw`)
+
+```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp
+		shaderPrimitive.prepareToDraw();
+		// ...
+		for (int i = 0; i < numberOfPasses; ++i)
+		{
+			Graphics::setStaticShader(staticShader, i);
+			// ...
+			shaderPrimitive.draw();
+```
+
+Within one sorter phase, **`prepareToDraw()` and `draw()` are back-to-back** for each primitive. No cross-primitive W clobber between one SBSSP’s `prepareToDraw` and its own `draw`.
+
+---
+
+## 2. Per-frame camera / view (global, not per-object)
+
+```629:637:src/engine/client/library/clientGraphics/src/shared/Camera.cpp
+void Camera::applyState() const
+{
+	const Transform &objectToWorld = getTransform_o2w();
+	Transform worldToCamera(Transform::IF_none);
+	worldToCamera.invert(objectToWorld);
+
+	Graphics::setWorldToCameraTransform(worldToCamera, objectToWorld.getPosition_p());
+	Graphics::setProjectionMatrix(projectionMatrix);
+```
+
+Called from `Camera::beginScene()` (`Camera.cpp:652-654`). This sets **one global view** for the whole scene pass. The second argument is **world-space camera position** (for lighting constants `c8`), not an object-local camera offset.
+
+**Object-local camera direction in shaders** (for lighting/fog only, not clip position):
+
+```29:34:.planning/research/vsh-extract/inc_functions.inc
+float calculateFog(float4 vertexPosition_o)
+{
+	float4 position_w = mul(vertexPosition_o, objectWorldMatrix);
+	float3 viewer_w = cameraPosition - position_w;
+```
+
+Clip position uses only `objectWorldCameraProjectionMatrix` (`inc_functions.inc:10-12`).
+
+---
+
+## 3. Side-by-side plugin trace
+
+### A. Object-to-world (`W`) storage
+
+| | **D3D9** | **D3D11** |
+|---|----------|-----------|
+| Handler | `Direct3d9.cpp:3402-3421` | `Direct3d11_StateCache.cpp:1909-1983` |
+| Storage | `ms_cachedObjectToWorldMatrix` via `convertScaleAndTransformToMatrix` (`Direct3d9.cpp:3410`, `3132-3168`) | `s_cachedWorld` (`1945-1949`) + `s_cachedObjectToWorldTransform` (`1942`) |
+| Translation layout (VSPS) | `matrix._14/_24/_34` = `transform.matrix[0/1/2][3]` (`3158-3168`) | Row 0–2 col 3 = `m[0/1/2][3]`; row 3 = `(0,0,0,1)` (`1945-1949`) |
+| Also sets | `Direct3d9_LightManager::setObjectToWorldTransform` (`3417`) | `composeSlot0Shadow()` immediately (`1951`) |
+
+Both copy translation into **column 4** of the 3×4 engine matrix (D3D row-major `_14/_24/_34`). Neither zeros translation here.
+
+### B. View (`V`) + camera position
+
+| | **D3D9** | **D3D11** |
+|---|----------|-----------|
+| Handler | `Direct3d9.cpp:3271-3297` | `Direct3d11_StateCache.cpp:1789-1845` |
+| View storage | `ms_cachedWorldToCameraMatrix` via `convertTransformToMatrix` (`3280`) | `s_cachedView` (`1800-1804`) |
+| Camera pos | `VSCR_cameraPosition` (`3290`) | `s_cachedCameraPos` → shadow `c8` (`1805`, `362`) |
+| Side effect | Recomputes `ms_cachedWorldToProjectionMatrix = P × V` (`3291`) | Calls `composeSlot0Shadow()` (`1844`) |
+
+D3D11 parameter is misnamed `objectToWorld` in the signature (`Direct3d11_StateCache.h:73`); it receives **`worldToCamera`** from `Camera::applyState`.
+
+### C. Projection (`P`)
+
+| | **D3D9** | **D3D11** |
+|---|----------|-----------|
+| Handler | `Direct3d9.cpp:3301-3365` | `Direct3d11_StateCache.cpp:1849-1888` |
+| Storage | `ms_cachedProjectionMatrix` | `s_cachedProj` (`1859`) |
+| P×V recompute | `ms_cachedWorldToProjectionMatrix = P × V` (`3359`) | `composeSlot0Shadow()` (`1863`) |
+
+### D. WVP composition
+
+| | **D3D9** | **D3D11** |
+|---|----------|-----------|
+| **When composed** | **At draw time**, if `ms_transformDirty` (`Direct3d9.cpp:4026-4039`) | **At each setter call** (`composeSlot0Shadow`), flushed at draw |
+| Formula (VSPS) | `WVP = ms_cachedWorldToProjectionMatrix × ms_cachedObjectToWorldMatrix` = `(P×V) × W` (`4034`) | `wtp = P×V; wvp = wtp×W` (`334-335`) |
+| Also uploads `W` | `matrices[1] = ms_cachedObjectToWorldMatrix` (`4035`) | `s_slot0Shadow.objectWorldMatrix = transpose(W)` (`353-355`) |
+
+### E. GPU upload
+
+| | **D3D9** | **D3D11** |
+|---|----------|-----------|
+| Upload site | `Direct3d9_StateCache::setVertexShaderConstants(VSCR_objectWorldCameraProjectionMatrix, matrices, 8)` (`4038`) | `flushSlot0IfDirty()` → `Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, 1152)` (`731`) |
+| Register layout | `c0..c3` WVP, `c4..c7` W, `c8` camera (`Direct3d9_VertexShaderConstantRegisters.h:22-24`) | Same layout (`Direct3d11_ConstantBuffer.h:194-216`) |
+| Transpose | **None** — matrices uploaded as composed | **`XMMatrixTranspose(wvp)` and `XMMatrixTranspose(W)` before store** (`352-355`, Iter-38B comment `337-351`) |
+| Flush trigger | `ms_transformDirty` cleared per draw (`4039`) | `s_slot0Dirty` cleared per flush (`732`); flush at top of `applyPreDrawState` (`1198`) |
+
+---
+
+## 4. End-to-end flow for one SBSSP soft-skin draw
+
+```
+Frame start
+  Camera::beginScene()                         Camera.cpp:652
+    → setWorldToCameraTransform(V, camPos_w)   Camera.cpp:637 → D3D9:3271 / D3D11:1789
+    → setProjectionMatrix(P)                   Camera.cpp:638 → D3D9:3301 / D3D11:1849
+
+Per visible object (before add to sorter)
+  appearance->setTransform_w(object->getTransform_o2w())   RenderWorldCommander.cpp:344/409
+
+Per SBSSP draw (ShaderPrimitiveSorter::Phase::draw)
+  prepareToDraw()
+    setObjectToWorldTransformAndScale(transform_apw)       SBSSP.cpp:490-491
+      → D3D9: caches W, ms_transformDirty=true            Direct3d9.cpp:3409-3410
+      → D3D11: s_cachedWorld=W, composeSlot0Shadow(), s_slot0Dirty=true   StateCache.cpp:1945-1951
+    [CPU skin → dynamic VB, set VB/IB]                     SBSSP.cpp:660-823
+
+  for each shader pass:
+    setStaticShader()                                      SPS.cpp:746 → D3D11:2383 (no matrix change)
+    draw() → render commands → DrawIndexed
+      D3D9: drawPrimitive() recomposes & uploads WVP       Direct3d9.cpp:4026-4038
+      D3D11: applyPreDrawState() → flushSlot0IfDirty()     StateCache.cpp:1198, 731
+```
+
+---
+
+## 5. Is object world translation dropped / zeroed in D3D11?
+
+### What the code does *not* do
+
+- D3D11 `setObjectToWorldTransformAndScale` **does copy** `m[0/1/2][3]` into `s_cachedWorld` (`1945-1948`). It does not zero translation.
+- D3D11 does **not** compute a separate per-object view that subtracts object position from the camera for skeletal draws (same as D3D9).
+- `c8` (`cameraPosition_w`) is world-space camera position in both plugins; it is used for lighting/fog, **not** for `transform3d()` clip position.
+
+### Where D3D11 **could** lose correct object depth (clip-W ≈ 0)
+
+Ranked by architectural risk:
+
+#### 1. **Transpose-at-upload convention** — `Direct3d11_StateCache.cpp:337-355`
+
+D3D9 uploads WVP **without transpose** (`Direct3d9.cpp:4034-4038`). D3D11 stores `transpose(WVP)` and `transpose(W)` into the cbuffer because HLSL bytecode does row-vector `mul(pos, M)`.
+
+Engine translation lives in **`W._14/_24/_34`** (pre-transpose). After transpose it moves to **`W._41/_42/_43`** in the uploaded cbuffer. A probe reading `_14/_24/_34` on the flushed cbuffer would report **`[0,0,0]` even when translation is correct** — a layout interpretation trap, not necessarily a plumbing bug.
+
+The staging probe’s clip-W math uses the transposed layout correctly (`_14/_24/_34/_44` as row-vector weights, `3325-3336`).
+
+#### 2. **WVP composed at setter time, not at draw time** — D3D11 `composeSlot0Shadow()` vs D3D9 `drawPrimitive()`
+
+| D3D9 | D3D11 |
+|------|-------|
+| Re-reads `ms_cachedObjectToWorldMatrix` at **every draw** when dirty (`4034`) | Re-composes only when a setter fires; GPU sees last composed shadow at flush |
+
+Normally equivalent for SBSSP (prepareToDraw immediately precedes draw). Divergence surfaces when:
+
+- `setWorldToCameraTransform` / `setProjectionMatrix` call `composeSlot0Shadow()` using **whatever `s_cachedWorld` still holds** (`1844`, `1863`) — often **previous frame’s last object** or identity defaults (`271-274`) — and something triggers a flush **before** the first `prepareToDraw` of the frame.
+- `s_slot0Dirty == false` causes `flushSlot0IfDirty` to skip (`492-493`), leaving a prior frame’s cbuffer bound.
+
+D3D9’s draw-time recompose avoids the “stale composed WVP in shadow” window.
+
+#### 3. **`s_cachedWorld` identity from non-skeletal paths**
+
+`FullGeometrySkeletalAppearanceBatchRenderer` intentionally sets identity W (`329`). Iter-34 diagnostics noted ~41% of flushes show identity W — those are other render families, not necessarily SBSSP. If a flush happens for a draw whose `prepareToDraw` never ran (or ran on a different primitive last), W could be identity → object at origin in world space → near-plane clip-W collapse for distant world objects.
+
+SBSSP itself always passes non-identity `transform_apw` when `getTransform_w()` is populated (`490-491`).
+
+#### 4. **`setVSConstantsRaw` can patch c0..c71 after compose** — `StateCache.cpp:446-457`
+
+If anything writes registers 0–7 via `setVSConstantsRaw` after `composeSlot0Shadow`, it mutates the shadow without recomposing WVP. Comments at `459-464` flag this as a suspected clobber path. D3D9 has no equivalent deferred shadow layer.
+
+#### 5. **Startup / first-flush transient**
+
+Handoff notes bad `clipW` only on calls 1–8 (view/proj not yet initialized). `s_cachedView`/`s_cachedProj` default to identity (`263-270`); first `composeSlot0Shadow` after `beginScene` but before meaningful `W` produces degenerate WVP.
+
+---
+
+## 6. Camera position: is it correctly applied?
+
+| Role | D3D9 | D3D11 | Applied in object space? |
+|------|------|-------|---------------------------|
+| View matrix `V` | Global `worldToCamera` from camera o2w invert | Same (`s_cachedView`) | No — world space |
+| Camera position constant | `VSCR_cameraPosition` = camera world pos (`3290`) | `s_cachedCameraPos` → `c8` (`1805`, `362`) | No — world space; shaders convert via `objectWorldMatrix` for lighting |
+| Per-object view offset | **Not implemented** in either plugin | **Not implemented** | N/A |
+
+Depth for clip position is carried by **`WVP = P×V×W`**, not by subtracting camera into a per-object view. For a correct result, **`W` must contain the object’s world translation** (unless `W=identity` and vertices were pre-transformed to world space, as in the batch path).
+
+---
+
+## 7. Specific point where D3D11 could yield clip-W ≈ 0 (given zero world-translation probe)
+
+**Most specific code site:** the combination of
+
+1. **`composeSlot0Shadow()`** (`329-355`) producing `objectWorldCameraProjectionMatrix` from `s_cachedView × s_cachedProj × s_cachedWorld`, and  
+2. **`flushSlot0IfDirty()`** (`490-732`) uploading that shadow at `applyPreDrawState` (`1198`),
+
+when **`s_cachedWorld` lacks object translation** at compose time.
+
+That happens if:
+
+- **`prepareToDraw` never reached** `setObjectToWorldTransformAndScale` for that draw (wrong primitive family last wrote W), or
+- **`s_cachedWorld` still identity/stale** because the last setter was `setWorldToCameraTransform`/`setProjectionMatrix` at `beginScene` and no per-object setter ran before flush, or
+- **Probe reads pre-transpose translation slots** (`_14/_24/_34`) on the post-transpose cbuffer and reports `[0,0,0]` erroneously.
+
+For SBSSP specifically, the intended injection point is unambiguous:
+
+```490:491:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+	const Transform &transform_apw = m_appearance.getTransform_w();
+	Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111);
+```
+
+→ `Direct3d11_StateCache.cpp:1945-1951` (W shadow) → `334-355` (WVP compose + transpose) → `731` (GPU upload).
+
+If the GPU sees zero world translation for that draw, the break is **between `1945` and `731`** (stale/identity `s_cachedWorld`, skipped flush, post-compose clobber, or transpose-slot misread) — not in CPU skinning or VB write paths.
+
+---
+
+## 8. D3D11 assumptions vs D3D9 fresh computation
+
+| D3D11 assumes / caches | D3D9 computes fresh |
+|------------------------|-------------------|
+| `s_cachedView`, `s_cachedProj`, `s_cachedWorld` file-scope shadows (`263-274`) | `ms_cachedWorldToCameraMatrix`, `ms_cachedProjectionMatrix`, `ms_cachedObjectToWorldMatrix` |
+| WVP in `s_slot0Shadow`, uploaded lazily via `s_slot0Dirty` | WVP in `drawPrimitive()` when `ms_transformDirty` |
+| Identity-initialized shadows safe before first setter (`258-261`) | Row 4 of W/V initialized once at install (`1693-1701`) |
+| Transposed matrices at upload for row-vector HLSL (`337-355`) | Raw composed matrices, no transpose (`4034-4038`) |
+| `composeSlot0Shadow` on **every** V/P/W setter, even mid-frame | P×V updated on V/P set; WVP only on draw when dirty |

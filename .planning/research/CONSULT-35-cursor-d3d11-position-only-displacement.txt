@@ -1,0 +1,18 @@
+You are diffing a D3D11 soft/hard-skin creature draw against its D3D9 reference in this repo (SWG client) to find a position-only corruption. Read ACTUAL source. Cite file:line. First READ .planning/RENDER-PATH-REFERENCE.md (our render tree) and the D3D9 reference path it cites.
+
+SYMPTOM (visually confirmed): D3D11 renders thin spike SHARDS radiating from soft/hard-skinned creatures (Jawa robe, a humanoid "commoner"). The shards are TEXTURED CORRECTLY in the creature's own texture — so the UVs are RIGHT and only the POSITION is wrong. D3D9 renders the same creatures CLEAN.
+
+DECISIVE NEW CONSTRAINT: UV correct + position wrong for the SAME drawn geometry. A uniform stride/offset/base mismatch would corrupt UVs too — so it is NOT that. The corruption is POSITION-SPECIFIC.
+
+Trustworthy in-process facts (NOT RenderDoc — it lies for deferred dynamic-ring draws):
+- The soft-skin CPU output (systemStream) is OBJECT-space and tight (ss-tight, maxDist=3) — no flung verts. The SSE HARD fill (fillVertexBufferHard @~2305) is UNINSTRUMENTED and is our render tree's #1 suspect (MONEY LEAF).
+- The D3D11 written VB slice [0,writtenCount) has NO position outliers (sentinel-aware centroid scan). copyN==lockN==m_vertexCount (structural). Dynamic-ring lifetime FALSIFIED (16MB never-wrap AND no-ring both still spike). Terrain outliers clamped -> creature spikes PERSIST.
+- => The GPU draws displaced positions that are NOT in the written [0,writtenCount) slice the scan reads, OR the position bytes are recomputed wrong, while UV is correct.
+- Render tree divergence #4 (HIGH): D3D9 DrawIndexedPrimitive BOUNDS the vertex fetch with MinVertexIndex/NumVertices; D3D11 DrawIndexed (Direct3d11_StateCache.cpp:3451) has NO such bound -> read-past into stale ring. cape-index-probe reported overRead=0 for tri-LISTS, but the render tree says re-verify with the ACTUAL draw's RenderCommand m_numberOfVertices (= maxVbIndex-minVbIndex+1, StateCache:~1537) vs the written/locked slice length.
+
+YOUR TASK — find what corrupts POSITION fetch specifically while leaving UV correct, in the D3D11 soft/hard-skin draw, by DIFFING against the D3D9 reference:
+1. The DrawIndexed args in D3D11 (StateCache.cpp:3451) vs D3D9 DrawIndexedPrimitive: does D3D11 omit a fetch bound (MinVertexIndex/NumVertices) that D3D9 enforces? If indices route a triangle to in-range-but-wrong slots, or read past the written count, what gets fetched?
+2. RenderCommand m_numberOfVertices (= maxVbIndex-minVbIndex+1) vs the lock/written count (m_vertexCount): can the DRAWN vertex window exceed the WRITTEN window, so tail verts fetch stale ring bytes? (file:line)
+3. How can the result keep CORRECT UVs but WRONG positions? Two candidates to evaluate against code: (a) the stale/read-past source is a PRIOR lock of the SAME creature mesh (same UVs, stale positions); (b) the hard SSE fill writes position to a wrong offset/with a tail bug while UV/static data (fillConstantVertexBufferData) is written correctly once. Trace fillVertexBufferHard's position write offset+count vs the vertex format, and how static UV is written.
+4. The DOT3 angle: 47 dot3 soft-skin draws (vc=1906/1240) spike; does the dot3 (extra tangent) format change the stride such that the position element or the draw's vertex window is computed wrong in D3D11 only?
+Output: ranked, code-grounded candidates with file:line, each explaining how POSITION is wrong while UV is right, and the single measurement that confirms it.

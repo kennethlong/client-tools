@@ -1,0 +1,183 @@
+# D3D11 soft-skin spike audit (clean baseline)
+
+Re-derived from current source with `P19_DISCARD_ONLY=0`, `P19_FORCE_DRAW_SYNC=0`, no per-draw staging VB readback in the skin draw path. Prior “exonerated” probes that used `forceDiscard`, `Map(READ)`, or `CopySubresourceRegion` are treated as void.
+
+---
+
+## Clean baseline facts
+
+| Item | Source |
+|------|--------|
+| One process-wide ring, no skin-specific ring | `ms_d3dRingBuffer` at ```72:76:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h``` |
+| Append = `WRITE_NO_OVERWRITE`; overflow = `WRITE_DISCARD` | ```245:262:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp``` |
+| `forceDiscard` only if `P19_DISCARD_ONLY` (currently 0) | ```51:52:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp``` |
+| `prepareToDraw` → lock/skin/unlock/bind; `draw()` → indexed draws | ```575:693``` and ```698:701:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp``` |
+| Per primitive: `prepareToDraw()` then immediate `draw()` | ```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp``` |
+
+---
+
+## 1. WRITE_NO_OVERWRITE append + mid-frame WRITE_DISCARD
+
+### Discard condition
+
+```250:262:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
+	{
+		ms_newFrame = false;
+		++ms_discardsSinceBeginFrame;
+		...
+		mapType = D3D11_MAP_WRITE_DISCARD;
+		ms_used = 0;
+	}
+```
+
+Ring size (VRAM-tiered): ```107:110:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp``` — up to **2 MiB** on typical GPUs.
+
+### Can a deferred draw outlive a discard?
+
+**Not within one creature’s lock→draw pair.** `ShaderPrimitiveSorter::Phase::draw()` calls `prepareToDraw()` then `draw()` back-to-back (```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp```). No other ring lock can run between that creature’s unlock and its `DrawIndexed` calls.
+
+**Yes across primitives in the same frame.** Flow per sorted primitive:
+
+1. Creature A: lock at `m_offset`, unlock, `DrawIndexed` (GPU read starts async)
+2. Creatures B…N, UI (`CuiLayerRenderer`), etc.: more locks
+3. When `ms_used + length > ms_size` → **WRITE_DISCARD**, `ms_used = 0`, new generation
+
+`CuiLayerRenderer` can force discard when remaining space is small:
+
+```62:68:src/engine/client/library/clientUserInterface/src/shared/core/CuiLayerRenderer.cpp
+	s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+	if (s_maxNumberOfVertices < 128)
+		s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableVertices(true);
+	s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+`getNumberOfLockableDynamicVertices(true)` returns full ring capacity (```362:366:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp```), which almost always triggers discard.
+
+### D3D11-only gap: `beginFrame()` never called
+
+`Direct3d11_DynamicVertexBufferData::beginFrame()` sets `ms_newFrame = true` (```144:151:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp```) but **has no caller** in the D3D11 plugin. D3D9 calls it every `beginScene`:
+
+```2484:2486:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+	Direct3d9_StaticShaderData::beginFrame();
+	Direct3d9_DynamicVertexBufferData::beginFrame();
+	Direct3d9_DynamicIndexBufferData::beginFrame();
+```
+
+`Direct3d11_Device::beginScene()` does not call VB `beginFrame()` (```652:734:src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp```).
+
+Effect: after the **first lock ever**, `ms_newFrame` stays false forever. No per-frame ring wrap at frame start; discards only happen on overflow. That increases mid-frame discard frequency and cross-frame GPU lag exposure — **D3D11-only**.
+
+### Same-generation byte reuse?
+
+Within one discard generation, `ms_used` only increases (```281:282:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp```). CPU accounting cannot hand out an overlapping byte range without a discard. The hazard is **generation rename**: draw recorded at `(gen G, offset O)` while a later lock at `(gen G+1, offset O)` writes another creature’s skinned verts — depth-valid, creature-textured, not NaN.
+
+---
+
+## 2. Index range vs written slice
+
+### How sub-draw bounds are built
+
+```1406:1406:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+RenderCommand::createTriList(static_cast<int>(minVbIndex), static_cast<int>((maxVbIndex - minVbIndex) + 1), ...);
+```
+
+Draw dispatch (always `baseIndex = 0`):
+
+```314:314:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+(*m_drawPrimitiveCommand)(0, m_minimumVertexBufferIndex, m_numberOfVertices, ...);
+```
+
+### D3D11 ignores `minimumVertexIndex` / `numberOfVertices`
+
+```3229:3236:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, ...)
+{
+	...
+	ctx->DrawIndexed(..., static_cast<INT>(baseIndex));
+}
+```
+
+D3D9 **does** pass them to `DrawIndexedPrimitive`:
+
+```4157:4157:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+ms_device->DrawIndexedPrimitive(..., ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ...);
+```
+
+### Re-derive over-read math (clean baseline)
+
+Binding:
+
+- IA byte offset = `getOffset() * stride` (```145:145:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp```)
+- `baseIndex = 0`
+- Fetched ring vertex index = `m_offset + IB[i]`
+
+Slice written: `m_vertexCount` verts at ring vertex index `m_offset` (```278:282:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp```).
+
+For over-read into the **next ring slice**, need `IB[i] >= m_vertexCount`. Indices are mesh-local; `maxVbIndex` is tracked from actual tris/strips (```1390:1391```, ```1438:1439:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp```). With `maxVbIndex <= m_vertexCount - 1`, **static index math does not reach past the written slice**.
+
+D3D11’s missing `NumVertices` bound is a real D3D9 vs D3D11 behavioral gap, but with correct IB construction it should not produce “neighbor creature’s verts” unless indices are wrong — which would also break D3D9. **Low fit** for D3D9-clean / D3D11-broken.
+
+---
+
+## 3. Stale / wrong InputLayout stride or IA byte-offset
+
+Multi-stream bind (creatures use `VertexBufferVector`):
+
+```143:146:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+	buffers[stream] = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
+	strides[stream] = static_cast<UINT>(data->getVertexSize());
+	offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+```
+
+Input layout resolved per draw from current formats + VS bytecode (```1144:1149:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp```). Stride comes from the same `getVertexSize()` as the lock path.
+
+Single-stream bug (vertex index passed as byte offset) was fixed (```2267:2280:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp```); creatures go through the vector path.
+
+Misaligned stride would scramble position **and** UV components → unlikely “correct UVs, depth-valid stale geometry from another creature.” **Low fit.**
+
+---
+
+## 4. WRITE_NO_OVERWRITE coherency / `ms_used` accounting
+
+- `ms_used` advanced at **lock**, not unlock (```281:282```, ```353:357:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp```).
+- No fence / draw tracking on ring regions.
+- No overlap within a generation (monotonic `ms_used`).
+- Hazard class: **GPU still reading generation G while CPU has renamed to G+1 and written new creature data at the same offset** — matches depth-valid stale verts, live-only (sync masks), D3D11-only (`beginFrame` missing), creature-textured.
+
+Note: file comment at ```44:50:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp``` records `P19_DISCARD_ONLY` once masked spikes; that diagnostic is **off** at clean baseline and must not be cited as exoneration.
+
+`P19_FORCE_DRAW_SYNC` (per-draw drain) is also **0** (```3227:3238:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp```); its comment documents that intra-frame CPU-write/GPU-read coherency was previously confirmed, but that result is void under your clean baseline rules.
+
+---
+
+## Ranking (fit to depth-valid + live-only + D3D11-only + creature-textured)
+
+| Rank | Hypothesis | Fit | Why |
+|------|-----------|-----|-----|
+| **1** | **Ring generation invalidation** (mid-frame `WRITE_DISCARD` + async GPU reads; missing `beginFrame`; post-discard reuse of same offset with another creature’s skinned data) | **Best** | Explains “clean CPU VB, wrong GPU bytes,” depth-valid neighbor geometry, correct UVs, sync-masked, D3D11-only (`beginFrame` never wired) |
+| **2** | **WRITE_NO_OVERWRITE coherency** (subset of #1: in-flight draw + later discard/rename, no byte-range overlap within gen) | **High** | Same mechanism; accounting alone doesn’t overlap, but D3D11 dynamic-buffer generation semantics are the delivery vehicle |
+| **3** | **IB index over-read** (D3D11 ignores `NumVertices`) | **Low** | Static math bounds `IB[i] < m_vertexCount`; D3D9 would also fail; prior `readPast=0` was on contaminated build |
+| **4** | **IA stride / InputLayout mismatch** | **Lowest** | Vector path multiplies offset×stride correctly; misalignment would corrupt UVs too, not “other creature at sensible depth” |
+
+---
+
+## One decisive GPU-side NON-DRAINING measurement
+
+**Deferred `D3D11_QUERY_EVENT` + ring generation journal** (no `Map(READ)`, no `CopySubresourceRegion`, no `forceGpuDrain` on the spike frame):
+
+1. **At each soft-skin `unlock()`** (after the memcpy/skin write): append to a frame ring log:
+   - `genLock = ms_discardsEver`
+   - `offsetVerts = m_offset`
+   - `numVerts = m_vertexCount`
+   - `stride`, `byteStart = offsetVerts * stride`
+
+2. **At each soft-skin `DrawIndexed`** (in `drawPartialIndexedTriangleList`, gated to skinned/static-shader draws only):  
+   - `End(ID3D11_QUERY_EVENT)` immediately after `DrawIndexed`  
+   - Store `{genLock, offsetVerts, numVerts, queryHandle, frameId}` from the bound slice metadata already in `ms_currentVBVectorOffsets` / `ms_currentVBVertexCount`
+
+3. **Next frame** (or after `Present`, one frame late): `GetData(query, ..., D3D11_ASYNC_GETDATA_DONOTFLUSH)` for prior frame’s events. **Do not stall the frame where the spike is visible.**
+
+4. **Verdict rule:** On a spike frame, if the spiking draw’s `(genLock, offsetVerts)` has **any later lock in the same frame** with `ms_discardsEver > genLock` **and** the later lock’s `offsetVerts` overlaps the draw’s byte range (post-discard rewrite at same offset), generation invalidation is confirmed. RenderDoc raw VB bytes at that draw’s bound offset vs CPU write then becomes the corroboration, not the first test.
+
+This is GPU-side (queries track actual draw completion), non-draining on the observation frame, and directly tests the top candidate without the sync that masked prior probes.

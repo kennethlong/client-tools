@@ -1,0 +1,155 @@
+This is a strong elimination set. The symptoms and your code point to a **narrower** failure mode than generic “uninitialized VRAM aliasing,” and RenderDoc replay-clean is real tension with the broad hypothesis.
+
+---
+
+## 1. Most likely specific defect
+
+### Primary: BC/DXT bottom-of-chain mip upload corruption (concrete, in-repo)
+
+The D3D11 texture path differs from D3D9 in exactly the way that would produce **distance/LOD-only texture corruption**:
+
+| | D3D9 | D3D11 |
+|---|---|---|
+| Native BC lock | `LockRect` directly on the mip (8×2, 2×2, 1×1 tolerated) | Staging texture **padded to 4×4**, then `CopySubresourceRegion` into `USAGE_DEFAULT` |
+| Sub-block mips | Driver accepts logical dimensions | Staging allocation padded; **copy box also padded** |
+
+Your `lock()` pads staging dimensions for BC:
+
+```696:702:src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp
+		UINT stagingWidth  = static_cast<UINT>(lockData.getWidth());
+		UINT stagingHeight = static_cast<UINT>(lockData.getHeight());
+		if (isBlockCompressedFormat(native))
+		{
+			stagingWidth  = (stagingWidth  + 3u) & ~3u;
+			stagingHeight = (stagingHeight + 3u) & ~3u;
+		}
+```
+
+The engine only writes the **logical** mip rows (`Texture.cpp` uses file block height derived from logical width/height, not padded staging size). The padded staging rows are never filled.
+
+`unlock()` then copies a **4-aligned srcBox** into the destination mip:
+
+```860:907:src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp
+			srcBox.right  = static_cast<UINT>(lockData.getWidth());
+			srcBox.bottom = static_cast<UINT>(lockData.getHeight());
+			// ...
+				if (isBlockCompressedFormat(dstDesc.Format))
+				{
+					srcBox.right  = (srcBox.right  + 3u) & ~3u;
+					srcBox.bottom = (srcBox.bottom + 3u) & ~3u;
+				}
+			// ...
+			context->CopySubresourceRegion(/* staging -> DEFAULT mip */);
+```
+
+For an 8×2 mip: staging is 8×4, engine writes one BC block-row, copy includes the extra padded rows → **undefined bytes baked into that mip permanently** until the texture is recreated.
+
+Why this matches your symptoms:
+
+- **Distance/LOD correlated**: distant surfaces sample lower mips; near surfaces use mip 0 (often ≥4×4 and fine).
+- **Flicker + latch**: LOD hovers around a bad mip boundary; once a bad mip is selected it stays until LOD changes.
+- **“Wrong texture” / saturated colors**: garbage BC blocks decode to structured color patterns (can look like another asset’s palette); not necessarily a wrong SRV pointer.
+- **D3D9 fine, D3D11 broken**: D3D9 locks sub-block mips directly; no padded staging copy.
+- **Immune to GPU flush + sync loader**: deterministic upload bug, not a race.
+- **Comments in your own code** already note debug-layer id=280 on sub-4 BC mips and that Iter-15 fixed allocation but copy-box padding came later.
+
+This is **uninitialized content**, but **inside the correct resource’s mip chain**, not “SRV points at someone else’s allocation.”
+
+### Secondary (geometry fragments): same class, different resource
+
+Static VB/IB use `CreateBuffer(..., nullptr)` + `operator new[]` (uninitialized) + `UpdateSubresource`:
+
+```123:156:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp
+	m_lockBuffer = operator new[](byteWidth);
+	// ...
+	context->UpdateSubresource(m_d3dBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+```
+
+If any LOD mesh path locks, **partially** fills, and unlocks, you get floating shards. D3D9 likely used managed pool or different lock semantics. This is plausible for geometry but **less explanatory** for recognizable texture content than the BC mip bug.
+
+### Tertiary (worth checking, not primary): format-mismatch lock path
+
+D3D9 converts when `lockData.format != m_destFormat` via `D3DXLoadSurfaceFromSurface`. D3D11 logs `FORMAT_MISMATCH` but still stages at lock format and `CopySubresourceRegion`s into a possibly different dest format — invalid for unlike formats. That would hit specific assets, not wholesale world corruption, unless very common.
+
+### What I would **not** lead with
+
+- **MemoryBlockManager / ComPtr reuse**: recycles C++ wrappers, not GPU texel storage.
+- **`UpdateSubresource` on `USAGE_DEFAULT` semantics**: on the immediate context this is synchronous; your GPU-event test already argues against in-flight upload races.
+- **Wrong SRV slot bindings**: you measured them as consistent.
+- **PS `SwgVertexConstants` @ b0**: 282k draws instrumented and sane.
+
+---
+
+## 2. Single decisive next test
+
+**Force finest-mip-only sampling globally** (one sampler change):
+
+In `Direct3d11_StaticShaderData.cpp` / `Direct3d11_StateCache.cpp`, set:
+
+```cpp
+desc.MaxLOD = 0.0f;
+desc.MinLOD = 0.0f;
+desc.MipLODBias = 0.0f;
+```
+
+(or equivalent for all cached samplers)
+
+**Interpretation:**
+
+| Result | Conclusion |
+|--------|------------|
+| Mid/far corruption **vanishes** (may look sharper/aliased) | **Mip-chain content bug** — BC sub-4 copy almost certainly |
+| Corruption **unchanged** | Not mip sampling; pivot to VS constants, VB/IB upload completeness, or present/compositing |
+
+This is one knob, one roam, binary outcome. It directly tests the strongest D3D11-specific mechanism without needing readback infrastructure first.
+
+**Follow-up if positive (pins the exact line):** after `Map` on BC staging in `lock()`, `memset` the entire padded staging to `0xCD`, then load as normal. If corruption pattern changes or disappears → padded-region copy is the defect. Fix: zero padded tail before copy, or copy only logical block rows with a row-loop `UpdateSubresource` instead of padded `CopySubresourceRegion`.
+
+**Follow-up if negative:** GPU readback hash of **bound SRV mip 0 vs highest mip** on one corrupt building draw vs on-disk DDS — separates “wrong resource” from “wrong constants.”
+
+---
+
+## 3. Are you wrong about uninitialized content?
+
+**Partially.** The eliminations argue against the **broad** framing:
+
+### RenderDoc replay-clean is real pushback
+
+If replay of the **same corrupt capture** produces a fully correct image, that is **not** consistent with “draw stream is fine but every bound texture is random VRAM.” RenderDoc would replay the same garbage unless it substitutes zeros (which tends to look black/flat, not correct stone buildings).
+
+So either:
+
+1. **The corrupt draws weren’t the ones replayed** (thumbnail = final composite; timeline replay = different effective state), or  
+2. Corruption is **outside what you think you verified** (e.g. only checked PS b0, not VS slot 0 for those draws), or  
+3. Live-only presentation/driver path (less likely for in-scene albedo).
+
+**Action:** In RenderDoc, pick a draw call where the **texture viewer** shows wrong texels on the bound SRV, and replay **that event**. If that event replays clean, the broad uninit hypothesis is dead for that draw.
+
+### What survives skepticism
+
+A **deterministic upload init gap** survives all your tests:
+
+- Wrong bytes in **correct** texture mips (BC padding bug)
+- Wrong bytes in **correct** VB/IB (partial CPU fill before `UpdateSubresource`)
+- **Not** a threading race, **not** wrong SRV pointer, **not** PS constants
+
+“Recognizable lava on stone” does **not** require cross-resource VRAM aliasing. It requires garbage BC decode or garbage UV/position data. Cross-resource aliasing is also harder to believe in D3D11’s resource model than “this mip’s copy included uninitialized staging tail.”
+
+### Possibly eliminated too hastily
+
+| Area | Why reconsider |
+|------|----------------|
+| **VS slot 0 (WVP/world)** | PS b0 ruled out ≠ VS ruled out. Floating geometry + distance correlation fits bad WVP on some world draw families (your Iter-34 notes mention identity-W flushes on terrain/batch paths). |
+| **RenderDoc “replay clean”** | May not have been verified per-corrupt-draw with texture viewer on auto-selected mip. |
+| **Async loader** | Rules out loader thread races, not “texture created → SRV bindable → first draw before `load()` finishes” on the main thread if the engine allows that for streaming LOD. |
+
+---
+
+## Recommended priority
+
+1. **Sampler MaxLOD=0 test** — one afternoon, binary.  
+2. If positive → fix BC staging: zero padded region after `Map`, or stop copying padded srcBox (match D3D9’s direct sub-block lock semantics via row-wise upload).  
+3. In parallel → RenderDoc texture viewer on a **known corrupt distant building draw**, inspect **mip 0 vs mip N** on the bound SRV.  
+4. If MaxLOD=0 negative → instrument **VS slot 0 c0–c7** on corrupt draws only (same methodology as PS b0), and hash static VB/IB CPU buffers at unlock for one corrupt LOD mesh.
+
+The BC bottom-mip copy gap is the highest-confidence **D3D11-specific, code-visible, D3D9-divergent** defect that fits distance/LOD texture corruption without contradicting your binding/constant-buffer/serialization eliminations. Treat “uninitialized VRAM aliasing” as the mechanism family, but pin it to **partial mip upload**, not generic pool reuse.

@@ -1,0 +1,177 @@
+## 5 — B (CURSOR): Sticky-snapshot detail
+
+### Where `s_pixelDot3State` PERSISTS vs UPDATES on empty/sunless `setLights`
+
+`s_pixelDot3State` is a **process-global** snapshot (`Direct3d11_LightManager.cpp:49`). Every `setLights` call reads/writes it; there is no per-object copy and no draw-time `selectLights` rebuild (unlike D3D9).
+
+| Field | Empty `setLights({})` | Sunless list (ambient only, no `T_parallel`) | List with ≥1 `T_parallel` |
+|---|---|---|---|
+| **Dot3 sun** (`diffuseColor`, `specularColor`, hemispheric, `localDirectionWorld`, `valid`) | **PERSISTS** — `if (psSlot)` skipped | **PERSISTS** — same gate | **UPDATES** at `:181-201` |
+| **Parallel fill** (`parallelDiffuseColor[0..1]`, `parallelDirectionWorld`, `parallelCount`) | **PERSISTS** — `if (psSlot)` skipped | **PERSISTS** — `:217-236` skipped | **UPDATES** at `:217-235` |
+| **Ambient** (`ambient` → c16 via `composeSlot0Shadow`) | **CLEARED to zero** — unconditional `:243` | **UPDATES** to summed ambient | **UPDATES** at `:243` |
+| **LightingCB** (`cb.*`) | Rebuilt zero each call (`:73-79`); flushed `:247-250` | Ambient-only CB | Full CB |
+
+**Persistence gates (CONSULT-38/39):**
+
+```84:90:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+	// CONSULT-38 FIX (2026-06-08): do NOT invalidate the dot3 snapshot on every setLights call.
+	// ...
+	// sunless/empty list leaves the previous sun intact.  (Was: s_pixelDot3State.valid = false;)
+```
+
+```181:236:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+	if (psSlot)
+	{
+		// ... writes ALL dot3 sun + hemispheric fields ...
+		s_pixelDot3State.valid = true;
+	}
+	// ...
+	if (psSlot)
+	{
+		s_pixelDot3State.parallelCount = 0;
+		for (int i = 0; i < 2; ++i)
+		{
+			if (pSlot[i]) { /* write parallelDiffuseColor[i] */ }
+			else          { /* zero slot */ }
+		}
+	}
+```
+
+```240:243:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+	// Plan 17-08 (GAP-5): record the frame's accumulated ambient for the VS
+	// vertex-lighting fill (lightData[0] @ c16).
+	s_pixelDot3State.ambient = cb.ambientColor;
+```
+
+**Read sites for her face draw:**
+
+1. **PS dot3 path** — `StaticShaderData::apply` reads the global snapshot at draw time:
+
+```932:955:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+						Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+						// ...
+						if (d3.valid)
+```
+
+2. **VS vertex lighting (v1)** — `composeSlot0Shadow` reads the same snapshot into c16 / c20-23 / c40-43:
+
+```376:430:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+			Direct3d11_PixelDot3State const &d3 = Direct3d11_LightManager::getPixelDot3State();
+			s_slot0Shadow.lightData[0] = d3.ambient;          // c16
+			if (d3.valid) { /* c17-19 sun, c40-43 dot3, c60-63 hemispheric */ }
+			for (int pi = 0; pi < 2; ++pi) {
+				// c20-23 from d3.parallelDiffuseColor[pi] — always, even when !d3.valid
+			}
+```
+
+### Can a prior blue interior light survive onto her face?
+
+**Yes, for dot3 sun and parallel fill — not for ambient on a truly empty call.**
+
+Mechanism: `ShaderPrimitiveSorter::Phase::draw` calls `setLights(i->lightBitSet)` once per primitive (`ShaderPrimitiveSorter.cpp:718`) **before** any pass draw. If her face primitive’s `lightBitSet` yields an **empty** or **sunless** list:
+
+- `psSlot` stays `nullptr` → blocks at `:181-202` and `:217-236` are skipped.
+- A **prior** primitive’s blue interior sun (`diffuseColor ≈ 0.298,0.422,0.425` or gray-sun+blue-fill `fill0 ≈ 0.106,0.159,0.220`) remains in `s_pixelDot3State`.
+- Her dot3 face draw (`StaticShaderData::apply:932` + `composeSlot0Shadow:376`) reads that stale blue state into PS c0-c4 and VS c17/c40/c20-23 → blue-dominant `v1=(0.524,0.537,0.707)`.
+
+**Ambient is different:** `:243` always overwrites `s_pixelDot3State.ambient`. On `setLights({})`, ambient becomes `(0,0,0,0)`. A prior blue interior ambient **cannot** stick through a subsequent empty call (but it **can** through a sunless non-empty call that carries new ambient while sun/parallel persist).
+
+### D3D9 contrast — no cross-object stickiness
+
+D3D9 **stores** the list in `setLights` (`:312-316`) and **rebuilds from scratch at every draw**:
+
+```380:393:src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+			for (int i = 0; i < ParallelSpecularCount; ++i)
+				ms_currentLights.parallelSpecular[i] = NULL;
+		{
+			for (int i = 0; i < ParallelCount; ++i)
+				ms_currentLights.parallel[i] = NULL;
+```
+
+`selectLights()` is invoked per draw in `Direct3d9::drawPrimitive()` (`Direct3d9.cpp:4012`). With an empty `ms_lightList`, `parallelSpecular[0]` stays NULL and `applyLights_vertexShader` **zeros** dot3 PS constants:
+
+```645:660:src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+			else
+			{
+				if (i == 0)
+				{
+					struct PixelDot3Data pixelDot3Data;
+					Zero(pixelDot3Data);
+					// ... alpha-fade packing only ...
+					Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5);
+				}
+			}
+```
+
+Parallel slots are likewise zero-initialized (`Zero(lightData)` at `:566`) and only filled when `ms_currentLights.parallel[i]` is non-null (`:665-684`). **No prior object’s blue sun or fill can survive** onto a draw whose current `ms_lightList` has no directionals.
+
+**First divergence line:** D3D11 `setLights` `:84-90` (removed invalidation) + `:181-236` (`if (psSlot)` persistence gates). D3D9 equivalent rebuild starts at `Direct3d9_LightManager.cpp:379-393`.
+
+---
+
+## 6 — Deliverable (angle B)
+
+### (1) Finding
+
+**CONFIRMED mechanism (architectural):** D3D11’s global `s_pixelDot3State` intentionally persists dot3-sun and parallel-fill across empty/sunless `setLights` (`Direct3d11_LightManager.cpp:84-90, 181-202, 207-236`). D3D9 clears and rebuilds per draw (`Direct3d9_LightManager.cpp:380-393`, invoked from `Direct3d9.cpp:4012`). A prior blue interior directional can therefore land on her face draw if her primitive’s `setLights` call is empty or sunless while an earlier call in the same phase left blue in the snapshot.
+
+**Tension with §2 locked dumps:** If per-face-draw probes truly show identical sun+ambient+fill0 in both renderers at the face draw instant, stickiness is not the *active* wrong-state source for that frame — the wrong blue state would already have been written by her own `setLights` (candidate **b** cascade) or D3D9 diverges downstream (**c**). The value-dedup key in `StaticShaderData::apply:1001-1003` tracks only sun+ambient (not fill0), so fill stickiness could be missed by that probe.
+
+### (2) §4 candidate verdicts (angle B)
+
+| Candidate | Verdict |
+|---|---|
+| **(a) Snapshot stickiness** | **CONFIRMED as real divergence** — exact gates above. Can deliver prior blue `parallelDiffuseColor` / dot3 sun to face; ambient does **not** stick on empty calls. |
+| **(b) Selection cascade** | **Not refuted** — orthogonal. When `psSlot` is non-null, `:100-175` may pick a different winner than D3D9 `:423-440`. Sticky + cascade can compound. |
+| **(c) Legit blue cell + D3D9 differs elsewhere** | **Possible** if dumps at face draw are truly identical including fill — then stickiness explains D3D9≠D3D11 only via VS/full-ambient path, not snapshot content. |
+
+### (3) Minimal D3D9-parity fix (no black-walls regression)
+
+**Location:** `Direct3d11_LightManager::setLights`, after the cascade loop (~`:175`), replace the blunt `if (psSlot)` persistence with a **two-path rebuild**:
+
+```cpp
+// PSEUDOCODE — exact insertion point: Direct3d11_LightManager.cpp ~:177
+if (lightList.empty())
+{
+    // CONSULT-38 preserve: transient popCell / empty-bitset draws that still
+    // need last-good fill+sun for VS c20-23 before next directional call.
+    // Do NOT touch s_pixelDot3State dot3/parallel; ambient still updates at :243.
+}
+else
+{
+    // D3D9 parity: non-empty per-object call => full rebuild from THIS list
+    if (psSlot) { /* existing :181-235 writes */ }
+    else
+    {
+        // Mirror D3D9 selectLights NULL + applyLights zero-dot3 (:645-660)
+        s_pixelDot3State.valid = false;
+        s_pixelDot3State.parallelCount = 0;
+        for (int i = 0; i < 2; ++i) {
+            s_pixelDot3State.parallelDirectionWorld[i] = {};
+            s_pixelDot3State.parallelDiffuseColor[i]   = {};
+        }
+        // zero hemispheric/dot3 color fields
+    }
+}
+```
+
+**Why this preserves black walls:** `ShaderPrimitiveSorter::popCell` issues `setLights({})` **after** `Phase::draw()` completes (`ShaderPrimitiveSorter.cpp:856-860` then `:1423-1425`). Intra-cell draws that need sticky fill are the `lightList.empty()` case from a prior sun-bearing call in the same batch — still persisted. Per-object sunless calls (the face bug vector) get D3D9-style NULL directionals.
+
+**Stronger D3D9 parity (optional follow-on):** Store `ms_lightList` in `setLights` and add `selectLights()` called from `StateCache::applyPreDrawState` / `composeSlot0Shadow` (mirroring `Direct3d9.cpp:4012`), rebuilding snapshot from the **current draw’s** list instead of a global sticky buffer.
+
+### (4) Decisive measurement
+
+Log **at the skinned-character face draw only**, immediately before `getPixelDot3State()` in `StaticShaderData::apply:932`:
+
+```
+[FACE-SNAPSHOT] shader=<sht> pass=<n>
+  setLights_listSize=<N> psSlot=<0|1>     // capture in setLights, thread-local or ring buffer
+  snapshot: valid=<v> sun=(r,g,b) ambient=(r,g,b) fill0=(r,g,b) fill1=(r,g,b)
+  STICKY=<1 if listSize==0 or psSlot==0 but valid==1 and sun≠0>
+```
+
+Match D3D9 at `selectLights` exit (`Direct3d9_LightManager.cpp:491-521` probe already exists). **Decisive outcome:**
+
+- `STICKY=1` on her face draw → **(a) confirmed active**; fix §(3) applies.
+- `STICKY=0` but sun/fill0 are blue-gray cell state while D3D9 shows warm sun for same cell → **(b) cascade** at `:100-175`.
+- Both show identical blue snapshot but D3D9 face is pink → **(c)** VS/full-ambient path; stickiness is not the active bug.

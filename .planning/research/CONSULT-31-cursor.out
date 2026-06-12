@@ -1,0 +1,232 @@
+## Construction (lines 1297–1384)
+
+### Pool sizing pass (1297–1310)
+
+```1297:1310:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	// account for transform weight data
+	int vertexIndex;
+	int numberOfExtraTransformWeightPairs=0;
+	for (vertexIndex = 0; vertexIndex < m_vertexCount; ++vertexIndex)
+	{
+		const MeshConstructionHelper::VertexData &vertexData = mesh.getVertexData(meshPerShaderData, vertexIndex);
+		const int localVertexTransformCount = mesh.getVertexTransformCount(vertexData);
+		if (localVertexTransformCount>1)
+		{
+			numberOfExtraTransformWeightPairs += localVertexTransformCount-1;
+		}
+	}
+	const int transformDataSize = numberOfExtraTransformWeightPairs * sizeof(TransformData);
+```
+
+Per vertex `v`, the pool only reserves slots for **extras** (transforms 1..N−1). The first bone lives inline in `SourceVertex::m_firstTransformData`.
+
+| `localVertexTransformCount` | Slots reserved |
+|---|---|
+| `< 1` | 0 (condition false) |
+| `== 1` | 0 (`>1` is false) |
+| `> 1` | `count − 1` |
+
+### Allocation + zero-init (1313–1334)
+
+```1313:1334:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	m_sourceData = new byte[alloc_size];
+	memset(m_sourceData, 0, alloc_size);
+	// ...
+	m_transformData = (TransformData *)diter;
+	diter += transformDataSize;
+```
+
+`memset` zeroes every `SourceVertex` field, including `m_extraTransformDataCount` and `m_firstTransformData`.
+
+### Per-vertex fill pass (1337–1384)
+
+```1359:1381:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+		if (localVertexTransformCount<1)
+		{
+			sourceVertex.m_firstTransformData.m_transformIndex = 0;
+			sourceVertex.m_firstTransformData.m_transformWeight = 0;
+		}
+		else
+		{
+			// ...
+			sourceVertex.m_extraTransformDataCount = localVertexTransformCount-1;
+			
+			for (int j = 1; j < localVertexTransformCount; ++j, ++destTransformData)
+			{
+				// copy extras into pool
+			}
+		}
+```
+
+| Category | `m_firstTransformData` | `m_extraTransformDataCount` | Pool writes (`destTransformData` advance) |
+|---|---|---|---|
+| **`count < 1`** (1359–1363) | Forced `{index=0, weight=0}` | **0** (memset, never reassigned) | **0** |
+| **`count == 1`** (else, 1372) | Mesh transform 0 | **`0`** (explicit) | **0** |
+| **`count > 1`** (else, 1372–1380) | Mesh transform 0 | **`count − 1`** | **`count − 1`** |
+
+Self-check at 1384:
+
+```1384:1384:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	WARNING(destTransformData-m_transformData != numberOfExtraTransformWeightPairs, ("logic error: TransfromData count [%d] != numberOfExtraTransformWeightPairs [%d]", destTransformData-m_transformData, numberOfExtraTransformWeightPairs));
+```
+
+If this fires, the pool layout is wrong before any frame runs.
+
+---
+
+## Consumption (lines 1846–1938, soft-skin path)
+
+```1845:1871:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	const SourceVertex *sourceVectors = m_sourceVectors;
+	const TransformData *transformData = m_transformData;
+	// ...
+		for (int i = 0; i < m_vertexCount; ++i, ++destVertexIt, sourceVectors++)
+		{
+			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+			// ... blend using firstTransformData + transformArray[firstTransformData.m_transformIndex]
+
+			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+			{
+				// ... blend using transformData->m_transformIndex / weight
+			}
+```
+
+Same pattern at 1905–1927 (no-dot3 branch). The shared `transformData` pointer advances **only** inside the inner `j` loop, by exactly `m_extraTransformDataCount` per vertex.
+
+Vertices with `m_extraTransformDataCount == 0` (`count < 1` or `count == 1`) **never touch** the sliding pool pointer.
+
+---
+
+## The invariant
+
+After processing vertices `0..i−1`, before vertex `i`:
+
+```
+transformData == m_transformData + Σ(k=0..i−1) m_sourceVectors[k].m_extraTransformDataCount
+```
+
+Globally, after all vertices:
+
+```
+transformData == m_transformData + numberOfExtraTransformWeightPairs
+```
+
+Construction guarantees the pool contains exactly:
+
+```
+Σ(k=0..m_vertexCount−1) max(0, localVertexTransformCount(k) − 1)
+```
+
+…and stores that same per-vertex sum in `m_sourceVectors[k].m_extraTransformDataCount` (with `max(0, count−1)` realized as 0 for `count≤1`).
+
+**Symmetry table (construction vs consumption):**
+
+| `localVertexTransformCount` | Stored `m_extraTransformDataCount` | Pool slots written | Pool slots consumed (`j` loop) |
+|---|---|---|---|
+| `< 1` | 0 (memset) | 0 | 0 |
+| `== 1` | 0 (1372) | 0 | 0 |
+| `> 1` | `count−1` (1372) | `count−1` (1375–1380) | `count−1` (1871/1927) |
+
+The sizing gate `>1` (1304) and the fill gate `else` / `count−1` (1364–1372) are equivalent for all integer counts.
+
+---
+
+## Can the shared `transformData` pointer desync for tail verts?
+
+### **No** — not via intentional construction/consumption disagreement in this file.
+
+Reasons:
+
+1. **Same field, same loop domain.** Both passes iterate `vertexIndex = 0 .. m_vertexCount−1` (1300, 1340) and call the same `mesh.getVertexTransformCount(vertexData)` on the same `getVertexData(meshPerShaderData, vertexIndex)` mapping.
+
+2. **`< 1` and `== 1` are symmetric at 0 advance.** Both branches leave `m_extraTransformDataCount == 0` and advance `destTransformData` / `transformData` by 0. A pointer desync cannot originate from these categories.
+
+3. **`> 1` is symmetric at `count−1`.** Construction writes `count−1` pool entries; consumption reads `count−1`. No off-by-one between the `>1` sizing test and the `else` fill branch.
+
+4. **Tail-only corruption is inconsistent with mid-stream desync.** Once `transformData` drifts at vertex `K`, **every subsequent vertex with `m_extraTransformDataCount > 0`** reads wrong pool slots. You would not expect a clean prefix of 1629 vertices unless vertices `0..1628` are overwhelmingly single-bone (`extra==0`) and the first multi-bone vertex with a mismatch is exactly 1629 — which construction forbids unless memory is corrupted after build.
+
+5. **Tail verts with `extra==0` cannot be pool-desynced at all.** They only use inline `m_firstTransformData`. Wrong world positions there imply wrong first bone/weight/position or wrong `transformArray[firstIdx]`, not a sliding-pointer mismatch.
+
+### The only lines where desync *could* occur (extra-construction causes)
+
+| Line | Condition | Effect |
+|---|---|---|
+| **1384** | `destTransformData − m_transformData != numberOfExtraTransformWeightPairs` | Pool layout wrong from vertex 0 onward |
+| **(post-build)** | Memory stomp on `m_sourceVectors[]` or `m_transformData[]` | Arbitrary desync at first corrupted vertex |
+
+There is **no** code path where construction stores one `m_extraTransformDataCount` but consumption is designed to read a different number for the same vertex.
+
+---
+
+## Vertex-count agreement: `m_systemStream` vs `m_vertexCount` vs index buffer
+
+### What `m_vertexCount` is
+
+```1187:1188:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+	m_vertexCount = mesh.getVertexCount(meshPerShaderData);
+	DEBUG_FATAL(m_vertexCount < 1, ("there are no vertices!"));
+```
+
+```1234:1238:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\MeshConstructionHelper.cpp
+int MeshConstructionHelper::getVertexCount(const PerShaderData *perShaderData) const
+{
+	NOT_NULL(perShaderData);
+	return perShaderData->m_usedVertexCount;
+}
+```
+
+Compact **used** shader-vertex indices `0 .. m_usedVertexCount−1`, assigned in `prepareForReading` (MeshConstructionHelper.cpp:543–567).
+
+### `m_systemStream` vs skin/write loops
+
+```1409:1411:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+		m_systemStream = new SystemVertexBuffer(dynamicFormat, m_vertexCount);
+		VertexBufferWriteIterator outIt = m_systemStream->begin();
+		fillConstantVertexBufferData(mesh, shaderIndex, outIt);
+```
+
+- Allocated with `m_vertexCount` vertices.
+- `fillVertexBuffer` writes exactly `m_vertexCount` slots (1855/1905).
+- Dynamic VB path locks `m_vertexCount` (776) and copies `m_systemStream->getNumberOfVertices()` (779) — equal when non-multi-stream.
+
+Runtime guard (collide path): `m_systemStream->getNumberOfVertices() != m_vertexCount` → bail (1003–1004).
+
+### Index buffer max index — **tri-list vs tri-strip asymmetry**
+
+**Tri lists** — indices remapped to compact `m_shaderVertexIndex`:
+
+```1482:1489:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\MeshConstructionHelper.cpp
+	const size_t  vertexDataIndex0 = perShaderData->m_vertexIndices[static_cast<size_t>((*m_indexedTriangles)[indexedTriangleIndex * 3 + 0])];
+	index0                         = m_vertexData->m_container[vertexDataIndex0].m_shaderVertexIndex;
+	// same for index1, index2
+```
+
+Max index should be `< m_vertexCount` (= `m_usedVertexCount`).
+
+**Tri strips** — **no remapping**; raw export slot into `m_vertexIndices`:
+
+```1426:1434:D:\Code\swg-client-v2\src\engine\client\library\clientSkeletalAnimation\src\shared\appearance\MeshConstructionHelper.cpp
+int MeshConstructionHelper::getTriStripVertexIndex(const TriStripHeader &triStripHeader, int vertexIndex) const
+{
+	// ...
+	return static_cast<int>(m_triStripIndices->m_container[indexIntoTriStripIndex]);
+}
+```
+
+Copied directly into the index buffer at 1565–1566. These are **export shader-vertex slots** (`0 .. m_vertexIndices.size()−1`), not necessarily compact `m_shaderVertexIndex`. If unused vertices sit between used ones, `maxIndex` can be **`≥ m_vertexCount`** even though skinning only populates compact slots `0..m_vertexCount−1`. The CAPE-INDEX-PROBE at 1589–1634 checks exactly this.
+
+For your **1656-vert / bad tail 1629–1655** case: those are indices **inside** the skin loop’s `m_vertexCount`, so the wrong positions are produced by `fillVertexBuffer` at those compact slots — not by D3D reading past an unwritten VB tail (which you already ruled out with the sentinel).
+
+---
+
+## Bottom line
+
+| Question | Answer |
+|---|---|
+| Construction vs consumption invariant | `transformData` advances by `m_extraTransformDataCount`; pool size = sum of those counts; first bone always inline; `count≤1` → 0 pool slots both sides |
+| Can shared `transformData` desync for tail verts via bookkeeping mismatch? | **No** (in this file’s logic) |
+| Where would it break if it did? | Only **1384** WARNING failure, or post-build memory corruption — not `<1` / `==1` / `>1` asymmetry |
+| Vertex categories that advance the pointer | **Only `count > 1`**; `<1` and `==1` are invisible to the sliding pointer |
+| `m_systemStream` / `m_vertexCount` / index max | Stream and skin loops agree on `m_vertexCount`; tri-list indices agree on compact range; **tri-strip indices may not** agree if export ordering has gaps |
+
+Given valid in-range bone indices and a fully written VB, tail wrong positions at compact indices 1629–1655 are more consistent with **per-vertex first-bone data or pose values** for those slots, or an **index-buffer slot mismatch** (tri-strip raw vs compact) — not a construction/consumption desync of the shared `transformData` pointer in `fillVertexBuffer`.

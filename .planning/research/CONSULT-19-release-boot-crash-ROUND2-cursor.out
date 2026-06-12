@@ -1,0 +1,143 @@
+## Verdict (challenge the framing)
+
+The paradox is real, but several Round‑2 inferences are **over-interpreted**. The most consistent story is **not** “source never assigns and nothing ever frees,” and **not** Round‑1 device‑restore UAF. It is:
+
+**At crash time, `program(0x21250010)->m_graphicsData` holds a PS‑data MBM freelist link (`0x21250000`), not a live `Direct3d11_PixelShaderProgramData`. The factory did run once (`PSDATA` at `0aa1dee0`, `prog=21250010`), but you have not proven that `0aa1dee0` was ever stored into `0x21250030` and still there at crash — only that create ran and the slot eventually reads like a freelist head.**
+
+The “impossible ctor” is largely a **when/where you sampled** problem, not proof the assignment opcode never exists.
+
+---
+
+## Resolving the central paradox
+
+### What the code actually guarantees
+
+```2754:2776:src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
+ShaderImplementationPassPixelShaderProgram::ShaderImplementationPassPixelShaderProgram(CrcString const &fileName)
+:
+	m_referenceCount(1),
+	m_fileName(fileName),
+	m_exe(NULL),
+	m_psrcText(nullptr),
+	m_psrcLen(0),
+	m_graphicsData(NULL)
+{
+	// ...
+	if (ConfigClientGraphics::getLoadAllAssetsRegardlessOfShaderCapability() || Graphics::getShaderCapability() >= ShaderCapability(1,1))
+	{
+		Iff iff(fileName.getString());
+		load(iff);
+
+		m_graphicsData = Graphics::createPixelShaderProgramData(*this);
+	}
+
+	const bool result = ms_programMap.insert(ProgramMap::value_type(&m_fileName, this)).second;
+	UNREF(result);
+	DEBUG_FATAL(!result, ("already existed!"));
+}
+```
+
+```666:669:src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+	ShaderImplementationPassPixelShaderProgramGraphicsData *createPixelShaderProgramData_impl(
+		ShaderImplementationPassPixelShaderProgram const &pixelShaderProgram)
+	{
+		return new Direct3d11_PixelShaderProgramData(pixelShaderProgram);
+	}
+```
+
+- `createPixelShaderProgramData` takes `const &` and **does not** write `m_graphicsData`; only line **2770** in the **Program** ctor can.
+- PS‑data uses MBM (`operator new` → `ms_memoryBlockManager->allocate()`); freed cells keep a **next pointer in the first DWORD** (`MemoryBlockManager.cpp:280–284`).
+- `0x21250000` is **exactly `program_base − 0x10`**: one `0x50` stride below `0x21250010`. That shape is “previous MBM cell’s link word,” not a normal heap pointer and not a round‑trip PS‑data vtable.
+
+### Why the slot can read `0x21250000` *inside* the nested PS‑data ctor
+
+**Assumption to drop:** “init list set NULL, therefore slot must be 0 before line 2770.”
+
+In **Release**, MSVC is allowed to **elide** the init‑list NULL store when it believes `m_graphicsData` is always written on the taken path before any read (here, only after `create…` returns). You sampled **during** the nested ctor — **before** the store at 2770. The Program object already sits in a `0x2124–0x2125` region **next to** PS‑data MBM blocks; bytes at `+0x20` can still hold **recycled / adjacent freelist pattern** that decodes as `0x21250000`. That is ugly recycled storage, not proof the C++ abstract machine skipped the init list on all paths.
+
+So: **non‑NULL before the outer assignment is plausible** without invoking magic aliasing.
+
+### Why “zero writes” to `0x21250030` does *not* prove 2770 never ran
+
+**Assumption to drop:** “`ba w4` on `&m_graphicsData` through crash ⇒ assignment never happened.”
+
+That watch was armed **inside** `Direct3d11_PixelShaderProgramData`’s ctor (gl11), while the store lives in **`SwgClient_r`’s Program ctor after the call returns**. Reasons you can still get zero hits **even if 2770 ran**:
+
+1. **Wrong experiment window** — you intentionally watch *before* the only store; you never logged **immediately after** 2770 in the same run.
+2. **Post‑assign stomp** — something later overwrites `0x21250030` with `0x21250000` via a **neighbor** (overflow, vector growth, bad pointer) without going through a “logical” lifecycle you breakpointed. That fits: create once, no `~Program` / `~PSDATA` hits, final slot looks like MBM freelist.
+3. **Debugger/watch limits** — cross‑module `this`, watch slot count, or continued execution can drop or miss a single `mov [reg+20h], eax` in Release.
+
+**What would falsify stomp vs never‑assigned in one shot:** at crash, inspect **`0aa1dee0`** (from creation log). If it still has `gl11_r!Direct3d11_PixelShaderProgramData` vtable and `m_program == 0x21250010` → assignment happened, then **overwrite**. If gone or unrelated → link/assign bug or different object.
+
+---
+
+## Your four candidates — refute / refine
+
+| # | Candidate | Assessment |
+|---|-----------|--------------|
+| **1** | Duplicate `2d_texture` Program; silent `insert`; orphan at `0x21250010` | **Unlikely as primary.** `DEBUG_FATAL` is NOP in Release (`Fatal.h:44`), but `fetch()` only does `new Program` when the map has no entry; `LessPointerComparator` compares `*lhs < *rhs` on **CrcString content**, not pointer identity (`LessPointerComparator.h:18–19`). A second `new` for the same file requires map erase without `delete` — you’d need a path that erases `ms_programMap` and leaves `PassPixelShader::m_program` pointing at the orphan. `reload()` erases then re‑inserts the **same** `this` (`2826–2861`), not a second instance. `reload()` is only reached from dev reload (`#if PRODUCTION == 0`, `2127–2129`) in normal tree. |
+| **2** | Program bulk‑freed without dtor; shared MBM with PS‑data | **Half wrong.** Programs use ordinary `new` (`2744`), not PS‑data MBM (`1178–1183`). Arena overlap is **CRT small‑heap locality + MBM blocks nearby**, not “Program allocated from PS‑data pool.” Zero dtor hits **do not** prove no free — they prove your breakpoints didn’t fire (stripping/inlining/wrong run) or, more likely, **no destructor‑based free on this path** because the slot was **stomped**, not unlinked. |
+| **3** | Layout / store through copy | **Low.** Header order matches `+0x20` (`ShaderImplementation.h:675–691`). Factory doesn’t write the slot. No copy ctor (disabled). Cross‑DLL `const &` is still the same object `0x21250010`. **Do** verify with `uf ShaderImplementationPassPixelShaderProgram::ShaderImplementationPassPixelShaderProgram` in Release — one `mov [ecx+20h], eax` after `createPixelShaderProgramData` returns. |
+| **4** | First arena program at `2d_texture` | **Correlation, not cause.** `PersistentCrcString` and PS‑data MBM both use `MemoryBlockManager` (`PersistentCrcString.cpp:38–44`, `Direct3d11_PixelShaderProgramData.cpp:1025–1027`). As load order advances, the process heap segment fills; `2d_texture` may be the first program whose **CRT block lands beside** a hot `0x50` freelist. That raises **stomp / recycled‑byte** risk; it does not mean the Program ctor didn’t run. |
+
+---
+
+## Wrong assumptions (explicit)
+
+1. **“Coherent chain ⇒ `m_graphicsData` was valid at construct.”** `construct` only requires non‑null (`459–466`); `0x21250000` is non‑null garbage. `m_fileName` / `refcount==1` can look fine while `m_graphicsData` is wrong.
+2. **“PSDATA create ⇒ slot was set.”** Create only proves `new Direct3d11_PixelShaderProgramData(*this)` ran with `this=0x21250010`; it does **not** prove line 2770 persisted `0aa1dee0` through to PPEM.
+3. **“Zero dtor ⇒ no UAF.”** Correct for **dtor‑mediated** UAF; **incorrect** for **overwrite‑in‑place** or **never‑linked** (orphan PS‑data on heap, slot still freelist‑shaped).
+4. **“Freelist pointer ⇒ Program/PS‑data was freed.”** The value is what you expect from **reading a freelist link as a pointer**, whether or not that Program was ever destroyed.
+5. **“Silent duplicate insert is the smoking gun.”** Map equivalence is by `CrcString` ordering, not silent double‑registration of the same filename key address.
+
+---
+
+## Vtable guard — band‑aid or fix?
+
+**Interim:** Yes — aligned with D3D9: D3D11 `apply` runs Plan 17‑03 reflection on `livePS` (`831–857`); D3D9’s static path does **not** iterate `getReflectedCbufferLayouts()` on PS‑data the same way.
+
+A check of the form  
+`*(void**)ptr == &Direct3d11_PixelShaderProgramData::vftable`  
+(or full round‑trip: slot value == live PS‑data, PS‑data `m_program` == engine program) is a **principled “not a live gl11 PS‑data” gate**, not a magic address threshold.
+
+**Limits:**
+
+- Stops the crash; **does not** restore correct `m_graphicsData` linking.
+- For `2d_texture` / PPEM, skipping the loop likely falls back toward magenta / per‑VS PS (`Direct3d11_PixelShaderProgramData` header) — copy pass may look “fine” while **material/reflection uploads are wrong** anywhere the slot is corrupt.
+- If **every** post‑`0x2124` program has a bad slot, you have **systemic broken Plan 17‑03**, not one shader.
+
+**Real fix direction:** enforce invariant after 2770 and on every `reload()` / `delete m_graphicsData`:  
+`program->m_graphicsData` is null or a live PS‑data whose `m_program` round‑trips; add `FATAL` in Release on duplicate map insert and on invariant failure during `StaticShaderData::construct`.
+
+Also note latent bug: `reload()` calls `ms_criticalSection.leave()` with **no matching `enter()`** (`2863`) — worth fixing, but **not** your Release boot path unless something calls `reload()` in production.
+
+---
+
+## One next experiment (pin the trigger)
+
+**Single highest‑signal run (same Release build, interactive boot):**
+
+1. Breakpoint on **`ShaderImplementation.cpp:2770`** (after `createPixelShaderProgramData` returns), filter `this->m_fileName` contains `2d_texture`.
+2. Log: `this`, `eax` (return value), `this->m_graphicsData` **after** the assignment instruction (step over the store).
+3. **Do not clear** — enable **`ba w4` on `this+0x20`** only **after** that line, continue to first `PostProcessingEffectsManager::postSceneRender` / crash.
+4. At crash (or on watch hit): dump **`0aa1dee0`** (creation address): vtable, `m_program`.
+
+| Outcome | Meaning |
+|---------|---------|
+| After 2770: slot `== 0aa1dee0`; later watch → `0x21250000` | **Post‑assign stomp** — bisect with same watch; suspect neighbors (`ShaderImplementation` `0x2124fb70`, pass `0x2124fbb0`, `m_exe`, std::vectors in gl11). |
+| After 2770: slot already `0x21250000` | **Store bug / wrong `this` / wrong offset** — disassemble ctor in Release. |
+| After 2770: slot good; at crash `0aa1dee0` still valid but slot bad | Confirms stomp; inspect who writes `program+0x20`. |
+| After 2770: slot good; at crash `0aa1dee0` invalid | **PS‑data freed without your dtor bp** — chase `operator delete` / `MemoryBlockManager::free` on that pointer. |
+
+That one experiment splits **“never linked”** vs **“linked then clobbered”** — which your current 8 runs cannot separate because you never sampled **after 2770** and treated zero watch hits as “assignment never existed.”
+
+---
+
+## Bottom line
+
+- **Most likely:** Release heap locality puts `ShaderImplementationPassPixelShaderProgram` beside PS‑data MBM; recycled bytes explain **pre‑assign `0x21250000`**; **either** line 2770 never persisted (needs post‑2770 sample) **or** (more likely given create log) it did and a **later overwrite** left the slot looking like a freelist head — **without** going through the destructor paths you watched.
+- **Less likely:** duplicate orphan Program via silent `insert` (map + `fetch` design fights this).
+- **Vtable guard:** correct **crash containment** and D3D9 parity; **not** root‑cause fix; expect hidden wrong rendering wherever the slot is bad.
+- **Do not reopen** Round‑1 device‑restore narrative (`flushResources` no‑op, snapshot==live still hold).
+
+I’m in Ask mode — I can’t run the debugger or patch. If you want the guard or a `FATAL` invariant wired in, switch to Agent mode.

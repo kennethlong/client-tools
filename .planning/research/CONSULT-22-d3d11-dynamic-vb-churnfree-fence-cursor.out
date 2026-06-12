@@ -1,0 +1,277 @@
+# CONSULT-22 Review — Fence-Retired Triple-Buffer Design
+
+**Verdict:** §4 is **directionally correct** and addresses exactly why fixes #1–#3 failed. It is **not** a rubber-stamp: several mandatory implementation details are missing from the sketch, and a **strictly simpler** variant (single ring + fence-before-discard) may suffice once accounting is fixed. Do **not** ship counter-rotated buffers without GPU retirement again.
+
+---
+
+## Why the three failures happened (mechanism, not hypothesis)
+
+| Attempt | What it did | Why it failed |
+|---|---|---|
+| **#1 Per-generation N=4** | Counter-advanced buffer on each `WRITE_DISCARD`; per-slice bind | Recycled by **counter**, not GPU fence. Shallow pool reused before deferred GPU reads → **deterministic** corruption (RenderDoc-capturable). |
+| **#2 Per-frame `beginFrame` flip** | `ms_newFrame=true` once/frame in `update_impl`; still **one** buffer | First lock of frame N+1 does `WRITE_DISCARD` **without waiting for GPU** → cross-frame reuse race. Same bug, slower discard rate. |
+| **#3 Per-instance buffers** | `CreateBuffer` per `DynamicVertexBuffer` object | Hundreds–thousands of runtime creates/releases → NVIDIA UMD crash (`SetDependencyInfo` null-deref). Constraint B violated. |
+
+Baseline “works” only because over-charged accounting manufactures ~370 driver renames/frame — accidental rename-pool fencing:
+
+```281:282:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+	ms_used += length;
+```
+
+```352:357:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+	m_numberOfVertices = numberOfVertices;
+	// Note: ms_used was already advanced in lock(); we don't re-adjust
+	// here. (D3D9 plugin advances on unlock because Lock takes only an
+	// upper-bound length and Unlock takes the actual used length; D3D11
+```
+
+D3D9 does the opposite — advance on **unlock** with actual count:
+
+```237:244:src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+	const int vertexSize = getVertexSize();
+	const int length = numberOfVertices * vertexSize;
+	// ...
+	ms_used += length;
+```
+
+`CuiLayerRenderer` exploits the D3D11 bug: lock-all-remaining, write a few quads, unlock actual count:
+
+```62:68:src/engine/client/library/clientUserInterface/src/shared/core/CuiLayerRenderer.cpp
+	s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+	if (s_maxNumberOfVertices < 128)
+		s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(true);
+	s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+That pattern is benign on D3D9 (~1 discard/frame); on D3D11 it drives the discard storm.
+
+---
+
+## Attack on §4: what’s right, what’s wrong
+
+### What’s right
+
+1. **Fixed buffer count at `install()`** — satisfies constraint B (no runtime churn).
+2. **Per-frame flip in `update_impl`** — correct hook (`Direct3d11.cpp:289`, called from `Game.cpp:1204` before `Graphics::beginScene()`).
+3. **GPU fence before reuse** — replaces counter-rotation and driver-accident protection with explicit retirement.
+4. **Within-frame `WRITE_NO_OVERWRITE` only** — correct for deferred-across-phases GPU reads on stable slice bytes.
+5. **D3D9-faithful unlock accounting** — mandatory; without it `CuiLayerRenderer` will force mid-frame `WRITE_DISCARD` and re-break everything.
+
+### What’s wrong / missing (will fail if omitted)
+
+**1. Per-slice buffer identity at bind time**
+
+Current bind sites always use the *current* ring, not the slice’s ring:
+
+```143:145:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+					buffers[stream] = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
+					strides[stream] = static_cast<UINT>(data->getVertexSize());
+					offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+```
+
+```2265:2280:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+		ms_currentVB             = Direct3d11_DynamicVertexBufferData::getSharedRingBuffer();
+		ms_currentVBStride       = static_cast<UINT>(data->getVertexSize());
+		// ...
+		ms_currentVBOffset       = static_cast<UINT>(data->getOffset()) * ms_currentVBStride;
+```
+
+§4 says “slices carry `(currentBuffer, offset)`” but the code has no per-slice `m_bufferIndex`. You need `getRingBuffer(sliceIndex)` stored at `lock()` and used at bind. This is likely why fix #1 was RenderDoc-deterministic even with per-slice buffer intent.
+
+**2. `getSortKey()` is buffer-global**
+
+```370:372:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+int Direct3d11_DynamicVertexBufferData::getSortKey()
+{
+	return static_cast<int>(reinterpret_cast<uintptr_t>(ms_d3dRingBuffer.Get()));
+```
+
+With N buffers, sort keys must include slice buffer identity or draws batch incorrectly.
+
+**3. Dynamic IB ring is the same hazard**
+
+`Direct3d11_DynamicIndexBufferData` mirrors the VB ring (single shared buffer, `beginFrame()` with zero callers, lock-time advance). Any fix must be applied in parallel or index corruption will masquerade as vertex corruption.
+
+**4. Fence signal must cover all frame GPU work**
+
+Frame order in `Game.cpp`:
+
+```1204:1225:src/engine/client/library/clientGame/src/shared/core/Game.cpp
+			Graphics::update(elapsedTime);
+			Graphics::beginScene();
+			// ...
+			IoWinManager::draw();
+			Graphics::endScene();
+			VideoPlaybackManager::performDrawing();
+			// ...
+			Graphics::present(hwnd, width, height);
+```
+
+Signal the query **after** `performDrawing()` (or at end of `present()` before `IDXGISwapChain::Present`), not at `endScene()` (no-op at `Direct3d11_Device.cpp:763`). `Present` does not read dynamic VBs, but late draws might.
+
+**5. Mid-frame overflow fallback is dangerous**
+
+“If single frame exceeds 4 MB → mid-frame `WRITE_DISCARD`” **must** fence-wait before that discard, or you reintroduce the intra-frame race. Prefer `FATAL` + log peak `ms_used` over silent mid-frame discard.
+
+**6. `beginFrame()` alone is insufficient (fix #2 proved this)**
+
+```144:151:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+void Direct3d11_DynamicVertexBufferData::beginFrame()
+{
+	ms_newFrame                = true;
+	ms_locksSinceBeginFrame    = 0;
+	ms_discardsSinceBeginFrame = 0;
+}
+```
+
+With default `discardDynamicBuffersAtBeginningOfFrame=false` (`ConfigDirect3d11.cpp:53`), this only sets a flag. The first lock triggers `WRITE_DISCARD` on a **single** buffer with **no fence** — identical failure mode to #2.
+
+**7. “Deferred across passes” is overstated for soft-skin CPU path**
+
+For skeletal meshes, `prepareToDraw()` and `draw()` are paired in the same sorter loop iteration:
+
+```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp
+		shaderPrimitive.prepareToDraw();
+		// ...
+		for (int i = 0; i < numberOfPasses; ++i)
+		{
+			// ...
+			shaderPrimitive.draw();
+```
+
+Soft-skin locks/unlocks in `prepareToDraw()` (`SoftwareBlendSkeletalShaderPrimitive.cpp:575-619`), then draws in the pass loop. The real deferral is **GPU async consumption** of ring bytes after `Unmap`, plus **cross-frame** buffer reuse — not “prepare in pass 1, draw in pass 5” on CPU.
+
+`Direct3d11_Device::beginScene()` is **not** per shader phase; it runs once per `Graphics::beginScene()` plus RT switches (`Direct3d11_RenderTarget.cpp:163`). `Camera::beginScene()` is unrelated (sorter setup only).
+
+---
+
+## Open questions — direct answers
+
+### Q1: Is 3×4 MB correct? Will fence-wait stall CPU?
+
+**Shape: yes, with prerequisites.**
+
+- **N=3**: matches standard triple-buffering with `Present(1,0)` (`Direct3d11_Device.cpp:858`). GPU latency is typically 2–3 frames; N=2 risks CPU stalls.
+- **4 MB/buffer**: baseline ring is 2 MB (`Direct3d11_DynamicVertexBufferData.cpp:110`); 4 MB gives headroom for close-range soft-skin bursts. Total 12 MB GPU memory is reasonable.
+- **CPU stall**: with N≥3, the wait in `update_impl` on buffer `frame%3` usually completes while you were rendering the prior 2 frames. Worst case: one frame of spin if GPU falls behind — acceptable and far better than 370 discards/frame.
+- **Mandatory companion**: D3D9 unlock accounting. Without it, CuiLayer will still poison `ms_used` and force mid-frame discards inside the “current frame” buffer.
+
+### Q2: Exact D3D11 fence mechanism (FL11_0)
+
+**Use `ID3D11Query` + `D3D11_QUERY_EVENT`.** Do **not** use `ID3D11Fence` — project baseline is `D3D_FEATURE_LEVEL_11_0` (`Direct3d11_Device.cpp:180-181`), and Fence requires D3D11.4 / `ID3D11Device5`.
+
+You already have a working template (disabled) in `present()`:
+
+```868:890:src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+	if (ms_context && ms_device)
+	{
+		ms_context->Flush();
+		D3D11_QUERY_DESC qd;
+		qd.Query = D3D11_QUERY_EVENT;
+		qd.MiscFlags = 0;
+		ID3D11Query *q = nullptr;
+		if (SUCCEEDED(ms_device->CreateQuery(&qd, &q)) && q)
+		{
+			ms_context->End(q);
+			BOOL done = FALSE;
+			while (ms_context->GetData(q, &done, sizeof(done), 0) != S_OK)
+			{ /* spin until the GPU reaches this point */ }
+			q->Release();
+		}
+	}
+```
+
+**Exact placement (production shape):**
+
+| When | Where | Action |
+|---|---|---|
+| `install()` | `Direct3d11_DynamicVertexBufferData::install()` | Create **3** `ID3D11Buffer` (4 MB, `DYNAMIC`) + **3** `ID3D11Query` (`D3D11_QUERY_EVENT`). **Never** `CreateQuery` per frame. |
+| Start of frame | `update_impl()` (`Direct3d11.cpp:289`) | `bufIdx = (bufIdx+1)%3`. `waitForQuery(bufIdx)` (Flush + GetData spin). `ms_used=0`. `ms_currentBuffer=bufIdx`. |
+| Each `lock()` | `Direct3d11_DynamicVertexBufferData::lock()` | First lock of frame: `Map(WRITE_DISCARD)` on `ms_buffers[bufIdx]`. Subsequent: `Map(WRITE_NO_OVERWRITE)`. Store `m_bufferIndex=bufIdx`, `m_offset`. **Do not** advance `ms_used` in lock — advance in unlock (D3D9 parity). |
+| End of frame | `present()` after all draws | `Flush(); End(ms_queries[bufIdxUsedThisFrame])`. Record which buffer was active. |
+| `waitForQuery(i)` | called from `update_impl` | `Flush();` loop `GetData(ms_queries[i], …)` until `S_OK`. |
+
+Use `D3D11_ASYNC_GETDATA_DONOTFLUSH` only after an initial `Flush()`. Do not `CreateQuery`/`Release` per frame.
+
+### Q3: Does per-frame flip + within-frame `NO_OVERWRITE` eliminate the race?
+
+**Yes — if fence-retired, not counter-retired.** That is exactly what fix #2 lacked and fix #1 lacked.
+
+- **Within a frame**: append-only `WRITE_NO_OVERWRITE` with non-overlapping byte ranges is the documented D3D11 dynamic-buffer pattern. Multiple GPU draws referencing earlier slices while CPU appends later slices is **legal** under `NO_OVERWRITE` — provided no `WRITE_DISCARD` recycles the backing store.
+- **Across frames**: triple-buffer + fence ensures buffer `i` is not remapped until the query proves all draws referencing that buffer’s slices have passed.
+- **Why #2 “did nothing”**: one buffer, frame-start `WRITE_DISCARD`, **no wait** → same cross-frame race, just less frequent.
+- **Why fence fixes what counter could not**: counter says “buffer 0 is on its 5th lap”; fence says “buffer 0’s lap-4 GPU work is complete.”
+
+**Remaining intra-frame hazard** (only if you skip accounting fix): CuiLayer over-charge → `ms_used + length > ms_size` → mid-frame `WRITE_DISCARD` on the **current frame buffer** → tears in-flight slices. Fix accounting or cap UI lock size; do not rely on overflow fallback without fence.
+
+### Q4: Simpler fix — single ring + one fence on wrap/discard?
+
+**Yes. This may be sufficient and is strictly simpler than 3-buffer flip.**
+
+Minimal correct single-buffer discipline:
+
+1. **D3D9 unlock accounting** (remove `ms_used += length` from lock; add to unlock).
+2. **Cap or isolate CuiLayer** (fixed batch size 512–2048 verts, or dedicated non-shared UI buffer).
+3. **One `ID3D11Query`**, created at `install()`.
+4. Before **every** `WRITE_DISCARD` (frame-start or ring wrap): `waitForQuery()` then `Map(WRITE_DISCARD)`.
+5. End of frame in `present()`: `Flush(); End(query)`.
+
+Within-frame: `WRITE_NO_OVERWRITE` append only.
+
+This replaces driver-accidental rename protection with **one** explicit fence per discard event (~1/frame with correct accounting). You do **not** reduce rename frequency below what D3D9 uses, but you **do** add the fence D3D11 lacks.
+
+Triple-buffering (§4) adds CPU/GPU pipeline overlap so the fence wait rarely blocks; single-buffer+fence is correct but may stall ~once per frame. Given vsync, 3-buffer is a performance refinement, not a correctness requirement.
+
+**Do not** do single-buffer+fence **without** accounting fix — you’d go from 370 fenced discards to 1 fenced discard but still have garbage `ms_used` state and CuiLayer adversarial behavior.
+
+### Q5: Why D3D9 truly survives (what we still had wrong)
+
+D3D9 is **not** running the same regime as D3D11 baseline:
+
+| Factor | D3D9 | D3D11 baseline |
+|---|---|---|
+| `ms_used` advance | unlock, actual count (`:244`) | lock, upper bound (`:282`) |
+| Discards/frame | ~1 (ring rarely fills) | ~370 (CuiLayer over-charge) |
+| `beginFrame` wired | `Direct3d9.cpp:2484-2486` | zero callers; `update_impl` no-op (`Direct3d11.cpp:289`) |
+| Lock API | subrange `Lock(offset, length, flags)` (`:207`) | whole-buffer `Map` + manual offset (`:268-281`) |
+| Discard protection | driver rename pool on `D3DLOCK_DISCARD` + looser runtime sync | `WRITE_NO_OVERWRITE` = **no implicit sync**; app must not reuse in-flight bytes |
+| Default frame-start discard | `false` (`ConfigDirect3d9.cpp:53`, `ConfigDirect3d11.cpp:53`) | same |
+
+D3D9’s ~1 discard/frame works because the driver’s per-resource rename chain retains old physical pages for in-flight draws when you `D3DLOCK_DISCARD`. D3D11’s ~370 discards accidentally invoke the same mechanism constantly. When you reduced discards without adding fences, you removed the protection without adding the synchronization D3D11 requires.
+
+The D3D9/D3D11 draw API difference is secondary but real: D3D9 passes `minimumVertexIndex` + `numberOfVertices` to `DrawIndexedPrimitive` (`Direct3d9.cpp:4157`); D3D11 `DrawIndexed` only gets `BaseVertexLocation` (`Direct3d11_StateCache.cpp:3225-3228`) — the app owns the full “don’t overwrite bytes the GPU may still read” contract via IA byte offset + ring discipline.
+
+---
+
+## Recommended execution order
+
+**Do not repeat fix #1 (counter N-buffer) or fix #3 (per-instance create).**
+
+### Phase 1 — minimum blast radius (try before full §4)
+
+1. **D3D9 accounting** in `Direct3d11_DynamicVertexBufferData.cpp` (and IB twin).
+2. **CuiLayer cap** — stop locking entire remaining ring at `:64`; use fixed batch (512–2048) or dedicated UI buffer not aliasing `ms_d3dRingBuffer`.
+3. **Single-buffer fence-before-discard** as Q4 above.
+4. Wire `beginFrame()` from `update_impl` for counter parity only.
+
+Re-test close-range Jawa. If clean → done; no need for 3×4 MB.
+
+### Phase 2 — if residual tearing or CPU stall from single-buffer wait
+
+Implement full §4 triple-buffer fence-retired design with all missing pieces:
+
+- per-slice `m_bufferIndex`
+- bind-site `getRingBuffer(m_bufferIndex)` not `getSharedRingBuffer()`
+- 3 queries created once at install
+- signal after `performDrawing()`, wait at `update_impl`
+- mirror on dynamic IB
+- overflow = `FATAL`, not silent mid-frame discard
+
+---
+
+## Bottom line
+
+§4 is the **first proposed design that correctly identifies the missing primitive** (GPU-fence retirement, not counter rotation). It will work **if and only if** per-slice buffer binding, D3D9 accounting, IB parity, and correct fence placement are included. Without those, it repeats fix #1’s deterministic binding bug.
+
+The simpler path you may be missing: **fix accounting + fence-before-discard on one ring** achieves the same correctness property as D3D9 with explicit sync, without 12 MB of buffers. Triple-buffering is an optimization for pipeline depth, not the core fix. Per-instance buffers remain ruled out by the crash constraint; a **fixed** N-buffer pool with fences is the churn-free alternative.

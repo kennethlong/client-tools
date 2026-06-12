@@ -1,0 +1,154 @@
+CONSULT-31 / OPUS — CPU soft-skin tail-spike mechanism analysis
+================================================================
+File: src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/
+      SoftwareBlendSkeletalShaderPrimitive.cpp
+Construction: ~1297-1384   Consumption (no-dot3 path): ~1903-1937
+Math: sharedMath/src/shared/Transform.h rotateTranslate_l2p (lines 463-469)
+
+GIVENS (treated as proven, not re-derived):
+- Tail-contiguous spike: last ~27 verts of a 1656-vert mesh (1629..1655); second
+  mesh 2628 verts, tail starts ~2575. CONTIGUOUS TAIL is the load-bearing clue.
+- Wrong cluster ~[-2816, 0, -6400], Y EXACTLY 0. Correct bulk ~[3400, 5, -4900].
+- Dest VB fully written. Every bone index used is IN RANGE (runtime clamp = 0 fires).
+- High-LOD only. Low-LOD clean.
+- blendPos = Σ_k transformArray[idx_k].rotateTranslate_l2p(srcPos) * weight_k.
+
+----------------------------------------------------------------------
+THE DECISIVE STRUCTURAL FACT
+----------------------------------------------------------------------
+`transformData` (the m_transformData cursor) is ONE shared running pointer for the
+WHOLE mesh, advanced per-vertex by m_extraTransformDataCount:
+
+   const TransformData *transformData = m_transformData;            // 1846/1099/887
+   for (i ...) {
+       ... firstTransform ...
+       for (j = sourceVectors->m_extraTransformDataCount; j>0; j--, transformData++)
+           ... transformArray[transformData->m_transformIndex] ...  // 1927-1936
+   }
+
+There is NO per-vertex reset of `transformData`. It is a stream cursor. The j-loop
+trusts each vertex's m_extraTransformDataCount to consume EXACTLY the right number
+of TransformData slots. The construction packs m_transformData as a tightly-packed
+stream: vertex v contributes (localCount-1) entries ONLY when localCount>1 (1304-1307
+sizing; 1375-1380 fill).
+
+=> If ANY single vertex's m_extraTransformDataCount does not match the number of
+   slots that vertex actually contributed to the packed stream, the cursor desyncs
+   by that delta and STAYS desynced for EVERY following vertex. The first verts read
+   correct stream entries; once the cursor slips, the remainder read SHIFTED entries
+   — i.e. valid TransformData (valid indices, real weights) belonging to the WRONG
+   vertex. This is EXACTLY a "contiguous tail goes wrong, head stays correct, indices
+   all in range" signature. No other candidate mechanism naturally produces a
+   sharp head/tail boundary from one defect.
+
+WHERE THE COUNT CAN BE WRONG — the localVertexTransformCount<1 branch (1359-1363):
+   if (localVertexTransformCount<1) {
+       sourceVertex.m_firstTransformData.m_transformIndex  = 0;
+       sourceVertex.m_firstTransformData.m_transformWeight = 0;
+       // m_extraTransformDataCount NOT set here -> relies on memset-0 (1316)
+   }
+This branch leaves m_extraTransformDataCount = 0 (memset). That is actually SAFE for
+the cursor (count 0 == 0 slots contributed). So the <1 branch is NOT itself the
+desync source under normal data.
+
+The REAL desync risk is the asymmetry between the SIZING pass and the FILL pass:
+  - SIZING (1300-1308) and FILL (1340-1381) both call mesh.getVertexTransformCount().
+  - They must return the IDENTICAL value for every vertex across the two passes.
+  - High-LOD meshes have the densest, most-weighted verts (3-4 bones/vert). If a
+    high-LOD vertex returns localCount>1 in fill (so it sets m_extraTransformDataCount
+    = localCount-1 AND advances destTransformData) but the two passes ever diverge —
+    OR if a vertex with localCount>1 but a malformed weight table writes fewer real
+    slots than counted — destTransformData ends up != numberOfExtraTransformWeightPairs.
+  - That mismatch is exactly what the WARNING at 1384 guards. CHECK THAT WARNING:
+    if it ever fired for these meshes, the cursor math is broken and the tail is
+    guaranteed garbage. (Low-LOD meshes have fewer multi-bone verts -> smaller/zero
+    extra stream -> no room to desync -> CLEAN. This explains high-LOD-ONLY directly.)
+
+----------------------------------------------------------------------
+WHY Y == EXACTLY 0 (the strongest discriminator)
+----------------------------------------------------------------------
+rotateTranslate_l2p (Transform.h 463-469):
+   x' = m00*x + m01*y + m02*z + m03
+   y' = m10*x + m11*y + m12*z + m13
+   z' = m20*x + m21*y + m22*z + m23
+Then blendPos = Σ_k transform_k(src) * weight_k.
+
+For the FINAL blendPos.y to be EXACTLY 0.0f (bitwise zero, not ~0), one of:
+ (A) Σ weight_k == 0 for the tail vert. Then blendPos = src-transformed * 0 = (0,0,0)
+     for ALL three components — but target X,Z are large (-2816,-6400), NOT zero.
+     So a pure zero-weight-sum is FALSIFIED by X,Z != 0. REJECT.
+ (B) The dominant transform contributing to the tail vert has its MIDDLE ROW zero:
+     m10=m11=m12=m13=0. Then y' = 0 exactly for any src, while x',z' are nonzero.
+     A PoseModelTransform whose row 1 is all-zero is NOT a normal animated bone
+     pose (those are orthonormal-ish, |row|≈1). It IS what you get from:
+        - a partially-initialized / zeroed matrix where only some rows were written,
+        - reading a TransformData entry that points (via desync) at a bone the pose
+          left as a degenerate/zero-row matrix at a valid index,
+        - reading PAST the logical end of a per-vertex contribution into a slot that
+          was memset-0 then never filled (the 1316 memset leaves zero matrices).
+ (C) A genuine projection/flatten in the bone matrix (designer-zeroed scale on Y).
+     Possible but would affect ALL LODs equally -> contradicts high-LOD-only. REJECT.
+
+(B) is the winner and it DOVETAILS with the cursor-desync: a desynced cursor that
+runs off the packed stream lands in the trailing memset-0 region of m_sourceData
+(alloc_size was sized to numberOfExtraTransformWeightPairs exactly; running past it
+reads zero-initialized bytes -> TransformData{index=0, weight=0} OR, if it reads
+transformArray via a 0 index, transformArray[0] which may be the ROOT/identity-ish
+pose). Critically, reading transformData PAST m_transformData's valid region yields
+m_transformWeight bytes that are 0 (memset) => those extra terms add 0; the vert then
+equals firstTransform(src)*firstWeight. If firstWeight itself got corrupted, or the
+single surviving transform is a near-zero-row matrix, you collapse Y while X,Z ride
+the m03/m23 translation columns of that bone -> [bigX, 0, bigZ]. That is the observed
+[-2816, 0, -6400] shape: a TRANSLATION-DOMINATED result (src rotated to ~0 on Y,
+offset by a bone whose position column sits near that cluster).
+
+ARITHMETIC SANITY on [-2816,0,-6400]: this is NOT a linear scaling of [3400,5,-4900]
+(no single scalar maps 3400->-2816 AND -4900->-6400; ratios -0.828 vs +1.306 differ
+and Y 5->0 needs a separate zero). So it is NOT "correct vertex times a bad weight
+sum". It IS "src mapped through a DIFFERENT bone matrix" — consistent with reading
+the wrong (desynced) TransformData / a zero-row pose, whose translation columns place
+the result at the bone's own anchor near [-2816,*,-6400]. Confirm by checking whether
+some bone in transformArray has position ≈ [-2816, 0, -6400]: if yes, the tail verts
+are being skinned ENTIRELY to that one bone (weight collapse onto a single foreign
+bone via desync), which also forces Y≈that bone's anchor — and if that bone's row-1
+is degenerate, Y locks to exactly 0.
+
+----------------------------------------------------------------------
+RANKED MECHANISMS (by fit)
+----------------------------------------------------------------------
+1. CURSOR DESYNC (m_extraTransformDataCount / packed-stream miscount), tail reads
+   shifted-or-past-end TransformData. UNIQUELY explains: contiguous-tail boundary,
+   head-correct, valid-in-range indices, full write, high-LOD-only (denser extra
+   stream = more desync room). Y=0 emerges from landing on a zero-row / memset-0
+   /single-foreign-bone term. *** BEST FIT. ***
+2. STALE/DEGENERATE POSE AT A VALID INDEX (bone allocated, not animated this frame ->
+   zero-row or identity matrix). Explains Y=0 cleanly and in-range indices, but does
+   NOT by itself explain the sharp tail-only boundary unless paired with desync (the
+   tail is what gets routed onto that one bad bone). Strong as the Y=0 PROXIMATE
+   cause, weak as the standalone trigger. Likely the *value* half of mechanism 1.
+3. LOD index→bone-table remap mismatch (high-LOD stored indices vs runtime pose
+   table). Explains high-LOD-only and in-range-but-wrong indices, but would scatter
+   errors across the whole mesh, NOT a clean contiguous tail. Lower fit.
+4. Weight-sum != 1 / sign error. FALSIFIED for the pure case: cannot produce
+   Y-exactly-0 while X,Z stay large (a scalar hits all 3 axes). Only survives if the
+   "extra" weights are the memset-0 tail (sum<1) AND the surviving bone is degenerate
+   — which is just mechanism 1 again. Reject as a standalone.
+
+----------------------------------------------------------------------
+THE ONE CONFIRMING EXPERIMENT
+----------------------------------------------------------------------
+Instrument the consumption loop to detect cursor desync DIRECTLY, not the symptom:
+Before the i-loop, save base = m_transformData. After the loop, assert
+(transformData - m_transformData) == numberOfExtraTransformWeightPairs — i.e. the
+cursor consumed EXACTLY the stream length. BETTER (localizes the slip): inside the
+loop, before each vertex, log i and (transformData - m_transformData); ALSO compute a
+parallel "expected offset" by summing m_extraTransformDataCount as you go and the
+independent count = Σ over verts of max(localTransformCount-1,0) recomputed from the
+mesh. The FIRST i where (running m_extraTransformDataCount sum) diverges from (running
+mesh-derived extra count) is the desync vertex; every i after it is the spike tail.
+Equivalently and cheapest: re-enable/inspect the WARNING at line 1384
+(destTransformData - m_transformData != numberOfExtraTransformWeightPairs). If that
+fires for the 1656/2628 meshes, mechanism 1 is PROVEN. As a second confirm, at the
+first spiked tail vertex dump transformArray[idx].getPosition() and matrix row 1
+([m10..m13]) for the dominant bone — expect position ≈ [-2816,*,-6400] and/or a
+zero/degenerate row 1 (Y collapse).

@@ -1,0 +1,19 @@
+You are tracing a D3D11 renderer bug in this repo (SWG client). Read ACTUAL source, cite file:line. The bug has resisted weeks of work; we just PROVED a key fact that creates a sharp paradox.
+
+PROVEN CLEAN (scale-free measurement, not coarse/sampled):
+- The CPU soft-skin OUTPUT (SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer, the per-vertex blendPosition, OBJECT space) is clean. A per-submesh ratio probe (maxDist^2 / meanDist^2 from vert0) shows max ratio 4.9 (~0.6 units) -- NO vertex flung out. The dewback's 7.5-unit extent was its LEGIT body size (ratio ~2, evenly spread), not a spike.
+- The copy systemStream -> dynamic VB is a single full-vertex memcpy (VertexBufferWriteIterator::copy).
+- The vertex shader is a SINGLE UNIFORM WVP (object->clip, one cbuffer 'SwgVertexConstants' per draw; no per-vertex blend weights -- CPU pre-skins).
+
+OBSERVED on-screen spike (trustworthy): a huge spike of the creature's geometry textured in the creature's OWN texture (UVs correct), extending through walls, and DEPTH-VALID -- it is depth-tested normally (a nearer wall correctly occludes it; it penetrates a far wall). So the spike vertices have SENSIBLE positions and depth, NOT garbage/NaN/behind-camera.
+
+KEY SIGNATURE: D3D11-ONLY (D3D9 hardware-skins these creatures on the GPU and never runs the CPU soft fill). LIVE-ONLY: any CPU readback that SYNCS the GPU (a staging Map(READ)) MASKS the spike; passive logging never changes it. View/camera/animation-dependent: flicker <-> frozen-spiked transitions as LOD/distance shuffle.
+
+THE PARADOX: a clean OBJECT-space VB + a UNIFORM WVP must yield clean CLIP space (a uniform 4x4 cannot fling a contiguous subset while leaving the rest valid). Yet the clip-space spike is real. Therefore the GPU must FETCH different object bytes than the CPU wrote, OR the index buffer references vertices outside the written range, OR there is a per-vertex factor we are missing. NOTE: earlier "downstream is clean / readPast=0 / ring exonerated" results were produced by probes that ALSO contained behavior-changing or GPU-draining diagnostics (forceDiscard=true on every skin lock; a per-draw staging Map(READ)). Those have since been REMOVED. Treat all prior downstream eliminations as VOID -- re-derive from the current clean baseline (forceDiscard off, no dedicated skin ring, WRITE_NO_OVERWRITE append at distinct offsets).
+
+YOUR TASK (byte-level trace, clean baseline): trace ONE dewback soft-skin submesh's data end to end and find every place the GPU-fetched bytes can diverge from the CPU-written bytes:
+1. fillVertexBuffer writes blendPosition into m_systemStream (object space). file:line.
+2. prepareToDraw: m_dynamicStream->lock(m_vertexCount) -> Direct3d11_DynamicVertexBufferData::lock (ring buffer, m_offset, WRITE_NO_OVERWRITE vs WRITE_DISCARD), then outIt.copy(systemStream) (memcpy), then unlock. file:line for the lock, the offset assignment, the map type.
+3. The bind: Direct3d11_VertexBufferVectorData::bind / Direct3d11_StateCache::setVertexBufferVector -- IA byte offset (getOffset()*stride), stride, slice vertex count. file:line.
+4. The draw: RenderCommand::render -> drawPartialIndexedTriangleList -> DrawIndexed(IndexCount, StartIndexLocation, BaseVertexLocation). file:line, and the index values' source (absolute? rebased?).
+For EACH boundary, state whether the GPU reads exactly [written bytes] or can read elsewhere (a stale prior-lock region of the SAME ring -> same-creature stale-but-valid positions = depth-valid spike; an index >= written count; a wrong offset/stride). Rank the candidates. End with the ONE decisive measurement -- ideally GPU-SIDE and NON-DRAINING (a readback drains and masks it) -- that would confirm the top candidate.

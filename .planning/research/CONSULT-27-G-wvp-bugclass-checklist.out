@@ -1,0 +1,254 @@
+# CONSULT-27-G — WVP-composition bug-class checklist for "clip-W collapsed to ~0 and sign-straddling"
+
+## Signature being explained
+- Vertex INPUT data is clean object-local (~±1 range, e.g. (0.2, 1.07, 0.06)).
+- Engine renders OBJECT-LOCAL: camera is transformed INTO the object's space, so the
+  object's own world translation is effectively identity; the meaningful translation that
+  must survive into the W-producing row is the **camera→object distance (~20 m)**.
+- Expected clip.w ≈ +20 for every vertex (W ≈ view-space depth = distance to camera).
+- Observed clip.w ≈ 0, range ≈ -0.24 .. +0.10 (straddles zero).
+- Perspective divide by ~0 → coordinates explode → radiating shards.
+- D3D9 build of the same data path is correct (clip.w ≈ +20). Only D3D11 is wrong.
+
+## Conventions (fix these so the matrix dump is unambiguous)
+- Engine is COLUMN-VECTOR: math is clip = M_engine * p, p = (x,y,z,1)^T, M_engine acts on
+  the LEFT. In a column-vector convention TRANSLATION lives in the 4th COLUMN
+  (elements m03, m13, m23) and the last row is (0,0,0,1) for affine transforms.
+- HLSL `mul(M, v)` with float4 v treats M as ROW-vector-major for a row vector, OR you keep
+  column-vector semantics by uploading M TRANSPOSED and doing `mul(v, M)` — the codebase
+  convention here is: **upload transposed, HLSL does row-vector mul**. After the single
+  upload-transpose, in the GPU-resident (row-major HLSL) matrix the translation lives in the
+  4th ROW (m30, m31, m32) and the last COLUMN is (0,0,0,1).
+- clip.w is produced by the DOT of the input position with the **W-column of the
+  projection** (in engine/column-vector space, the 4th ROW of P; for a standard D3D
+  perspective that row is (0,0,1,0): w_clip = z_view). After WVP composition, w_clip is the
+  dot of p_object with the matrix's **W-producing row/column** that, expanded, equals
+  (z-of-camera-relative-position). For our object-local case w_clip should ≈ +20 because the
+  camera sits ~20 m down the +z (LH) view axis from the object.
+
+KEY INVARIANT TO REMEMBER WHILE READING THE DUMP:
+  w_clip = (W-producing row of the GPU matrix) · (x,y,z,1).
+  For a correct LH perspective WVP rendering an object 20 m away, that row ≈ (a, b, c, +20),
+  where (a,b,c) are small (sub-unit) and the **constant term ≈ +20** is what carries the
+  camera distance. The bug almost always lives in that ONE row's 4th element (or in which
+  row gets read as "the W row").
+
+================================================================================
+EXACTLY WHICH ELEMENTS TO PRINT (single dump disambiguates)
+================================================================================
+Print the full 4x4 of the matrix AS UPLOADED TO THE CBUFFER (the bytes the GPU sees), in
+row-major order, labelled r0..r3 / c0..c3. Then specifically call out:
+
+  A. ROW 3  = (m30, m31, m32, m33)   <- in correct row-vector/transposed layout this is the
+              TRANSLATION row. m33 should be ~ +20-ish-derived (see note) and NOT 0/1-only.
+  B. COL 3  = (m03, m13, m23, m33)   <- if translation shows up HERE instead of row 3, the
+              matrix was NOT transposed (or double-transposed) → classic single/double
+              transpose bug.
+  C. The W-producing row of the composed matrix. For LH D3D perspective the projection's
+     w-row is (0,0,1,0) so after composition w_clip = dot(p, col\_or\_row carrying view-z).
+     Print the row that multiplies to give w. Concretely print BOTH:
+        wrow_candidate_A = r3 = (m30,m31,m32,m33)
+        wrow_candidate_B = c3 = (m03,m13,m23,m33)
+     and compute w for the sample vertex (0.2,1.07,0.06,1) against EACH. The one that yields
+     ~+20 is the correct layout; the one yielding ~0 is what the shader is actually using.
+  D. Projection plumbing elements: _33, _34, _43, _44 (DX docs naming, 1-based). In a
+     row-vector LH perspective these are:
+        _33 =  zf/(zf-zn)            (row3,col3 0-based m22)
+        _34 =  1                     (row3,col4 0-based m23)  <-- the "copy z to w" element
+        _43 = -zn*zf/(zf-zn)         (row4,col3 0-based m32)
+        _44 =  0                     (row4,col4 0-based m33)
+     The element that COPIES view-z into clip-w is _34 (m23 in 0-based row-major). If that is
+     0, w_clip loses its z term and collapses. Print m23 and m32 explicitly.
+
+So the minimum disambiguating print is 6 numbers plus a recomputation:
+    m23, m32, m33   and   r3=(m30,m31,m32,m33), c3=(m03,m13,m23,m33)
+    + w_for_sample(r3·p) and w_for_sample(c3·p).
+
+================================================================================
+RANKED BUG CLASSES
+================================================================================
+
+--------------------------------------------------------------------------------
+#1  DOUBLE-TRANSPOSE (or MISSING transpose) of WVP at upload  —  MOST LIKELY
+--------------------------------------------------------------------------------
+(a) Mechanism: Engine is column-vector; the codebase convention uploads matrices TRANSPOSED
+    once so HLSL row-vector mul works. If the D3D11 path transposes a matrix that was
+    ALREADY transposed (double), or fails to transpose one that needed it, the
+    W-producing translation term is read from the wrong place. In a column-vector matrix the
+    camera-distance (~20) sits in the 4th COLUMN; the GPU then reads the 4th ROW for the
+    row-vector w, which contains the projection's (0,0,1,0)-derived small terms and a 0/near-0
+    constant. Net: w_clip = a·x + b·y + c·z + ~0 ≈ small, sign depends on x,y,z → STRADDLES 0.
+    This matches the observed -0.24..+0.10 perfectly: it's the leftover linear (a,b,c)·p with
+    the +20 constant MISSING.
+(b) Fingerprint in the dump: the +20-class constant appears in COL 3 (m03/m13/m23/m33 carry
+    the big number) when it SHOULD be in ROW 3; r3 = (small,small,small, ~0 or ~1). I.e.
+    translation is on the WRONG axis of the 4x4. Equivalently w_for_sample(c3·p) ≈ +20 while
+    w_for_sample(r3·p) ≈ 0.
+(c) Discriminating test: dump M, compute c3·p and r3·p for the sample vertex; if c3·p≈+20 and
+    r3·p≈0, it is a transpose-parity bug. Toggle the XMMatrixTranspose on the WVP upload and
+    re-dump — the +20 moves to r3 and w_clip snaps to +20.
+
+--------------------------------------------------------------------------------
+#2  PARTIAL-PRODUCT TRANSPOSE: only SOME factors transposed (W,V,P mixed handedness)
+--------------------------------------------------------------------------------
+(a) Mechanism: WVP is composed from W·V·P (or P·V·W). If one factor (commonly the projection,
+    or the view) is uploaded/multiplied with a different vector convention than the others,
+    the product is NOT a clean transpose of the intended matrix — it's a scrambled mix. The
+    translation/camera-distance term lands in neither a clean row nor column; the z→w copy
+    (_34) ends up multiplied against a wrong component. w_clip becomes a small mixed dot →
+    near-0, sign-straddling. Distinguish from #1 because a single transpose toggle does NOT
+    fix it (the +20 doesn't cleanly appear in r3 OR c3).
+(b) Fingerprint: NEITHER r3 nor c3 contains a clean ~+20 constant; instead a ~20-magnitude
+    number appears at an off-diagonal interior element (e.g. m13 or m31) and m23/m32 look
+    swapped relative to the DX-doc projection values. The 3x3 rotation block may also be
+    transposed (asymmetry: m01≠m10 in a way that's the transpose of expected).
+(c) Discriminating test: independently dump W, V, P (un-multiplied) and check each one's
+    translation placement (row3 vs col3). The factor whose translation is on the wrong axis
+    is the mis-transposed one. Or: build WVP on CPU two ways (all-transposed vs none) and
+    compare to the uploaded bytes.
+
+--------------------------------------------------------------------------------
+#3  PROJECTION z→w COPY ELEMENT (_34 / m23) ZEROED OR WRONG  —  "lost the z-to-w"
+--------------------------------------------------------------------------------
+(a) Mechanism: For LH perspective, w_clip = view_z is produced solely by the projection
+    element that copies z into w: row-vector _34 = +1 (0-based m23). If that element is 0
+    (e.g. an ORTHOGRAPHIC projection matrix substituted, where _34=0 and _44=1), w_clip no
+    longer tracks z. With an ortho-like matrix w_clip becomes a constant (≈ _44) or, if the
+    near/far terms are also off, a small value — and because the object-local positions are
+    sub-unit and centered, the residual (a,b,c)·p straddles 0.
+(b) Fingerprint: m23 (the z→w element) ≈ 0 instead of ≈ +1 (or ≈ -1 for RH). m33 (_44) ≈ 1
+    instead of ≈ 0. This is the ORTHO fingerprint: last column (0,0,0,1) row-vector form ->
+    w_clip independent of z. Also check m22 (_33): ortho z-scale 1/(zf-zn) is tiny vs
+    perspective zf/(zf-zn)≈1.
+(c) Discriminating test: print m23 and m33. Perspective: (m23≈1, m33≈0). Ortho/broken:
+    (m23≈0, m33≈1). If you see the ortho fingerprint, the wrong projection (e.g. the UI/2D
+    or shadow ortho matrix) is being bound to this 3D draw.
+
+--------------------------------------------------------------------------------
+#4  CAMERA-IN-OBJECT-SPACE (view translation) NOT APPLIED → position relative to camera ≈ 0
+--------------------------------------------------------------------------------
+(a) Mechanism: The engine renders object-local by folding the camera position into the view
+    (or world) matrix so that what reaches the projection is the CAMERA-RELATIVE position
+    (~20 m along view-z). If that camera translation is dropped (view matrix translation row
+    zeroed, or identity view used), the position fed to projection is ~the raw object-local
+    (~±1) instead of ~(±1, ±1, ~20). Then w_clip = view_z ≈ the object-local z ≈ ±0.06 →
+    near 0, sign follows the geometry → straddles 0. THIS EXACTLY REPRODUCES -0.24..+0.10
+    if the object-local z spans roughly that range.
+(b) Fingerprint: the matrix's translation row/column (wherever #1 says it should be) has a
+    near-ZERO constant where +20 belongs — but UNLIKE #1, toggling transpose does NOT make a
+    +20 appear anywhere, because the +20 was never in the matrix at all. The 3x3 block looks
+    like a correct perspective*rotation; only the translation term is missing.
+(c) Discriminating test: search the uploaded matrix for ANY element of magnitude ~15-25.
+    #1/#2 have a +20 hiding somewhere (wrong slot); #4 has NO ~20 anywhere → the camera
+    distance never entered the matrix. (Print max(|element|): ≥~15 ⇒ transpose family;
+    <~5 ⇒ camera-translation-dropped family.)
+
+--------------------------------------------------------------------------------
+#5  PRE-DIVIDED / PRE-PROJECTED POSITIONS (w already applied upstream)
+--------------------------------------------------------------------------------
+(a) Mechanism: If a stage already did a perspective divide or normalized positions (so input
+    is effectively NDC with w folded in), re-applying WVP yields tiny/near-0 w. Less likely
+    here because the stated INPUT is clean object-local (~±1), but a skinning path that
+    outputs already-transformed positions and is then transformed AGAIN would shrink w toward
+    0 and let rounding straddle the sign.
+(b) Fingerprint: the matrix is FINE (r3 has +20, m23≈1) yet w still ≈0 → the bug is in the
+    POSITION, not the matrix. Vertex buffer / skinning output already in clip-ish space.
+(c) Discriminating test: feed a hardcoded p=(0.2,1.07,0.06,1) through the dumped matrix on
+    CPU. If CPU gives w≈+20 but the GPU still shows w≈0, the input position the shader
+    actually receives is NOT object-local (skinning/stream bug), not a matrix bug.
+
+--------------------------------------------------------------------------------
+#6  POSITION.w NOT 1 (input w = 0, or wrong, so translation/z→w term is never picked up)
+--------------------------------------------------------------------------------
+(a) Mechanism: The +20 constant lives in the translation slot and is selected by the input's
+    w component (the "1"). If the vertex shader builds float4(pos.xyz, 0) — or a skinning
+    weight path leaves w=0, or reads pos as float3 and the implicit w is 0 — the dot with the
+    translation row drops the +20 entirely. w_clip = (a,b,c,+20)·(x,y,z,0) = a·x+b·y+c·z ≈
+    small, sign-straddling. Indistinguishable in symptom from #1/#4 but matrix is PERFECT.
+(b) Fingerprint: matrix dump is correct (r3=(*,*,*,+20), m23≈1) — bug is the appended w.
+    Look at the VS source: float4(input.pos, 1) vs float4(input.pos, 0) vs mul of a float3.
+(c) Discriminating test: in the VS, force position.w=1 explicitly before the mul. If w_clip
+    jumps to +20, it was the input-w bug. (Also: CPU-multiply matrix·(x,y,z,1) gives +20 and
+    matrix·(x,y,z,0) gives ~0 — compare to observed.)
+
+--------------------------------------------------------------------------------
+#7  RH/LH OR VIEW-DIRECTION SIGN FLIP (z→w element has wrong SIGN)
+--------------------------------------------------------------------------------
+(a) Mechanism: LH perspective copies +z to w (_34=+1); RH copies -z (_34=-1). If the wrong
+    handedness projection is used, OR the view matrix flips view-z sign, w_clip = -view_z.
+    With a +20 m camera distance this gives w_clip ≈ -20 (uniformly NEGATIVE), not
+    sign-straddling. So a pure handedness flip gives w≈-20 (clamped/clipped, often whole
+    object vanishes), NOT the -0.24..+0.10 spread. Ranked low because the OBSERVED spread is
+    SMALL and straddles 0 — a sign flip alone would be large and uniform-sign. Include it to
+    RULE IT OUT via the dump.
+(b) Fingerprint: m23 ≈ -1 (instead of +1), and w_for_sample ≈ -20 (large, uniform sign).
+(c) Discriminating test: if w is uniformly ≈ -20 → handedness; if w ≈ 0 straddling → NOT
+    this, look at #1/#4/#6.
+
+--------------------------------------------------------------------------------
+#8  NEAR/FAR PLANE COLLAPSE (zn≈zf, or _33/_43 degenerate)
+--------------------------------------------------------------------------------
+(a) Mechanism: Bad near/far (e.g. zn=zf, or far=0) makes _33=zf/(zf-zn) blow up or NaN and
+    _43=-zn*zf/(zf-zn) degenerate. This corrupts clip.z far more than clip.w (w is the z→w
+    copy, independent of zn/zf), so it usually does NOT produce a w≈0 straddle — it produces
+    z banding / everything at one depth. Ranked low for THIS signature.
+(b) Fingerprint: m22 (_33) huge/NaN/inf, m32 (_43) huge/NaN, but m23 (z→w) still ≈1 and
+    w_clip still ≈+20. So if w is fine but z is wrong, this; our symptom is w-wrong, so this
+    is NOT it.
+(c) Discriminating test: print m22, m32; if finite and ~(0.5..1.0, small negative) the
+    near/far are fine — exclude.
+
+--------------------------------------------------------------------------------
+#9  UNINITIALIZED / FRAME-STALE / WRONG-SLOT cbuffer (matrix is garbage or last-frame)
+--------------------------------------------------------------------------------
+(a) Mechanism: The WVP cbuffer for this draw was never written this frame (partial
+    WRITE_DISCARD tail, wrong cbuffer slot bound, register-packing offset) so the VS reads
+    zeros or stale data. Zeros → w_clip=0 exactly (all zero rows) → divide by 0 → shards.
+    Stale → could be a DIFFERENT object's WVP (wrong distance) but typically not a clean
+    small straddle unless that object was near the camera. The codebase has a documented
+    "P19_CBUF_ZERO_TAIL partial-WRITE_DISCARD cbuffer" hazard and "shared-header ABI offset"
+    hazards — both can land the matrix at the wrong cbuffer offset.
+(b) Fingerprint: matrix is all-zero, identity, NaN, or obviously another object's transform
+    (translation ≠ ~20). If r3 and c3 are BOTH ~0 (no +20 anywhere AND no sane rotation),
+    it's zeroed/stale, not a transpose.
+(c) Discriminating test: dump the matrix for TWO consecutive frames and for a KNOWN-good
+    nearby draw. If it changes frame-to-frame in lockstep with a different draw, it's
+    wrong-slot/stale; if it's identity/zero, it's uninitialized. Cross-check the cbuffer
+    register index and the byte offset of the WVP within the cbuffer against the VS
+    reflection.
+
+================================================================================
+ONE-DUMP DECISION TREE (run after printing the 6 numbers + 2 recomputations)
+================================================================================
+1. Is there a ~+20-magnitude element ANYWHERE in the matrix?
+     NO  -> camera distance never entered matrix.
+              - all near-zero/identity/NaN  -> #9 (uninit/stale) or #4 (view-translation
+                dropped). Distinguish: rotation block sane ⇒ #4; rotation block junk ⇒ #9.
+     YES -> go to 2.
+2. Where is the +20?
+     In r3 (4th ROW)  -> matrix layout CORRECT for row-vector HLSL. If w still ≈0, the bug is
+                          NOT the matrix -> #6 (input w=0) or #5 (pre-projected pos). Confirm
+                          via CPU multiply with w=1 (gives +20) vs w=0 (gives 0).
+     In c3 (4th COL)  -> #1 single/double transpose (translation on wrong axis). Toggle the
+                          upload transpose; +20 moves to r3 and fixes it.
+     Off-diagonal interior (m13/m31...) -> #2 partial/mixed transpose. Dump W,V,P separately.
+3. Check z→w element m23 (and its sign):
+     m23 ≈ +1 -> LH perspective OK.
+     m23 ≈  0 (and m33≈1) -> #3 ortho/wrong-projection bound.
+     m23 ≈ -1 (and w≈-20 uniform) -> #7 handedness flip.
+4. Check m22/m32 only to EXCLUDE #8 (they affect z, not w; if NaN/huge it's a separate
+   near/far bug, not this w-collapse).
+
+================================================================================
+WHY THE OBSERVED -0.24..+0.10 SPREAD IS DIAGNOSTIC
+================================================================================
+The spread magnitude (~0.34) and its straddle of 0 say: w_clip ≈ a linear function of the
+object-local position with NO large constant offset. That is the residual (a,b,c)·(x,y,z)
+with the +20 constant term DELETED. The three ways to delete that constant are:
+  - the constant is in the matrix but on the wrong axis (transpose) -> #1/#2
+  - the constant was never put in the matrix (camera translation dropped) -> #4
+  - the constant is in the matrix but the input's w=0 fails to select it -> #6
+These three are the top suspects; #1 and #6 are the most common in a D3D9→D3D11 port
+(transpose convention + float4(pos,?) authoring), and BOTH are settled by ONE matrix dump
+plus the CPU re-multiply with w=1 vs w=0. A uniform large-negative w would instead point at
+#7; an all-zero/NaN matrix at #9; an ortho fingerprint (m23≈0,m33≈1) at #3.

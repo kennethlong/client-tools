@@ -1,0 +1,234 @@
+# CONSULT-39 — Why some bump draws read b0 c1/c3 = 0
+
+## 1. `setStaticShader` dedup guard
+
+**`Direct3d11_StateCache::setStaticShader` has no dedup.** It always calls `apply(pass)`:
+
+```2399:2420:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setStaticShader(StaticShader const &shader, int pass)
+{
+	// ...
+	Direct3d11_StaticShaderData const * d3dShader =
+		static_cast<Direct3d11_StaticShaderData const *>(shader.m_graphicsData);
+	NOT_NULL(d3dShader);
+	IGNORE_RETURN(d3dShader->apply(pass));
+}
+```
+
+**Dedup lives in `Direct3d11_StaticShaderData::apply`:**
+
+```762:767:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StaticShaderData.cpp
+	bool const cacheHit = (ms_active == this && ms_activePass == passNumber);
+
+	if (!cacheHit)
+	{
+		ms_active     = this;
+		ms_activePass = passNumber;
+```
+
+- Compare: **`ms_active == this`** (`Direct3d11_StaticShaderData const*`) **AND** **`ms_activePass == passNumber`**.
+- No dirty flag; no shader-bytecode pointer compare.
+- On **`cacheHit`**, the entire `if (!cacheHit) { ... }` block (`:764`–`:1722`) is skipped: no `setCurrentVSData`/`setCurrentPSData`, no legacy-b0 staging/upload, no `writeShadowBack`, no per-pass RS/texture work.
+- Cache is cleared each frame at `beginFrame()` (`:294`–`:297`).
+
+**D3D9 has the same pattern** (`ms_active != this || ms_pass != pass`) at `Direct3d9_StaticShaderData.cpp:1047`–`:1057`; on hit it also skips `Pass::apply()` and constant uploads.
+
+**Why this matters for buildings:** `StaticShaderTemplate::fetchShader()` returns **one shared `StaticShader` per template**:
+
+```169:175:D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp
+const Shader *StaticShaderTemplate::fetchShader() const
+{
+	if (!m_staticShader)
+		m_staticShader = new StaticShader(*this);
+
+	m_staticShader->fetch();
+	return m_staticShader;
+```
+
+All building meshes using the same bump `.sht` share the same `StaticShader*` → same `Direct3d11_StaticShaderData*` → **cache hit on the 2nd+ consecutive draw** with the same pass index.
+
+**What was last in b0 when apply is skipped?** Whatever last called `Direct3d11_ConstantBuffer::updatePS(0, ...)`. The per-primitive sorter calls **`setAlphaFadeOpacity` immediately before `setStaticShader`**:
+
+```742:746:D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderPrimitiveSorter.cpp
+		Graphics::setAlphaFadeOpacity(alphaFadeOpacityEnabled, alphaFadeOpacity);
+		
+		for (int i = 0; i < numberOfPasses; ++i)
+		{
+			Graphics::setStaticShader(staticShader, i);
+```
+
+`setAlphaFadeOpacity` does a **16-byte** `updatePS(0, ...)`:
+
+```2022:2028:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setAlphaFadeOpacity(bool /*enabled*/, float opacity)
+{
+	XMFLOAT4 fade(opacity, opacity, opacity, opacity);
+	Direct3d11_ConstantBuffer::updatePS(0, &fade, sizeof(fade));
+}
+```
+
+With `P19_CBUF_ZERO_TAIL`, `updatePS` **zero-fills the whole 1152-byte mapped region**, then copies only `sizeBytes`:
+
+```208:214:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp
+#if P19_CBUF_ZERO_TAIL
+	std::memset(mapped.pData, 0, static_cast<size_t>(kMaxCBufferBytes));
+#endif
+	std::memcpy(mapped.pData, data, sizeBytes);
+```
+
+So on a cache hit: **`setAlphaFadeOpacity` zeros GPU b0 c1/c3/c4**, then **apply is skipped**, draw reads **zero dot3 diffuse/tangent** — matching locked fact #1 and #4.
+
+D3D9 does **not** clobber PS b0 here; alpha fade is folded into `LightManager` dot3 `.a` channels (`Direct3d9_LightManager.cpp:795`–`:862`), which is why D3D9 stays correct.
+
+---
+
+## 2. Shared shadow read/write enumeration
+
+### Read (Producer B seed)
+
+```903:912:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StaticShaderData.cpp
+					bool const isLegacyB0 =
+						(layout.BindPoint == 0
+						 && layout.TotalSize == Direct3d11_LegacyPSConstants::kShadowBytes);
+					// ...
+					if (isLegacyB0)
+					{
+						std::memcpy(staging.data(),
+							Direct3d11_LegacyPSConstants::getShadow(),
+							Direct3d11_LegacyPSConstants::kShadowBytes);
+```
+
+### Producer A overwrite (only if `d3.valid`)
+
+```968:980:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StaticShaderData.cpp
+						if (d3.valid)
+						{
+							// ...
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &d3.diffuseColor,             ...);
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, ...);
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor,    ...);
+						}
+```
+
+### Write back
+
+```1427:1436:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StaticShaderData.cpp
+					Direct3d11_ConstantBuffer::updatePS(layout.BindPoint, staging.data(), layout.TotalSize);
+					// ...
+					if (isLegacyB0)
+					{
+						Direct3d11_LegacyPSConstants::writeShadowBack(staging.data());
+```
+
+### Every writer of `s_shadow`
+
+| Writer | Location | Can write c1/c3/c4 = 0? |
+|--------|----------|-------------------------|
+| Static init | `LegacyPSConstants.cpp:31` `s_shadow[...] = {}` | Yes — all zero at boot |
+| `writeShadowBack` | `LegacyPSConstants.cpp:73`–`:77` full 400B memcpy | Yes — if staging had zero c1..c4 |
+| `writeFloat4` | `LegacyPSConstants.cpp:47`–`:51` | Only targeted index; Producer C writes **c8+** (`Direct3d11.cpp:736`–`:738`) |
+| `writeRange` | `LegacyPSConstants.cpp:56`–`:68` | **No engine callers** found |
+| `flushToB0` | `LegacyPSConstants.cpp:82`–`:84` | **Never called** anywhere else in engine |
+
+**Can shadow hold zero c1/c3 at seed time while a draw skips the `if (d3.valid)` overwrite?**
+
+- **Yes, in principle:** if `!d3.valid`, staging keeps shadow c0..c4 unchanged (`:968` guard), then `writeShadowBack` persists that (`:1436`).
+- **Not consistent with locked fact #2** (snapshot always valid): when apply runs with `d3.valid==1`, shadow gets sun via `writeShadowBack`.
+- **Critical split:** `setAlphaFadeOpacity` / `setFog` update **GPU b0 only**, **not** the shadow. So CPU shadow can hold sun while GPU b0 c1/c3 = 0 after a partial `updatePS(0, 16)` + cache-hit skip. P38C probe logs only inside the `!cacheHit` path (`:906`), so it never sees cache-hit draws.
+
+`setFog` is the same partial clobber pattern:
+
+```1919:1920:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+	XMFLOAT4 fog(r, g, b, a);
+	Direct3d11_ConstantBuffer::updatePS(0, &fog, sizeof(fog));
+```
+
+Called at cell push (`ShaderPrimitiveSorter.cpp:1364`), not per draw — lower risk than `setAlphaFadeOpacity`, but same mechanism if a cache-hit draw follows without apply.
+
+---
+
+## 3. `updatePS` buffer lifetime
+
+**One `ID3D11Buffer` per PS slot, not a ring:**
+
+```46:47:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp
+ComPtr<ID3D11Buffer> Direct3d11_ConstantBuffer::ms_psBuffers[Direct3d11_ConstantBuffer::kNumSlots];
+```
+
+`kNumSlots = 4` (`ConstantBuffer.h:125`). Each update: `Map(WRITE_DISCARD)` → memset tail → memcpy `sizeBytes` → `Unmap` (`:194`–`:216`).
+
+**Re-bind every draw:** `applyPreDrawState` always calls `bindPS(0)` (and `bindPS(2)`):
+
+```1369:1372:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+		Direct3d11_ConstantBuffer::bindVS(0);
+		Direct3d11_ConstantBuffer::bindVS(1);
+		Direct3d11_ConstantBuffer::bindPS(0);
+		Direct3d11_ConstantBuffer::bindPS(2);
+```
+
+Binding is not change-deduped; the **same buffer object** is rebound. The hazard is **stale/zero content in that single buffer** from the last `updatePS(0, ...)` writer, not an old bound buffer handle.
+
+A draw can absolutely issue with b0 whose last write was a **16-byte zero-tail clobber** if apply was skipped afterward.
+
+---
+
+## 4. Multi-pass apply behavior
+
+**Each pass calls `setStaticShader(staticShader, i)` → `apply(i)`** (`ShaderPrimitiveSorter.cpp:744`–`:746`).
+
+Pass indices differ → **`ms_activePass` changes → cache miss between passes** of the same shared `StaticShader`.
+
+Inside apply (on miss), **each pass with `livePS` + reflected legacy b0** runs the full legacy-b0 path: seed shadow → optional `d3.valid` c0..c4 patch → material patches → **`updatePS(0, staging, 400)`** (`:1427`) → `writeShadowBack` (`:1436`).
+
+Passes without `bind==0 && size==400` layout do not upload b0 for that pass; they still run other layout uploads in the same `for (auto const &layout : layouts)` loop (`:855`+).
+
+**Capture30 adjacent 2376-index draws (4597, 4621):** consistent with **two primitives** sharing the same indexed template (same index count), not two passes of one entry — the pass loop would be sequential within one `Entry` with no intervening sorter entries. Pass 0 then pass 1 of one mesh = two cache misses; two meshes same template = **2nd mesh can cache-hit**.
+
+---
+
+## 5. Path table (bump PS + Draw)
+
+| Path | Calls `apply` + current d3? | Re-uploads b0 dot3? | Can leave b0 stale? |
+|------|----------------------------|---------------------|---------------------|
+| **`ShaderPrimitiveSorter::Phase::draw`** (buildings) | Yes on cache miss only (`:762`–`:764`) | Yes on miss (`:1427`) | **YES — rank 1:** `setAlphaFadeOpacity` (`:742`) partial `updatePS(0)` then cache hit on shared template singleton |
+| Same path, **first** draw after shader/pass change | Miss → full apply | Yes | No (if `d3.valid`, per locked facts) |
+| Same path, **multi-pass** same entry | Miss per pass (different `passNumber`) | Yes per pass with legacy b0 | Unlikely zero c1/c3 unless partial clobber between passes without apply (heat path calls `setAlphaFadeOpacity` again at `:772`) |
+| **`ShaderPrimitiveSet::LocalShaderPrimitive::draw`** | Via sorter above | Via sorter | Same as sorter |
+| **`IndexedTriangleListShaderPrimitive`** | Via sorter | Via sorter | Same |
+| **`BlueprintTextureRendererTemplate`** (`:800`, `:858`) | Direct `setStaticShader` per pass | On miss | Rank 2 if same shared shader + alpha fade pattern |
+| **UI / debug** (`drawQuadList`, `CuiLayerRenderer`, etc.) | Usually non-bump shaders | N/A | Not building bump |
+| **Skeletal** (`SoftwareBlendSkeletalShaderPrimitive`) | Own path; not main building bump | — | Separate investigation |
+| **Draw without `setStaticShader`** | No | No | Would inherit prior PS + b0; world content goes through sorter |
+| **`apply` cache hit** (any path) | **No** | **No** | **YES** if preceded by partial `updatePS(0)` |
+| **`setFog` at cell push** (`:1364`) | N/A | 16-byte `updatePS(0)` only | Rank 3 if next draws cache-hit without apply |
+| **`flushToB0`** | N/A | Would upload shadow | Never invoked |
+
+**Bug signature (matches all 5 locked facts):**  
+`(a)=no` or `(b)=no` on **cache-hit draws** after **`setAlphaFadeOpacity`** — CPU snapshot and shadow stay valid; **GPU b0 c1/c3 never refreshed**.
+
+**Camera-angle toggle:** sort/visibility changes which mesh is **first** (cache miss → lit) vs **Nth consecutive** same-template draw (cache hit → black). Same shader, same frame, different instances — exactly locked fact #1.
+
+---
+
+## Ranked root-cause list
+
+1. **`StaticShaderData::apply` cache hit** (`:762`) on **shared per-template `StaticShader`** (`StaticShaderTemplate.cpp:169`–`:175`) **after** `setAlphaFadeOpacity` **16-byte** `updatePS(0)` (`StateCache.cpp:2028` + `ConstantBuffer.cpp:208`–`:214`). **Primary explanation for c1/c3 = 0.**
+
+2. Same mechanism via **`setFog` 16-byte `updatePS(0)`** (`StateCache.cpp:1920`) if a cache-hit draw follows without apply.
+
+3. **`apply` cache hit alone** (no clobber): GPU keeps **previous** draw's b0 — c1/c3 may still be sun but **c0 object-local direction is stale** (`worldDirectionToObjectLocal` only runs inside apply `:973`–`:974`). Explains wrong lighting, not pure black c1/c3.
+
+4. **`apply` with empty `layouts`** (`:1492`–`:1496`): no b0 upload that draw.
+
+5. **`!d3.valid` path** (`:968`): would upload zero dot3 from shadow — **ruled out** by locked fact #2 for probed apply calls.
+
+---
+
+## Inaccuracies to avoid (relative to locked facts)
+
+- **Do not claim** `setStaticShader` itself dedups — it does not (`StateCache.cpp:2420`).
+- **Do not claim** P38C logs every bump draw — it is inside `!cacheHit` only (`:906`).
+- **Do not claim** shadow and GPU b0 stay in sync — partial `updatePS(0)` updates GPU only; shadow untouched until next `writeShadowBack`.
+- **Do not claim** a cbuffer ring — single buffer per slot (`ConstantBuffer.cpp:46`–`:47`).
+
+**Recommended fix direction (guidance only, Ask mode):** break the pair — either stop partial `updatePS(0)` for fade/fog (write into legacy shadow + full 400B flush), or **never skip Producer B b0 upload on cache hit** (at minimum re-upload dot3 c0..c4 per object after `setObjectToWorldTransformAndScale`), or invalidate cache when object transform changes. D3D9's equivalent is safe because dot3 is refreshed through `LightManager`, not gated on static-shader cache.

@@ -1,0 +1,136 @@
+# CONSULT-38 — Bump-PS lighting math (MATH/Opus angle)
+
+**BOTTOM LINE UP FRONT:** packedRegister1/3/4 are the PS dot3 constants c1/c3/c4 = `dot3LightDiffuseColor` / `dot3LightTangentMinusDiffuseColor` / `dot3LightTangentMinusBackColor`, sourced ONLY from `ms_currentLights.parallelSpecular[0]` (the world sun directional) — NOT from ambient/full-ambient. The const term `packedRegister3 + packedRegister1 = (tangent − diffuse) + diffuse = tangentColor` (the hemispheric "up/sky" color) is what makes the wall visible. D3D11 zeroes it because the c1/c3/c4 write is gated behind `if (d3.valid)` (Direct3d11_StaticShaderData.cpp:945), and `d3.valid` is only set when `setLights` saw a T_parallel light (Direct3d11_LightManager.cpp:176/196) — for this draw the list was empty (listSz=0) so the snapshot is invalid and c1/c3/c4 stay at their zero-init. **Minimal fix: feed the dot3/hemispheric snapshot (tangentColor, diffuse, backColor, tangentMinus* deltas) from the SAME sun directional D3D9's `selectLights` puts in `parallelSpecular[0]`, independent of the per-draw dynamic list, and write c1/c3/c4 unconditionally (drop the `d3.valid` gate, or persist last-good).**
+
+---
+
+## 1. packedRegister → engine-register map
+
+The black shader's PS reads cbuffer `SwgVertexConstants` @ b0 (400B = 25 float4). The rewriter emits generic names `packedRegister0..N`; the byte offset is the authoritative key, `offset = cIndex * 16`. The cIndex enum is mirrored verbatim from the D3D9 spec:
+
+- Direct3d9_PixelShaderConstantRegisters.h:23-33 (the WARNING-banner enum, encoded into the PS data files)
+- Direct3d11_LegacyPSConstants.h:54-63 (compile-time copy)
+
+| PS reg (disasm) | cIndex / byte off | D3D9 enum name | Engine quantity |
+|---|---|---|---|
+| `packedRegister0` | c0 / 0 | `PSCR_dot3LightDirection` | object-local light dir (.xyz), `.w` = materialSpecularPower |
+| **`packedRegister1`** | **c1 / 16** | **`PSCR_dot3LightDiffuseColor`** | **sun diffuseColor (rgb)** |
+| `packedRegister2` | c2 / 32 | `PSCR_dot3LightSpecularColor` | sun specularColor; `.w` = alphaFadeOpacity → the PS `o0.w` |
+| **`packedRegister3`** | **c3 / 48** | **`PSCR_dot3LightTangentMinusDiffuseColor`** | **`tangentColor − diffuseColor`** (hemispheric delta) |
+| **`packedRegister4`** | **c4 / 64** | **`PSCR_dot3LightTangentMinusBackColor`** | **`tangentColor − backColor`** (hemispheric delta) |
+| `packedRegister5..7` | c5..c7 | textureFactor/2, materialSpecularColor | per-material (Producer B) |
+
+These five PS constants are packed in D3D9 from `struct PixelDot3Data` and uploaded as one 5-register block `setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5)`:
+- Direct3d9_LightManager.cpp:592-601 (the `applyLights_vertexShader` parallelSpecular[0] path)
+- :823-830 (the `applyLights_vertexShader_dot3` re-apply path)
+
+The values themselves are derived from a real `Light*` via `_vsps_setExtendedLightData` (Direct3d9_LightManager.cpp:732-760):
+- `tangentMinusBackColor = getDiffuseTangentColor() − getDiffuseBackColor()` (:751-754) → c4
+- `tangentMinusDiffuseColor = getDiffuseTangentColor() − diffuseColor` (:756-759) → c3
+- `diffuseColor = getScaledDiffuseColor()` (:552-556 / :581) → c1
+
+The D3D11 snapshot mirrors this exactly (Direct3d11_LightManager.cpp:188-195): `tangentMinusDiffuseColor`, `tangentMinusBackColor`, `diffuseColor` are computed identically from the chosen `psSlot` directional.
+
+**Important separation of registers (this is the trap the c16 story fell into):**
+- The PS hemispheric/dot3 constants are **PSCR c1/c3/c4** (a SEPARATE 400B b0 cbuffer, fed by `Direct3d11_LegacyPSConstants` / StaticShaderData::apply).
+- The VS hemispheric registers `cLightData_*` c16–c43, c60–c63 (registers.inc, diffuse.inc) live in `VertexSlot0CB` and are fed by `composeSlot0Shadow` (Direct3d11_StateCache.cpp:380-414). Locked fact #2 (v1 = VS o1 = c16 ambient = 0) is about THAT register file. The bump PS does NOT read the VS c16; it reads its OWN b0 packedRegister1/3/4. So zeroing c16 is irrelevant — correct, c16 is not the variable.
+
+---
+
+## 2. D3D9 bump-PS output, term-by-term (precalc draw)
+
+Reconstructing the disasm in engine terms (sub `c1=diffuse`, `c3=tangent−diffuse`, `c4=tangent−back`):
+
+```
+r0   = v1 + c3 + c1
+     = v1 + (tangent − diffuse) + diffuse
+     = v1 + tangentColor                         // v1 = VS o1 = ambient/emissive base (=0 here, fact #2)
+d    = dot3(v4, 2*(normalMap−0.5))               // v4 = tangent-space light dir; d∈[−1,1]
+front= max(d,0),  back = min(d,0)
+r0   = r0 − front*c3 = tangentColor − front*(tangent−diffuse)
+r0   = saturate(r0 + back*c4) = … + back*(tangent−back)
+o0.rgb = r0 * diffuseMap * detailMap
+o0.w   = c2.w
+```
+
+This is the **per-pixel hemispheric model**, identical in structure to the VS version in diffuse.inc:
+```
+add r7, tangentColor, r7
+mad r7, tangentMinusDiffuse, -front, r7
+mad r7, tangentMinusBack,    +back,  r7
+```
+i.e. front-facing (d=+1) → `tangentColor − (tangent−diffuse) = diffuseColor`; back-facing (d=−1) → `tangentColor + (tangent−back) = … ` collapses toward backColor; perpendicular (d=0) → `tangentColor`. tangentColor is the "sky/up" hemisphere color, backColor the "ground/down".
+
+**The constant (pre-dot3) term is `c1 + c3 = tangentColor`.** Since v1=0 (fact #2), and dot3 only MODULATES around tangentColor, the entire visible brightness is anchored by tangentColor. If c1=c3=c4=0 ⇒ r0 = 0 + 0·(…) = 0 ⇒ `o0.rgb = 0 * tex = 0` = **pure black**, exactly matching Capture25.
+
+**Which of c1/c3/c4 must be nonzero for the wall to be visible?** At minimum `c1 + c3 = tangentColor ≠ 0`. Concretely D3D9 supplies all three nonzero whenever `parallelSpecular[0]` exists. With a populated sun:
+- c1 = sun diffuse ≈ (0.49,…)
+- c3 = tangent − diffuse
+- c4 = tangent − back
+giving `c1+c3 = tangent ≈ 0.29` (matches the measured const term, see §4).
+
+**Does D3D9 supply these for an "empty dynamic list"?** This is the crux and the framing needs correcting:
+
+- The PS dot3 constants come ONLY from `ms_currentLights.parallelSpecular[0]`, populated in `selectLights` by sorting **T_parallel** lights from `ms_lightList` (Direct3d9_LightManager.cpp:423-440). **`setFullAmbientOn`/full-ambient does NOT create a directional** — it only sets `ms_fullAmbient = (1,1,1,0)` → `ms_currentLights.ambient` → c16/VS (Direct3d9_LightManager.h:201-217, :404). Ambient never touches parallelSpecular[0], hence never touches PS c1/c3/c4.
+- If `parallelSpecular[0]` is genuinely empty, D3D9 ALSO writes **zero RGB** for c1/c3/c4 (only `.w` carries alphaFade/bloom): the `else` branch Direct3d9_LightManager.cpp:610-625 zeros `pixelDot3Data` then uploads it. So a TRULY empty parallelSpecular ⇒ D3D9 would ALSO render black.
+- Therefore, since D3D9 renders this wall LIT (fact #5), **D3D9's `parallelSpecular[0]` is NOT empty for this draw — the world sun directional is in `ms_lightList` and survives `selectLights` into parallelSpecular[0].** The "empty dynamic list" in the brief is a D3D11-only condition (the engine handed D3D11's `setLights` a list with `listSz=0` for this batch), NOT a property of the geometry. The hemispheric constants are sun-derived, frame-global state.
+
+The D3D9 ambient/precalc contribution that DOES go to precalc geometry is the c16 full-white ambient — but that lands in the VS register file (v1) and per fact #2 it's 0 in the capture anyway (the bump VS has NO COLOR0 input, so it never emits a vertex-ambient into o1 — confirmed: VS10950 inputs = pos/normal/uv×3/TANGENT, no COLOR0). So for THIS bump shader the ambient path is a no-op and 100% of the light must ride on c1/c3/c4.
+
+---
+
+## 3. The D3D11 divergence and the minimal fix
+
+**The gate that zeros c1/c3/c4 in D3D11:**
+
+```
+Direct3d11_StaticShaderData.cpp:945   if (d3.valid) {
+:953    write c0 (PSCR_dot3LightDirection)
+:954    write c1 (PSCR_dot3LightDiffuseColor)        ← packedRegister1
+:955    write c2
+:956    write c3 (PSCR_dot3LightTangentMinusDiffuseColor)  ← packedRegister3
+:957    write c4 (PSCR_dot3LightTangentMinusBackColor)     ← packedRegister4
+        }
+```
+
+`d3.valid` is the snapshot validity flag:
+- Direct3d11_LightManager.cpp:85 `s_pixelDot3State.valid = false;` — invalidated at the TOP of every `setLights`.
+- :176 `if (psSlot)` … :196 `s_pixelDot3State.valid = true;` — set ONLY if a T_parallel light was found in THIS call's `lightList`.
+
+So: when `setLights` is called with an empty list (`listSz=0`, the measured precalc condition), `psSlot==nullptr` ⇒ `valid` stays false ⇒ the c1/c3/c4 writes are skipped ⇒ they keep the **zero-init** from `s_shadow[] = {}` (Direct3d11_LegacyPSConstants.cpp:31). PS const term = 0 ⇒ black. This precisely reproduces fact #3 (packedRegister1/3/4 = 0 in black) and fact #4 (the whole VS10950/PS10952 batch is uniformly zero — they all draw under the same invalid snapshot).
+
+Camera-dependence (fact: +15° → lit) is the snapshot being GLOBAL state: it's whatever the LAST `setLights` before this draw established. A 15° turn changes DPVS/draw order so a neighbor's populated `setLights(sun)` runs before this batch, leaving `valid=true` + nonzero c1/c3/c4 in the shared shadow (the shadow persists via `writeShadowBack`, StaticShaderData.cpp:1413). That's a sequencing artifact, not a lighting-math difference — but the MATH root cause is the same: **the hemispheric constants are only ever populated by a directional that may or may not be in the per-draw list.**
+
+**Minimal fix (MATH-correct, parity with D3D9):**
+
+D3D9's invariant is: c1/c3/c4 derive from the FRAME's sun (`parallelSpecular[0]`), which is selected ONCE per frame from the global light set and is camera-independent. To match:
+
+1. **Decouple the dot3/hemispheric snapshot from the per-draw `lightList`.** The snapshot must hold the frame's sun directional regardless of which sub-batch's `setLights` ran last. Either:
+   - (a) Do NOT invalidate `s_pixelDot3State` per `setLights` call (remove/relocate the :85 reset); only UPDATE it when a T_parallel is present, so the last-good sun persists across empty-list draws — this mirrors D3D9 state-cache persistence (PS constants are sticky in the register file). This makes the const term `c1+c3 = tangentColor` survive the empty-list draws.
+   - (b) Stronger: capture the sun once per frame at frame-begin from the world's main directional, independent of `setLights` entirely.
+
+2. **Drop the `if (d3.valid)` gate at StaticShaderData.cpp:945** (or make it `if (d3 has ever been valid this frame)`), so c1/c3/c4 are written from the persisted snapshot. With a persisted snapshot, `valid` is effectively always true after the first sun-bearing `setLights`.
+
+The getter to source from is already wired: `psSlot->getScaledDiffuseColor()` → c1, and the `tangentColor`/`backColor` deltas via `getScaledDiffuseTangentColor()`/`getScaledDiffuseBackColor()` (Direct3d11_LightManager.cpp:181-195 already computes these; they're just being thrown away when the per-draw list is empty). **The fix is in the LIFETIME of `s_pixelDot3State`, not in adding a new getter.**
+
+(Note: this is a CALLER/data-lifetime fix — it does NOT modify the lighting equation, the register map, or Koogie's diagnostic patches; it changes when the already-correct values are allowed to persist.)
+
+---
+
+## 4. Magnitude sanity check
+
+Measured lit-frame: packedRegister1 ≈ +0.49, packedRegister3 ≈ −0.20 ⇒ const term `c1 + c3 = tangentColor ≈ +0.29`. Final pixel ≈ 0.2 after dot3 modulation × diffuseMap × detailMap.
+
+- `c3 = tangent − diffuse = 0.29 − 0.49 = −0.20` ✓ internally consistent: diffuse(0.49) > tangent(0.29), i.e. the head-on diffuse is brighter than the perpendicular sky term, exactly as a hemispheric model with a strong sun should be. So c3 NEGATIVE is correct and expected (it's `−front·(tangent−diffuse)` = `+front·(diffuse−tangent)` = brighten toward diffuse as the face turns to the sun).
+- Const term ≈ 0.29 = tangentColor = the hemispheric **up/sky** color. A wall facing perpendicular to the sun (d≈0) lands near `tangentColor ≈ 0.29`; after `×diffuseMap(~0.6–0.8)×detailMap(~0.9)` → ~0.2. **Matches the measured ~0.2 lit value.**
+
+**Does 0.29 read as a hemispheric ambient/back term or a single directional?** It reads as **a hemispheric tangent(sky) term riding on a single sun directional** — NOT a flat ambient. A flat ambient would put the SAME value on every facet regardless of normal (no dot3 dependence), but the measured behavior is dot3-modulated (front brighter via −c3, back dimmer via +c4). And it is NOT a pure single directional `N·L·diffuse` either, because that would be 0 on perpendicular faces — yet the wall holds ~tangentColor at perpendicular. So the 0.29 floor is the **tangent(sky) hemisphere color of the sun light**, the same quantity D3D9's `_vsps_setExtendedLightData` computes (Direct3d9_LightManager.cpp:745-749) and packs into c3/c4.
+
+What does D3D9 source say the value should be for precalc? D3D9 does NOT special-case "precalc" for these constants — `m_fullAmbient` only seeds c16 ambient (VS, unused by this bump shader). c1/c3/c4 are the ordinary sun-directional hemispheric values from `parallelSpecular[0]`, supplied for ALL geometry whose pass reads PSCR c0..c4, precalc or not. So D3D9's "precalc bump wall" gets exactly the frame's sun tangent/diffuse/back — `tangentColor ≈ 0.29`, `diffuse ≈ 0.49` — which is what D3D11 must replicate by persisting the snapshot.
+
+---
+
+## Corrections to prior framing
+- "Empty dynamic list for precalc geometry" is a **D3D11-only** symptom (`setLights` handed `listSz=0`), not a D3D9 property; D3D9's `parallelSpecular[0]` is populated from the frame's global light set and is camera-independent.
+- The fix is NOT "supply a default hemispheric ambient" — it's "persist the sun-derived dot3/hemispheric snapshot across draws that lack the directional in their per-draw list," matching D3D9's sticky PS-constant register file.
+- packedRegister3 being NEGATIVE is correct (diffuse > tangent), not a sign bug.

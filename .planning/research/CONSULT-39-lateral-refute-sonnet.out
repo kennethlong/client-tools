@@ -1,0 +1,75 @@
+# CONSULT-39 — Lateral / Skeptic findings
+## Bottom line
+**The "apply-skip / stale-zero b0" hypothesis is CORRECT but INCOMPLETE. The black output is caused by PS b0 c1/c3 = 0, but the root cause is NOT that apply() ran with an invalid snapshot — it is that the VS *also* lacks lit o1, meaning the VS cbuffer b0's `lightData.parallel.diffuseColor` is zero at draw time. Both the PS and VS b0 for the black draw are stale-zero for the parallel diffuse color slot. The per-draw object-space dot3 direction (VS→PS v4) is NON-ZERO and correct, which refutes the "VS cbuffer entirely zeroed" variant of the hypothesis.**
+
+---
+
+## Locked ground truth — verified
+- Pixel history (Capture30, px 1450,175, eventId up to 9999): event 4475 IS the winning fragment with shaderOut=[0,0,0,0]. No later draw overwrites it. **Hypothesis 1 (separate black draw on top) is REFUTED.**
+- PS debug_pixel (event 4475, 17 steps): PS inputs v0=[0,0,0,0], v1=[0,0,0,0]. Trace confirms `add r0.xyz, v1.xyz+packedRegister3.xyz` = 0 at every step. `o0=[0,0,0,0]` is directly caused by c1 (v1=packedRegister1) and c3 (packedRegister3) both being zero.
+- VS debug_vertex (event 4475, vertex 0): VS output o4=[0.678,-0.413,0.609] — the tangent-space dot3 direction reaching PS as v4 **is non-zero and plausible**. The black output is NOT caused by a degenerate v4.
+
+---
+
+## Hypotheses — ranked by evidence
+
+### H1 — Separate black draw on top (decal / shadow / depth-prepass)
+**REFUTED.** pixel_history on (1450,175) to end-of-frame shows draw 4475 is the **last** fragment writer. There is no later event that clears or darkens the pixel. The pixel is left at [0,0,0,0] by the shader's own output.
+
+*Evidence: mcp pixel_history eventId=9999 (failed with "not found") → used pixel_history to eventId=4475; the last modification listed is eventId=4475 postMod=[0,0,0,0]. Earlier modifications (eventIds 9, 249, 273, 297, 321) all show a warm brown wall colour ~[0.56,0.44,0.43], which eventId=4475 clobbers to pure black. This means 4475 IS a different, later mesh on top of the original wall — and its own PS emits zero because c1/c3 are zero.*
+
+### H2 — Two-pass / instance overlay: one lit draw + one black draw over the same mesh
+**PARTIALLY CONFIRMED — but as separate meshes, not blend passes.** Events 4597 and 4621 are both 2376-index draws with the same VS10820/PS10819 pair, same b0 byteSize=400. They are paired same-shader draws for the same mesh family (each pair in the event list is ~20 IDs apart, consistent with a "shadow pass + colour pass" or LOD A + LOD B pattern). However, at px 1450,175 neither 4597 nor 4621 covers that pixel (no debuggable fragment at that coordinate). So the two-pass overlay does not directly explain 4475's black pixel. The question is whether some draws in this run ARE a black overlay pass, which remains open but not the root cause for 4475 specifically.
+
+*Evidence: get_draw_info: 4597=2376 idx, 4621=2376 idx, same shaders. pixel_history at (1450,175) shows no contribution from 4597/4621 (they do not touch that pixel). The pairs throughout the event list (4351/4375, 4401/4427, etc.) suggest a consistent two-draw-per-mesh structure; whether one is a shadow/alpha pass needs blend-state inspection per pair.*
+
+### H3 — Valid c1/c3 in b0 but zero dot3 geometry output (v4/normalmap degenerate)
+**REFUTED by VS trace.** VS output o4=[0.678,-0.413,0.609] at event 4475 vertex 0 is a fully normalised, non-zero tangent-space vector. The PS dp3(v4, normalMap_decoded) at step 5 produces a non-zero r0.w (positive lobe). The black output is NOT caused by a degenerate tangent, degenerate normal map, or a zero dot3 direction. c1/c3 are confirmed zero in the PS inputs, not a downstream modulation artifact.
+
+*Evidence: debug_vertex event 4475 vertex 0 o4=[0.677,-0.413,0.609]; debug_pixel event 4475 trace step 3-5: normalMap decode r1=[non-zero], dp3 r0.w = non-zero (step 6 max keeps a positive value). The zero output is arithmetic: r0=[0,0,0] because c1=v1=[0,0,0,0] and c3=packedRegister3=[0,0,0,0] both zero.*
+
+### H4 — VS cbuffer b0 has zero lightData.parallel.diffuseColor at draw time (independent of PS b0)
+**CONFIRMED — NEW FINDING not in the prevailing hypothesis.** The VS trace at step 12 (`mad r1.xyz, r0.w, lightData.parallel.diffuseColor.xyz, material.emissiveColor.xyz`) leaves r1=[0,0,0] because `lightData.parallel.diffuseColor` = zero in the VS cbuffer. The VS o1 output (the diffuse+ambient colour term interpolated as PS v0) is therefore [0,0,1] (fog only, no colour). This means:
+- The VS b0 (`SwgVertexConstants` at cb0[42]) has `lightData.parallel.diffuseColor` = 0 for this draw.
+- The PS b0 ALSO has c1/c3=0.
+- Both are writing from the same `s_pixelDot3State` snapshot via `StaticShaderData::apply()`, so if one is zero the other likely is too — but they are written from DIFFERENT code paths: VS b0 goes through `Direct3d11_StateCache::composeSlot0Shadow` / `setLights` cbuffer update (`Direct3d11_LightManager::setLights` → `Direct3d11_ConstantBuffer::updateVS(kLightingCBSlot)`), while PS b0 goes through `StaticShaderData::apply` → `Direct3d11_LegacyPSConstants::getShadow()`.
+- VS step 10 (`dp3 r0.w, r0.xyz, lightData.parallel.direction_w.xyz`) DOES produce a non-zero result (r0.w changes from 1.0 to ~0.94), meaning the VS cbuffer HAS a non-zero parallel direction — just zero parallel diffuse COLOR. This is consistent with the `setLights` selectLights cascade writing `pSlot[0]` direction but an attenuated/zero color.
+
+*Evidence: debug_vertex event 4475 steps 10-15: r1.xyz stays [0,0,0] through all `mad` light accumulation steps. o1 output at step 87 = [0,0,0,1] (zero RGB, only fog alpha). VS disasm instruction 12: `mad r1.xyz, r0.wwww, lightData.parallel.diffuseColor.xyzx, material.emissiveColor.xyzx` — r1 stays zero implies diffuseColor=emissiveColor=0. Step 86: `add o1.xyz, r0.xyzx, lightData.ambient.ambientColor.xyzx` → o1=[0,0,0] implies ambient=0 too.*
+
+**This reveals a second defect alongside the PS b0 zero: the VS cbuffer's parallel diffuse color slot is also zero for this draw, so even if the PS b0 c1/c3 were fixed, the diffuse-lit vertex color (o1→PS v0) would still be black.**
+
+### H5 — An UNFOUND reset of s_pixelDot3State (install/lostDevice/beginScene/per-frame)
+**NOT FOUND — but partially addressed by a different mechanism.** Exhaustive grep of `s_pixelDot3State` in all .cpp and .h files shows it is only written in `Direct3d11_LightManager.cpp` at:
+- Line 60: static initializer `= {}` (zero-init at process start, once only)
+- Lines 209-218: inside `setLights()`, only if `psSlot != nullptr` (sun present)
+- Lines 224-238: parallelCount + parallelDirection/Color reset (UNCONDITIONALLY on every setLights call)
+- Line 247: ambient (unconditionally)
+
+**Critical: Lines 224-238 unconditionally zero `parallelDirectionWorld[i]` and `parallelDiffuseColor[i]` for any slot where `pSlot[i]` is null.** This means a `setLights` call with a sunless list (e.g. cell-boundary empty list) will zero the parallel[0..1] color slots even after the persistence fix, because the parallel slot zeroing is NOT guarded by the same "don't invalidate if empty" logic as the `psSlot`/dot3 block. The dot3 `diffuseColor`/`specularColor` in the PS path survives empty lists (correct), but the VS-path parallel diffuse color gets wiped.
+
+*Evidence: Direct3d11_LightManager.cpp:224-238: `s_pixelDot3State.parallelCount = 0; ... parallelDiffuseColor[i] = XMFLOAT4(0,0,0,0)` — no guard. The `valid` flag is NOT the gating check for the VS parallel path (which reads `parallelDiffuseColor` directly). An empty setLights zeros the VS parallel diffuse even while leaving the PS dot3 diffuse intact. This is a NEW gap not addressed by the CONSULT-38 persistence fix.*
+
+### H6 — LOD / VB difference causing garbage tangent-space data
+**REFUTED.** The VS input v5 (tangent+handedness) at event 4475 vertex 0 = [-1.0, -4.9e-5, 9.7e-6, 1.0] — a well-normalised tangent with w=1 (positive handedness). The tangent cross-product at instructions 90-92 produces a valid bitangent. o4 is non-zero and plausible. No evidence of garbage LOD data.
+
+*Evidence: debug_vertex event 4475 v5=[-1.0,-4.9e-5,9.7e-6,1.0] — clean unit tangent; VS instruction 92 cross-product r0 = [-0.0017, -0.0021, 0.025, 1.0] (approximation from uint decode), non-degenerate.*
+
+---
+
+## EXPLICIT PICK — most probable root cause
+
+**H5 (parallel color zeroed by sunless setLights) PLUS H4 (VS cbuffer parallel diffuse = 0) together constitute the root cause, and they may be the same underlying event.** The prevailing "apply-skip" story for the PS b0 is correct but focuses on the wrong cbuffer path. The VS cbuffer's `lightData.parallel.diffuseColor` slot gets zeroed by the cell-boundary empty setLights calls (H5, lines 224-238 unconditional), and the apply() staging for the PS b0 may ALSO read stale zeros from `s_pixelDot3State.parallelDiffuseColor[0]` because that slot was unconditionally zeroed. Both paths fail for the same reason: the sunless popCell setLights wipes parallel color; the persistence fix only guards the dot3 PS block, not the parallel VS block.
+
+**However, looking at the PS trace more carefully: PS v1=c1=[0,0,0,0] is `packedRegister1` which maps to `PSCR_dot3LightDiffuseColor` = `d3.diffuseColor`, NOT the parallel color.** The sun's diffuse (psSlot) IS guarded by the persistence fix. So if d3.diffuseColor is legitimately zero, either (a) the snapshot was valid but loaded with a zero-diffuse sun, or (b) the b0 staging path has a separate RMW failure.
+
+**Cheapest discriminating probe (single log line or RenderDoc op):**
+
+Add a log in `StaticShaderData::apply()` at the `isLegacyB0` block (Direct3d11_StaticShaderData.cpp:906-907) that dumps the ACTUAL bytes being `memcpy`'d into staging from `getShadow()` at offsets `PSCR_dot3LightDiffuseColor * 16` and `PSCR_dot3LightDirection * 16`, along with the current `d3.valid` and `d3.diffuseColor`. **If d3.diffuseColor is non-zero at that point but the staging bytes at PSCR_dot3LightDiffuseColor*16 are still zero, the RMW from getShadow() is returning stale-zero from a buffer that wasn't updated by the last valid setLights.** That would prove the LegacyPSConstants shadow buffer is not being populated from the snapshot, i.e. there is a write-path gap between `s_pixelDot3State.diffuseColor` (written in setLights) and `getShadow()` (read in apply). If the dump shows d3.diffuseColor = 0 at apply() time for the black draw, the persistence fix is not working for that draw's frame and H5 (unconditional parallel zero contaminating a subsequent call that has a sun but somehow stale snapshot) is the cause.
+
+**RenderDoc equivalent (zero-cost): export the b0 buffer contents at event 4474 (the UpdateSubresource just before draw 4475) via `export_buffer` on the PS b0 resource, and compare bytes at offset `PSCR_dot3LightDiffuseColor * 16` (64 bytes in = 0x40) to the values shown for a lit draw's b0 export. If `[0x40..0x4F]` is zero for the black draw but non-zero for the lit draw, the shadow RMW path is correct and the issue is that `s_pixelDot3State.diffuseColor` was zero when apply() ran — pointing squarely at the H5 unconditional parallel-zero overwrite of a prior good state.**
+
+---
+
+## Key structural finding (not in the brief)
+The "lit" draw 6911 uses a **different** PS (ResourceId::11822) and VS (ResourceId::2220) from the "black" draw 4475 (PS ResourceId::10819, VS ResourceId::10820). They are NOT the same shader. PS 10819 declares `dcl_input_ps linear v1.xyz` (colour from VS), while PS 11822 does not have a v2 (detail UV pair) in the same slot. The "same PS family" claim in the task brief means same asset-PS type, but the RenderDoc resource IDs differ — they are compiled variants. This does not change the c1/c3 analysis but means cross-draw cbuffer comparisons should match by resource ID, not assume identity.

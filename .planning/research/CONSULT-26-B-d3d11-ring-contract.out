@@ -1,0 +1,462 @@
+CONSULT-26-B: D3D11 Ring-Buffer Correctness Contract
+Generated: 2026-06-07
+Researcher: Claude Sonnet 4.6 (agent mode, WebSearch/WebFetch)
+Scope: Single ID3D11Buffer (D3D11_USAGE_DYNAMIC, vertex buffer), per-frame ring usage,
+       one immediate context, five research questions.
+
+==============================================================================
+SOURCES
+==============================================================================
+
+[S1]  D3D11_MAP enum reference
+      https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_map
+
+[S2]  How to Use Dynamic Resources (Microsoft Learn)
+      https://learn.microsoft.com/en-us/windows/win32/direct3d11/how-to--use-dynamic-resources
+
+[S3]  ID3D11DeviceContext::Map reference
+      https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
+
+[S4]  Immediate and Deferred Rendering (Microsoft Learn)
+      https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-render-multi-thread-render
+
+[S5]  DirectX-Specs / CPUEfficiency (Microsoft GitHub)
+      https://microsoft.github.io/DirectX-Specs/d3d/CPUEfficiency.html
+      (This page covers D3D12 removal of WRITE_DISCARD, which illuminates the D3D11
+       driver-managed renaming model by contrast.)
+
+[S6]  DirectXTK PrimitiveBatch.cpp (Microsoft reference implementation)
+      https://github.com/Microsoft/DirectXTK/blob/main/Src/PrimitiveBatch.cpp
+
+[S7]  DXVK immediate context implementation (open-source D3D11-to-Vulkan translation)
+      https://github.com/doitsujin/dxvk/blob/master/src/d3d11/d3d11_context_imm.cpp
+
+[S8]  DXVK PR #4293 - Buffer management rewrite
+      https://github.com/doitsujin/dxvk/pull/4293
+
+[S9]  gfx-rs issue #1418 - D3D11 partial dynamic resource update bug
+      https://github.com/gfx-rs/gfx/issues/1418
+
+[S10] D3D11_USAGE enum reference
+      https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_usage
+
+[S11] Important Changes from D3D11 to D3D12 (MicrosoftDocs/win32)
+      https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/direct3d12/important-changes-from-directx-11-to-directx-12.md
+
+==============================================================================
+QUESTION 1: WRITE_NO_OVERWRITE SLICE ISOLATION
+Does a prior NO_OVERWRITE write to region [a,b) remain valid at the Draw that
+reads it, even after a second NO_OVERWRITE write to non-overlapping region [c,d)?
+==============================================================================
+
+ANSWER: YES — guaranteed, provided the application upholds its half of the contract.
+
+CITATION [S1] — D3D11_MAP_WRITE_NO_OVERWRITE contract (verbatim):
+
+  "D3D11_MAP_WRITE_NO_OVERWRITE signifies that the application promises not to
+   write to data that the input assembler (IA) stage is using. In exchange, the
+   GPU allows the application to write to other parts of the same buffer. The
+   application must ensure that it does not write over any data in use by the
+   IA stage."
+
+  "For example, consider the buffer illustrated in the following diagram. If a
+   Draw call has been issued that uses vertices 4-6, then an application that
+   calls Map on this buffer must ensure that it does not write to the vertices
+   that the Draw call will access during rendering."
+
+CITATION [S2] — How to Use Dynamic Resources (verbatim):
+
+  "D3D11_MAP_WRITE_NO_OVERWRITE indicates that the app will not overwrite data
+   already in use in the dynamic buffer. The Map call will return a pointer to
+   the old data, which will allow the app to add new data in unused regions of
+   the vertex or index buffer. The app must not modify vertices or indices that
+   are used in a draw operation as they might still be in use by the GPU."
+
+INTERPRETATION:
+- WRITE_NO_OVERWRITE does NOT rename the buffer or allocate new backing memory.
+  It returns a pointer into the SAME physical memory as the prior Map calls.
+  [S7] confirms: the DXVK fast path for NO_OVERWRITE "returns the existing
+  mapped pointer directly via GetMapPtr()", trusting the application's guarantee.
+- The GPU "allows" writes to non-in-use regions precisely because the application
+  has promised not to touch in-use regions. Both [a,b) and [c,d) are visible in
+  the same memory at the same GPU address. A DrawIndexed that reads [a,b), issued
+  in API submission order AFTER both writes and after Unmap on each, will read
+  the correct first write's data. Region [c,d) is at a different offset and does
+  not disturb [a,b).
+- The runtime provides NO additional isolation between NO_OVERWRITE slices beyond
+  the application's own promise. If the application were to accidentally write
+  into [a,b) during the second NO_OVERWRITE Map, the GPU could read corrupted
+  data with no API-level error.
+
+CONCLUSION FOR Q1: Region [a,b) is guaranteed to contain the first write's data
+at the time of the Draw, as long as:
+  (a) The application did not write into [a,b) during any subsequent NO_OVERWRITE
+      Map (the application promise).
+  (b) No WRITE_DISCARD occurred between the write to [a,b) and the Draw that
+      reads it (see Q2 — DISCARD invalidates the entire buffer).
+  (c) The Draw is issued on the same immediate context in submission order after
+      Unmap (see Q4 — no additional sync needed on immediate context).
+
+==============================================================================
+QUESTION 2: WRITE_DISCARD — WHOLE BUFFER OR MAPPED REGION ONLY?
+==============================================================================
+
+ANSWER: WRITE_DISCARD invalidates / discards the ENTIRE buffer, not just the
+mapped region or the byte range the application happens to write into.
+
+CITATION [S2] — How to Use Dynamic Resources (verbatim, emphasis in source):
+
+  "Note: When you map a buffer with D3D11_MAP_WRITE_DISCARD, the runtime always
+   discards the entire buffer. You can't preserve info in unmapped areas of the
+   buffer by specifying a nonzero offset or limited size field."
+
+CITATION [S1] — D3D11_MAP_WRITE_DISCARD definition (verbatim):
+
+  "Resource is mapped for writing; the previous contents of the resource will
+   be undefined. The resource must have been created with write access and
+   dynamic usage."
+
+CITATION [S2] — Rename / new backing memory semantics (verbatim):
+
+  "D3D11_MAP_WRITE_DISCARD indicates that the app doesn't need to keep the old
+   vertex or index data in the buffer. If the GPU is still using the buffer when
+   you call Map with D3D11_MAP_WRITE_DISCARD, the runtime returns a pointer to a
+   new region of memory instead of the old buffer data. This allows the GPU to
+   continue using the old data while the app places data in the new buffer. No
+   additional memory management is required in the app; the old buffer is reused
+   or destroyed automatically when the GPU is finished with it."
+
+CITATION [S5] / [S11] — D3D12 removal explains the D3D11 model (paraphrase):
+
+  "In D3D11, applications were able to map dynamic resources with a DISCARD flag.
+   Because the particular memory allocation currently linked to the resource is
+   not exposed at the API level (only the abstract 'resource'), drivers had to
+   perform this tracking behind-the-scenes." (D3D12 removes this driver-managed
+   rename because it is incompatible with multi-threaded recording.)
+
+CITATION [S7/S8] — DXVK implementation confirms rename-the-whole-buffer:
+
+  "Allocate a new backing slice for the buffer and set it as the 'new' mapped
+   slice." DXVK emits a command to "invalidate the old buffer with this new
+   slice" — the invalidation covers the entire resource object, not a sub-range.
+
+CRITICAL IMPLICATION FOR THE RING SCENARIO:
+
+If, at any point during a frame, you call Map(WRITE_DISCARD) on the same buffer
+you have been using as a ring:
+
+  1. The runtime/driver switches the buffer object to a completely new backing
+     memory allocation. The CPU receives a pointer to this new allocation.
+  2. Any data previously written into the OLD allocation (all prior NO_OVERWRITE
+     slices) is no longer accessible through this buffer object for draws NOT YET
+     ISSUED. Prior-written slices are gone from the application's perspective.
+  3. HOWEVER, draws that were ALREADY ISSUED (submitted to the immediate context
+     command queue) BEFORE the DISCARD call will still read from the old backing
+     memory correctly — the driver retains the old allocation until GPU execution
+     of those prior draws completes. This is the "allows the GPU to continue
+     using the old data" guarantee.
+  4. Draws issued AFTER the DISCARD call will read from the new (discarded/blank)
+     backing memory. If the application has not re-written those vertex regions
+     into the new allocation, the GPU will read undefined/garbage data.
+
+BOTTOM LINE: DISCARD is a whole-buffer operation. It is NOT safe to DISCARD
+mid-ring and expect old NO_OVERWRITE slices to remain valid for draws that have
+not yet been issued. All draws for previously-written slices MUST be issued
+before any DISCARD on the same buffer.
+
+==============================================================================
+QUESTION 3: CAN A WRITE_NO_OVERWRITE REGION BE CLOBBERED BY DRIVER/WDDM
+ON A SINGLE IMMEDIATE CONTEXT?
+==============================================================================
+
+ANSWER: No documented driver/WDDM mechanism causes clobbering of a correctly-
+used NO_OVERWRITE region on a single immediate context. The contract is
+unidirectional: the application promises not to overwrite GPU-in-use regions;
+in exchange the driver promises not to interfere with application writes to
+other regions.
+
+CITATION [S1] — Remarks on NO_OVERWRITE (verbatim):
+
+  "However, ensuring this can be difficult, because the GPU is often many frames
+   behind the CPU in terms of which frame it is currently processing. Keeping
+   track of which sections of a resource are being used because of calls made 2
+   to 5 frames ago is difficult and error-prone. Because of this, it is
+   recommended that applications only write to the uninitialized portions of a
+   resource when using D3D11_MAP_WRITE_NO_OVERWRITE."
+
+This passage documents the PRACTICAL HAZARD: the application may incorrectly
+believe a region is free when the GPU is still using it — but this is entirely
+on the application. The driver does not clobber NO_OVERWRITE regions; only the
+application can break this contract.
+
+DOCUMENTED RISK — "reads before CPU write visible": NOT a risk on a single
+immediate context. On the immediate context, Map/Unmap establishes happens-before
+with subsequent Draw calls in API submission order (see Q4). The CPU write IS
+visible to the GPU by the time the Draw executes, because the immediate context
+serializes operations.
+
+DOCUMENTED RISK — Write-combine memory: [S3] warns:
+
+  "When you pass D3D11_MAP_WRITE, D3D11_MAP_WRITE_DISCARD, or
+   D3D11_MAP_WRITE_NO_OVERWRITE to the MapType parameter, you must ensure that
+   your app does not read the subresource data to which the pData member of
+   D3D11_MAPPED_SUBRESOURCE points because doing so can cause a significant
+   performance penalty. The memory region to which pData points can be allocated
+   with PAGE_WRITECOMBINE..."
+
+  Additionally: "Even the following C++ code can read from memory and trigger the
+   performance penalty because the code can expand to x86 AND DWORD PTR:
+   *((int*)MappedResource.pData) = 0;"
+
+  This is a CPU PERFORMANCE concern (WC memory is slow to read), NOT a GPU
+  visibility or correctness hazard. Use non-temporal stores or memcpy for fills.
+
+CONCLUSION FOR Q3: No documented driver/WDDM behavior clobbers a correctly-used
+NO_OVERWRITE region. The only hazard is the application violating its own promise
+(writing into GPU-in-use bytes), or using WRITE_DISCARD on the same buffer (which
+renames the backing memory for all future draws, leaving prior-write slices on the
+old backing — safe for already-issued draws, unsafe for draws not yet issued).
+
+==============================================================================
+QUESTION 4: MAP/UNMAP → DRAW ORDERING ON A SINGLE IMMEDIATE CONTEXT
+==============================================================================
+
+ANSWER: API submission order IS the ordering guarantee. No manual synchronization
+(fences, barriers, events) is needed. Unmap completing before the subsequent Draw
+call in the same thread on the same immediate context is sufficient.
+
+CITATION [S4] — Immediate context design (verbatim):
+
+  "Immediate rendering refers to calling rendering APIs or commands from a device,
+   which queues the commands in a buffer for execution on the GPU."
+
+  The immediate context is strictly single-threaded. There is no documented
+  mechanism by which a Draw issued later in the same thread could begin GPU
+  execution before a Map/Unmap issued earlier in that thread has made the CPU
+  writes available. The driver/runtime queues commands in order.
+
+CITATION [S2] — Synchronization via WRITE_DISCARD for static-pattern use (verbatim):
+
+  "When you map a buffer with D3D11_MAP_WRITE_DISCARD or no map values, you are
+   always guaranteed that the vertices are synchronized properly with the GPU."
+
+  While this sentence focuses on DISCARD, it confirms the general principle that
+  Map/Unmap provides a defined synchronization point with the GPU work queue.
+
+CITATION [S3] — No mention of any fence or barrier requirement between Map/Unmap
+and Draw on an immediate context. The API implicitly provides serialization.
+
+DXVK [S7] — sequence-number tracking across draw submissions is used for resource
+reuse decisions (to know when old backing memory is GPU-idle), NOT to impose
+barriers between Map and Draw on the same context. The immediate context's command
+stream IS the ordering mechanism.
+
+NOTE on D3D11_MAP_FLAG_DO_NOT_WAIT: This flag can cause Map to return
+DXGI_ERROR_WAS_STILL_DRAWING if the GPU is not yet done with the resource. In
+normal (non-NO_OVERWRITE) usage this would be a stall risk. For a correctly-used
+ring (NO_OVERWRITE always, DISCARD only on wrap), this flag is unnecessary — the
+application guarantees it is not writing to GPU-in-use regions, so there is no
+GPU stall.
+
+CONCLUSION FOR Q4: On a single immediate context, submission order is the only
+synchronization needed. Calling Map(NO_OVERWRITE) → write → Unmap → then later
+DrawIndexed (all in the same thread on the immediate context) guarantees the GPU
+sees the CPU-written data when the draw executes. No additional manual sync is
+required.
+
+==============================================================================
+QUESTION 5: KNOWN CORRECTNESS PITFALLS OF THE ONE-BUFFER RING PATTERN
+==============================================================================
+
+The canonical pattern is: DISCARD on first use per frame (or on wrap), then
+NO_OVERWRITE for subsequent appends within the frame. Several pitfalls exist.
+
+---------------------------------------------------------------------------
+PITFALL A (CRITICAL): WRITE_DISCARD WHILE PENDING DRAWS STILL NEED PRIOR SLICES
+---------------------------------------------------------------------------
+
+This is the most dangerous pitfall and directly answers the "deferred draw" sub-
+question.
+
+Scenario: You write slice [a,b) with NO_OVERWRITE, then write slice [c,d) with
+NO_OVERWRITE, then call Map(WRITE_DISCARD) before issuing the DrawIndexed for
+[a,b).
+
+Result: DISCARD renames the entire buffer to new backing memory (as shown in Q2).
+The draw for [a,b) is now issued against the new (empty/undefined) backing memory.
+The data written to [a,b) lives on the OLD backing memory that the driver may
+release as soon as it knows no draws reference it. If no draws were issued against
+the OLD backing before the DISCARD, the driver may recycle it immediately. The
+draw then reads garbage.
+
+CITATION [S2] (verbatim):
+  "Note: When you map a buffer with D3D11_MAP_WRITE_DISCARD, the runtime always
+   discards the entire buffer. You can't preserve info in unmapped areas of the
+   buffer by specifying a nonzero offset or limited size field."
+
+MICROSOFT REFERENCE FIX — DirectXTK PrimitiveBatch [S6] always issues the draw
+(FlushBatch()) BEFORE calling DISCARD (verbatim from implementation analysis):
+
+  "The implementation calls FlushBatch() *before* resetting positions...
+   'if (... wrapVertexBuffer) { FlushBatch(); }' — This ensures any pending draw
+   calls execute using the current buffer contents *before* a DISCARD invalidates
+   that data."
+
+RULE: Every slice written with NO_OVERWRITE must have its DrawIndexed issued
+(submitted to the immediate context) BEFORE any subsequent Map(WRITE_DISCARD) on
+the same buffer.
+
+---------------------------------------------------------------------------
+PITFALL B: WRITE_NO_OVERWRITE ON A REGION THE GPU IS STILL READING
+---------------------------------------------------------------------------
+
+CITATION [S1] (verbatim):
+  "The GPU is often many frames behind the CPU in terms of which frame it is
+   currently processing. Keeping track of which sections of a resource are being
+   used because of calls made 2 to 5 frames ago is difficult and error-prone."
+
+In a multi-frame ring (buffer reused across frames), after completing one full
+revolution, the CPU write head re-enters bytes that the GPU may still be executing
+against from a prior frame. Writing there with NO_OVERWRITE violates the
+application promise and the GPU reads partially-written or wrong data —
+silently, with no API error.
+
+FIX: The safe half-measure from Microsoft is to only ever write into "uninitialized
+portions" of the ring [S1]. The full-correct approach requires either:
+  (a) Ensuring the ring is large enough that the CPU never catches the GPU
+      (N frames of CPU latency * worst-case per-frame byte consumption, rounded
+      up to a safe multiple), OR
+  (b) Using D3D11_QUERY_EVENT after the last draw of a frame to confirm GPU idle
+      before re-entering old regions [S2]:
+        "Issue a query of type D3D11_QUERY_EVENT after the last draw call that
+         uses the vertices. The vertices are no longer in use when
+         ID3D11DeviceContext::GetData returns S_OK."
+
+---------------------------------------------------------------------------
+PITFALL C: WRITE_NO_OVERWRITE NOT VALID FOR CONSTANT BUFFERS (D3D11.0)
+---------------------------------------------------------------------------
+
+CITATION [S1] (verbatim):
+  "This flag is only valid on vertex and index buffers. The resource must have
+   been created with write access. Cannot be used on a resource created with the
+   D3D11_BIND_CONSTANT_BUFFER flag."
+
+  "The Direct3D 11.1 runtime, which is available starting with Windows 8, enables
+   mapping dynamic constant buffers and shader resource views (SRVs) of dynamic
+   buffers with D3D11_MAP_WRITE_NO_OVERWRITE."
+
+The ring pattern using NO_OVERWRITE for a VERTEX buffer (as in the SWG client
+DynamicVertexBufferData usage) is valid on D3D11.0+. Attempting the same pattern
+for a constant buffer requires 11.1 + CheckFeatureSupport confirmation of
+MapNoOverwriteOnDynamicConstantBuffer.
+
+---------------------------------------------------------------------------
+PITFALL D: PAGE_WRITECOMBINE PENALTY FROM READS THROUGH THE MAP POINTER
+---------------------------------------------------------------------------
+
+CITATION [S3] (verbatim):
+  "The memory region to which pData points can be allocated with PAGE_WRITECOMBINE,
+   and your app must honor all restrictions that are associated with such memory."
+
+WC memory is write-only from the CPU perspective (reads are slow and may be
+reordered or go to uncached paths). Using a non-streaming memcpy or any C++
+construct that reads-back the destination (e.g., compound assignment operators
+expanding to AND DWORD PTR) incurs severe performance penalties. This is a
+performance issue, not a correctness issue, but it manifests as unexplained CPU-
+side stalls in the Map-write loop.
+
+FIX: Use memcpy (which compilers typically optimize with non-temporal stores for
+WC targets) or _mm_stream_* intrinsics. Avoid any read-modify-write through the
+pData pointer.
+
+---------------------------------------------------------------------------
+PITFALL E: ASSUMING DISCARD ONLY AFFECTS THE BYTES YOU WRITE
+---------------------------------------------------------------------------
+
+A common misconception is that WRITE_DISCARD with a small written region only
+invalidates the written bytes, leaving other bytes at their old values. This is
+explicitly false — the ENTIRE buffer is renamed [S2]. Applications that skip the
+first-frame DISCARD and jump straight to NO_OVERWRITE may read driver-undefined
+values in the pre-write bytes if the driver returned new-allocation memory.
+
+FIX: Always begin a frame's ring usage with exactly one WRITE_DISCARD (at position
+0), then switch to NO_OVERWRITE for all subsequent writes that frame. [S2]
+
+---------------------------------------------------------------------------
+PITFALL F: DEFERRED CONTEXT RESTRICTION
+---------------------------------------------------------------------------
+
+CITATION [S3/S4] (verbatim):
+  "If you call Map on a deferred context, you can only pass D3D11_MAP_WRITE_DISCARD,
+   D3D11_MAP_WRITE_NO_OVERWRITE, or both to the MapType parameter. Other D3D11_MAP-
+   typed values are not supported for a deferred context."
+
+  "The Map method is only supported in a deferred context for dynamic resources
+   (D3D11_USAGE_DYNAMIC) where the first call within the command list is
+   D3D11_MAP_WRITE_DISCARD. D3D11_MAP_WRITE_NO_OVERWRITE is supported on
+   subsequent calls if available for the given type of resource."
+
+The ring pattern is supported on deferred contexts, but the FIRST Map in each
+command list MUST be WRITE_DISCARD. A deferred context cannot begin with
+NO_OVERWRITE. This is not a concern for immediate-context use.
+
+==============================================================================
+SUMMARY TABLE
+==============================================================================
+
+Question | Key Finding
+---------|-----------------------------------------------------------------------
+Q1       | YES: [a,b) data is preserved at Draw time. NO_OVERWRITE does not rename
+         | the buffer; same physical memory throughout. Non-overlapping [c,d) write
+         | is harmless to [a,b). Application promise is the sole guard.
+---------|-----------------------------------------------------------------------
+Q2       | WRITE_DISCARD renames THE WHOLE BUFFER unconditionally (not just the
+         | mapped region). Previous contents of all slices become undefined for
+         | draws not yet issued. Draws already issued before DISCARD are safe (driver
+         | retains old backing until GPU finishes). No way to preserve prior-slice
+         | data through a DISCARD.
+---------|-----------------------------------------------------------------------
+Q3       | No driver/WDDM mechanism clobbers a correct NO_OVERWRITE region.
+         | Only hazards: (a) app writes into GPU-in-use bytes (app bug, silent), or
+         | (b) WRITE_DISCARD called before pending draws (see Q2/Q5-A). WC memory
+         | read penalty is a perf issue, not correctness.
+---------|-----------------------------------------------------------------------
+Q4       | Immediate context submission order IS the synchronization. Map → write →
+         | Unmap → Draw in same thread = CPU data visible at GPU draw time.
+         | No manual fence/barrier needed.
+---------|-----------------------------------------------------------------------
+Q5       | FATAL: Issuing WRITE_DISCARD before all pending-slice draws clobbers
+         | unissued draws (they see new empty backing). Always FlushBatch()/issue
+         | all draws before DISCARD. Also: multi-frame ring overflow writes GPU-
+         | in-use bytes silently; WC read-back penalty; CBV restriction on D3D11.0.
+
+==============================================================================
+APPLICATION TO SWG CLIENT Direct3d11_DynamicVertexBufferData
+==============================================================================
+
+The SWG client ring pattern (as of koogie-msvc-cpp20-base branch) uses a single
+D3D11_USAGE_DYNAMIC vertex buffer as a per-frame ring, with WRITE_DISCARD at the
+start of the frame and WRITE_NO_OVERWRITE for per-draw appends. The cape/spike
+skinning regression (.planning/research/cape-spike-evidence/) is characterized as
+"undefined-memory-zero-on-replay" — consistent with a DISCARD being called while
+slices have been written but their draws have not yet been issued (Pitfall A).
+
+Key questions to answer with RenderDoc:
+1. Is WRITE_DISCARD called mid-frame before DrawIndexed for prior NO_OVERWRITE
+   slices?
+2. Does the VB offset passed to IASetVertexBuffers for the Draw point into a
+   region that was written BEFORE the most recent DISCARD?
+3. Is the VB fence-point (buffer rename) happening inside
+   Direct3d11_DynamicVertexBufferData::lock() on the softskin path, and are
+   softskin draws deferred until after other draws that trigger a DISCARD wrap?
+
+If the softskin primitives write vertices (via SoftwareBlendSkeletalShaderPrimitive)
+then defer their draw until after a DISCARD-triggering wrap, the entire softskin
+slice is invalidated. The GPU will draw using zeroed (new-allocation) memory,
+which explains both the spike geometry (zero positions = origin collapse) and the
+"invisible on replay" characteristic (capture tools re-execute the command stream
+against the renamed buffer, not the original one).
+
+==============================================================================
+END OF DOCUMENT
+==============================================================================

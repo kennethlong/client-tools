@@ -1,0 +1,570 @@
+CONSULT-30-SONNET-LATERAL: Full Root-Cause Space Analysis
+Cape/Robe "Radiating Vertex Spikes" — D3D11-Only, Live-Garbage / Zero-Replay / Sync-Masked / Position-Clean
+Model: claude-sonnet-4-6  Date: 2026-06-07
+==========================================================
+
+ESTABLISHED SIGNATURE (treat as axioms):
+  A. Live render: heavy vertex spikes (triangles fan from a garbage-position point)
+  B. RenderDoc replay of SAME frame: nearly clean (small residual spikes only)
+  C. CPU staging Map(READ) sync stall does NOT stop spikes — yet position bytes at ring-offset 0 read CLEAN
+  D. 11,724 sampled body (tri-list) draws: ALL clean. Player char (identity world matrix): clean.
+  E. D3D9 (same assets, same engine skinning code): perfect. Batch renderer dormant. Tri-strips dormant.
+  F. Shadow volumes force-disabled (SoftwareBlendSkeletalShaderPrimitive.cpp:793 `false &&` guard).
+  G. Ring-thread race KILLED (P19_THREAD_AUDIT, 0 off-thread locks). P19_DISCARD_ONLY (per-lock WRITE_DISCARD) DID NOT KILL IT.
+  H. Dedicated soft-skin ring (ms_d3dSkinRingBuffer, 16 MB, beginFrameSkin) now in play — added 2026-06-07.
+  I. Cape-index-probe (SoftwareBlendSkeletalShaderPrimitive.cpp:1589-1634): logged, no READPAST flagged on tri-lists.
+  J. Cape-collapse-probe (CPU skin sim + systemStream scan): NO COLLAPSE from CPU skin.
+  K. Cape-d3d11-probe (unlock-time slice scan for collapsed positions): if LIVE COLLAPSE seen here -> issue is in the D3D11 buffer path, not the skin.
+  L. Cape-stage-probe (drawPartialIndexedTriangleList staging readback): the critical GPU-side readback.
+
+KNOWN PRIOR CONSULTS / DEAD HYPOTHESES:
+  - Ring CPU-GPU race (WRITE_NO_OVERWRITE hazard): killed by DISCARD_ONLY showing NO CHANGE (DynamicVertexBufferData.cpp:49)
+  - Thread race on ring: killed by THREAD_AUDIT showing 0 off-thread locks
+  - Body tri-list draws: 11,724 samples clean -> body not spiking, garment-specific
+  - Tri-strips: dormant per stated fact
+  - Batch path: dormant per stated fact
+  - Shadow volume extrusion: force-disabled 2026-06-07
+  - Index read-past (tri-lists): cape-index-probe shows no READPAST (probe added 2026-06-07)
+  - VS-input-format mismatch at declared offsets: Cursor CONSULT-30 verdict = NO (every declared component is written by skin path)
+  - WVP transform for NPCs: body draws clean -> WVP is fine per-NPC
+
+==========================================================
+CANDIDATE ROOT CAUSES — FULL LATERAL SPACE
+==========================================================
+
+--- TIER 1: HIGHEST FIT (all 4 signature facts explained) ---
+
+CANDIDATE 1: MULTI-STREAM SECOND-STREAM (STATIC VB) BINDING CARRIES UNINITIALIZED DATA
+---------------------------------------------------------------------
+The multi-stream path (ms_useMultiStreamVertexBuffers=true) binds TWO vertex buffers:
+  stream 0: m_dynamicStream (skinned pos+normal[+dot3])
+  stream 1: m_staticStream (color + 2D UVs)
+
+When ms_useMultiStreamVertexBuffers=false (runtime default per ConfigClientGraphics default),
+the single-stream path copies systemStream (which holds ALL components) into dynamicStream via
+`outIt.copy(m_systemStream->beginReadOnly(), ...)` and the static stream is never created.
+
+BUT: the GAP-6 multistream latch log (gap6_latch.log) at install() shows the ACTUAL runtime
+value of ms_useMultiStreamVertexBuffers. If this is TRUE at runtime (D3D11 plugin may return
+maxStreamCount > 1 + supportsStreamOffsets=true, unlike D3D9's expected false), then:
+  - The static stream (StaticVertexBuffer) is only written ONCE at init (fillConstantVertexBufferData).
+    The dot3 4D texture set is skipped in fillConstantVertexBufferData (case 4 branch: saves to
+    m_sourceDot3Vectors, does NOT write destVertexIt -- CONSULT-30-cursor.out line 88-94).
+    That means the 4D-TEXCOORD slot in the static stream's buffer is NEVER written.
+  - The dynamic stream only has pos+normal+optional dot3 (no color, no 2D UVs).
+  - The static StaticVertexBuffer is allocated via `new byte[]` -- no guarantee of zero-init.
+  - At draw time, the input layout reads from both streams by semantic. The VS may read
+    TEXCOORD0 (the 2D UV set) from the static stream's uninitialized 4D slot, or it reads
+    DOT3/TANGENT from an unwritten region.
+
+Mechanism: VS reads an unwritten byte range in the static stream -> garbage live.
+Why zero on replay: RenderDoc zero-inits all staging/upload buffers on replay (documented behavior
+for USAGE_DEFAULT resources captured before first upload).
+Why sync-masked: CPU staging reads the DYNAMIC VB (stream 0) which IS clean; nobody probed stream 1.
+Why position-clean: position is at offset 0 in the dynamic stream, always written by skinData.
+
+Test: grep gap6_latch.log for "ms_useMultiStreamVertexBuffers=1". If true, add a probe in
+SoftwareBlendSkeletalShaderPrimitive.cpp _initialize(): log `multiStream` + check
+m_staticStream != nullptr. The quick kill-test: set ConfigClientGraphics::getDisableMultiStreamVertexBuffers
+to always return true and see if spikes vanish.
+
+Code locations:
+  SoftwareBlendSkeletalShaderPrimitive.cpp:344 -- multistream latch
+  SoftwareBlendSkeletalShaderPrimitive.cpp:661-742 -- multistream code path
+  SoftwareBlendSkeletalShaderPrimitive.cpp:1191-1243 -- constantFormat setup
+  SoftwareBlendSkeletalShaderPrimitive.cpp:1387-1402 -- static stream creation
+  SoftwareBlendSkeletalShaderPrimitive.cpp:1646-1707 -- fillConstantVertexBufferData (dot3 skip)
+  Direct3d11_VertexBufferVectorData.cpp:101-164 -- multi-stream bind
+
+CANDIDATE 2: STATIC STREAM DOT3 SLOT UNWRITTEN IN SINGLE-STREAM SYSTEMSTREAM INIT
+---------------------------------------------------------------------
+Even in the single-stream path, m_systemStream is initialized by fillConstantVertexBufferData()
+ONCE (SoftwareBlendSkeletalShaderPrimitive.cpp:1409-1411), and skinData() is called each frame.
+fillConstantVertexBufferData skips the 4D texcoord set (dot3): the case 4 branch extracts to
+m_sourceDot3Vectors but does NOT write destVertexIt (SoftwareBlendSkeletalShaderPrimitive.cpp:1688-1701).
+
+The dot3 slot in m_systemStream starts uninitialized. skinData with SM_softSkinning calls
+fillVertexBuffer, which DOES write the dot3 texcoord set via setTextureCoordinates() -- IF
+m_hasDot3Vector is true. But if the garment mesh has no dot3 data (m_hasDot3Vector=false for a
+simple robe), the dot3 slot is never written at all. The copy from systemStream to dynamicStream
+faithfully copies the uninitialized dot3 bytes.
+
+BUT: if the garment has no dot3, dynamicFormat does not declare a TEXCOORD set for dot3 either,
+so the input layout would not have a TEXCOORD slot at that offset -> the VS would not read it.
+Unless the input layout is built from the VS reflection (which may declare a TEXCOORD beyond
+what the VB format has), at which point the phantom-zero buffer (slot 15, stride 0) would supply
+zeros for that channel -- zero on live too, so this doesn't explain garbage.
+
+HOWEVER: for garments WITH dot3, the systemStream's dot3 bytes start uninitialized and are
+overwritten correctly by skinData each frame -- but ONLY if doSkinning=true (every-other-frame
+skinning may skip). If everyOtherFrameSkinningEnabled and this frame is the skip frame, skinData
+returns early WITHOUT writing anything (SoftwareBlendSkeletalShaderPrimitive.cpp:1734-1737), and
+the copy picks up whatever was in systemStream from the prior frame -- not guaranteed to be
+correct for the CURRENT pose (slightly stale but not garbage). Doesn't explain spikes.
+
+More interesting: the initial state of m_systemStream before the FIRST skin call contains
+uninitialized memory (position bytes, normal bytes). On the very first frame of a new NPC,
+copy() would copy garbage into the dynamic ring. On replay, RenderDoc zero-inits. Sync-masked:
+by the time you CPU-stall to probe the VB, you are past the first frame and the skin has run.
+Position-clean: after the first frame, position is always correct (subsequent frames overwrite it).
+
+This explains FIRST-FRAME spikes only, not persistent ones. Lower fit for persistent spikes.
+
+CANDIDATE 3: WRONG RING BUFFER BOUND AT DRAW TIME (SKIN WROTE TO SKIN-RING, DRAW READS MAIN RING)
+---------------------------------------------------------------------
+The 2026-06-07 code split the ring into two: ms_d3dRingBuffer (main) and ms_d3dSkinRingBuffer.
+The routing in lock() is:
+  bool isSkin = (vertexSize != 28) && (vertexSize != 24);
+  uses ms_d3dSkinRingBuffer if isSkin, else ms_d3dRingBuffer.
+
+The BINDING side (StateCache::setVertexBuffer) calls data->getRingBuffer() which returns
+m_ringBuffer (set at lock time) or falls back to ms_d3dRingBuffer.Get() if null.
+
+The VBVectorData::bind() also uses data->getRingBuffer() for the dynamic stream.
+
+Critical race: m_ringBuffer is a RAW POINTER stored on the DynamicVertexBufferData instance.
+If lock() is called with vertexSize=48 (skin ring), m_ringBuffer = ms_d3dSkinRingBuffer.Get().
+The bind at draw time reads m_ringBuffer. This is correct IF the same instance's lock()
+ran first. But what if:
+  (a) A body draw (same instance, body dynamicStream with vertexSize=24) runs lock() -> m_ringBuffer = main ring.
+  (b) The garment draw (same NPC, different instance, vertexSize=48) runs lock() -> m_ringBuffer = skin ring.
+  Each instance has its OWN m_ringBuffer, so there is no cross-contamination between instances.
+  This is safe.
+
+BUT: what if the garment dynamicStream's vertexSize is 28 or 24? A robe with ONLY position+normal
+and a 2D texcoord (pos=12, norm=12, uv0=8 = 32 bytes, or just pos+norm=24) would route to the
+MAIN ring. Then beginFrameSkin() does NOT discard the main ring. If the main ring carries garment
+data from a prior frame AND the CuiLayer (UI) does a whole-ring WRITE_DISCARD on the main ring
+(because UI VBs have vertexSize=24 or 28 -> isSkin=false -> main ring), then the garment slice
+is clobbered mid-frame by UI geometry, and the deferred DrawIndexed reads UI vertex data at the
+garment's offset.
+
+Mechanism: UI whole-ring WRITE_DISCARD on the main ring nukes the garment slice -> garbage (UI vert data)
+live. RenderDoc replay: WRITE_DISCARD's new backing is zero-initialized on replay. Sync-masked:
+staging readback probes the post-discard state (after the CuiLayer discard, the probed bytes are
+UI-garbage or zero depending on whether UI wrote to that offset -- and the probe fires BEFORE DrawIndexed,
+so it may see the garment's original data before the discard that happens intra-frame). Position-clean:
+the probe reads position-at-slice-offset which is the garment's written position, not yet clobbered.
+Wait -- if the discard clobbers the slice entirely, the staging readback would also see clobbered data.
+This inconsistency reduces fit.
+
+Actually a better framing: the lock() for the garment ran, wrote clean data to offset X on the main
+ring. Then a WRITE_DISCARD (new-frame or CuiLayer whole-ring lock) renamed the backing buffer.
+The garment's m_ringBuffer still points to the OLD backing (D3D11 DYNAMIC WRITE_DISCARD CONTRACT:
+Map(WRITE_DISCARD) returns a new backing allocation; the driver manages the swap atomically for
+the GPU). The IASetVertexBuffers at draw time binds ms_currentVBVectorBuffers[0] = the CURRENT
+ms_d3dRingBuffer.Get() (or ms_d3dSkinRingBuffer.Get()) -- NOT the stale old backing.
+
+Actually the bind uses m_ringBuffer which is the ComPtr::Get() at lock time. After WRITE_DISCARD,
+the ID3D11Buffer* object (ms_d3dRingBuffer.Get()) is THE SAME OBJECT -- D3D11 WRITE_DISCARD
+doesn't create a new ID3D11Buffer, it internally aliases new memory. So the pointer is stable.
+The danger is only if WRITE_DISCARD overwrites the garment's offset in the same frame:
+  - If garment locks at offset X, then a later WRITE_DISCARD (ringUsed=0), then a UI lock writes
+    at offset 0 of the NEW generation which physically overlaps the garment's offset X in the
+    NEW generation backing. DrawIndexed reads offset X from the NEW generation -> UI garbage.
+
+This is the intra-frame WRITE_DISCARD overwrite hazard. It was supposedly tested by P19_DISCARD_ONLY
+(every lock gets WRITE_DISCARD) and found to show NO CHANGE -- but P19_DISCARD_ONLY operated on the
+SAME ring (before the ring split), not the dedicated skin ring. The skin-ring split changes the
+equation: the skin ring only DISCARDS once per beginFrameSkin (once per frame, not per-lock).
+The question is whether any OTHER lock ever triggers a DISCARD on the skin ring mid-frame.
+
+The DISCARD condition in lock() for the skin ring:
+  if (skinNewFrame || forceDiscard || skinUsed + length > skinSize)
+The 16MB skin ring is sized to avoid wrap-mid-frame. skinNewFrame=true only at beginFrameSkin
+(once/frame). So the skin ring should NOT discard mid-frame under normal conditions.
+
+FOR THE MAIN RING: CuiLayer's whole-ring lock does:
+  getNumberOfLockableDynamicVertices(withDiscard=true) -> returns ms_size / vertexSize (the full ring)
+  lock(full_ring_size) -> length = full_ring_size * vertexSize = ms_size bytes
+                         -> triggers WRITE_DISCARD (since the full ring won't fit in remaining space, or ringNewFrame).
+If a garment's dynamicStream has vertexSize=24 or 28 (routed to main ring), this CuiLayer discard
+CLOBBERS it. This is the highest-fit mechanism for clobbering.
+
+Test: log isSkin for each SBSSP dynamicStream lock. Find garments with vertexSize=24 or 28.
+Code location: Direct3d11_DynamicVertexBufferData.cpp:268 (`isSkin` discriminator).
+
+CANDIDATE 4: PHANTOM-ZERO BUFFER AT SLOT 15 READ INSTEAD OF ACTUAL STREAM
+---------------------------------------------------------------------
+The input layout in D3D11 may declare elements with InputSlot=15, stride=0 (phantom zero buffer).
+This is used for VS-declared inputs that the VBFormat doesn't cover (Direct3d11_StateCache.cpp:1254-1267).
+For the garment VS (e.g. a_specmap_bump variant), if the VS declares a TEXCOORD beyond what the
+dynamic stream's VertexBufferFormat has, the phantom element at slot 15 returns 0 for that
+component on replay AND on live. But position is in slot 0 (the actual VB). So this is NOT
+garbage on live -- it's always 0. Doesn't fit the "garbage live" signature. Low fit.
+
+CANDIDATE 5: INPUT LAYOUT STRIDE/OFFSET MISMATCH FOR THE MULTI-STREAM VECTOR PATH
+---------------------------------------------------------------------
+The multi-stream bind (VertexBufferVectorData::bind) extracts strides from each stream:
+  strides[stream] = static_cast<UINT>(data->getVertexSize())
+  offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream]  (for dynamic stream)
+  offsets[stream] = 0  (for static stream)
+
+The input layout in Direct3d11_VertexDeclarationMap::getOrCreateMultiStream() maps semantics to
+streams based on what each VertexBufferFormat declares. If the static stream declares COLOR0 +
+TEXCOORD0 (2D UV), and the dynamic stream declares POSITION + NORMAL + TEXCOORD0 (4D dot3),
+the input layout must map TEXCOORD0 to slot 0 (dynamic) for the dot3 set AND TEXCOORD1 to
+slot 1 (static) for the 2D UV. If the semantic index remapping is wrong (e.g. the layout maps
+TEXCOORD0 to the static stream's COLOR0 bytes) -> wrong data live.
+
+Mechanism: semantic-index collisions between static (UV at TEXCOORD0) and dynamic (dot3 at TEXCOORD0)
+streams cause the IA to read from the wrong slot/offset. D3D9 avoids this by separate SetStreamSource
+per stream; D3D11 requires careful TEXCOORD0/TEXCOORD1 partitioning across InputSlot values.
+If the VS reads POSITION from TEXCOORD0 (wrong semantic) -> garbage.
+
+Actually POSITION is always declared as POSITION, so the VS cannot confuse POSITION with TEXCOORD.
+More plausible: the VS reads a TEXCOORD at a register that the layout maps to the WRONG stream
+or wrong offset -> garbage live. RenderDoc replay: replay re-executes IA with the same layout;
+if the layout is wrong, replay should ALSO be wrong. Unless RenderDoc fixes up or zero-inits the
+unbound slots. Zero-on-replay requires a zero-init of something. If the static stream
+(StaticVertexBuffer, USAGE_DEFAULT) was never written to GPU (just CPU-side locked and filled once
+at init) and RenderDoc zero-inits DEFAULT resources not captured in a copy, then live it has
+uninitialized GPU memory (static VB upload might have landed garbage bytes from the CPU
+new byte[] allocation), and replay shows zeros.
+
+This is a strong candidate IF ms_useMultiStreamVertexBuffers=true at runtime.
+
+Test: Check if Direct3d11_VertexDeclarationMap::getOrCreateMultiStream correctly partitions
+TEXCOORD indices between static and dynamic streams.
+
+CANDIDATE 6: INDEX BUFFER REFERENCING VERTICES PAST THE LOCKED COUNT (TRI-STRIP PATH ONLY)
+---------------------------------------------------------------------
+The CONSULT-29-B (cursor) identified that tri-strip indices use raw getTriStripVertexIndex()
+while m_vertexCount is the COMPACTED count. A strip can have raw index > m_vertexCount-1.
+The cape-strip-probe (StateCache.cpp:3462-3555) was added to catch this.
+
+But the prompt says tri-strips are DORMANT. However "dormant" may mean not the primary path --
+if ANY strip render command exists in a garment's m_renderCommands, drawPartialIndexedTriangleStrip
+fires. If the garment has even one tri-strip (alongside tri-lists), the strip's raw indices can
+exceed m_vertexCount -> DrawIndexed fetches past the locked slice -> garbage (uninitialized ring
+tail) live -> zero on replay.
+
+Mechanism: lock(m_vertexCount) writes verts [0, m_vertexCount). A strip index of, say, 2630
+(actual example from the handoff comment at SoftwareBlendSkeletalShaderPrimitive.cpp:1592)
+causes the VS to fetch vertex 2630 which is past the locked slice -> ring memory for a DIFFERENT
+draw or the fresh-discard tail -> garbage.
+
+This fits ALL four facts:
+  - Garbage live: post-slice ring memory is stale from prior draw or fresh undefined.
+  - Zero on replay: RenderDoc zero-inits undefined ring memory.
+  - Sync-masked (mostly): staging readback of position at [0, m_vertexCount) is CLEAN;
+    the out-of-bounds read is at a DIFFERENT index, not probed.
+  - Position-clean: the probe checks verts [0, numberOfVertices) which are correctly written.
+    The spiking vertices are those accessed via out-of-bounds strip indices.
+  - Body draws clean: body tri-lists have in-range indices (cape-index-probe confirmed).
+  - D3D9: D3D9 uses SetStreamSource with byteOffset per instance AND DrawIndexedPrimitive
+    with BaseVertexIndex which shifts the index -> the raw strip index 2630 is interpreted
+    as an offset FROM BaseVertexIndex, landing within the correct per-character VB segment.
+    In D3D11, the IASetVertexBuffers offset IS the base; DrawIndexed BaseVertexLocation is 0.
+    So index 2630 in D3D11 reaches 2630*stride bytes past the start of the buffer (the skin ring
+    offset + 2630*stride), which lands well past the lock(m_vertexCount) slice.
+  - Why NOT killed by DISCARD_ONLY: DISCARD_ONLY renamed the ring but the out-of-bounds read
+    still fetches from the new allocation's uninitialized tail -> still garbage.
+
+Wait: DISCARD_ONLY result was "NO CHANGE" per the comments. If strip out-of-bounds caused spikes,
+DISCARD_ONLY would STILL produce spikes (garbage tail after the locked slice) or FEWER spikes
+(zeros in the fresh allocation -> zero-position spikes = degenerate/collapsed not RADIATING).
+The "NO CHANGE" under DISCARD_ONLY could mean either (a) this is not the cause, or (b) the fresh
+allocation has initialized-to-garbage memory from the allocator (WRITE_DISCARD doesn't zero the
+buffer on live, only on replay).
+
+The cape-strip-probe was recently ADDED (2026-06-07). Its output will distinguish this.
+
+Test: Read cape-strip-probe.txt if it exists. If it shows readPast=1 on strip draws, this is confirmed.
+Code: SoftwareBlendSkeletalShaderPrimitive.cpp:1589-1634 (index probe, but only for the VBVector path).
+      Direct3d11_StateCache.cpp:3462-3555 (strip staging readback).
+
+CANDIDATE 7: VERTEX FORMAT STRIDE MISMATCH BETWEEN LOCK SIDE AND INPUT LAYOUT SIDE
+---------------------------------------------------------------------
+The `getVertexSize()` returned by DynamicVertexBufferData (from VertexBufferDescriptor) is used
+both to compute the lock slice size AND the IASetVertexBuffers stride.
+
+The VertexBufferDescriptor is built from the VertexBufferFormat in Direct3d11_VertexBufferDescriptorMap.
+The Input Layout elements in D3D11 must use the SAME stride as the bound VB.
+
+If the D3D11 input layout for the garment VS was created when the VBFormat had FEWER components
+(e.g., a TEXCOORD set was added or removed due to LOD switching), but the cached InputLayout
+still uses the old stride, then IASetVertexBuffers supplies stride=48 but the layout was compiled
+for stride=32 -> each vertex the VS reads is offset by (48-32)=16 bytes from where the engine
+wrote it -> garbage.
+
+Mechanism: stale input layout cache with wrong stride for the actual VBFormat.
+Why garbage live: the VS reads component at wrong offset -> stale ring bytes.
+Why zero replay: RenderDoc zero-inits new allocations.
+Why sync-masked: the probe checks position at byte offset 0, which is always correct (position
+is always the first field at offset 0 regardless of stride). The stride mismatch shifts LATER
+reads (normal, UV) but the probe only reads the first 3 floats.
+
+Test: log the stride values in IASetVertexBuffers vs the VBFormat's expected vertexSize for
+garment draws. Code: Direct3d11_StateCache.cpp:1237-1253 (IASetVertexBuffers call).
+Direct3d11_DynamicVertexBufferData.cpp:261 (vertexSize = m_vertexBufferDescriptor.vertexSize).
+
+CANDIDATE 8: CBUFFER TAIL READ AS VS POSITION INPUT (SPECULATIVE / CREATIVE)
+---------------------------------------------------------------------
+The VS slot 0 cbuffer has 72 float4 registers (1152 bytes). If the composeSlot0Shadow fails to
+mark s_slot0Dirty before the deferred DrawIndexed for a garment (e.g., setObjectToWorldTransformAndScale
+ran for a BODY draw and set s_anyMatrixWritten, but the GARMENT draw comes later and the world
+matrix is now for a different object), the GARMENT draw gets a cbuffer with the PREVIOUS object's
+world matrix -> the garment vertices are transformed by the wrong WVP -> spike to wrong position.
+
+But this is a cbuffer issue not a VB issue. The position data in the VB is correct (confirmed by probe).
+The spike would result from the VS applying a WVP that places the vertex far off screen. This would
+show as spikes to CONSISTENT positions (determined by the wrong WVP) not random garbage. And it would
+affect body draws too if they had the wrong WVP. Body draws are clean -> WVP is object-correct.
+
+Additionally, for garments specifically: prepareToDraw() for SBSSP calls
+  Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111)
+which calls setObjectToWorldTransformAndScale_impl -> composeSlot0Shadow() -> s_slot0Dirty=true.
+The garment SBSSP owns its own prepareToDraw, so the WVP is composed for the garment's transform.
+Low fit -- the garment is a separate SBSSP instance with its own prepareToDraw.
+
+CANDIDATE 9: SHADOW VOLUME STILL FIRES (FORCE-DISABLE INCOMPLETE)
+---------------------------------------------------------------------
+The `false &&` guard in SoftwareBlendSkeletalShaderPrimitive.cpp:793 disables the shadow volume
+RENDER. But ShadowVolume::addPrimitive and the ShadowVolume object itself might still be created
+(addPrimitive is inside the same if-block). Looking at the code (lines 793-816): the ENTIRE block
+including addPrimitive is guarded by `false &&` -> shadow volumes are truly dead. Low fit.
+
+CANDIDATE 10: EVERY-OTHER-FRAME SKINNING SKIP ON THE GARMENT SBSSP
+---------------------------------------------------------------------
+If m_everyOtherFrameSkinningEnabled=true for the garment primitive, and this frame is the SKIP
+frame, skinData returns early WITHOUT writing position/normal (SoftwareBlendSkeletalShaderPrimitive.cpp:1734).
+The systemStream is NOT re-skinned. The copy() then copies the PREVIOUS FRAME's systemStream data
+into the dynamic ring. This is stale (T-1 pose) but not garbage -- it would cause one-frame lag
+pose jitter, not spikes to infinity.
+
+UNLESS m_hasBeenSkinned=false on the first frame AND doSkinning check is wrong -> systemStream
+contains uninitialized bytes from the `new byte[]` allocation (no memset for the vertex data
+portion, only the source data block at line 1316: `memset(m_sourceData, 0, alloc_size)` -- but
+m_systemStream is NOT m_sourceData). SystemVertexBuffer is allocated as a raw new[] array
+(SystemVertexBuffer.h) which is NOT zero-initialized.
+
+Mechanism for first-frame-only: systemStream contains uninitialized heap memory; first copy()
+sends garbage to ring -> spike on first render. Subsequent frames: skinData fills systemStream
+correctly; copy() sends good data. But sync-masked: by the time a user noticing spikes does a
+CPU probe, the garment has rendered many frames correctly.
+
+If garments FREQUENTLY spawn (new NPCs appearing, costume changes), first-frame spikes would be
+persistent-looking. This fits the "NPC garment-only" pattern well.
+
+Test: Add a probe in prepareToDraw() that detects m_hasBeenSkinned==false and logs it.
+After the first skin call in skinData (SoftwareBlendSkeletalShaderPrimitive.cpp:1714), m_hasBeenSkinned
+is set to true. Zero-on-replay: RenderDoc captures the frame AFTER the ring has been written; the
+first-frame spike frame may not be captured because RenderDoc capture is manual.
+
+CANDIDATE 11: INTRA-FRAME WRITE_NO_OVERWRITE RACE BETWEEN SKIN-RING WRITE AND A DIFFERENT
+GARMENT'S BEGINFRAMESKIN RESET (TIMING WINDOW IN THE DEDICATED RING)
+---------------------------------------------------------------------
+beginFrameSkin() sets ms_skinNewFrame=true (DynamicVertexBufferData.cpp:168-173). This causes the
+NEXT lock() for ANY isSkin VB to do WRITE_DISCARD. If two garment primitives are rendered in
+the same frame:
+  - Garment A: lock() with ms_skinNewFrame=true -> WRITE_DISCARD, write A's data at offset 0.
+  - Garment B: lock() with ms_skinNewFrame=false -> WRITE_NO_OVERWRITE, write B's data at offset X.
+  - DRAW for A comes (deferred after prepareToDraw runs for ALL visible objects? Or interleaved?).
+
+If the engine's render loop interleaves prepareToDraw and draw() at the ShaderPrimitiveSorter
+level (prepare all, then draw all), then:
+  - All garments prepareToDraw (lock + write) in sequence
+  - All garments draw() in sequence after that
+This is the SAFE pattern. No race.
+
+But if prepareToDraw and draw() are interleaved per-primitive (prepare A, draw A, prepare B, draw B...):
+  - Prepare A: lock DISCARD at 0, write, unlock. A's m_offset=0.
+  - DRAW A: binds at offset 0. FINE.
+  - Prepare B: lock NO_OVERWRITE at offsetX, write, unlock. B's m_offset=offsetX.
+  - DRAW B: binds at offsetX. FINE.
+No race in this case either.
+
+The race only emerges if beginFrameSkin() fires MID-FRAME (between two garment draws):
+  - Garment A: prepare (lock DISCARD at 0), draw (reads offset 0). Fine.
+  - beginFrameSkin() is called AGAIN mid-frame (this should not happen -- it's called ONCE before
+    beginScene per the implementation comment).
+
+Low fit -- beginFrameSkin is documented as once-per-frame. Unless it fires multiple times
+(multi-pass rendering: StaticShaderData::apply per pass?). Check if beginFrameSkin is accidentally
+called per-PASS rather than per-FRAME.
+
+CANDIDATE 12: VS READS AN UNWRITTEN NORMAL COMPONENT THAT PARTICIPATES IN POSITION COMPUTATION
+---------------------------------------------------------------------
+Standard skeletal VSes do NOT use normals to compute SV_Position. They use only vertex POSITION
+and the WVP matrix. HOWEVER: some SWG vertex shaders (especially specular-bump variants) have
+complex HLSL that might use normal data in an intermediate computation whose result feeds into
+the position transform indirectly (e.g., morph target, displacement, dot3 offset).
+
+If a garment VS uses the NORMAL field in a position computation (unusual but not impossible for
+older SWG VSes), and the normal bytes happen to be garbage (e.g., first frame before skinData
+writes them), this would cause geometric spikes.
+
+Mechanism: garment-specific VS reads normal bytes as a position offset -> garbage normal -> spike.
+Why clean on body draws: body uses a different VS (no such displacement term).
+Why zero on replay: RenderDoc zero-inits.
+Why sync-masked: probe reads position at offset 0 only.
+
+Test: inspect the compiled HLSL for the garment-specific VSes (a_specmap_bump_vs20_for_ps20.vsh
+family) to see if any intermediate computation affects SV_Position using a per-vertex input other
+than POSITION.
+
+CANDIDATE 13: VERTEX BUFFER OBJECT POINTER STALE AFTER COM RESOURCE DESTRUCTION/RECREATE
+---------------------------------------------------------------------
+If the skin ring ComPtr (ms_d3dSkinRingBuffer) is ever Reset() and re-created mid-session
+(e.g., on device lost/reset, though unlikely in D3D11), then old ID3D11Buffer* pointers cached
+in m_ringBuffer on existing SBSSP instances become dangling. The draw binds the dangling pointer.
+D3D11 would accept a dangling COM pointer silently and return garbage data.
+
+RenderDoc intercepts all COM calls; it may substitute a zero-initialized buffer for the dangling
+resource during replay. Sync-masked: CPU doesn't touch the D3D11 buffer pointer.
+
+Low fit -- D3D11 device loss is uncommon and the ring is only created once at install().
+
+CANDIDATE 14: VERTEX BUFFER BINDING USES ms_currentVBVectorBuffers[0] WHICH IS THE OLD SKIN-RING
+POINTER BEFORE THE 2026-06-07 RING SPLIT, WHILE lock() WROTE TO THE NEW SKIN RING
+---------------------------------------------------------------------
+After the dedicated skin ring was added (2026-06-07), the bind path for the vector route uses:
+  buffers[stream] = data->getRingBuffer()
+which returns m_ringBuffer (set during lock() to whichever ring was used). This was recently added.
+
+If there is a code path where m_ringBuffer is NOT set (e.g., the garment was constructed before
+the split was live, m_ringBuffer initialized to nullptr in the constructor), then getRingBuffer()
+falls back to ms_d3dRingBuffer.Get() (the MAIN ring). But the data was written to the skin ring.
+The draw then reads from the MAIN ring at the garment's offset -- which contains whatever main-ring
+data was there (UI geometry, other draws) -> garbage live.
+
+Code: Direct3d11_DynamicVertexBufferData.h:134-138 (getRingBuffer() fallback to ms_d3dRingBuffer).
+The fallback fires only if m_ringBuffer==nullptr. m_ringBuffer is initialized to nullptr in the
+constructor (DynamicVertexBufferData.cpp:225), and set in lock() (line 332: `m_ringBuffer = ringBuffer`).
+If lock() was never called (brand new primitive before first prepareToDraw), m_ringBuffer is null and
+getRingBuffer() returns the main ring. But bind() is only called AFTER prepareToDraw (which calls lock()).
+So m_ringBuffer should always be set by the time bind() fires.
+
+Unless there is a path where setVertexBufferVector fires BEFORE the first lock() on a garment --
+e.g., if the engine binds the VBVector to set up state but doesn't call prepareToDraw first. This
+seems unlikely but is worth verifying.
+
+CANDIDATE 15: RENDERDOC CAPTURES THE FRAME IN A ZEROED STATE (SMALL SPIKES ON REPLAY)
+---------------------------------------------------------------------
+The prompt notes "nearly clean (only small spikes)" on replay, not perfectly clean. This suggests
+the zero-init hypothesis for some spikes but not all. Small spikes on replay could mean:
+  - Some vertices are fetched from zero-initialized memory (the undefined region), causing them
+    to be at position (0,0,0) in object space, which after WVP lands at the character's world
+    origin (NOT infinity). These appear as "small spikes" to a nearby point.
+  - Large spikes live are caused by STALE data (prior draw's geometry, unrelated numbers) rather
+    than zeros.
+
+This reframes the problem: the undefined memory on replay is 0 -> small spike to origin.
+Live, the undefined memory is whatever was in the ring before (other draw's vertices, or driver
+heap content) -> large spike to wherever those floats happen to point.
+
+This supports the INDEX-OUT-OF-BOUNDS class (candidate 6) or the MULTI-STREAM-STATIC-STREAM
+uninitialized class (candidate 1). The "small" replay spikes are the zero-initialized counterpart.
+
+==========================================================
+RANKING (best fit first, considering ALL four signature facts)
+==========================================================
+
+RANK 1: CANDIDATE 6 — TRI-STRIP INDEX READ-PAST m_vertexCount
+  Score: 4/4 facts. Garment-only. D3D9 safe (D3D9's BaseVertexIndex makes raw indices relative).
+  D3D11: DrawIndexed(count, startIndex, baseVertexLocation=0) + IASetVertexBuffers offset bakes
+  the base. Raw strip index > m_vertexCount fetches past the locked slice. Position-clean: the
+  CPU probe scans [0, m_vertexCount) which is written. Zero-on-replay: undefined ring tail is
+  zero on RenderDoc replay. Sync-masked: probe covers only written region.
+  The cape-strip-probe (StateCache.cpp:3462) was just added; its output will confirm or kill this.
+  ONE-SHOT TEST: read cape-strip-probe.txt. If readPast=1 on strip draws, confirmed.
+
+RANK 2: CANDIDATE 1 — MULTI-STREAM SECOND STREAM CARRIES UNINITIALIZED DATA
+  Score: 4/4 facts IF ms_useMultiStreamVertexBuffers=true at runtime.
+  The GAP-6 log shows the exact runtime value. If true:
+    - Static stream created with `new byte[]` (no zero-init for StaticVertexBuffer backing)
+    - fillConstantVertexBufferData skips 4D dot3 slot -> those bytes are never written to static VB
+    - VS reads TEXCOORD from static stream at an uninitialized offset -> garbage live
+    - Zero on replay: D3D11 USAGE_DEFAULT static VBs initialized to GPU-undefined; RenderDoc
+      captures the UPLOAD call and replays with the CPU data, which IS zero for the unwritten dot3 slot
+  ONE-SHOT TEST: check gap6_latch.log for ms_useMultiStreamVertexBuffers=1.
+
+RANK 3: CANDIDATE 10 — FIRST-FRAME SYSTEMSTREAM UNINITIALIZED (FREQUENT SPAWN PATTERN)
+  Score: 3/4 (explains persistent-appearing spikes if NPCs spawn frequently; less clean for
+  existing stable NPCs). SystemVertexBuffer is `new byte[]` (no memset). First call to copy()
+  sends uninitialized heap bytes to the ring. Position probe is clean because the probe runs
+  on SUBSEQUENT frames after skinData has run.
+  ONE-SHOT TEST: add m_hasBeenSkinned probe in prepareToDraw before lock(); if spikes correlate
+  with first-skin frames, confirmed. Also: memset the systemStream in SystemVertexBuffer ctor
+  as a fixability test (should eliminate spikes if this is the cause).
+
+RANK 4: CANDIDATE 3 — GARMENT VERTEXSIZE=24/28 ROUTED TO MAIN RING, CLOBBERED BY UI DISCARD
+  Score: 3.5/4. The routing discriminator `(vertexSize != 28) && (vertexSize != 24)` means any
+  garment with vertexSize 24 or 28 goes to the MAIN ring. CuiLayer whole-ring locks on the main
+  ring do WRITE_DISCARD -> clobber. Position-clean: the probe fires BEFORE the CuiLayer lock
+  that clobbers it -- but actually: if the staging readback (Map READ) fires BEFORE DrawIndexed
+  and AFTER the write, and the CuiLayer discard happens between write and DrawIndexed, then
+  the probe might MISS the clobber (it reads the pre-clobber state). This is frame-rate sensitive.
+  The dedicated skin ring was added 2026-06-07 specifically to test this -- the question is
+  whether ALL spiking garments have vertexSize outside {24,28}.
+  ONE-SHOT TEST: log isSkin + vertexSize for all garment SBSSP locks.
+
+RANK 5: CANDIDATE 7 — INPUT LAYOUT STRIDE MISMATCH (CACHED LAYOUT WITH WRONG STRIDE)
+  Score: 3/4. Explains garbage for non-position components; position at offset 0 always correct.
+  The VertexDeclarationMap cache uses VBFormat as key; if VBFormat changes between LOD switch
+  and the cache gets the old layout, stride is wrong. Less likely given the input layout cache
+  uses the full VBFormat as a key.
+
+RANK 6: CANDIDATE 5 — MULTI-STREAM SEMANTIC-INDEX COLLISION IN INPUT LAYOUT CREATION
+  Score: 3/4 IF multistream is active. TEXCOORD0 collision between static and dynamic streams
+  could cause the IA to read from the wrong stream's bytes.
+
+RANK 7: CANDIDATE 14 — m_ringBuffer STALE NULL FALLBACK TO MAIN RING POST RING-SPLIT
+  Score: 3/4. Newly introduced risk with 2026-06-07 ring split. m_ringBuffer=null fallback
+  returns main ring when skin-ring data was written there -> main-ring reads garbage.
+  ONE-SHOT TEST: add assert/log if m_ringBuffer==nullptr at getRingBuffer() call time.
+
+RANK 8-15: Candidates 2, 4, 8, 9, 11, 12, 13 have lower fit (1-2 of 4 facts) or are
+effectively ruled out by prior experiments.
+
+==========================================================
+ONE-SHOT TESTS ORDERED BY SPEED AND SIGNAL
+==========================================================
+
+T1 (seconds): Check gap6_latch.log in stage/ -> ms_useMultiStreamVertexBuffers=0 or 1.
+  If 1: CANDIDATE 1 is live. If 0: CANDIDATE 1 is dead, jump to T2.
+
+T2 (seconds): Read cape-strip-probe.txt in stage/ (added 2026-06-07).
+  If readPast=1 on any strip draw: CANDIDATE 6 confirmed.
+  If empty or all ok: CANDIDATE 6 is dead for tri-strips; garment may only have tri-lists.
+
+T3 (code change, 1 build): In DynamicVertexBufferData.cpp:lock(), add:
+    if (!isSkin && vertexSize != 24 && vertexSize != 28)
+      LOG("unexpected routing: vertexSize=%d not routed to skin ring", vertexSize);
+  to catch garments routed to the main ring.
+  Also log getOffset() at DrawIndexed time for garment draws.
+
+T4 (code change, 1 build): Memset systemStream backing to known sentinel (0xCD) in
+  SystemVertexBuffer constructor. If spikes appear with 0xCD positions -> CANDIDATE 10 confirmed.
+  Fix: memset to 0 instead.
+
+T5 (RenderDoc): In the capture of a spiking frame, look at IA input-assembly state for a
+  spiking draw: what is the VB buffer, offset, stride? What indices are referenced? Do any
+  indices exceed m_vertexCount? This distinguishes index-OOB (candidate 6) from write-path issues.
+
+==========================================================
+CONCLUSION
+==========================================================
+
+The cleanest lateral insight: the existing staging readbacks (cape-stage-probe.txt,
+cape-strip-probe.txt, cape-d3d11-probe.txt) contain the answer RIGHT NOW without any new builds.
+Reading those files should immediately discriminate between:
+  - "COLLAPSE at the D3D11 write site" -> data corruption before Unmap
+  - "COLLAPSE at the draw staging" -> ring was overwritten between write and draw
+  - "readPast on strip draws" -> index OOB -> CANDIDATE 6
+  - "VB clean at draw" -> transformation/WVP issue (already partially ruled out by body-clean fact)
+
+The most NOVEL (not previously raised) candidate with strong fit: CANDIDATE 14 (m_ringBuffer null
+fallback after the 2026-06-07 ring split). The split is fresh code; any garment instance whose
+lock() ran BEFORE the split but draw() runs AFTER (impossible since both are per-frame) -- actually
+more likely: any garment whose DynamicVertexBufferData was constructed but not yet lock()ed could
+return the wrong ring. In practice, lock always precedes bind in the same prepareToDraw, so this
+is low risk but the null-fallback assert is a zero-cost safety net.
+
+The HIGHEST PROBABILITY candidate given the constraint that "the staging readback of position is
+clean" (which means the draw IS reading the correct slice but fetching FROM CORRECT OFFSET) is:
+  Candidate 6 (index OOB on strips) or Candidate 7 (stride mismatch makes some vertices point
+  to wrong ring bytes). The CONSULT-30 under-write test (DynamicVertexBufferData.cpp:347-349:
+  memset slice to 0 before write) is already in the code -- its result determines if "draw reads
+  past the written slice" (spikes shrink -> zeros) vs "data is corrupted within the slice" (no change).

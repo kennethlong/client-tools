@@ -1,0 +1,153 @@
+## Independent verdict
+
+**The `ms_used` accounting bug is real and is the right primary fix.** The trace story (370/400 `WRAP=1`, `numVerts≈74894`, `CuiLayerRenderer` locking the remainder) matches the code. The current tree already has the D3D9-faithful VB path in `Direct3d11_DynamicVertexBufferData.cpp` (lock does not advance `ms_used`; unlock does).
+
+**Two important corrections to the write-up:**
+
+1. **“Deferred draw” on the CPU is misleading.** `ShaderPrimitiveSorter::Phase::draw()` calls `prepareToDraw()` and then `draw()` back-to-back for each primitive (`ShaderPrimitiveSorter.cpp:725–781`). Skinned meshes lock/unlock the ring in `prepareToDraw`, bind VB/IB there (`SoftwareBlendSkeletalShaderPrimitive.cpp:651–656`), and issue draws immediately in `draw()` (`:661–664`). The hazard is **CPU ahead of GPU** on a shared `D3D11_USAGE_DYNAMIC` ring, not recorded-but-not-submitted D3D11 command lists. RenderDoc replay looking clean fits that.
+
+2. **D3D9 vs D3D11 bind semantics are not the differentiator for multi-stream skinned meshes.** With stream offsets, D3D9 also uses `byteOffset = getOffset() * vertexSize` and `ms_sliceFirstVertex = 0` (`Direct3d9.cpp:3855–3861`), same as D3D11 (`Direct3d11_VertexBufferVectorData.cpp:145`, `drawPartialIndexedTriangleList` with `baseIndex=0` at `Direct3d11_StateCache.cpp:3263–3266`). Ground truth is the **ring lock/accounting**, not BaseVertexIndex vs IA byte offset.
+
+---
+
+## Q1 — Why did D3D9-faithful accounting make D3D11 worse?
+
+**Not because D3D9 accounting is wrong — it is required.** D3D9 reference:
+
+```216:244:src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+	m_numberOfVertices = numberOfVertices;
+	m_offset = ms_used / vertexSize;
+
+	return data;
+// ...
+	ms_used += length;
+```
+
+D3D11 now mirrors that (`Direct3d11_DynamicVertexBufferData.cpp:326–327`, `457–458`).
+
+**What changed when accounting was fixed:**
+
+| Before (buggy D3D11) | After (D3D9-faithful) |
+|---|---|
+| `lock()` charged the **requested** size (`~2 MB` for CuiLayer) | `lock()` only sets `m_offset`; `unlock(actual)` advances `ms_used` |
+| `ms_used` instantly hit ring capacity → **~371 mid-frame `WRITE_DISCARD`s/frame** | Trace: **0 mid-frame wraps in first 400 locks**, ~1 discard/frame |
+| Most skinned slices effectively fought over **renamed offset-0** regions | **Many coexisting slices** in one 2 MB buffer via `WRITE_NO_OVERWRITE` |
+
+So the regression is not “D3D9 math breaks D3D11.” It is: **fixing accounting removed pathological discards and exposed the normal D3D11 dynamic-ring rule: `WRITE_NO_OVERWRITE` is only safe if the driver knows the GPU has finished with everything below the new write point.** Under load, a cantina can accumulate a large foot-print of live slices in one buffer while the GPU is still chewing earlier subranges — worse than sparse “a few robe spikes.”
+
+D3D9 uses the same `D3DLOCK_NOOVERWRITE` / `D3DLOCK_DISCARD` pattern (`Direct3d9_DynamicVertexBufferData.cpp:184–203`). It “works” because:
+
+- Correct unlock accounting was always there, so CuiLayer never **virtually filled** the ring on lock (`CuiLayerRenderer.cpp:62–68` + D3D9 `unlock@244`).
+- D3D9 drivers often stall/rename more aggressively on discard.
+- Your **buggy D3D11 path was accidentally closer to “discard every slice”** (bad accounting, fewer simultaneous live offsets), which can look *less broken* than one big contended ring.
+
+**`P19_DISCARD_ONLY` does not exonerate the ring** (despite the contradictory comment at `Direct3d11_DynamicVertexBufferData.cpp:50`). Forcing discard every lock (`:279–280`) killing spikes but dropping hands is exactly “only one live rename region works reliably without sync” — not proof the ring is innocent.
+
+---
+
+## Q2 — Is the 2 MB ring just too small?
+
+**Partly, but not as the main story after your trace.**
+
+- With **buggy** accounting, the ring wasn’t full of real geometry; it was **full of fictional `ms_used`** from `CuiLayer`’s “lock all remaining” (`CuiLayerRenderer.cpp:64–68`).
+- With **correct** accounting, `WRAP=0` in the first 400 locks means those locks fit; you may still hit `ms_used + length > ms_size` later in the same frame (busy cantina, batch renderer, reticle, etc.).
+
+When a **real** mid-frame wrap happens (`Direct3d11_DynamicVertexBufferData.cpp:288–299`), any draw still in flight against older slices can read renamed storage — **unless you synchronize before `WRITE_DISCARD`**. That is the architectural issue, not “2 MB is always too small.”
+
+Reasonable architecture (in order of blast radius):
+
+1. **D3D9-faithful VB accounting** (mandatory).
+2. **Stop CuiLayer from treating the remainder as its reservation** (see Q3/Q4).
+3. **`ID3D11DeviceContext::Flush()` (or a fence/query) immediately before mid-frame `WRITE_DISCARD`** when `ms_used + length > ms_size`.
+4. Only if profiling still shows wraps: **larger ring** (`install()` tiers at `:139–142`) or a **dedicated UI dynamic buffer**.
+
+Per-mesh dedicated dynamic VBs are overkill; the engine is explicitly designed around one shared ring (`Direct3d11_DynamicVertexBufferData.h:7–10`).
+
+---
+
+## Q3 — Is `CuiLayerRenderer` compatible with the shared ring?
+
+**Not as implemented for D3D11 with wrong accounting; with D3D9 accounting it is tolerable but still a bad citizen.**
+
+The pattern at `CuiLayerRenderer.cpp:62–68`:
+
+- Locks **`getNumberOfLockableDynamicVertices(false)`** → essentially “everything left.”
+- Keeps the buffer **mapped** from first `render()` (`:175–176`) until `flushRenderQueueQuads()` (`:528`).
+
+On **D3D9**, that was OK because only **`unlock(s_numberOfVertices)`** advances `ms_used` — the huge `lock(n)` is just the D3D9 `Lock` region size, not committed ring space.
+
+On **old D3D11**, charging `ms_used` in `lock()` turned that into “consume the whole ring,” triggering the 371 discards/frame.
+
+On **fixed D3D11**, CuiLayer no longer poisons `ms_used`, but it still:
+
+- Uses **`length ≈ entire tail`** in the wrap test (`Direct3d11_DynamicVertexBufferData.cpp:288`).
+- Holds a **long-lived `Map`** while batching UI (`:306` — only one subresource map allowed at a time).
+- In **release**, there is **no** `ms_dynamicGlobalLocked` guard (`DynamicVertexBuffer.h:190–194` is `_DEBUG` only) — nested dynamic locks during UI are undefined.
+
+**Recommendation:** either cap batch size in `CuiLayerRenderer` or give UI its own dynamic buffer. You do **not** need to rewrite the whole UI renderer if you cap locks.
+
+---
+
+## Q4 — Minimal correct fix
+
+**Two changes, in order:**
+
+### A. Keep D3D9-faithful VB accounting (already present)
+
+`Direct3d11_DynamicVertexBufferData.cpp`:
+
+- `lock()`: set `m_offset`, return slice; **do not** advance `ms_used` (lines 326–341).
+- `unlock(n)`: `ms_used = (m_offset + n) * vertexSize` (lines 449–458).
+
+This matches D3D9 and fixes the CuiLayer amplifier.
+
+### B. Cap `CuiLayerRenderer` lock size (the missing piece for “fix made it worse”)
+
+In `CuiLayerRenderer.cpp:62–68` and `:76–87`, replace “lock all remaining” with a bounded batch, e.g.:
+
+```cpp
+static const int kMaxCuiBatchVerts = 4096; // tune; must be >= 128 fallback threshold
+int const remaining = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+s_maxNumberOfVertices = (remaining < kMaxCuiBatchVerts) ? remaining : kMaxCuiBatchVerts;
+if (s_maxNumberOfVertices < 128) {
+    int const whole = s_vertexBuffer->getNumberOfLockableDynamicVertices(true);
+    s_maxNumberOfVertices = (whole < kMaxCuiBatchVerts) ? whole : kMaxCuiBatchVerts;
+}
+s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+Existing `render()` already flushes when `s_numberOfVertices+4 > s_maxNumberOfVertices` (`:172–173`), so behavior stays batched without claiming ~74k verts for the wrap test or holding a gigantic logical reservation.
+
+### C. Before real mid-frame discard (if wraps still happen after A+B)
+
+In `Direct3d11_DynamicVertexBufferData.cpp:288–299`, before `mapType = D3D11_MAP_WRITE_DISCARD`:
+
+```cpp
+context->Flush(); // or fence/query when you have one
+```
+
+Only on the **true** `ms_used + length > ms_size` path, not on `ms_newFrame` frame-start discard (unless you measure that too).
+
+---
+
+## Attack summary (what I would *not* rubber-stamp)
+
+| Claim | Verdict |
+|---|---|
+| CuiLayer + `ms_used` over-charge caused 371 wraps | **Confirmed** |
+| Offset math / IA byte offset wrong | **Rejected** (trace `MISMATCH=0`; bind path consistent with D3D9) |
+| CPU “deferred draws” with stale bind state | **Mostly rejected** (immediate prepare→draw) |
+| D3D9-faithful accounting is wrong | **Rejected** |
+| Accounting-only fix should ship alone | **Rejected** — must cap CuiLayer and/or sync before discard |
+| 2 MB ring alone is the root cause | **Incomplete** — real fills + GPU lag + discard without flush |
+| `P19_DISCARD_ONLY` exonerates ring | **Rejected** — file contradicts itself (`:50` vs `:52–56`) |
+
+---
+
+## Bottom line
+
+- **Root cause:** real — D3D11 VB `ms_used` advanced on **lock** instead of **unlock**, incompatible with `CuiLayerRenderer`’s “lock the rest of the ring” scratch pattern; D3D9 never had that bug.
+- **Why worse after fix:** fixing accounting stopped fake discards and left a **large, correct, multi-slice `NO_OVERWRITE` frame** without CuiLayer cap and without GPU sync on any remaining mid-frame `DISCARD` — a bigger hazard than occasional wrong-offset spikes.
+- **Minimal ship set:** (A) D3D9 VB accounting + (B) cap CuiLayer batch + (C) `Flush()` before non-frame-start ring wrap if still needed.
+
+I’m in Ask mode, so I can’t apply (B)/(C) in the repo; switch to Agent mode if you want those edits made and re-tested with `P19_RING_TRACE` on a cantina roam.

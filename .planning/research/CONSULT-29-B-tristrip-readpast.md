@@ -1,0 +1,12 @@
+# Research task: is the tri-STRIP skeletal path reading past the written vertex slice in D3D11? (read-only)
+
+## Established (treat as given)
+Skeletal **triangle-LIST** body draws are verified clean. The character still spikes → suspect a path the instrumentation missed. `SoftwareBlendSkeletalShaderPrimitive::buildIndexBufferAndRenderCommands` builds the index buffer; for triangle-strip primitives it uses `RenderCommand::createTriStrip(...)` and stores **raw** `mesh.getTriStripVertexIndex(...)` values into the index buffer. The render path only `lock(m_vertexCount)` + writes `m_vertexCount` vertices, where `m_vertexCount = mesh.getVertexCount(meshPerShaderData)` (the per-shader compacted count). Tri-LIST draws go through `Graphics::drawPartialIndexedTriangleList`; tri-STRIP draws go through `Graphics::drawPartialIndexedTriangleStrip` (a SEPARATE function).
+
+## Questions (trace + answer, file:line; no fixes)
+1. **Do skeletal meshes actually use triangle strips?** Under what conditions / which assets or LODs does `buildIndexBufferAndRenderCommands` emit `createTriStrip` vs `createTriList`? (Jawa LOD0 arm was observed as tri-list — but check other parts/LODs/creatures, e.g. dewback, robes.)
+2. **Can raw tri-strip indices exceed `m_vertexCount - 1`?** Trace `mesh.getTriStripVertexIndex()` — does it index into the FULL mesh vertex set (un-compacted) while `m_vertexCount` is the per-shader compacted count? If so, a strip index can be `>= m_vertexCount` → the draw fetches past the written/locked slice.
+3. **D3D9 vs D3D11 strip draw with an over-range index.** Follow `Graphics::drawPartialIndexedTriangleStrip` into both plugins. When an index `>= m_vertexCount` is fetched from a vertex buffer that only has `m_vertexCount` vertices written, what does each do? Does D3D11 read undefined memory past the slice (→ garbage vertex → shard) while D3D9 clamped/handled it? Note: there is an existing `cape-strip-probe` in `Direct3d11_StateCache.cpp` (~line 3389) built to test exactly this — describe what it checks.
+4. Is the **strip primitive** itself (a degenerate strip with a flung vertex) a natural producer of the "radiating shard from a point" look (a strip fans triangles off a moving edge)?
+
+Deliverable: a yes/no on "tri-strip skeletal draws read past the written slice in D3D11," with the trace and file:line for `getTriStripVertexIndex` vs `m_vertexCount` and the two plugins' strip-draw handling. This is the CONSULT-24 hazard — confirm whether it's live and which assets trigger it.

@@ -1,0 +1,185 @@
+## Executive summary
+
+Your **UV-correct / position-wrong** constraint strongly favors mechanisms that corrupt **only bytes at `offsetPosition`** while leaving **static per-vertex UVs** (written once at construction) intact. Given **ss-tight systemStream**, **clean unlock scan of `[0,m_vertexCount)`**, and **terrain clamp not fixing creature spikes**, the fault is almost certainly **after the CPU write**, in the **D3D11 bind/fetch path** — not a uniform stride/base bug.
+
+---
+
+## 1. DrawIndexed: D3D11 omits D3D9’s vertex-fetch bound
+
+### D3D9 (bounded)
+```4157:4157:src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp
+		HRESULT hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+```
+
+`minimumVertexIndex` + `numberOfVertices` tell the driver the **index-value span** for this draw. Slice placement is via `ms_sliceFirstVertex + baseIndex` (or stream byte offset when `ms_supportsStreamOffsets` — `Direct3d9.cpp:3855-3861`).
+
+### D3D11 (unbounded on GPU)
+```3451:3454:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+	Direct3d11_Device::getContext()->DrawIndexed(
+		static_cast<UINT>(primitiveCount * 3),
+		static_cast<UINT>(startIndex),
+		static_cast<INT>(baseIndex));
+```
+
+`minimumVertexIndex` and `numberOfVertices` are **only used by diagnostics** (`3233-3450`, strip probe `3524-3536`). They are **not** passed to `DrawIndexed`. Same for all other `drawPartialIndexed*` paths (`3203-3230`, `3546-3549`).
+
+### What gets fetched?
+Physical address for index `i`:
+
+```
+IA_byte_offset + (i + BaseVertexLocation) * stride
+```
+
+- **IA offset** = `data->getOffset() * stride` (`Direct3d11_VertexBufferVectorData.cpp:145`, applied at draw in `StateCache.cpp:1239-1244`)
+- **BaseVertexLocation** = `baseIndex` = **0** from `RenderCommand::render` (`SBSSP.cpp:314`)
+- **IB indices** are **absolute mesh indices** (not rebased by `minVbIndex`) — stored at `SBSSP.cpp:1621-1623`
+
+So index `1665` fetches byte `boundOffset + 1665*stride`. If `1665 >= m_vertexCount`, you read **past the written slice** into stale ring memory.
+
+**Why UV stays right on read-past:** UVs are **per-vertex-index static** (`fillConstantVertexBufferData` at construction, `SBSSP.cpp:1500-1501`, `1736-1796`). A stale ring occupant from the **same mesh** at the same index has the **same UV, wrong position** — exactly your symptom.
+
+**Tri-list status:** global `cape-index-probe` (`SBSSP.cpp:1679-1724`) reported `overRead=0`. That checks `maxIdx >= capeVertexCount` over the **whole IB**, not per-`RenderCommand`. So global read-past is falsified for lists, but **per-draw** `minimumVertexIndex + numberOfVertices - 1` vs `m_vertexCount` is still worth re-checking on the **actual spiking draw**.
+
+---
+
+## 2. `m_numberOfVertices` (draw) vs `m_vertexCount` (lock/write)
+
+| Quantity | Where set | Meaning |
+|----------|-----------|---------|
+| **`m_vertexCount`** | `SBSSP.cpp:1277`, lock `839`, write `869` | Full mesh vertex count — **written window** `[0, m_vertexCount)` |
+| **`RenderCommand::m_numberOfVertices`** | `SBSSP.cpp:1627` / `1665` | `(maxVbIndex - minVbIndex) + 1` — **index span width**, not “fetch from 0” |
+| **`ms_currentVBVertexCount`** | `Direct3d11_VertexBufferVectorData.cpp:146` → `StateCache.cpp:2341` | Lock count (= `m_vertexCount`); used for **non-indexed** `Draw()` only (`StateCache.cpp:2522`) |
+
+Per-draw creation:
+```1627:1627:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+				RenderCommand *const renderCommand = RenderCommand::createTriList(static_cast<int>(minVbIndex), static_cast<int>((maxVbIndex - minVbIndex) + 1), firstTriListIndex, triCount);
+```
+
+**Can the drawn window exceed the written window?**
+
+- **Not via `numberOfVertices` alone** — it’s a span width; GPU uses **absolute IB indices**.
+- **Yes via indices** if `maxVbIndex >= m_vertexCount` (read-past). Global probe says no for tri-lists.
+- **Diagnostic trap:** staging readback scans **`[0, numberOfVertices)` relative to bound offset** (`StateCache.cpp:3302-3340`), **not** `[minVbIndex, minVbIndex+numberOfVertices)`. For partial draws (e.g. `minVbIndex=800`), it scans the **wrong vertex range** and can falsely exonerate tail indices like 1665.
+
+**Confirm measurement:** on the spiking `RenderCommand`, log  
+`minVbIndex`, `numberOfVertices`, `maxIndex = minVbIndex + numberOfVertices - 1`, `m_vertexCount`, and whether `maxIndex >= m_vertexCount`.
+
+---
+
+## 3. UV right + position wrong: two code-grounded paths
+
+### (a) Stale ring / wrong bind offset — **best fit given current facts**
+
+**Mechanism:** CPU writes clean positions at lock offset `s_lastLockOffset` (`DynamicVertexBufferData.cpp:371,381`). GPU draw binds `boundVertOffset = ms_currentVBVectorOffsets[0] / stride` (`StateCache.cpp:3251`). If they differ, or GPU-visible memory changes between `Unmap` (`609`) and `DrawIndexed` (`3451`), index `i` reads **wrong physical bytes** but **same index → same static UV**.
+
+**Why D3D9 clean:** same index semantics, but different ring timing (`D3D9 unlock` advances `ms_used` at `Direct3d9_DynamicVertexBufferData.cpp:244`; D3D11 advances at lock `383`), plus D3D9’s `MinVertexIndex/NumVertices` hint.
+
+**Confirm:** compare `s_lastLockOffset` (lock `381`) vs `boundVertOffset` at draw (`cape-draw-probe.txt` writer, `StateCache.cpp:3269-3274`). Must match for spiking primitive. Then staging readback (`3324`) at indices **actually referenced by the spiking draw’s IB** (not `[0,numVtx)`), compare position bytes to unlock CPU scan at same indices.
+
+### (b) Hard-fill position-only write — **UV/position split is real in code, but ss-tight falsifies for probed meshes**
+
+**Static UV path (construction only):**
+```1753:1776:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+	for (int vertexIndex = 0; vertexIndex < m_vertexCount; ++vertexIndex, ++destVertexIt)
+	{
+		// copy color ... copy texture data (2D sets only; 4D → m_sourceDot3Vectors)
+```
+
+**Hard fill (every frame, position+normal only):**
+```2653:2655:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+		*(Vector *)(viter +  0) = position;
+		*(Vector *)(viter + 12) = normal;
+```
+
+SSE equivalent writes only `[edi+0..edi+20]` then `viter += vertexSize` (`2548-2571`). **Never touches UV offsets.**
+
+So a hard-fill **tail underwrite** (loop `< m_vertexCount`) would leave tail **positions** garbage while **UVs remain from construction** — perfect UV/pos split.
+
+**But:** post-`skinData` probe reads actual systemStream positions for **both** soft and hard (`792-827`, comment at `793-794`). **ss-tight** falsifies this for probed meshes. Hard skin is selected at `SkeletalAppearance2.cpp:1739-1740` for small/on-screen NPCs (Jawa/commoner likely **hard**).
+
+**Confirm:** filter `cape-trace-systemstream.txt` for spiking `numVerts` with `mode=1` (hard). If still `ss-tight` on those meshes, hard fill is dead.
+
+---
+
+## 4. DOT3 angle (47 draws, vc=1906/1240)
+
+**Format construction (single-stream, dot3):**
+```1342:1351:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+		dynamicFormat.setNumberOfTextureCoordinateSets(tcSetCount);  // includes 4D dot3 set
+```
+
+- 4D TC set → `m_sourceDot3Vectors`, **not** written to VB by `fillConstantVertexBufferData` (`1778-1791`)
+- 2D UV sets **are** written to VB once at construction
+- Hard dot3 path writes tangent to `dot3viter = viter + dot3Offset` (`1857-1870`, SSE `2319-2354`)
+
+`dot3Offset` comes from `vbi->offsetTextureCoordinateSet[m_dot3TextureCoordinateSetIndex]` (`1860`) with `offsetPosition==0` enforced (`1848`). Dot3 changes **stride** (e.g. 48 = pos12+norm12+uv8+dot3_16) but **not** position offset or how `minVbIndex`/`numberOfVertices` are computed.
+
+Dot3 spikes are more likely because those meshes are **hard-skinned + stride-48 skin-ring** (`DynamicVertexBufferData.cpp:300`), not because tangent format misaligns position fetch separately from UV fetch.
+
+**Confirm:** for a spiking dot3 draw, log `vertexSize`, `offsetPosition`, `offsetTextureCoordinateSet[0]` (UV), `offsetTextureCoordinateSet[m_dot3TextureCoordinateSetIndex]` (dot3). If position offset is 0 and UV offset matches stride layout, dot3 is not the position corruption mechanism.
+
+---
+
+## Ranked candidates
+
+### #1 — GPU reads different bytes than CPU unlock scan (bind offset drift or post-Unmap GPU memory) — **HIGHEST**
+
+| | |
+|--|--|
+| **Position wrong** | Fetch from stale/wrong ring slice at same index |
+| **UV right** | Static per-index UV unchanged (`fillConstantVertexBufferData`) |
+| **D3D9 diff** | No unbounded fetch hint; different ring accounting |
+| **Falsified** | forceDiscard per skin lock (`311-312`), 16MB no-wrap, no-ring (`P19_SKIN_RING_DISABLED` comment `65-67`) — rules out simple wrap, not bind drift |
+| **Confirm** | `s_lastLockOffset == boundVertOffset/stride` at spiking draw; staging pre-draw positions at **IB-referenced indices** vs unlock CPU at same indices |
+
+### #2 — Index read-past on **tri-STRIPs** (D3D11 unbounded `DrawIndexed`) — **MEDIUM** (lists falsified)
+
+| | |
+|--|--|
+| **Position wrong** | Index ≥ `m_vertexCount` → stale world-space tail (`StateCache.cpp:3463-3465`) |
+| **UV right** | Same mesh index → same static UV |
+| **Code** | Strip probe computes `ssMaxIndex = minimumVertexIndex + numberOfVertices - 1` (`3524`) |
+| **Falsified** | Global tri-list `overRead=0` (`SBSSP.cpp:1699`) |
+| **Confirm** | Spiking primitive: tri-strip? `ssMaxIndex >= m_vertexCount`? `cape-strip-probe.txt` `readPast=1` |
+
+### #3 — Per-draw diagnostic window bug (not root cause, but blocked confirmation) — **MEDIUM**
+
+| | |
+|--|--|
+| **Issue** | Staging scans `[0, numberOfVertices)` not `[minVbIndex, maxIndex]` (`3302-3340`) |
+| **Effect** | Can miss tail spikes on partial draws; explains “CPU clean, GPU corrupt” false negatives |
+| **Confirm** | Re-scan staging at `minVbIndex .. maxIndex` for spiking `RenderCommand` |
+
+### #4 — Hard SSE `fillVertexBufferHard` tail underwrite — **LOW** (given ss-tight)
+
+| | |
+|--|--|
+| **UV/pos split** | Hard fill writes pos+normal only (`2653-2655`); UV from construction |
+| **Falsified** | systemStream probe covers hard path (`792-794`); ss-tight |
+| **Confirm** | `cape-trace-systemstream.txt` with `mode=1` on spiking `numVerts` |
+
+### #5 — DOT3 stride changes draw window — **LOW**
+
+| | |
+|--|--|
+| **Why unlikely** | Position offset fixed at 0; draw counts from IB min/max, not format (`1627`) |
+| **Confirm** | Descriptor offsets identical D3D9/D3D11 for spiking stride-48 mesh |
+
+---
+
+## Single decisive measurement (do this first)
+
+For **one visible spiking draw** of a creature mesh:
+
+1. From its `RenderCommand`: `minVbIndex`, `numberOfVertices`, `maxIndex = min + numberOfVertices - 1`, `m_vertexCount`.
+2. At lock/unlock: `s_lastLockOffset` (`DynamicVertexBufferData.cpp:381`).
+3. At draw (after `applyPreDrawState`): `boundVertOffset = ms_currentVBVectorOffsets[0]/stride` (`StateCache.cpp:3251`).
+4. Staging readback **at index `maxIndex` and known spike indices** (e.g. 1665), not `[0,numVtx)`.
+
+**Verdict tree:**
+- `maxIndex >= m_vertexCount` → **read-past confirmed** (candidate #2)
+- `lockOffset != boundOffset` → **misbind confirmed** (candidate #1a)
+- offsets match, unlock clean, staging dirty at same index → **post-Unmap GPU coherency** (candidate #1b)
+- all match and clean → look outside this path (VS constants unlikely — would not preserve per-index UV on shards)
+
+The render tree’s money leaf (`fillVertexBufferHard` @2305) is **architecturally capable** of UV/pos split, but **ss-tight + clean unlock scan** moves it behind **D3D11 fetch-layer** bugs unless hard-mode rows in `cape-trace-systemstream.txt` show `SS-HAS-SPIKE` for the same `numVerts`.

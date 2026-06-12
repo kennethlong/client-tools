@@ -1,0 +1,152 @@
+CONSULT-33-OPUS — Hunt for the 36-byte WORLD-space dynamic-VB writer with a stale tail
+======================================================================================
+Date: 2026-06-07
+Repo: D:\Code\swg-client-v2 (koogie-msvc-cpp20-base)
+
+FINGERPRINT RECAP
+-----------------
+- vertexSize = 36 = position(12) + normal(12) + color0/BGRA(4) + ONE 2D texcoord(8).
+- ~1647 and ~2664 verts per lock (two draws).
+- VB CONTENTS are WORLD-space (object->world baked on CPU); bulk centroid at NPC world pos ~[3307, 4.9, -5002].
+- Contiguous TAIL (~10-30 verts) is garbage at a stale world pos ~[-2816, 0, -6400], Y≈0.
+- Routed to D3D11 "skin ring" (plugin: vSize != 28 && vSize != 24 -> skin ring).
+
+METHOD
+------
+Grepped the whole client tree for `new DynamicVertexBuffer`, `->lock(`, setPosition/setNormal/
+setColor0/texcoord format builders, `rotateTranslate*`, `getTransform_w`, identity-world-matrix
+("Vertices are in world space"), and world-baking copy loops. Read every candidate's VB format
+and transform space.
+
+FORMAT TRIAGE (who can even make 36 bytes = pos+normal+color0+1×2D-uv?)
+-----------------------------------------------------------------------
+Exhaustive: the ONLY format builder in the entire client library that sets
+position+normal+color0+texcoord on one dynamic/system VB is
+  src\...\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp
+  buildVertexBuffer() lines 1336-1364 (dynamicFormat): setPosition + setNormal +
+  setColor0(hasArgb) + setNumberOfTextureCoordinateSets(tcSetCount).
+  In SINGLE-stream mode (ms_useMultiStreamVertexBuffers=0, which IS the runtime config per the
+  in-file CAPE probes) with color0 + one 2D tc set => 12+12+4+8 = 36 bytes EXACTLY.
+  This same format backs BOTH m_systemStream (new SystemVertexBuffer, lines 1489/1499) and
+  m_dynamicStream (new DynamicVertexBuffer, line 1364).
+
+Eliminated 36-byte impostors:
+- ShadowVolume.cpp: format = setPosition() only (12B), object-relative + setObjectToWorld. NO.
+- DynamicMeshAppearance.cpp: pos+color0+1×2D-uv = 24B, NO normal, STATIC buffers. NO.
+- DynamicMeshAppearanceShaderSet.cpp: STATIC VBs, no world bake. NO.
+- Particle/Swoosh/Ribbon/Beam/Trail: billboard quads, pos+color+uv (NO normal). NO.
+- FullGeometrySkeletalAppearanceBatchRenderer.install(): pos+normal+color0 = 28B (NO uv). (see below)
+
+TRANSFORM-SPACE TRIAGE (who bakes object->WORLD into the verts?)
+---------------------------------------------------------------
+SoftwareBlendSkeletalShaderPrimitive's own draw path is OBJECT-space:
+  prepareToDraw() line 490-491 does getTransform_w() + Graphics::setObjectToWorldTransformAndScale
+  (object-space verts, GPU applies world). skinData/fillVertexBuffer* blend with
+  skeleton.getBindPoseModelToRootTransforms() via rotateTranslate_l2p = MODEL/object space.
+  => Its m_dynamicStream/m_systemStream CONTENTS are object-space (±a-few-units). This correctly
+     matches the prompt's "SoftwareBlend ruled out: object-space output."
+
+The ONLY path that bakes object->WORLD into the VB CONTENTS and then binds an IDENTITY world
+matrix is the FULL-GEOMETRY BATCH RENDERER:
+  src\...\clientSkeletalAnimation\src\shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp
+  renderBuffers() lines 178-291:
+    - lock:   s_batchVertexBuffer->lock(vertexCount, allowDiscard)        [line 193]
+    - bake:   destVbIt.setPosition(transform_a2w->rotateTranslate_l2p(srcPos))  [line 230]
+              destVbIt.setNormal  (transform_a2w->rotate_l2p(srcNormal))        [line 231]
+              destVbIt.setColor0  (color)                                       [line 234]
+    - identity world matrix at draw:
+              LocalShaderPrimitive::prepareToDraw() line 326-330:
+              "Vertices are in world space, so set object to world to identity."
+              Graphics::setObjectToWorldTransformAndScale(Transform::identity, xyz111)
+    - per-SUB-MESH transform pulled from a STORED POINTER:
+              Transform const *transform_a2w = s_transformVector_a2w[bufferIndex]  [line 214]
+    - accumulates copiedVertexCount and rebases indices                          [lines 227-251]
+    - chunked across multiple lock/draw passes (do/while), each pass is its own DrawIndexed
+              => naturally yields the "two draws ~1647 and ~2664 verts".
+
+THE 28-vs-36 CONFLICT — RESOLVED
+--------------------------------
+FullGeometry is the ONLY world-baker, but its install() format is pos+normal+color0 = 28 bytes
+(lines 417-421). The prompt's "FullGeometry ruled out: 28-byte format" is literally true for the
+CHECKED-IN code. Yet every OTHER property of the fingerprint (world-space contents, identity
+world matrix, per-sub-mesh transform, NPC-centered, big counts, two draws, contiguous stale tail)
+fits ONLY this renderer. The 36-byte measurement therefore points at a FullGeometry-style
+world-bake whose dest VB carries the extra 2D texcoord, i.e. one of:
+  (a) the source SoftwareBlend skinned VB (getSkinnedVertexBuffer() returns the 36-byte
+      single-stream m_systemStream, line 1013-1026) being copied through a full-vertex
+      VertexBufferWriteIterator::copy() (preserves all 36 bytes) instead of the explicit
+      setPosition/setNormal/setColor0 (which would drop to 28) — VERIFY whether the live build /
+      a local edit changed the copy to `destVbIt.copy(sourceVbIt)` and the install format to add
+      setNumberOfTextureCoordinateSets(1)/setTextureCoordinateSetDimension(0,2); OR
+  (b) s_batchVertexBuffer was created from the SOURCE VB's getFormat() (36B) rather than the fixed
+      28B format.
+  ACTION: at runtime, dump s_batchVertexBuffer->getFormat() vertexSize and confirm the copy idiom
+  in renderBuffers(). If it is 36, FullGeometry IS the writer and the "didn't run / 28B"
+  ruling-out was a checked-in-source read, not a live-build read.
+
+TAIL-STALE MECHANISM (two candidates, both live in FullGeometry; #1 is the strong one)
+--------------------------------------------------------------------------------------
+#1 DANGLING/STALE per-sub-mesh transform pointer for the LAST batched item (STRONGEST):
+   submit() line 450: const Transform &transform_a2w = appearance.getTransform_w();
+   submit() line 475: s_transformVector_a2w.push_back(&transform_a2w);
+   getTransform_w() (Appearance.h:237-240) returns &m_appearanceToWorld — a POINTER INTO THE
+   APPEARANCE is stored in the batch list. submit() happens during the cull/visibility walk;
+   renderBuffers()/draw() happens LATER at the deferred ShaderPrimitiveSorter flush. Between the
+   two, if the NPC's appearance has its m_appearanceToWorld overwritten (NPC moved/teleported,
+   pose re-evaluated, attachment re-parent at SkeletalAppearance2.cpp:1827-1832 reuses
+   setTransform_w on attached appearances), or the appearance object is freed/reallocated, then
+   the LAST sub-mesh's stored pointer bakes a DIFFERENT (stale or freed) world transform than the
+   bulk did. Result: the final sub-mesh's contiguous vertex run lands at a stale world position
+   ([-2816,0,-6400], Y≈0 = a default/zeroed or previous-frame transform) while the bulk is at the
+   current NPC position [3307,4.9,-5002]. This is EXACTLY a "contiguous tail at a stale world pos."
+   It is also live-only / RenderDoc-masked: the staleness depends on inter-system write ordering
+   that any CPU sync (or capture replay) perturbs — matching the cape-spike "undefined-memory"
+   class already on record.
+
+#2 lock-count vs write-count mismatch (weaker here, but the SAME mechanism the in-tree probe
+   already flagged on SoftwareBlend's own copy):
+   - FullGeometry: lock(vertexCount) [193] where vertexCount = getBufferCounts() sum over
+     [beginIndex,endIndex); written = copiedVertexCount accumulated in the copy loop. If
+     findEndBufferForCount() [140-174] and getBufferCounts() [115-136] ever disagree on the
+     buffer span, or a source VB's getNumberOfVertices() changes between the two passes, the dest
+     tail [copiedVertexCount, vertexCount) is locked but NEVER written. On the D3D11 skin ring a
+     never-written tail = the PREVIOUS WRITE_DISCARD generation's bytes (a prior object's
+     world-space output) => stale-world tail. The in-tree CAPE-BATCH-PROBE (lines 254-281,
+     cape-batch-probe.txt) checks exactly copiedVertexCount!=vertexCount / maxRebasedIdx>=vertexCount.
+   - The identical idiom is ALSO probed on SoftwareBlend's systemStream->dynamicStream copy
+     (lines 839-871, "PROBE D", cape-trace-copycount.txt): lock(m_vertexCount) vs
+     copy(systemStream->getNumberOfVertices()); tail [copyN, m_vertexCount) unwritten -> skin-ring
+     stale generation. That copy is object-space, so it cannot by itself explain a WORLD-space
+     stale tail — but it confirms the engine has lock>write tail-staleness as a known live failure.
+
+WHY NOT the other world-bakers
+------------------------------
+- Other "identity world matrix" hits (DustAppearance, Lightning/Particle/Swoosh, Nebula,
+  ClientProceduralTerrain, water) are billboard/terrain/particle formats (no normal, or huge
+  static grids, or not NPC-centered). None build pos+normal+color0+uv at ~1600-2700 NPC-centered
+  verts with a per-sub-mesh appearance-transform pointer list.
+
+RANKED CONCLUSION
+-----------------
+1. FullGeometrySkeletalAppearanceBatchRenderer (clientSkeletalAnimation\...\batch\...cpp) — the
+   world-baker. Lock: renderBuffers() line 193. World-bake write loop: lines 227-235 (setPosition/
+   setNormal/setColor0 with transform_a2w->rotateTranslate_l2p). Identity world matrix: line 329.
+   Tail-stale: DANGLING per-sub-mesh transform pointer for the LAST submitted sub-mesh
+   (submit() stores &appearance.getTransform_w() = &m_appearanceToWorld at line 475; read stale at
+   line 214/230 during the deferred draw after the NPC's transform/appearance changed). Secondary
+   tail vector: lock(vertexCount) vs written copiedVertexCount mismatch -> skin-ring stale
+   generation. VERIFY the live s_batchVertexBuffer vertexSize==36 (install format / copy idiom) to
+   close the only gap vs the 36-byte fingerprint.
+2. SoftwareBlendSkeletalShaderPrimitive m_systemStream->m_dynamicStream copy (lines 839-871) —
+   correct 36-byte format and the EXACT lock>write tail-stale mechanism, but OBJECT-space contents;
+   only explains a WORLD-space tail if its skinned VB is consumed/world-baked by #1.
+3. Everything else — wrong format or wrong space; ruled out above.
+
+IMMEDIATE NEXT STEP
+-------------------
+At a spiking NPC, add a one-shot dump in FullGeometry::renderBuffers() of
+  s_batchVertexBuffer->getFormat() vertexSize, vertexCount vs copiedVertexCount, and for the LAST
+  bufferIndex: *transform_a2w (its getPosition_p()) compared to s_transformVector_a2w.front()'s.
+If the last sub-mesh's transform position == [-2816,0,-6400] while the bulk == [3307,4.9,-5002],
+the dangling-transform-pointer mechanism (#1) is confirmed; fix by storing the Transform BY VALUE
+in s_transformVector_a2w (or snapshotting at submit) instead of a pointer into the appearance.

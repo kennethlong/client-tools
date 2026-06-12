@@ -1,0 +1,28 @@
+I would **stop using the shared append ring for soft-skinned geometry**.
+
+The minimal fix I’d ship first:
+
+- Add one persistent D3D11 soft-skin upload VB, not per primitive.
+- `D3D11_USAGE_DYNAMIC`, `D3D11_CPU_ACCESS_WRITE`, `D3D11_BIND_VERTEX_BUFFER`.
+- Size it to the largest soft-skin draw seen, grow rarely in powers of two if needed.
+- In `SoftwareBlendSkeletalShaderPrimitive::draw()`, after CPU skinning into the system buffer:
+  - `Map(..., D3D11_MAP_WRITE_DISCARD, ...)`
+  - copy exactly this primitive’s skinned vertices to offset `0`
+  - optionally clear/pad a small guard tail
+  - `Unmap`
+  - bind that scratch VB with byte offset `0`
+  - call `DrawIndexed(..., BaseVertexLocation = 0)`
+- Do **not** use `WRITE_NO_OVERWRITE`.
+- Do **not** share this buffer with `CuiLayerRenderer`.
+- Do **not** suballocate within it.
+- Do **not** mass-create per-instance buffers.
+
+That makes every soft-skin draw a discard-renamed whole-resource upload, which is the D3D11 path where the runtime/driver owns the in-flight hazard. If the driver runs out of rename space, `Map(WRITE_DISCARD)` may block; it must not expose stale data to a later draw.
+
+I mostly agree with the hazard characterization, but I’d phrase it more narrowly: the evidence shows the shared `NO_OVERWRITE` ring contract is invalid for this workload. It may be literal CPU overwrite of an in-flight region, or it may be driver-side range/rename bookkeeping getting defeated by the shared ring plus deferred draws. Either way, the fix is the same: remove soft skin from the shared append/no-overwrite allocator.
+
+The per-draw drain result is the key. A `CopySubresourceRegion` followed by staging `Map(READ)` forces prior GPU work to catch up before the sampled draw. That reduces or eliminates the window where later CPU writes can alias data the GPU has not consumed yet. A Present-time sync does not help because the damage already happened inside the frame. Moving the write immediately before `DrawIndexed` also does not help because the command queue can still contain the draw while subsequent dynamic writes execute on the CPU.
+
+The D3D9 angle is a strong lead. `DrawIndexedPrimitive` gives the driver `MinIndex` and `NumVertices`; D3D11 `DrawIndexed` does not. With a huge shared D3D11 VB, the driver sees a large resource and no explicit valid vertex window. D3D9 can bound validation/fetch/renaming around the exact vertex range. Binding a dedicated scratch VB at offset `0`, sized/padded for the current soft-skin draw, recreates the important property: the draw’s vertex address space is local and unambiguous.
+
+One falsifying test: route only one known spiking primitive through a private discard-only scratch VB at base vertex `0`, while all other dynamic users stay on the old ring. If that primitive still spikes and RenderDoc shows its private scratch contents stale, then the shared-ring hazard model is wrong and the next suspect is draw parameters or shader/IA interpretation. If it goes clean, the minimal fix is confirmed.

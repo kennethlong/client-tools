@@ -1,0 +1,143 @@
+## 6 — B (CURSOR): Register/offset detail
+
+### PS b0 layout for dot3 bump (PS 2224 / `SwgVertexConstants`)
+
+The asset PS cb0 is 400 bytes (25 × float4). The rewriter names the dot3 block `packedRegister0..4`; engine code maps them via the D3D9-mirrored `PSCR_*` enum where **byte offset = register index × 16**:
+
+| Shader name (reflection) | `PSCR_*` enum | Byte offset | D3D9 c-register | Semantic (D3D9) |
+|---|---|---:|---|---|
+| `packedRegister0` | `PSCR_dot3LightDirection` | **0** | c0 | object-local light dir; **`.w` = materialSpecularPower** (per-draw) |
+| **`packedRegister1`** | **`PSCR_dot3LightDiffuseColor`** | **16** | **c1** | parallel sun diffuse RGB; **`.w` = alphaFadeOpacityEnabled** |
+| **`packedRegister2`** | **`PSCR_dot3LightSpecularColor`** | **32** | **c2** | parallel sun specular RGB; **`.w` = alphaFadeOpacity** |
+| `packedRegister3` | `PSCR_dot3LightTangentMinusDiffuseColor` | 48 | c3 | tangent−diffuse; **`.w` = bloomEnabled** (D3D9) |
+| `packedRegister4` | `PSCR_dot3LightTangentMinusBackColor` | 64 | c4 | tangent−back; **`.w` = currentTime** (D3D9) |
+
+Enum definition:
+
+```54:58:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_LegacyPSConstants.h
+	constexpr int PSCR_dot3LightDirection               = 0;   // .xyz = object-local light dir, .w = materialSpecularPower
+	constexpr int PSCR_dot3LightDiffuseColor            = 1;
+	constexpr int PSCR_dot3LightSpecularColor           = 2;
+	constexpr int PSCR_dot3LightTangentMinusDiffuseColor = 3;
+	constexpr int PSCR_dot3LightTangentMinusBackColor   = 4;
+```
+
+PS 2224 lines 42–43 therefore read:
+- **`packedRegister1.w` → cb0 offset 16 + 12 = byte 28** (c1.a)
+- **`packedRegister2.w` → cb0 offset 32 + 12 = byte 44** (c2.a)
+
+ShaderBuilder confirms the D3D9 naming contract: `c[alphaFadeOpacity]` → `c{PSCR_dot3LightSpecularColor}.a` (c2.a).
+
+### Which source statements fill each `.w` at draw time
+
+**Producer A snapshot (per-frame, wrong `.a` semantics):**
+
+```192:194:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_LightManager.cpp
+		s_pixelDot3State.localDirectionWorld = XMFLOAT4(dir.x, dir.y, dir.z, 0.0f);
+		s_pixelDot3State.diffuseColor        = XMFLOAT4(diffuse.r, diffuse.g, diffuse.b, diffuse.a);
+		s_pixelDot3State.specularColor       = XMFLOAT4(specular.r, specular.g, specular.b, specular.a);
+```
+
+- **`packedRegister1.w`** ← `psSlot->getScaledDiffuseColor().a` (sun light diffuse alpha)
+- **`packedRegister2.w`** ← `psSlot->getScaledSpecularColor().a` (sun light specular alpha)
+
+**Producer B staging upload (per-draw, copies snapshot verbatim):**
+
+```962:965:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StaticShaderData.cpp
+							DirectX::XMFLOAT4 const c0(-localDir.x, -localDir.y, -localDir.z, pm.m_power);
+							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0,                          sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &d3.diffuseColor,             sizeof(DirectX::XMFLOAT4));
+							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &d3.specularColor,            sizeof(DirectX::XMFLOAT4));
+```
+
+- **`packedRegister0.w`** ← `pm.m_power` (material specular power) — correct D3D9 parity for c0.w
+- **`packedRegister1.w`** ← `d3.diffuseColor.w` (still light diffuse `.a`, not fade flag)
+- **`packedRegister2.w`** ← `d3.specularColor.w` (still light specular `.a`, not fade opacity)
+
+**Misplaced fade path (PS 2224 never reads this for alpha):**
+
+```2025:2031:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+void Direct3d11_StateCache::setAlphaFadeOpacity(bool /*enabled*/, float opacity)
+{
+	// Push opacity into the per-material cbuffer alpha channel. Plan 11-07
+	// smoke will surface whether the engine shaders read it from
+	// userConstants[0].a or expect a dedicated slot.
+	XMFLOAT4 fade(opacity, opacity, opacity, opacity);
+	Direct3d11_ConstantBuffer::updatePS(0, &fade, sizeof(fade));
+```
+
+This writes only **offset 0** (c0 / `packedRegister0`), ignores `enabled`, and does not touch c1.a/c2.a. PS 2224 does not use c0 for output alpha.
+
+### D3D9 cross-map (reference)
+
+D3D9 `PixelDot3Data` maps 1:1 to `PSCR_dot3LightDirection..4` (5 consecutive float4). Alpha-fade packing at the **per-draw** upload site:
+
+```579:584:D:\Code\swg-client-v2\src\engine\client\application\Direct3d9\src\win32\Direct3d9_LightManager.cpp
+					VectorRgba alphaFadeAndBloomSettings = Direct3d9::getAlphaFadeAndBloomSettings();
+
+					lightData.dot3.diffuseColor     = parallelSpecular.diffuseColor;
+					lightData.dot3.diffuseColor.a = alphaFadeAndBloomSettings.r; //alphaFadeOpacityEnabled in diffuseColor.a
+					lightData.dot3.specularColor = parallelSpecular.specularColor;
+					lightData.dot3.specularColor.a = alphaFadeAndBloomSettings.a; //alphaFadeOpacity in specularColor.a
+```
+
+Then uploaded as:
+
+```601:601:D:\Code\swg-client-v2\src\engine\client\application\Direct3d9\src\win32\Direct3d9_LightManager.cpp
+					Direct3d9_StateCache::setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5);
+```
+
+| Channel | D3D9 source | D3D11 source | Faithful? |
+|---|---|---|---|
+| c1.a / `packedRegister1.w` | `getAlphaFadeAndBloomSettings().r` (0 = opaque path) | `getScaledDiffuseColor().a` | **NO** |
+| c2.a / `packedRegister2.w` | `getAlphaFadeAndBloomSettings().a` (fade opacity) | `getScaledSpecularColor().a` | **NO** |
+
+Register indices and byte offsets **are** faithful (same `PSCR_*` enum). Only the **`.a` channel semantics** diverge — first at `Direct3d11_LightManager.cpp:193-194`.
+
+Note: `Direct3d11_LightManager.h:69-71` claims `.w` channels carry D3D9 alpha-fade packing; the implementation contradicts that comment.
+
+---
+
+## 7 — Deliverable (angle B)
+
+### (1) Finding
+
+**`packedRegister1` = offset 16 (c1), `packedRegister2` = offset 32 (c2).** At draw EID 617, their `.w` channels come from sun-light `VectorArgb.a` values copied in `Direct3d11_LightManager.cpp:193-194` and uploaded unchanged at `Direct3d11_StaticShaderData.cpp:964-965`. D3D9 puts alpha-fade enable/opacity in those same slots (`Direct3d9_LightManager.cpp:582,584`). D3D11's `setAlphaFadeOpacity` (`Direct3d11_StateCache.cpp:2025-2031`) writes to offset 0 only; PS 2224 never consumes it for output alpha.
+
+RenderDoc ground truth for draw 617: `packedRegister1.w > 0` and `packedRegister2.w ≈ 0.60` → under D3D11 code, that means sun `diffuse.a > 0` and sun `specular.a ≈ 0.60`.
+
+### (2) Confirm / refute §5
+
+**CONFIRMED** on mechanism and register mapping:
+- D3D11 assigns light alphas to the two PS fade-control channels instead of alpha-fade settings.
+- Any sun with `diffuse.a > 0` forces PS 2224 into the fade branch (`lt r0.y, l(0), packedRegister1.w`).
+- Vertex-lit body (PS 10948, no cb0) stays opaque — matches §2.
+
+**Partially unresolved on 0.60:** per the traced code path, `0.60` must be `psSlot->getScaledSpecularColor().a` at frame capture time, **not** `setAlphaFadeOpacity` (wrong slot). Whether that equals engine fade opacity or is an independent light-data alpha requires a cb0 dump at EID 617 (bytes 28 and 44). The bug stands even if sun specular `.a` ≠ 0.60: wrong enable alone (`diffuse.a ≈ 1.0` vs D3D9's `0`) forces the fade branch on every dot3 surface.
+
+### (3) Minimal D3D9-parity fix
+
+**Primary fix — per-draw `.a` overlay at the staging write** (mirrors D3D9's per-draw `applyLights_vertexShader`):
+
+In `Direct3d11_StaticShaderData.cpp` at **lines 964-965**, before `memcpy` to `PSCR_dot3LightDiffuseColor` / `PSCR_dot3LightSpecularColor`, override `.w` from stored fade settings:
+
+```cpp
+// D3D9 parity: Direct3d9_LightManager.cpp:582,584
+XMFLOAT4 dot3Diffuse  = d3.diffuseColor;
+XMFLOAT4 dot3Specular = d3.specularColor;
+VectorRgba const &fade = Direct3d11::getAlphaFadeAndBloomSettings(); // must be added
+dot3Diffuse.w  = fade.r;   // alphaFadeOpacityEnabled
+dot3Specular.w = fade.a;   // alphaFadeOpacity
+std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor  * 16, &dot3Diffuse,  ...);
+std::memcpy(staging.data() + PSCR_dot3LightSpecularColor * 16, &dot3Specular, ...);
+```
+
+**Prerequisite — store fade state** (D3D11 currently has none; D3D9 uses `ms_alphaFadeOpacity`):
+
+In `Direct3d11_StateCache::setAlphaFadeOpacity` (**`Direct3d11_StateCache.cpp:2025`**), mirror `Direct3d9.cpp:3579-3605`: persist `enabled → .r` (0/1) and `opacity → .a`; remove or stop relying on the 16-byte `updatePS(0, ...)` write for fade semantics.
+
+When not fading: `diffuse.a = 0` → PS takes luminance branch → opaque output, matching D3D9.
+
+### (4) Risk other angles may miss
+
+**Register layout is correct; semantics are wrong.** A fix that only repoints `setAlphaFadeOpacity` to c2.a without zeroing c1.a on non-fading draws will still force the fade branch whenever sun `diffuse.a > 0`. Both channels must be packed per draw. Also, `Direct3d11_LightManager` captures dot3 once per `setLights` (frame-level); fade/bloom on `packedRegister3.w` has the same per-draw vs per-frame gap — alpha-fade fix belongs at the **StaticShaderData apply** site, not only in `setLights`.

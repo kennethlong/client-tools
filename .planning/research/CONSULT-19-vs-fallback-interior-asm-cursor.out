@@ -1,0 +1,243 @@
+## Framing check (skeptical)
+
+The **null `//asm` VS → skip draw** diagnosis is well supported by the code paths you cited. That is separate from Phase 19 “world corruption” (BC mip upload, etc. in `.planning/handoff/phase-19-world-corruption.md`) — do not merge those debug threads.
+
+What **was** wrong earlier: Plan 11-05/11-01 assumed target scenes “don’t rely on `//asm`” (`11-05-SUMMARY.md:128`). Interior/structural/sky proves that assumption false for the D3D11 beachhead.
+
+What is **not** proven from repo alone: that all 120 skipped static shaders map to many distinct `.vsh` bodies (likely many templates → few shared vertex programs). Count distinct `getFilename()` from the P19 skip audit before sizing HLSL conversion.
+
+---
+
+## 1. One generic VS vs per-VBFormat variants?
+
+**A single “POSITION-only” or minimal VS cannot work** under this engine’s layout rules.
+
+`CreateInputLayout` is driven by **both** `VertexBufferFormat` and **VS bytecode**:
+
+```32:34:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_VertexDeclarationMap.cpp
+	// Cache key: (engine VertexBufferFormat flags, VS bytecode hash).
+	// Pitfall 6: cannot use VBFormat alone -- the input layout is validated
+	// against the VS bytecode signature at CreateInputLayout time.
+```
+
+Flow:
+
+1. `buildInputElementDescForStream` emits one element per enabled channel (POSITION, NORMAL, COLOR0/1, TEXCOORD0..N with correct dims) — see `Direct3d11_VertexBufferDescriptorMap.cpp:218-270`.
+2. `augmentWithPhantomElements` adds **phantom** elements only for **VS inputs not covered by the layout** (`VertexBufferDescriptorMap.cpp:346-398`, slot 15).
+3. There is **no** removal of layout elements the VS does not declare.
+
+D3D11 rule (also noted in comments at `VertexDeclarationMap.cpp:196-198`): **every layout element must exist in the VS input signature**. If the mesh has `NORMAL` + `TEXCOORD1` but the fallback VS only declares `POSITION` + `TEXCOORD0`, `CreateInputLayout` fails → `nullptr` layout → `ms_skippedDrawsNullLayout` at `StateCache.cpp:1220-1223`.
+
+So:
+
+| Approach | Verdict |
+|----------|---------|
+| One minimal VS (pos + tc0) | Fails on richer interior formats |
+| One **maximal** VS (all channels the layout builder can emit) | Works for any layout that is a **subset** of that signature; phantoms feed unused VS inputs |
+| Per-`VBFormat.getFlags()` variant | Safest; small cardinality in practice |
+| Per static shader | Wrong layer — overkill |
+
+**Recommended:** a **small family (2–4)** of precompiled fallback VS blobs, selected by a coarse classifier on `VertexBufferFormat::getFlags()` at draw time — not 120 variants, not one size fits all.
+
+Typical families:
+
+1. **Static world** — `POSITION` float3, optional `NORMAL`, `COLOR0`, `COLOR1`, `TEXCOORD0..7` with dims 1–4 per `MAX_TEXTURE_COORDINATE_SETS = 8` (`VertexBufferFormat.h:22`).
+2. **Transformed (RHW)** — `POSITION` as **float4** when `isTransformed()` (`VertexBufferDescriptorMap.cpp:220-227`) — **different VS**; applying WVP to xyzw1 is a common failure mode for sky/UI.
+3. Optional **DOT3-heavy** only if interior bump paths show layout failures (often 2–3 TC sets, not full bump).
+
+Other engines (UE “default vertex factory”, Unity shader graph) do the same thing: **vertex factory matches the mesh layout**, not “one vec3 shader for everything.”
+
+**`textureCoordinateSetKey`:** asset `//asm` shaders remap tags via `vTextureCoordinateSet*` (`Direct3d11_VertexShaderData.cpp:233-234`; D3D9 `Direct3d9_VertexShaderData.cpp:523-534`). A generic fallback should **passthrough `TEXCOORDi → TEXCOORDi`** for all mesh sets present in the layout, not replay per-shader tag macros. Remap correctness is a **pitfall** (below), not a reason for per-shader VS variants.
+
+---
+
+## 2. WVP / cbuffer source
+
+Working `//hlsl` path uses **`SwgVertexConstants` @ `b0`**, with WVP at **c0–c3**, produced by Rule D in `Direct3d11_HlslRewrite.cpp:757-809`.
+
+CPU mirror (what actually gets uploaded each draw):
+
+```214:215:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_ConstantBuffer.h
+	DirectX::XMFLOAT4X4 objectWorldCameraProjectionMatrix;   // c0..c3   (WVP)         offset 0
+	DirectX::XMFLOAT4X4 objectWorldMatrix;                   // c4..c7   (World)       offset 64
+```
+
+Composition + **transpose** (required for row-vector HLSL):
+
+```329:355:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_StateCache.cpp
+	void composeSlot0Shadow()
+	{
+		...
+		DirectX::XMMATRIX wtp = DirectX::XMMatrixMultiply(P, V);     // P * V (CODEX Q1)
+		DirectX::XMMATRIX wvp = DirectX::XMMatrixMultiply(wtp, W);   // (P * V) * W
+		...
+		DirectX::XMMATRIX wvp_t = DirectX::XMMatrixTranspose(wvp);
+		DirectX::XMMATRIX W_t   = DirectX::XMMatrixTranspose(W);
+		DirectX::XMStoreFloat4x4(&s_slot0Shadow.objectWorldCameraProjectionMatrix, wvp_t);
+```
+
+Upload: `flushSlot0IfDirty()` → `Direct3d11_ConstantBuffer::updateVS(0, &s_slot0Shadow, sizeof(...))` (`StateCache.cpp:1198`, `731`); bind `bindVS(0)` at `StateCache.cpp:1341`.
+
+**Fallback HLSL must:**
+
+```hlsl
+cbuffer SwgVertexConstants : register(b0)
+{
+    float4x4 objectWorldCameraProjectionMatrix : packoffset(c0);
+};
+// row-vector convention used by compiled assets:
+o.pos = mul(float4(i.pos, 1.0f), objectWorldCameraProjectionMatrix);
+```
+
+**Static cell geometry:** `composeSlot0Shadow` WVP is the right transform for non-skinned draws (same as D3D9 draw-time multiply). No separate path required for interiors unless a pass uses **pre-transformed** verts (`isTransformed()` — then use a **different** fallback that copies `POSITION` to `SV_Position` without WVP, matching `2d`/sky semantics).
+
+---
+
+## 3. Output signature + PS-fallback chaining
+
+`buildHlslForVSOutputs` chooses Variant T vs magenta **only from reflected VS outputs**:
+
+```506:520:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_PixelShaderProgramData.cpp
+		// Find TEXCOORD0 / FLOAT32 / xy declared ...
+		int texcoord0Index = -1;
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			...
+			if (_stricmp(o.SemanticName, "TEXCOORD") != 0) continue;
+			if (o.SemanticIndex != 0) continue;
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			if ((o.ComponentMask & 0x3) != 0x3) continue;
+```
+
+Also supports **`COLOR0`** with full xyzw mask for `tex * color` (`PixelShaderProgramData.cpp:531-547, 598-622`).
+
+`getOrCompilePSForVS` keys the dynamic PS on **`vsVariant.reflectedOutputs`** and **bytecode hash** (`PixelShaderProgramData.cpp:1137-1149`). Empty outputs → tombstone → magenta (`1145-1154`).
+
+**Minimal fallback VS outputs (after reflection, SV_Position filtered out):**
+
+| Output | Purpose |
+|--------|---------|
+| `TEXCOORD0` | `float2` or `float4`, mask ≥ xy | Required for textured passthrough |
+| `COLOR0` | `float4`, mask `0xF` | Optional; baked/vertex tint on cell meshes |
+| `TEXCOORD1+` | passthrough | Only if you need lightmap-style PS sampling on non-zero indices; **dynamic PS still only samples TEXCOORD0** unless you extend `buildHlslForVSOutputs` |
+
+**Chaining:** With populated `reflectedOutputs` on the **effective** bound VS, `selectFallbackPSForVS` → `getOrCompilePSForVS` → Variant T `t.Sample(s, input._vN.xy)` works (`StateCache.cpp:1314-1324`).
+
+**Caveat:** If `isCompatibleWithVS` lets the **asset PS** bind against fallback outputs (`PixelShaderProgramData.cpp:1559+`), you may get a “textured” draw with **wrong lighting math** (asset PS expects asm-computed varyings). For asm interiors, prefer forcing the **fallback PS lane** when `m_isAssembly` (or when effective VS is the fallback blob), not only when native PS is incompatible.
+
+---
+
+## 4. Injection point + caching
+
+**Do not** only fix `applyPreDrawState` null check — `resolveShaders` never builds a layout today because bytecode is null:
+
+```147:149:D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_VertexDeclarationMap.cpp
+	ID3DBlob *bytecode = variant.bytecode.Get();
+	if (!bytecode)
+		return nullptr;     // //asm VS or compile failure path -- draw must skip
+```
+
+**Recommended design**
+
+| Layer | Responsibility |
+|-------|----------------|
+| New `Direct3d11_FallbackVertexShader` (or namespace in existing file) | At `install()`, compile 2–4 canonical HLSL strings; `D3DReflect` → store `Variant`-like `{d3dVS, bytecode, bytecodeHash, reflectedInputs, reflectedOutputs}` per **FormatClass** |
+| `Direct3d11_VertexShaderData` | Keep `m_isAssembly`; expose `bool isAssembly() const`; **leave** `compileVariant` returning null for asm (stable tombstone per key) |
+| **`Direct3d11_StateCache::resolveShaders()` ~1138–1158** | If `vsVariant.d3dVS == nullptr && ms_currentVSData->isAssembly()`, set `ms_effectiveVSVariant = &FallbackVS::get(ms_currentVBFormat)` (and multi-stream equivalent), call `getOrCreate(..., *ms_effectiveVSVariant)`, return `true` when fallback non-null |
+| **`applyPreDrawState` ~1209–1217** | Bind `ms_effectiveVSVariant->d3dVS` (not asset null variant) |
+| **`selectFallbackPSForVS` ~1064–1074 / ~1320** | Pass **effective** variant’s `reflectedOutputs` (overload or `ms_effectiveVSVariant`) — **critical**; asset `getVariant(key)` for asm has **empty** reflection (`VertexShaderData.cpp:350-355`, no compile) |
+
+**Caching:** Unchanged keys `(formatFlags, fallbackBytecodeHash)` in `VertexDeclarationMap` — one fallback hash × many interior formats, as long as each format’s layout ⊆ fallback input signature.
+
+**Do not** stuff fallback into `compileVariant` without format knowledge unless you use the **maximal** input signature only (still need transformed vs untransformed split).
+
+---
+
+## 5. VS fallback vs author `//hlsl`
+
+| | Generic fallback | Convert `//asm` → `//hlsl` |
+|--|------------------|---------------------------|
+| Time-to-first-pixel | Low (engine-only) | Medium–high (per shared `.vsh`) |
+| Visual fidelity | Passthrough albedo; wrong/missing lighting, fog, texgen, alpha | Match D3D9 |
+| Risk | Subtle wrong UV set / RHW / PS lane | Compile/rewrite regressions (known path for `*_vs20_for_ps20.vsh`) |
+| Maintenance | Small fixed HLSL in engine | Assets stay authoritative |
+
+D3D9 compiles asm via **`D3DXAssembleShader`** (`Direct3d9_VertexShaderData.cpp:567`), not HLSL — conversion means **rewriting** behavior, not changing a header.
+
+**Scope estimate:** 120 **static shader template names** ≠ 120 vertex programs. Interior families (`stco_*`, `intr_*`, `gradient_sky`) likely share a handful of asm templates (often one “transform + pass UV/color/light” program per era). **Before committing to HLSL:** extend P19 skip logging to print `ms_currentVSData->getEngineShader()->getFilename()` once per template; unique count is the real conversion budget (often **~5–25** `.vsh`, not 120).
+
+**Recommendation:** **Fallback first** for boot gate / “walls exist”; **author HLSL** for shared asm files once the unique-`.vsh` census is done (especially `gradient_sky` / transformed paths).
+
+---
+
+## 6. Top pitfalls + detection
+
+### Pitfall A — Layout still fails (`skippedNullLayout`)
+
+**Cause:** Fallback VS input signature ⊄ mesh layout (missing `TEXCOORD3`, transformed `POSITION` float4 vs float3, etc.).
+
+**Detect:** `CreateInputLayout failed` in log (`VertexDeclarationMap.cpp:199-203`); `ms_skippedDrawsNullLayout` rises while `skippedNullVS` falls.
+
+### Pitfall B — Renders but wrong UV / no albedo
+
+**Cause:** Passthrough `TEXCOORD0` only; asset PS or asm path expected diffuse on **`TEXCOORD1+`** after tag remap; or `textureCoordinateSetKey` mismatch.
+
+**Detect:** RenderDoc — VS output `TEXCOORD0` vs PS `Sample` coordinate; compare to D3D9 same draw. Magenta → missing `TEXCOORD0` in reflection (tombstone path).
+
+### Pitfall C — Visible but flat / black / wrong lighting
+
+**Cause:** Asm VS computed **lit** `COLOR0`/`COLOR1` from `lightData` @ c16+ (`StateCache.cpp:364-374`); fallback passes mesh `COLOR0` or zero; asset PS still bound with full lighting expectations.
+
+**Detect:** RenderDoc PS constants look sane but output dark; force `bindPath=fallback` (`emitPlan1707BindAttribution`, `StateCache.cpp:1108-1114`) and compare. Interior may look “good enough” with fallback PS + vertex color; lightmapped passes won’t.
+
+### Pitfall D — Sky garbled / radial fan
+
+**Cause:** WVP applied to **`isTransformed()`** meshes (`gradient_sky` class in planning tables).
+
+**Detect:** Log `ms_currentVBFormat.isTransformed()` on sky draws (`StateCache.cpp:1386`); clip-space insanity in VS output; use transformed fallback branch (pass-through position).
+
+---
+
+## Recommended design summary
+
+```
+resolveShaders():
+  vsVariant = asset->getVariant(key)
+  if (!vsVariant.d3dVS && asset->isAssembly())
+    effective = FallbackVS::forFormat(VBFormat)   // 2-4 classes
+  else
+    effective = vsVariant
+  inputLayout = VertexDeclarationMap::getOrCreate(format, effective)
+  return effective.d3dVS != nullptr
+
+applyPreDrawState():
+  VSSetShader(effective.d3dVS)
+  if (asset->isAssembly() || !isCompatible(...))
+    PSSetShader(selectFallbackPSForVS(effective.outputs))  // not asset variant
+```
+
+**Fallback VS HLSL (static untransformed class):**
+
+- **Inputs:** `POSITION` float3; optional `NORMAL0`; `COLOR0`/`COLOR1` as `float4` with `DXGI_FORMAT_B8G8R8A8_UNORM` layout match (unpack in VS if needed); `TEXCOORD0..7` with float1/2/3/4 dims matching `buildInputElementDescForStream`.
+- **Constants:** `SwgVertexConstants` / `objectWorldCameraProjectionMatrix` @ b0 c0.
+- **Outputs:** `SV_Position`; passthrough `TEXCOORDi` (at least `TEXCOORD0` float2); passthrough `COLOR0` if input present.
+
+**WVP:** Same `Direct3d11_VertexSlot0CB` upload + transpose convention as existing path.
+
+**PS chain:** Rely on existing `buildHlslForVSOutputs` + `getOrCompilePSForVS` with **effective** reflection.
+
+---
+
+## Cheap first verification
+
+1. Rebuild with fallback; enter cantina interior.
+2. **Logs:** `[P19SKIP] resolveShaders-fail` stops growing; `Plan 17-07 fallback-PS bound=` appears for `stco_cantina_wall_*` / `intr_*`.
+3. **Counters:** `skippedNullVS` → ~0 for interior session; watch `skippedNullLayout`.
+4. **RenderDoc (Release client per handoff):** Pick a wall draw — `DrawIndexed` present; bound VS = fallback hash (constant per format class); PS samples `t0`; SRV0 = wall diffuse; clip positions sane (not radial fan).
+5. **One-line census:** Log unique `.vsh` filenames from former skip set → sizes HLSL conversion.
+
+---
+
+## Bottom line
+
+The asymmetry diagnosis is correct: **PS fallback reflects a real VS; VS fallback must supply bytecode + reflection + format-compatible input signature.** A single generic VS is insufficient under D3D11 layout rules; use **2–4 format-class fallbacks**, inject at **`resolveShaders` + effective variant for PS bind**, read WVP from **`SwgVertexConstants.objectWorldCameraProjectionMatrix` @ b0** with the same transpose upload as `composeSlot0Shadow`. Use that for a fast beachhead; convert the small set of shared `//asm` `.vsh` files once the P19 audit lists unique vertex program paths.

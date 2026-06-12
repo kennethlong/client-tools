@@ -1,0 +1,180 @@
+## Executive summary
+
+After a repo-wide search for `DynamicVertexBuffer::lock` / fill sites, **only a handful of paths produce exactly 36 bytes** (position + normal + color0 + one 2D texcoord) and route to the D3D11 **skin ring** (`vertexSize != 28 && != 24` in `Direct3d11_DynamicVertexBufferData.cpp:270`).
+
+Your counts **1647 = 183×9** and **2664 = 296×9** are an exact match for **`ClientTerrainSorter`** batching (9 verts per terrain patch). That makes terrain the strongest *non-skeletal* candidate.
+
+However, for an **NPC-centered** spike at ~1.6k–2.6k verts, **`SoftwareBlendSkeletalShaderPrimitive` remains the strongest overall match** on format, count scale, and skin-ring routing — despite your instrumentation exclusion. The codebase itself documents the exact tail failure mode at the copy site. Your “never 1647/2664 in prepareToDraw” result may reflect probe caps (`cape-trace-path.txt` logs only the first 300 meshes with `vc >= 1000`) or the spike draw not correlating with the logged prepare pass.
+
+---
+
+## Ranked candidates (36-byte + skin ring + fingerprint fit)
+
+### #1 — `SoftwareBlendSkeletalShaderPrimitive` (clientSkeletalAnimation)
+
+**Why it still ranks #1:** It is the **only** high-volume NPC skeletal path with PNCT-36 on the skin ring, typical creature LOD vertex counts in the 1k–3k range, and explicit lock/copy tail logic in-tree.
+
+| Item | Location |
+|------|----------|
+| **Format (36 B)** | `dynamicFormat`: position + normal + color0 + tc sets — ```1336:1364:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp``` |
+| **Lock** | ```839:839:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp``` — `m_dynamicStream->lock(m_vertexCount)` |
+| **Write loop** | Single-stream path: skin to `m_systemStream` via `skinData()` / `fillVertexBuffer()` / `fillVertexBufferHard()` (```788:790```, ```1922+```, ```2633+```), then **memcpy copy** to dynamic: ```841:869:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp``` |
+| **“World space” note** | Positions are **model-root / appearance-local** from `transformArray[].rotateTranslate_l2p()` (```2643:2644```). O2W is set separately at ```490:491```. Centroid ≈ NPC world position in your probe likely means either (a) probe adds appearance translation, or (b) **tail bytes are stale ring data** from a prior draw that *was* world-space at `[-2816, 0, -6400]`. |
+| **Ruled-out branches** | Multi-stream copy @ ```758:763``` (runtime `ms_useMultiStreamVertexBuffers=0` per ```567:567```). Hard-skin SSE fill @ ```2633:2661``` still ends in same copy path. |
+
+**Exact tail mechanism (#1 candidate): lock count vs copy count mismatch**
+
+The source documents this explicitly:
+
+```842:869:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+// CONSULT-32 PROBE D: lock reserves m_vertexCount; copy writes systemStream count. If
+// they differ, the dynamic slice tail [copyN, m_vertexCount) is NEVER written -> on the
+// D3D11 skin ring that tail is uninitialized fresh-WRITE_DISCARD memory (prev generation,
+// world-space) -> spike. Probe B showed the spike tail starts at firstIdx == copyN.
+outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+```
+
+If `lockN = m_vertexCount` (1647/2664) but `copyN = m_systemStream->getNumberOfVertices()` is smaller by ~27, indices drawing verts `[copyN .. lockN)` read **stale skin-ring memory** — classically a prior mesh’s world-space positions at `[-2816, 0, -6400]`. That produces a **contiguous tail** with a correct bulk centroid at the current NPC.
+
+**Reconcile with your exclusions:** Path log @ ```663:680``` caps at 300 entries; Probe A/D @ ```798:831``` only fires for `ssN >= 1000`. If the spiking mesh’s prepare pass didn’t land in those buckets, SBSSP would look “absent” while still owning the buffer. Latest handoff (`.planning/handoff/2026-06-07-cape-spike-LIVE-ONLY-undefined-memory-reframe.md`) also notes: systemStream “tight” + dynamic tail garbage ⇒ **copy destination vs unlock read pointer may diverge on skin ring after discard** — a D3D11 plumbing bug, but the **writer entry point is still this prepareToDraw copy**.
+
+**Alternate tail mechanism (if copyN == lockN):** Last ~27 verts skinned with bad/stale `transformArray[boneIndex]` (hardpoint slots never filled in `Skeleton::calculateBindPoseModelToRootTransforms()` — handoff §“CODEX-31”). Those verts get garbage `rotateTranslate_l2p()` output while the bulk is fine.
+
+---
+
+### #2 — `ClientTerrainSorter::PrimitiveNode` (clientTerrain)
+
+**Why it ranks high:** **1647 and 2664 are exact multiples of 9** — the only writer whose batch unit is 9 verts/patch.
+
+| Item | Location |
+|------|----------|
+| **Format (36 B with 1 UV set)** | ```77:88:src/engine/client/library/clientTerrain/src/shared/appearance/ClientTerrainSorter.cpp``` |
+| **Lock** | ```298:298:src/engine/client/library/clientTerrain/src/shared/appearance/ClientTerrainSorter.cpp``` |
+| **Write loop** | ```308:344``` — 9 verts per terrain primitive from `positionList/normalList/colorList` |
+| **Space** | Positions copied raw from `primitive->getPositionList()`; **O2W set to terrain** @ ```367:367``` — not CPU world-bake, but coords are planet-scale (~3000+) |
+| **Counts** | Batch accumulates `numberOfVertices += 9` per queued patch @ ```614:614```; max batch ~256KB / 36 ≈ 7281 verts |
+
+**Tail stale mechanism:** Unlikely — loop always writes exactly `9 × primitiveList->size()` which equals `numberOfVertices`. No partial-subbatch transform pointer. Would need a batch accounting bug (not visible in current code).
+
+**Mismatch with NPC spike:** Terrain draws aren’t tied to a single creature’s bounding volume; centroid at NPC world pos could be coincidental (terrain patches near player).
+
+---
+
+### #3 — `ShadowVolume::setVertexBuffer` (clientObject) — **latent / currently disabled for skeletal**
+
+| Item | Location |
+|------|----------|
+| **Lock + copy** | ```130:134:src/engine/client/library/clientObject/src/shared/appearance/ShadowVolume.cpp``` |
+| **Format** | Copied from source `SystemVertexBuffer` format — for soft-skin meshes, same PNCT layout as `m_systemStream` |
+| **Trigger** | SBSSP shadow build @ ```880:896``` — **force-disabled** with `if (false && ...)` |
+| **Tail** | Full `v.copy(..., numberOfVertices)` — no count mismatch unless caller passes wrong count |
+
+Only relevant if shadow disable is reverted.
+
+---
+
+### #4 — `ClientDynamicRadialFloraManager::FloraRenderBucket::LocalShaderPrimitive` (clientTerrain)
+
+| Item | Location |
+|------|----------|
+| **Format (36 B)** | `_vertex` struct + DEBUG_FATAL checks @ ```558:562``` |
+| **Lock** | ```552:552``` — `m_radialNodeCount * 4` |
+| **Write loop** | ```571:666``` — **world positions baked** from flora transform matrix (`q.v0.pos = offset ± wvec/hvec`) |
+| **O2W** | Identity @ ```671:671``` |
+
+**Disqualifier:** Vertex count **must be a multiple of 4**. 1647 and 2664 are not. Max batch = `sliceSize(500) × 4 = 2000` — 2664 exceeds cap.
+
+---
+
+### #5 — `NebulaShellShaderPrimitive` (clientGame / space)
+
+| Item | Location |
+|------|----------|
+| **Format** | ```88:96``` — PNCT-36 |
+| **Lock** | ```337:337``` |
+| **Write loop** | ```393:416``` — `renderTransform.rotateTranslate_l2p(corners, ...)` — **CPU world-bake** |
+| **O2W** | Identity @ ```425:425``` |
+
+Space nebula quads only; not ground NPC scenes. Variable `vertexCount` (multiples of 4).
+
+---
+
+## Full inventory: every runtime `DynamicVertexBuffer` lock/fill path
+
+Grouped by **vertex size** (determines main vs skin ring on D3D11):
+
+### Skin ring (36 bytes — PNCT, 1×2D UV)
+
+| Class | Lock site | Format | World-bake? | Typical count | Tail stale? |
+|-------|-----------|--------|-------------|---------------|-------------|
+| **SoftwareBlendSkeletalShaderPrimitive** | SBSSP.cpp:758,775,839 | PNCT-36 | No (model-root skin) | 100–4000+ LOD | **Yes — lock/copy mismatch or bad tail bone weights** |
+| **ClientTerrainSorter::PrimitiveNode** | ClientTerrainSorter.cpp:298 | PNCT-36+ (1–5 UV sets) | No (terrain O2W) | Batches; **1647=183×9, 2664=296×9** | Unlikely |
+| **ClientDynamicRadialFloraManager** | ClientDynamicRadialFloraManager.cpp:552 | PNCT-36 | **Yes** | ≤2000, **×4 only** | Unlikely |
+| **NebulaShellShaderPrimitive** | NebulaShellShaderPrimitive.cpp:337 | PNCT-36 | **Yes** | Variable ×4 | Skip quads in loop could mismatch (```420:420``` warns) |
+| **SpriteAppearance** | SpriteAppearance.cpp:208 | PNCT-36 | Camera-space | 4 | No |
+| **MarkerAppearance** | MarkerAppearance.cpp:253 | PNCT-36 | Camera-space | 4 | No |
+| **ShaderAppearance** | ShaderAppearance.cpp:135 | PNCT + 8 UV sets (>>36) | O2W on appearance | 4 | No |
+| **ShadowVolume** (copy) | ShadowVolume.cpp:130 | Source-dependent | Object-local copy | Mesh-sized | No if counts match |
+
+### Main ring (28 bytes — common UI/debug)
+
+| Class | Lock | Format |
+|-------|------|--------|
+| **FullGeometrySkeletalAppearanceBatchRenderer** | FullGeometry…cpp:193 | PNC-28, **world-bake** @ ```230:231``` — **ruled out** (28 B, not skin ring) |
+| **CuiLayerRenderer** | CuiLayerRenderer.cpp:68,87 | pos+transformed+color+UV = 28 |
+| **ShaderPrimitiveSorter::finishCompositing** | ShaderPrimitiveSorter.cpp:536 | pos+ooz+UV = 28 |
+| **PostProcessing / Bloom / GameBitmap / Bink / Intro** | various | pos+color+UV = 24–28 |
+
+### Main ring (24 bytes — particles/UI)
+
+| Class | Lock | Notes |
+|-------|------|-------|
+| ParticleEmitter, Swoosh, Lightning, Beam, Glow, Dust, Celestial, ShadowBlob, Reticle | various | pos+color+UV; no normal |
+| IndexedTriangleListShaderPrimitive | IndexedTriangleList…cpp:87 | pos+color = 20 B (stack local VB) |
+| Graphics.cpp debug helpers | Graphics.cpp:1753+ | mostly pos+color |
+
+### Other
+
+| Class | Notes |
+|-------|-------|
+| **ClientGlobalWaterManager2** | pos+normal+UV = **32 B** (no color0) → main ring |
+| **StarAppearance** | copies section static VB → dynamic |
+| **OverheadMap / SpaceTargetBracketOverlay / GameCamera / ViewerLight / Ribbon\*/Trail\*** | various small counts |
+| **DynamicColorPolyPrimitive / SimplePolyPrimitive / ClientDebugShapeRenderer** | debug/editor |
+
+**Not runtime client:** TextureBuilder, TerrainEditor, MayaExporter.
+
+---
+
+## What is definitively NOT your buffer
+
+| Path | Why excluded |
+|------|--------------|
+| **FullGeometrySkeletalAppearanceBatchRenderer** | 28 B (PNC), main ring — you confirmed |
+| **CuiLayerRenderer / UI** | 28 B, screen-space, locks whole ring |
+| **Particles (Emitter/Swoosh/Lightning/Beam)** | 24 B, main ring |
+| **Flora radial** | Count must be ×4; 1647/2664 invalid; max 2000 |
+| **ShaderAppearance** | Stride >> 36 (8 UV sets) |
+| **IndexedTriangleListShaderPrimitive** | 20 B, stack-local VB |
+
+---
+
+## Recommended next correlation (read-only)
+
+To break the SBSSP vs terrain ambiguity without code changes:
+
+1. **`1647 mod 9 == 0` and `2664 mod 9 == 0`** → log whether those exact lock sizes correlate with **terrain draw shaders** vs **skeletal shader templates** at the D3D11 unlock probe (`s_lastLockIsSkin`, `numberOfVertices`, bound shader).
+2. **`cape-trace-path.txt`** — search for `vc=1647` / `vc=2664`. If present with `skinMode=2` (soft), SBSSP is the writer despite object-space expectation.
+3. **Compare `lockN` vs `copyN`** at SBSSP ```847:848``` for exactly 1647/2664 — one line answers whether the documented tail mechanism applies.
+
+---
+
+## #1 tail mechanism (precise answer)
+
+For **`SoftwareBlendSkeletalShaderPrimitive`**, the last ~27 vertices at stale world position `[-2816, 0, -6400]` most likely come from:
+
+**Primary (code-documented):** `m_dynamicStream->lock(m_vertexCount)` reserves **1647/2664** slots, but `outIt.copy(..., m_systemStream->getNumberOfVertices())` writes fewer. Vertices `[copyN, lockN)` are never touched by the copy; on the D3D11 skin ring they retain **previous-generation bytes** from an earlier lock at that ring offset — often another creature/mesh that was at the old world location. Draw indices still reference the full `[0, lockN)` range → **tail-only spike**, bulk correct.
+
+**Secondary (if copyN == lockN):** Last ~27 verts in `fillVertexBuffer` / `fillVertexBufferHard` receive garbage from `transformArray[m_transformIndex]` when the index points at an **uninitialized hardpoint slot** in the bind-pose array (in-range but never written) — producing a small contiguous bad tail while most verts skin correctly.
+
+Given your sentinel result (`UNWRITTEN=0`) from the latest handoff, if copy truly covers all bytes, pivot to **secondary** or to **D3D11 slice pointer / bind offset divergence** (writer is still SBSSP prepareToDraw, but bytes land in a different mapped region than the draw reads).

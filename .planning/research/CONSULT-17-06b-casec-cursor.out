@@ -1,0 +1,103 @@
+**VERDICT: CASE-C-CORRECT** — no engine line maps PS `SwgVertexConstants` diffuse/emissive to a named slot or a provable `userConstants[N]` / `packedRegisterN` offset.
+
+---
+
+### (a) Rule D — no diffuse/emissive → `userConstants[N]` / `packedRegisterN` table
+
+Rule D only wraps `: register(cN)` → `: packoffset(cN)` and keeps the `cN` token; it does **not** rename symbols or build a semantic map:
+
+```757:767:src/engine/client/application/Direct3d11/src/win32/Direct3d11_HlslRewrite.cpp
+	// Input form (vertex_shader_constants.inc):
+	//   float4x4  objectWorldCameraProjectionMatrix : register(c0);
+	//   ...
+	//   ExtendedLightData extendedLightData : register(c60);
+	// Output form:
+	//   cbuffer SwgVertexConstants : register(b0)
+	//   {
+	//   float4x4  objectWorldCameraProjectionMatrix : packoffset(c0);
+	//   ...
+	//   ExtendedLightData extendedLightData : packoffset(c60);
+	//   };
+```
+
+```959:980:src/engine/client/application/Direct3d11/src/win32/Direct3d11_HlslRewrite.cpp
+		// Section bytes with `register` -> `packoffset` substitutions.
+		for (std::size_t i = sectionStart; i < sectionEnd; )
+		{
+			// ...
+					std::memcpy(dst + outPos, kPackoffsetToken, kPackoffsetTokenLen);
+					// ... `(` + `cN` + `)` verbatim
+```
+
+Char-select PS reflection (`packedRegister0..4`, `materialSpecularColor` @ 112, flat `userConstants[17]` @ 128) means the **PS** include declares those names — not that Rule D moved D3D9 `VSCR_material` (c11) into a known `userConstants` index. `materialSpecularColor` @ offset 112 (= `packoffset(c7)`) is the only material-related **named** PS field; that is separate from GAP-2 diffuse/emissive.
+
+The `material[0]/[1]/[2]` chain in `apply()` is explicitly non-evidence (two planner guesses, discovery falsified `material[N]`):
+
+```868:898:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+					// Array index mapping is best-effort against the documented likely
+					// layout (Plan 17-04 PLAN lines 108-114; Plan 17-03 SUMMARY line 252-258
+					// caveat). The .inc is in TRE archives so the executor can't read it
+					// directly; we write to BOTH candidate slots that are plausible per
+					// the two cited slot guesses.
+					// ...
+					// discovery dump below pins which is correct from boot
+					// evidence; if the FFP ordering proves right, the index
+					// constants here flip in a tightening commit.
+```
+
+```904:933:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+					//   var[0..4]: packedRegister0..4  (generic, packed per the
+					//              rewriter — each PS's pixel_shader_constants.inc
+					//              defines what semantically lives in each slot)
+					// ...
+					//   - The diffuse/emissive material values are NOT directly
+					//     consumed by these PS programs (diffuse comes from the
+					//     texture sampler; emissive lives in packedRegisterN +
+					//     userConstants engine state). So material[N] / material*
+					//     lookups will silently miss for char-select shaders —
+```
+
+That is folklore wiring, not Case B.
+
+---
+
+### (b) Other engine-side deterministic pins — none for GAP-2
+
+| Source | What it pins | Why it does **not** close GAP-2 |
+|--------|----------------|----------------------------------|
+| `Direct3d9_VertexShaderConstantRegisters.h:27` `VSCR_material = 11` | VS c11–c15 material block | D3D9 only; D3D11 `apply()` uploads **PS** reflected cbuffers, not VS `material[5]` @ 176 |
+| `Direct3d9_PixelShaderConstantRegisters.h:30` `PSCR_materialSpecularColor` | PS **specular** register index | No `PSCR_materialDiffuse` / `PSCR_materialEmissive` |
+| `Direct3d9_StaticShaderData.cpp:862-863` | `setVertexShaderConstants(VSCR_material, …)` + `PSCR_materialSpecularColor` | D3D9 path; diffuse/emissive are not pushed to PS registers there |
+| `Direct3d11.cpp:679-704` `setPixelShaderUserConstants_impl` | `userConstants[i]` ← `constants[i]` by index | No index→semantic map |
+| `Direct3d11_ConstantBuffer.h:58-63` `PerMaterialCB` | Engine shadow field order | Char-select PS binds `SwgVertexConstants` @ **b0**, not slot-2 names; reflection has no `materialDiffuse` |
+| `Direct3d11_VertexSlot0CB` `material[5]` @ offset 176 (`:231`) | VS slot-0 **documentation** | Not the 400 B PS `SwgVertexConstants`; no `StaticShaderData` write to VS material found |
+| `Direct3d11_StaticShaderData.cpp:823-849` | Case C deferral + latent `writeVarFloat4AtOffset` | Explicit: no evidence-backed offset |
+
+```823:849:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+					// Plan 17-06b OUTCOME = CASE C (DEFERRED). Plan 17-06a's discovery boot
+					// (2026-05-29) showed userConstants reflects as a FLAT float4[17] array
+					// with NO member names ...
+					// setPixelShaderUserConstants_impl
+					// (Direct3d11.cpp:679-704) -- writes the userConstants[] slots POSITIONALLY
+					// ... there is NO engine line that maps
+					// a specific slot index to materialDiffuse / materialEmissive
+					// ...
+					// Per Round-5 review item 3, writing to a GUESSED slot would set
+					// wroteDiffuse=1 and FALSELY close GAP-2 -- forbidden.
+					(void)writeVarFloat4AtOffset;   // Case C: latent infrastructure, not yet wired
+```
+
+`PixelShaderProgramView.cpp:41-48` maps ShaderBuilder display names to `PSCR_*` — again no diffuse/emissive PS register enum.
+
+---
+
+### (c) Case C reasoning — sound
+
+- **Not Case A:** reflection has no `materialDiffuse` / `materialEmissive` (or `material[N]` on char-select PS); only `materialSpecularColor` + `textureFactor*` are name-addressable.
+- **Not Case B:** no deterministic engine table from material fields → byte offset in PS `SwgVertexConstants`; Rule D preserves `cN` labels only; positional `userConstants[]` upload is caller-defined per asset.
+- **Folklore prohibition:** correctly applied — `material[0]/[1]/[2]` and D3D9 c11→PS offset extrapolation would set `wroteDiffuse=1` without visual proof and contradict falsified discovery (`908-916`).
+- **Char-select scope:** comments at `924-940` align with round-4: GAP-2 is instrumentation completeness; visuals driven by `textureFactor` + interpolated `COLOR0` (plan 17-07), not cbuffer diffuse/emissive.
+
+**Nuance:** `writeVarByName("materialSpecularColor", …)` is evidence-backed Case A for **specular** only (`938`). Deferring diffuse/emissive does not contradict that partial closure.
+
+**To flip to Case B later:** need a non-guess source — e.g. TRE `pixel_shader_constants.inc` naming `materialDiffuseColor : register(cN)` plus reflection offset, or an engine call site that sets `userConstants[k]` with a documented `k` for material (none in tree today).

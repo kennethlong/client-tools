@@ -1,0 +1,14 @@
+You are characterizing the D3D9 REFERENCE implementation of a soft-skinned creature draw in this repo (SWG client), so a D3D11 port bug can be diffed against it. Read ACTUAL source. Cite file:line. The D3D9 path is the SPEC; describe it exactly, do not speculate about D3D11.
+
+CONTEXT (corrected, established by in-process probes — NOT RenderDoc, which lies for deferred dynamic-ring draws):
+- D3D11 renders ROBE-TEXTURED spikes centered on soft-skinned creatures (Jawa robe). The robe texture is stretched into spikes = a POSITION displacement of the garment mesh. D3D9 renders the same creature CLEAN.
+- The spiking draws are SOFT skin (SM_softSkinning) and notably DOT3 (hasDot3=1): vc=1906 and vc=1240, 47 such draws logged. Non-dot3 soft-skin (vc=1504) is less/not affected.
+- Trustworthy in-process facts: the CPU skin output (systemStream) is OBJECT-space and tight/clean (ss-tight, maxDist=3); the D3D11 written VB slice has NO position outliers in [0, writtenCount) (sentinel-aware centroid scan); copyN==lockN==m_vertexCount (structural); the dynamic-ring lifetime is FALSIFIED (16MB never-wrap ring AND no-skin-ring-at-all both still spike). So the bytes the fill WROTE are clean — yet the GPU draws displaced geometry => the GPU fetches vertex bytes OUTSIDE the written [0,writtenCount) region, or at a wrong base/stride/offset.
+- Our render tree (.planning/RENDER-PATH-REFERENCE.md — READ IT) flags D3D9-vs-D3D11 divergence #4 (HIGH): D3D9 DrawIndexedPrimitive bounds the fetch with MinVertexIndex/NumVertices; D3D11 DrawIndexed has no such bound -> read-past into stale ring.
+
+YOUR TASK — produce the D3D9 REFERENCE SPEC for ONE soft-skin (ideally dot3) creature draw. From the D3D9 plugin (src/engine/client/application/Direct3d9) and the engine soft-skin path (clientSkeletalAnimation SoftwareBlendSkeletalShaderPrimitive) + RenderCommand:
+1. The VERTEX DECLARATION / format for the soft-skin DOT3 dynamic VB: every element, its byte offset, the stride. Where is the dot3 tangent/binormal element and at what offset? (file:line for the declaration construction.)
+2. The dynamic VB LOCK -> OFFSET -> BIND chain: what byte offset is the slice written at, and what offset/stride is passed to D3D9 SetStreamSource. (file:line)
+3. The DRAW call: D3D9 DrawIndexedPrimitive arguments — BaseVertexIndex, MinVertexIndex, NumVertices, startIndex, primCount — and where each comes from (RenderCommand m_numberOfVertices, m_minimumVertexBufferIndex, etc.). Show how MinVertexIndex+NumVertices BOUND the vertex fetch window. (file:line)
+4. The RenderCommand vertex count: is m_numberOfVertices = (maxVbIndex - minVbIndex)+1, and can it differ from the lock/written count? (file:line)
+Output: a precise numbered SPEC (offsets, stride, draw args, bound window) with file:line for every value. This is the reference the D3D11 port must match.

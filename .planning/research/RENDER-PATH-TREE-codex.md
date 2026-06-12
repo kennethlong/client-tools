@@ -1,0 +1,8097 @@
+I’ll build this as a read-only research pass and write the deliverable only if the sandbox allows it. First I’m restoring the repo handoff context, then I’ll trace the skeletal path from the plugin boundary outward with exact file and line references.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/README.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-ChildItem -Path .planning/handoff -File | Select-Object -ExpandProperty Name' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short' in D:\Code\swg-client-v2
+ succeeded in 2236ms:
+# Session handoffs
+
+## Active handoffs
+
+| File | Topic | Updated |
+| --- | --- | --- |
+| [swg-blender-import.md](swg-blender-import.md) | SWG Blender IFF pipeline; M16 tre_project WIP; abyssin_m io compare | 2026-05-29 |
+| [phase-17-char-select.md](phase-17-char-select.md) | Phase 17 D3D11 char-select beachhead; GAP-2/3 execution order | 2026-05-29 |
+
+ succeeded in 2295ms:
+2026-06-02-boot-crash-resolved-cape-next.md
+2026-06-03-cape-spike-ring-investigation.md
+2026-06-05-cape-spike-race-confirmed-serialization-test.md
+2026-06-07-cape-spike-LIVE-ONLY-undefined-memory-reframe.md
+2026-06-07-cape-spike-softskin-ring-discard-renderdoc-next.md
+d3d9-d3dx-fp-regression.md
+gap6-bump-arms-vs-lighting-nan.md
+phase-17-char-select.md
+phase-19-world-corruption.md
+README.md
+release-boot-crash-postfx.md
+swg-blender-import.md
+
+ succeeded in 2524ms:
+ M AGENTS.md
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h
+ M src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+ M src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+ M src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp
+ M tools/swg_blender/CLIENT_SPAWN_CHECKLIST.md
+ M tools/swg_blender/HUMAN_E2E_TEST_GUIDE.md
+ M tools/swg_blender/PHASE6_VERIFICATION.md
+ M tools/swg_blender/PIPELINE.md
+ M tools/swg_blender/README.md
+ M tools/swg_blender/scripts/run_building_roundtrip_check.py
+ M tools/swg_blender/scripts/run_creature_client_smoke.py
+ M tools/swg_blender/swg_blender_addon/README.md
+ M tools/swg_blender/swg_blender_addon/__init__.py
+ M tools/swg_blender/swg_blender_addon/path_util.py
+ M tools/swg_blender/swg_blender_addon/preferences.py
+ M tools/swg_blender/swg_pipeline/export_bundle.py
+?? .mcp.json
+?? .planning/handoff/2026-06-02-boot-crash-resolved-cape-next.md
+?? .planning/handoff/2026-06-03-cape-spike-ring-investigation.md
+?? .planning/handoff/2026-06-05-cape-spike-race-confirmed-serialization-test.md
+?? .planning/handoff/2026-06-07-cape-spike-LIVE-ONLY-undefined-memory-reframe.md
+?? .planning/handoff/2026-06-07-cape-spike-softskin-ring-discard-renderdoc-next.md
+?? .planning/handoff/phase-19-world-corruption.md
+?? .planning/handoff/release-boot-crash-postfx.md
+?? .planning/research/CONSULT-17-06b-casec-codex.out
+?? .planning/research/CONSULT-17-06b-casec-cursor.out
+?? .planning/research/CONSULT-17-09-vs-texcoord-set-key-SYNTHESIS.md
+?? .planning/research/CONSULT-17-09-vs-texcoord-set-key-codex.out
+?? .planning/research/CONSULT-17-09-vs-texcoord-set-key-cursor.out
+?? .planning/research/CONSULT-17-09-vs-texcoord-set-key.md
+?? .planning/research/CONSULT-19-d3d11-world-corruption-ROUND2-SYNTHESIS.md
+?? .planning/research/CONSULT-19-d3d11-world-corruption-ROUND2-codex.out
+?? .planning/research/CONSULT-19-d3d11-world-corruption-ROUND2-cursor.out
+?? .planning/research/CONSULT-19-d3d11-world-corruption-ROUND2.md
+?? .planning/research/CONSULT-19-d3d11-world-corruption-codex.out
+?? .planning/research/CONSULT-19-d3d11-world-corruption-cursor.out
+?? .planning/research/CONSULT-19-d3d11-world-corruption.md
+?? .planning/research/CONSULT-19-interior-nan-specular-pow-codex.out
+?? .planning/research/CONSULT-19-interior-nan-specular-pow-cursor.out
+?? .planning/research/CONSULT-19-interior-nan-specular-pow.md
+?? .planning/research/CONSULT-19-release-boot-crash-ROUND2-SYNTHESIS.md
+?? .planning/research/CONSULT-19-release-boot-crash-ROUND2-codex.out
+?? .planning/research/CONSULT-19-release-boot-crash-ROUND2-cursor.out
+?? .planning/research/CONSULT-19-release-boot-crash-ROUND2.md
+?? .planning/research/CONSULT-19-release-boot-crash-psdata-garbage-SYNTHESIS.md
+?? .planning/research/CONSULT-19-release-boot-crash-psdata-garbage-codex.out
+?? .planning/research/CONSULT-19-release-boot-crash-psdata-garbage-cursor.out
+?? .planning/research/CONSULT-19-release-boot-crash-psdata-garbage.md
+?? .planning/research/CONSULT-19-vs-fallback-interior-asm-SYNTHESIS.md
+?? .planning/research/CONSULT-19-vs-fallback-interior-asm-codex.out
+?? .planning/research/CONSULT-19-vs-fallback-interior-asm-cursor.out
+?? .planning/research/CONSULT-19-vs-fallback-interior-asm.md
+?? .planning/research/CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting-codex.out
+?? .planning/research/CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting-cursor.out
+?? .planning/research/CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting.md
+?? .planning/research/CONSULT-21-d3d11-softskin-vb-race-renderdoc-codex.out
+?? .planning/research/CONSULT-21-d3d11-softskin-vb-race-renderdoc-cursor.out
+?? .planning/research/CONSULT-21-d3d11-softskin-vb-race-renderdoc.md
+?? .planning/research/CONSULT-22-REVIEW-codex.out
+?? .planning/research/CONSULT-22-REVIEW-prompt.txt
+?? .planning/research/CONSULT-22-REVIEW2-codex.out
+?? .planning/research/CONSULT-22-REVIEW2-prompt.txt
+?? .planning/research/CONSULT-22-d3d11-dynamic-vb-churnfree-fence-codex.out
+?? .planning/research/CONSULT-22-d3d11-dynamic-vb-churnfree-fence-cursor.out
+?? .planning/research/CONSULT-22-d3d11-dynamic-vb-churnfree-fence.md
+?? .planning/research/CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed-codex.out
+?? .planning/research/CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed-cursor.out
+?? .planning/research/CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed.md
+?? .planning/research/CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes-codex.out
+?? .planning/research/CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes-cursor.out
+?? .planning/research/CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes.md
+?? .planning/research/CONSULT-25-codex.clean.txt
+?? .planning/research/CONSULT-25-codex.out
+?? .planning/research/CONSULT-25-cursor.clean.txt
+?? .planning/research/CONSULT-25-cursor.out
+?? .planning/research/CONSULT-25-d3d11-cape-intraframe-cpu-gpu-ring-hazard.md
+?? .planning/research/CONSULT-26-A-renderdoc-fidelity.out
+?? .planning/research/CONSULT-26-B-d3d11-ring-contract.out
+?? .planning/research/CONSULT-26-C-codex.out
+?? .planning/research/CONSULT-26-C-skinning-lod-inputs.md
+?? .planning/research/CONSULT-26-D-cursor.out
+?? .planning/research/CONSULT-26-D-per-instance-state.md
+?? .planning/research/CONSULT-27-E-codex.out
+?? .planning/research/CONSULT-27-E-wvp-d3d9-vs-d3d11-diff.md
+?? .planning/research/CONSULT-27-F-cursor.out
+?? .planning/research/CONSULT-27-F-objectlocal-camera-transform.md
+?? .planning/research/CONSULT-27-G-wvp-bugclass-checklist.out
+?? .planning/research/CONSULT-28-G-nearplane-spec.out
+?? .planning/research/CONSULT-28-codex.out
+?? .planning/research/CONSULT-28-cursor.out
+?? .planning/research/CONSULT-28-d3d9-vs-d3d11-nearplane-clamp.md
+?? .planning/research/CONSULT-29-A-codex.out
+?? .planning/research/CONSULT-29-A-skeletal-draw-paths.md
+?? .planning/research/CONSULT-29-B-cursor.out
+?? .planning/research/CONSULT-29-B-tristrip-readpast.md
+?? .planning/research/CONSULT-30-CODEX-discard-region.md
+?? .planning/research/CONSULT-30-CURSOR-vertexformat-unwritten.md
+?? .planning/research/CONSULT-30-SONNET-lateral.out
+?? .planning/research/CONSULT-30-codex.out
+?? .planning/research/CONSULT-30-cursor.out
+?? .planning/research/CONSULT-31-CODEX-transformarray-pose-source.md
+?? .planning/research/CONSULT-31-CURSOR-skin-construction-vs-consumption.md
+?? .planning/research/CONSULT-31-OPUS-mechanism.out
+?? .planning/research/CONSULT-31-codex.out
+?? .planning/research/CONSULT-31-cursor.out
+?? .planning/research/CONSULT-slot0-codex.out
+?? .planning/research/CONSULT-vs-ps-interpolator-mismatch-codex.out
+?? .planning/research/CONSULT-vs-ps-interpolator-mismatch-cursor.out
+?? .planning/research/RENDER-PATH-TREE-TASK-codex.md
+?? .planning/research/RENDER-PATH-TREE-TASK-cursor.md
+?? .planning/research/RENDER-PATH-TREE-codex-run.out
+?? .planning/research/RENDER-PATH-TREE-cursor-run.out
+?? .planning/research/cape-spike-evidence/
+?? .planning/research/vsh-extract/
+?? .planning/tmp/
+?? PROGRESS.md
+?? binary-backups/
+?? build-17-07-start.txt
+?? dbg-d3d11-after2770.cmd
+?? dbg-d3d11-bawatch.cmd
+?? dbg-d3d11-crash.cmd
+?? dbg-d3d11-creationwatch.cmd
+?? dbg-d3d11-poolwatch.cmd
+?? dbg-d3d11-progfree.cmd
+?? dbg-d3d11-stompwatch.cmd
+?? docs/progress-gallery/
+
+codex
+The worktree is already dirty with several D3D11 and skeletal files modified, so I’ll treat all existing changes as user state and only read. The current sandbox is read-only with no approval path, which may block writing the markdown file; I’ll still produce the full research content and call out the write constraint clearly.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/PROJECT.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/phase-17-char-select.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/STATE.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/handoff/swg-blender-import.md' in D:\Code\swg-client-v2
+ succeeded in 1411ms:
+# Handoff: SWG Blender IFF pipeline
+
+**Updated:** 2026-05-29 (M16 tre_project ready to commit; roundtrip smoke green)
+**Branch:** koogie-msvc-cpp20-base (ahead 63, **swg_blender WIP staged for commit**)
+**Worktree:** D:\Code\swg-client-v2
+**Status:** Phases 0â€“15 + Phase 7 done Â· Creature **io-parity compare validated** (abyssin_m) Â· **M16 tre_project roundtrip smoke PASS** (creature + building Blender) Â· MCP **blender-mcp 1.5.6** / Blender **5.1.2**
+
+---
+
+## Pick up here (restart)
+
+1. Read AGENTS.md â€” **never use Cursor Write on `tools/swg_blender/**/*.py` or `.planning/handoff/*.md`** (UTF-16 corruption on Windows).
+2. Read this file; if resuming D3D11 char-select work read [phase-17-char-select.md](phase-17-char-select.md).
+3. `cd tools/swg_blender; python -m pytest tests/ -q` â€” last run **191 passed, 8 skipped** (~165s).
+4. **Roundtrip smoke (host, 2026-05-29):**
+   - `python scripts/run_creature_roundtrip_check.py` â€” 12/12 LOD `.mgn` OK
+   - `python scripts/run_building_roundtrip_check.py` â€” 41/41 `.msh` Python + Blender OK (~45s)
+5. **M16 modules** (commit as one slice):
+   - `swg_pipeline/creature_graph.py`, `building_graph.py`, `tre_project*.py` â€” workspace materialize + export
+   - Addon **Creature project** / **Building project** panels + operators in `swg_blender_addon/`
+   - `load_skeletal_mesh_io_parity()` + compare scripts under `tools/swg_blender/scripts/`
+   - Spec: `docs/research/tre-project-roundtrip-SPEC.md`
+5. **Creature compare** (visual parity validated):
+   - Workspace: `C:\Users\kenne\AppData\Local\Temp\swg_creature_compare_oubiscla`
+   - Script: `tools/swg_blender/scripts/compare_creature_io_scene_bpy.py`
+   - io_scene (patched): `D:\Code\io_scene_swg_msh\io_scene_swg\`
+   - User confirmed **matching** after NIDX fix + Y-offset + zero blend shapes
+6. **MCP:** Cursor mcp.json uses `cmd /c uvx blender-mcp` + DISABLE_TELEMETRY. PyPI **1.5.6**. Chunk heavy imports â€” do not one-shot full runpy over MCP.
+
+---
+
+## Session 2026-05-29 â€” M16 TRE project (WIP, uncommitted)
+
+### Goal
+
+Vertical slice: extract creature/building DAG from TRE â†’ Blender workspace (`swg_tre_project.json`) â†’ edit â†’ export back â†’ optional pack.
+
+### New modules (untracked / modified)
+
+| Area | Files |
+| --- | --- |
+| Creature graph | `swg_pipeline/creature_graph.py`, `tre_project.py`, `tre_project_bpy.py` |
+| Building graph | `swg_pipeline/building_graph.py`, `tre_project_building.py`, `tre_project_bpy_building.py` |
+| Floor/portal import | `swg_blender/import_floor.py`, `import_portal.py`, `export_floor.py`, `export_portal.py` |
+| POB cells | `swg_scene/pob_cells.py` |
+| Addon UI | `operators.py` â€” `SWG_OT_import/export_creature_project`, building project ops |
+| Tests | `test_creature_graph.py`, `test_building_graph.py`, `test_tre_project.py`, `test_skeletal_io_scene_parity.py` |
+| Smoke scripts | `scripts/run_creature_roundtrip_check.py`, `run_building_roundtrip_check.py`, `run_creature_client_smoke.py` |
+
+### CLI (from SKILL.md)
+
+```powershell
+python -m swg_pipeline.tre_project import-creature --workspace W --sat appearance/abyssin_m.sat [--tre X.tre] [--blender]
+python -m swg_pipeline.tre_project export-creature --workspace W [--blender] [--rebuild-rsp]
+python -m swg_pipeline.tre_project import-building --workspace W --pob appearance/echo_base_pob.pob [--blender]
+```
+
+Golden refs: `appearance/abyssin_m.sat` (creature), `appearance/echo_base_pob.pob` (building).
+
+### Next for M16
+
+1. ~~Commit once roundtrip smoke passes~~ **done** (2026-05-29).
+2. **M16 client smoke** â€” pack creature TRE, load in client (Blender geometry parity already validated).
+3. Decide addon **creature import** UX: SAT+rotation vs io-parity MGN path (`docs/research/sat-lmg-ux-comparison.md`).
+4. **`rebuild_appearance=True` hang** on some building `.msh` (e.g. `echo_base_pob_r11_r11`) â€” building Blender export uses `rebuild_appearance=False` to match parity tests; root cause in appearance rebuild still open.
+
+---
+
+## Session 2026-05-29 â€” abyssin_m compare (swg_blender vs io_scene_swg_msh)
+
+### Default compare behavior
+
+| Flag | Meaning |
+| --- | --- |
+| *(default)* | **io-parity MGN** â€” 3 LOD0 files (`abyssin_m_l0`, `body_l0`, `arms_l0`) |
+| `--use-sat-import` | Old full SAT + armature path |
+| `--torso-only` | Only `abyssin_m_body_l0.mgn` |
+| `--offset 2.5` | **Y-axis** separation (swg at -Y, io at +Y) |
+
+Background (stable, no MCP):
+
+```powershell
+blender -b --python D:\Code\swg-client-v2\tools\swg_blender\scripts\compare_creature_io_scene_bpy.py -- --workspace C:\Users\kenne\AppData\Local\Temp\swg_creature_compare_oubiscla --io-scene-dir D:\Code\io_scene_swg_msh\io_scene_swg --offset 2.5
+```
+
+### Root causes fixed
+
+| Symptom | Fix |
+| --- | --- |
+| Opposite facing | Offset on **Y** not X |
+| io "fat" belly | `_zero_blend_shape_keys()` on io side |
+| Geometry mismatch | Default **io-parity** loader (not SAT) |
+| Splotchy swg shading | **NIDX** in `load_skeletal_mesh_io_parity()` |
+| MCP disconnect | Chunked MCP or `blender -b` |
+
+### Verification
+
+Per-mesh evaluated vertex delta = **0.0** for `abyssin_m_l0`, `abyssin_m_body_l0`, `abyssin_m_arms_l0`.
+
+### Code touched
+
+| File | Change |
+| --- | --- |
+| `scripts/compare_creature_io_scene_bpy.py` | io-parity default, Y offset, neutral mats, zero blends |
+| `swg_scene/mesh_skeletal.py` | `load_skeletal_mesh_io_parity()`, IoParityFace + NIDX |
+
+---
+
+## Blender MCP stability
+
+| Item | Detail |
+| --- | --- |
+| **PyPI** | blender-mcp **1.5.6** |
+| **Cursor config** | `C:\Users\kenne\.cursor\mcp.json` â€” `cmd /c uvx blender-mcp`, DISABLE_TELEMETRY=true |
+| **Blender** | **5.1.2** |
+| **Rule** | Only one MCP instance; chunk heavy imports |
+
+---
+
+## Pipeline status
+
+| Phase | Status |
+| --- | --- |
+| 0â€“15 | Done |
+| 7 (client gate) | Done |
+| M16 tre_project | **Roundtrip smoke PASS** â€” client smoke next |
+
+---
+
+## Test status
+
+Run: `cd tools/swg_blender; python -m pytest tests/ -q`
+
+**191 passed, 8 skipped** (2026-05-29). Skips: pack tests without TreeFileBuilder, swg-main retail paths without SWG_MAIN.
+
+---
+
+## Gotchas
+
+See AGENTS.md (UTF-16, VTXA tag, use_auto_smooth removed in Blender 4+, import rotation on **object** not vertices).
+
+ succeeded in 1464ms:
+---
+gsd_state_version: 1.0
+milestone: v2.2
+milestone_name: Visual Parity
+status: ready_to_plan
+last_updated: "2026-05-29T22:46:53.967Z"
+last_activity: "2026-05-30 -- Phase 17 COMPLETE + VERIFIED. GAP-3/4/5/6 all closed â†’ char-select renders LIT+textured for ALL parts. 17-05 T4-5 done (commit bb4b13a00): matched A/B (D3D9 screenShot0029 vs D3D11 0030), CHAR-01/02/03 = PASS (asset-PS lane, 9/9 binds). UAT 3/3 pass; security 28/28 threats closed (17-SECURITY.md). Phase advanced 17â†’18. Pushed to origin."
+progress:
+  total_phases: 7
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 7
+  percent: 29
+---
+
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
+
+**Core value:** Every change must leave the client bootable to character select â€” and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
+**Current focus:** Phase 18 â€” load-screen-half-texel-seam (UI-01)
+
+## Deferred Items (acknowledged at v2.0 close)
+
+NOTE: "Remove dead code (CLEAN-01..04 vs MSBuild)" is now CLOSED â€” it was the v2.1 Decruft milestone (Phases 12â€“16, shipped 2026-05-27).
+
+Acknowledged and deferred at v2.0 milestone close (2026-05-25):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | closed (pre-existing engine quirk; not a regression) |
+| debug | safecast-null-cast | closed (resolved 2026-05-15) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low â€” workaround exists |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low â€” informational, post-Phase-11 |
+| backlog | Dead-code re-removal (CLEAN-01..04) vs MSBuild tree | **CLOSED â€” shipped as v2.1 Decruft (Phases 12â€“16)** |
+| backlog | DPVS D3D11 remeasure (SPEC R7); CLEAN-06 ~30 tools | DPVS-01 now scheduled as v2.2 Phase 23; CLEAN-06 tools carried to backlog |
+
+## Deferred Items (acknowledged at v2.1 close)
+
+5 open artifacts acknowledged and deferred at v2.1 Decruft milestone close (2026-05-27). All non-blocking â€” none are v2.1 regressions:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | closed (pre-existing SOE engine quirk; not a regression) |
+| debug | safecast-null-cast | closed (resolved 2026-05-15, ContrailData D-18 guard) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low â€” annoying, workaround available |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low â€” informational, post-Phase-11 |
+| todo | 2026-05-27-options-toolbar-cooldown-ui-data-mismatch-crash | medium â€” pre-existing Options-window FATAL (`checkShowToolbarCommandCooldownTimer` `.ui`-data mismatch from feature commit `d1b3c0eaf`); OUTSIDE the v2.1 diff, NOT a Decruft regression |
+
+Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` accumulated test-settings cleanup (after v2.2 visual parity); AR-15-01 future-TCG-revival re-evaluation (future v2.x). See `milestones/v2.1-MILESTONE-AUDIT.md`.
+
+## Current Position
+
+Phase: 19
+Plan: Not started
+Status: Ready to plan
+Resume: None â€” Phase 17 complete + verified + secured. Ready to plan Phase 18 (load-screen half-texel seam, UI-01 â€” `getOneToOneUVMapping` stub; independent of the PS pipeline). gl11_d.dll = HEAD a0d5ac80f (5/30 13:24). See memory project_phase17_charselect_d3d11_parity_verified.
+Last activity: 2026-05-30
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- [2026-05-27] **v2.2 Visual Parity ROADMAP CREATED** â€” 7 phases (17â€“23), 13/13 requirements mapped (CHAR/WORLD/GAMMA/UI/FX/GEO/DPVS). Standard granularity. Phases continue from 16 â†’ start at 17.
+- Phase 16 added: v2.1 tech-debt cleanup (SwgGodClient 989crypt.lib + P12-P15 residue) â€” from milestone audit
+
+### Decisions
+
+**v2.2 Visual Parity (roadmap):**
+
+- [2026-05-27] **Char-select beachhead FIRST (Phase 17).** Prove the asset-PS pipeline on the deterministic, isolated character-select screen (textures + eyes + head) before any open-world work. Use `sul_eye.sht` + `sul_*_head.sht` PLUS one single-stage control (body/clothing) to separate "pipeline works" from "multi-sampler works."
+- [2026-05-27] **Phase 17's gating first task = PSRC language census on the REAL asset tree** (retail-TRE extraction; the repo checkout has no extracted `.psh`/`.sht`). Classify `//hlsl` vs asm â€” the HLSL:asm ratio decides the lane mix and gates the rest of the phase.
+- [2026-05-27] **Asset-PS approach (per CODEX+Cursor consult, SUPERSEDES SUMMARY.md on the asm lane):** primary lane = recompile discarded `TAG_PSRC` `//hlsl` via existing `compilePixelShaderFromHlsl` (mirror the VS compile stack); secondary lane = port asm `PSRC` â†’ HLSL â†’ `ps_4_0` (re-assembling asm just reproduces the rejected D3D9 bytecode â€” named landmine); FFP `TextureOperation` generator is tertiary/narrow ONLY for genuine FFP-only passes. Per-pass `Pass::apply` constants upload **reflection-driven (D3DReflect)**, NOT via copied D3D9 register indices.
+- [2026-05-27] **Independent/parallel gaps:** load-screen half-texel seam (Phase 18, UI-01) is small/early/standalone (`getOneToOneUVMapping` stub), independent of the PS pipeline. Gamma LUT (Phase 19) scheduled AFTER the PS pipeline so it's tuned on correctly-shaded content; NO sRGB-view gamma (double-correction trap â€” keep SRVs `_UNORM`).
+- [2026-05-27] **Satellite gaps are SEPARATE from the PS pipeline, not assumed to fall out of it:** interior flat-white (Phase 19, WORLD-03) also needs the simplified `Direct3d11_LightManager` + gamma, not just PS; "eyes through back of head" was already fixed by Iter-44A depth wiring (verify by screenshot in Phase 17, don't re-fold into PS scope); stencil is its own state-parity item; exterior/skeletal shard distortion (Phase 22, GEO-01) gated on a fully-settled re-capture (0013/0014 were mid-load LOD smear) with a single-stream-fix vs flip-to-multistream decision.
+- [2026-05-27] **DPVS D3D11 remeasure (Phase 23, DPVS-01) is STRICTLY LAST** â€” meaningless until geometry renders cleanly.
+- [2026-05-27] **Validation = D3D9-vs-D3D11 screenshot diff** against the `docs/research/phase12-baseline/COMPARISON.md` matched pairs. Success = "matches `rasterMajor=5`", NOT "no magenta". Every parity claim needs a matched pair (Iter-44B minimap over-claim lesson). Do NOT mark UI-02 minimap done without a diff.
+- [2026-05-27] **Cross-cutting landmines for executors:** boot-gate BOTH `rasterMajor=5` and `=11` on any `ShaderImplementation.cpp` edit; keep D3D9 `load_0000` PSRC behavior byte-for-byte identical except storing text; mirror the intentional D3D9 `Compare[]` swap (`C_GreaterOrEqual`â†”`C_NotEqual`), don't "fix" it; every new cbuffer matrix needs `XMMatrixTranspose`; persistent baked RT stays `B8G8R8A8_UNORM`; do NOT re-enable per-pass blend factors early (Iter-44C amplification regression); feed generator/rewrite/profile changes into the `.cso` cache key/version.
+
+**v2.1 Decruft (roadmap):**
+
+- [2026-05-25] v2.1 framed as **cleanup-only**: re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree. Visual Parity reordered to v2.2 (cleanup-first shrinks surface area before upstream imports). Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits, retargeted CMake â†’ MSBuild.
+- [2026-05-25] Phase ordering is **risk-gradient, low-first**: pure deletes (Phase 12) â†’ lib unlink (Phase 13) â†’ live-source surgery (Phases 14 Vivox, 15 XPCOM). Re-establishes the boot baseline before the riskier source removals.
+- [2026-05-25] DECRUFT-07 (dual-renderer boot gate) is a cross-cutting milestone gate owned by the final phase (15) but **verified incrementally** after every removal in Phases 12â€“15 â€” mirrors v2.0 CLEAN-05.
+
+### Pending Todos
+
+1 pending:
+
+- [Sync community compat fixes from SWG-Source/client-tools master](todos/pending/2026-05-08-sync-swg-source-community-compat.md) â€” future milestone (not v2.2)
+
+### Blockers/Concerns
+
+- **[v2.2 â€” census gate]** Phase 17's first deliverable (PSRC census) MUST run against the real retail-TRE asset extraction â€” this repo checkout has no extracted `.psh`/`.sht`. Neither consult reviewer could verify asset contents from the tree. The HLSL:asm ratio is the single biggest open unknown and gates the lane mix.
+- **[v2.2 â€” screenshot-diff discipline]** Every parity win requires a matched D3D9/D3D11 pair from the same scene/pose. The Iter-44B minimap over-claim propagated a false win through a full plan cycle. Do NOT mark UI-02 done without a diff.
+- **[v2.2 â€” boot invariant]** Every shared-`clientGraphics` edit must boot-test BOTH `rasterMajor=5` AND `rasterMajor=11` before being claimed done. Debug exe reads `client_d.cfg` (not `client.cfg`) â€” set rasterMajor there for each smoke (memory feedback_debug_exe_reads_client_d_cfg).
+- **[Phase 12 â€” /FORCE false-pass, still applies]** SwgClient links under `/FORCE`, which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. `MSBuild exit 0` is NOT proof of a clean link â€” grep the link output for `unresolved external symbol` (must be 0).
+
+## Deferred Items
+
+Items carried from v1 close:
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| Build warnings | Nested CMake minimum-version deprecation warnings | Deferred (historical CMake tree) | Phase 1 |
+| Build warnings | `crypto` C4530 exception-unwind warnings | Deferred | Phase 1 |
+| Runtime | 156k DEBUG_WARNINGs at exit (mostly per-frame nebula lightning) | Deferred | v1 post-launch |
+| Runtime | 8,152 memory leaks at exit (singletons/caches, expected) | Deferred | v1 post-launch |
+
+## Session Continuity
+
+Last session: 2026-05-27T20:59:43.979Z
+Resume (2026-05-27): **v2.2 Visual Parity ROADMAP CREATED** (Phases 17â€“23; 13/13 requirements mapped 100%). v2.1 Decruft shipped + tagged `v2.1`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
+
+**v2.2 Visual Parity â€” the plan (7 phases):**
+
+1. **Phase 17** (CHAR-01/02/03) â€” PSRC census on the real asset tree (gating first task), then prove the recompile + reflection-driven-constant pipeline on char-select: textures, eyes, multi-stage head. Primary lane = `//hlsl` PSRC recompile; secondary = asmâ†’HLSL port; tertiary/narrow = FFP generator. UI hint.
+2. **Phase 18** (UI-01) â€” load-screen half-texel centerline-seam fix (`getOneToOneUVMapping` stub). Independent of Phase 17; safe early/parallel canary. UI hint.
+3. **Phase 19** (GAMMA-01, WORLD-03) â€” gamma LUT post-pass (D3D9 `pow()` ramp, NO sRGB views) + interior lighting via per-pass light constants + simplified `Direct3d11_LightManager` parity. After Phase 17.
+4. **Phase 20** (WORLD-01, WORLD-02, UI-02) â€” extend the PS pipeline to open-world surfaces + multi-stage `TextureOperation` cascade + round minimap (screenshot-diff verified). After Phase 17.
+5. **Phase 21** (FX-01, FX-02) â€” particles (blend/additive/alpha) + ribbon/swoosh (instrument the draw path first; stretch is NOT a transform bug). After Phases 17/20.
+6. **Phase 22** (GEO-01) â€” exterior static-mesh shard distortion, gated on a fully-settled re-capture (0013/0014 were mid-load LOD smear) + single-stream-fix vs multistream-flip decision. After Phase 20.
+7. **Phase 23** (DPVS-01) â€” DPVS D3D11 remeasure + keep/remove verdict (SPEC R7 deferral). STRICTLY LAST.
+
+Validation throughout = D3D9-vs-D3D11 screenshot diff against `docs/research/phase12-baseline/COMPARISON.md` matched pairs. Success = matches `rasterMajor=5`, not "no magenta".
+
+**Next action:** `/gsd-plan-phase 17` â€” plan the PSRC census + char-select beachhead. Census tool is the gating first deliverable; needs the real retail-TRE asset extraction.
+
+Known unrelated long-tail (deferred): 0x087a armor_marauder async crash (cross-client, retry works); pre-existing Options-window cooldown-UI crash (commit `d1b3c0eaf`, NOT a regression). Koogie's uncommitted Direct3d9.cpp Utinni vtable probe in the working tree is a separate sidequest â€” leave untouched.
+
+ succeeded in 1796ms:
+# Handoff: Phase 17 â€” char-select D3D11 beachhead
+
+**Updated:** 2026-05-30 (17-05 T4â€“5 DONE â†’ CHAR-01/02/03 = PASS; Phase 17 char-select verification COMPLETE)
+**Branch:** koogie-msvc-cpp20-base
+**Worktree (D3D11 work):** `D:\Code\swg-client-v2-d3d11` â€” Cursor uses the main checkout `D:\Code\swg-client-v2` on `swg-blender-m16`. Build gl11 in the worktree with `& $env:MSBUILD <worktree>\src\build\win32\swg.sln /t:Direct3d11 /p:Configuration=Debug /p:Platform=Win32 /m /nodeReuse:false`. The worktree `stage` is a **junction â†’ main stage**, so the postbuild copy auto-deploys `gl11_d.dll` to `D:\Code\swg-client-v2\stage` (no manual copy; see memory `project_d3d11_worktree_stage_junction`).
+**Status:** 17-01..17-04 done Â· 17-05 T1â€“3 PARKED Â· 17-06a/06b done Â· 17-07/GAP-3 DONE (9/9 binds) Â· GAP-4 (PS b0 lighting) + GAP-5 (VS vertex lighting) DONE `e1db7bf65` Â· **GAP-6 (bump sleeves/hands) FIXED+COMMITTED `a0d5ac80f` (pushed to origin)** â†’ char-select asset-PS renders LIT+textured for ALL parts (face/skin, tunic, pants, shoes, AND bump sleeves/hands). Â· 17-05 T4â€“5 (A/B + verdict) still pending.
+
+> ## â–¶ PHASE 17 char-select VERIFICATION COMPLETE (2026-05-30) â€” CHAR-01/02/03 = PASS
+>
+> **17-05 T4â€“5 DONE** (commit `bb4b13a00`). Matched-pair A/B captured on Kenny's host: D3D9
+> `screenShot0029` (rasterMajor=5 Release stack) vs D3D11 `screenShot0030` (rasterMajor=11) â†’
+> near-identical lit+textured char-select; only residual is a minor brightness/tone delta tracked
+> under **GAMMA-01 (Phase 19)**, out of CHAR scope. POST-gap metric set: `asset-PS bound=`**9**,
+> `COMPATIBLE`**9** / `INCOMPATIBLE`**0**, `id=342`=0, `PSRC recompile FAILED`=0 (asset-PS lane
+> delivering â€” the primary char-select visual driver). Verifier-produced `17-VERIFICATION.md`
+> supersedes the synthesized stand-in (`a20e828d8`); 4 evidence PNGs committed (D3D9 + preGap +
+> postGap + canonical alias); evidence/README.md Â§6 provenance corrected to the GAP-6 build.
+>
+> **GAP-1 closed.** No remaining char-select work. Possible next steps: push `bb4b13a00` to origin;
+> run `/gsd:verify-work 17` for the formal pass; close/audit the phase; or advance to the next
+> ROADMAP phase. NOTE: the 17-05-PLAN Task-5 acceptance criteria literally greps
+> `authored_by: claude-opus-4.7` â€” the doc honestly records `claude-opus-4.8` (the real author), so
+> that one stale literal-string gate will mismatch; the field's provenance intent is satisfied.
+>
+> _(Superseded resume blocks below â€” kept for the root-cause derivation history.)_
+>
+> ### Earlier resume: 17-05 Tasks 4â€“5 (now DONE)
+> capture D3D9 baseline (rasterMajor=5 via the pre-17-01 Release stack â€” see "D3D9 capture
+> workaround" below) + author `17-VERIFICATION.md`. Expect CHAR-01/02/03 PASS on pipeline/lighting and ALL
+> body parts now (bump parts included). Append the POST-gap build provenance (HEAD `a0d5ac80f` + gl11_d.dll
+> mtime) to evidence/README.md Â§6 before the A/B.
+>
+> ### How GAP-6 was actually fixed (the multi-stream theory was WRONG)
+> The purple/green bump arms were NOT a tangent/NaN problem. Full detail: memory
+> `project_d3d11_multitexture_srv_slot_swap`. Two parts:
+> 1. **Tangent**: the per-key VS texcoord-set variant (Fix A â€” `Direct3d11_VertexShaderData`/`VertexDeclarationMap`
+>    per-`textureCoordinateSetKey` recompile) gave the bump VS its real DOT3 tangent at TEXCOORD1. This did
+>    NOT require activating multi-stream â€” single-stream per-key remap sufficed, so the
+>    `SoftwareBlendSkeletalShaderPrimitive` multi-stream-activation rabbit hole was unnecessary.
+> 2. **The real culprit â€” TEXTURE-SLOT SWAP**: fxc assigns SM4 texture registers by first-USE order when
+>    splitting legacy `sampler2D`. specmap_bump samples `normalMap` before `diffuseMap` â†’ normalMap=t0,
+>    diffuseMap=t1, opposite the engine's D3D9 stage-index SRV bind â†’ the blue normal map was sampled as
+>    albedo. Fixed by a reflection-driven stageâ†’SRV-slot remap (`Direct3d11_PixelShaderProgramData::
+>    getSrvSlotForStage`, used in `Direct3d11_StaticShaderData::apply`). Also added the VS material c11â€“c15
+>    feed (`Direct3d11_StateCache::setVertexMaterialColors`, mirrors D3D9 `VSCR_material`). The VS-NaN that
+>    the old GAP-6 handoff (`gap6-bump-arms-vs-lighting-nan.md`) chased was already fixed by GAP-5 + the
+>    material feed â€” RenderDoc "Debug this Vertex" confirmed finite COLOR0/COLOR1.
+> The GAP-6 multi-stream infra (caps flip, VertexBufferDescriptorMap changes) committed in `e1db7bf65`
+> remains DORMANT/unused â€” harmless; revisit only if a true multi-stream asset ever needs it.
+>
+> _(Superseded GAP-4 design block below â€” kept for the root-cause derivation; GAP-4 is now DONE+committed.)_
+>
+> **17-07 / GAP-3 is DONE** (commits `f9e5ac569`â†’`d8cc1ca99`, SUMMARY `8639c5458`). The asset-PS bind
+> rate went 0/9 â†’ **9/9** (`path=rewritten`) via VS-signature RECONSTRUCTION (axis-b reorder was wrong â€”
+> the mismatch was a register-BASE offset: VS reserves o0=SV_Position, asset PS starts v0; reorder can't
+> add the +1 base, so we now rebuild the PS input sig to mirror the VS exactly + wrap the asset main).
+> Enabling the lane revealed **GAP-4: char-select body renders BLACK** â€” the asset PS reads zero lighting
+> constants.
+>
+> **GAP-4 fix is fully designed + dual-AI converged + census-gate UNBLOCKED** (codex+cursor:
+> `.planning/research/CONSULT-17-07-gap4-cbuffer-reconcile*`; full design in memory
+> `project_17_07_ps_register_base_offset`). Root cause: asset PS reads `SwgVertexConstants`@b0 but the
+> light constants (c0-c4) are pushed to b0 by NOBODY (D3D11 LightManager only fills `LightingCB`@b3);
+> `StaticShaderData::apply` zero-inits b0 and clobbers it; engine userConstants go to b2. The c-index map
+> is IN-REPO at `Direct3d9_PixelShaderConstantRegisters.h` (`PSCR_dot3LightDirection=c0 ... userConstant=c8`),
+> matching the reflected b0 offsets â€” **no TRE .inc extraction needed.**
+>
+> **GAP-4 implementation (the converged plan):** a persistent D3D11 b0 shadow[400] fed by 3 producers:
+> (A) port `Direct3d11_LightManager` to push `pixelDot3Data` (5 float4s) â†’ shadow@c0 (from
+> `Direct3d9_LightManager.cpp:601`/~592-625; specPower packs into `dot3LightDirection.w`); (B)
+> `StaticShaderData::apply` RMW from the shared shadow (STOP the `staging(400,0)` zero-init) + patch
+> textureFactor/materialSpecularColor by reflected offset; (C) `setPixelShaderUserConstants_impl` â†’
+> shadow@`(PSCR_userConstant+i)*16` (offset 128+, NOT c0); upload merged shadow via `updatePS(0)`; keep
+> b2/fallback untouched. Instrument b0 c0.xyz/c1.rgb/c7/c8 at flush (pass = c0 nonzero + lit character).
+>
+> **Also still PENDING:** D-06 `rasterMajor=5` re-boot (gl11-only change â†’ D3D9 byte-for-byte; needed for
+> 17-05 Task 4's D3D9 re-capture). 17-05 Tasks 4â€“5 (POST-gap A/B + 17-VERIFICATION.md) best run AFTER
+> GAP-4 so they capture a LIT character, not the black interim â†’ CHAR-01/02/03 verdict.
+>
+> `gl11_d.dll` currently = HEAD `d8cc1ca99` (5/29 17:23, GAP-3). `SwgClient_d.exe` (5/28) unchanged/compatible.
+
+---
+
+_Historical (pre-execution 17-07 plan notes â€” SUPERSEDED by the GAP-4 resume block above; 17-07 is done):_
+
+> **RESUME HERE â†’ execute 17-07, then 17-05 Tasks 4â€“5.** 17-07 is the big one: HLSL parameter-list
+> parser (`rewritePsMainParameterListForVSOutputs`) + per-VS rewrite cache (VS-output-sig-hash keyed,
+> pointer-reuse invalidated) + per-VS reflected-inputs cache (HIGH-6) + StateCache bind wiring
+> (native > rewritten > fallback) + `asset-PS bound=` log. Touches PSData.h + VertexShaderData.h â†’
+> STAGE-1 MUST rebuild ALL plugin .vcxprojs + relink SwgClient_d.exe (ABI cascade trap). Bump
+> D3D11_REWRITE_VERSION 21â†’22 at BOTH sites (PixelShaderProgramData.cpp:153 + :303). Do the built-in
+> COLOR0/TEXCOORD spike FIRST (de-risk the parser) before the full impl. After 17-07's combined build,
+> APPEND the "POST-gap build provenance" line (HEAD SHA + gl11_d.dll mtime) to evidence/README.md Â§6,
+> then run 17-05 Task 4 (POST-gap capture) + Task 5 (author real 17-VERIFICATION.md).
+
+> **Execution note (this session):** running inline/sequential (Kenny-in-the-loop), not parallel
+> worktrees â€” the executor cannot boot the client (no `.tre`), every capture is a host checkpoint.
+> Wave-only fallback ordering is in effect (orchestrator does not resolve named partial deps).
+
+## PRE-gap baseline (recorded for Task 5's PRE/POST table)
+
+Host boot 2026-05-29 12:55, `stage/d3d11-debug.log` (32,594 lines), HEAD `9f5db9c3f`:
+`id=342`=0 Â· `id=343`=27 Â· `PSRC recompile FAILED`=0 Â· `wroteDiffuse=1`=0 Â· `wroteEmissive=1`=0 Â·
+`wroteSpecular=1`=6 Â· `asset-PS bound=`=0 Â· `fallback-PS bound=`=0 Â· `Plan 17-07 COMPATIBLE/INCOMPATIBLE`=0/0 Â·
+native `Plan 17-04 Task 1 INCOMPATIBLE`=27 (real PRE fallback driver). PRE state: GAP-2 open (0
+diffuse/emissive writes), GAP-3 open (27 incompatible pairs, 0 asset-PS binds). PNGs at 1920Ã—1080:
+`evidence/char_default_d3d9_0003.png` + `evidence/char_default_d3d11_0003_preGap.png`.
+
+## D3D9 capture workaround (needed again for Task 4's D-06 re-boot)
+
+Current Debug binaries CANNOT boot D3D9 char-select (post-17-01 `SwgClient_d.exe` ABI-cascades with
+`gl05_d.dll` â€” parked Phase-17.X gl05 regression). **Capture D3D9 via the pre-17-01 Release stack:**
+`stage/SwgClient_r.exe` + `gl05_r.dll` (both 5/27). Release exe reads `stage/client.cfg`, which is
+edited (reversible) to `rasterMajor=5` + 1920Ã—1080 â€” **leave it** for Task 4's D3D9 re-boot; revert at
+phase close. Use the in-client **F12** key (back-buffer dump to `stage/screenshots/`), not the OS snip
+tool (fights fullscreen). jpgâ†’png transcode for canonical naming.
+
+---
+
+## Pick up here
+
+1. Read `.planning/STATE.md` and `.planning/phases/17-psrc-census-char-select-beachhead/17-VERIFICATION.md`.
+2. Execution order after 17-05 Task 3 (Round-5 review item 2 â€” 17-07 MUST build LAST; `depends_on` enforces 17-06b -> 17-07):
+   - **17-06a** (Wave 6, human checkpoint) â€” extend cbuffer discovery dump in `Direct3d11_StaticShaderData.cpp` (re-reflect via D3DReflect is MANDATORY â€” cached layout has no type info)
+   - **17-06b** (Wave 7, autonomous, `depends_on: 17-06a`) â€” `writeVarFloat4AtOffset` + diffuse/emissive writes from 06a evidence (evidence-backed offset ONLY; folklore-slot writes forbidden â€” take Case-C DEFERRED instead)
+   - **17-07** (Wave 7, human checkpoint, `depends_on: 17-04 + 17-05-task3 + 17-06b`) â€” PS parameter-list rewrite + StateCache bind path + per-VS cache + `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; touches PSData.{cpp,h} + StateCache.cpp + VertexShaderData.{h,cpp}; bumps `D3D11_REWRITE_VERSION` 21->22 (live is already 21); STAGE-1 all-plugin rebuild runs LAST so the post-gap gl11_d.dll contains BOTH 17-06b and 17-07 (GAP-3, **primary visual driver**)
+   - **17-05 Tasks 4â€“5** â€” POST-gap boot capture (hard-gated on the recorded 17-07 commit SHA + gl11_d.dll mtime in evidence/README.md) + CHAR verdict authoring
+3. Rebuild **all plugin vcxprojs** after any `Direct3d11_*.h` touch (stale gl11_d.dll trap).
+4. **Orchestrator contract for the `17-05-task3` named partial dependency (Round-5 review item 8):** 17-06a/06b/07 declare `depends_on` including `17-05-task3`, which is satisfied by Plan 17-05's Task-3 PRE-gap commit (the `## TASK 3 HANDOFF â€” PARK POINT` block, literal `17-05-task3`), NOT by 17-05 reaching its final task. If the orchestrator cannot resolve a named partial dependency, fall back to WAVE-ONLY ordering: Wave 5 (17-05 PRE-gap commit) -> Wave 6 (17-06a) -> Wave 7 (17-06b then 17-07) -> resume 17-05 Tasks 4â€“5. Either way 17-07 builds last in Wave 7.
+
+---
+
+## Gap inventory (char-select)
+
+| Gap | Plan | Delivers |
+| --- | --- | --- |
+| GAP-1 | 17-05 | Screenshot A/B evidence (D3D9 vs D3D11) |
+| GAP-2 | 17-06a/06b | Cbuffer diffuse/emissive **instrumentation** (`wroteDiffuse=1`) â€” **not** primary char-select visuals |
+| GAP-3 | 17-07 | Asset PS bind rate + `asset-PS bound=` log â€” **primary char-select visual driver** |
+
+Char-select PSes consume `textureFactor.rgb` + `COLOR0`, not cbuffer material colors (see `evidence/plan-17-04x-psrc-source-dump.txt`).
+
+---
+
+## Planning changes (uncommitted)
+
+| Change | Detail |
+| --- | --- |
+| Deleted | `17-06-PLAN.md` (monolithic) |
+| Added | `17-06a-PLAN.md` (discovery dump), `17-06b-PLAN.md` (offset writes) |
+| Rewritten | `17-07-PLAN.md` â€” parameter-list parser primary; touches StateCache + PSData.h + VertexShaderData.{h,cpp}; real compile+reflect Task-0 spike; `Plan 17-07 COMPATIBLE vs=` rewritten-lane log; `D3D11_REWRITE_VERSION` 21->22 |
+| Updated | `17-05-PLAN.md` (token + build-provenance + orchestrator-contract), `17-06a` (re-reflect mandatory), `17-06b` (evidence-backed-offset-only), `17-RESEARCH.md`/`17-PATTERNS.md`/`17-VERIFICATION.md` (REWRITE_VERSION live=21, next=22) |
+
+Execute via GSD: `/gsd-execute-phase 17` or individual plan files.
+
+---
+
+## Boot gate
+
+Both `rasterMajor=5` and `rasterMajor=11` must boot to char-select. D3D9 path byte-for-byte unchanged.
+
+ succeeded in 3145ms:
+# whitengold â€” SWG Client Modernisation Port
+
+## Current State: v2.1 Decruft SHIPPED (2026-05-27)
+
+v2.1 re-applied the orphaned v2.0 dead-code removals (CLEAN-01..04) against the active Koogie/MSBuild tree: five dormant subsystems â€” trackIR/stationapi/SwgClientSetup/lcdui (Phase 12), VideoCapture (13), Vivox voice chat (14), and the XPCOM/Mozilla in-game browser (15) â€” were fully unlinked and deleted, plus a final tech-debt cleanup pass (Phase 16). The client stays bootable to character-select under **both** D3D9 (`rasterMajor=5`) and D3D11 (`=11`) after every removal. Audit: `tech_debt` (7/7 DECRUFT satisfied, 0 blockers, 28/28 integration). See `MILESTONES.md` + `milestones/v2.1-*`.
+
+**Prior:** v2.0 (shipped 2026-05-25) delivered the modern MSVC/C++20/MSBuild client with selectable D3D9 + D3D11 renderers. **Key pivot (Phase 9, "Option D"):** the original CMake/whitengold build was *replaced* by adopting Koogie's already-MSVC/C++20-migrated **MSBuild** tree wholesale (merge `479d35df3`). The active build is `src/build/win32/swg.sln`; the CMake build that v1 + early-v2 docs describe is superseded (kept for history).
+
+## Shipped Milestone: v2.1 â€” Decruft (closed 2026-05-27)
+
+**Goal (MET):** Re-applied the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree, shrinking the client's surface area before any SWG-Source upstream import work. All 7 DECRUFT requirements satisfied across Phases 12â€“16; per-phase detail archived in `milestones/v2.1-ROADMAP.md`.
+
+**Target removals (each its own boot-gated step):**
+- Vivox voice chat â€” `vivoxSharedWrapper_debug.lib` (SwgClient `libraries_d.rsp`) + `CuiVoiceChatManager` source
+- VideoCapture â€” `VideoCapture_debug.lib`
+- XPCOM/Mozilla in-game browser â€” `libMozilla.vcxproj` (swg.sln) + `libMozilla/include/public` (`includePaths.rsp`)
+- lcdui (G15 LCD) â€” `lcdui.vcxproj`
+- SwgClientSetup â€” `SwgClientSetup.vcxproj`
+- trackIR/ + stationapi/ orphaned directories
+
+**Key context:** These removals were done once on the original whitengold **CMake** tree (Phase 7, CLEAN-01..05) but the Phase 9 "Option D" base swap to Koogie's MSBuild tree orphaned them â€” the dead code is dormant-but-present in the active build. Reference diff template: the whitengold (swg-client) Phase 07 removal commits. The Mozillaâ†”`/Zc:wchar_t` interlock is already resolved (Phase 9 went `char16_t`), so XPCOM removal is a clean unlink. **Invariant:** every step leaves the client bootable to character select under both `rasterMajor=5` (D3D9) and `=11` (D3D11).
+
+**Progress:** âœ“ Phase 12 complete (2026-05-25) â€” DECRUFT-01/-02/-03 done: trackIR + stationapi orphan dirs deleted, SwgClientSetup dropped from swg.sln, and lcdui (G15 LCD) fully removed (live UI de-wired to no-op stubs + build graph + dirs). Dual-renderer boot baseline re-established (both renderers to character select). A recurring finding drove 4 deviations: dead modules were still *linked* via inline `.vcxproj` deps (not the vestigial `.rsp` files), and the `/FORCE` linker masks unresolved-symbol false-passes â€” so removal-step build gates must check for 0 unresolved externals, not just MSBuild exit 0.
+âœ“ Phase 13 complete (2026-05-26) â€” DECRUFT-04 done: VideoCapture/AudioCapture middleware fully unlinked (live `CuiIoWin` caller + `SwgVideoCapture` wrapper + 15 lib tokens/8 paths removed atomically; all dead `#if 0` source + `.rsp` + 10 editor `.vcxproj` refs purged; vendored `src/external/3rd/library/videocapture/` tree deleted). Repo-wide grep incl `.vcxproj` == 0; Debug+Release link gate clean (2138/0/0, 2104/0/0); dual-renderer boot (D3D9+D3D11) human-confirmed to Tatooine. Bink/Vivox/Miles preserved. Next: Phase 14 (Vivox voice-chat source removal â€” higher-risk live-UI surgery).
+âœ“ Phase 14 complete (2026-05-26) â€” DECRUFT-05 done: Vivox voice-chat subsystem fully removed from source and build. ~24 voice source files + 3 voicechat network messages deleted, 10 live callers + 5 in-repo registrations de-wired, 6 CuiPreferences voice keys stripped, vivox/VChat/libsndfile unlinked from SwgClient (3 configs) + all vestigial `.rsp`/editor `.vcxproj` refs purged, and the 3 vendored voice trees (vivox/, vivoxSharedWrapper/, soePlatform/VChatAPI/) deleted. Repo-wide `rg -i vivox src` == 0; Debug+Release link gate clean (0 unresolved); dual-renderer boot (D3D9+D3D11) human-confirmed to character-select. Code review caught + fixed a real regression (CR-01: voice-enum deletion shifted radial-menu ordinals off their retail-datatable rows â€” fixed with ordinal-preserving placeholders). Deferred (non-Decruft): DEF-14-01 Optimized SAFESEH config defect. Next: Phase 15 (XPCOM/Mozilla removal + milestone gate â€” highest-risk surgery).
+âœ“ Phase 15 complete (2026-05-27) â€” DECRUFT-06/-07 done: XPCOM/Mozilla in-game browser fully removed + v2.1 milestone gate PASS. The 3 `SwgCuiWebBrowser*` units (the only `libMozilla::` consumers) deleted, all live callers + 5 `IsA(TUIWebBrowser)` focus sites de-wired, `TUIWebBrowser` deleted outright from `UITypeID.h` (ordinal never serialized â€” no placeholder, unlike CR-01), TCG browser tie severed (libEverQuestTCG kept), Mozilla-family link tokens stripped from `SwgClient.vcxproj` + `.rsp` + 7 editors + SwgGodClient, `libMozilla.vcxproj` dropped from `swg.sln` (11 GUID locations), and the vendored `libMozilla/` tree (1,866 files: XPCOM/Gecko SDK) deleted. Milestone-wide P12â€“P15 residue sweep == 0 / KEEP-listed (incl. lcdui A1 cleanup); Debug+Release link gate clean (0 unresolved; Optimized EXEMPT per DEF-14-01); dual-renderer boot (rasterMajor=5 D3D9 + =11 D3D11) human-confirmed to character-select with correct HUD/radial/IME focus. Verified 9/9 must-haves; code review 0 blockers (3 advisory warnings, all the deliberate T-15-02/D-04a TCG-tie severance â€” TCG revival out of scope). **v2.1 Decruft COMPLETE (Phases 12â€“15; DECRUFT-01..07 all done).** Next: v2.2 Visual Parity.
+âœ“ Phase 16 complete (2026-05-27) â€” v2.1 tech-debt cleanup (post-milestone-audit closure, no new product reqs): unlinked the dead SwgGodClient `989crypt.lib` latent-LNK1181 token (soePlatform KEEP-list + the separate live `crypto.lib` preserved), confirmed the 4 editor vcxproj lcdui-clean (verify-only), and removed the cosmetic P12â€“P15 source residue â€” the dead `finalUrl` browser-CS URL block (+ now-dead `shellapi.h`/`ConfigClientGame.h` includes) in `SwgCuiHudAction.cpp` and the orphaned voice-volume API (2 statics + 2 REGISTER_OPTION persistence lines + 4 accessors + 4 decls) in `CuiPreferences.cpp/.h`. All grep-zero gates green; SwgClient Debug+Release relink clean (0 unresolved externals, Optimized EXEMPT per DEF-14-01); single rasterMajor=11 (D3D11) boot to character-select human-confirmed (no-behavior-change phase â†’ single boot replaces the dual-renderer matrix). Verified 8/8 must-haves (D-01..D-08); code review 0 blocker/0 warning/1 INFO (the `httpParams` builder is now write-only â€” 16-02's intentional narrow scope, follow-up-pass candidate). Discovered + ruled out a pre-existing Options-window crash (`checkShowToolbarCommandCooldownTimer` `.ui`-data mismatch from feature commit `d1b3c0eaf` â€” NOT a Decruft regression; captured as a pending todo). **v2.1 Decruft milestone-audit tech-debt fully closed.**
+
+## Current Milestone: v2.2 â€” Visual Parity (ACTIVE, started 2026-05-27)
+
+**Goal:** Close the D3D11 visual gaps so it matches the known-good D3D9 baseline â€” **starting with a deterministic character-select beachhead** (get textures + eyes correct there first), then extending the working PS pipeline outward to the open world. The #1 blocker is **the asset pixel-shader pipeline**: the engine ships pre-compiled D3D9 PEXE PS bytecode that `CreatePixelShader` rejects, so D3D11 falls back to a magenta PS and renders untextured surfaces. Requirements derive from `docs/research/phase12-baseline/COMPARISON.md` (5 gap buckets). Phases continue from 16 â†’ **start at Phase 17**.
+
+**Target features (all confirmed in scope):**
+- **Asset PS pipeline** â€” re-author/bridge engine pixel shaders so D3D11 binds real asset shaders. Proven **first on character-select (textures + eyes)**, then world surfaces.
+- **Gamma LUT + lighting** â€” fix blown-out flat-white interiors.
+- **Minimap shape** â€” square â†’ round (PS-gen / 2D-texturing family).
+- **Multi-stage sampling** â€” multi-texture material stages.
+- **Load-screen centerline seam** â€” half-texel fullscreen-blit fix (isolated, deterministic sampling-path canary).
+- **Geometry distortion** â€” exterior static-mesh shards (OPEN investigation; the skeletal-path twin was already fixed at `905fb5d64`).
+- **Particles / ribbon** â€” post-PS-pipeline.
+- **DPVS D3D11 remeasure** â€” SPEC R7, deferred from v2.0 ("after the asset PS pipeline lands" = now).
+
+**Key sequencing constraint:** the **character-select screen is the first vertical slice** â€” quick to reach, deterministic, isolated. Nail textures + eyes there before any open-world work. *(Milestone reordered after v2.1: cleanup-first shrank the surface area before visual work + upstream imports.)*
+
+---
+
+## What This Is
+
+whitengold is the leaked Star Wars Galaxies source tree (NGE-era ~2010 build, leaked
+Feb 2015). This project takes the **client** â€” `SwgClient` and its ~70-project
+dependency graph â€” and modernises it off Visual Studio 2005 onto a current
+**MSVC / C++20 / MSBuild + Visual Studio 2022** toolchain (via Koogie's
+`MSVC-CPP20-Upgrade` base, adopted in Phase 9) so it can be compiled, debugged, and
+launched against a community-run **SWG-Source** server VM. The long-arc
+goal is full feature parity with the live NGE client (ground/space, professions,
+housing, GCW, jukebox). v1 (compile + launch) and v2.0 (modernisation: dead-code,
+STL swap, DPVS verdict, D3D11 renderer) are complete; v2.1 (Decruft) re-applies the
+orphaned dead-code removals to the active MSBuild tree; v2.2 targets D3D11 visual parity.
+
+> **Build-system note:** v1 + early-v2 sections below describe the original **CMake**
+> port (the "whitengold" tree). Phase 9 "Option D" replaced it with Koogie's
+> **MSBuild** solution (`src/build/win32/swg.sln`) â€” the active build. CMake-specific
+> requirements/decisions are historical; the engine-level architecture they describe
+> still holds.
+
+## Core Value
+
+**Every change must leave the client bootable to character select.** Dead code removal, STL swap, renderer work â€” all of it is only valid if the client still runs at the end. Build health is the invariant; modernisation is layered on top.
+
+## Requirements
+
+### Validated
+
+<!-- Recon and prior work that's already locked. -->
+
+- âœ“ **Codebase mapped** â€” `.planning/codebase/` (7 docs, 2265 lines, commit `4349655bb`)
+- âœ“ **Source structure recon'd** â€” engine/game/dsrc/external layout documented in
+  `STRUCTURE.md` and `CLAUDE.md`
+- âœ“ **Boot sequence (17 phases) traced** â€” `docs/recon/05-client-boot-sequence.md`
+- âœ“ **Build chain analysed** â€” `docs/research/swgclient-build.md` (project graph,
+  flag inventory, third-party dependency map)
+- âœ“ **Middleware inventory** â€” animation, foliage, audio, video, physics middleware
+  identified and characterised (`docs/research/runtime-middleware.md`,
+  `animation-system.md`, `foliage-system.md`)
+- âœ“ **SWG-Source diff** â€” confirmed server-only fork, no client patches to adopt;
+  build patterns are transferable (`docs/recon/07-swg-source-diff-findings.md`)
+
+**v2.1 Decruft (shipped 2026-05-27) â€” dead-code removals re-applied to the MSBuild tree:**
+
+- âœ“ **DECRUFT-01** â€” trackIR + stationapi orphan dirs deleted; ClientHeadTracking de-wired to no-op stubs â€” v2.1 (Phase 12)
+- âœ“ **DECRUFT-02** â€” SwgClientSetup dropped from `swg.sln` + dir deleted â€” v2.1 (Phase 12)
+- âœ“ **DECRUFT-03** â€” lcdui (G15 LCD) fully removed (live UI stubbed + 7 sln deps + `.rsp` purge) â€” v2.1 (Phase 12)
+- âœ“ **DECRUFT-04** â€” VideoCapture unlinked + vendored tree deleted; Debug+Release link clean â€” v2.1 (Phase 13)
+- âœ“ **DECRUFT-05** â€” Vivox voice chat fully removed (source + build + 3 vendored trees); CR-01 radial-ordinal regression fixed â€” v2.1 (Phase 14)
+- âœ“ **DECRUFT-06** â€” XPCOM/Mozilla in-game browser fully removed (`libMozilla.vcxproj` + 1,866-file tree) â€” v2.1 (Phase 15)
+- âœ“ **DECRUFT-07** â€” full-removal-set dual-renderer boot to character-select human-confirmed (D3D9 + D3D11) â€” v2.1 (Phase 15, re-confirmed Phase 16)
+
+### Active
+
+<!-- v1 milestone scope: compile + launch -->
+
+- âœ“ **CMake build system** authored parallel to existing `.vcproj`s, mirroring
+  swg-main's CMakeLists structure (top-level `CMakeLists.txt` + `cmake/win32/`
+  toolchain modules) â€” Validated in Phase 1 (foundations) + Phase 2 (23 shared libs)
+- âœ“ **Third-party SDK integration** â€” `Find*.cmake` modules for DX9, Bink, Miles,
+  Vivox, libMozilla XPCOM, DPVS, lcdui, STLPort 4.5.3, libxml2, pcre, zlib, Boost
+  â€” Validated in Phase 1; STLPort compat shims for VS 2022 / Win SDK 26100 resolved
+- âœ“ **Compile flags ported** â€” `/Zc:wchar_t-`, `_USE_32BIT_TIME_T=1`, `_MBCS`,
+  `DEBUG_LEVEL`, `PRODUCTION`, `/wd4244 /wd4996 /wd4018 /wd4351`, `/MP`, `/Ob1`,
+  `/MT[d]` verified across 24 static `.lib` targets â€” Validated in Phase 2
+- âœ“ **All 13 client engine libraries build** â€” `engine/client/library/` complete:
+  clientAnimation, clientAudio, clientBugReporting, clientDirectInput, clientGame,
+  clientGraphics (P1.11 resolved â€” d3d9.h from vendored DX9 path), clientObject,
+  clientParticle, clientSkeletalAnimation, clientTerrain, clientTextureRenderer,
+  clientUserInterface (XPCOM stub gate passed â€” zero xpcom/xul symbols); plus ui.lib
+  â€” Validated in Phase 3; libMozilla XPCOM stub locks D-04/D-05/D-07
+- âœ“ **Game client libraries + SwgClient executable link** â€” `libEverQuestTCG`,
+  `swgSharedNetworkMessages`, `swgClientUserInterface` (266 cpp), and `SwgClient`
+  WIN32 executable all link cleanly; `SwgClient_d.exe` (34 MB) + `SwgClient_r.exe`
+  (16.5 MB) produced; 30 runtime DLLs + `mozilla/` staged via POST_BUILD;
+  dumpbin confirms static CRT + zero XPCOM imports â€” Validated in Phase 4
+- âœ“ **Debug build first** â€” `cmake --build build --config Debug` produces
+  `SwgClient_d.exe`; binary launches (cursor spins, no missing DLL popup);
+  Phase 1 pass/fail gate cleared â€” Validated in Phase 4 (2026-05-05)
+- âœ“ **Release build** â€” same toolchain produces `SwgClient_r.exe` (16.6 MB); clean-clone build verified â€” Validated in Phase 5 (2026-05-05)
+- [ ] **Asset path wired** â€” client reads `.tre` archives from a retail SWG install
+  via `searchPath*` configs in `client.cfg`
+- [ ] **Login screen reached** â€” client boots far enough to render the login UI
+  and connect to the local SWG-Source LoginServer
+- [ ] **swg-main login flow handshake** â€” authenticate against the SWG-Source VM's
+  LoginServer (whatever station-key stub it ships with) and reach character select
+
+### Out of Scope
+
+<!-- Deferred to future milestones or rejected outright. -->
+
+- **Modifying C++ source files** â€” Phase 1/2 are build-config and configuration
+  work only; source edits come later (avoid blast radius, keep diff focused on
+  CMake authoring)
+- **Replacing STLPort 4.5.3 with MSVC STL** â€” swg-main openly warns this is
+  non-trivial; deferred to a future modernisation milestone
+- **Replacing DirectX 9 / migrating to D3D11+** â€” multi-year effort, deferred
+- **TRE asset reconstruction** â€” user has a retail SWG install; community-rebuilt
+  client-assets is not needed for v1
+- **Server-side modifications** â€” swg-main is treated as a **black-box network
+  endpoint**; if server changes are required they happen upstream in the
+  swg-main repo, not here
+- **Linux server build** â€” `src/build/linux/Makefile` and the Oracle/JVM/IBM-Java
+  toolchain are server-side and out of scope
+- **Editor / tool builds** â€” ParticleEditor, ConversationEditor, SpaceQuestEditor,
+  GodClient, etc. are deferred until SwgClient itself ships
+- **Beyond zone-in** â€” combat, AI, quests, professions, housing, GCW, space,
+  jukebox are all future-milestone scope
+- **Patcher / live-update infrastructure** â€” `publish/*.mft` describe a retired
+  patcher tree; we ship via direct CMake build, no patcher
+- **SOE Station authentication** â€” the real auth service is gone; the swg-main
+  VM stubs it and we accept whatever it provides
+- **Customer service / metrics / chat / commodities servers** â€” these are
+  separate processes in the SWG cluster; only LoginServer + Connection +
+  PlanetServer + GameServer are needed to reach character select
+
+## Context
+
+**The repo is a frozen archive, not a runnable system.** Per `CLAUDE.md`'s
+"What's NOT here" inventory, several gaps prevent end-to-end execution from
+this tree alone: no `.tre` asset archives, no Oracle DB content, no working
+Linux build environment (gcc 2.95/3.2, IBM Java 1.3, Oracle 9.2), no SOE
+Station auth, proprietary SDKs as headers/stubs, internal SOE infra
+references. The user's plan accepts these gaps and works around them â€”
+retail SWG install supplies assets, swg-main VM supplies the server tier,
+proprietary SDKs are reconstructed from headers + vendored libs where licensed
+copies are available.
+
+**Reference repo:** `C:\Code\swg-main` (sibling checkout, populated submodules).
+Server-only fork descended from the same SOE source. Authoritative for build
+patterns, **not** for client port work (no client patches exist there).
+
+**Target environment:** Windows 10/11 with Visual Studio 2022 (MSVC 14.4x)
+and CMake 3.27+. C++17 standard. STLPort 4.5.3 retained for v1.
+
+**Server runtime target:** SWG-Source StellaBellum-style VM, stood up locally
+by the user. Out of scope for this repo's commits.
+
+**Asset source:** The user owns a legitimate retail SWG install. Client will
+be configured to read its data tree at runtime via `searchPath*` entries.
+
+## Constraints
+
+- **Tech stack (current, post-v2):** Windows-only, VS 2022, **MSBuild** (`src/build/win32/swg.sln`),
+  **C++20**, **MSVC STL** â€” Linux work out of scope (server-side toolchain anyway).
+  *(v1 used CMake + C++17 + STLPort; superseded by Phase 9 Option-D.)*
+- **Source edits expected (v2+):** unlike v1's zero-source-edit rule, v2 modernisation
+  edits engine source freely (STL swap, D3D11 plugin). Keep diffs focused per phase.
+- **Don't modify Koogie's diagnostic patches** without strong reason â€” fix the caller/data instead.
+- **Static CRT:** `/MT` (Release) / `/MTd` (Debug) per swg-main pattern; matches
+  the third-party static libs we link against
+- **Server contract is read-only:** swg-main VM is the runtime target; if a
+  client behaviour requires a server change, it's deferred or pushed upstream
+- **Asset licensing:** Only the user's own retail SWG install is used for `.tre`
+  archives; no redistribution
+- **Timeline:** No deadline â€” exploratory hobby cadence; granularity matters more
+  than speed
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| **Framing B** (CMake + VS 2022, no source edits) over Framing A (period-correct VS 2005) | Aligns with swg-main's build system, easier onboarding, "minimum change" still holds because we're *adding* CMakeLists not editing source | Phase 1 foundation graph configures and builds with added CMake files only |
+| **Debug build first**, Release later | Debug build is the more useful artefact for Phase 2 launch debugging â€” step-through is required to diagnose boot failures | â€” Pending |
+| **swg-main as build-pattern reference** (server-only, but their CMake structure / flags / C++17 transfer) | They've already solved the modernisation problem for the server tree; client porting can follow the same shape | â€” Pending |
+| **Retail SWG install for assets**, not community client-assets | User owns a legitimate copy; simpler licensing story; closer to original NGE behaviour | â€” Pending |
+| **swg-main VM as black-box server**, no server edits in this repo | Keeps blast radius narrow; if server changes needed, push upstream to swg-main | â€” Pending |
+| **STLPort 4.5.3 retained** for v1 | swg-main warns the swap is non-trivial; defeats "no source edits" principle | Phase 1 uses a build-local staged STLPort layout so VS 2022 can supply modern UCRT/MSVC native headers without editing vendored STLPort |
+| **DirectX 9 vendored SDK first** | The repo ships the 2005-era DirectX 9 headers/import libs used by the client; system SDK drift is avoidable | Phase 1 `FindDirectX9.cmake` resolves vendored headers/libs; first real compile remains Phase 3 `clientGraphics` |
+| **Mozilla XPCOM stub strategy** | Modern MSVC cannot safely compile the old XPCOM surface; the in-game browser is not required for v1 launch | Phase 1 `FindMozilla.cmake` resolves headers only; do not link `xul.lib`/`xpcom.lib` in client targets |
+| **/MT static CRT** | Matches third-party static libs (Bink, Miles, DPVS) we link against | Phase 1 root CMake sets `CMAKE_MSVC_RUNTIME_LIBRARY` to `/MT` and `/MTd` |
+| **Phase 9 "Option D": adopt Koogie's MSVC/C++20 MSBuild tree wholesale** (`479d35df3`) instead of hand-migrating STLPort in the CMake tree | Koogie already solved the MSVC migration; collapsed ~30 risky refactor commits into ~3 | âœ“ Good â€” STL swap done, Tatooine zone-in PASS. Side effect: CMake build + Phase 7 dead-code removals orphaned (active tree is MSBuild) |
+| **D3D11 as a second selectable renderer** (`gl11_d.dll`), keep D3D9 (`gl05_d.dll`) buildable (invariant D-05) | De-risks the port; lets D3D9 stay the known-good reference for visual parity | âœ“ Good â€” both selectable via `rasterMajor`; single `Gl_api` loader multiplexes |
+| **v2.1 cleanup-first, risk-gradient ordering** (pure deletes â†’ lib unlinks â†’ live-source surgery) before v2.2 visual work | Re-establish the dual-renderer boot baseline on the low-risk deletes before the riskier Vivox/XPCOM source surgery; shrink surface area before upstream imports | âœ“ Good â€” every removal step boot-verified; v2.1 closed clean (7/7 DECRUFT) |
+| **`/FORCE` link-grep gate** â€” grep link output for `unresolved external symbol` (==0), not just MSBuild exit 0 | SwgClient links under `/FORCE`, which downgrades unresolved externals to warnings and still emits a binary with exit 0 â€” exit 0 is NOT proof of a clean link | âœ“ Good â€” caught 2 real Phase 12 defects (live `989crypt.lib` dep, orphaned ClientHeadTracking callers) |
+| **Ordinal-preserving placeholders** for deletions from positional enums/tables that mirror retail-TRE row indices | Mid-sequence enum deletes silently shift surviving ordinals off their datatable rows â€” a regression the link + boot gate cannot catch | âœ“ Good â€” CR-01 (radial-menu ordinal shift from voice-enum delete) caught in code review + fixed with `RESERVED_*` placeholders (Phase 14) |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? â†’ Move to Out of Scope with reason
+2. Requirements validated? â†’ Move to Validated with phase reference
+3. New requirements emerged? â†’ Add to Active
+4. Decisions to log? â†’ Add to Key Decisions
+5. "What This Is" still accurate? â†’ Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check â€” still the right priority?
+3. Audit Out of Scope â€” reasons still valid?
+4. Update Context with current state
+
+---
+*Last updated: 2026-05-27 â€” **v2.2 Visual Parity STARTED** (`/gsd-new-milestone`). Scope confirmed: full COMPARISON.md gap set (asset PS pipeline, gamma/lighting, minimap, multi-stage sampling, load-screen seam, geometry distortion, particles/ribbon, DPVS D3D11 remeasure). Sequencing: character-select beachhead first (textures + eyes), then open world. Phases continue from 16 â†’ start at 17. Prior: v2.1 Decruft SHIPPED + tagged `v2.1` (Phases 12â€“16; 7/7 DECRUFT); roadmap/requirements archived to `milestones/v2.1-*`. Requirements being defined now via the milestone workflow (research â†’ REQUIREMENTS.md â†’ ROADMAP.md).*
+
+codex
+The handoff context confirms this is in the active D3D11 visual parity workstream, and the exact spike investigation already has prior artifacts under `.planning/research`. I’m going to mine those for known hypotheses, then verify every call path directly against source so the result is grounded in file:line references rather than prior notes.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "SoftwareBlendSkeletalShaderPrimitive::(prepareToDraw|draw)|FullGeometrySkeletalAppearanceBatchRenderer::renderBuffers|m_skinningMode|skinningMode" src/engine/client/library/clientSkeletalAnimation/src/shared' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"DynamicVertexBuffer|VertexBufferWriteIterator|setVertexBuffer|setVertexBufferVector|setIndexBuffer|drawIndexed|setObjectToWorldTransformAndScale|Gl_api|lock\\(|unlock\\(|BaseVertexLocation|WRITE_DISCARD|WRITE_NO_OVERWRITE|ringUsed|m_offset\" src/engine/client/application/Direct3d9 src/engine/client/application/Direct3d11 src/engine/client/library/clientGraphics src/engine/client/library/clientSkeletalAnimation/src/shared" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem -Path .planning/research -Filter '*cape*' -File | Select-Object -ExpandProperty Name" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Path .planning/research/RENDER-PATH-TREE-TASK-codex.md -ErrorAction SilentlyContinue' in D:\Code\swg-client-v2
+ succeeded in 1058ms:
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:101:	int const cs_skinningModeCount = 3;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:103:	char const *const cs_skinningModeName[] =
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:145:	int  s_perSkinningModeCharacterCount[2 * cs_skinningModeCount];
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:331:		for (int i = 0; i < cs_skinningModeCount; ++i)
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:332:			REPORT_PRINT(true, ("%s: %d/%d/%d\n", cs_skinningModeName[i], s_perSkinningModeCharacterCount[i], s_perSkinningModeCharacterCount[cs_skinningModeCount + i], s_perSkinningModeCharacterCount[i] + s_perSkinningModeCharacterCount[cs_skinningModeCount + i]));
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1733:				ShaderPrimitive::SkinningMode  skinningMode;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1738:					skinningMode = ShaderPrimitive::SM_noSkinning;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1740:					skinningMode = ShaderPrimitive::SM_hardSkinning;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1742:					skinningMode = ShaderPrimitive::SM_softSkinning;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1746:				++s_perSkinningModeCharacterCount[(useBatcher ? cs_skinningModeCount : 0) + static_cast<int>(skinningMode)];
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1769:					sbsShaderPrimitive->setSkinningMode(skinningMode);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:66:	virtual void                setSkinningMode(SkinningMode skinningMode);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:155:	SkinningMode            m_skinningMode;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:402:	m_skinningMode(SM_softSkinning),
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:483:void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:487:	NP_PROFILER_AUTO_BLOCK_DEFINE("SoftwareBlendSkeletalShaderPrimitive::prepareToDraw");
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:828:void SoftwareBlendSkeletalShaderPrimitive::draw() const
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:830:	NP_PROFILER_AUTO_BLOCK_DEFINE("SoftwareBlendSkeletalShaderPrimitive::draw");
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1136:void SoftwareBlendSkeletalShaderPrimitive::setSkinningMode(SkinningMode skinningMode)
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1138:	m_skinningMode = skinningMode;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1739:	if (m_skinningMode==SM_noSkinning && m_hasBeenSkinned)
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1745:	switch (m_skinningMode)
+
+ succeeded in 1038ms:
+CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting-codex.out
+CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting-cursor.out
+CONSULT-20-cape-d3d11-dynamic-vb-ring-accounting.md
+CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed-codex.out
+CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed-cursor.out
+CONSULT-23-d3d11-cape-collapse-write-clean-draw-collapsed.md
+CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes-codex.out
+CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes-cursor.out
+CONSULT-24-d3d11-cape-vb-correct-at-draw-still-spikes.md
+CONSULT-25-d3d11-cape-intraframe-cpu-gpu-ring-hazard.md
+
+ succeeded in 1108ms:
+src/engine/client/application/Direct3d11\src\win32\ConfigDirect3d11.h:22:	static int  getDynamicVertexBufferSize();
+src/engine/client/application/Direct3d11\src\win32\ConfigDirect3d11.cpp:69:int  ConfigDirect3d11::getDynamicVertexBufferSize()                   { return ms_dynamicVertexBufferSize; }
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.h:39:	// Lifecycle -- called from Graphics.cpp through Gl_api.install.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:4:// Phase 11 D3D11 renderer plugin -- plugin entry point + Gl_api scaffold.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:6:// Plan 11-02 SCAFFOLD-ONLY: every Gl_api slot is populated, but every
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:27:#include "Direct3d11_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:52:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:97:	// The exported Gl_api table.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:99:	Gl_api ms_glApi;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:117:		FATAL(true, ("Direct3d11 plugin: scaffold-only -- unimplemented Gl_api slot called (Plan 11-02 expected; Wave 3+ replaces this)"));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:224:	// setVertexBufferVectorBindState + getOrCreateMultiStream + 11-09.8 phantom) and
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:259:		Direct3d11_DynamicVertexBufferData::remove();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:294:		// draws defer across passes). First skinned lock of the frame then WRITE_DISCARDs a
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:297:		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:354:	// Plan 11-04 (Wave 4 -- resource layer): Gl_api factory slot bodies
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:374:	DynamicVertexBufferGraphicsData * createDynamicVertexBufferData_impl(const DynamicVertexBuffer &vb)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:376:		return new Direct3d11_DynamicVertexBufferData(vb);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:648:	// Plan 11-05 (Wave 5 -- shader layer): Gl_api factory slot bodies
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:832:extern "C" __declspec(dllexport) Gl_api const * GetApi();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:834:Gl_api const * GetApi()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:843:// Direct3d11::install -- populate the rest of the Gl_api table.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:885:	Direct3d11_DynamicVertexBufferData::install();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1026:	// dedicated createRenderTarget Gl_api slot -- Texture+RTV pair lives
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1060:	ms_glApi.setObjectToWorldTransformAndScale = Direct3d11_StateCache::setObjectToWorldTransformAndScale;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1076:	// Plan 11-06: setVertexBuffer / setIndexBuffer slots now route through
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1082:	ms_glApi.createDynamicVertexBufferData  = createDynamicVertexBufferData_impl;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1084:	ms_glApi.setVertexBuffer                = Direct3d11_StateCache::setVertexBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1085:	ms_glApi.setVertexBufferVector          = Direct3d11_VertexBufferVectorData::bind;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1089:	ms_glApi.setIndexBuffer                = Direct3d11_StateCache::setIndexBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1116:	ms_glApi.drawIndexedPointList        = Direct3d11_StateCache::drawIndexedPointList;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1117:	ms_glApi.drawIndexedLineList         = Direct3d11_StateCache::drawIndexedLineList;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1118:	ms_glApi.drawIndexedLineStrip        = Direct3d11_StateCache::drawIndexedLineStrip;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1119:	ms_glApi.drawIndexedTriangleList     = Direct3d11_StateCache::drawIndexedTriangleList;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1120:	ms_glApi.drawIndexedTriangleStrip    = Direct3d11_StateCache::drawIndexedTriangleStrip;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11.cpp:1121:	ms_glApi.drawIndexedTriangleFan      = Direct3d11_StateCache::drawIndexedTriangleFan;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:141:	// values under Map(WRITE_DISCARD) (CODEX sixth hypothesis).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:148:	// Map(WRITE_DISCARD) -> memcpy a full kMaxCBufferBytes payload. The
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:150:	// item #6 (CODEX sixth hypothesis): Map(WRITE_DISCARD) does NOT zero
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:161:	// CPU-side update: Map(WRITE_DISCARD) -> memcpy -> Unmap. Per
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:162:	// RESEARCH §Pattern 2 the WRITE_DISCARD mode ensures GPU/CPU
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.h:206:// WRITE_DISCARD does NOT zero unwritten bytes per Microsoft documentation
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:12:// D3D11_CPU_ACCESS_WRITE. Update via Map(D3D11_MAP_WRITE_DISCARD) ->
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:28:// Phase 19 world-corruption fix/diagnostic. WRITE_DISCARD returns UNDEFINED
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:91:	// root-cause-item-#6 rationale (Map(WRITE_DISCARD) yields UNDEFINED
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:176:		ms_vsBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:180:	// Phase 19 fix/diagnostic: WRITE_DISCARD returns UNDEFINED driver memory for
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:205:		ms_psBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_ConstantBuffer.cpp:209:	// Phase 19 fix/diagnostic (see updateVS): zero the WRITE_DISCARD undefined
+src/engine/client/library/clientGraphics\build\win32\clientGraphics.vcxproj:215:    <ClCompile Include="..\..\src\shared\DynamicVertexBuffer.cpp">
+src/engine/client/library/clientGraphics\build\win32\clientGraphics.vcxproj:397:    <ClInclude Include="..\..\src\shared\DynamicVertexBuffer.h" />
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:23:// matching block in Direct3d11_DynamicVertexBufferData.cpp. Smoking-gun test:
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:26:// WRITE_DISCARD on every lock to test the CPU/GPU intra-frame reuse hazard.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:154:	m_offset(0),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:167:Index *Direct3d11_DynamicIndexBufferData::lock(int numberOfIndices)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:190:	D3D11_MAP    mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:207:		mapType = D3D11_MAP_WRITE_DISCARD;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:223:	m_offset = ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:228:	return reinterpret_cast<Index *>(static_cast<char *>(mapped.pData) + m_offset * static_cast<int>(sizeof(Index)));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.cpp:233:void Direct3d11_DynamicIndexBufferData::unlock()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.cpp:606:// Plan 11-09.5 -- Gl_api::setWindowedMode real binding.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:3:// Direct3d11_DynamicVertexBufferData.h
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:5:// Plan 11-04 (Wave 4). Replaces createDynamicVertexBufferData stub.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:9:// reserves a slice of the ring via lock() (Map WRITE_DISCARD on wrap;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:10:// WRITE_NO_OVERWRITE on append per RESEARCH Pitfall 5).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:16:#ifndef INCLUDED_Direct3d11_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:17:#define INCLUDED_Direct3d11_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:23:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:31:class Direct3d11_DynamicVertexBufferData : public DynamicVertexBufferGraphicsData
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:44:	// DEDICATED SOFT-SKIN RING 2026-06-07: per-frame WRITE_DISCARD reset for the soft-skin
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:51:	// CAPE-COLLAPSE diagnostic 2026-06-06: lifetime WRITE_DISCARD count, so the draw
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:58:	explicit Direct3d11_DynamicVertexBufferData(const VertexBuffer &vertexBuffer);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:59:	virtual ~Direct3d11_DynamicVertexBufferData();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:61:	virtual void                            *lock(int numberOfVertices, bool forceDiscard);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:62:	virtual void                             unlock();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:63:	virtual void                             unlock(int numberOfVertices);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:72:	// The ring buffer this instance's most recent lock() actually used (main ring or the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:83:	Direct3d11_DynamicVertexBufferData();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:84:	Direct3d11_DynamicVertexBufferData(const Direct3d11_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:85:	Direct3d11_DynamicVertexBufferData &operator =(const Direct3d11_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:97:	// dynamic VBs (vertexSize==48). Isolated from CuiLayer's whole-ring WRITE_DISCARD.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:113:	int                              m_offset;     // byte offset into ring at last lock
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:119:inline int Direct3d11_DynamicVertexBufferData::getNumberOfVertices() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:126:inline int Direct3d11_DynamicVertexBufferData::getOffset() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:128:	return m_offset;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.h:133:inline ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getRingBuffer() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.h:45:	// Direct3d11_StateCache::setVertexBufferVector when composing the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.h:50:	// Plan 11-09.7: Gl_api::setVertexBufferVector slot body. Wired by
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.h:56:	// Direct3d11_StateCache::setVertexBufferVectorBindState. Static
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.h:57:	// because it's wired into ms_glApi.setVertexBufferVector as a
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:25:#include "Direct3d11_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:81:// Plan 11-09.7: Gl_api::setVertexBufferVector slot body.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:86:// Direct3d11_StateCache::setVertexBufferVectorBindState.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:88:// Mirrors Direct3d9.cpp:3764 setVertexBufferVector shape, with D3D9 ->
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:138:					DynamicVertexBuffer const *dvb = safe_cast<DynamicVertexBuffer const *>(&vb);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:139:					Direct3d11_DynamicVertexBufferData const *data =
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:140:						safe_cast<Direct3d11_DynamicVertexBufferData const *>(dvb->m_graphicsData);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_VertexBufferVectorData.cpp:156:	Direct3d11_StateCache::setVertexBufferVectorBindState(
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:3:// Direct3d11_DynamicVertexBufferData.cpp
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:12://   wrap            -> Map(D3D11_MAP_WRITE_DISCARD), reset used=0
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:13://   append          -> Map(D3D11_MAP_WRITE_NO_OVERWRITE), advance used
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:21:#include "Direct3d11_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:45:// CPU-races-GPU intra-frame WRITE_NO_OVERWRITE reuse hazard, which the thread
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:47:// forces WRITE_DISCARD on every dynamic VB/IB lock so each lock gets a freshly
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:58:bool                              Direct3d11_DynamicVertexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:59:int                               Direct3d11_DynamicVertexBufferData::ms_size;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:60:int                               Direct3d11_DynamicVertexBufferData::ms_used;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:61:ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dRingBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:62:MemoryBlockManager *              Direct3d11_DynamicVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:65:ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dSkinRingBuffer;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:66:int                               Direct3d11_DynamicVertexBufferData::ms_skinSize;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:67:int                               Direct3d11_DynamicVertexBufferData::ms_skinUsed;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:68:bool                              Direct3d11_DynamicVertexBufferData::ms_skinNewFrame;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:69:int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:70:int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:71:int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:72:int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:73:int                               Direct3d11_DynamicVertexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:74:int                               Direct3d11_DynamicVertexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:76:// Plan 11-09.15 Iter-4 (Test A): stash the slice CPU pointer at lock() so
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:77:// unlock() can snapshot the engine's written verts BEFORE Unmap invalidates
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:79:// in unlock(int). File-scope static because the ring buffer is shared; only
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:85:void Direct3d11_DynamicVertexBufferData::install()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:87:	DEBUG_FATAL(ms_memoryBlockManager, ("Direct3d11_DynamicVertexBufferData already installed"));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:89:		"Direct3d11_DynamicVertexBufferData", true,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:90:		sizeof(Direct3d11_DynamicVertexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:126:	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (dynamic VB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:130:	// (so no nvwgf2um mass-CreateBuffer churn). CuiLayer's whole-ring WRITE_DISCARD hits only
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:134:	// wrap it mid-frame -- a mid-frame WRITE_DISCARD would re-create the very hazard we are
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:140:	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (soft-skin VB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:150:		("Direct3d11_DynamicVertexBufferData: ring buffer %d KB (videoMemory ~%d MB)\n",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:156:void Direct3d11_DynamicVertexBufferData::remove()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:167:void Direct3d11_DynamicVertexBufferData::beginFrameSkin()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:169:	// Start the soft-skin ring on a fresh WRITE_DISCARD generation each frame. Called
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:177:void Direct3d11_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:188:ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getSharedRingBuffer()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:193:int Direct3d11_DynamicVertexBufferData::getDiscardsEver()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:200:void *Direct3d11_DynamicVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:204:	DEBUG_FATAL(size != sizeof(Direct3d11_DynamicVertexBufferData), ("wrong new called"));
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:211:void Direct3d11_DynamicVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:219:Direct3d11_DynamicVertexBufferData::Direct3d11_DynamicVertexBufferData(const VertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:221:	DynamicVertexBufferGraphicsData(),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:224:	m_offset(0),
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:231:Direct3d11_DynamicVertexBufferData::~Direct3d11_DynamicVertexBufferData()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:237:const VertexBufferDescriptor &Direct3d11_DynamicVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:244:int Direct3d11_DynamicVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:251:void Direct3d11_DynamicVertexBufferData::roundUpUsed() const
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:259:void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:269:	int                 &ringUsed     = isSkin ? ms_skinUsed     : ms_used;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:275:	ringUsed = ((ringUsed + vertexSize - 1) / vertexSize) * vertexSize;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:297:	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:302:	if (ringNewFrame || forceDiscard || ringUsed + length > ringSize)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:312:		mapType = D3D11_MAP_WRITE_DISCARD;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:313:		ringUsed = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:323:		 HRESULT_CODE(hr), discard, ringUsed, length,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:329:	// [m_offset, m_offset + length); after Unmap the GPU sees the writes.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:331:	m_offset           = ringUsed / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:334:	void * const sliceStart = static_cast<char *>(mapped.pData) + ringUsed;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:335:	ringUsed += length;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:339:	// CONSULT-31: sentinel removed (full-write proven 387/387). Outlier scan in unlock() reads the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:347:void Direct3d11_DynamicVertexBufferData::unlock()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:349:	unlock(m_numberOfVertices);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:354:void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:363:	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:393:						s_diagFanShapedUnlocks, v, px, py, pz, c, u, tv, m_offset);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:456:								m_offset, ms_discardsEver);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:517:							fcx, fcy, fcz, m_offset);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:533:	// Note: ms_used was already advanced in lock(); we don't re-adjust
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:542:int Direct3d11_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool withDiscard)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:547:		// dedicated (non-UI) ring -- match lock() routing
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicVertexBufferData.cpp:557:int Direct3d11_DynamicVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:57:	// Plan 11-09.5: real binding for Gl_api::setWindowedMode (replaces
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:98:	// Gl_api per-frame slot bodies (replace FATAL stubs from Plan 11-02).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:99:	// Signatures match Gl_api struct field types in Gl_dll.def exactly.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:101:	// Gl_api::beginScene  -- void (*beginScene)()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:104:	// Gl_api::endScene  -- void (*endScene)()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:107:	// Gl_api::clearViewport  --
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:115:	// Gl_api::present  -- bool (*present)()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_Device.h:118:	// Gl_api::displayModeChanged  -- void (*displayModeChanged)()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.h:57:	virtual void          lock(LockData &lockData);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.h:58:	virtual void          unlock(LockData &lockData);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:89:// the sub-block bottom-of-chain mip levels). Used in lock() to pad the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:288:	// then writes via lock()/unlock() (Texture::loadSurface), so we cannot
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:525:void Direct3d11_TextureData::lock(LockData &lockData)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:582:	// For dynamic textures (USAGE_DYNAMIC), Map(WRITE_DISCARD) is legal
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:594:			lockData.shouldDiscardContents() ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:697:		// block-rows. unlock()'s 4-aligned CopySubresourceRegion then bakes
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:759:		// block-rows. unlock()'s 4-aligned CopySubresourceRegion then bakes
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:782:void Direct3d11_TextureData::unlock(LockData &lockData)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_TextureData.cpp:927:			// lock() so its BC block grid covers the same data;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:8:// engine fills the buffer via lock() AFTER CreateBuffer, so true
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:44:	virtual void                            *lock(bool readOnly);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.h:45:	virtual void                             unlock();
+src/engine/client/library/clientGraphics\src\win32\SetupClientGraphics.cpp:18:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\win32\SetupClientGraphics.cpp:241:	DynamicVertexBuffer::install();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:9:// engine fills the buffer via lock() AFTER CreateBuffer (Texture / mesh
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:11:// is not workable. Engine lock() returns a CPU staging block; unlock()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:123:void *Direct3d11_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticVertexBufferData.cpp:147:void Direct3d11_StaticVertexBufferData::unlock()
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:15:struct Gl_api;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:19:class DynamicVertexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:20:class DynamicVertexBufferGraphicsData;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:192:	static void                          setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:205:	static void                               setVertexBuffer(const HardwareVertexBuffer &vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:206:	static void                               setVertexBuffer(VertexBufferVector const & vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:208:	static DynamicVertexBufferGraphicsData   *createVertexBufferData(const DynamicVertexBuffer &vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:213:	static void                              setIndexBuffer(const HardwareIndexBuffer &indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:260:	static void                          drawIndexedPointList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:261:	static void                          drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:262:	static void                          drawIndexedLineStrip();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:263:	static void                          drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:264:	static void                          drawIndexedTriangleStrip();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:265:	static void                          drawIndexedTriangleFan();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:274:	static void                          drawIndexedPointList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:275:	static void                          drawIndexedLineList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:276:	static void                          drawIndexedLineStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:277:	static void                          drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:278:	static void                          drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:279:	static void                          drawIndexedTriangleFan(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:51:	int    drawIndexedPrimitiveCalls;
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:69:	int    setVertexBufferCalls;
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:70:	int    setVertexBufferUniqueVertexBuffers;
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:81:	int    setIndexBufferCalls;
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:82:	int    setIndexBufferUniqueIndexBuffers;
+src/engine/client/library/clientGraphics\src\win32\Graphics.def:83:	int    setIndexBufferCacheMisses;
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:15:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:70:	const Gl_api                             *ms_api;
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:243:	typedef const Gl_api *(*GetApi)();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1266:				t.lock(lockData);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1283:				t.unlock(lockData);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1486:void Graphics::setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1488:	NOT_NULL(ms_api->setObjectToWorldTransformAndScale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1489:	ms_api->setObjectToWorldTransformAndScale(objectToWorld, scale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1599: * Create the GlData for a DynamicVertexBuffer.
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1602: * @param vertexBuffer  DynamicVertexBuffer to create the GlData for.
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1605:DynamicVertexBufferGraphicsData *Graphics::createVertexBufferData(const DynamicVertexBuffer &vertexBuffer)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1607:	NOT_NULL(ms_api->createDynamicVertexBufferData);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1608:	return ms_api->createDynamicVertexBufferData(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1722:	DEBUG_FATAL(ms_activeVertexBufferDynamicId && ms_activeVertexBufferDynamicId != DynamicVertexBuffer::getDynamicGlobalId(), ("Attempting to draw with a set dynamic VB after another one has been locked"));
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1751:	DynamicVertexBuffer  vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1753:	vertexBuffer.lock(1);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1755:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1761:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1763:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1795:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1797:	vertexBuffer.lock(2);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1799:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1810:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1812:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1901:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1903:	vertexBuffer.lock(pointList.size());
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1905:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1918:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1974:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1976:	vertexBuffer.lock(5);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1978:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2005:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2007:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2030:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2032:	vertexBuffer.lock(1);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2034:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2038:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2040:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2064:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2066:	vertexBuffer.lock(2);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2068:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2077:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2079:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2100:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2106:	vertexBuffer.lock(6);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2108:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2133:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2135:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2158:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2160:	vertexBuffer.lock(8);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2162:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2195:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2218:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2219:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2220:	drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2273:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2284:			vertexBuffer.lock(segments+1);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2286:				VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2305:			vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2306:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2317:			vertexBuffer.lock(segments+1);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2319:				VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2336:			vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2337:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2348:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2359:			vertexBuffer.lock( tessPhi + 1 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2360:			VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2375:			vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2376:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2389:			vertexBuffer.lock( tessTheta + 1 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2390:			VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2405:			vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2406:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2417:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2421:	vertexBuffer.lock( tessTheta + 1 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2422:	VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2437:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2438:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2447:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2455:	vertexBuffer.lock( 24 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2456:	VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2502:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2503:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2512:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2517:	vertexBuffer.lock( nSpokes * 2 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2518:	VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2538:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2539:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2547:		vertexBuffer.lock( tessTheta + 1 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2548:		VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2563:		vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2564:		setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2575:		vertexBuffer.lock( nSpokes * 4 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2576:		VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2602:		vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2603:		setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2618:				vertexBuffer.lock( tessTheta + 1 );
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2619:				VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2633:				vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2634:				setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2654:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2655:	vertexBuffer.lock(8);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2656:		VertexBufferWriteIterator vbi = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2662:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2665:	indexBuffer.lock(24);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2692:	indexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2694:	Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2695:	Graphics::setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2696:	Graphics::drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2720:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2731:	vertexBuffer.lock(8);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2733:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2768:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2790:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2791:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2792:	drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2802:	DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2818:	vertexBuffer.lock(8);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2820:		VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2853:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2877:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2878:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2879:	drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2965:void Graphics::setVertexBuffer(const HardwareVertexBuffer &vertexBuffer)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2968:	NOT_NULL(ms_api->setVertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2969:	ms_api->setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2974:void Graphics::setVertexBuffer(VertexBufferVector const & vertexBufferVector)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2977:	NOT_NULL(ms_api->setVertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2978:	ms_api->setVertexBufferVector(vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2983:void Graphics::setIndexBuffer(const HardwareIndexBuffer &indexBuffer)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2994:	ms_api->setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3068:void Graphics::drawIndexedPointList()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3072:		ms_api->drawIndexedPointList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3077:void Graphics::drawIndexedLineList()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3081:		ms_api->drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3086:void Graphics::drawIndexedLineStrip()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3090:		ms_api->drawIndexedLineStrip();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3095:void Graphics::drawIndexedTriangleList()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3099:		ms_api->drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3104:void Graphics::drawIndexedTriangleStrip()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3108:		ms_api->drawIndexedTriangleStrip();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3113:void Graphics::drawIndexedTriangleFan()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3117:		ms_api->drawIndexedTriangleFan();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3240:void Graphics::drawIndexedPointList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3265:void Graphics::drawIndexedLineList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3290:void Graphics::drawIndexedLineStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3315:void Graphics::drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3340:void Graphics::drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3365:void Graphics::drawIndexedTriangleFan(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3387: * at one time with Graphics::setVertexBuffer().
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3389: * @return  the maximum number of vertex buffers that can be set simultaneously with Graphics::setVertexBuffer()
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:20:class  DynamicVertexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:21:class  DynamicVertexBufferGraphicsData;
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:76:struct Gl_api
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:164:	void (*setObjectToWorldTransformAndScale)(const Transform &objectToWorld, const Vector &scale);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:176:	DynamicVertexBufferGraphicsData   *(*createDynamicVertexBufferData)(const DynamicVertexBuffer &vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:178:	void                               (*setVertexBuffer)(HardwareVertexBuffer const & vertexBufferArray);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:179:	void                               (*setVertexBufferVector)(VertexBufferVector const & vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:183:	void                               (*setIndexBuffer)(const HardwareIndexBuffer &indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:200:	void (*drawIndexedPointList)();
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:201:	void (*drawIndexedLineList)();
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:202:	void (*drawIndexedLineStrip)();
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:203:	void (*drawIndexedTriangleList)();
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:204:	void (*drawIndexedTriangleStrip)();
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:205:	void (*drawIndexedTriangleFan)();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:9:// via lock() after CreateBuffer).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:44:	virtual Index *lock(bool readOnly);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.h:45:	virtual void   unlock();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:103:Index *Direct3d11_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StaticIndexBufferData.cpp:119:void Direct3d11_StaticIndexBufferData::unlock()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:15://   * The Gl_api draw* slot bodies (Draw / DrawIndexed dispatch)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:76:	static void setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:172:	static void setVertexBuffer(HardwareVertexBuffer const &vb);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:173:	static void setIndexBuffer(HardwareIndexBuffer const &ib);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:178:	// format. Mutually exclusive with setVertexBuffer (each clears the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:181:	static void setVertexBufferVectorBindState(
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:231:	// Draw-call dispatch -- the Gl_api draw* slot bodies.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:243:	static void drawIndexedPointList();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:244:	static void drawIndexedLineList();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:245:	static void drawIndexedLineStrip();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:246:	static void drawIndexedTriangleList();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:247:	static void drawIndexedTriangleStrip();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.h:248:	static void drawIndexedTriangleFan();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:36:#include "Direct3d11_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:47:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:147:	// exclusive with the single-stream state above -- setVertexBuffer
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:148:	// clears the vector flag and setVertexBufferVector clears the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:235:	int ms_drawIndexedTriangleFanCalls        = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:241:	// setProjectionMatrix / setObjectToWorldTransformAndScale) write
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:243:	// per-object setter (setObjectToWorldTransformAndScale) is the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:301:	// Round 3 guidance: avoids dozens of Map(WRITE_DISCARD) per frame).
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:442:		// Only mark dirty here -- per-setter Map(WRITE_DISCARD) was a CODEX-
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:495:	// setObjectToWorldTransformAndScale-canonical-upload pattern. If no
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1149:		// calls either setVertexBuffer OR setVertexBufferVector, and they
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1382:		// flows through drawIndexedTriangleList / drawTriangleList / etc.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1550:	ms_drawIndexedTriangleFanCalls        = 0;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1599:		"drawIndexedTriangleFanCalls=%d drawPartialIndexedTriangleFanCalls=%d "
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1603:		ms_drawIndexedTriangleFanCalls, ms_drawPartialIndexedTriangleFanCalls,
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1799:	// setObjectToWorldTransformAndScale (the canonical per-object site
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1803:	// write leaving 1056 bytes UNDEFINED via Map(WRITE_DISCARD), exactly
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1860:	// matrix that setObjectToWorldTransformAndScale also wrote to slot 1.
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1916:void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1966:	// Plan 11-09.15 Iter-35: log first 50 setObjectToWorldTransformAndScale
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:1980:					"Plan 11-09.15 Iter-35 setObjectToWorldTransformAndScale#%d "
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2242:void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2272:		DynamicVertexBuffer const *dvb = safe_cast<DynamicVertexBuffer const *>(&vb);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2273:		Direct3d11_DynamicVertexBufferData const *data =
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2274:			safe_cast<Direct3d11_DynamicVertexBufferData const *>(dvb->m_graphicsData);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2279:		// Plan 11-09.12 Iter-1: Direct3d11_DynamicVertexBufferData::getOffset()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2280:		// returns the slice's VERTEX index (Direct3d11_DynamicVertexBufferData.cpp
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2281:		// :234 `m_offset = ms_used / vertexSize`), but IASetVertexBuffers expects
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2304:// Gl_api::setVertexBufferVector. The wrapper class iterates the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2309:void Direct3d11_StateCache::setVertexBufferVectorBindState(
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2325:		("Direct3d11_StateCache::setVertexBufferVectorBindState: streamCount=%d outside [0,%d]",
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2339:	// use these to compute the BaseVertexLocation for indexed draws +
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:2349:void Direct3d11_StateCache::setIndexBuffer(HardwareIndexBuffer const &ib)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3051:	// caller assumes its prior setIndexBuffer is still bound on the
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3057:void Direct3d11_StateCache::drawIndexedPointList()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3064:void Direct3d11_StateCache::drawIndexedLineList()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3071:void Direct3d11_StateCache::drawIndexedLineStrip()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3078:void Direct3d11_StateCache::drawIndexedTriangleList()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3085:void Direct3d11_StateCache::drawIndexedTriangleStrip()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3092:void Direct3d11_StateCache::drawIndexedTriangleFan()
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3104:	++ms_drawIndexedTriangleFanCalls;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3113:		char const *msg = "Plan 11-09.15: Direct3d11_StateCache::drawIndexedTriangleFan called -- "
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3168:	// reusable fan IB; BaseVertexLocation = startVertex shifts the (0,i,i+1)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3241:	// and never fired -- SBSSP binds via setVertexBufferVector (the VECTOR path:
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3262:				bool const capeIsRing = (cdBuf == Direct3d11_DynamicVertexBufferData::getSharedRingBuffer());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3274:						Direct3d11_DynamicVertexBufferData::getDiscardsEver());
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3554:	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): see drawIndexedTriangleFan
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_StateCache.cpp:3562:		// drawIndexedTriangleFan).
+src/engine/client/application/Direct3d9\p4integrate.bat:11:p4 integrate //depot/swg/current/src/engine/client/application/Direct3d8/src/win32/Direct3d8_DynamicVertexBufferData.cpp       //depot/swg/current/src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+src/engine/client/application/Direct3d9\p4integrate.bat:12:p4 integrate //depot/swg/current/src/engine/client/application/Direct3d8/src/win32/Direct3d8_DynamicVertexBufferData.h         //depot/swg/current/src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:11:// Lock/Unlock semantics mirror Direct3d11_DynamicVertexBufferData:
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:12://   wrap   -> Map(D3D11_MAP_WRITE_DISCARD)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:13://   append -> Map(D3D11_MAP_WRITE_NO_OVERWRITE)
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:50:	virtual Index *lock(int numberOfIndices);
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:51:	virtual void   unlock();
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:78:	int m_offset;             // INDEX offset into ring at last lock
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_DynamicIndexBufferData.h:88:	return m_offset;
+src/engine/client/application/Direct3d11\src\win32\Direct3d11_LightManager.h:104:	// Gl_api::setLights slot body.
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:13:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:80:	DynamicVertexBuffer                         *s_batchVertexBuffer;
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:193:	s_batchVertexBuffer->lock(vertexCount, allowDiscard);
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:194:	VertexBufferWriteIterator destVbIt = s_batchVertexBuffer->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:197:	s_batchIndexBuffer->lock(indexCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:248:		sourceIb->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:284:	s_batchIndexBuffer->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:285:	s_batchVertexBuffer->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:288:	Graphics::setVertexBuffer(*s_batchVertexBuffer);
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:289:	Graphics::setIndexBuffer(*s_batchIndexBuffer);
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:290:	Graphics::drawIndexedTriangleList();
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:329:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+src/engine/client/library/clientSkeletalAnimation/src/shared\batch\FullGeometrySkeletalAppearanceBatchRenderer.cpp:422:	s_batchVertexBuffer = new DynamicVertexBuffer(format);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:3:// DynamicVertexBuffer.h
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:9:#ifndef INCLUDED_DynamicVertexBuffer_H
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:10:#define INCLUDED_DynamicVertexBuffer_H
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:21:class DynamicVertexBufferGraphicsData
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:24:	virtual DLLEXPORT ~DynamicVertexBufferGraphicsData();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:26:	virtual void                          *lock(int numberOfVertices, bool forceDiscard) = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:27:	virtual void                           unlock() = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:28:	virtual void                           unlock(int numberOfVertices) = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:38:class DynamicVertexBuffer : public HardwareVertexBuffer
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:41:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:43:	friend class  Direct3d8_DynamicVertexBufferData;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:45:	friend class  Direct3d9_DynamicVertexBufferData;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:48:	friend class  Direct3d11_DynamicVertexBufferData;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:65:	DynamicVertexBuffer(const VertexBufferFormat &format);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:66:	virtual ~DynamicVertexBuffer();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:75:	void                  lock(int numberOfVertices, bool forceDiscard=false);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:76:	void                  unlock();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:77:	void                  unlock(int numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:79:	VertexBufferWriteIterator  begin();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:80:	VertexBufferWriteIterator  end();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:84:	virtual VertexBufferWriteIterator preLoad(int numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:92:	DynamicVertexBuffer();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:93:	DynamicVertexBuffer(const DynamicVertexBuffer &);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:94:	DynamicVertexBuffer &operator =(const DynamicVertexBuffer &);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:107:	DynamicVertexBufferGraphicsData * m_graphicsData;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:125:inline int DynamicVertexBuffer::getDynamicGlobalId()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:136:inline int DynamicVertexBuffer::getSortKey() const
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:148:inline int DynamicVertexBuffer::getDynamicId() const
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:168:inline int DynamicVertexBuffer::getNumberOfLockableDynamicVertices(bool withDiscard)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:183: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:186:inline void DynamicVertexBuffer::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:198:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(numberOfVertices, forceDiscard));
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:203: * Let the DynamicVertexBuffer know it is done being modified.
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:204: * @see lock()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:207:inline void DynamicVertexBuffer::unlock()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:214:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:220: * Let the DynamicVertexBuffer know it is done being modified.
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:221: * @see lock()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:224:inline void DynamicVertexBuffer::unlock(int numberOfVertices)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:231:	m_graphicsData->unlock(numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:241:inline VertexBufferWriteIterator DynamicVertexBuffer::begin()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:244:	return VertexBufferWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:253:inline VertexBufferWriteIterator DynamicVertexBuffer::end()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:256:	return VertexBufferWriteIterator(*this, m_data + m_numberOfVertices * m_descriptor->vertexSize);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:3:// DynamicVertexBuffer.cpp
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:10:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:18:MemoryBlockManager  *DynamicVertexBuffer::ms_memoryBlockManager;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:21:int                               DynamicVertexBuffer::ms_dynamicGlobalId;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:22:bool                              DynamicVertexBuffer::ms_dynamicGlobalLocked;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:27:DynamicVertexBufferGraphicsData::~DynamicVertexBufferGraphicsData()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:33:void DynamicVertexBuffer::install()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:36:	ms_memoryBlockManager = new MemoryBlockManager("DynamicVertexBuffer", true, sizeof(DynamicVertexBuffer), 0, 0, 0);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:37:	ExitChain::add(remove, "DynamicVertexBuffer::remove()");
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:42:void DynamicVertexBuffer::remove()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:51:void *DynamicVertexBuffer::operator new(size_t size)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:55:	DEBUG_FATAL(size != sizeof(DynamicVertexBuffer), ("Looks like a decendent class is trying to use our new routine"));
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:63:void  DynamicVertexBuffer::operator delete(void *pointer)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:71:DynamicVertexBuffer::DynamicVertexBuffer(const VertexBufferFormat &format)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:89:DynamicVertexBuffer::~DynamicVertexBuffer()
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:98:VertexBufferWriteIterator DynamicVertexBuffer::preLoad(int numberOfVertices)
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:103:	return VertexBufferWriteIterator(*this, NULL);
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.cpp:108:void DynamicVertexBuffer::postLoad()
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:24:	virtual Index *lock(int numberOfIndices) = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:25:	virtual void   unlock() = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:31:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:51:	void          lock(int numberOfIndices);
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:52:	void          unlock() const;
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:119: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:122:inline void DynamicIndexBuffer::lock(int numberOfIndices)
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:131:	m_indexData = m_graphicsData->lock(m_numberOfIndices);
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:138: * @see lock()
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:142:inline void DynamicIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:148:	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:12:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:77:	Graphics::setObjectToWorldTransformAndScale (m_appearance.getTransform_w (), Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:85:		DynamicVertexBuffer vertexBuffer (format);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:89:			VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:100:		Graphics::setVertexBuffer (vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:118:		Graphics::setIndexBuffer (indexBuffer);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:132:	Graphics::drawIndexedTriangleList ();
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:12:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:35:	return new DynamicVertexBuffer(format);
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:42:	DynamicVertexBuffer * buffer = dynamic_cast<DynamicVertexBuffer*>(m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:49:	buffer->lock(bufferSize);
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:51:	VertexBufferWriteIterator v = buffer->begin();
+src/engine/client/library/clientGraphics\src\shared\DynamicColorPolyPrimitive.cpp:71:	buffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:93:	Graphics::setObjectToWorldTransformAndScale(m_objectToWorld, m_scale);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:826:	Graphics::setVertexBuffer(m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:827:	Graphics::setIndexBuffer(m_indexBuffer);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:838:			Graphics::drawIndexedLineList();
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:842:			Graphics::drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:928:	m_vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:994:	m_vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\RenderWorldCommander.cpp:67:	ProfilerBlock             ms_reportingProfilerBlock("reporting");
+src/engine/client/library/clientGraphics\src\shared\RenderWorldCommander.cpp:193:			NP_PROFILER_BLOCK_LEAVE(RenderWorld::getDpvsQueryProfilerBlock());
+src/engine/client/library/clientGraphics\src\shared\RenderWorld.h:102:	static ProfilerBlock           &getDpvsQueryProfilerBlock();
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:12:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:216:		DynamicVertexBuffer vertexBuffer(format);
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:221:		vertexBuffer.lock(4);
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:223:			VertexBufferWriteIterator v = vertexBuffer.begin();
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:244:		vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:249:		Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\RenderWorld.cpp:97:	ProfilerBlock                                ms_dpvsQueryProfilerBlock("dpvs query and immediate callbacks");
+src/engine/client/library/clientGraphics\src\shared\RenderWorld.cpp:1148:ProfilerBlock &RenderWorld::getDpvsQueryProfilerBlock()
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:12:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:526:	DynamicVertexBuffer vertexBuffer (format);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:538:		VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:579:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:580:	Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:682:	Graphics::drawIndexedPointList,     // SPSPT_indexedPointList,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:683:	Graphics::drawIndexedLineList,      // SPSPT_indexedLineList,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:684:	Graphics::drawIndexedLineStrip,     // SPSPT_indexedLineStrip,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:685:	Graphics::drawIndexedTriangleList,  // SPSPT_indexedTriangleList,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:686:	Graphics::drawIndexedTriangleStrip, // SPSPT_indexedTriangleStrip,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:687:	Graphics::drawIndexedTriangleFan,   // SPSPT_indexedTriangleFan,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:760:	m_vertexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:798:				m_indexBuffer->lock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:809:				m_indexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:913:	m_vertexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:914:	m_indexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:940:	pBuffer->lock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:948:	pBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:960:	pBuffer->lock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:968:	pBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1113:	pIndexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1240:	Graphics::setVertexBuffer(*m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1264:		Graphics::setIndexBuffer(*(m_sortedIndices->at(minArray).second));
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1269:			Graphics::setIndexBuffer(*m_indexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1367:				if (m_drawFunction == Graphics::drawIndexedTriangleList)
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1370:					if (m_drawFunction == Graphics::drawIndexedTriangleStrip)
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1373:						if (m_drawFunction == Graphics::drawIndexedTriangleFan)
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1393:	m_vertexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:270:	vertexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:272:		VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:280:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:287:	indexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:349:	vertexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:351:	VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:379:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:385:	indexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:451:	vertexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:453:		VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:462:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:468:	indexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:513:	vertexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:515:		VertexBufferWriteIterator v = vertexBuffer.begin ();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:525:	vertexBuffer.unlock();
+src/engine/client/library/clientGraphics\src\shared\ClientDebugShapeRenderer.cpp:531:	indexBuffer.lock();
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSet.cpp:228:	Graphics::setObjectToWorldTransformAndScale(m_owner.getTransform_w(), m_owner.getScale());
+src/engine/client/application/Direct3d11\build\win32\Direct3d11.vcxproj:268:    <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp" />
+src/engine/client/application/Direct3d11\build\win32\Direct3d11.vcxproj:302:    <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h" />
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.h:56:	virtual void					setVertexBuffer		( HardwareVertexBuffer * buffer );
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:74:	buffer->lock();
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:96:	buffer->unlock();
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:112:void SimplePolyPrimitive::setVertexBuffer( HardwareVertexBuffer * buffer )
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:142:		setVertexBuffer( createVertexBuffer() );
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:191:		Graphics::setObjectToWorldTransformAndScale (m_owner.getTransform_w(), Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:192:		Graphics::setVertexBuffer(*m_vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.h:15:struct Gl_api;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.h:81:	static void                 setVertexBuffer(HardwareVertexBuffer const & vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.h:82:	static void                 setVertexBufferVector(VertexBufferVector const & vertexBufferVector);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.h:83:	static void                 setIndexBuffer(HardwareIndexBuffer const & indexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.h:88:	static void                 drawIndexedPrimitive(D3DPRIMITIVETYPE primitiveType, int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, int numberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:28:#include "Direct3d9_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:328:	void                               setObjectToWorldTransformAndScale(const Transform &transform, const Vector &scale);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:349:	DynamicVertexBufferGraphicsData *  createVertexBufferData(const DynamicVertexBuffer &vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:371:	void                               drawIndexedPointList();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:372:	void                               drawIndexedLineList();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:373:	void                               drawIndexedLineStrip();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:374:	void                               drawIndexedTriangleList();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:375:	void                               drawIndexedTriangleStrip();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:376:	void                               drawIndexedTriangleFan();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:385:	void                               drawIndexedPointList(int baseInex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:386:	void                               drawIndexedLineList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:387:	void                               drawIndexedLineStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:388:	void                               drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:389:	void                               drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:390:	void                               drawIndexedTriangleFan(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:466:	Gl_api                                     ms_glApi;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:633:extern "C" __declspec(dllexport) Gl_api const * GetApi();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:637:Gl_api const * GetApi()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1192:	ms_glApi.setObjectToWorldTransformAndScale = setObjectToWorldTransformAndScale;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1209:	ms_glApi.createDynamicVertexBufferData     = createVertexBufferData;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1216:	ms_glApi.setVertexBuffer                   = setVertexBuffer;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1217:	ms_glApi.setVertexBufferVector             = setVertexBufferVector;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1218:	ms_glApi.setIndexBuffer                    = setIndexBuffer;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1228:	ms_glApi.drawIndexedPointList              = drawIndexedPointList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1229:	ms_glApi.drawIndexedLineList               = drawIndexedLineList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1230:	ms_glApi.drawIndexedLineStrip              = drawIndexedLineStrip;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1231:	ms_glApi.drawIndexedTriangleList           = drawIndexedTriangleList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1232:	ms_glApi.drawIndexedTriangleStrip          = drawIndexedTriangleStrip;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1233:	ms_glApi.drawIndexedTriangleFan            = drawIndexedTriangleFan;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1242:	ms_glApi.drawPartialIndexedPointList       = drawIndexedPointList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1243:	ms_glApi.drawPartialIndexedLineList        = drawIndexedLineList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1244:	ms_glApi.drawPartialIndexedLineStrip       = drawIndexedLineStrip;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1245:	ms_glApi.drawPartialIndexedTriangleList    = drawIndexedTriangleList;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1246:	ms_glApi.drawPartialIndexedTriangleStrip   = drawIndexedTriangleStrip;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1247:	ms_glApi.drawPartialIndexedTriangleFan     = drawIndexedTriangleFan;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1647:	Direct3d9_DynamicVertexBufferData::install();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:1733:	Direct3d9_DynamicVertexBufferData::remove();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:2094:	Direct3d9_DynamicVertexBufferData::lostDevice();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:2109:	Direct3d9_DynamicVertexBufferData::restoreDevice();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:2399:	ms_quadListIndexBuffer->lock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:2418:	ms_quadListIndexBuffer->unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:2485:	Direct3d9_DynamicVertexBufferData::beginFrame();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3031:	calls     = Direct3d9_Metrics::drawPrimitiveCalls + Direct3d9_Metrics::drawIndexedPrimitiveCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3402:void Direct3d9Namespace::setObjectToWorldTransformAndScale(const Transform &transform, const Vector &scale)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3641:DynamicVertexBufferGraphicsData *Direct3d9Namespace::createVertexBufferData(const DynamicVertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3643:	return new Direct3d9_DynamicVertexBufferData(vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3686:void Direct3d9::setVertexBuffer(const HardwareVertexBuffer & vertexBuffer)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3714:					Direct3d9_Metrics::setVertexBufferUniqueVertexBuffers += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3731:				const DynamicVertexBuffer *dynamicVertexBuffer = safe_cast<const DynamicVertexBuffer *>(&vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3732:				const Direct3d9_DynamicVertexBufferData *data = safe_cast<Direct3d9_DynamicVertexBufferData *>(dynamicVertexBuffer->m_graphicsData);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3758:	Direct3d9_Metrics::setVertexBufferCalls += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3764:void Direct3d9::setVertexBufferVector(const VertexBufferVector & vertexBufferVector)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3806:						Direct3d9_Metrics::setVertexBufferUniqueVertexBuffers += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3833:					const DynamicVertexBuffer *dynamicVertexBuffer = safe_cast<const DynamicVertexBuffer *>(&vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3834:					const Direct3d9_DynamicVertexBufferData *data = safe_cast<Direct3d9_DynamicVertexBufferData *>(dynamicVertexBuffer->m_graphicsData);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3885:	Direct3d9_Metrics::setVertexBufferCalls += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3891:void Direct3d9::setIndexBuffer(const HardwareIndexBuffer &indexBuffer)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3908:			Direct3d9_Metrics::setIndexBufferUniqueIndexBuffers += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3930:	Direct3d9_StateCache::setIndexBuffer(ms_savedIndexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:3933:	Direct3d9_Metrics::setIndexBufferCalls += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4137:inline void Direct3d9::drawIndexedPrimitive(D3DPRIMITIVETYPE primitiveType, int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, int numberOfIndices)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4141:	Direct3d9_Metrics::drawIndexedPrimitiveCalls += 1;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4292:	Direct3d9::setIndexBuffer(*ms_quadListIndexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4294:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, numberOfTriangles, numberOfTriangles * 3);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4299:void Direct3d9Namespace::drawIndexedPointList()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4308:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4313:void Direct3d9Namespace::drawIndexedLineList()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4322:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 2, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4327:void Direct3d9Namespace::drawIndexedLineStrip()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4336:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 1, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4341:void Direct3d9Namespace::drawIndexedTriangleList()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4350:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 3, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4355:void Direct3d9Namespace::drawIndexedTriangleStrip()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4364:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4369:void Direct3d9Namespace::drawIndexedTriangleFan()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4378:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4464:void Direct3d9Namespace::drawIndexedPointList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4472:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4477:void Direct3d9Namespace::drawIndexedLineList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4485:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 2);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4490:void Direct3d9Namespace::drawIndexedLineStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4498:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount+1);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4503:void Direct3d9Namespace::drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4512:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 3);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4517:void Direct3d9Namespace::drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4526:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4531:void Direct3d9Namespace::drawIndexedTriangleFan(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9.cpp:4540:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+src/engine/client/application/Direct3d9\src\win32\ConfigDirect3d9.cpp:189:int ConfigDirect3d9::getDynamicVertexBufferSize()
+src/engine/client/application/Direct3d9\src\win32\ConfigDirect3d9.h:45:	static int  getDynamicVertexBufferSize();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.h:41:	virtual Index *lock(int numberOfIndices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.h:42:	virtual void   unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.h:72:	DWORD  m_offset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.h:87:	return m_offset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:124:	m_offset(0),
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:137:Index *Direct3d9_DynamicIndexBufferData::lock(int numberOfIndices)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:174:	m_offset                = ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:178:	HRESULT const hresult = ms_d3dIndexBuffer->Lock(m_offset * sizeof(Index), length, &data, lockFlag);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:179:	FATAL(FAILED(hresult), ("Could not lock dynamic %s %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards", "ib", HRESULT_CODE(hresult), discard, m_offset * sizeof(Index), length, ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver, ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:190:void Direct3d9_DynamicIndexBufferData::unlock()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicIndexBufferData.cpp:192:	const HRESULT hresult = ms_d3dIndexBuffer->Unlock();
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:12:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:74:		static DynamicVertexBuffer *s_vertexBuffer;
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:80:	DynamicVertexBuffer *TextureBlit::s_vertexBuffer;
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:203:	s_vertexBuffer = new DynamicVertexBuffer(s_vertexFormat);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:268:	s_dynamicTexture->lock(ldata);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:277:	s_dynamicTexture->unlock(ldata);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:299:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:322:	s_vertexBuffer->lock(4);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:324:		VertexBufferWriteIterator vbiter = s_vertexBuffer->begin();
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:346:	s_vertexBuffer->unlock();
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:348:	Graphics::setVertexBuffer(*s_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:24:	virtual Index *lock(bool readOnly) = 0;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:25:	virtual void   unlock() = 0;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:31:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:47:	DLLEXPORT void    lock();
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:49:	DLLEXPORT void    unlock() const;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:59:	void lock(bool readOnly) const;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:92:inline void StaticIndexBuffer::lock(bool readOnly) const 
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:96:	m_indexData = m_graphicsData->lock(m_readOnly);
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:102: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:105:inline void StaticIndexBuffer::lock()
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:107:	lock(false);
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:113: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:118:	lock(true);
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:124: * @see lock()
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:128:inline void StaticIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:131:	m_graphicsData->unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:3:// Direct3d9_DynamicVertexBufferData.cpp
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:9:#include "Direct3d9_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:22:bool                     Direct3d9_DynamicVertexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:23:int                      Direct3d9_DynamicVertexBufferData::ms_size;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:24:int                      Direct3d9_DynamicVertexBufferData::ms_used;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:25:IDirect3DVertexBuffer9 * Direct3d9_DynamicVertexBufferData::ms_d3dVertexBuffer;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:26:MemoryBlockManager *     Direct3d9_DynamicVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:27:int                      Direct3d9_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:28:int                      Direct3d9_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:29:int                      Direct3d9_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:30:int                      Direct3d9_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:31:int                      Direct3d9_DynamicVertexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:32:int                      Direct3d9_DynamicVertexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:36:void Direct3d9_DynamicVertexBufferData::install()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:39:	ms_memoryBlockManager  = new MemoryBlockManager("Direct3d9_DynamicVertexBufferData", true, sizeof(Direct3d9_DynamicVertexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:66:	//ms_size = ConfigDirect3d9::getDynamicVertexBufferSize() * 1024;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:74:void Direct3d9_DynamicVertexBufferData::remove()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:84:void Direct3d9_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:93:void *Direct3d9_DynamicVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:97:	DEBUG_FATAL(size != sizeof(Direct3d9_DynamicVertexBufferData), ("wrong new called"));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:105:void Direct3d9_DynamicVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:113:void Direct3d9_DynamicVertexBufferData::lostDevice()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:126:void Direct3d9_DynamicVertexBufferData::restoreDevice()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:139:Direct3d9_DynamicVertexBufferData::Direct3d9_DynamicVertexBufferData(const VertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:143:	m_offset(0),
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:150:Direct3d9_DynamicVertexBufferData::~Direct3d9_DynamicVertexBufferData()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:157:const VertexBufferDescriptor &Direct3d9_DynamicVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:164:void Direct3d9_DynamicVertexBufferData::roundUpUsed() const
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:172:void *Direct3d9_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:217:	m_offset = ms_used / vertexSize;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:224:void Direct3d9_DynamicVertexBufferData::unlock()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:226:	Direct3d9_DynamicVertexBufferData::unlock(m_numberOfVertices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:231:void Direct3d9_DynamicVertexBufferData::unlock(int numberOfVertices)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:233:	const HRESULT hresult = ms_d3dVertexBuffer->Unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:249:int Direct3d9_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool withDiscard)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:260:int Direct3d9_DynamicVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:267:int Direct3d9_DynamicVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.cpp:274:IDirect3DVertexBuffer9 *Direct3d9_DynamicVertexBufferData::getVertexBuffer() const
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.cpp:115:VertexBufferWriteIterator StaticVertexBuffer::preLoad(int numberOfVertices)
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.cpp:122:	lock();
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.cpp:124:	return VertexBufferWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.cpp:131:	unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:3:// Direct3d9_DynamicVertexBufferData.h
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:9:#ifndef INCLUDED_Direct3d9_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:10:#define INCLUDED_Direct3d9_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:18:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:23:class Direct3d9_DynamicVertexBufferData: public DynamicVertexBufferGraphicsData
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:38:	explicit Direct3d9_DynamicVertexBufferData(const VertexBuffer &vertexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:39:	virtual ~Direct3d9_DynamicVertexBufferData();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:41:	virtual void                            *lock(int numberOfVertices, bool forceDiscard);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:42:	virtual void                             unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:43:	virtual void                             unlock(int numberOfVertices);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:61:	Direct3d9_DynamicVertexBufferData(void);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:62:	Direct3d9_DynamicVertexBufferData(const Direct3d9_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:63:	Direct3d9_DynamicVertexBufferData &operator =(const Direct3d9_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:84:	int                            m_offset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:90:inline int Direct3d9_DynamicVertexBufferData::getNumberOfVertices() const
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:97:inline int Direct3d9_DynamicVertexBufferData::getOffset() const
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:99:	return m_offset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_DynamicVertexBufferData.h:104:inline IDirect3DVertexDeclaration9 *Direct3d9_DynamicVertexBufferData::getVertexDeclaration() const
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:29:	virtual void                          *lock(bool readOnly) = 0;
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:30:	virtual void                           unlock() = 0;
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:42:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:68:	void                           lock();
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:70:	void                           unlock() const;
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:80:	virtual VertexBufferWriteIterator preLoad(int numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:134: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:137:inline void StaticVertexBuffer::lock()
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:154:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(false));
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:161: * @see unlock()
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:174:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(true));
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:180: * @see lock()
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:183:inline void StaticVertexBuffer::unlock() const
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:191:	m_graphicsData->unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.h:38:	virtual Index *lock(bool readOnly);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.h:39:	virtual void   unlock();
+src/engine/client/application/Direct3d11\build\win32\Direct3d11.vcxproj.filters:39:    <ClCompile Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.cpp">
+src/engine/client/application/Direct3d11\build\win32\Direct3d11.vcxproj.filters:125:    <ClInclude Include="..\..\src\win32\Direct3d11_DynamicVertexBufferData.h">
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:91:Index *Direct3d9_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:110:void Direct3d9_StaticIndexBufferData::unlock()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticIndexBufferData.cpp:112:	const HRESULT hresult = m_d3dIndexBuffer->Unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:37:	static int     drawIndexedPrimitiveCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:55:	static int     setVertexBufferCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:56:	static int     setVertexBufferUniqueVertexBuffers;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:68:	static int     setIndexBufferCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:69:	static int     setIndexBufferUniqueIndexBuffers;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.h:70:	static int     setIndexBufferCacheMisses;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.h:47:	virtual void            lock(LockData &lockData);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.h:48:	virtual void            unlock(LockData &lockData);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:102:void *Direct3d9_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:121:void Direct3d9_StaticVertexBufferData::unlock()
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.cpp:123:	const HRESULT hresult = m_d3dVertexBuffer->Unlock();
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:50:	static void setIndexBuffer(IDirect3DIndexBuffer9 *indexBuffer);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:92:		UINT                    m_offset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:280:	++Direct3d9_Metrics::setIndexBufferCacheMisses;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:290:inline void Direct3d9_StateCache::setIndexBuffer(IDirect3DIndexBuffer9 *indexBuffer)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:310:	ms_streamDataCache[streamIndex].m_offset = byteOffset;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StateCache.h:331:		|| (ms_streamDataCache[streamIndex].m_offset != byteOffset)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:43:int      Direct3d9_Metrics::drawIndexedPrimitiveCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:61:int      Direct3d9_Metrics::setVertexBufferCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:62:int      Direct3d9_Metrics::setVertexBufferUniqueVertexBuffers;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:74:int      Direct3d9_Metrics::setIndexBufferCalls;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:75:int      Direct3d9_Metrics::setIndexBufferUniqueIndexBuffers;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:76:int      Direct3d9_Metrics::setIndexBufferCacheMisses;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:148:	drawIndexedPrimitiveCalls = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:167:	setVertexBufferCalls = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:168:	setVertexBufferUniqueVertexBuffers = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:179:	setIndexBufferCalls = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:180:	setIndexBufferUniqueIndexBuffers = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:181:	setIndexBufferCacheMisses = 0;
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:233:	DEBUG_REPORT_PRINT(true, ("d:%6d=drawPrim   %6d=drawIP   %6d=tri/s\n", drawPrimitiveCalls, drawIndexedPrimitiveCalls, static_cast<int>(static_cast<float>(triangles) / Clock::frameTime())));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:258:	DEBUG_REPORT_PRINT(true, ("v:%5d=uniq  %5d=setVB  %5d=missStream  %5d=setStream  %5d=discard\n", setVertexBufferUniqueVertexBuffers, setVertexBufferCalls, setStreamSourceCacheMisses, setStreamSourceCalls, vertexBufferDiscards));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_Metrics.cpp:266:	DEBUG_REPORT_PRINT(true, ("i:%5d=uniq  %5d=miss  %5d=setIB  %5d=discards\n", setIndexBufferUniqueIndexBuffers, setIndexBufferCacheMisses, setIndexBufferCalls, indexBufferDiscards));
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:405:void Direct3d9_TextureData::lock(LockData &lockData)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_TextureData.cpp:575:void Direct3d9_TextureData::unlock(LockData &lockData)
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.h:39:	virtual void                            *lock(bool readOnly);
+src/engine/client/application/Direct3d9\src\win32\Direct3d9_StaticVertexBufferData.h:40:	virtual void                             unlock();
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.cpp:207:VertexBufferWriteIterator SystemVertexBuffer::preLoad(int numberOfVertices)
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.cpp:212:	return VertexBufferWriteIterator(*this, NULL);
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:51:	VertexBufferWriteIterator       beginWriteOnly();
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:52:	VertexBufferWriteIterator       endWriteOnly();
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:59:	virtual VertexBufferWriteIterator preLoad(int numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:125:inline VertexBufferWriteIterator SystemVertexBuffer::beginWriteOnly()
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:127:	return VertexBufferWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:135:inline VertexBufferWriteIterator SystemVertexBuffer::endWriteOnly()
+src/engine/client/library/clientGraphics\src\shared\SystemVertexBuffer.h:137:	return VertexBufferWriteIterator(*this, m_data + m_numberOfVertices * m_descriptor->vertexSize);
+src/engine/client/application/Direct3d9\build\win32\Direct3d9.vcxproj:262:    <ClCompile Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.cpp" />
+src/engine/client/application/Direct3d9\build\win32\Direct3d9.vcxproj:289:    <ClInclude Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.h" />
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:225:	lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:229:	unlock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:262:	lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:284:	unlock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:394:			lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:418:			unlock(lockData);								
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:757:void Texture::lock(LockData &lockData)
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:762:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:779:	m_graphicsData->lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:784:void Texture::unlock(LockData &lockData) const
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:788:	m_graphicsData->unlock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:818:	unlock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:846:	lock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.cpp:868:	unlock(lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.h:98:	virtual void        lock(LockData &lockData) = 0;
+src/engine/client/library/clientGraphics\src\shared\Texture.h:99:	virtual void        unlock(LockData &lockData) = 0;
+src/engine/client/library/clientGraphics\src\shared\Texture.h:184:	void                  lock(LockData &lockData);
+src/engine/client/library/clientGraphics\src\shared\Texture.h:186:	void                  unlock(LockData &lockData) const;
+src/engine/client/library/clientGraphics\include\public\clientGraphics\DynamicVertexBuffer.h:1:#include "../../src/shared/DynamicVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\VertexBuffer.h:16:class VertexBufferWriteIterator;
+src/engine/client/library/clientGraphics\src\shared\VertexBuffer.h:60:	virtual VertexBufferWriteIterator preLoad(int numberOfVertices) = 0;
+src/engine/client/library/clientGraphics\src\shared\VertexBuffer.cpp:131:		VertexBufferWriteIterator v = preLoad(numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\VertexBuffer.cpp:196:		VertexBufferWriteIterator v = preLoad(numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\VertexBuffer.cpp:265:		VertexBufferWriteIterator v = preLoad(numberOfVertices);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.cpp:29:VertexBufferWriteIterator::~VertexBufferWriteIterator()
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:62:	friend class VertexBufferWriteIterator;
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:105:class VertexBufferWriteIterator : public  VertexBufferBaseIterator
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:107:	friend class DynamicVertexBuffer;
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:113:	VertexBufferWriteIterator(); 
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:114:	VertexBufferWriteIterator(const VertexBufferWriteIterator &rhs);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:115:	VertexBufferWriteIterator(const VertexBufferReadWriteIterator &rhs);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:116:	virtual ~VertexBufferWriteIterator();
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:118:	VertexBufferWriteIterator &operator =(const VertexBufferWriteIterator &rhs);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:119:	VertexBufferWriteIterator &operator =(const VertexBufferReadWriteIterator &rhs);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:120:	VertexBufferWriteIterator &operator ++();
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:121:	VertexBufferWriteIterator &operator --();
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:122:	VertexBufferWriteIterator &operator -=(int offset);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:123:	VertexBufferWriteIterator &operator +=(int offset);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:124:	VertexBufferWriteIterator  operator +(int offset) const;
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:125:	VertexBufferWriteIterator  operator -(int offset) const;
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:156:	VertexBufferWriteIterator(const VertexBuffer &vertexBuffer, byte *data);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:561:inline VertexBufferWriteIterator::VertexBufferWriteIterator()
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:568:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBuffer &vertexBuffer, byte *data)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:575:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBufferWriteIterator &rhs)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:582:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBufferReadWriteIterator &rhs)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:589:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator =(const VertexBufferWriteIterator &rhs)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:597:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator =(const VertexBufferReadWriteIterator &rhs)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:605:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator ++()
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:613:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator --()
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:621:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator +=(int offset)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:630:inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator -=(int offset)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:639:inline VertexBufferWriteIterator VertexBufferWriteIterator::operator +(int offset) const
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:642:	return VertexBufferWriteIterator(*m_vertexBuffer, m_data + (offset * m_descriptor->vertexSize));
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:647:inline VertexBufferWriteIterator VertexBufferWriteIterator::operator -(int offset) const
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:650:	return VertexBufferWriteIterator(*m_vertexBuffer, m_data - (offset * m_descriptor->vertexSize));
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:655:inline void VertexBufferWriteIterator::setPosition(const Vector &position)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:664:inline void VertexBufferWriteIterator::setPosition(float x, float y, float z)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:676:inline void VertexBufferWriteIterator::setPositionX(float x)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:685:inline void VertexBufferWriteIterator::setPositionY(float y)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:694:inline void VertexBufferWriteIterator::setPositionZ(float z)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:703:inline void VertexBufferWriteIterator::setOoz(float ooz)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:712:inline void VertexBufferWriteIterator::setNormal(const Vector &normal)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:721:inline void VertexBufferWriteIterator::setNormal(float x, float y, float z)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:733:inline void VertexBufferWriteIterator::setNormalX(float x)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:742:inline void VertexBufferWriteIterator::setNormalY(float y)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:751:inline void VertexBufferWriteIterator::setNormalZ(float z)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:760:inline void VertexBufferWriteIterator::setPointSize(float size)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:769:inline void VertexBufferWriteIterator::setColor0(uint32 color0)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:778:inline void VertexBufferWriteIterator::setColor1(uint32 color1)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:787:inline void VertexBufferWriteIterator::setColor0(const PackedArgb &color0)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:796:inline void VertexBufferWriteIterator::setColor1(const PackedArgb &color1)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:805:inline void VertexBufferWriteIterator::setTextureCoordinate(int setIndex, int coordinateIndex, float value)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:815:inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:826:inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:838:inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1, float tc2)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:851:inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, const Vector &tcs012)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:864:inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1, float tc2, float tc3)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:878:inline void VertexBufferWriteIterator::copy(const VertexBufferReadIterator &source, int count)
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:895:inline void *VertexBufferWriteIterator::getDataPointer()
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1067:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPosition(position);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1074:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPosition(x, y, z);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1081:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPositionX(x);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1088:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPositionY(y);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1095:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPositionZ(z);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1102:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setOoz(ooz);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1109:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setNormal(normal);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1116:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setNormal(x, y, z);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1123:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setNormalX(x);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1130:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setNormalY(y);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1137:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setNormalZ(z);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1144:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setPointSize(size);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1151:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setColor0(color);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1158:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setColor1(color);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1165:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setColor0(color);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1172:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setColor1(color);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1179:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinate(setIndex, coordinateIndex, value);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1186:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinates(setIndex, tc0);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1193:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinates(setIndex, tc0, tc1);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1200:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinates(setIndex, tc0, tc1, tc2);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1207:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinates(setIndex, tcs012);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1214:	reinterpret_cast<VertexBufferWriteIterator*>(this)->setTextureCoordinates(setIndex, tc0, tc1, tc2, tc3);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferIterator.h:1221:	reinterpret_cast<VertexBufferWriteIterator*>(this)->copy(source, count);
+src/engine/client/library/clientGraphics\src\shared\VertexBufferVector.h:27:	friend struct Gl_api;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SkeletalAppearance2.cpp:1894:		Graphics::setObjectToWorldTransformAndScale(object->getTransform_a2w(), Vector::xyz111);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\Skeleton.cpp:348:	Graphics::setObjectToWorldTransformAndScale(m_appearance.getTransform_w(), Vector::xyz111);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\Skeleton.cpp:623:			Graphics::setObjectToWorldTransformAndScale(hardpointToWorld, Vector::xyz111);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\Skeleton.cpp:1330:			Graphics::setObjectToWorldTransformAndScale(renderFrameToWorldTransform, scale);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\Skeleton.cpp:1633:					Graphics::setObjectToWorldTransformAndScale(jointToWorldTransform, scale);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\Skeleton.cpp:1635:					Graphics::setObjectToWorldTransformAndScale(skeletonToWorld, scale);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:18:#include "clientGraphics/DynamicVertexBuffer.h"
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:274:	DrawPrimitiveCommand dpc = Graphics::drawIndexedTriangleList;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:288:	DrawPrimitiveCommand dpc = Graphics::drawIndexedTriangleStrip;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:491:	Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:494:	// transform passed into Graphics::setObjectToWorldTransformAndScale for
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:667:		VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:737:		m_dynamicStream->lock(m_vertexCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:739:			VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:742:		m_dynamicStream->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:754:			m_dynamicStream->lock(m_vertexCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:756:				VertexBufferWriteIterator writeIterator = m_dynamicStream->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:759:			m_dynamicStream->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:768:			VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:776:			m_dynamicStream->lock(m_vertexCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:778:				VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:781:			m_dynamicStream->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:819:	Graphics::setVertexBuffer(*m_vertexBufferVector);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:823:	Graphics::setIndexBuffer(*m_indexBuffer);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:933:	VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1007:		m_indexBuffer->lock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1069:		m_indexBuffer->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1274:	m_dynamicStream = new DynamicVertexBuffer(dynamicFormat);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1393:		m_staticStream->lock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1394:		VertexBufferWriteIterator outIt = m_staticStream->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1396:		m_staticStream->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1410:		VertexBufferWriteIterator outIt = m_systemStream->begin();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1475:	m_indexBuffer->lock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1590:	//   vertices [0, maxIndex] but the render path only lock(m_vertexCount)+writes
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1597:		// exact value m_vertexCount will be set to and that the render path lock()s+writes.
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1636:	m_indexBuffer->unlock();
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1646:void SoftwareBlendSkeletalShaderPrimitive::fillConstantVertexBufferData(const MeshConstructionHelper &mesh, int shaderIndex, VertexBufferWriteIterator &destVertexIt)
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1712:void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1832:void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1836:	//-- We will be updating m_boxExtent every frame in fillDynamicVertexBuffer*.  
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:23:class DynamicVertexBuffer;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:35:class VertexBufferWriteIterator;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:105:	void fillConstantVertexBufferData(const MeshConstructionHelper &mesh, int shaderIndex, VertexBufferWriteIterator &destVertexIt);
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:107:	void skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:109:	void fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:137:	DynamicVertexBuffer    *m_dynamicStream;
+src/engine/client/application/Direct3d9\build\win32\Direct3d9_ffp.vcxproj:262:    <ClCompile Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.cpp" />
+src/engine/client/application/Direct3d9\build\win32\Direct3d9_ffp.vcxproj:288:    <ClInclude Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.h" />
+src/engine/client/application/Direct3d9\build\win32\Direct3d9_vsps.vcxproj:262:    <ClCompile Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.cpp" />
+src/engine/client/application/Direct3d9\build\win32\Direct3d9_vsps.vcxproj:289:    <ClInclude Include="..\..\src\win32\Direct3d9_DynamicVertexBufferData.h" />
+
+ succeeded in 1168ms:
+# Build the D3D9-vs-D3D11 render-path call tree from the PLUGIN-divergence side (read-only, exhaustive)
+
+Repo: D:\Code\swg-client-v2. DEBUGGING-TOOL deliverable. Be exhaustive, every method call, file:line everywhere. A peer (Cursor) is building the same tree top-down; you build it from the renderer-plugin boundary so the two cross-check.
+
+## Context
+D3D11-only "spike" bug: certain skinned NPC meshes render ~10-30 TAIL vertices flung to a stale WORLD-space position. The vertex data is correct in the shared skinning output but spiked in the D3D11 dynamic VB the GPU reads. The shared `clientSkeletalAnimation` code is identical for D3D9 (gl05, src/engine/client/application/Direct3d9/) and D3D11 (gl11, src/engine/client/application/Direct3d11/). **Since the bug is D3D11-only, the cause is a behavioral DIVERGENCE between the two plugins at some call the skeletal path makes.** We need every such call enumerated and compared.
+
+## Deliverable: write to D:\Code\swg-client-v2\.planning\research\RENDER-PATH-TREE-codex.md
+1. **Enumerate every `Graphics::` / `Gl_api` call the skeletal render path makes** (dynamic VB create/lock/unlock, `VertexBufferWriteIterator::copy`, `setVertexBuffer`, `setVertexBufferVector`, `setIndexBuffer`, `drawIndexedTriangleList` / partial / strip, `setObjectToWorldTransformAndScale`, etc.), in call order, from `SoftwareBlendSkeletalShaderPrimitive::prepareToDraw`/`draw` and `FullGeometrySkeletalAppearanceBatchRenderer::renderBuffers` down to the GPU.
+2. For EACH such call, give a **side-by-side D3D9 âˆ¥ D3D11 table**:
+   | call | Direct3d9 impl (file:line) | Direct3d11 impl (file:line) | behavioral divergence |
+   Cover especially the **dynamic vertex buffer**: how D3D9 backs/locks a `DynamicVertexBuffer` (offset, discard, NOOVERWRITE, per-frame reset, the VB the GPU binds) vs D3D11's shared ring (`Direct3d11_DynamicVertexBufferData`: WRITE_DISCARD/WRITE_NO_OVERWRITE, `ringUsed`, `m_offset`, the bind byte-offset, BaseVertexLocation). And `VertexBufferWriteIterator::copy` (clientGraphics, shared â€” memcpy at VertexBufferIterator.h:884) and what `m_descriptor->vertexSize`/`m_data` resolve to under each backend.
+3. **Rank the divergences by how well each could produce a TAIL-only, world-space, ~1692-vert spike that is sane in source but corrupt in the GPU-bound VB.**
+4. Trace the SELECTOR that picks `m_skinningMode` (SoftwareBlendSkeletalShaderPrimitive.cpp:1138 â€” where does the `skinningMode` arg come from?) and whether D3D9 vs D3D11 could land the SAME mesh in different modes/primitive classes.
+
+## Format
+Method-call call-graph (every call, file:line), with the D3D9âˆ¥D3D11 comparison table at each plugin boundary, and a ranked "divergence suspects" section at the end.
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if($i -ge 1 -and $i -le 260) { '"'{0}:{1}' -f "'$i,$_ } }' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if($i -ge 1 -and $i -le 260) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+2026-06-07T20:29:19.235432Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if($i -ge 1 -and $i -le 260) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 568 -and $i -le 590) -or ($i -ge 878 -and $i -le 900)) { '"'{0}:{1}' -f "'$i,$_ } }' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 568 -and $i -le 590) -or ($i -ge 878 -and $i -le 900)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+2026-06-07T20:29:19.253481Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 568 -and $i -le 590) -or ($i -ge 878 -and $i -le 900)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 460 -and $i -le 845) -or ($i -ge 900 -and $i -le 1080) -or ($i -ge 1128 -and $i -le 1150) -or ($i -ge 1258 -and $i -le 1285) -or ($i -ge 1700 -and $i -le 1855)) { '"'{0}:{1}' -f "'$i,$_ } }' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 460 -and $i -le 845) -or ($i -ge 900 -and $i -le 1080) -or ($i -ge 1128 -and $i -le 1150) -or ($i -ge 1258 -and $i -le 1285) -or ($i -ge 1700 -and $i -le 1855)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+2026-06-07T20:29:19.263616Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 460 -and $i -le 845) -or ($i -ge 900 -and $i -le 1080) -or ($i -ge 1128 -and $i -le 1150) -or ($i -ge 1258 -and $i -le 1285) -or ($i -ge 1700 -and $i -le 1855)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 1690 -and $i -le 1780) -or ($i -ge 1870 -and $i -le 1910)) { '"'{0}:{1}' -f "'$i,$_ } }' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 1690 -and $i -le 1780) -or ($i -ge 1870 -and $i -le 1910)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+2026-06-07T20:29:19.491301Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp'; "'$i=0; Get-Content $p | ForEach-Object { $i++; if(($i -ge 1690 -and $i -le 1780) -or ($i -ge 1870 -and $i -le 1910)) { '"'{0}:{1}' -f "'$i,$_ } }'` rejected: blocked by policy
+codex
+The shell policy rejected my ad hoc line-range formatter. I’m switching to `rg -n` and simple `Get-Content` reads that fit the sandbox policy, then I’ll map line ranges from those outputs.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 8 "void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw|Graphics::setObjectToWorldTransformAndScale|m_dynamicStream->lock|VertexBufferWriteIterator outIt|Graphics::setVertexBuffer|Graphics::setIndexBuffer|void SoftwareBlendSkeletalShaderPrimitive::draw|m_drawPrimitiveCommand|void SoftwareBlendSkeletalShaderPrimitive::setSkinningMode|void SoftwareBlendSkeletalShaderPrimitive::skinData|void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "VertexBufferWriteIterator::VertexBufferWriteIterator|VertexBufferWriteIterator::copy|memcpy|m_descriptor->vertexSize|m_data" src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 8 "skinningMode|setSkinningMode|new SoftwareBlendSkeletalShaderPrimitive|create|batch" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 6 \"renderBuffers|setObjectToWorldTransformAndScale|setVertexBuffer|setIndexBuffer|drawIndexed|lock\\(|unlock\\(|begin\\(\" src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp" in D:\Code\swg-client-v2
+ succeeded in 438ms:
+41-
+42-protected:
+43-
+44-	const VertexBuffer             *m_vertexBuffer;
+45-	const VertexBufferDescriptor   *m_descriptor;
+46:	byte                           *m_data;
+47-
+48-#ifdef _DEBUG
+49-	int                             m_locks;
+50-#endif
+51-
+--
+230-
+231-inline VertexBufferBaseIterator::VertexBufferBaseIterator()
+232-:
+233-	m_vertexBuffer(NULL),
+234-	m_descriptor(NULL),
+235:	m_data(NULL)
+236-#ifdef _DEBUG
+237-	,
+238-	m_locks(0)
+239-#endif
+240-{
+--
+244-
+245-inline VertexBufferBaseIterator::VertexBufferBaseIterator(const VertexBuffer &vertexBuffer, byte *data)
+246-:
+247-	m_vertexBuffer(&vertexBuffer),
+248-	m_descriptor(vertexBuffer.m_descriptor),
+249:	m_data(data)
+250-#ifdef _DEBUG
+251-	,
+252-	m_locks(m_vertexBuffer->m_debugIteratorLockCount)
+253-#endif
+254-{
+255:	NOT_NULL(m_data);
+256-}
+257-
+258-// ----------------------------------------------------------------------
+259-
+260-inline VertexBufferBaseIterator::VertexBufferBaseIterator(const VertexBufferBaseIterator &rhs)
+261-:
+262-	m_vertexBuffer(rhs.m_vertexBuffer),
+263-	m_descriptor(rhs.m_descriptor),
+264:	m_data(rhs.m_data)
+265-#ifdef _DEBUG
+266-	,
+267-	m_locks(rhs.m_locks)
+268-#endif
+269-{
+270-	rhs.checkLock();
+271:	NOT_NULL(m_data);
+272-}
+273-
+274-// ----------------------------------------------------------------------
+275-
+276-inline bool VertexBufferBaseIterator::operator ==(const VertexBufferBaseIterator &rhs) const
+277-{
+278-	checkLock();
+279-	rhs.checkLock();
+280:	return m_data == rhs.m_data;
+281-}
+282-
+283-// ----------------------------------------------------------------------
+284-
+285-inline bool VertexBufferBaseIterator::operator !=(const VertexBufferBaseIterator &rhs) const
+--
+303-	rhs.checkLock();
+304-	if (this != &rhs)
+305-	{
+306-		m_vertexBuffer = rhs.m_vertexBuffer;
+307-		m_descriptor = rhs.m_descriptor;
+308:		m_data = rhs.m_data;
+309-#ifdef _DEBUG
+310-		m_locks = rhs.m_locks;
+311-#endif
+312-	}
+313-}
+--
+315-// ----------------------------------------------------------------------
+316-
+317-inline void VertexBufferBaseIterator::increment()
+318-{
+319-	checkLock();
+320:	m_data += m_descriptor->vertexSize;
+321-}
+322-
+323-// ----------------------------------------------------------------------
+324-
+325-inline void VertexBufferBaseIterator::decrement()
+326-{
+327-	checkLock();
+328:	m_data -= m_descriptor->vertexSize;
+329-}
+330-
+331-// ======================================================================
+332-
+333-inline VertexBufferReadIterator::VertexBufferReadIterator(const VertexBuffer &vertexBuffer, byte *data)
+--
+384-// ----------------------------------------------------------------------
+385-
+386-inline VertexBufferReadIterator &VertexBufferReadIterator::operator +=(int offset)
+387-{
+388-	checkLock();
+389:	m_data += m_descriptor->vertexSize * offset;
+390-	return *this;
+391-}
+392-
+393-// ----------------------------------------------------------------------
+394-
+395-inline VertexBufferReadIterator &VertexBufferReadIterator::operator -=(int offset)
+396-{
+397-	checkLock();
+398:	m_data -= m_descriptor->vertexSize * offset;
+399-	return *this;
+400-}
+401-
+402-// ----------------------------------------------------------------------
+403-
+404-inline VertexBufferReadIterator VertexBufferReadIterator::operator +(int offset) const
+405-{
+406-	checkLock();
+407:	return VertexBufferReadIterator(*m_vertexBuffer, m_data + (offset * m_descriptor->vertexSize));
+408-}
+409-
+410-// ----------------------------------------------------------------------
+411-
+412-inline VertexBufferReadIterator VertexBufferReadIterator::operator -(int offset) const
+413-{
+414-	checkLock();
+415:	return VertexBufferReadIterator(*m_vertexBuffer, m_data - (offset * m_descriptor->vertexSize));
+416-}
+417-
+418-// ----------------------------------------------------------------------
+419-
+420-inline const Vector &VertexBufferReadIterator::getPosition() const
+421-{
+422-	checkLock();
+423-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+424:	return *reinterpret_cast<const Vector*>(m_data + m_descriptor->offsetPosition);
+425-}
+426-
+427-// ----------------------------------------------------------------------
+428-
+429-inline float VertexBufferReadIterator::getOoz() const
+430-{
+431-	checkLock();
+432-	DEBUG_FATAL(!m_vertexBuffer->isTransformed(), ("VB is not transformed"));
+433:	return *reinterpret_cast<const float*>(m_data + m_descriptor->offsetOoz);
+434-}
+435-
+436-// ----------------------------------------------------------------------
+437-
+438-inline const Vector &VertexBufferReadIterator::getNormal() const
+439-{
+440-	checkLock();
+441-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+442:	return *reinterpret_cast<const Vector*>(m_data + m_descriptor->offsetNormal);
+443-}
+444-
+445-// ----------------------------------------------------------------------
+446-
+447-inline float VertexBufferReadIterator::getPointSize() const
+448-{
+449-	checkLock();
+450-	DEBUG_FATAL(!m_vertexBuffer->hasPointSize(), ("VB does not have point size"));
+451:	return *reinterpret_cast<const float*>(m_data + m_descriptor->offsetPointSize);
+452-}
+453-
+454-// ----------------------------------------------------------------------
+455-
+456-inline const PackedArgb &VertexBufferReadIterator::getColor0() const
+457-{
+458-	checkLock();
+459-	DEBUG_FATAL(!m_vertexBuffer->hasColor0(), ("VB does not have color 0"));
+460:	return *reinterpret_cast<const PackedArgb *>(m_data + m_descriptor->offsetColor0);
+461-}
+462-
+463-// ----------------------------------------------------------------------
+464-
+465-inline const PackedArgb &VertexBufferReadIterator::getColor1() const
+466-{
+467-	checkLock();
+468-	DEBUG_FATAL(!m_vertexBuffer->hasColor1(), ("VB does not have color 1"));
+469:	return *reinterpret_cast<const PackedArgb *>(m_data + m_descriptor->offsetColor1);
+470-}
+471-
+472-// ----------------------------------------------------------------------
+473-
+474-inline int VertexBufferReadIterator::getNumberOfTextureCoordinateSets() const
+--
+488-inline float VertexBufferReadIterator::getTextureCoordinate(int setIndex, int coordinateIndex) const
+489-{
+490-	checkLock();
+491-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+492-	DEBUG_FATAL(coordinateIndex >= m_vertexBuffer->getTextureCoordinateSetDimension(setIndex), ("VB texture coordinate set %d is too low dimension %d/%d", setIndex, coordinateIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+493:	return reinterpret_cast<const float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex])[coordinateIndex];
+494-}
+495-
+496-// ----------------------------------------------------------------------
+497-
+498-inline void VertexBufferReadIterator::getTextureCoordinates(int setIndex, float &tc0) const
+499-{
+500-	checkLock();
+501-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+502-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 1, ("VB texture coordinate set %d is not of proper dimension 1/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+503:	const float * const tcs = reinterpret_cast<const float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+504-	tc0 = tcs[0];
+505-}
+506-
+507-// ----------------------------------------------------------------------
+508-
+509-inline void VertexBufferReadIterator::getTextureCoordinates(int setIndex, float &tc0, float &tc1) const
+510-{
+511-	checkLock();
+512-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+513-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 2, ("VB texture coordinate set %d is not of proper dimension 2/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+514:	const float * const tcs = reinterpret_cast<const float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+515-	tc0 = tcs[0];
+516-	tc1 = tcs[1];
+517-}
+518-
+519-// ----------------------------------------------------------------------
+--
+521-inline void VertexBufferReadIterator::getTextureCoordinates(int setIndex, float &tc0, float &tc1, float &tc2) const
+522-{
+523-	checkLock();
+524-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+525-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 3, ("VB texture coordinate set %d is not of proper dimension 3/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+526:	const float * const tcs = reinterpret_cast<const float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+527-	tc0 = tcs[0];
+528-	tc1 = tcs[1];
+529-	tc2 = tcs[2];
+530-}
+531-
+--
+534-inline void VertexBufferReadIterator::getTextureCoordinates(int setIndex, float &tc0, float &tc1, float &tc2, float &tc3) const
+535-{
+536-	checkLock();
+537-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+538-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 4, ("VB texture coordinate set %d is not of proper dimension 4/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+539:	const float * const tcs = reinterpret_cast<const float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+540-	tc0 = tcs[0];
+541-	tc1 = tcs[1];
+542-	tc2 = tcs[2];
+543-	tc3 = tcs[3];
+544-}
+--
+551- * and require access to data through a different interface.
+552- */
+553-
+554-inline const void *VertexBufferReadIterator::getDataPointer() const
+555-{
+556:	return m_data;
+557-}
+558-
+559-// ======================================================================
+560-
+561:inline VertexBufferWriteIterator::VertexBufferWriteIterator()
+562-:	VertexBufferBaseIterator()
+563-{
+564-}
+565-
+566-// ----------------------------------------------------------------------
+567-
+568:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBuffer &vertexBuffer, byte *data)
+569-:	VertexBufferBaseIterator(vertexBuffer, data)
+570-{
+571-}
+572-
+573-// ----------------------------------------------------------------------
+574-
+575:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBufferWriteIterator &rhs)
+576-:	VertexBufferBaseIterator(rhs)
+577-{
+578-}
+579-
+580-// ----------------------------------------------------------------------
+581-
+582:inline VertexBufferWriteIterator::VertexBufferWriteIterator(const VertexBufferReadWriteIterator &rhs)
+583-:	VertexBufferBaseIterator(rhs)
+584-{
+585-}
+586-
+587-// ----------------------------------------------------------------------
+--
+619-// ----------------------------------------------------------------------
+620-
+621-inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator +=(int offset)
+622-{
+623-	checkLock();
+624:	m_data += m_descriptor->vertexSize * offset;
+625-	return *this;
+626-}
+627-
+628-// ----------------------------------------------------------------------
+629-
+630-inline VertexBufferWriteIterator &VertexBufferWriteIterator::operator -=(int offset)
+631-{
+632-	checkLock();
+633:	m_data -= m_descriptor->vertexSize * offset;
+634-	return *this;
+635-}
+636-
+637-// ----------------------------------------------------------------------
+638-
+639-inline VertexBufferWriteIterator VertexBufferWriteIterator::operator +(int offset) const
+640-{
+641-	checkLock();
+642:	return VertexBufferWriteIterator(*m_vertexBuffer, m_data + (offset * m_descriptor->vertexSize));
+643-}
+644-
+645-// ----------------------------------------------------------------------
+646-
+647-inline VertexBufferWriteIterator VertexBufferWriteIterator::operator -(int offset) const
+648-{
+649-	checkLock();
+650:	return VertexBufferWriteIterator(*m_vertexBuffer, m_data - (offset * m_descriptor->vertexSize));
+651-}
+652-
+653-// ----------------------------------------------------------------------
+654-
+655-inline void VertexBufferWriteIterator::setPosition(const Vector &position)
+656-{
+657-	checkLock();
+658-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+659:	*reinterpret_cast<Vector*>(m_data + m_descriptor->offsetPosition) = position;
+660-}
+661-
+662-// ----------------------------------------------------------------------
+663-
+664-inline void VertexBufferWriteIterator::setPosition(float x, float y, float z)
+665-{
+666-	checkLock();
+667-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+668:	float * const pos = reinterpret_cast<float*>(m_data + m_descriptor->offsetPosition);
+669-	pos[0] = x;
+670-	pos[1] = y;
+671-	pos[2] = z;
+672-}
+673-
+--
+675-
+676-inline void VertexBufferWriteIterator::setPositionX(float x)
+677-{
+678-	checkLock();
+679-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+680:	reinterpret_cast<float*>(m_data + m_descriptor->offsetPosition)[0] = x;
+681-}
+682-
+683-// ----------------------------------------------------------------------
+684-
+685-inline void VertexBufferWriteIterator::setPositionY(float y)
+686-{
+687-	checkLock();
+688-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+689:	reinterpret_cast<float*>(m_data + m_descriptor->offsetPosition)[1] = y;
+690-}
+691-
+692-// ----------------------------------------------------------------------
+693-
+694-inline void VertexBufferWriteIterator::setPositionZ(float z)
+695-{
+696-	checkLock();
+697-	DEBUG_FATAL(!m_vertexBuffer->hasPosition(), ("VB does not have position"));
+698:	reinterpret_cast<float*>(m_data + m_descriptor->offsetPosition)[2] = z;
+699-}
+700-
+701-// ----------------------------------------------------------------------
+702-
+703-inline void VertexBufferWriteIterator::setOoz(float ooz)
+704-{
+705-	checkLock();
+706-	DEBUG_FATAL(!m_vertexBuffer->isTransformed(), ("VB does is not transformed"));
+707:	*reinterpret_cast<float*>(m_data + m_descriptor->offsetOoz) = ooz;
+708-}
+709-
+710-// ----------------------------------------------------------------------
+711-
+712-inline void VertexBufferWriteIterator::setNormal(const Vector &normal)
+713-{
+714-	checkLock();
+715-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+716:	*reinterpret_cast<Vector*>(m_data + m_descriptor->offsetNormal) = normal;
+717-}
+718-
+719-// ----------------------------------------------------------------------
+720-
+721-inline void VertexBufferWriteIterator::setNormal(float x, float y, float z)
+722-{
+723-	checkLock();
+724-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+725:	float * const n = reinterpret_cast<float*>(m_data + m_descriptor->offsetNormal);
+726-	n[0] = x;
+727-	n[1] = y;
+728-	n[2] = z;
+729-}
+730-
+--
+732-
+733-inline void VertexBufferWriteIterator::setNormalX(float x)
+734-{
+735-	checkLock();
+736-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+737:	reinterpret_cast<float*>(m_data + m_descriptor->offsetNormal)[0] = x;
+738-}
+739-
+740-// ----------------------------------------------------------------------
+741-
+742-inline void VertexBufferWriteIterator::setNormalY(float y)
+743-{
+744-	checkLock();
+745-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+746:	reinterpret_cast<float*>(m_data + m_descriptor->offsetNormal)[1] = y;
+747-}
+748-
+749-// ----------------------------------------------------------------------
+750-
+751-inline void VertexBufferWriteIterator::setNormalZ(float z)
+752-{
+753-	checkLock();
+754-	DEBUG_FATAL(!m_vertexBuffer->hasNormal(), ("VB does not have normal"));
+755:	reinterpret_cast<float*>(m_data + m_descriptor->offsetNormal)[2] = z;
+756-}
+757-
+758-// ----------------------------------------------------------------------
+759-
+760-inline void VertexBufferWriteIterator::setPointSize(float size)
+761-{
+762-	checkLock();
+763-	DEBUG_FATAL(!m_vertexBuffer->hasPointSize(), ("VB does not have point size"));
+764:	*reinterpret_cast<float*>(m_data + m_descriptor->offsetPointSize) = size;
+765-}
+766-
+767-// ----------------------------------------------------------------------
+768-
+769-inline void VertexBufferWriteIterator::setColor0(uint32 color0)
+770-{
+771-	checkLock();
+772-	DEBUG_FATAL(!m_vertexBuffer->hasColor0(), ("VB does not have color 0"));
+773:	*reinterpret_cast<uint32 *>(m_data + m_descriptor->offsetColor0) = color0;
+774-}
+775-
+776-// ----------------------------------------------------------------------
+777-
+778-inline void VertexBufferWriteIterator::setColor1(uint32 color1)
+779-{
+780-	checkLock();
+781-	DEBUG_FATAL(!m_vertexBuffer->hasColor1(), ("VB does not have color 1"));
+782:	*reinterpret_cast<uint32 *>(m_data + m_descriptor->offsetColor1) = color1;
+783-}
+784-
+785-// ----------------------------------------------------------------------
+786-
+787-inline void VertexBufferWriteIterator::setColor0(const PackedArgb &color0)
+788-{
+789-	checkLock();
+790-	DEBUG_FATAL(!m_vertexBuffer->hasColor0(), ("VB does not have color 0"));
+791:	*reinterpret_cast<PackedArgb *>(m_data + m_descriptor->offsetColor0) = color0;
+792-}
+793-
+794-// ----------------------------------------------------------------------
+795-
+796-inline void VertexBufferWriteIterator::setColor1(const PackedArgb &color1)
+797-{
+798-	checkLock();
+799-	DEBUG_FATAL(!m_vertexBuffer->hasColor1(), ("VB does not have color 1"));
+800:	*reinterpret_cast<PackedArgb *>(m_data + m_descriptor->offsetColor1) = color1;
+801-}
+802-
+803-// ----------------------------------------------------------------------
+804-
+805-inline void VertexBufferWriteIterator::setTextureCoordinate(int setIndex, int coordinateIndex, float value)
+806-{
+807-	checkLock();
+808-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+809-	DEBUG_FATAL(coordinateIndex >= m_vertexBuffer->getTextureCoordinateSetDimension(setIndex), ("VB texture coordinate set %d is too low dimension %d/%d", setIndex, coordinateIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+810:	reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex])[coordinateIndex] = value;
+811-}
+812-
+813-// ----------------------------------------------------------------------
+814-
+815-inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0)
+816-{
+817-	checkLock();
+818-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+819-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 1, ("VB texture coordinate set %d is not of proper dimension 1/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+820:	float * const tcs = reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+821-	tcs[0] = tc0;
+822-}
+823-
+824-// ----------------------------------------------------------------------
+825-
+826-inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1)
+827-{
+828-	checkLock();
+829-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+830-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 2, ("VB texture coordinate set %d is not of proper dimension 2/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+831:	float * const tcs = reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+832-	tcs[0] = tc0;
+833-	tcs[1] = tc1;
+834-}
+835-
+836-// ----------------------------------------------------------------------
+--
+838-inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1, float tc2)
+839-{
+840-	checkLock();
+841-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+842-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 3, ("VB texture coordinate set %d is not of proper dimension 3/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+843:	float * const tcs = reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+844-	tcs[0] = tc0;
+845-	tcs[1] = tc1;
+846-	tcs[2] = tc2;
+847-}
+848-
+--
+851-inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, const Vector &tcs012)
+852-{
+853-	checkLock();
+854-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+855-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 3, ("VB texture coordinate set %d is not of proper dimension 3/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+856:	float * const tcs = reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+857-	tcs[0] = tcs012.x;
+858-	tcs[1] = tcs012.y;
+859-	tcs[2] = tcs012.z;
+860-}
+861-
+--
+864-inline void VertexBufferWriteIterator::setTextureCoordinates(int setIndex, float tc0, float tc1, float tc2, float tc3)
+865-{
+866-	checkLock();
+867-	DEBUG_FATAL(setIndex >= m_vertexBuffer->getNumberOfTextureCoordinateSets(), ("VB does not have enough texture coordinates %d/%d", setIndex, m_vertexBuffer->getNumberOfTextureCoordinateSets()));
+868-	DEBUG_FATAL(m_vertexBuffer->getTextureCoordinateSetDimension(setIndex) != 4, ("VB texture coordinate set %d is not of proper dimension 4/%d", setIndex, m_vertexBuffer->getTextureCoordinateSetDimension(setIndex)));
+869:	float * const tcs = reinterpret_cast<float*>(m_data + m_descriptor->offsetTextureCoordinateSet[setIndex]);
+870-	tcs[0] = tc0;
+871-	tcs[1] = tc1;
+872-	tcs[2] = tc2;
+873-	tcs[3] = tc3;
+874-}
+875-
+876-// ----------------------------------------------------------------------
+877-
+878:inline void VertexBufferWriteIterator::copy(const VertexBufferReadIterator &source, int count)
+879-{
+880-	checkLock();
+881-	source.checkLock();	
+882-	DEBUG_FATAL(m_vertexBuffer == source.m_vertexBuffer, ("Cannot copy from a VB back to iteself"));
+883-	DEBUG_FATAL(*m_descriptor != *source.m_descriptor, ("VertexBufferDescriptors differ, can't copy"));
+884:	memcpy(m_data, source.m_data, m_descriptor->vertexSize * count);
+885-}
+886-
+887-// ----------------------------------------------------------------------
+888-/**
+889- * Retrieve a pointer to the beginning of raw data for this vertex.
+--
+892- * and require access to data through a different interface.
+893- */
+894-
+895-inline void *VertexBufferWriteIterator::getDataPointer()
+896-{
+897:	return m_data;
+898-}
+899-
+900-// ======================================================================
+901-
+902-inline VertexBufferReadWriteIterator ::VertexBufferReadWriteIterator(const VertexBufferReadWriteIterator &rhs)
+--
+938-// ----------------------------------------------------------------------
+939-
+940-inline VertexBufferReadWriteIterator &VertexBufferReadWriteIterator::operator +=(int offset)
+941-{
+942-	checkLock();
+943:	m_data += m_descriptor->vertexSize * offset;
+944-	return *this;
+945-}
+946-
+947-// ----------------------------------------------------------------------
+948-
+949-inline VertexBufferReadWriteIterator &VertexBufferReadWriteIterator::operator -=(int offset)
+950-{
+951-	checkLock();
+952:	m_data -= m_descriptor->vertexSize * offset;
+953-	return *this;
+954-}
+955-
+956-// ----------------------------------------------------------------------
+957-
+958-inline VertexBufferReadWriteIterator  VertexBufferReadWriteIterator::operator +(int offset) const
+959-{
+960-	checkLock();
+961:	return VertexBufferReadWriteIterator(*m_vertexBuffer, m_data + (offset * m_descriptor->vertexSize));
+962-}
+963-
+964-// ----------------------------------------------------------------------
+965-
+966-inline VertexBufferReadWriteIterator  VertexBufferReadWriteIterator::operator -(int offset) const
+967-{
+968-	checkLock();
+969:	return VertexBufferReadWriteIterator(*m_vertexBuffer, m_data - (offset * m_descriptor->vertexSize));
+970-}
+971-
+972-// ----------------------------------------------------------------------
+973-
+974-inline const Vector &VertexBufferReadWriteIterator::getPosition() const
+--
+1229- * and require access to data through a different interface.
+1230- */
+1231-
+1232-inline const void *VertexBufferReadWriteIterator::getDataPointer() const
+1233-{
+1234:	return m_data;
+1235-}
+1236-
+1237-// ----------------------------------------------------------------------
+1238-/**
+1239- * Retrieve a pointer to the beginning of raw data for this vertex.
+--
+1242- * and require access to data through a different interface.
+1243- */
+1244-
+1245-inline void *VertexBufferReadWriteIterator::getDataPointer()
+1246-{
+1247:	return m_data;
+1248-}
+1249-
+1250-// ======================================================================
+1251-
+1252-#endif
+
+ succeeded in 446ms:
+166-	typedef void (*DrawPrimitiveCommand)(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+167-
+168-private:
+169-
+170-	RenderCommand(int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, bool flipCullMode, DrawPrimitiveCommand drawPrimitiveCommand);
+171-
+172-private:
+173-
+174:	DrawPrimitiveCommand  m_drawPrimitiveCommand;
+175-	int                   m_minimumVertexBufferIndex;
+176-	int                   m_numberOfVertices;
+177-	int                   m_startIndexBufferIndex;
+178-	int                   m_primitiveCount;
+179-	bool                  m_flipCullMode;
+180-
+181-private:
+182-	// disabled
+--
+287-{
+288-	DrawPrimitiveCommand dpc = Graphics::drawIndexedTriangleStrip;
+289-	return new RenderCommand(minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, flipCullMode, dpc);
+290-}
+291-
+292-// ----------------------------------------------------------------------
+293-
+294-SoftwareBlendSkeletalShaderPrimitive::RenderCommand::RenderCommand(int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, bool flipCullMode, DrawPrimitiveCommand drawPrimitiveCommand) :
+295:	m_drawPrimitiveCommand(drawPrimitiveCommand),
+296-	m_minimumVertexBufferIndex(minimumVertexIndex),
+297-	m_numberOfVertices(numberOfVertices),
+298-	m_startIndexBufferIndex(startIndex),
+299-	m_primitiveCount(primitiveCount),
+300-	m_flipCullMode(flipCullMode)
+301-{
+302-}
+303-
+--
+305-
+306-inline void SoftwareBlendSkeletalShaderPrimitive::RenderCommand::render() const
+307-{
+308-	//-- set the cull mode.  we do this because removing hidden triangles from a mesh strip can
+309-	//   force us to toggle the cull mode.
+310-	const GlCullMode cullMode = (m_flipCullMode ? GCM_clockwise : GCM_counterClockwise);
+311-	Graphics::setCullMode(cullMode);
+312-
+313:	NOT_NULL(m_drawPrimitiveCommand);
+314:	(*m_drawPrimitiveCommand)(0, m_minimumVertexBufferIndex, m_numberOfVertices, m_startIndexBufferIndex, m_primitiveCount);
+315-}
+316-
+317-// ======================================================================
+318-// class SoftwareBlendSkeletalShaderPrimitive
+319-// ======================================================================
+320-
+321-MEMORY_BLOCK_MANAGER_IMPLEMENTATION_WITHOUT_INSTALL(SoftwareBlendSkeletalShaderPrimitive, true, 0, 0, 0);
+322-
+--
+475-
+476-const StaticShader &SoftwareBlendSkeletalShaderPrimitive::prepareToView() const
+477-{
+478-	return m_shader->prepareToView();
+479-}
+480-
+481-// ----------------------------------------------------------------------
+482-
+483:void SoftwareBlendSkeletalShaderPrimitive::prepareToDraw() const
+484-{
+485-	NOT_NULL(m_dynamicStream);
+486-
+487-	NP_PROFILER_AUTO_BLOCK_DEFINE("SoftwareBlendSkeletalShaderPrimitive::prepareToDraw");
+488-
+489-	//-- Set transform.
+490-	const Transform &transform_apw = m_appearance.getTransform_w();
+491:	Graphics::setObjectToWorldTransformAndScale(transform_apw, Vector::xyz111);
+492-
+493-	// Plan 11-09.15 Iter-36D diagnostic: log the appearance-to-world
+494:	// transform passed into Graphics::setObjectToWorldTransformAndScale for
+495-	// the first 100 SoftwareBlendSkeletalShaderPrimitive draws. CODEX +
+496-	// Cursor convergent consult identified this as THE path that should
+497-	// push non-identity world matrices for standard skeletal meshes
+498-	// (a_specmap_bump_vs20_for_ps20.vsh family). Iter-34 cbuffer dump
+499-	// showed c4..c7 stays identity in the flushed cbuffer; if this
+500-	// transform is non-identity at prepareToDraw time, there's a
+501-	// plumbing/timing bug between the engine setter and the D3D11
+502-	// flush. If this transform is also identity, the bug is upstream:
+--
+729-							static_cast<float>(capeLongPos.x), static_cast<float>(capeLongPos.y), static_cast<float>(capeLongPos.z),
+730-							capeFirstXform, capeRotMag, transformCount);
+731-						fclose(capeFp);
+732-					}
+733-				}
+734-			}
+735-		}
+736-
+737:		m_dynamicStream->lock(m_vertexCount);
+738-		{
+739:			VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+740-			outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+741-		}
+742-		m_dynamicStream->unlock();
+743-	}
+744-	else
+745-	{
+746-		// STATE: Not using multi streaming.
+747-		// @todo -TRF- look at this: the following code path should not be legal.
+748-		if (!m_systemStream)
+749-		{
+750-			// STATE: There's only skinned data for this primitive.  Skin directly to the dynamic
+751-			//        vertex buffer.
+752-
+753-			// Compute and fill the dynamic vertex buffer.
+754:			m_dynamicStream->lock(m_vertexCount);
+755-			{
+756-				VertexBufferWriteIterator writeIterator = m_dynamicStream->begin();
+757-				skinData(transformCount, transformArray, writeIterator);
+758-			}
+759-			m_dynamicStream->unlock();
+760-		}
+761-		else
+762-		{
+--
+768-			VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+769-			skinData(transformCount, transformArray, writeIterator);
+770-
+771-			// Copy the system vertex buffer in one chunk into the dynamic vertex buffer that we render with.
+772-			// This is how the geometry gets into a buffer readable by the GPU.  We can't render out of system
+773-			// VBs, we don't want to store a GPU-renderable VB for every shader prim, and we do want a fast
+774-			// single mem copy into the destination dynamic VB.  This is the solution: tradeoff memory by using
+775-			// a fixed system VB for each shader prim.
+776:			m_dynamicStream->lock(m_vertexCount);
+777-			{
+778:				VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+779-				outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+780-			}
+781-			m_dynamicStream->unlock();
+782-		}
+783-	}
+784-
+785-	//-- set the vb and ib to the shadow system
+786-	// CAPE-SPIKE TEST 2026-06-07: force-disable the skeletal shadow-volume build+render to
+--
+811-		if (m_shadowVolume)
+812-		{
+813-			delete m_shadowVolume;
+814-			m_shadowVolume = 0;
+815-		}
+816-	}
+817-
+818-	// Set the vertex buffer(s).
+819:	Graphics::setVertexBuffer(*m_vertexBufferVector);
+820-
+821-	// Set the index buffer.
+822-	NOT_NULL(m_indexBuffer);
+823:	Graphics::setIndexBuffer(*m_indexBuffer);
+824-}
+825-
+826-// ----------------------------------------------------------------------
+827-
+828:void SoftwareBlendSkeletalShaderPrimitive::draw() const
+829-{
+830-	NP_PROFILER_AUTO_BLOCK_DEFINE("SoftwareBlendSkeletalShaderPrimitive::draw");
+831-
+832-	std::for_each(m_renderCommands->begin(), m_renderCommands->end(), VoidMemberFunction(&RenderCommand::render));
+833-}
+834-
+835-// ----------------------------------------------------------------------
+836-
+--
+1128-
+1129-// ----------------------------------------------------------------------
+1130-/**
+1131- * Switch between soft skinning (multiple weights per vertex) and hard skinning (100% weighting to a single vertex).
+1132- *
+1133- * @useSoftSkinning  if true, soft skinning will be used; otherwise, hard skinning will be used.
+1134- */
+1135-
+1136:void SoftwareBlendSkeletalShaderPrimitive::setSkinningMode(SkinningMode skinningMode)
+1137-{
+1138-	m_skinningMode = skinningMode;
+1139-}
+1140-
+1141-// ======================================================================
+1142-// class SoftwareBlendSkeletalShaderPrimitive: private member functions
+1143-// ======================================================================
+1144-
+--
+1386-
+1387-	IS_NULL(m_vertexBufferVector);
+1388-	if (multiStream)
+1389-	{
+1390-		///////////////////////////////////////////////////////////////////////
+1391-		//-- Fill the constant static vertex buffer.
+1392-		m_staticStream = new StaticVertexBuffer(constantFormat, m_vertexCount);
+1393-		m_staticStream->lock();
+1394:		VertexBufferWriteIterator outIt = m_staticStream->begin();
+1395-		fillConstantVertexBufferData(mesh, shaderIndex, outIt);
+1396-		m_staticStream->unlock();
+1397-		///////////////////////////////////////////////////////////////////////
+1398-
+1399-		m_systemStream = new SystemVertexBuffer(dynamicFormat, m_vertexCount);
+1400-
+1401-		m_vertexBufferVector = new VertexBufferVector(*m_staticStream, *m_dynamicStream);
+1402-	}
+1403-	else
+1404-	{
+1405-		///////////////////////////////////////////////////////////////////////
+1406-		//-- Construct and fill the system vertex buffer with constant data.
+1407-		//   We'll stuff both constant and per-frame-skinned geometry in the system vertex buffer
+1408-		//   so we can do a single memory copy to the dynamic VB used at render time.
+1409-		m_systemStream = new SystemVertexBuffer(dynamicFormat, m_vertexCount);
+1410:		VertexBufferWriteIterator outIt = m_systemStream->begin();
+1411-		fillConstantVertexBufferData(mesh, shaderIndex, outIt);
+1412-		///////////////////////////////////////////////////////////////////////
+1413-
+1414-		//-- Track which vertex buffers we render with.  Non-multi-streaming always uses just the
+1415-		//   dynamic vertex buffer.
+1416-		m_vertexBufferVector = new VertexBufferVector(*m_dynamicStream);
+1417-	}
+1418-}
+--
+1704-				DEBUG_FATAL(true, ("not supported."));
+1705-			}
+1706-		}
+1707-	}
+1708-}
+1709-
+1710-// ===========================================================================
+1711-
+1712:void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+1713-{
+1714-	//-- Initialize doSkinning to true only on the first render.
+1715-	bool doSkinning = true;
+1716-
+1717-	if (m_hasBeenSkinned && m_everyOtherFrameSkinningEnabled)	
+1718-	{
+1719-		// We're doing every other frame skinning.  Figure out if 
+1720-		// we should skin for this appearance this frame.
+--
+1824-	m_hasBeenSkinned = true;
+1825-}
+1826-
+1827-// ----------------------------------------------------------------------
+1828-/**
+1829- * Soft.
+1830- */
+1831-
+1832:void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const
+1833-{
+1834-	bool const updateExtentsThisFrame = (m_appearance.getRenderedFrameNumber() & 1) != 0;
+1835-
+1836-	//-- We will be updating m_boxExtent every frame in fillDynamicVertexBuffer*.  
+1837-	//   m_boxExtent will be used to help speed up collision.
+1838-	if (updateExtentsThisFrame)
+1839-	{
+1840-		m_boxExtent.setNegative();
+
+ succeeded in 459ms:
+60-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+61-
+62-	void remove();
+63-
+64-	void getBufferCounts(int beginIndex, int endIndex, int &vertexCount, int &indexCount);
+65-	int  findEndBufferForCount(int beginIndex, int destVerticesAvailable);
+66:	void renderBuffers(bool allowDiscard, int beginIndex, int endIndex);
+67-
+68-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+69-
+70-	FullGeometrySkeletalAppearanceBatchRenderer *s_instance;
+71-	bool                                         s_installed;
+72-
+--
+172-
+173-	return endIndex;
+174-}
+175-
+176-// ----------------------------------------------------------------------
+177-
+178:void FullGeometrySkeletalAppearanceBatchRendererNamespace::renderBuffers(bool allowDiscard, int beginIndex, int endIndex)
+179-{
+180-	//-- Get # vertices/indices to lock.
+181-	int  vertexCount       = 0;
+182-	int  indexCount        = 0;
+183-	int  copiedVertexCount = 0;
+184-	int  capeMaxRebasedIndex = -1; // CAPE-BATCH-PROBE (temporary 2026-06-07)
+--
+187-	getBufferCounts(beginIndex, endIndex, vertexCount, indexCount);
+188-	DEBUG_FATAL(vertexCount < 1, ("skel mesh batcher: bad vertex count [%d].", vertexCount));
+189-	DEBUG_FATAL(indexCount < 1, ("skel mesh batcher: bad index count [%d].", indexCount));
+190-
+191-	//-- Lock down dest buffers.
+192-	NOT_NULL(s_batchVertexBuffer);
+193:	s_batchVertexBuffer->lock(vertexCount, allowDiscard);
+194:	VertexBufferWriteIterator destVbIt = s_batchVertexBuffer->begin();
+195-
+196-	NOT_NULL(s_batchIndexBuffer);
+197:	s_batchIndexBuffer->lock(indexCount);
+198:	Index *destIbIt = s_batchIndexBuffer->begin();
+199-
+200-	//-- Add each vertex buffer's data.
+201-	for (int bufferIndex = beginIndex; bufferIndex < endIndex; ++bufferIndex)
+202-	{
+203-		//-- Get source buffers.
+204-		VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, bufferIndex, static_cast<int>(s_vertexBuffers.size()));
+--
+242-			if (capeRebased > capeMaxRebasedIndex) capeMaxRebasedIndex = capeRebased;   // CAPE-BATCH-PROBE
+243-			++capeCopiedIndexCount;                                                     // CAPE-BATCH-PROBE
+244-			*destIbIt = static_cast<unsigned short>(*sourceIbIt + copiedVertexCount);
+245-		}
+246-
+247-		//-- Unlock applicable source buffers.
+248:		sourceIb->unlock();
+249-
+250-		//-- Update base vertex adjustment.
+251-		copiedVertexCount += sourceVertexCount;
+252-	}
+253-
+254-	//-- CAPE-BATCH-PROBE (temporary 2026-06-07): the spiking draw is this combined batch
+--
+278-				fclose(capeFp);
+279-			}
+280-		}
+281-	}
+282-
+283-	//-- Unlock dest buffers.
+284:	s_batchIndexBuffer->unlock();
+285:	s_batchVertexBuffer->unlock();
+286-
+287-	//-- Render.
+288:	Graphics::setVertexBuffer(*s_batchVertexBuffer);
+289:	Graphics::setIndexBuffer(*s_batchIndexBuffer);
+290:	Graphics::drawIndexedTriangleList();
+291-}
+292-
+293-// ======================================================================
+294-// Batcher Shader Primitive
+295-// ======================================================================
+296-
+--
+323-
+324-// ----------------------------------------------------------------------
+325-
+326-void FullGeometrySkeletalAppearanceBatchRendererNamespace::LocalShaderPrimitive::prepareToDraw() const
+327-{
+328-	// Vertices are in world space, so set object to world to identity.
+329:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+330-}
+331-
+332-// ----------------------------------------------------------------------
+333-
+334-void FullGeometrySkeletalAppearanceBatchRendererNamespace::LocalShaderPrimitive::draw() const
+335-{
+--
+377-		}
+378-		else
+379-			allowDiscard = false;
+380-
+381-
+382-		//-- Fill in the specified buffers.
+383:		renderBuffers(allowDiscard, beginIndex, endIndex);
+384-
+385-		//-- Start next loop rendering at next buffer.
+386-		beginIndex = endIndex;
+387-
+388-	} while (endIndex < bufferCount);
+389-
+--
+448-
+449-	//-- Add appearance shader primitives to list for batching.
+450-	const Transform &transform_a2w = appearance.getTransform_w();
+451-
+452-	SkeletalAppearance2::ShaderPrimitiveVector const &shaderPrimitives = appearance.getDisplayLodShaderPrimitives();
+453-	SkeletalAppearance2::ShaderPrimitiveVector::const_iterator const endIt = shaderPrimitives.end();
+454:	for (SkeletalAppearance2::ShaderPrimitiveVector::const_iterator it = shaderPrimitives.begin(); it != endIt; ++it)
+455-	{
+456-		if (*it)
+457-		{
+458-			// @todo make derived class that has necessary functions.  OR make texture renderers a derived class of Texture and
+459-			//       get rid of the other tr shader primitive.
+460-
+
+ succeeded in 460ms:
+93-		float minScreenFraction;
+94-	};
+95-
+96-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+97-
+98-	int const cs_maxLodCount = 4;
+99-
+100-#if PRODUCTION == 0
+101:	int const cs_skinningModeCount = 3;
+102-
+103:	char const *const cs_skinningModeName[] =
+104-		{
+105-			"no skinning",
+106-			"hard skinning",
+107-			"soft skinning"
+108-		};
+109-#endif
+110-
+111-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+--
+117-#if PRODUCTION == 0
+118-	void printRenderStatistics();
+119-	void reportRebuildMeshStatistics();
+120-#endif
+121-
+122-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+123-
+124-	LodInfo  s_lodInfoArray[cs_maxLodCount];
+125:	float    s_batchRendererStartNearFraction;
+126:	float    s_batchRendererStartFarFraction;
+127-
+128-	bool s_reportAllocations;
+129-	bool s_disableBatcher = true;
+130-	bool s_logReadyIssues;
+131-
+132-#if PRODUCTION == 0
+133-
+134-	bool s_disableSkeletalAppearanceRendering;
+135-	bool s_disableCollisionChecking;
+136-	bool s_disableSphereTreeUpdates;
+137-	bool s_reportRenderStatistics;
+138-	bool s_showSkeleton;
+139-
+140:	// These store per-lod batched/unbatched counts.
+141-	int  s_perLodRenderedShaderPrimitiveCount[2 * cs_maxLodCount];
+142-	int  s_perLodRenderedCharacterCount[2 * cs_maxLodCount];
+143-
+144-	// This stores per-character skinning mode counts.
+145:	int  s_perSkinningModeCharacterCount[2 * cs_skinningModeCount];
+146-	int  s_addToCameraSceneCount;
+147-
+148-	bool                 s_reportRebuildMeshStatistics;
+149-	int                  s_rebuildMeshCallCount;
+150-	ProfilerTimer::Type  s_rebuildMeshCallTime;
+151-
+152-#endif
+153-
+--
+309-// ----------------------------------------------------------------------
+310-
+311-#if PRODUCTION == 0
+312-
+313-void SkeletalAppearance2Namespace::printRenderStatistics()
+314-{
+315-	REPORT_PRINT(true, ("SA2:render() calls: %d\n", s_addToCameraSceneCount));
+316-
+317:	REPORT_PRINT(true, ("SA2:Per-Character Counts (standard/batched/total)\n"));
+318-	{
+319-		for (int i = 0; i < cs_maxLodCount; ++i)
+320-			REPORT_PRINT(true, ("l%d: %d/%d/%d\n", i, s_perLodRenderedCharacterCount[i], s_perLodRenderedCharacterCount[cs_maxLodCount + i], s_perLodRenderedCharacterCount[i] + s_perLodRenderedCharacterCount[cs_maxLodCount + i]));
+321-	}
+322-
+323:	REPORT_PRINT(true, ("\nSA2:Per-ShaderPrimitive Counts (standard/batched/total)\n"));
+324-	{
+325-		for (int i = 0; i < cs_maxLodCount; ++i)
+326-			REPORT_PRINT(true, ("l%d: %d/%d/%d\n", i, s_perLodRenderedShaderPrimitiveCount[i], s_perLodRenderedShaderPrimitiveCount[cs_maxLodCount + i], s_perLodRenderedShaderPrimitiveCount[i] + s_perLodRenderedShaderPrimitiveCount[cs_maxLodCount + i]));
+327-	}
+328-
+329:	REPORT_PRINT(true, ("SA2:Per-Skinning Mode Character Counts (standard/batched/total)\n"));
+330-	{
+331:		for (int i = 0; i < cs_skinningModeCount; ++i)
+332:			REPORT_PRINT(true, ("%s: %d/%d/%d\n", cs_skinningModeName[i], s_perSkinningModeCharacterCount[i], s_perSkinningModeCharacterCount[cs_skinningModeCount + i], s_perSkinningModeCharacterCount[i] + s_perSkinningModeCharacterCount[cs_skinningModeCount + i]));
+333-	}
+334-
+335-	//-- Clear counters.
+336-	s_addToCameraSceneCount = 0;
+337-
+338-	Zero(s_perLodRenderedShaderPrimitiveCount);
+339-	Zero(s_perLodRenderedCharacterCount);
+340-	Zero(s_perSkinningModeCharacterCount);
+--
+919-			if (lodIndex < cs_maxLodCount - 1)
+920-			{
+921-				float const decreaseAmount = overlapFraction * lodWidth[lodIndex + 1];
+922-				s_lodInfoArray[lodIndex].minScreenFraction -= decreaseAmount;
+923-			}
+924-		}
+925-	}
+926-
+927:	//-- Setup batch renderer's staring distance (near and far for temporal coherence).
+928-	setBatchRenderScreenFraction(!s_disableBatcher, ConfigClientSkeletalAnimation::getBatchRenderScreenFraction());
+929-
+930-	ms_installed = true;
+931-	ExitChain::add(remove, "SkeletalAppearance2");
+932-}
+933-
+934-// ----------------------------------------------------------------------
+935-
+--
+967-#endif
+968-}
+969-
+970-// ----------------------------------------------------------------------
+971-
+972-void SkeletalAppearance2::getBatchRenderScreenFraction(bool &enabled, float &screenFraction)
+973-{
+974-	enabled        = !s_disableBatcher;
+975:	screenFraction =  s_batchRendererStartFarFraction;
+976-}
+977-
+978-// ----------------------------------------------------------------------
+979-
+980-void SkeletalAppearance2::setBatchRenderScreenFraction(bool enabled,  float screenFraction)
+981-{
+982-	s_disableBatcher                 = !enabled;
+983:	s_batchRendererStartNearFraction = screenFraction;
+984:	s_batchRendererStartFarFraction  = s_batchRendererStartNearFraction;
+985-
+986:	if (s_batchRendererStartNearFraction > 0.0f)
+987-	{
+988:		float const bandWidth = 0.2f * s_batchRendererStartNearFraction;
+989:		s_batchRendererStartNearFraction += bandWidth;
+990-	}
+991-}
+992-
+993-// ----------------------------------------------------------------------
+994-
+995-void SkeletalAppearance2::setUiContextEnabled(bool enabled)
+996-{
+997-	s_uiContextEnabled = enabled;
+--
+1075-
+1076-	//-- Initialize yaw direction.
+1077-	m_yawDirection = 0;
+1078-
+1079-	m_animationEnvironment->setSkeletalAppearance(*this);
+1080-	m_animationResolver = new TransformAnimationResolver(*NON_NULL(newAppearanceTemplate), *this);
+1081-
+1082-	//-- Create all Skeleton LODs from template.
+1083:	newAppearanceTemplate->createSkeletonLods(*m_skeletons, *m_animationResolver);
+1084-	// DEBUG_FATAL(m_skeletons->empty() || !m_skeletons->front(), ("No Skeleton LOD instances were generated for [%s].", newAppearanceTemplate->getName()));
+1085-
+1086-	const SkeletonVector::size_type  skeletonLodCount = m_skeletons->size();
+1087-
+1088-	//-- Create owned MeshGenerator instances from template.
+1089-	NOT_NULL(newAppearanceTemplate);
+1090-	int meshGeneratorDetailLevelCount = 0;
+1091-	
+--
+1154-	//   which only happens when extents report that it is visible.
+1155-	m_extent.setMin(Vector(-5.0f, 0.0f, -5.0f));
+1156-	m_extent.setMax(Vector(5.0f, 10.0f, 5.0f));
+1157-	m_extent.calculateCenterAndRadius();
+1158-
+1159-	//-- Initialize DPVS data.
+1160-	{
+1161-		DPVS::Model *const testModel = RenderWorld::fetchDefaultModel();
+1162:		m_dpvsObject = RenderWorld::createObject(this, testModel);
+1163-		IGNORE_RETURN(testModel->release());
+1164-	}
+1165-
+1166-	updateDpvsTestObjectWithExtents();
+1167-
+1168-	//-- Cleanup mgn LOD hack reference.
+1169-	if (meshGeneratorTemplateLodHack)
+1170-	{
+--
+1697-						break;
+1698-				}
+1699-
+1700-				// Handle mesh rendering.
+1701-
+1702-				//-- Update the animation environment's last rendered frame number.
+1703-				m_animationEnvironment->setMostRecentVisibleGraphicsFrameNumber(Graphics::getFrameNumber());
+1704-
+1705:				//-- Determine if we're batch rendering.
+1706-				bool useBatcher = false;
+1707-				if (!s_disableBatcher 
+1708-					&& (m_fadeState == FS_notFading) 
+1709-					&& (m_hologramType == HT_none)
+1710-					&& !m_isBlueGlowie
+1711-				)
+1712-				{
+1713-					if (m_mostRecentRenderUsedBatch || s_uiContextEnabled)
+1714-					{
+1715:						// Rendered with batcher last frame.  Keep it turned on if screen fraction is smaller than near screen fraction.
+1716:						useBatcher = (screenDiameterFraction < s_batchRendererStartNearFraction);
+1717-					}
+1718-					else
+1719-					{
+1720:						// Did not render with batcher last frame.  Only turn on if screen fraction is smaller than far screen fraction.
+1721:						useBatcher = (screenDiameterFraction <= s_batchRendererStartFarFraction);
+1722-					}
+1723-				}
+1724-
+1725-				if (!s_uiContextEnabled)
+1726-				{
+1727-					// Only update this value if we're not rendering in the UI context.
+1728-					m_mostRecentRenderUsedBatch = useBatcher;
+1729-				}
+1730-
+1731-				//-- Figure out skinning mode for shader primitives.
+1732-				SkeletalAppearanceTemplate const &appearanceTemplate = getSkeletalAppearanceTemplate();
+1733:				ShaderPrimitive::SkinningMode  skinningMode;
+1734-
+1735-				bool const mustUseSoftSkinning = appearanceTemplate.mustUseSoftSkinning();
+1736-
+1737-				if (screenDiameterFraction <= ConfigClientSkeletalAnimation::getNoSkinningScreenFraction())
+1738:					skinningMode = ShaderPrimitive::SM_noSkinning;
+1739-				else if (!mustUseSoftSkinning && (m_forceHardSkinningEnabled || (screenDiameterFraction <= ConfigClientSkeletalAnimation::getHardSkinningScreenFraction())))
+1740:					skinningMode = ShaderPrimitive::SM_hardSkinning;
+1741-				else
+1742:					skinningMode = ShaderPrimitive::SM_softSkinning;
+1743-
+1744-#if PRODUCTION == 0
+1745:				//-- Track # characters rendered in each skinning mode (separate batched from standard rendering).
+1746:				++s_perSkinningModeCharacterCount[(useBatcher ? cs_skinningModeCount : 0) + static_cast<int>(skinningMode)];
+1747-
+1748:				//-- Track # characters rendered at each LOD (separate batched from standard rendering).
+1749-				++s_perLodRenderedCharacterCount[(useBatcher ? cs_maxLodCount : 0) + m_displayLodIndex];
+1750-#endif
+1751-
+1752:				//-- Tell each shader primitive about the skinning mode.  Render if not batching.
+1753-				const ShaderPrimitiveVector &shaderPrimitives = getDisplayLodShaderPrimitives();
+1754-
+1755-				const ShaderPrimitiveVector::const_iterator itEnd = shaderPrimitives.end();
+1756-				for (ShaderPrimitiveVector::const_iterator it = shaderPrimitives.begin(); it != itEnd; ++it)
+1757-				{
+1758-					//-- Get the shader primitive.
+1759-					ShaderPrimitive *const shaderPrimitive = (*it);
+1760-					NOT_NULL(shaderPrimitive);
+1761-
+1762-					//-- NOTE: do not sned the sbsShaderPrimitive directly to the ShaderPrimitiveSorter.  That
+1763-					//   will screw up and bypass the TextureRendererShaderPrimitives that sometimes piggyback
+1764-					//   on top of a SBSSP.
+1765-					SoftwareBlendSkeletalShaderPrimitive *const sbsShaderPrimitive = shaderPrimitive->asSoftwareBlendSkeletalShaderPrimitive();
+1766-					NOT_NULL(sbsShaderPrimitive);
+1767-
+1768-					//-- Set the skinning parameters.
+1769:					sbsShaderPrimitive->setSkinningMode(skinningMode);
+1770-					sbsShaderPrimitive->setEveryOtherFrameSkinningEnabled(m_everyOtherFrameSkinningEnabled);
+1771-
+1772-					if (!useBatcher)
+1773-					{
+1774-						if (m_fadeState == FS_notFading)
+1775-							ShaderPrimitiveSorter::add(*shaderPrimitive);
+1776-						else
+1777-							ShaderPrimitiveSorter::addWithAlphaFadeOpacity(*shaderPrimitive, true, m_fadeFraction, true, m_fadeFraction);
+1778-
+1779-#if PRODUCTION == 0
+1780:						//-- Track # shader primitives rendered at each LOD (separate batched from standard rendering).
+1781-						++s_perLodRenderedShaderPrimitiveCount[m_displayLodIndex];
+1782-#endif
+1783-					}
+1784-				}
+1785-
+1786:				//-- Submit appearance for batch rendering.
+1787-				if (useBatcher)
+1788-				{
+1789-					FullGeometrySkeletalAppearanceBatchRenderer::getInstance()->submit(*this);
+1790-
+1791-#if PRODUCTION == 0
+1792:						//-- Track # shader primitives rendered at each LOD (separate batched from standard rendering).
+1793-					s_perLodRenderedShaderPrimitiveCount[cs_maxLodCount + m_displayLodIndex] += static_cast<int>(shaderPrimitives.size());
+1794-#endif
+1795-				}
+1796-
+1797-				//-- Render attachments.
+1798-				if (m_attachedAppearances && !m_attachedAppearances->empty() && m_showAttachments)
+1799-				{
+1800-					const Transform *const transformToRoot = NON_NULL(getDisplayLodSkeleton())->getJointToRootTransformArray();
+--
+1981-		}
+1982-	}
+1983-
+1984-	//-- force a rebuild because this is the only way right now to feed
+1985-	//   CustomizationData into just _our_ TextureRenderer instances.
+1986-	//   -TRF- this probably guarantees that we'll build every mesh
+1987-	//   at least twice, since Object instances probably will 
+1988-	//   initialize and set the CustomizationData after the appearance 
+1989:	//   is created.
+1990-	markAsDirty();
+1991-}
+1992-
+1993-// ----------------------------------------------------------------------
+1994-
+1995-void SkeletalAppearance2::addCustomizationVariables(CustomizationData &customizationData) const
+1996-{
+1997-	//-- Force use of highest detail level.  I do this because only the highest detail level is
+--
+2269-
+2270-		//-- release the old shader primitives
+2271-		std::for_each(workingShaderPrimitives.begin(), workingShaderPrimitives.end(), PointerDeleter());
+2272-	}
+2273-
+2274-	//-- Mark as clean.
+2275-	m_appearanceDirty[static_cast<BoolVector::size_type>(lodIndex)] = false; //lint !e1058 // error 1058: (Error -- Initializing a non-const reference 'std::_Bit_reference &' with a non-lvalue) // This is the class interface.
+2276-
+2277:	//-- Reset most recently used frame so we don't pitch it as soon as we create it.  Chances
+2278:	//   are we created it because we're going to need it in the next few frames.
+2279-	m_perLodMruFrameVector[static_cast<BoolVector::size_type>(lodIndex)] = Os::getNumberOfUpdates();
+2280-
+2281-	//-- Clear out all MeshGenerator instances so we don't leak these MeshGenerator instances.
+2282-	compositeMesh.removeAllMeshGenerators();
+2283-
+2284-	//-- Attach transform modifiers.
+2285-	if (m_attachedTransformModifiers)
+2286-	{
+--
+2920- *          appearance instance.
+2921- */
+2922-
+2923-const BoxExtent &SkeletalAppearance2::getExactMeshExtent()
+2924-{
+2925-	//-- Rebuild the mesh as necessary.
+2926-	bool const isReady = rebuildIfDirtyAndAvailable();
+2927-
+2928:	//-- create mesh extent variable as necessary
+2929-	if (!m_meshExtent)
+2930-	{
+2931-		m_meshExtent = new BoxExtent();
+2932-		NOT_NULL(m_meshExtent); // lint needs this!
+2933-	}
+2934-
+2935-	const ShaderPrimitiveVector *const shaderPrimitives = (isReady && !m_perLodShaderPrimitives->empty() ? &getDisplayLodShaderPrimitives() : 0);
+2936-	if (!shaderPrimitives || shaderPrimitives->empty())
+--
+3315-void SkeletalAppearance2::addTransformModifierTakeOwnership(CrcString const &transformName, TransformModifier *modifier)
+3316-{
+3317-	NOT_NULL(modifier);
+3318-
+3319-	//-- Create container as necessary.
+3320-	if (!m_attachedTransformModifiers)
+3321-		m_attachedTransformModifiers = new AttachedTransformModifierVector;
+3322-
+3323:	//-- Track the attached modifier since we need to reattach when we create/rebuild skeletons.
+3324-	m_attachedTransformModifiers->push_back(new AttachedTransformModifier(transformName, modifier));
+3325-
+3326-	//-- Attach modifier to all existing skeletons.
+3327-	SkeletonVector::iterator const endIt = m_skeletons->end();
+3328-	for (SkeletonVector::iterator it = m_skeletons->begin(); it != endIt; ++it)
+3329-	{
+3330-		Skeleton *const skeleton = *it;
+3331-		if (skeleton)
+--
+3475-
+3476-// ----------------------------------------------------------------------
+3477-/**
+3478- * Fetch all the MeshGenerator instances owned by this instance for a given detail level.
+3479- *
+3480- * @param appearanceTemplate  the AppearanceTemplate for which owned MeshGenerators
+3481- *                            are being collected.
+3482- * @param lodIndex            the detail level index of the MeshGenerator instances to be retrieved.
+3483: * @param meshGenerators      the newly created MeshGenerator instances are appended to this vector.
+3484- */
+3485-
+3486-void SkeletalAppearance2::fetchOwnedMeshGeneratorsForDetailLevel(const SkeletalAppearanceTemplate &appearanceTemplate, int lodIndex, MeshGeneratorVector &meshGenerators)
+3487-{
+3488-	//-- Get the # MeshGeneratorTemplate instances associated with this appearance.
+3489-	const int meshGeneratorCount = appearanceTemplate.getMeshGeneratorCount();
+3490-
+3491:	//-- Load each MeshGeneratorTemplate instance and create the appropriate MeshGenerator if it exists at the specified LOD.
+3492-	for (int i = 0; i < meshGeneratorCount; ++i)
+3493-	{
+3494-		//-- Fetch the MeshGeneratorTemplate instance.
+3495-		const MeshGeneratorTemplate *const mgTemplate = MeshGeneratorTemplateList::fetch(appearanceTemplate.getMeshGeneratorName(i));
+3496-		if (!mgTemplate)
+3497-		{
+3498-			//-- Skip unavailable mesh generators.
+3499-			continue;
+--
+3502-		//-- Get # detail levels for this particular MeshGeneratorTemplate.
+3503-		const int mgLodCount = mgTemplate->getDetailCount();
+3504-		if (mgLodCount > lodIndex)
+3505-		{
+3506-			// Get the BasicMeshGeneratorTemplate for this LOD.
+3507-			const BasicMeshGeneratorTemplate *const bmgTemplate = mgTemplate->fetchBasicMeshGeneratorTemplate(lodIndex);
+3508-			if (bmgTemplate)
+3509-			{
+3510:				// Create the MeshGenerator for this LOD, keeping track of the last non-null MeshGenerator instance created from this template.
+3511:				MeshGenerator *meshGenerator = bmgTemplate->createMeshGenerator();
+3512-				if (meshGenerator)
+3513-				{
+3514-					if (m_customizationData)
+3515-						meshGenerator->setCustomizationData(m_customizationData);
+3516-
+3517-					meshGenerator->registerModificationHandler(meshGeneratorModifiedCallback, this);
+3518-					meshGenerators.push_back(meshGenerator);
+3519-				}
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "SystemVertexBuffer::begin|SystemVertexBuffer::lock|SystemVertexBuffer::unlock|beginReadOnly|beginWriteOnly" src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 5 \"DynamicVertexBuffer::DynamicVertexBuffer|DynamicVertexBuffer::lock|DynamicVertexBuffer::unlock|begin\\(\" src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "StaticVertexBuffer::lock|StaticVertexBuffer::begin|StaticVertexBuffer::unlock" src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.cpp src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "IndexBuffer::lock|IndexBuffer::unlock|IndexBuffer::begin|DynamicIndexBuffer::lock|DynamicIndexBuffer::unlock" src/engine/client/library/clientGraphics/src/shared/*IndexBuffer*' in D:\Code\swg-client-v2
+ succeeded in 577ms:
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-132- * Allow the vertex data to be modified.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-133- * This routine may not be called multiple times.  A VertexBuffer may not be used to render while it is locked.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-134- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-135- */
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-136-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h:137:inline void StaticVertexBuffer::lock()
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-138-{
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-139-	NOT_NULL(m_graphicsData);
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-140-	DEBUG_FATAL(m_data, ("VB already locked"));
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-141-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-142-#ifdef _DEBUG
+--
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-159- * Allow the vertex data to be modified.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-160- * This routine may not be called multiple times.  A VertexBuffer may not be used to render while it is locked.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-161- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-162- */
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-163-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h:164:inline void StaticVertexBuffer::lockReadOnly() const
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-165-{
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-166-	NOT_NULL(m_graphicsData);
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-167-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-168-	DEBUG_FATAL(m_data, ("VB already locked"));
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-169-
+--
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-178-/**
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-179- * Let the VertexBuffer know it is done being modified.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-180- * @see lock()
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-181- */
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-182-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h:183:inline void StaticVertexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-184-{
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-185-	DEBUG_FATAL(!m_data, ("VB not locked"));
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-186-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-187-#ifdef _DEBUG
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-188-	++m_debugIteratorLockCount;
+--
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-194-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-195-/**
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-196- * return read-only iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-197- */
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-198-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h:199:inline VertexBufferReadIterator StaticVertexBuffer::beginReadOnly() const
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-200-{
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-201-	DEBUG_FATAL(!m_data, ("Vertex buffer is not locked"));
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-202-	return VertexBufferReadIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-203-}
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-204-
+--
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-216-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-217-/**
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-218- * Return a read-write iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-219- */
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-220-
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h:221:inline VertexBufferReadWriteIterator StaticVertexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-222-{
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-223-	DEBUG_FATAL(!m_data, ("Vertex buffer is not locked"));
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-224-	return VertexBufferReadWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-225-}
+src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h-226-
+
+ succeeded in 603ms:
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-243-		maxExtent = Vector::zero;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-244-		return;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-245-	}
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-246-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-247-	// start off with the first vertex as the whole min/max 
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp:248:	VertexBufferReadIterator v = beginReadOnly();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-249-	minExtent = v.getPosition();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-250-	maxExtent = minExtent;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-251-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-252-	// check all the other vertices
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-253-	const VertexBufferReadIterator e = endReadOnly();
+--
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-271- * @param iff The iff file to store the vertex buffer data into.
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-272- */
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-273-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-274-void SystemVertexBuffer::write(Iff &iff) const
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-275-{
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp:276:	VertexBuffer::write(iff, beginReadOnly(), m_numberOfVertices);
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-277-}
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-278-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.cpp-279-// ======================================================================
+--
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-43-	int               getNumberOfVertices() const;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-44-	void              getMinMax(Vector &minExtent, Vector &maxExtent) const;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-45-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-46-	void              write(Iff &iff) const;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-47-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h:48:	VertexBufferReadIterator        beginReadOnly() const;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-49-	VertexBufferReadIterator        endReadOnly() const;
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-50-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h:51:	VertexBufferWriteIterator       beginWriteOnly();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-52-	VertexBufferWriteIterator       endWriteOnly();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-53-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-54-	VertexBufferReadWriteIterator   begin();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-55-	VertexBufferReadWriteIterator   end();
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-56-
+--
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-100-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-101-/**
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-102- * Return read-only iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-103- */
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-104-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h:105:inline VertexBufferReadIterator SystemVertexBuffer::beginReadOnly() const
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-106-{
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-107-	return VertexBufferReadIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-108-}
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-109-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-110-// ----------------------------------------------------------------------
+--
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-120-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-121-/**
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-122- * Return a write iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-123- */
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-124-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h:125:inline VertexBufferWriteIterator SystemVertexBuffer::beginWriteOnly()
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-126-{
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-127-	return VertexBufferWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-128-}
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-129-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-130-// ----------------------------------------------------------------------
+--
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-140-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-141-/**
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-142- * Return a read-write iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-143- */
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-144-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h:145:inline VertexBufferReadWriteIterator SystemVertexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-146-{
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-147-	return VertexBufferReadWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-148-}
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-149-
+src/engine/client/library/clientGraphics/src/shared/SystemVertexBuffer.h-150-// ----------------------------------------------------------------------
+
+ succeeded in 618ms:
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-66-	ms_memoryBlockManager->free(pointer);
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-67-}
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-68-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-69-// ======================================================================
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-70-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp:71:DynamicVertexBuffer::DynamicVertexBuffer(const VertexBufferFormat &format)
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-72-: HardwareVertexBuffer(T_dynamic, format),
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-73-	m_graphicsData(0),
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-74-	m_sortKey(0),
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-75-	m_data(0),
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp-76-	m_numberOfVertices(0)
+--
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-74-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-75-	void                  lock(int numberOfVertices, bool forceDiscard=false);
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-76-	void                  unlock();
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-77-	void                  unlock(int numberOfVertices);
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-78-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:79:	VertexBufferWriteIterator  begin();
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-80-	VertexBufferWriteIterator  end();
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-81-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-82-protected:
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-83-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-84-	virtual VertexBufferWriteIterator preLoad(int numberOfVertices);
+--
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-181- * @param numberOfVertices The number of vertices the application will write into the DVB.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-182- * @param forceDiscard Force the flush of any existing data and start from vertex 0.  Should be used for multistreaming with dynamic VBs only.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-183- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-184- */
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-185-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:186:inline void DynamicVertexBuffer::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-187-{
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-188-	NOT_NULL(m_graphicsData);
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-189-	DEBUG_FATAL(m_data, ("VB already locked"));
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-190-	DEBUG_FATAL(ms_dynamicGlobalLocked, ("Locking two dynamic VBs at the same time"));
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-191-
+--
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-202-/**
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-203- * Let the DynamicVertexBuffer know it is done being modified.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-204- * @see lock()
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-205- */
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-206-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:207:inline void DynamicVertexBuffer::unlock()
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-208-{
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-209-	DEBUG_FATAL(!m_data, ("VB not locked"));
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-210-#ifdef _DEBUG
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-211-	++m_debugIteratorLockCount;
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-212-	ms_dynamicGlobalLocked = false;
+--
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-219-/**
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-220- * Let the DynamicVertexBuffer know it is done being modified.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-221- * @see lock()
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-222- */
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-223-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:224:inline void DynamicVertexBuffer::unlock(int numberOfVertices)
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-225-{
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-226-	DEBUG_FATAL(!m_data, ("VB not locked"));
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-227-#ifdef _DEBUG
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-228-	++m_debugIteratorLockCount;
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-229-	ms_dynamicGlobalLocked = false;
+--
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-236-/**
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-237- * Get a write-only iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-238- * @return A write-only iterator pointing to first vertex of the vertex buffer.
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-239- */
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-240-
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:241:inline VertexBufferWriteIterator DynamicVertexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-242-{
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-243-	DEBUG_FATAL(!m_data, ("Vertex buffer is not locked"));
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-244-	return VertexBufferWriteIterator(*this, m_data);
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-245-}
+src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h-246-
+
+ exited 1 in 578ms:
+rg: src/engine/client/library/clientGraphics/src/shared/*IndexBuffer*: IO error for operation on src/engine/client/library/clientGraphics/src/shared/*IndexBuffer*: The filename, directory name, or volume label syntax is incorrect. (os error 123)
+
+2026-06-07T20:29:50.609655Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.6 seconds
+Output:
+rg: src/engine/client/library/clientGraphics/src/shared/*IndexBuffer*: IO error for operation on src/engine/client/library/clientGraphics/src/shared/*IndexBuffer*: The filename, directory name, or volume label syntax is incorrect. (os error 123)
+
+codex
+I have the shared skeletal path now: standard SBSSP skins into either system memory then `memcpy`s into the dynamic VB, or directly writes the dynamic VB, then binds a `VertexBufferVector`, index buffer, and issues stored render commands. The batch path separately writes world-space merged dynamic VB/IB buffers and draws one indexed triangle list.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 12 "inline void DynamicVertexBuffer::lock|inline void DynamicVertexBuffer::unlock|inline VertexBufferWriteIterator DynamicVertexBuffer::begin|m_graphicsData->lock|m_graphicsData->unlock" src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 8 "class DynamicVertexBufferGraphicsData|virtual void.*lock|virtual void.*unlock|class StaticVertexBufferGraphicsData|class IndexBufferGraphicsData" src/engine/client/library/clientGraphics/src/shared/*.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "Graphics::setVertexBuffer|Graphics::setIndexBuffer|Graphics::drawIndexedTriangleList|Graphics::drawIndexedTriangleStrip|Graphics::setObjectToWorldTransformAndScale|setVertexBufferVector" src/engine/client/library/clientGraphics/src/shared/Graphics.cpp src/engine/client/library/clientGraphics/include/public/clientGraphics/Graphics.h src/engine/client/library/clientGraphics/src/shared/GraphicsApi.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 10 "IndexBuffer::lock|IndexBuffer::unlock|IndexBuffer::begin|DynamicIndexBuffer::lock|DynamicIndexBuffer::unlock|DynamicIndexBuffer::begin" src/engine/client/library/clientGraphics/src/shared' in D:\Code\swg-client-v2
+ succeeded in 512ms:
+174-/**
+175- * Allow the vertex data to be modified.
+176- * 
+177- * A VertexBuffer may not be used to render while it is locked.
+178- * Data is not preserved between separate locks of a dynamic vertex buffer.
+179- * Locking a dynamic vertex buffer makes it illegal to try to render with any
+180- * previously locked dynamic vertex buffer.
+181- * @param numberOfVertices The number of vertices the application will write into the DVB.
+182- * @param forceDiscard Force the flush of any existing data and start from vertex 0.  Should be used for multistreaming with dynamic VBs only.
+183- * @see unlock()
+184- */
+185-
+186:inline void DynamicVertexBuffer::lock(int numberOfVertices, bool forceDiscard)
+187-{
+188-	NOT_NULL(m_graphicsData);
+189-	DEBUG_FATAL(m_data, ("VB already locked"));
+190-	DEBUG_FATAL(ms_dynamicGlobalLocked, ("Locking two dynamic VBs at the same time"));
+191-
+192-#ifdef _DEBUG
+193-	++m_debugIteratorLockCount;
+194-	ms_dynamicGlobalLocked = true;
+195-	m_dynamicId = ++ms_dynamicGlobalId;
+196-#endif
+197-	m_numberOfVertices = numberOfVertices;
+198:	m_data = reinterpret_cast<byte *>(m_graphicsData->lock(numberOfVertices, forceDiscard));
+199-}
+200-
+201-// ----------------------------------------------------------------------
+202-/**
+203- * Let the DynamicVertexBuffer know it is done being modified.
+204- * @see lock()
+205- */
+206-
+207:inline void DynamicVertexBuffer::unlock()
+208-{
+209-	DEBUG_FATAL(!m_data, ("VB not locked"));
+210-#ifdef _DEBUG
+211-	++m_debugIteratorLockCount;
+212-	ms_dynamicGlobalLocked = false;
+213-#endif
+214:	m_graphicsData->unlock();
+215-	m_data = NULL;
+216-}
+217-
+218-// ----------------------------------------------------------------------
+219-/**
+220- * Let the DynamicVertexBuffer know it is done being modified.
+221- * @see lock()
+222- */
+223-
+224:inline void DynamicVertexBuffer::unlock(int numberOfVertices)
+225-{
+226-	DEBUG_FATAL(!m_data, ("VB not locked"));
+227-#ifdef _DEBUG
+228-	++m_debugIteratorLockCount;
+229-	ms_dynamicGlobalLocked = false;
+230-#endif
+231:	m_graphicsData->unlock(numberOfVertices);
+232-	m_data = NULL;
+233-}
+234-
+235-// ----------------------------------------------------------------------
+236-/**
+237- * Get a write-only iterator pointing to first vertex of the vertex buffer.
+238- * @return A write-only iterator pointing to first vertex of the vertex buffer.
+239- */
+240-
+241:inline VertexBufferWriteIterator DynamicVertexBuffer::begin()
+242-{
+243-	DEBUG_FATAL(!m_data, ("Vertex buffer is not locked"));
+244-	return VertexBufferWriteIterator(*this, m_data);
+245-}
+246-
+247-// ----------------------------------------------------------------------
+248-/**
+249- * Return a write-only iterator pointing to one past end of the vertex buffer.
+250- * @return A write-only iterator pointing to one past end of the vertex buffer.
+251- */
+252-
+253-inline VertexBufferWriteIterator DynamicVertexBuffer::end()
+
+ exited 1 in 543ms:
+rg: src/engine/client/library/clientGraphics/src/shared/*.h: IO error for operation on src/engine/client/library/clientGraphics/src/shared/*.h: The filename, directory name, or volume label syntax is incorrect. (os error 123)
+
+ exited 1 in 528ms:
+rg: src/engine/client/library/clientGraphics/src/shared/Graphics.cpp: The system cannot find the file specified. (os error 2)
+rg: src/engine/client/library/clientGraphics/src/shared/GraphicsApi.h: The system cannot find the file specified. (os error 2)
+
+2026-06-07T20:30:05.276302Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+rg: src/engine/client/library/clientGraphics/src/shared/*.h: IO error for operation on src/engine/client/library/clientGraphics/src/shared/*.h: The filename, directory name, or volume label syntax is incorrect. (os error 123)
+
+ succeeded in 545ms:
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-112-}
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-113-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-114-#endif
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-115-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-116-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-117-/**
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-118- * Lock the index buffer so it may be modified.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-119- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-120- */
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-121-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:122:inline void DynamicIndexBuffer::lock(int numberOfIndices)
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-123-{
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-124-	DEBUG_FATAL(m_indexData, ("IB already locked"));
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-125-	DEBUG_FATAL(ms_dynamicLocked, ("Locking two dynamic IBs at the same time"));
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-126-#ifdef _DEBUG
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-127-	ms_dynamicLocked = true;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-128-	m_dynamicId = ++ms_dynamicId;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-129-#endif
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-130-	m_numberOfIndices = numberOfIndices;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-131-	m_indexData = m_graphicsData->lock(m_numberOfIndices);
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-132-}
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-133-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-134-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-135-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-136-/**
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-137- * Unlock the index buffer so it may be used to render.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-138- * @see lock()
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-139- * @see lockReadOnly().
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-140- */
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-141-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:142:inline void DynamicIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-143-{
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-144-	DEBUG_FATAL(!m_indexData, ("IB not locked"));
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-145-#ifdef _DEBUG
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-146-	ms_dynamicLocked = false;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-147-#endif
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-148-	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-149-	m_indexData = NULL;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-150-}
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-151-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-152-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-153-/**
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-154- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-155- * This pointer should only be written to, never read from.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-156- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-157- */
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-158-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h:159:inline Index *DynamicIndexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-160-{
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-161-	DEBUG_FATAL(!m_indexData, ("IB not locked"));
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-162-	return m_indexData;
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-163-}
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-164-
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-165-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-166-/**
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-167- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-168- * This pointer should only be written to, never read from.
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.h-169- * @return Pointer to the start of the index memory.
+--
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-82-inline int StaticIndexBuffer::getNumberOfIndices() const
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-83-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-84-	return m_numberOfIndices;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-85-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-86-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-87-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-88-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-89- * @internal
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-90- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-91-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:92:inline void StaticIndexBuffer::lock(bool readOnly) const 
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-93-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-94-	DEBUG_FATAL(m_indexData, ("IB already locked"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-95-	m_readOnly = readOnly;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-96-	m_indexData = m_graphicsData->lock(m_readOnly);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-97-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-98-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-99-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-100-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-101- * Lock the index buffer so it may be modified.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-102- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-103- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-104-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:105:inline void StaticIndexBuffer::lock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-106-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-107-	lock(false);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-108-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-109-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-110-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-111-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-112- * Lock the index buffer so it may be read.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-113- * @see unlock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-114- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-115-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:116:inline void StaticIndexBuffer::lockReadOnly() const
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-117-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-118-	lock(true);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-119-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-120-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-121-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-122-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-123- * Unlock the index buffer so it may be used to render.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-124- * @see lock()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-125- * @see lockReadOnly().
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-126- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-127-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:128:inline void StaticIndexBuffer::unlock() const
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-129-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-130-	DEBUG_FATAL(!m_indexData, ("IB not locked"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-131-	m_graphicsData->unlock();
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-132-	m_indexData = NULL;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-133-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-134-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-135-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-136-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-137- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-138- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-139- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-140-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:141:inline Index *StaticIndexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-142-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-143-	DEBUG_FATAL(!m_indexData, ("IB not locked"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-144-	DEBUG_FATAL(m_readOnly, ("IB locked read-only"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-145-	return m_indexData;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-146-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-147-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-148-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-149-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-150- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-151- * @return Pointer to the start of the index memory.
+--
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-157-	DEBUG_FATAL(m_readOnly, ("IB locked read-only"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-158-	return m_indexData + m_numberOfIndices;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-159-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-160-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-161-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-162-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-163- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-164- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-165- */
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-166-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h:167:inline const Index *StaticIndexBuffer::beginReadOnly() const
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-168-{
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-169-	DEBUG_FATAL(!m_indexData, ("IB not locked"));
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-170-	return m_indexData;
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-171-}
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-172-
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-173-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-174-/**
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-175- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-176- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.h-177- */
+--
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-58-{
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-59-	return m_numberOfIndices;
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-60-}
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-61-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-62-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-63-/**
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-64- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-65- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-66- */
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-67-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h:68:inline const Index *SystemIndexBuffer::beginReadOnly() const
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-69-{
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-70-	return m_data;
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-71-}
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-72-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-73-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-74-/**
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-75- * Get a pointer to one past the end of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-76- * @return Pointer to one past the end of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-77- */
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-78-
+--
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-80-{
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-81-	return m_data + m_numberOfIndices;
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-82-}
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-83-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-84-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-85-/**
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-86- * Get a pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-87- * @return Pointer to the start of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-88- */
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-89-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h:90:inline Index *SystemIndexBuffer::begin()
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-91-{
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-92-	return m_data;
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-93-}
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-94-
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-95-// ----------------------------------------------------------------------
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-96-/**
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-97- * Get a pointer to one past the end of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-98- * @return Pointer to one past the end of the index memory.
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-99- */
+src/engine/client/library/clientGraphics/src/shared\SystemIndexBuffer.h-100-
+
+2026-06-07T20:30:05.299633Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+rg: src/engine/client/library/clientGraphics/src/shared/Graphics.cpp: The system cannot find the file specified. (os error 2)
+rg: src/engine/client/library/clientGraphics/src/shared/GraphicsApi.h: The system cannot find the file specified. (os error 2)
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"struct Gl_api|setObjectToWorldTransformAndScale|drawIndexedTriangleList|setVertexBufferVector|setVertexBuffer\\(|setIndexBuffer\\(\" src/engine/client/library/clientGraphics src/engine/shared" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg --files src/engine/client/library/clientGraphics | rg \"(Graphics|Gl).*\\.(cpp|h)"'$"' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 8 \"class DynamicVertexBufferGraphicsData|virtual void \\*lock|virtual void unlock\" src/engine/client/library/clientGraphics" in D:\Code\swg-client-v2
+ succeeded in 946ms:
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-12-
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-13-// ======================================================================
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-14-
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-15-struct Gl_api;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-16-
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-17-class DynamicIndexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-18-class DynamicIndexBufferGraphicsData;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-19-class DynamicVertexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:20:class DynamicVertexBufferGraphicsData;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-21-class Extent;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-22-class HardwareIndexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-23-class HardwareVertexBuffer;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-24-class Light;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-25-class MeshConstructionHelper;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-26-class Rectangle2d;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-27-class ShaderImplementation;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h-28-class ShaderImplementationGraphicsData;
+--
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-13-
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-14-class MemoryBlockManager;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-15-
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-16-#include "clientGraphics/HardwareVertexBuffer.h"
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-17-#include "clientGraphics/VertexBufferIterator.h"
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-18-
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-19-// ======================================================================
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-20-
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:21:class DynamicVertexBufferGraphicsData
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-22-{
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-23-public:
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-24-	virtual DLLEXPORT ~DynamicVertexBufferGraphicsData();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-25-
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-26-	virtual void                          *lock(int numberOfVertices, bool forceDiscard) = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-27-	virtual void                           unlock() = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-28-	virtual void                           unlock(int numberOfVertices) = 0;
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h-29-	virtual const VertexBufferDescriptor  &getDescriptor() const = 0;
+
+ succeeded in 1068ms:
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:15:struct Gl_api;
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:192:	static void                          setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:205:	static void                               setVertexBuffer(const HardwareVertexBuffer &vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:206:	static void                               setVertexBuffer(VertexBufferVector const & vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:213:	static void                              setIndexBuffer(const HardwareIndexBuffer &indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:263:	static void                          drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.h:277:	static void                          drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1486:void Graphics::setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1488:	NOT_NULL(ms_api->setObjectToWorldTransformAndScale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1489:	ms_api->setObjectToWorldTransformAndScale(objectToWorld, scale);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1763:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1812:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:1918:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2007:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2040:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2079:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2135:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2218:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2219:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2306:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2337:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2376:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2406:			setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2438:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2503:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2539:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2564:		setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2603:		setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2634:				setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2694:	Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2695:	Graphics::setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2790:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2791:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2877:	setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2878:	setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2965:void Graphics::setVertexBuffer(const HardwareVertexBuffer &vertexBuffer)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2969:	ms_api->setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2974:void Graphics::setVertexBuffer(VertexBufferVector const & vertexBufferVector)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2977:	NOT_NULL(ms_api->setVertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2978:	ms_api->setVertexBufferVector(vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2983:void Graphics::setIndexBuffer(const HardwareIndexBuffer &indexBuffer)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:2994:	ms_api->setIndexBuffer(indexBuffer);
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3095:void Graphics::drawIndexedTriangleList()
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3099:		ms_api->drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3315:void Graphics::drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3387: * at one time with Graphics::setVertexBuffer().
+src/engine/client/library/clientGraphics\src\win32\Graphics.cpp:3389: * @return  the maximum number of vertex buffers that can be set simultaneously with Graphics::setVertexBuffer()
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:76:struct Gl_api
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:164:	void (*setObjectToWorldTransformAndScale)(const Transform &objectToWorld, const Vector &scale);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:179:	void                               (*setVertexBufferVector)(VertexBufferVector const & vertexBufferVector);
+src/engine/client/library/clientGraphics\src\win32\Gl_dll.def:203:	void (*drawIndexedTriangleList)();
+src/engine/client/library/clientGraphics\src\shared\VertexBufferVector.h:27:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\StaticVertexBuffer.h:42:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\StaticIndexBuffer.h:31:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:112:void SimplePolyPrimitive::setVertexBuffer( HardwareVertexBuffer * buffer )
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:142:		setVertexBuffer( createVertexBuffer() );
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:191:		Graphics::setObjectToWorldTransformAndScale (m_owner.getTransform_w(), Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\SimplePolyPrimitive.cpp:192:		Graphics::setVertexBuffer(*m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:579:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSorter.cpp:580:	Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:685:	Graphics::drawIndexedTriangleList,  // SPSPT_indexedTriangleList,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1240:	Graphics::setVertexBuffer(*m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1264:		Graphics::setIndexBuffer(*(m_sortedIndices->at(minArray).second));
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1269:			Graphics::setIndexBuffer(*m_indexBuffer);
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp:1367:				if (m_drawFunction == Graphics::drawIndexedTriangleList)
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitiveSet.cpp:228:	Graphics::setObjectToWorldTransformAndScale(m_owner.getTransform_w(), m_owner.getScale());
+src/engine/client/library/clientGraphics\src\shared\PostProcessingEffectsManager.cpp:249:		Graphics::setVertexBuffer(vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:77:	Graphics::setObjectToWorldTransformAndScale (m_appearance.getTransform_w (), Vector::xyz111);
+src/engine/client/library/clientGraphics\src\shared\IndexedTriangleListShaderPrimitive.cpp:132:	Graphics::drawIndexedTriangleList ();
+src/engine/client/library/clientGraphics\src\shared\DynamicVertexBuffer.h:41:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\DynamicIndexBuffer.h:31:	friend struct Gl_api;
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:93:	Graphics::setObjectToWorldTransformAndScale(m_objectToWorld, m_scale);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:826:	Graphics::setVertexBuffer(m_vertexBuffer);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:827:	Graphics::setIndexBuffer(m_indexBuffer);
+src/engine/client/library/clientGraphics\src\shared\DebugPrimitive.cpp:842:			Graphics::drawIndexedTriangleList();
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:299:	Graphics::setObjectToWorldTransformAndScale(Transform::identity, Vector::xyz111);
+src/engine/client/library/clientGraphics\src\Bink\BinkVideo.cpp:348:	Graphics::setVertexBuffer(*s_vertexBuffer);
+
+ exited 1 in 1067ms:
+2026-06-07T20:30:16.067434Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 1.1 seconds
+Output:
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 6 \"void Graphics::setObjectToWorldTransformAndScale|void Graphics::setVertexBuffer\\(|void Graphics::setIndexBuffer|void Graphics::drawIndexedTriangleList\\(|drawIndexedTriangleStrip\\(\" src/engine/client/library/clientGraphics/src/win32/Graphics.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 8 \"setObjectToWorldTransformAndScale|setVertexBuffer\\(|setVertexBufferVector|setIndexBuffer\\(|drawIndexedTriangleList|drawIndexedTriangleStrip|createDynamicVertexBufferData|createDynamicIndexBufferData\" src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 8 \"setObjectToWorldTransformAndScale|setVertexBuffer\\(|setVertexBufferVector|setIndexBuffer\\(|drawIndexedTriangleList|drawIndexedTriangleStrip|createDynamicVertexBufferData|createDynamicIndexBufferData\" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp" in D:\Code\swg-client-v2
+ succeeded in 719ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-73-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-74-	DEBUG_FATAL(stream < 0 || stream >= m_streamCount,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-75-		("Direct3d11_VertexBufferVectorData::getStreamFormat: stream %d out of range [0, %d)",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-76-		stream, m_streamCount));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-77-	return m_streamFormat[stream];
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-78-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-79-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-80-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:81:// Plan 11-09.7: Gl_api::setVertexBufferVector slot body.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-82-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-83-// Iterates the engine VBVector (we have friend access via the Rule-3
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-84-// declaration in clientGraphics/VertexBufferVector.h:31), extracts per-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-85-// stream ID3D11Buffer + stride + offset + format, and routes to
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:86:// Direct3d11_StateCache::setVertexBufferVectorBindState.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-87-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:88:// Mirrors Direct3d9.cpp:3764 setVertexBufferVector shape, with D3D9 ->
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-89-// D3D11 substitutions: SetStreamSource-per-slot loop replaced by a
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-90-// single IASetVertexBuffers batch issued from applyPreDrawState. We
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-91-// track static/dynamic slice-count parity for the engine's draw-call
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-92-// vertex-count argument (matches D3D9's ms_sliceFirstVertex /
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-93-// ms_sliceNumberOfVertices tracking but routed through StateCache).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-94-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-95-// Mixed static + dynamic VBs across streams: supported (D3D9
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-96-// precedent). Stream-offset semantics differ between static (offset=0)
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-148-				break;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-149-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-150-			default:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-151-				DEBUG_FATAL(true, ("Direct3d11_VertexBufferVectorData::bind: unknown VB type %d", static_cast<int>(vb.getType())));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-152-				break;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-153-		}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-154-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-155-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:156:	Direct3d11_StateCache::setVertexBufferVectorBindState(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-157-		stream,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-158-		buffers,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-159-		strides,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-160-		offsets,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-161-		formats,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-162-		sliceFirstVertex,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-163-		sliceVertexCount);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp-164-}
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-216-	bool supportsTwoSidedStencil_impl()      { return false; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-217-	// Plan 17-08 (GAP-6 / D-08): enable MULTI-STREAM skinned-mesh path. These
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-218-	// two caps gate SoftwareBlendSkeletalShaderPrimitive::ms_useMultiStreamVertexBuffers
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-219-	// (set at install: maxStreamCount>1 && supportsStreamOffsets && !disableMultiStream).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-220-	// With them false the engine forced single-stream, which places the skinned DOT3
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-221-	// tangent at a texcoord index the recompiled bump VS doesn't read as TEXCOORD2 ->
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-222-	// phantom-zero -> normalize(0) -> NaN COLOR0 -> wrong sleeves/hands. The D3D11
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-223-	// multi-stream bind path is already implemented (Plan 11-09.7
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:224:	// setVertexBufferVectorBindState + getOrCreateMultiStream + 11-09.8 phantom) and
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-225-	// the GAP-6 global-TEXCOORD-index fix routes stream-1 DOT3 -> TEXCOORD2. D3D11
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-226-	// IASetVertexBuffers natively supports per-stream offsets, so advertising both is
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-227-	// honest. getOrCreateMultiStream caps streamCount at 2 (constant + dynamic skinned).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-228-	bool supportsStreamOffsets_impl()        { return true; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-229-	bool supportsDynamicTextures_impl()      { return false; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-230-	bool supportsAntialias_impl()            { return false; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-231-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-232-	int  getMaximumVertexBufferStreamCount_impl() { return 2; }
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-366-		return new Direct3d11_TextureData(texture, runtimeFormats, numberOfRuntimeFormats);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-367-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-368-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-369-	StaticVertexBufferGraphicsData * createStaticVertexBufferData_impl(const StaticVertexBuffer &vb)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-370-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-371-		return new Direct3d11_StaticVertexBufferData(vb);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-372-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-373-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:374:	DynamicVertexBufferGraphicsData * createDynamicVertexBufferData_impl(const DynamicVertexBuffer &vb)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-375-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-376-		return new Direct3d11_DynamicVertexBufferData(vb);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-377-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-378-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-379-	// Plan 11-09.7: multi-stream VertexBufferVector factory. Mirrors
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-380-	// Direct3d9Namespace::createVertexBufferVectorData (Direct3d9.cpp:3648).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-381-	VertexBufferVectorGraphicsData * createVertexBufferVectorData_impl(VertexBufferVector const &vbVector)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-382-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-383-		return new Direct3d11_VertexBufferVectorData(vbVector);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-384-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-385-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-386-	StaticIndexBufferGraphicsData * createStaticIndexBufferData_impl(const StaticIndexBuffer &ib)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-387-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-388-		return new Direct3d11_StaticIndexBufferData(ib);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-389-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-390-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:391:	DynamicIndexBufferGraphicsData * createDynamicIndexBufferData_impl()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-392-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-393-		return new Direct3d11_DynamicIndexBufferData();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-394-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-395-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-396-	void setDynamicIndexBufferSize_impl(int numberOfIndices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-397-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-398-		Direct3d11_DynamicIndexBufferData::setSize(numberOfIndices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-399-	}
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1052-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1053-	// Plan 11-06: per-frame transform + viewport + scissor + global-texture
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1054-	// + per-stage texture-transform + alpha-fade slot bodies.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1055-	ms_glApi.setViewport                       = Direct3d11_StateCache::setViewport;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1056-	ms_glApi.setScissorRect                    = Direct3d11_StateCache::setScissorRect;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1057-	ms_glApi.setWorldToCameraTransform         = Direct3d11_StateCache::setWorldToCameraTransform;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1058-	ms_glApi.setProjectionMatrix               = Direct3d11_StateCache::setProjectionMatrix;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1059-	ms_glApi.setFog                            = Direct3d11_StateCache::setFog;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1060:	ms_glApi.setObjectToWorldTransformAndScale = Direct3d11_StateCache::setObjectToWorldTransformAndScale;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1061-	ms_glApi.setGlobalTexture                  = Direct3d11_StateCache::setGlobalTexture;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1062-	ms_glApi.releaseAllGlobalTextures          = Direct3d11_StateCache::releaseAllGlobalTextures;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1063-	ms_glApi.setTextureTransform               = Direct3d11_StateCache::setTextureTransform;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1064-	// Plan 11-05: cbuffer user-constant setters. Plan 11-06's draw dispatch
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1065-	// flushes via Direct3d11_ConstantBuffer::bindVS(1) + bindPS(2) in
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1066-	// applyPreDrawState.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1067-	ms_glApi.setVertexShaderUserConstants  = setVertexShaderUserConstants_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1068-	ms_glApi.setPixelShaderUserConstants   = setPixelShaderUserConstants_impl;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1074-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1075-	// Plan 11-04: VB + IB factory slots wired.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1076-	// Plan 11-06: setVertexBuffer / setIndexBuffer slots now route through
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1077-	// the state cache (geometry tracking + draw-time binding).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1078-	// Plan 11-09.7: multi-stream slots wired -- skeletal-animation
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1079-	// rendering (SoftwareBlendSkeletalShaderPrimitive) consumes these
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1080-	// during char-customization preview + world entry.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1081-	ms_glApi.createStaticVertexBufferData   = createStaticVertexBufferData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1082:	ms_glApi.createDynamicVertexBufferData  = createDynamicVertexBufferData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1083-	ms_glApi.createVertexBufferVectorData   = createVertexBufferVectorData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1084-	ms_glApi.setVertexBuffer                = Direct3d11_StateCache::setVertexBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1085:	ms_glApi.setVertexBufferVector          = Direct3d11_VertexBufferVectorData::bind;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1086-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1087-	ms_glApi.createStaticIndexBufferData   = createStaticIndexBufferData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1088:	ms_glApi.createDynamicIndexBufferData  = createDynamicIndexBufferData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1089-	ms_glApi.setIndexBuffer                = Direct3d11_StateCache::setIndexBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1090-	ms_glApi.setDynamicIndexBufferSize     = setDynamicIndexBufferSize_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1091-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1092-	STUB(getOneToOneUVMapping);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1093-	// Plan 11-04: createTextureData -- the slot that was the Plan 11-03
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1094-	// FATAL boundary. Now serves real ID3D11Texture2D + SRV pairs.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1095-	ms_glApi.createTextureData             = createTextureData_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1096-
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1111-	ms_glApi.drawTriangleList            = Direct3d11_StateCache::drawTriangleList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1112-	ms_glApi.drawTriangleStrip           = Direct3d11_StateCache::drawTriangleStrip;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1113-	ms_glApi.drawTriangleFan             = Direct3d11_StateCache::drawTriangleFan;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1114-	ms_glApi.drawQuadList                = Direct3d11_StateCache::drawQuadList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1115-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1116-	ms_glApi.drawIndexedPointList        = Direct3d11_StateCache::drawIndexedPointList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1117-	ms_glApi.drawIndexedLineList         = Direct3d11_StateCache::drawIndexedLineList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1118-	ms_glApi.drawIndexedLineStrip        = Direct3d11_StateCache::drawIndexedLineStrip;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1119:	ms_glApi.drawIndexedTriangleList     = Direct3d11_StateCache::drawIndexedTriangleList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1120:	ms_glApi.drawIndexedTriangleStrip    = Direct3d11_StateCache::drawIndexedTriangleStrip;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1121-	ms_glApi.drawIndexedTriangleFan      = Direct3d11_StateCache::drawIndexedTriangleFan;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1122-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1123-	ms_glApi.drawPartialPointList        = Direct3d11_StateCache::drawPartialPointList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1124-	ms_glApi.drawPartialLineList         = Direct3d11_StateCache::drawPartialLineList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1125-	ms_glApi.drawPartialLineStrip        = Direct3d11_StateCache::drawPartialLineStrip;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1126-	ms_glApi.drawPartialTriangleList     = Direct3d11_StateCache::drawPartialTriangleList;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1127-	ms_glApi.drawPartialTriangleStrip    = Direct3d11_StateCache::drawPartialTriangleStrip;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp-1128-	ms_glApi.drawPartialTriangleFan      = Direct3d11_StateCache::drawPartialTriangleFan;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-140-	UINT            ms_currentVBStride   = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-141-	UINT            ms_currentVBOffset   = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-142-	int             ms_currentVBVertexCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-143-	VertexBufferFormat ms_currentVBFormat;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-144-	bool            ms_currentVBValid    = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-145-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-146-	// Plan 11-09.7: multi-stream VertexBufferVector tracking. Mutually
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-147-	// exclusive with the single-stream state above -- setVertexBuffer
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:148:	// clears the vector flag and setVertexBufferVector clears the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-149-	// single-stream state. resolveShaders + applyPreDrawState branch
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-150-	// on ms_currentVBVectorActive to pick the input-layout cache lookup
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-151-	// + IASetVertexBuffers call shape.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-152-	enum { kMaxVBStreams = 2 };   // matches Direct3d11_VertexBufferVectorData::MAX_VERTEX_BUFFERS
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-153-	bool                          ms_currentVBVectorActive               = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-154-	int                           ms_currentVBVectorStreamCount          = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-155-	ID3D11Buffer *                ms_currentVBVectorBuffers[kMaxVBStreams] = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-156-	UINT                          ms_currentVBVectorStrides[kMaxVBStreams] = {};
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-233-	// smoke whether 11-09.16 is required (non-zero -> engine actively uses
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-234-	// indexed fans per ShaderPrimitiveSetTemplate.cpp:673 SPSPT_indexedTriangleFan).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-235-	int ms_drawIndexedTriangleFanCalls        = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-236-	int ms_drawPartialIndexedTriangleFanCalls = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-237-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-238-	// ------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-239-	// Plan 11-08 Task 3b: matrix-shadow file-scope statics. The three
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-240-	// per-frame transform setters (setWorldToCameraTransform /
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:241:	// setProjectionMatrix / setObjectToWorldTransformAndScale) write
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-242-	// ONLY to these shadows -- they do NOT touch the GPU cbuffer. The
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:243:	// per-object setter (setObjectToWorldTransformAndScale) is the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-244-	// canonical upload site: it composes WVP = (P * V) * W from the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-245-	// current shadows and uploads the FULL Direct3d11_VertexSlot0CB
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-246-	// (1152 bytes) to slot 0 via composeSlot0Shadow().
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-247-	//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-248-	// Iter-18 BSOD root-cause analysis (the never-committed minimum-WVP
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-249-	// attempt that BSOD'd the OS via GPU TDR escalation) enumerated 5
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-250-	// must-haves; CODEX peer review added a 6th. This block satisfies
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-251-	// must-haves #1 (verified D3D9 composition order via Iter-1 source
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-487-					iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-488-				}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-489-			}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-490-		}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-491-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-492-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-493-	// Plan 11-09 Iter-2.7 Fix C: lazy upload of the slot 0 shadow once per
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-494-	// applyPreDrawState. Replaces Plan 11-08's first-draw race guard +
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:495:	// setObjectToWorldTransformAndScale-canonical-upload pattern. If no
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-496-	// setter has touched the shadow since the last flush, this is a no-op.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-497-	void flushSlot0IfDirty()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-498-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-499-		if (!s_slot0Dirty)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-500-			return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-501-		// Plan 11-09.15 Iter-9 diagnostic: sample the c9 viewportData slot
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-502-		// at flush time so we can confirm the value actually uploaded to
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-503-		// the GPU. c9 is at byte offset 144 of s_slot0Shadow.
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1141-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1142-		// Plan 17-09: resolve the per-key VS variant ONCE (cheap cached lookup
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1143-		// after first compile) and pass it EXPLICITLY into layout creation -- the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1144-		// layout cache never reads the ambient key.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1145-		Direct3d11_VertexShaderData::Variant const &vsVariant =
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1146-			ms_currentVSData->getVariant(ms_currentVSKey);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1147-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1148-		// Plan 11-09.7: multi-stream path takes precedence -- the engine
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1149:		// calls either setVertexBuffer OR setVertexBufferVector, and they
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1150-		// clear each other's state.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1151-		if (ms_currentVBVectorActive)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1152-		{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1153-			ms_currentInputLayout = Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1154-				ms_currentVBVectorFormats,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1155-				ms_currentVBVectorStreamCount,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1156-				vsVariant);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1157-			return vsVariant.d3dVS.Get() != nullptr;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1374-		// blit. The splash UI must be using non-transformed VBFormat
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1375-		// (clip-space verts) -- this iter captures every draw so we see
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1376-		// the full picture: topology, VS, isTransformed flag, SRV0, RTV.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1377-		//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1378-		// Plan 11-09.15 Iter-33: extended with shader template name and
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1379-		// bumped cap from 200 -> 500 to cover the world-content draw
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1380-		// routing investigation. UI rendering is resolved (Iter-32A); the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1381-		// next frontier is in-world geometry showing skewed textures, which
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1382:		// flows through drawIndexedTriangleList / drawTriangleList / etc.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1383-		// (NOT drawQuadList, so Iter-29B's UI-focused logger doesn't catch
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1384-		// it). All world draws still go through applyPreDrawState here, so
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1385-		// enhancing this single logger covers every draw path.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1386-		//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1387-		// Plan 11-09.15 Iter-33B: split cap into two counters -- one for
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1388-		// xform=1 (UI; XYZRHW pre-projected verts) and one for xform=0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1389-		// (world content; goes through full WVP). The first 200-cap run
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1390-		// showed all xform=1 (UI), so world content draws AFTER the boot
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1791-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1792-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1793-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1794-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1795-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1796-void Direct3d11_StateCache::setWorldToCameraTransform(Transform const &objectToWorld, Vector const &cameraPosition)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1797-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1798-	// Plan 11-08 Task 3b: shadow-only. The cbuffer upload happens in
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1799:	// setObjectToWorldTransformAndScale (the canonical per-object site
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1800-	// where the full WVP is composed). Pre-Plan-11-08 this site wrote
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1801-	// Direct3d11_PerFrameCB to slot 0 (96 bytes) -- which under the new
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1802-	// Direct3d11_VertexSlot0CB layout (1152 bytes) would be a partial
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1803-	// write leaving 1056 bytes UNDEFINED via Map(WRITE_DISCARD), exactly
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1804-	// the Iter-18 BSOD root cause #6. Replaced with shadow assignment;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1805-	// see composeAndUploadSlot0 helper in this file's namespace block.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1806-	auto const &m = objectToWorld.getMatrix();    // real[3][4]; 4th row is implicit (0,0,0,1)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1807-	s_cachedView = XMFLOAT4X4(
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1852-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1853-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1854-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1855-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1856-void Direct3d11_StateCache::setProjectionMatrix(GlMatrix4x4 const &projectionMatrix)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1857-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1858-	// Plan 11-08 Task 3b: shadow-only. Pre-Plan-11-08 this site wrote
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1859-	// Direct3d11_PerObjectCB to slot 1 (192 bytes), clobbering the world
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1860:	// matrix that setObjectToWorldTransformAndScale also wrote to slot 1.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1861-	// The shader's c4..c7 (objectWorldMatrix) was therefore overwritten
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1862-	// by the projection matrix every frame -- a structural bug. Under
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1863-	// the Plan 11-08 layout slot 1 is unused by the per-frame pipeline;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1864-	// projection lives in the WVP composition uploaded to slot 0 via
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1865-	// composeSlot0Shadow().
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1866-	std::memcpy(&s_cachedProj, projectionMatrix.matrix, sizeof(float) * 16);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1867-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1868-	// Plan 11-09 Iter-2.7 Fix C: re-compose + mark dirty. See note in
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1908-	float const g = static_cast<float>(color.getG()) * (1.0f / 255.0f);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1909-	float const b = static_cast<float>(color.getB()) * (1.0f / 255.0f);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1910-	XMFLOAT4 fog(r, g, b, a);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1911-	Direct3d11_ConstantBuffer::updatePS(0, &fog, sizeof(fog));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1912-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1913-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1914-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1915-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1916:void Direct3d11_StateCache::setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1917-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1918-	// Plan 11-08 Task 3b: the canonical per-object upload site. Shadows
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1919-	// the world matrix (with uniform per-axis scale composed into basis
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1920-	// columns -- same logic as the pre-Plan-11-08 version), then composes
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1921-	// the full WVP from the three shadows and uploads the entire
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1922-	// Direct3d11_VertexSlot0CB (1152 bytes) to slot 0. See
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1923-	// composeAndUploadSlot0 in this file's namespace block for the WVP
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1924-	// composition order (CODEX Q1 ratified: wtp = P * V; wvp = wtp * W).
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1958-	++s_owtSeq;   // CONSULT-27: track per-call sequence + translation for the draw-time probe
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1959-	s_owtLastTx = static_cast<float>(m[0][3]);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1960-	s_owtLastTy = static_cast<float>(m[1][3]);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1961-	s_owtLastTz = static_cast<float>(m[2][3]);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1962-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1963-	composeSlot0Shadow();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1964-	s_anyMatrixWritten = true;   // Kept for back-compat; Fix C uses s_slot0Dirty instead
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1965-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1966:	// Plan 11-09.15 Iter-35: log first 50 setObjectToWorldTransformAndScale
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1967-	// calls. This is THE per-mesh setter -- engine calls it before each
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1968-	// world mesh draw. If we see N draws on the Iter-26/33B WORLD log but
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1969-	// only M < N calls here, the engine is using a different path for
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1970-	// (N - M) draws.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1971-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1972-		static int s_iter35OwtCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1973-		if (s_iter35OwtCount < 50)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1974-		{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1975-			++s_iter35OwtCount;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1976-			if (ID3D11InfoQueue *iq35 = Direct3d11_Device::getInfoQueue())
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1977-			{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1978-				char buf35[384];
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1979-				_snprintf_s(buf35, sizeof(buf35), _TRUNCATE,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1980:					"Plan 11-09.15 Iter-35 setObjectToWorldTransformAndScale#%d "
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1981-					"row0=[%.3f %.3f %.3f %.3f] row1=[%.3f %.3f %.3f %.3f] "
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1982-					"row2=[%.3f %.3f %.3f %.3f] scale=[%.3f %.3f %.3f]",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1983-					s_iter35OwtCount,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1984-					static_cast<float>(m[0][0]), static_cast<float>(m[0][1]),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1985-					static_cast<float>(m[0][2]), static_cast<float>(m[0][3]),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1986-					static_cast<float>(m[1][0]), static_cast<float>(m[1][1]),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1987-					static_cast<float>(m[1][2]), static_cast<float>(m[1][3]),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-1988-					static_cast<float>(m[2][0]), static_cast<float>(m[2][1]),
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2234-	// (PSSetSamplers tolerates null but the bound shader then reads garbage
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2235-	// per the D3D11 spec; CODEX Q4 says "default sampler is fine" for the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2236-	// "no texture" path).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2237-	ms_boundSampler[slot] = sampler ? sampler : ms_defaultSampler.Get();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2238-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2239-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2240-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2241-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2242:void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2243-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2244-	// Plan 11-09.7: deactivate multi-stream state (mutual exclusion with
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2245-	// the single-stream path below). resolveShaders + applyPreDrawState
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2246-	// branch on ms_currentVBVectorActive.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2247-	ms_currentVBVectorActive = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2248-	ms_currentVBVectorStreamCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2249-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2250-	ms_currentVBValid = false;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2296-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2297-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2298-	ms_geometryRebindNeeded = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2299-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2300-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2301-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2302-// Plan 11-09.7: multi-stream VertexBufferVector bind path. Called by
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2303-// Direct3d11_VertexBufferVectorData::bind, which is the slot wired to
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2304:// Gl_api::setVertexBufferVector. The wrapper class iterates the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2305-// engine-side VBVector, extracts per-stream ID3D11Buffer + offset +
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2306-// stride + format, and passes them in. resolveShaders + applyPreDrawState
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2307-// branch on ms_currentVBVectorActive.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2308-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2309:void Direct3d11_StateCache::setVertexBufferVectorBindState(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2310-	int streamCount,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2311-	ID3D11Buffer * const *buffers,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2312-	UINT const *strides,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2313-	UINT const *offsets,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2314-	VertexBufferFormat const * const *formats,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2315-	int sliceFirstVertex,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2316-	int sliceVertexCount)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2317-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2318-	// Clear single-stream state (mutual exclusion with the vector path).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2319-	ms_currentVB = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2320-	ms_currentVBStride = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2321-	ms_currentVBOffset = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2322-	ms_currentVBValid = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2323-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2324-	DEBUG_FATAL(streamCount < 0 || streamCount > kMaxVBStreams,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2325:		("Direct3d11_StateCache::setVertexBufferVectorBindState: streamCount=%d outside [0,%d]",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2326-		streamCount, kMaxVBStreams));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2327-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2328-	ms_currentVBVectorActive      = (streamCount > 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2329-	ms_currentVBVectorStreamCount = streamCount;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2330-	for (int i = 0; i < kMaxVBStreams; ++i)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2331-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2332-		ms_currentVBVectorBuffers[i] = (i < streamCount && buffers) ? buffers[i] : nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2333-		ms_currentVBVectorStrides[i] = (i < streamCount && strides) ? strides[i] : 0;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2341-	ms_currentVBVertexCount = sliceVertexCount;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2342-	(void)sliceFirstVertex; // single-stream slice offset; multi-stream uses streamOffsets[]
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2343-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2344-	ms_geometryRebindNeeded = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2345-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2346-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2347-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2348-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2349:void Direct3d11_StateCache::setIndexBuffer(HardwareIndexBuffer const &ib)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2350-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2351-	ms_currentIBValid = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2352-	ms_currentIB = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2353-	ms_currentIBOffset = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2354-	ms_currentIBIndexCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2355-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2356-	if (ib.getType() == HardwareIndexBuffer::T_static)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-2357-	{
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3070-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3071-void Direct3d11_StateCache::drawIndexedLineStrip()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3072-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3073-	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3074-		return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3075-	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3076-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3077-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3078:void Direct3d11_StateCache::drawIndexedTriangleList()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3079-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3080-	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3081-		return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3082-	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3083-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3084-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3085:void Direct3d11_StateCache::drawIndexedTriangleStrip()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3086-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3087-	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3088-		return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3089-	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3090-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3091-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3092-void Direct3d11_StateCache::drawIndexedTriangleFan()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3093-{
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3233-void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3234-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3235-	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3236-		return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3237-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3238-	// CAPE-COLLAPSE DRAW-OFFSET PROBE v2 2026-06-06 (DIAGNOSTIC -- REMOVE after).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3239-	// Engine skin + D3D11 write are PROVEN clean (cape-collapse-probe / cape-d3d11-probe);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3240-	// the GPU draw reads collapsed. v1 gated on the SINGLE-stream state (ms_currentVBValid)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3241:	// and never fired -- SBSSP binds via setVertexBufferVector (the VECTOR path:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3242-	// ms_currentVBVectorActive=true, ms_currentVBValid=false). This logs the VECTOR stream-0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3243-	// bound offset at the garment draw and compares to the write offset (cape-d3d11-probe
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3244-	// offsetVerts). boundVertOffset == write offset => bind matches => OVERWRITE/rename of the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3245-	// slice between write and the deferred draw. boundVertOffset != write offset => MISREAD
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3246-	// (deferred draw binds the wrong offset). Read AFTER applyPreDrawState so the bind state is
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3247-	// settled. stride 48 = the skinned garment format. Writes stage/cape-draw-probe.txt.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3248-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp-3249-		bool const cdVec    = ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0;
+
+ succeeded in 736ms:
+1480- * using the object-to-world transform.
+1481- *
+1482- * @param objectToWorld  New object-to-world transform for object-space vertices
+1483- * @param scale  Scale to be applied to the object-space vertices
+1484- */
+1485-
+1486:void Graphics::setObjectToWorldTransformAndScale(const Transform &objectToWorld, const Vector &scale)
+1487-{
+1488-	NOT_NULL(ms_api->setObjectToWorldTransformAndScale);
+1489-	ms_api->setObjectToWorldTransformAndScale(objectToWorld, scale);
+1490-#ifdef _DEBUG
+1491-	ms_haveTransformAndScale = true;
+1492-#endif
+--
+2959-		drawCircle (extent->getSphere().getCenter (), Vector::unitZ, extent->getSphere().getRadius (), 20, color);
+2960-	}
+2961-}
+2962-
+2963-// ----------------------------------------------------------------------
+2964-
+2965:void Graphics::setVertexBuffer(const HardwareVertexBuffer &vertexBuffer)
+2966-{
+2967-	NOT_NULL(ms_api);
+2968-	NOT_NULL(ms_api->setVertexBuffer);
+2969-	ms_api->setVertexBuffer(vertexBuffer);
+2970-}
+2971-
+2972-// ----------------------------------------------------------------------
+2973-
+2974:void Graphics::setVertexBuffer(VertexBufferVector const & vertexBufferVector)
+2975-{
+2976-	NOT_NULL(ms_api);
+2977-	NOT_NULL(ms_api->setVertexBufferVector);
+2978-	ms_api->setVertexBufferVector(vertexBufferVector);
+2979-}
+2980-
+2981-// ----------------------------------------------------------------------
+2982-
+2983:void Graphics::setIndexBuffer(const HardwareIndexBuffer &indexBuffer)
+2984-{
+2985-#ifdef _DEBUG
+2986-	if (indexBuffer.getType() == HardwareIndexBuffer::T_dynamic)
+2987-	{
+2988-		const DynamicIndexBuffer *dynamicIndexBuffer = safe_cast<const DynamicIndexBuffer *>(&indexBuffer);
+2989-		DEBUG_FATAL(dynamicIndexBuffer->getDynamicId() == 0, ("Dynamic IB never locked, cannot set"));
+--
+3089-	if (ms_shaderValidated)
+3090-		ms_api->drawIndexedLineStrip();
+3091-}
+3092-
+3093-// ----------------------------------------------------------------------
+3094-
+3095:void Graphics::drawIndexedTriangleList()
+3096-{
+3097-	predrawCheck();
+3098-	if (ms_shaderValidated)
+3099-		ms_api->drawIndexedTriangleList();
+3100-}
+3101-
+3102-// ----------------------------------------------------------------------
+3103-
+3104:void Graphics::drawIndexedTriangleStrip()
+3105-{
+3106-	predrawCheck();
+3107-	if (ms_shaderValidated)
+3108:		ms_api->drawIndexedTriangleStrip();
+3109-}
+3110-
+3111-// ----------------------------------------------------------------------
+3112-
+3113-void Graphics::drawIndexedTriangleFan()
+3114-{
+--
+3309- * @param minimumVertexIndex  The minimum index specified in the index list.
+3310- * @param numberOfVertices    The range of vertices that may be referenced.
+3311- * @param startIndex          The first index in the index buffer to render with.
+3312- * @param primitiveCount      The number of primitives to draw.
+3313- */
+3314-
+3315:void Graphics::drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+3316-{
+3317-	predrawCheck();
+3318-	if (ms_shaderValidated)
+3319-		ms_api->drawPartialIndexedTriangleList(baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount);
+3320-}
+3321-
+--
+3334- * @param minimumVertexIndex  The minimum index specified in the index list.
+3335- * @param numberOfVertices    The range of vertices that may be referenced.
+3336- * @param startIndex          The first index in the index buffer to render with.
+3337- * @param primitiveCount      The number of primitives to draw.
+3338- */
+3339-
+3340:void Graphics::drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+3341-{
+3342-	predrawCheck();
+3343-	if (ms_shaderValidated)
+3344-		ms_api->drawPartialIndexedTriangleStrip(baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount);
+3345-}
+3346-
+
+ succeeded in 758ms:
+320-	bool                               setMouseCursor(Texture const & mouseCursorTexture, int hotSpotX, int hotSpotY);
+321-	bool                               showMouseCursor(bool cursorVisible);
+322-
+323-	void                               setViewport(int x0, int y0, int x1, int y1, float minZ, float maxZ);
+324-	void                               setScissorRect(bool enabled, int x, int y, int width, int height);
+325-	void                               setWorldToCameraTransform(const Transform &transform, const Vector &cameraPosition);
+326-	void                               setProjectionMatrix(const GlMatrix4x4 &projectionMatrix);
+327-	void                               setFog(bool enabled, float density, const PackedArgb &color);
+328:	void                               setObjectToWorldTransformAndScale(const Transform &transform, const Vector &scale);
+329-	void                               setGlobalTexture(Tag tag, const Texture &texture);
+330-	void                               releaseAllGlobalTextures();
+331-	void                               setTextureTransform(int stage, bool enabled, int dimension, bool projected, const float *transform);
+332-	void                               setVertexShaderUserConstants(int index, float c0, float c1, float c2, float c3);
+333-	void                               setPixelShaderUserConstants(VectorRgba const * constants, int count);
+334-
+335-	ShaderImplementationGraphicsData * createShaderImplementationGraphicsData(const ShaderImplementation &shaderImplementation);
+336-	StaticShaderGraphicsData *         createStaticShaderGraphicsData(const StaticShader &shader);
+--
+366-	void                               drawTriangleList();
+367-	void                               drawTriangleStrip();
+368-	void                               drawTriangleFan();
+369-	void                               drawQuadList();
+370-
+371-	void                               drawIndexedPointList();
+372-	void                               drawIndexedLineList();
+373-	void                               drawIndexedLineStrip();
+374:	void                               drawIndexedTriangleList();
+375:	void                               drawIndexedTriangleStrip();
+376-	void                               drawIndexedTriangleFan();
+377-
+378-	void                               drawPointList(int startVertex, int primitiveCount);
+379-	void                               drawLineList(int startVertex, int primitiveCount);
+380-	void                               drawLineStrip(int startVertex, int primitiveCount);
+381-	void                               drawTriangleList(int startVertex, int primitiveCount);
+382-	void                               drawTriangleStrip(int startVertex, int primitiveCount);
+383-	void                               drawTriangleFan(int startVertex, int primitiveCount);
+384-
+385-	void                               drawIndexedPointList(int baseInex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+386-	void                               drawIndexedLineList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+387-	void                               drawIndexedLineStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+388:	void                               drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+389:	void                               drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+390-	void                               drawIndexedTriangleFan(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount);
+391-
+392-	void                               resizeQuadListIndexBuffer(int numberOfQuads);
+393-
+394-	void                               addDeviceLostCallback(CallbackFunction callbackFunction);
+395-	void                               removeDeviceLostCallback(CallbackFunction callbackFunction);
+396-	void                               addDeviceRestoredCallback(CallbackFunction callbackFunction);
+397-	void                               removeDeviceRestoredCallback(CallbackFunction callbackFunction);
+--
+1184-	ms_glApi.setMouseCursor                    = setMouseCursor;
+1185-	ms_glApi.showMouseCursor                   = showMouseCursor;
+1186-	ms_glApi.setViewport                       = setViewport;
+1187-	ms_glApi.setScissorRect                    = setScissorRect;
+1188-	ms_glApi.setWorldToCameraTransform         = setWorldToCameraTransform;
+1189-	ms_glApi.setProjectionMatrix               = setProjectionMatrix;
+1190-	ms_glApi.setFog                            = setFog;
+1191-
+1192:	ms_glApi.setObjectToWorldTransformAndScale = setObjectToWorldTransformAndScale;
+1193-	ms_glApi.setGlobalTexture                  = setGlobalTexture;
+1194-	ms_glApi.releaseAllGlobalTextures          = releaseAllGlobalTextures;
+1195-	ms_glApi.setTextureTransform               = setTextureTransform;
+1196-	ms_glApi.setVertexShaderUserConstants      = setVertexShaderUserConstants;
+1197-	ms_glApi.setPixelShaderUserConstants       = setPixelShaderUserConstants;
+1198-
+1199-	ms_glApi.createShaderImplementationGraphicsData    = createShaderImplementationGraphicsData;
+1200-	ms_glApi.createStaticShaderGraphicsData            = createStaticShaderGraphicsData;
+1201-	ms_glApi.createVertexShaderData            = createVertexShaderData;
+1202-	ms_glApi.createPixelShaderProgramData      = createPixelShaderProgramData;
+1203-
+1204-	ms_glApi.setAlphaFadeOpacity               = setAlphaFadeOpacity;
+1205-
+1206-	ms_glApi.setLights                         = setLights;
+1207-
+1208-	ms_glApi.createStaticVertexBufferData      = createVertexBufferData;
+1209:	ms_glApi.createDynamicVertexBufferData     = createVertexBufferData;
+1210-	ms_glApi.createVertexBufferVectorData      = createVertexBufferVectorData;
+1211-	ms_glApi.createStaticIndexBufferData       = createIndexBufferData;
+1212:	ms_glApi.createDynamicIndexBufferData      = createIndexBufferData;
+1213-
+1214-	ms_glApi.getOneToOneUVMapping              = getOneToOneUVMapping;
+1215-
+1216-	ms_glApi.setVertexBuffer                   = setVertexBuffer;
+1217:	ms_glApi.setVertexBufferVector             = setVertexBufferVector;
+1218-	ms_glApi.setIndexBuffer                    = setIndexBuffer;
+1219-
+1220-	ms_glApi.drawPointList                     = drawPointList;
+1221-	ms_glApi.drawLineList                      = drawLineList;
+1222-	ms_glApi.drawLineStrip                     = drawLineStrip;
+1223-	ms_glApi.drawTriangleList                  = drawTriangleList;
+1224-	ms_glApi.drawTriangleStrip                 = drawTriangleStrip;
+1225-	ms_glApi.drawTriangleFan                   = drawTriangleFan;
+1226-	ms_glApi.drawQuadList                      = drawQuadList;
+1227-
+1228-	ms_glApi.drawIndexedPointList              = drawIndexedPointList;
+1229-	ms_glApi.drawIndexedLineList               = drawIndexedLineList;
+1230-	ms_glApi.drawIndexedLineStrip              = drawIndexedLineStrip;
+1231:	ms_glApi.drawIndexedTriangleList           = drawIndexedTriangleList;
+1232:	ms_glApi.drawIndexedTriangleStrip          = drawIndexedTriangleStrip;
+1233-	ms_glApi.drawIndexedTriangleFan            = drawIndexedTriangleFan;
+1234-
+1235-	ms_glApi.drawPartialPointList              = drawPointList;
+1236-	ms_glApi.drawPartialLineList               = drawLineList;
+1237-	ms_glApi.drawPartialLineStrip              = drawLineStrip;
+1238-	ms_glApi.drawPartialTriangleList           = drawTriangleList;
+1239-	ms_glApi.drawPartialTriangleStrip          = drawTriangleStrip;
+1240-	ms_glApi.drawPartialTriangleFan            = drawTriangleFan;
+1241-
+1242-	ms_glApi.drawPartialIndexedPointList       = drawIndexedPointList;
+1243-	ms_glApi.drawPartialIndexedLineList        = drawIndexedLineList;
+1244-	ms_glApi.drawPartialIndexedLineStrip       = drawIndexedLineStrip;
+1245:	ms_glApi.drawPartialIndexedTriangleList    = drawIndexedTriangleList;
+1246:	ms_glApi.drawPartialIndexedTriangleStrip   = drawIndexedTriangleStrip;
+1247-	ms_glApi.drawPartialIndexedTriangleFan     = drawIndexedTriangleFan;
+1248-
+1249-	ms_glApi.getMaximumVertexBufferStreamCount = getMaximumVertexBufferStreamCount;
+1250-
+1251-	ms_glApi.optimizeIndexBuffer			   = optimizeIndexBuffer;
+1252-
+1253-	ms_glApi.setBloomEnabled = setBloomEnabled;
+1254-
+--
+3394-	else
+3395-	{
+3396-		Direct3d9_StateCache::setRenderState(D3DRS_FOGENABLE, FALSE);
+3397-	}
+3398-}
+3399-
+3400-// ----------------------------------------------------------------------
+3401-
+3402:void Direct3d9Namespace::setObjectToWorldTransformAndScale(const Transform &transform, const Vector &scale)
+3403-{
+3404-#ifdef _DEBUG
+3405-	if (ms_disableAll)
+3406-		return;
+3407-#endif
+3408-
+3409-	ms_transformDirty = true;
+3410-	Direct3d9::convertScaleAndTransformToMatrix(scale, transform, ms_cachedObjectToWorldMatrix);
+--
+3678-	u0 = (0.0f + 0.5f) / static_cast<float>(textureWidth);
+3679-	v0 = (0.0f + 0.5f) / static_cast<float>(textureHeight);
+3680-	u1 = (static_cast<float>(textureWidth - 1) + 0.5f) / static_cast<float>(textureWidth);
+3681-	v1 = (static_cast<float>(textureHeight - 1) + 0.5f) / static_cast<float>(textureHeight);
+3682-}
+3683-
+3684-// ----------------------------------------------------------------------
+3685-
+3686:void Direct3d9::setVertexBuffer(const HardwareVertexBuffer & vertexBuffer)
+3687-{
+3688-#ifdef _DEBUG
+3689-	if (ms_disableAll)
+3690-		return;
+3691-	ms_currentStaticVertexBuffer = NULL;
+3692-#endif
+3693-
+3694-	IDirect3DVertexBuffer9 *      vb                = 0;
+--
+3756-
+3757-#ifdef _DEBUG
+3758-	Direct3d9_Metrics::setVertexBufferCalls += 1;
+3759-#endif
+3760-}
+3761-
+3762-// ----------------------------------------------------------------------
+3763-
+3764:void Direct3d9::setVertexBufferVector(const VertexBufferVector & vertexBufferVector)
+3765-{
+3766-#ifdef _DEBUG
+3767-	if (ms_disableAll)
+3768-		return;
+3769-
+3770-	ms_currentStaticVertexBuffer = NULL;
+3771-#endif
+3772-
+--
+3883-
+3884-#ifdef _DEBUG
+3885-	Direct3d9_Metrics::setVertexBufferCalls += 1;
+3886-#endif
+3887-}
+3888-
+3889-// ----------------------------------------------------------------------
+3890-
+3891:void Direct3d9::setIndexBuffer(const HardwareIndexBuffer &indexBuffer)
+3892-{
+3893-#ifdef _DEBUG
+3894-	if (ms_disableAll)
+3895-		return;
+3896-#endif
+3897-
+3898-	// get the index buffer
+3899-	if (indexBuffer.getType() == HardwareIndexBuffer::T_static)
+--
+3922-		NOT_NULL(ib);
+3923-
+3924-		// remember stuff about the indices
+3925-		ms_savedIndexBuffer     = Direct3d9_DynamicIndexBufferData::getIndexBuffer();
+3926-		ms_sliceNumberOfIndices = ib->getNumberOfIndices();
+3927-		ms_sliceFirstIndex      = ib->getOffset();
+3928-	}
+3929-
+3930:	Direct3d9_StateCache::setIndexBuffer(ms_savedIndexBuffer);
+3931-
+3932-#ifdef _DEBUG
+3933-	Direct3d9_Metrics::setIndexBufferCalls += 1;
+3934-#endif
+3935-}
+3936-
+3937-// ----------------------------------------------------------------------
+3938-
+--
+4284-
+4285-	Direct3d9_Metrics::triangles += numberOfTriangles;
+4286-	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += numberOfTriangles;
+4287-#endif
+4288-
+4289-	// make sure the index buffer is large enough, and set it
+4290-	if (numberOfQuads > ms_quadListIndexBufferNumberOfQuads)
+4291-		resizeQuadListIndexBuffer(numberOfQuads);
+4292:	Direct3d9::setIndexBuffer(*ms_quadListIndexBuffer);
+4293-
+4294-	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, numberOfTriangles, numberOfTriangles * 3);
+4295-}
+4296-
+4297-// ----------------------------------------------------------------------
+4298-
+4299-void Direct3d9Namespace::drawIndexedPointList()
+4300-{
+--
+4333-	Direct3d9_Metrics::lines += (ms_sliceNumberOfIndices - 1);
+4334-#endif
+4335-
+4336-	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 1, ms_sliceNumberOfIndices);
+4337-}
+4338-
+4339-// ----------------------------------------------------------------------
+4340-
+4341:void Direct3d9Namespace::drawIndexedTriangleList()
+4342-{
+4343-#ifdef _DEBUG
+4344-	if (!shouldDraw(true, ms_sliceNumberOfIndices / 3))
+4345-		return;
+4346-
+4347-	Direct3d9_Metrics::triangles += (ms_sliceNumberOfIndices / 3);
+4348-	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += (ms_sliceNumberOfIndices / 3);
+4349-#endif
+4350-	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 3, ms_sliceNumberOfIndices);
+4351-}
+4352-
+4353-// ----------------------------------------------------------------------
+4354-
+4355:void Direct3d9Namespace::drawIndexedTriangleStrip()
+4356-{
+4357-#ifdef _DEBUG
+4358-	if (!shouldDraw(true, ms_sliceNumberOfIndices - 2))
+4359-		return;
+4360-
+4361-	Direct3d9_Metrics::triangles += (ms_sliceNumberOfIndices - 2);
+4362-	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += (ms_sliceNumberOfIndices - 2);
+4363-#endif
+--
+4495-
+4496-	Direct3d9_Metrics::lines += primitiveCount;
+4497-#endif
+4498-	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount+1);
+4499-}
+4500-
+4501-// ----------------------------------------------------------------------
+4502-
+4503:void Direct3d9Namespace::drawIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+4504-{
+4505-#ifdef _DEBUG
+4506-	if (!shouldDraw(true, primitiveCount))
+4507-		return;
+4508-
+4509-	Direct3d9_Metrics::triangles += primitiveCount;
+4510-	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += primitiveCount;
+4511-#endif
+4512-	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 3);
+4513-}
+4514-
+4515-// ----------------------------------------------------------------------
+4516-
+4517:void Direct3d9Namespace::drawIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+4518-{
+4519-#ifdef _DEBUG
+4520-	if (!shouldDraw(true, primitiveCount))
+4521-		return;
+4522-
+4523-	Direct3d9_Metrics::triangles += primitiveCount;
+4524-	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += primitiveCount;
+4525-#endif
+
+codex
+I’m at the plugin boundary now. The main divergence is already visible: D3D9 binds the dynamic VB’s shared D3D9 buffer plus a stream-source vertex offset, while D3D11 binds a shared ID3D11Buffer with a byte offset and later draws with `BaseVertexLocation=0`. I’m checking the exact lock and draw implementations next.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 10 \"Direct3d9_DynamicVertexBufferData::|lock\\(|unlock\\(|getOffset|getVertexBuffer|getNumberOfVertices|DISCARD|NOOVERWRITE|ms_used|ms_newFrame\" src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 10 \"Direct3d11_DynamicIndexBufferData::|lock\\(|unlock\\(|getOffset|getIndexBuffer|getNumberOfIndices|WRITE_DISCARD|WRITE_NO_OVERWRITE|ms_used\" src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 10 \"Direct3d9_DynamicIndexBufferData::|lock\\(|unlock\\(|getOffset|getIndexBuffer|getNumberOfIndices|DISCARD|NOOVERWRITE|ms_used\" src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 10 \"Direct3d11_DynamicVertexBufferData::|lock\\(|unlock\\(|getOffset|getRingBuffer|getNumberOfVertices|WRITE_DISCARD|WRITE_NO_OVERWRITE|ms_used|ms_skinUsed|beginFrameSkin|m_offset|ringUsed|m_ringBuffer\" src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h" in D:\Code\swg-client-v2
+ succeeded in 549ms:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-12-#include "Direct3d9.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-13-#include "Direct3d9_Metrics.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-14-#include "Direct3d9_VertexBufferDescriptorMap.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-15-#include "Direct3d9_VertexDeclarationMap.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-16-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-17-#include "clientGraphics/VertexBuffer.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-18-#include "sharedFoundation/MemoryBlockManager.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-19-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-20-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-21-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:22:bool                     Direct3d9_DynamicVertexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:23:int                      Direct3d9_DynamicVertexBufferData::ms_size;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:24:int                      Direct3d9_DynamicVertexBufferData::ms_used;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:25:IDirect3DVertexBuffer9 * Direct3d9_DynamicVertexBufferData::ms_d3dVertexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:26:MemoryBlockManager *     Direct3d9_DynamicVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:27:int                      Direct3d9_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:28:int                      Direct3d9_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:29:int                      Direct3d9_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:30:int                      Direct3d9_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:31:int                      Direct3d9_DynamicVertexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:32:int                      Direct3d9_DynamicVertexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-33-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-34-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-35-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:36:void Direct3d9_DynamicVertexBufferData::install()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-37-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-38-	DEBUG_FATAL(ms_memoryBlockManager, ("Already installed"));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-39-	ms_memoryBlockManager  = new MemoryBlockManager("Direct3d9_DynamicVertexBufferData", true, sizeof(Direct3d9_DynamicVertexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-40-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-41-	bool ffp = !Direct3d9::supportsVertexShaders();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-42-	if (ffp)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-43-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-44-		ms_size=256*1024;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-45-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-46-	else
+--
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-58-		{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-59-			ms_size=1024*1024;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-60-		}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-61-		else
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-62-		{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-63-			ms_size=2048*1024;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-64-		}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-65-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-66-	//ms_size = ConfigDirect3d9::getDynamicVertexBufferSize() * 1024;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-67-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:68:	ms_used = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-69-	restoreDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-70-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-71-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-72-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-73-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:74:void Direct3d9_DynamicVertexBufferData::remove()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-75-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-76-	lostDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-77-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-78-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-79-	ms_memoryBlockManager = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-80-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-81-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-82-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-83-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:84:void Direct3d9_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-85-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:86:	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-87-	ms_locksSinceBeginFrame = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-88-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-89-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-90-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-91-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-92-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:93:void *Direct3d9_DynamicVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-94-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-95-	UNREF(size);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-96-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-97-	DEBUG_FATAL(size != sizeof(Direct3d9_DynamicVertexBufferData), ("wrong new called"));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-98-	DEBUG_FATAL(size != static_cast<size_t> (ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-99-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-100-	return ms_memoryBlockManager->allocate();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-101-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-102-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-103-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-104-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:105:void Direct3d9_DynamicVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-106-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-107-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-108-	ms_memoryBlockManager->free(memory);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-109-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-110-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-111-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-112-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:113:void Direct3d9_DynamicVertexBufferData::lostDevice()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-114-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-115-	if (ms_d3dVertexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-116-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-117-		IGNORE_RETURN(ms_d3dVertexBuffer->Release());
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-118-		ms_d3dVertexBuffer = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-119-		ms_locksSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-120-		ms_discardsSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-121-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-122-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-123-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-124-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-125-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:126:void Direct3d9_DynamicVertexBufferData::restoreDevice()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-127-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:128:	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-129-	IDirect3DDevice9 *device = Direct3d9::getDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-130-	HRESULT hresult = device->CreateVertexBuffer(ms_size, D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &ms_d3dVertexBuffer, NULL);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-131-	FATAL_DX_HR("Could not create dynamic VB %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:132:	ms_used = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-133-	ms_locksSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-134-	ms_discardsSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-135-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-136-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-137-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-138-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:139:Direct3d9_DynamicVertexBufferData::Direct3d9_DynamicVertexBufferData(const VertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-140-:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-141-	m_vertexBufferDescriptor(Direct3d9_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-142-	m_numberOfVertices(0),
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-143-	m_offset(0),
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-144-	m_vertexDeclaration(Direct3d9_VertexDeclarationMap::fetchVertexDeclaration(vertexBuffer.getFormat()))
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-145-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-146-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-147-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-148-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-149-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:150:Direct3d9_DynamicVertexBufferData::~Direct3d9_DynamicVertexBufferData()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-151-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-152-	m_vertexDeclaration->Release();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-153-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-154-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-155-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-156-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:157:const VertexBufferDescriptor &Direct3d9_DynamicVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-158-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-159-	return m_vertexBufferDescriptor;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-160-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-161-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-162-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-163-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:164:void Direct3d9_DynamicVertexBufferData::roundUpUsed() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-165-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-166-	const int vertexSize = getVertexSize();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:167:	ms_used = ((ms_used + vertexSize - 1) / vertexSize) * vertexSize;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-168-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-169-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-170-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-171-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:172:void *Direct3d9_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-173-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-174-	roundUpUsed();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-175-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-176-	const int vertexSize = getVertexSize();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-177-	const int length = numberOfVertices * vertexSize;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-178-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-179-	++ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-180-	++ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-181-	++ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-182-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-183-	// check for space
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:184:	DWORD lockFlag = D3DLOCK_NOOVERWRITE;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-185-	int discard = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:186:	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-187-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:188:		ms_newFrame = false;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-189-		++ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-190-		++ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-191-		++ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-192-		discard = 1;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-193-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-194-		// make sure this VB will fit even when the dynamic vb is empty
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-195-		DEBUG_FATAL(length > ms_size, ("Too many vertices %d/%d", numberOfVertices, ms_size / getVertexSize()));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-196-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-197-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-198-		Direct3d9_Metrics::vertexBufferDiscards += 1;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-199-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-200-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-201-		// lock with discard contents
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:202:		lockFlag = D3DLOCK_DISCARD;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:203:		ms_used = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-204-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-205-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-206-	void *data = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:207:	HRESULT const hresult = ms_d3dVertexBuffer->Lock(ms_used, length, &data, lockFlag);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:208:	FATAL(FAILED(hresult), ("Could not lock dynamic %s %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards", "vb", HRESULT_CODE(hresult), discard, ms_used, length, ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver, ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-209-	NOT_NULL(data);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-210-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-211-	// handle bad NVidia drivers
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-212-	if (IsBadWritePtr(data, 1) != 0)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-213-		data = Direct3d9::getTemporaryBuffer(length);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-214-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-215-	// use up vertices from this dynamic vb
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-216-	m_numberOfVertices = numberOfVertices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:217:	m_offset = ms_used / vertexSize;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-218-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-219-	return data;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-220-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-221-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-222-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-223-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:224:void Direct3d9_DynamicVertexBufferData::unlock()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-225-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:226:	Direct3d9_DynamicVertexBufferData::unlock(m_numberOfVertices);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-227-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-228-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-229-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-230-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:231:void Direct3d9_DynamicVertexBufferData::unlock(int numberOfVertices)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-232-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:233:	const HRESULT hresult = ms_d3dVertexBuffer->Unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-234-	FATAL_DX_HR("Could not unlock vb %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-235-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-236-	m_numberOfVertices = numberOfVertices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-237-	const int vertexSize = getVertexSize();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-238-	const int length = numberOfVertices * vertexSize;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-239-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-240-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-241-	Direct3d9_Metrics::vertexBufferMemoryDynamic += length;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-242-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-243-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:244:	ms_used += length;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-245-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-246-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-247-// ------------------------------------------------------------------	----
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-248-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:249:int Direct3d9_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool withDiscard)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-250-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-251-	roundUpUsed();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-252-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-253-	// with a discard, they can get all the vertices
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-254-	// without discard, they can only get access to the remaining ones
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:255:	return (ms_size - (withDiscard ? 0 : ms_used)) / getVertexSize();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-256-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-257-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-258-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-259-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:260:int Direct3d9_DynamicVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-261-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-262-	return reinterpret_cast<int>(ms_d3dVertexBuffer);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-263-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-264-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-265-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-266-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:267:int Direct3d9_DynamicVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-268-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-269-	return m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-270-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-271-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-272-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-273-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:274:IDirect3DVertexBuffer9 *Direct3d9_DynamicVertexBufferData::getVertexBuffer() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-275-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-276-	return ms_d3dVertexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-277-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-278-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-279-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp-280-
+--
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-31-	static void restoreDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-32-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-33-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-34-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-35-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-36-public:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-37-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-38-	explicit Direct3d9_DynamicVertexBufferData(const VertexBuffer &vertexBuffer);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-39-	virtual ~Direct3d9_DynamicVertexBufferData();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-40-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:41:	virtual void                            *lock(int numberOfVertices, bool forceDiscard);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:42:	virtual void                             unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:43:	virtual void                             unlock(int numberOfVertices);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-44-	virtual const VertexBufferDescriptor    &getDescriptor() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-45-	virtual int                              getNumberOfLockableDynamicVertices(bool withDiscard);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-46-	virtual int                              getSortKey();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-47-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:48:	int                          getNumberOfVertices() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:49:	IDirect3DVertexBuffer9      *getVertexBuffer() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-50-	int                          getVertexSize() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-51-	IDirect3DVertexDeclaration9 *getVertexDeclaration() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:52:	int                          getOffset() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-53-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-54-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-55-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-56-	void roundUpUsed() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-57-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-58-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-59-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-60-	// Disabled.
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-61-	Direct3d9_DynamicVertexBufferData(void);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-62-	Direct3d9_DynamicVertexBufferData(const Direct3d9_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-63-	Direct3d9_DynamicVertexBufferData &operator =(const Direct3d9_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-64-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-65-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-66-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:67:	static bool                    ms_newFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-68-	static int                     ms_size;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:69:	static int                     ms_used;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-70-	static IDirect3DVertexBuffer9 *ms_d3dVertexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-71-	static MemoryBlockManager     *ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-72-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-73-	static int                     ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-74-	static int                     ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-75-	static int                     ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-76-	static int                     ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-77-	static int                     ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-78-	static int                     ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-79-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-80-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-81-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-82-	const VertexBufferDescriptor  &m_vertexBufferDescriptor;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-83-	int                            m_numberOfVertices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-84-	int                            m_offset;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-85-	IDirect3DVertexDeclaration9   *m_vertexDeclaration;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-86-};
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-87-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-88-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-89-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:90:inline int Direct3d9_DynamicVertexBufferData::getNumberOfVertices() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-91-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-92-	return m_numberOfVertices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-93-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-94-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-95-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-96-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:97:inline int Direct3d9_DynamicVertexBufferData::getOffset() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-98-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-99-	return m_offset;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-100-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-101-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-102-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-103-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h:104:inline IDirect3DVertexDeclaration9 *Direct3d9_DynamicVertexBufferData::getVertexDeclaration() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-105-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-106-	return m_vertexDeclaration;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-107-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-108-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-109-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-110-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.h-111-#endif
+
+ succeeded in 548ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-16-#include "sharedFoundation/MemoryBlockManager.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-17-#include "sharedFoundation/Os.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-18-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-19-#include <d3d11.h>
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-20-#include <wrl/client.h>
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-21-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-22-// Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). See the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-23-// matching block in Direct3d11_DynamicVertexBufferData.cpp. Smoking-gun test:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-24-// log every dynamic IB ring lock that runs OFF the main/render thread.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-25-// RESULT 2026-05-31: SILENT (CPU-thread race dead). P19_DISCARD_ONLY forces
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:26:// WRITE_DISCARD on every lock to test the CPU/GPU intra-frame reuse hazard.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-27-// RESULT 2026-05-31: DISCARD-only ring = NO CHANGE -> dynamic ring EXONERATED.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-28-#define P19_THREAD_AUDIT 0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-29-#define P19_DISCARD_ONLY 0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-30-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-31-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-32-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-33-using Microsoft::WRL::ComPtr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-34-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:35:bool                              Direct3d11_DynamicIndexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:36:MemoryBlockManager               *Direct3d11_DynamicIndexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:37:int                               Direct3d11_DynamicIndexBufferData::ms_numberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:38:int                               Direct3d11_DynamicIndexBufferData::ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:39:ComPtr<ID3D11Buffer>              Direct3d11_DynamicIndexBufferData::ms_d3dRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:40:int                               Direct3d11_DynamicIndexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:41:int                               Direct3d11_DynamicIndexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:42:int                               Direct3d11_DynamicIndexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:43:int                               Direct3d11_DynamicIndexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:44:int                               Direct3d11_DynamicIndexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:45:int                               Direct3d11_DynamicIndexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-46-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-47-namespace
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-48-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-49-	// Default ring size in indices (KB / sizeof(Index)). Mirrors D3D9's
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-50-	// ConfigDirect3d9::getDynamicIndexBufferSize default (256 KB) until
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-51-	// the engine calls setSize.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-52-	int const cms_defaultDynamicIndexBufferKB = 256;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-53-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-54-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-55-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-56-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:57:void Direct3d11_DynamicIndexBufferData::install()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-58-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-59-	DEBUG_FATAL(ms_memoryBlockManager, ("Direct3d11_DynamicIndexBufferData already installed"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-60-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-61-	ms_numberOfIndices = (cms_defaultDynamicIndexBufferKB * 1024) / static_cast<int>(sizeof(Index));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-62-	recreateRing();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-63-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-64-	ms_memoryBlockManager = new MemoryBlockManager(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-65-		"Direct3d11_DynamicIndexBufferData", true,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-66-		sizeof(Direct3d11_DynamicIndexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-67-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-68-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-69-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-70-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:71:void Direct3d11_DynamicIndexBufferData::remove()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-72-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-73-	ms_d3dRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-74-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-75-	ms_memoryBlockManager = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-76-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-77-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-78-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-79-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:80:void Direct3d11_DynamicIndexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-81-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-82-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-83-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-84-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-85-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-86-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-87-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-88-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:89:void Direct3d11_DynamicIndexBufferData::setSize(int numberOfIndices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-90-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-91-	if (numberOfIndices == ms_numberOfIndices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-92-		return;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-93-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-94-	ms_numberOfIndices = numberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-95-	recreateRing();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-96-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-97-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-98-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-99-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:100:void Direct3d11_DynamicIndexBufferData::recreateRing()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-101-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-102-	ms_d3dRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-103-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-104-	ID3D11Device * const device = Direct3d11_Device::getDevice();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-105-	NOT_NULL(device);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-106-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-107-	D3D11_BUFFER_DESC bd = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-108-	bd.ByteWidth      = static_cast<UINT>(ms_numberOfIndices * static_cast<int>(sizeof(Index)));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-109-	bd.Usage          = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-110-	bd.BindFlags      = D3D11_BIND_INDEX_BUFFER;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-111-	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-112-	bd.MiscFlags      = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-113-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-114-	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:115:	FATAL_DX_HR("Direct3d11_DynamicIndexBufferData::CreateBuffer (dynamic IB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-116-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:117:	ms_usedNumberOfIndices             = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-118-	ms_newFrame                        = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-119-	ms_locksSinceResourceCreation      = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-120-	ms_discardsSinceResourceCreation   = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-121-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-122-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-123-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-124-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:125:ID3D11Buffer *Direct3d11_DynamicIndexBufferData::getSharedRingBuffer()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-126-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-127-	return ms_d3dRingBuffer.Get();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-128-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-129-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-130-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-131-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:132:void *Direct3d11_DynamicIndexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-133-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-134-	UNREF(size);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-135-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-136-	DEBUG_FATAL(size != sizeof(Direct3d11_DynamicIndexBufferData), ("bad size"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-137-	DEBUG_FATAL(size != static_cast<size_t>(ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-138-	return ms_memoryBlockManager->allocate();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-139-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-140-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-141-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-142-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:143:void Direct3d11_DynamicIndexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-144-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-145-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-146-	ms_memoryBlockManager->free(memory);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-147-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-148-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-149-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-150-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:151:Direct3d11_DynamicIndexBufferData::Direct3d11_DynamicIndexBufferData()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-152-:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-153-	DynamicIndexBufferGraphicsData(),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-154-	m_offset(0),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-155-	m_numberOfIndices(0)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-156-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-157-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-158-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-159-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-160-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:161:Direct3d11_DynamicIndexBufferData::~Direct3d11_DynamicIndexBufferData()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-162-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-163-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-164-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-165-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-166-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:167:Index *Direct3d11_DynamicIndexBufferData::lock(int numberOfIndices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-168-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-169-	m_numberOfIndices = numberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-170-	int const lengthBytes = numberOfIndices * static_cast<int>(sizeof(Index));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-171-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-172-#if P19_THREAD_AUDIT
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-173-	if (!Os::isMainThread())
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-174-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-175-		static int s_offThreadIBLocks = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-176-		++s_offThreadIBLocks;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-177-		char tbuf[160];
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-180-			GetCurrentThreadId(), s_offThreadIBLocks, numberOfIndices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-181-		ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-182-		if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, tbuf);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-183-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-184-#endif
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-185-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-186-	++ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-187-	++ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-188-	++ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-189-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:190:	D3D11_MAP    mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-191-	int          discard = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-192-#if P19_DISCARD_ONLY
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-193-	bool const p19ForceDiscard = true;  // diagnostic: rename every lock
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-194-#else
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-195-	bool const p19ForceDiscard = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-196-#endif
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:197:	if (p19ForceDiscard || ms_newFrame || ms_usedNumberOfIndices + numberOfIndices > ms_numberOfIndices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-198-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-199-		ms_newFrame = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-200-		++ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-201-		++ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-202-		++ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-203-		discard = 1;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-204-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-205-		DEBUG_FATAL(numberOfIndices > ms_numberOfIndices, ("Too many indices %d/%d", numberOfIndices, ms_numberOfIndices));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-206-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:207:		mapType = D3D11_MAP_WRITE_DISCARD;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:208:		ms_usedNumberOfIndices = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-209-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-210-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-211-	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-212-	NOT_NULL(context);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-213-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-214-	D3D11_MAPPED_SUBRESOURCE mapped = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-215-	HRESULT const hr = context->Map(ms_d3dRingBuffer.Get(), 0, mapType, 0, &mapped);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-216-	FATAL(FAILED(hr),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-217-		("Could not lock dynamic ib %d=err %d=discard %d=offset(indices) %d=count %d/%d/%d=locks %d/%d/%d=discards",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:218:		 HRESULT_CODE(hr), discard, ms_usedNumberOfIndices, numberOfIndices,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-219-		 ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-220-		 ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-221-	NOT_NULL(mapped.pData);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-222-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:223:	m_offset = ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:224:	ms_usedNumberOfIndices += numberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-225-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-226-	UNREF(lengthBytes);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-227-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-228-	return reinterpret_cast<Index *>(static_cast<char *>(mapped.pData) + m_offset * static_cast<int>(sizeof(Index)));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-229-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-230-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-231-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-232-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:233:void Direct3d11_DynamicIndexBufferData::unlock()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-234-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-235-	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-236-	NOT_NULL(context);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-237-	context->Unmap(ms_d3dRingBuffer.Get(), 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-238-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-239-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-240-// ======================================================================
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-2-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-3-// Direct3d11_DynamicIndexBufferData.h
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-4-// Phase 11 D3D11 renderer plugin -- dynamic ring-buffer IB.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-5-// Plan 11-04 (Wave 4). Replaces createDynamicIndexBufferData stub.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-6-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-7-// Engine signature is parameterless: each call returns a fresh
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-8-// DynamicIndexBufferGraphicsData; all instances share one
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-9-// USAGE_DYNAMIC ID3D11Buffer ring (D3D11_BIND_INDEX_BUFFER).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-10-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-11-// Lock/Unlock semantics mirror Direct3d11_DynamicVertexBufferData:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:12://   wrap   -> Map(D3D11_MAP_WRITE_DISCARD)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:13://   append -> Map(D3D11_MAP_WRITE_NO_OVERWRITE)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-14-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-15-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-16-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-17-#ifndef INCLUDED_Direct3d11_DynamicIndexBufferData_H
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-18-#define INCLUDED_Direct3d11_DynamicIndexBufferData_H
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-19-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-20-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-21-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-22-class MemoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-23-
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-40-	static ID3D11Buffer *getSharedRingBuffer();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-41-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-42-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-43-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-44-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-45-public:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-46-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-47-	Direct3d11_DynamicIndexBufferData();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-48-	virtual ~Direct3d11_DynamicIndexBufferData();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-49-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:50:	virtual Index *lock(int numberOfIndices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:51:	virtual void   unlock();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-52-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:53:	int getOffset() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:54:	int getNumberOfIndices() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-55-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-56-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-57-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-58-	Direct3d11_DynamicIndexBufferData(const Direct3d11_DynamicIndexBufferData &);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-59-	Direct3d11_DynamicIndexBufferData &operator =(const Direct3d11_DynamicIndexBufferData &);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-60-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-61-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-62-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-63-	static bool                                  ms_newFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-64-	static MemoryBlockManager                   *ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-65-	static int                                   ms_numberOfIndices;       // ring size in INDICES
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:66:	static int                                   ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-67-	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-68-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-69-	static int                                   ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-70-	static int                                   ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-71-	static int                                   ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-72-	static int                                   ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-73-	static int                                   ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-74-	static int                                   ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-75-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-76-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-77-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-78-	int m_offset;             // INDEX offset into ring at last lock
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-79-	int m_numberOfIndices;    // count locked at last lock
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-80-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-81-	static void recreateRing();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-82-};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-83-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-84-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-85-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:86:inline int Direct3d11_DynamicIndexBufferData::getOffset() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-87-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-88-	return m_offset;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-89-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-90-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-91-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-92-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h:93:inline int Direct3d11_DynamicIndexBufferData::getNumberOfIndices() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-94-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-95-	return m_numberOfIndices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-96-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-97-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-98-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-99-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.h-100-#endif
+
+ succeeded in 635ms:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-9-#include "FirstDirect3d9.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-10-#include "Direct3d9_DynamicIndexBufferData.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-11-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-12-#include "ConfigDirect3d9.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-13-#include "Direct3d9.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-14-#include "Direct3d9_Metrics.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-15-#include "sharedFoundation/MemoryBlockManager.h"
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-16-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-17-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-18-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:19:bool                               Direct3d9_DynamicIndexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:20:MemoryBlockManager                *Direct3d9_DynamicIndexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:21:int                                Direct3d9_DynamicIndexBufferData::ms_numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:22:int                                Direct3d9_DynamicIndexBufferData::ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:23:IDirect3DIndexBuffer9             *Direct3d9_DynamicIndexBufferData::ms_d3dIndexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:24:int                                Direct3d9_DynamicIndexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:25:int                                Direct3d9_DynamicIndexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:26:int                                Direct3d9_DynamicIndexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:27:int                                Direct3d9_DynamicIndexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:28:int                                Direct3d9_DynamicIndexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:29:int                                Direct3d9_DynamicIndexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-30-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-31-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-32-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:33:void Direct3d9_DynamicIndexBufferData::install()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-34-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-35-	ms_numberOfIndices = (ConfigDirect3d9::getDynamicIndexBufferSize() * 1024) / sizeof(Index);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-36-	restoreDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-37-	ms_memoryBlockManager = new MemoryBlockManager("Direct3d9_DynamicIndexBufferData", true, sizeof(Direct3d9_DynamicIndexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-38-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-39-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-40-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-41-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:42:void Direct3d9_DynamicIndexBufferData::remove()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-43-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-44-	lostDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-45-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-46-	if (ms_memoryBlockManager)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-47-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-48-		delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-49-		ms_memoryBlockManager = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-50-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-51-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-52-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-53-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-54-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:55:void Direct3d9_DynamicIndexBufferData::beginFrame()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-56-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-57-	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-58-	ms_locksSinceBeginFrame = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-59-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-60-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-61-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-62-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-63-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:64:void *Direct3d9_DynamicIndexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-65-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-66-	UNREF(size);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-67-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-68-	DEBUG_FATAL(size != sizeof (Direct3d9_DynamicIndexBufferData), ("bad size"));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-69-	DEBUG_FATAL(size != static_cast<size_t> (ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-70-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-71-	return ms_memoryBlockManager->allocate();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-72-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-73-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-74-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-75-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:76:void Direct3d9_DynamicIndexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-77-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-78-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-79-	ms_memoryBlockManager->free(memory);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-80-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-81-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-82-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-83-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:84:void Direct3d9_DynamicIndexBufferData::setSize(int numberOfIndices)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-85-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-86-	if (ms_numberOfIndices != numberOfIndices)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-87-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-88-		lostDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-89-		ms_numberOfIndices = numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-90-		restoreDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-91-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-92-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-93-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-94-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-95-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:96:void Direct3d9_DynamicIndexBufferData::lostDevice()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-97-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-98-	if (ms_d3dIndexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-99-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-100-		ms_d3dIndexBuffer->Release();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-101-		ms_d3dIndexBuffer = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-102-		ms_locksSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-103-		ms_discardsSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-104-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-105-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-106-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-107-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-108-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:109:void Direct3d9_DynamicIndexBufferData::restoreDevice()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-110-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-111-	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:112:	ms_usedNumberOfIndices = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-113-	IDirect3DDevice9 *device = Direct3d9::getDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-114-	const HRESULT hresult = device->CreateIndexBuffer(ms_numberOfIndices * sizeof(Index), D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &ms_d3dIndexBuffer, NULL);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-115-	FATAL_DX_HR("could not restore dynamic IB %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-116-	ms_locksSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-117-	ms_discardsSinceResourceCreation = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-118-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-119-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-120-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-121-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:122:Direct3d9_DynamicIndexBufferData::Direct3d9_DynamicIndexBufferData()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-123-:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-124-	m_offset(0),
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-125-	m_numberOfIndices(0)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-126-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-127-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-128-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-129-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-130-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:131:Direct3d9_DynamicIndexBufferData::~Direct3d9_DynamicIndexBufferData()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-132-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-133-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-134-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-135-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-136-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:137:Index *Direct3d9_DynamicIndexBufferData::lock(int numberOfIndices)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-138-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-139-	m_numberOfIndices = numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-140-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-141-	const int length = m_numberOfIndices * sizeof(Index);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-142-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-143-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-144-	Direct3d9_Metrics::indexBufferMemoryDynamic += length;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-145-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-146-	++ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-147-	++ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-148-	++ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-149-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-150-	// check for space in the dynamic index buffer
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:151:	DWORD lockFlag = D3DLOCK_NOOVERWRITE;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-152-	int discard = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:153:	if (ms_newFrame || ms_usedNumberOfIndices + numberOfIndices > ms_numberOfIndices)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-154-	{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-155-		ms_newFrame = false;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-156-		++ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-157-		++ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-158-		++ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-159-		discard = 1;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-160-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-161-		// make sure this IB will fit even when the dynamic ib is empty
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-162-		DEBUG_FATAL(numberOfIndices > ms_numberOfIndices, ("Too many indices %d/%d", numberOfIndices, ms_numberOfIndices));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-163-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-164-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-165-		Direct3d9_Metrics::indexBufferDiscards += 1;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-166-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-167-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-168-		// lock, discard contents
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:169:		lockFlag = D3DLOCK_DISCARD;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:170:		ms_usedNumberOfIndices = 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-171-	}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-172-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-173-	// use up indices from this dynamic vb
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:174:	m_offset                = ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:175:	ms_usedNumberOfIndices += numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-176-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-177-	void *data = NULL;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-178-	HRESULT const hresult = ms_d3dIndexBuffer->Lock(m_offset * sizeof(Index), length, &data, lockFlag);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-179-	FATAL(FAILED(hresult), ("Could not lock dynamic %s %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards", "ib", HRESULT_CODE(hresult), discard, m_offset * sizeof(Index), length, ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver, ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-180-	NOT_NULL(data);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-181-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-182-	if (IsBadWritePtr(data, 1) != 0)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-183-		data = Direct3d9::getTemporaryBuffer(length);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-184-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-185-	return reinterpret_cast<Index *>(data);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-186-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-187-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-188-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-189-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:190:void Direct3d9_DynamicIndexBufferData::unlock()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-191-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp:192:	const HRESULT hresult = ms_d3dIndexBuffer->Unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-193-	FATAL_DX_HR("Could not unlock IB %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-194-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-195-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.cpp-196-// ======================================================================
+--
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-21-class Direct3d9_DynamicIndexBufferData : public DynamicIndexBufferGraphicsData
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-22-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-23-public:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-24-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-25-	static void  install();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-26-	static void  remove();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-27-	static void  beginFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-28-	static void  lostDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-29-	static void  restoreDevice();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-30-	static void  setSize(int numberOfIndices);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:31:	static IDirect3DIndexBuffer9 *getIndexBuffer();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-32-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-33-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-34-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-35-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-36-public:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-37-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-38-	Direct3d9_DynamicIndexBufferData();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-39-	virtual ~Direct3d9_DynamicIndexBufferData();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-40-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:41:	virtual Index *lock(int numberOfIndices);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:42:	virtual void   unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-43-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:44:	DWORD                  getOffset() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:45:	int                    getNumberOfIndices() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-46-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-47-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-48-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-49-	// Disabled.
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-50-	Direct3d9_DynamicIndexBufferData(const Direct3d9_DynamicIndexBufferData &);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-51-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-52-	// Disabled.
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-53-	Direct3d9_DynamicIndexBufferData &operator =(const Direct3d9_DynamicIndexBufferData &);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-54-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-55-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-56-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-57-	static bool                    ms_newFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-58-	static MemoryBlockManager  *   ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-59-	static int                     ms_numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:60:	static int                     ms_usedNumberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-61-	static IDirect3DIndexBuffer9 * ms_d3dIndexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-62-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-63-	static int                     ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-64-	static int                     ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-65-	static int                     ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-66-	static int                     ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-67-	static int                     ms_locksEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-68-	static int                     ms_discardsEver;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-69-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-70-private:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-71-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-72-	DWORD  m_offset;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-73-	int    m_numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-74-};
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-75-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-76-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-77-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:78:inline IDirect3DIndexBuffer9 *Direct3d9_DynamicIndexBufferData::getIndexBuffer()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-79-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-80-	return ms_d3dIndexBuffer;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-81-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-82-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-83-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-84-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:85:inline DWORD Direct3d9_DynamicIndexBufferData::getOffset() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-86-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-87-	return m_offset;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-88-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-89-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-90-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-91-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h:92:inline int Direct3d9_DynamicIndexBufferData::getNumberOfIndices() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-93-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-94-	return m_numberOfIndices;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-95-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-96-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-97-// ======================================================================
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-98-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicIndexBufferData.h-99-#endif
+
+ succeeded in 870ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-1-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-2-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-3-// Direct3d11_DynamicVertexBufferData.h
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-4-// Phase 11 D3D11 renderer plugin -- dynamic ring-buffer VB.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-5-// Plan 11-04 (Wave 4). Replaces createDynamicVertexBufferData stub.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-6-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-7-// One process-wide ring buffer (D3D11_USAGE_DYNAMIC), allocated at
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-8-// install() with videomem-tiered size. Each per-mesh data instance
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:9:// reserves a slice of the ring via lock() (Map WRITE_DISCARD on wrap;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:10:// WRITE_NO_OVERWRITE on append per RESEARCH Pitfall 5).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-11-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-12-// Per D-13: no D3DPOOL_MANAGED / OnLostDevice / OnResetDevice.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-13-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-14-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-15-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-16-#ifndef INCLUDED_Direct3d11_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-17-#define INCLUDED_Direct3d11_DynamicVertexBufferData_H
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-18-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-19-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-20-
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-34-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-35-	static void install();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-36-	static void remove();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-37-	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-38-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-39-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-40-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-41-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-42-	static ID3D11Buffer *getSharedRingBuffer();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-43-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:44:	// DEDICATED SOFT-SKIN RING 2026-06-07: per-frame WRITE_DISCARD reset for the soft-skin
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-45-	// ring. Call ONCE per frame from the gl_api update hook (before the first beginScene,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-46-	// NOT per-pass) so the skin ring starts each frame on a fresh generation and then
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-47-	// appends (NO_OVERWRITE) within the frame -- a frame's skinned slices coexist at
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-48-	// distinct offsets, so each DEFERRED draw reads its own data.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:49:	static void beginFrameSkin();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-50-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:51:	// CAPE-COLLAPSE diagnostic 2026-06-06: lifetime WRITE_DISCARD count, so the draw
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-52-	// probe (StateCache) can compare discards-at-draw vs discards-at-write for a garment
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-53-	// slice. A large gap proves the deferred draw reads a later buffer generation.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-54-	static int getDiscardsEver();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-55-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-56-public:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-57-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-58-	explicit Direct3d11_DynamicVertexBufferData(const VertexBuffer &vertexBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-59-	virtual ~Direct3d11_DynamicVertexBufferData();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-60-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:61:	virtual void                            *lock(int numberOfVertices, bool forceDiscard);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:62:	virtual void                             unlock();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:63:	virtual void                             unlock(int numberOfVertices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-64-	virtual const VertexBufferDescriptor    &getDescriptor() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-65-	virtual int                              getNumberOfLockableDynamicVertices(bool withDiscard);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-66-	virtual int                              getSortKey();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-67-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:68:	int getNumberOfVertices() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-69-	int getVertexSize() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:70:	int getOffset() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-71-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:72:	// The ring buffer this instance's most recent lock() actually used (main ring or the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-73-	// dedicated soft-skin ring). The bind sites MUST use this, not getSharedRingBuffer(),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-74-	// so a skinned slice is bound from the same buffer it was written into.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:75:	ID3D11Buffer *getRingBuffer() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-76-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-77-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-78-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-79-	void roundUpUsed() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-80-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-81-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-82-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-83-	Direct3d11_DynamicVertexBufferData();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-84-	Direct3d11_DynamicVertexBufferData(const Direct3d11_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-85-	Direct3d11_DynamicVertexBufferData &operator =(const Direct3d11_DynamicVertexBufferData &);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-86-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-87-private:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-88-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-89-	// Ring-buffer state (process-wide; static).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-90-	static bool                                  ms_newFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-91-	static int                                   ms_size;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:92:	static int                                   ms_used;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-93-	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-94-	static MemoryBlockManager                   *ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-95-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-96-	// DEDICATED SOFT-SKIN RING (2026-06-07). Second dynamic ring used ONLY by skinned
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:97:	// dynamic VBs (vertexSize==48). Isolated from CuiLayer's whole-ring WRITE_DISCARD.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-98-	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dSkinRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-99-	static int                                   ms_skinSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:100:	static int                                   ms_skinUsed;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-101-	static bool                                  ms_skinNewFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-102-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-103-	static int                                   ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-104-	static int                                   ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-105-	static int                                   ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-106-	static int                                   ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-107-	static int                                   ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-108-	static int                                   ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-109-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-110-	// Per-mesh state.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-111-	const VertexBufferDescriptor    &m_vertexBufferDescriptor;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-112-	int                              m_numberOfVertices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:113:	int                              m_offset;     // byte offset into ring at last lock
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:114:	ID3D11Buffer                    *m_ringBuffer; // which ring (main/skin) the last lock used
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-115-};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-116-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-117-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-118-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:119:inline int Direct3d11_DynamicVertexBufferData::getNumberOfVertices() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-120-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-121-	return m_numberOfVertices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-122-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-123-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-124-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-125-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:126:inline int Direct3d11_DynamicVertexBufferData::getOffset() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-127-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:128:	return m_offset;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-129-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-130-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-131-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-132-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:133:inline ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getRingBuffer() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-134-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-135-	// Fall back to the main ring if this instance has never been locked (defensive; a bind
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-136-	// without a prior lock would otherwise pass null and skip the draw).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:137:	return m_ringBuffer ? m_ringBuffer : ms_d3dRingBuffer.Get();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-138-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-139-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-140-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-141-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h-142-#endif
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-2-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-3-// Direct3d11_DynamicVertexBufferData.cpp
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-4-// Phase 11 D3D11 renderer plugin -- dynamic ring-buffer VB.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-5-// Plan 11-04.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-6-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-7-// Ring sized at install() based on DXGI DedicatedVideoMemory (replaces
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-8-// D3D9's getVideoMemoryInMegabytes -- always shader path, no FFP branch
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-9-// per Plan 11-01 D-04a DESCOPE verdict).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-10-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-11-// Lock/Unlock per RESEARCH Pitfall 5:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:12://   wrap            -> Map(D3D11_MAP_WRITE_DISCARD), reset used=0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:13://   append          -> Map(D3D11_MAP_WRITE_NO_OVERWRITE), advance used
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-14-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-15-// Per D-13: ComPtr ownership; no D3DPOOL_MANAGED / OnLostDevice /
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-16-// OnResetDevice.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-17-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-18-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-19-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-20-#include "FirstDirect3d11.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-21-#include "Direct3d11_DynamicVertexBufferData.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-22-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-23-#include "Direct3d11.h"
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-26-#include "clientGraphics/VertexBuffer.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-27-#include "sharedFoundation/MemoryBlockManager.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-28-#include "sharedFoundation/Os.h"
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-29-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-30-#include <d3d11.h>
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-31-#include <dxgi.h>
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-32-#include <wrl/client.h>
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-33-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-34-// Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). Both
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-35-// AIs independently fingered the process-wide dynamic VB/IB ring + its
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:36:// unsynchronized static accounting (ms_used/ms_newFrame) as the #1 suspect
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-37-// for a live-only, RenderDoc-masked engine-transaction RACE. Smoking-gun test:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-38-// log every ring lock that runs OFF the main/render thread. If this fires, an
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-39-// off-thread graphics transaction is confirmed (the hole the D3D11 runtime
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-40-// MT-lock does not cover). If it NEVER fires across a corrupt roam, the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-41-// threading hypothesis is dead too. REVERT (set to 0) afterward.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-42-//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-43-// RESULT 2026-05-31: SILENT across a corrupt roam (896 ring unlocks, ~1M draws,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-44-// 0 off-thread locks) -> CPU-thread race on the ring is DEAD. Next suspect: the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:45:// CPU-races-GPU intra-frame WRITE_NO_OVERWRITE reuse hazard, which the thread
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-46-// audit cannot see (single CPU thread, but the GPU runs async). P19_DISCARD_ONLY
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:47:// forces WRITE_DISCARD on every dynamic VB/IB lock so each lock gets a freshly
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-48-// renamed buffer -> no overlap with an in-flight same-frame draw. Corruption
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-49-// VANISHES -> ring reuse hazard confirmed. Slow (many renames); diagnostic, REVERT.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-50-// RESULT 2026-05-31: DISCARD-only ring = NO CHANGE -> dynamic ring EXONERATED.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-51-#define P19_THREAD_AUDIT 0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-52-#define P19_DISCARD_ONLY 0
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-53-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-54-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-55-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-56-using Microsoft::WRL::ComPtr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-57-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:58:bool                              Direct3d11_DynamicVertexBufferData::ms_newFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:59:int                               Direct3d11_DynamicVertexBufferData::ms_size;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:60:int                               Direct3d11_DynamicVertexBufferData::ms_used;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:61:ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:62:MemoryBlockManager *              Direct3d11_DynamicVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-63-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-64-// DEDICATED SOFT-SKIN RING (2026-06-07).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:65:ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dSkinRingBuffer;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:66:int                               Direct3d11_DynamicVertexBufferData::ms_skinSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:67:int                               Direct3d11_DynamicVertexBufferData::ms_skinUsed;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:68:bool                              Direct3d11_DynamicVertexBufferData::ms_skinNewFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:69:int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:70:int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:71:int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:72:int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:73:int                               Direct3d11_DynamicVertexBufferData::ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:74:int                               Direct3d11_DynamicVertexBufferData::ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-75-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:76:// Plan 11-09.15 Iter-4 (Test A): stash the slice CPU pointer at lock() so
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:77:// unlock() can snapshot the engine's written verts BEFORE Unmap invalidates
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-78-// the mapped memory. Used by the fan-shaped-slice CPU snapshot diagnostic
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:79:// in unlock(int). File-scope static because the ring buffer is shared; only
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-80-// one lock can be active at a time.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-81-static void *s_lastLockedSliceCPUPtr = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-82-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-83-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-84-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:85:void Direct3d11_DynamicVertexBufferData::install()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-86-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-87-	DEBUG_FATAL(ms_memoryBlockManager, ("Direct3d11_DynamicVertexBufferData already installed"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-88-	ms_memoryBlockManager = new MemoryBlockManager(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-89-		"Direct3d11_DynamicVertexBufferData", true,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-90-		sizeof(Direct3d11_DynamicVertexBufferData), 0, 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-91-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-92-	// Always-shader path (no FFP branch per Plan 11-01 D-04a DESCOPE).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-93-	// Query DXGI for DedicatedVideoMemory and pick a ring size.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-94-	ID3D11Device * const device = Direct3d11_Device::getDevice();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-95-	NOT_NULL(device);
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-116-	else                           ms_size = 2048 * 1024;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-117-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-118-	D3D11_BUFFER_DESC bd = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-119-	bd.ByteWidth      = static_cast<UINT>(ms_size);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-120-	bd.Usage          = D3D11_USAGE_DYNAMIC;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-121-	bd.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-122-	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-123-	bd.MiscFlags      = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-124-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-125-	hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:126:	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (dynamic VB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-127-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-128-	// DEDICATED SOFT-SKIN RING (2026-06-07): a SECOND ring, same size, used ONLY by skinned
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-129-	// dynamic VBs (vertexSize==48). One extra buffer created ONCE here -- NOT per-instance
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:130:	// (so no nvwgf2um mass-CreateBuffer churn). CuiLayer's whole-ring WRITE_DISCARD hits only
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:131:	// the main ring; the skin ring discards once/frame (beginFrameSkin) then appends, so a
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-132-	// deferred skinned draw never reads a generation renamed by UI churn.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-133-	// 16 MB (vs the 2 MB main ring) so a frame's worth of ALL non-UI dynamic geometry cannot
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:134:	// wrap it mid-frame -- a mid-frame WRITE_DISCARD would re-create the very hazard we are
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-135-	// testing. Oversized ON PURPOSE for a clean experiment; size down once proven.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-136-	ms_skinSize = 16 * 1024 * 1024;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-137-	D3D11_BUFFER_DESC bdSkin = bd;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-138-	bdSkin.ByteWidth = static_cast<UINT>(ms_skinSize);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-139-	hr = device->CreateBuffer(&bdSkin, nullptr, &ms_d3dSkinRingBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:140:	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (soft-skin VB ring) failed: %s", hr);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:141:	ms_skinUsed     = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-142-	ms_skinNewFrame = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-143-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:144:	ms_used     = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-145-	ms_newFrame = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-146-	ms_locksSinceResourceCreation    = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-147-	ms_discardsSinceResourceCreation = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-148-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-149-	DEBUG_REPORT_LOG_PRINT(true,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-150-		("Direct3d11_DynamicVertexBufferData: ring buffer %d KB (videoMemory ~%d MB)\n",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-151-		 ms_size / 1024, videoMemoryMB));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-152-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-153-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-154-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-155-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:156:void Direct3d11_DynamicVertexBufferData::remove()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-157-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-158-	ms_d3dRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-159-	ms_d3dSkinRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-160-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-161-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-162-	ms_memoryBlockManager = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-163-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-164-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-165-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-166-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:167:void Direct3d11_DynamicVertexBufferData::beginFrameSkin()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-168-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:169:	// Start the soft-skin ring on a fresh WRITE_DISCARD generation each frame. Called
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-170-	// once/frame from the gl_api update hook (Direct3d11.cpp update_impl), BEFORE the first
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-171-	// beginScene -- NOT per-pass (per-pass reset tears geometry: draws defer across passes).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-172-	ms_skinNewFrame = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-173-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-174-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-175-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-176-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:177:void Direct3d11_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-178-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-179-	// Wrap at the start of each frame so per-frame dynamic uploads don't
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-180-	// stomp on previous-frame data still in-flight.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-181-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-182-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-183-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-184-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-185-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-186-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-187-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:188:ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getSharedRingBuffer()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-189-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-190-	return ms_d3dRingBuffer.Get();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-191-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-192-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:193:int Direct3d11_DynamicVertexBufferData::getDiscardsEver()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-194-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-195-	return ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-196-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-197-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-198-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-199-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:200:void *Direct3d11_DynamicVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-201-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-202-	UNREF(size);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-203-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-204-	DEBUG_FATAL(size != sizeof(Direct3d11_DynamicVertexBufferData), ("wrong new called"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-205-	DEBUG_FATAL(size != static_cast<size_t>(ms_memoryBlockManager->getElementSize()), ("installed with bad size"));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-206-	return ms_memoryBlockManager->allocate();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-207-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-208-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-209-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-210-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:211:void Direct3d11_DynamicVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-212-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-213-	NOT_NULL(ms_memoryBlockManager);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-214-	ms_memoryBlockManager->free(memory);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-215-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-216-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-217-// ======================================================================
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-218-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:219:Direct3d11_DynamicVertexBufferData::Direct3d11_DynamicVertexBufferData(const VertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-220-:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-221-	DynamicVertexBufferGraphicsData(),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-222-	m_vertexBufferDescriptor(Direct3d11_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-223-	m_numberOfVertices(0),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:224:	m_offset(0),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:225:	m_ringBuffer(nullptr)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-226-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-227-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-228-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-229-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-230-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:231:Direct3d11_DynamicVertexBufferData::~Direct3d11_DynamicVertexBufferData()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-232-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-233-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-234-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-235-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-236-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:237:const VertexBufferDescriptor &Direct3d11_DynamicVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-238-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-239-	return m_vertexBufferDescriptor;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-240-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-241-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-242-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-243-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:244:int Direct3d11_DynamicVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-245-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-246-	return m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-247-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-248-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-249-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-250-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:251:void Direct3d11_DynamicVertexBufferData::roundUpUsed() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-252-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-253-	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:254:	ms_used = ((ms_used + vertexSize - 1) / vertexSize) * vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-255-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-256-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-257-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-258-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:259:void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-260-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-261-	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-262-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-263-	// DEDICATED SOFT-SKIN RING routing. (Count-based `numberOfVertices < 16384` was tried and
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-264-	// REVERTED: it broke the whole-ring lockers -- CuiLayer/ShadowVolume/Reticle call
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-265-	// getNumberOfLockableDynamicVertices() [vSize-based, returns MAIN] then lock; when that lock
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-266-	// was small it routed to SKIN, splitting query from lock -> screen-filling corruption.)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-267-	// Back to the vSize discriminator as the known baseline for the draw-time readback diagnostic.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-268-	bool const           isSkin       = (vertexSize != 28) && (vertexSize != 24);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:269:	int                 &ringUsed     = isSkin ? ms_skinUsed     : ms_used;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-270-	int const            ringSize     = isSkin ? ms_skinSize     : ms_size;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-271-	bool                &ringNewFrame = isSkin ? ms_skinNewFrame : ms_newFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-272-	ID3D11Buffer * const ringBuffer   = isSkin ? ms_d3dSkinRingBuffer.Get() : ms_d3dRingBuffer.Get();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-273-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-274-	// round used up to vertexSize alignment (inlined roundUpUsed for the selected ring)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:275:	ringUsed = ((ringUsed + vertexSize - 1) / vertexSize) * vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-276-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-277-	int const length = numberOfVertices * vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-278-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-279-#if P19_THREAD_AUDIT
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-280-	if (!Os::isMainThread())
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-281-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-282-		static int s_offThreadVBLocks = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-283-		++s_offThreadVBLocks;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-284-		char tbuf[160];
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-285-		_snprintf_s(tbuf, sizeof(tbuf), _TRUNCATE,
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-287-			GetCurrentThreadId(), s_offThreadVBLocks, numberOfVertices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-288-		ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-289-		if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, tbuf);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-290-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-291-#endif
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-292-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-293-	++ms_locksSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-294-	++ms_locksSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-295-	++ms_locksEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-296-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:297:	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-298-	int          discard  = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-299-#if P19_DISCARD_ONLY
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-300-	forceDiscard = true;  // diagnostic: rename every lock (kills intra-frame reuse hazard)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-301-#endif
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:302:	if (ringNewFrame || forceDiscard || ringUsed + length > ringSize)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-303-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-304-		ringNewFrame = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-305-		++ms_discardsSinceBeginFrame;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-306-		++ms_discardsSinceResourceCreation;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-307-		++ms_discardsEver;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-308-		discard = 1;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-309-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-310-		DEBUG_FATAL(length > ringSize, ("Too many vertices %d/%d", numberOfVertices, ringSize / vertexSize));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-311-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:312:		mapType = D3D11_MAP_WRITE_DISCARD;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:313:		ringUsed = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-314-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-315-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-316-	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-317-	NOT_NULL(context);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-318-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-319-	D3D11_MAPPED_SUBRESOURCE mapped = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-320-	HRESULT const hr = context->Map(ringBuffer, 0, mapType, 0, &mapped);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-321-	FATAL(FAILED(hr),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-322-		("Could not lock dynamic vb %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:323:		 HRESULT_CODE(hr), discard, ringUsed, length,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-324-		 ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-325-		 ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-326-	NOT_NULL(mapped.pData);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-327-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-328-	// Track this lock's slice. The engine writes into the byte range
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:329:	// [m_offset, m_offset + length); after Unmap the GPU sees the writes.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-330-	m_numberOfVertices = numberOfVertices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:331:	m_offset           = ringUsed / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:332:	m_ringBuffer       = ringBuffer;             // bind from THIS ring (main or skin)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-333-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:334:	void * const sliceStart = static_cast<char *>(mapped.pData) + ringUsed;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:335:	ringUsed += length;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-336-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-337-	// Plan 11-09.15 Iter-4 (Test A): stash for unlock-time snapshot.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-338-	s_lastLockedSliceCPUPtr = sliceStart;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:339:	// CONSULT-31: sentinel removed (full-write proven 387/387). Outlier scan in unlock() reads the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-340-	// copied dynamic VB to pair against the systemStream skin probe in fillVertexBuffer.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-341-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-342-	return sliceStart;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-343-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-344-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-345-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-346-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:347:void Direct3d11_DynamicVertexBufferData::unlock()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-348-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:349:	unlock(m_numberOfVertices);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-350-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-351-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-352-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-353-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:354:void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-355-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-356-	// Plan 11-09.15 Iter-4 (Test A): CPU-side VB snapshot for radial-pattern
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-357-	// investigation. Iter-3's per-fan-draw state diagnostic showed 15/16 fan
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-358-	// samples at byte offset 0 + same shared-ring VB pointer; the math on
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-359-	// the fan-list IB path is clean (CODEX Bucket A verified) so the next
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-360-	// question is whether the engine is writing a real quad into CPU memory
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-361-	// or degenerate/collapsed data. Read from s_lastLockedSliceCPUPtr BEFORE
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-362-	// Unmap -- after Unmap the mapped memory may be rotated by the driver
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:363:	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-364-	//
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-365-	// Filtered to fan-shaped slices (numberOfVertices==4 && vertexSize==24:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-366-	// position(12)+color(4)+UV(8)) to keep log volume low. Sampled like the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-367-	// Iter-3 diagnostic: first 5 + every 500th.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-368-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-369-		int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-370-		bool const fanShaped = (numberOfVertices == 4) && (vertexSize == 24);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-371-		if (fanShaped && s_lastLockedSliceCPUPtr)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-372-		{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-373-			static int s_diagFanShapedUnlocks = 0;
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-383-					uint8_t const *src = vb + v * vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-384-					float const px = *reinterpret_cast<float const *>(src + 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-385-					float const py = *reinterpret_cast<float const *>(src + 4);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-386-					float const pz = *reinterpret_cast<float const *>(src + 8);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-387-					uint32_t const c = *reinterpret_cast<uint32_t const *>(src + 12);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-388-					float const u  = *reinterpret_cast<float const *>(src + 16);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-389-					float const tv = *reinterpret_cast<float const *>(src + 20);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-390-					char buf[256];
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-391-					_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-392-						"Plan 11-09.15 Iter-4 fan-shaped unlock#%d vert#%d pos=(%.3f,%.3f,%.3f) color=0x%08X uv=(%.3f,%.3f) offsetVerts=%d",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:393:						s_diagFanShapedUnlocks, v, px, py, pz, c, u, tv, m_offset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-394-					if (iq)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-395-						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-396-				}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-397-			}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-398-		}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-399-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-400-		// CAPE-COLLAPSE D3D11-SIDE PROBE 2026-06-06 (DIAGNOSTIC -- REMOVE after).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-401-		// The engine-side probe PROVED the CPU skin computes distinct positions,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-402-		// yet the GPU VB (Capture15 eid 2497) has 98/123 verts collapsed to ONE
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-403-		// point. This reads back the just-written D3D11 slice (BEFORE Unmap) for
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-446-						FILE *cdFp = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-447-						fopen_s(&cdFp, "cape-d3d11-probe.txt", s_capeD3DFirst ? "wb" : "ab");
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-448-						s_capeD3DFirst = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-449-						if (cdFp)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-450-						{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-451-							fprintf(cdFp,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-452-								"%s call=%d numVerts=%d vSize=%d longestRun=%d runStart=%d pos=[%.4f %.4f %.4f] firstPos=[%.4f %.4f %.4f] offsetVerts=%d discards=%d\n",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-453-								cdCollapse ? "COLLAPSE" : "HB", s_capeD3DCall, numberOfVertices, cdVertexSize,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-454-								cdLongRun, cdLongStart, cdLongX, cdLongY, cdLongZ,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-455-								*reinterpret_cast<float const *>(cdVb + 0), *reinterpret_cast<float const *>(cdVb + 4), *reinterpret_cast<float const *>(cdVb + 8),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:456:								m_offset, ms_discardsEver);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-457-							fclose(cdFp);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-458-						}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-459-					}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-460-				}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-461-			}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-462-		}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-463-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-464-		// CONSULT-31 DYNAMIC-VB OUTLIER SCAN (DIAGNOSTIC -- remove after). Reads the COPIED dynamic VB
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-465-		// (copy output, post systemStream->dynamic). Computes centroid and flags verts flung far from it
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-466-		// = spikes. Pairs with the systemStream skin probe (fillVertexBuffer cape-skin-spike.txt): if the
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-507-					++s_olLogged;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-508-					static bool s_olFirst = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-509-					FILE *olFp = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-510-					fopen_s(&olFp, "cape-dynvb-outlier.txt", s_olFirst ? "wb" : "ab");
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-511-					s_olFirst = false;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-512-					if (olFp)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-513-					{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-514-						fprintf(olFp,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-515-							"OUTLIER numVerts=%d vSize=%d outliers=%d firstIdx=%d firstPos=[%.1f %.1f %.1f] maxD=%.0f centroid=[%.1f %.1f %.1f] offsetVerts=%d\n",
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-516-							numberOfVertices, olVertexSize, olCount, olFirstIdx, olFx, olFy, olFz, olMaxD,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:517:							fcx, fcy, fcz, m_offset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-518-						fclose(olFp);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-519-					}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-520-				}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-521-			}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-522-		}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-523-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-524-		s_lastLockedSliceCPUPtr = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-525-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-526-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-527-	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-528-	NOT_NULL(context);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-529-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:530:	context->Unmap(m_ringBuffer ? m_ringBuffer : ms_d3dRingBuffer.Get(), 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-531-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-532-	m_numberOfVertices = numberOfVertices;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:533:	// Note: ms_used was already advanced in lock(); we don't re-adjust
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-534-	// here. (D3D9 plugin advances on unlock because Lock takes only an
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-535-	// upper-bound length and Unlock takes the actual used length; D3D11
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-536-	// Map gets a slice pointer and the actual-used count only affects
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-537-	// the draw call, not the buffer accounting.)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-538-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-539-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-540-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-541-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:542:int Direct3d11_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool withDiscard)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-543-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-544-	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-545-	if ((vertexSize != 28) && (vertexSize != 24))
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-546-	{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:547:		// dedicated (non-UI) ring -- match lock() routing
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:548:		ms_skinUsed = ((ms_skinUsed + vertexSize - 1) / vertexSize) * vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:549:		return (ms_skinSize - (withDiscard ? 0 : ms_skinUsed)) / vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-550-	}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-551-	roundUpUsed();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:552:	return (ms_size - (withDiscard ? 0 : ms_used)) / vertexSize;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-553-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-554-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-555-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-556-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:557:int Direct3d11_DynamicVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-558-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-559-	return static_cast<int>(reinterpret_cast<uintptr_t>(ms_d3dRingBuffer.Get()));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-560-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-561-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-562-// ======================================================================
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"beginFrame\\(|beginFrameSkin|Direct3d9_DynamicVertexBufferData::beginFrame|Direct3d11_DynamicVertexBufferData::beginFrame\" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"DWORD lockFlag|ms_newFrame|ms_used \\+ length|forceDiscard|D3DLOCK_NOOVERWRITE|D3DLOCK_DISCARD|ms_used = 0|Lock\\(ms_used|m_offset = ms_used\" src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"bool const useSkinRing|ringUsed|ringSize|ringNewFrame|mapType|WRITE_NO_OVERWRITE|WRITE_DISCARD|forceDiscard|Map\\(|m_offset|sliceStart|Unmap\" src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "getMaximumVertexBufferStreamCount_impl|supportsStreamOffsets_impl|setUseMultiStreamVertexBuffers|ms_useMultiStream|disableMultiStream|supportsStreamOffsets|getMaximumVertexBufferStreamCount" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp' in D:\Code\swg-client-v2
+ succeeded in 896ms:
+22:bool                     Direct3d9_DynamicVertexBufferData::ms_newFrame;
+68:	ms_used = 0;
+86:	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+128:	ms_newFrame = ConfigDirect3d9::getDiscardDynamicBuffersAtBeginningOfFrame();
+132:	ms_used = 0;
+172:void *Direct3d9_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+184:	DWORD lockFlag = D3DLOCK_NOOVERWRITE;
+186:	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
+188:		ms_newFrame = false;
+202:		lockFlag = D3DLOCK_DISCARD;
+203:		ms_used = 0;
+207:	HRESULT const hresult = ms_d3dVertexBuffer->Lock(ms_used, length, &data, lockFlag);
+217:	m_offset = ms_used / vertexSize;
+
+ succeeded in 955ms:
+12://   wrap            -> Map(D3D11_MAP_WRITE_DISCARD), reset used=0
+13://   append          -> Map(D3D11_MAP_WRITE_NO_OVERWRITE), advance used
+45:// CPU-races-GPU intra-frame WRITE_NO_OVERWRITE reuse hazard, which the thread
+47:// forces WRITE_DISCARD on every dynamic VB/IB lock so each lock gets a freshly
+77:// unlock() can snapshot the engine's written verts BEFORE Unmap invalidates
+130:	// (so no nvwgf2um mass-CreateBuffer churn). CuiLayer's whole-ring WRITE_DISCARD hits only
+134:	// wrap it mid-frame -- a mid-frame WRITE_DISCARD would re-create the very hazard we are
+169:	// Start the soft-skin ring on a fresh WRITE_DISCARD generation each frame. Called
+224:	m_offset(0),
+259:void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceDiscard)
+269:	int                 &ringUsed     = isSkin ? ms_skinUsed     : ms_used;
+270:	int const            ringSize     = isSkin ? ms_skinSize     : ms_size;
+271:	bool                &ringNewFrame = isSkin ? ms_skinNewFrame : ms_newFrame;
+275:	ringUsed = ((ringUsed + vertexSize - 1) / vertexSize) * vertexSize;
+297:	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
+300:	forceDiscard = true;  // diagnostic: rename every lock (kills intra-frame reuse hazard)
+302:	if (ringNewFrame || forceDiscard || ringUsed + length > ringSize)
+304:		ringNewFrame = false;
+310:		DEBUG_FATAL(length > ringSize, ("Too many vertices %d/%d", numberOfVertices, ringSize / vertexSize));
+312:		mapType = D3D11_MAP_WRITE_DISCARD;
+313:		ringUsed = 0;
+320:	HRESULT const hr = context->Map(ringBuffer, 0, mapType, 0, &mapped);
+323:		 HRESULT_CODE(hr), discard, ringUsed, length,
+329:	// [m_offset, m_offset + length); after Unmap the GPU sees the writes.
+331:	m_offset           = ringUsed / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
+334:	void * const sliceStart = static_cast<char *>(mapped.pData) + ringUsed;
+335:	ringUsed += length;
+338:	s_lastLockedSliceCPUPtr = sliceStart;
+342:	return sliceStart;
+362:	// Unmap -- after Unmap the mapped memory may be rotated by the driver
+363:	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+393:						s_diagFanShapedUnlocks, v, px, py, pz, c, u, tv, m_offset);
+403:		// point. This reads back the just-written D3D11 slice (BEFORE Unmap) for
+456:								m_offset, ms_discardsEver);
+517:							fcx, fcy, fcz, m_offset);
+530:	context->Unmap(m_ringBuffer ? m_ringBuffer : ms_d3dRingBuffer.Get(), 0);
+
+ succeeded in 1117ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:297:		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2484:	Direct3d9_StaticShaderData::beginFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2485:	Direct3d9_DynamicVertexBufferData::beginFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2486:	Direct3d9_DynamicIndexBufferData::beginFrame();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2487:	Direct3d9_LightManager::beginFrame();
+
+ succeeded in 1077ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:218:	// two caps gate SoftwareBlendSkeletalShaderPrimitive::ms_useMultiStreamVertexBuffers
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:219:	// (set at install: maxStreamCount>1 && supportsStreamOffsets && !disableMultiStream).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:228:	bool supportsStreamOffsets_impl()        { return true; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:232:	int  getMaximumVertexBufferStreamCount_impl() { return 2; }
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:959:	ms_glApi.supportsStreamOffsets             = supportsStreamOffsets_impl;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:963:	ms_glApi.getMaximumVertexBufferStreamCount = getMaximumVertexBufferStreamCount_impl;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:115:bool                SoftwareBlendSkeletalShaderPrimitive::ms_useMultiStreamVertexBuffers;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:340:	int  const  gap6MaxStreamCount = Graphics::getMaximumVertexBufferStreamCount();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:341:	bool const  gap6StreamOffsets  = Graphics::supportsStreamOffsets();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:344:	ms_useMultiStreamVertexBuffers =
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:350:	DEBUG_REPORT_LOG(true, ("GAP-6 multistream latch: maxStreamCount=%d (>1=%d) supportsStreamOffsets=%d disableMultiStreamCfg=%d -> ms_useMultiStreamVertexBuffers=%d\n",
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:351:		gap6MaxStreamCount, (gap6MaxStreamCount > 1) ? 1 : 0, gap6StreamOffsets ? 1 : 0, gap6DisableCfg ? 1 : 0, ms_useMultiStreamVertexBuffers ? 1 : 0));
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:359:			"GAP-6 multistream latch: maxStreamCount=%d (>1=%d) supportsStreamOffsets=%d disableMultiStreamCfg=%d -> ms_useMultiStreamVertexBuffers=%d\n",
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:360:			gap6MaxStreamCount, (gap6MaxStreamCount > 1) ? 1 : 0, gap6StreamOffsets ? 1 : 0, gap6DisableCfg ? 1 : 0, ms_useMultiStreamVertexBuffers ? 1 : 0);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:413:	_initialize(mesh, shaderIndex, ms_useMultiStreamVertexBuffers);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:567:	// Branch-INDEPENDENT: ms_useMultiStreamVertexBuffers=0 at runtime (config
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:568:	// disableMultiStreamCfg), so the v1 probe in the multi-stream branch below
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:661:	if (ms_useMultiStreamVertexBuffers)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:926:	if (ms_useMultiStreamVertexBuffers)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:944:	if (ms_useMultiStreamVertexBuffers)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:993:		//   (ms_useMultiStreamVertexBuffers == false), an intervening
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1220:			m_dot3TextureCoordinateSetIndex = ms_useMultiStreamVertexBuffers ? 0 : i;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:274:	int                                getMaximumVertexBufferStreamCount();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:487:	bool                                       ms_supportsStreamOffsets;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1148:	ms_glApi.supportsStreamOffsets             = supportsStreamOffsets;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1249:	ms_glApi.getMaximumVertexBufferStreamCount = getMaximumVertexBufferStreamCount;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1543:	ms_supportsStreamOffsets   = (ms_deviceCaps.DevCaps2 & D3DDEVCAPS2_STREAMOFFSET) != 0;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1644:	Direct3d9_StateCache::install(getMaximumVertexBufferStreamCount());
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2033:bool Direct3d9::supportsStreamOffsets()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2035:	return ms_supportsStreamOffsets;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:3845:						if (!ms_supportsStreamOffsets)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:3855:					if (ms_supportsStreamOffsets)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:4545:int Direct3d9Namespace::getMaximumVertexBufferStreamCount()
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 8 "void Direct3d11_DynamicVertexBufferData::beginFrame|void Direct3d11_DynamicVertexBufferData::beginFrameSkin|void Direct3d11_DynamicIndexBufferData::beginFrame" src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 5 "Direct3d11_DynamicVertexBufferData::beginFrame|Direct3d11_DynamicIndexBufferData::beginFrame" src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"Direct3d11_DynamicVertexBufferData::beginFrame\\(|Direct3d11_DynamicIndexBufferData::beginFrame\\(|Direct3d11_DynamicVertexBufferData::beginFrameSkin\\(\" src/engine/client/application/Direct3d11/src/win32" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"ms_glApi\\.update|void .*update\\(\" src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp" in D:\Code\swg-client-v2
+ succeeded in 703ms:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:307:	void                               update(float elapsedTime);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1166:	ms_glApi.update                            = update;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2423:void Direct3d9Namespace::update(float elapsedTime)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:292:		// frame, here -- this is the gl_api update hook (ms_glApi.update), which fires once per
+src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1017:	ms_glApi.update        = update_impl;
+
+ succeeded in 734ms:
+292-		// frame, here -- this is the gl_api update hook (ms_glApi.update), which fires once per
+293-		// frame BEFORE the first beginScene (NOT per-pass; per-pass reset tears geometry since
+294-		// draws defer across passes). First skinned lock of the frame then WRITE_DISCARDs a
+295-		// fresh generation and the rest of the frame appends, so the frame's skinned slices
+296-		// coexist and each deferred draw reads its own data. Main ring is untouched.
+297:		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+298-	}
+299-
+300-	// Plan 11-09.10: realize the design intent of the comment block at the
+301-	// install-time wire-up below -- D3D11 has no fixed-function point-sprite
+302-	// control (the D3DRS_POINTSIZE / D3DRS_POINTSPRITEENABLE / D3DRS_POINTSCALE*
+
+ succeeded in 735ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-159-	ms_d3dSkinRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-160-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-161-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-162-	ms_memoryBlockManager = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-163-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-164-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-165-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-166-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:167:void Direct3d11_DynamicVertexBufferData::beginFrameSkin()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-168-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-169-	// Start the soft-skin ring on a fresh WRITE_DISCARD generation each frame. Called
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-170-	// once/frame from the gl_api update hook (Direct3d11.cpp update_impl), BEFORE the first
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-171-	// beginScene -- NOT per-pass (per-pass reset tears geometry: draws defer across passes).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-172-	ms_skinNewFrame = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-173-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-174-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-175-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-176-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:177:void Direct3d11_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-178-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-179-	// Wrap at the start of each frame so per-frame dynamic uploads don't
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-180-	// stomp on previous-frame data still in-flight.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-181-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-182-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-183-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-184-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp-185-
+--
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-72-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-73-	ms_d3dRingBuffer.Reset();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-74-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-75-	ms_memoryBlockManager = nullptr;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-76-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-77-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-78-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-79-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp:80:void Direct3d11_DynamicIndexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-81-{
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-82-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-83-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-84-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-85-}
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-86-
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-87-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicIndexBufferData.cpp-88-
+
+ succeeded in 766ms:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11.cpp:297:		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp:80:void Direct3d11_DynamicIndexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp:167:void Direct3d11_DynamicVertexBufferData::beginFrameSkin()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp:177:void Direct3d11_DynamicVertexBufferData::beginFrame()
+
+codex
+One important read: in the D3D11 source currently on disk, `beginFrameSkin()` is called from the once-per-frame update hook, but plain `Direct3d11_DynamicVertexBufferData::beginFrame()` and `Direct3d11_DynamicIndexBufferData::beginFrame()` do not show a caller in `Direct3d11.cpp`. That is a divergence from D3D9’s `update()` calling both dynamic ring `beginFrame()` methods.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 12 "void Direct3d9Namespace::update|Direct3d9_DynamicVertexBufferData::beginFrame|Direct3d9_DynamicIndexBufferData::beginFrame" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 6 \"Direct3d11_DynamicVertexBufferData::beginFrame\\(|Direct3d11_DynamicIndexBufferData::beginFrame\\(|beginFrame\\(\\)\" src/engine/client/application/Direct3d11/src/win32" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 6 \"applyPreDrawState|IASetVertexBuffers|IASetIndexBuffer|DrawIndexed\\(|DrawIndexed\\(\" src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 12 "void update_impl|Direct3d11_DynamicVertexBufferData::beginFrameSkin|Direct3d11_DynamicVertexBufferData::beginFrame|Direct3d11_DynamicIndexBufferData::beginFrame" src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp' in D:\Code\swg-client-v2
+ succeeded in 779ms:
+1858-	if (fullReset)
+1859-	{
+1860-		setWindowedMode(ms_windowed, true);
+1861-	}
+1862-	else
+1863-	{
+1864-		IGNORE_RETURN(ms_device->EvictManagedResources());
+1865-	}
+1866-}
+1867-
+1868-// ----------------------------------------------------------------------
+1869-
+1870:void Direct3d9Namespace::updateWindowSettings()
+1871-{
+1872-	if (ms_engineOwnsWindow)
+1873-	{
+1874-		DWORD const windowStyleWindowed    = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+1875-		DWORD const windowStyleFullscreen  = WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+1876-
+1877-		if (ms_windowed)
+1878-		{
+1879-			RECT rect;
+1880-			rect.left   = 0;
+1881-			rect.top    = 0;
+1882-			rect.right  = ms_width;
+--
+2411-			++index;
+2412-			*index = static_cast<Index>(base + 2);
+2413-			++index;
+2414-			*index = static_cast<Index>(base + 3);
+2415-			++index;
+2416-		}
+2417-
+2418-	ms_quadListIndexBuffer->unlock();
+2419-}
+2420-
+2421-// ----------------------------------------------------------------------
+2422-
+2423:void Direct3d9Namespace::update(float elapsedTime)
+2424-{
+2425-	++ms_frameNumber;
+2426-	ms_currentTime += elapsedTime;
+2427-
+2428-#ifdef _DEBUG
+2429-	Direct3d9_Metrics::reset();
+2430-#endif
+2431-
+2432-#ifdef VSPS
+2433-	const float time[4] = { ms_currentTime, 0.f, 0.f, 0.f };
+2434-	Direct3d9_StateCache::setVertexShaderConstants(VSCR_currentTime, time, 1);
+2435-#endif
+--
+2473-// ----------------------------------------------------------------------
+2474-
+2475-void Direct3d9Namespace::beginScene()
+2476-{
+2477-	if (ms_displayModeChanged && !checkDisplayMode())
+2478-		setWindowedMode(false);
+2479-
+2480-	// begin the 3d scene
+2481-	const HRESULT hresult = ms_device->BeginScene();
+2482-	FATAL_DX_HR("BeginScene failed %s", hresult);
+2483-
+2484-	Direct3d9_StaticShaderData::beginFrame();
+2485:	Direct3d9_DynamicVertexBufferData::beginFrame();
+2486:	Direct3d9_DynamicIndexBufferData::beginFrame();
+2487-	Direct3d9_LightManager::beginFrame();
+2488-	ms_savedIndexBuffer = NULL;
+2489-}
+2490-
+2491-// ----------------------------------------------------------------------
+2492-
+2493-void Direct3d9Namespace::endScene()
+2494-{
+2495-	// end the 3d scene
+2496-	HRESULT hresult = ms_device->EndScene();
+2497-	FATAL_DX_HR("EndScene failed %s", hresult);
+2498-}
+
+ succeeded in 965ms:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-74-	delete ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-75-	ms_memoryBlockManager = nullptr;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-76-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-77-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-78-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-79-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp:80:void Direct3d11_DynamicIndexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-81-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-82-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-83-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-84-	ms_discardsSinceBeginFrame = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-85-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.cpp-86-
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-171-	// beginScene -- NOT per-pass (per-pass reset tears geometry: draws defer across passes).
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-172-	ms_skinNewFrame = true;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-173-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-174-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-175-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-176-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp:177:void Direct3d11_DynamicVertexBufferData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-178-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-179-	// Wrap at the start of each frame so per-frame dynamic uploads don't
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-180-	// stomp on previous-frame data still in-flight.
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-181-	ms_newFrame                = true;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-182-	ms_locksSinceBeginFrame    = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.cpp-183-	ms_discardsSinceBeginFrame = 0;
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-31-class Direct3d11_DynamicIndexBufferData : public DynamicIndexBufferGraphicsData
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-32-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-33-public:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-34-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-35-	static void install();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-36-	static void remove();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h:37:	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-38-	static void setSize(int numberOfIndices);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-39-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-40-	static ID3D11Buffer *getSharedRingBuffer();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-41-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-42-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicIndexBufferData.h-43-	static void  operator delete(void *memory);
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-31-class Direct3d11_DynamicVertexBufferData : public DynamicVertexBufferGraphicsData
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-32-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-33-public:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-34-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-35-	static void install();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-36-	static void remove();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h:37:	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-38-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-39-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-40-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-41-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-42-	static ID3D11Buffer *getSharedRingBuffer();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_DynamicVertexBufferData.h-43-
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-57-		shaderCacheHits,      shaderCacheMisses));
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-58-#endif
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-59-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-60-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-61-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-62-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp:63:void Direct3d11_Metrics::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-64-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-65-#ifdef _DEBUG
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-66-	vertices       = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-67-	indices        = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-68-	triangles      = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.cpp-69-	drawCallCount  = 0;
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-26-class Direct3d11_Metrics
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-27-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-28-public:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-29-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-30-	static void install();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-31-	static void remove();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h:32:	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-33-	static void endFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-34-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-35-#ifdef _DEBUG
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-36-	// Per-frame counters (reset in beginFrame).
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-37-	static int vertices;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_Metrics.h-38-	static int indices;
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1648-	ms_dssCache = nullptr;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1649-	ms_ssCache  = nullptr;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1650-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1651-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1652-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1653-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp:1654:void Direct3d11_StateCache::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1655-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1656-	ms_drawCallCount = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1657-	ms_skippedDrawsNullVS = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1658-	ms_skippedDrawsNullLayout = 0;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1659-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.cpp-1660-
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-288-	ms_active     = nullptr;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-289-	ms_activePass = -1;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-290-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-291-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-292-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-293-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp:294:void Direct3d11_StaticShaderData::beginFrame()
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-295-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-296-	ms_active     = nullptr;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-297-	ms_activePass = -1;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-298-}
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-299-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.cpp-300-// ----------------------------------------------------------------------
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-71-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-72-	static void *operator new(size_t size);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-73-	static void  operator delete(void *memory);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-74-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-75-	static void install();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-76-	static void remove();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h:77:	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-78-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-79-public:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-80-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-81-	explicit Direct3d11_StaticShaderData(StaticShader const &shader);
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-82-	virtual ~Direct3d11_StaticShaderData() override;
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StaticShaderData.h-83-
+--
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-55-class Direct3d11_StateCache
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-56-{
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-57-public:
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-58-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-59-	static void install();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-60-	static void remove();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h:61:	static void beginFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-62-	static void endFrame();
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-63-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-64-	// ------------------------------------------------------------------
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-65-	// Slot-setter bodies (called from Direct3d11.cpp slot bindings).
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-66-
+src/engine/client/application/Direct3d11/src/win32\Direct3d11_StateCache.h-67-	static void setFillMode(GlFillMode mode);
+
+ succeeded in 1016ms:
+9-//     cache them by descriptor-hash (FNV-1a 64-bit over the struct bytes)
+10-//     so identical state combinations share one object. Cache survives
+11-//     for the lifetime of the device.
+12-//   * Engine state-setter slots (setFillMode / setCullMode / setFog /
+13-//     setAlphaFadeOpacity / ...) mutate a per-frame "current" descriptor
+14-//     struct; the actual state object is fetched / created at draw time
+15://     in applyPreDrawState.
+16-//   * Pitfall 4: SRV bindings (ms_boundSRV[16]) and sampler bindings
+17-//     (ms_boundSampler[16]) tracked INDEPENDENTLY. setGlobalTexture only
+18-//     touches the SRV; default samplers come from install-time defaults.
+19-//   * Pitfall 5: cbuffer flush per draw via Direct3d11_ConstantBuffer.
+20-//   * PS NULL fallback: if the currently-set shader's m_d3dPS is null
+21-//     (stock-asset D3D9 PEXE bytecode case from Plan 11-05),
+22://     applyPreDrawState DOES NOT call PSSetShader -- D3D11 leaves
+23-//     whatever PS was last bound (default pass-through during init).
+24-//     Documented in Plan 11-05 SUMMARY; visual impact surfaces in Plan 11-07.
+25-//
+26-// ======================================================================
+27-
+28-#include "FirstDirect3d11.h"
+--
+111-	BSCache  *ms_bsCache  = nullptr;
+112-	DSSCache *ms_dssCache = nullptr;
+113-	SSCache  *ms_ssCache  = nullptr;
+114-
+115-	// ------------------------------------------------------------------
+116-	// Pending descriptors -- mutated by state-setter slots; resolved to
+117:	// state objects on draw via applyPreDrawState.
+118-
+119-	D3D11_RASTERIZER_DESC    ms_rsDesc     = {};
+120-	D3D11_BLEND_DESC         ms_bsDesc     = {};
+121-	D3D11_DEPTH_STENCIL_DESC ms_dssDesc    = {};
+122-	bool                     ms_rsDirty    = true;
+123-	bool                     ms_bsDirty    = true;
+--
+143-	VertexBufferFormat ms_currentVBFormat;
+144-	bool            ms_currentVBValid    = false;
+145-
+146-	// Plan 11-09.7: multi-stream VertexBufferVector tracking. Mutually
+147-	// exclusive with the single-stream state above -- setVertexBuffer
+148-	// clears the vector flag and setVertexBufferVector clears the
+149:	// single-stream state. resolveShaders + applyPreDrawState branch
+150-	// on ms_currentVBVectorActive to pick the input-layout cache lookup
+151:	// + IASetVertexBuffers call shape.
+152-	enum { kMaxVBStreams = 2 };   // matches Direct3d11_VertexBufferVectorData::MAX_VERTEX_BUFFERS
+153-	bool                          ms_currentVBVectorActive               = false;
+154-	int                           ms_currentVBVectorStreamCount          = 0;
+155-	ID3D11Buffer *                ms_currentVBVectorBuffers[kMaxVBStreams] = {};
+156-	UINT                          ms_currentVBVectorStrides[kMaxVBStreams] = {};
+157-	UINT                          ms_currentVBVectorOffsets[kMaxVBStreams] = {};
+--
+177-
+178-	int ms_drawCallCount      = 0;
+179-	int ms_stateObjectCreates = 0;
+180-	int ms_skippedDrawsNullVS = 0;
+181-	int ms_skippedDrawsNullLayout = 0;
+182-
+183:	// Plan 11-09.14: lifetime count of applyPreDrawState flushes where
+184-	// ms_boundSRV[0] != nullptr at the PSSetShaderResources call. Pairs
+185-	// with the StaticShaderData-side per-pass counters to attribute id=353
+186-	// residue ("PS expects SRV at slot 0, but none is bound") to either
+187-	// (a) genuine slot-0-less passes, or (b) StaticShaderData-bypass paths
+188-	// (CODEX Q6 residual-gap survey).
+189-	int ms_drawsWithSRV0Bound = 0;
+190-
+191-	// Plan 11-09.15 (CODEX Bucket A): reusable static fan-to-list index
+192-	// buffer + 6 lifetime counters. D3D11 has no native TRIANGLEFAN topology;
+193-	// drawTriangleFan + drawPartialTriangleFan bind this IB after
+194:	// applyPreDrawState and issue DrawIndexed with the canonical fan-to-list
+195-	// pattern (0, 1, 2, 0, 2, 3, ..., 0, N-2, N-1). Pre-Plan-11-09.15 the
+196-	// Plan 11-06 STUB submitted fan vertex data with TRIANGLELIST topology;
+197-	// 4-vert quads (SkyBox6Sided face, sun, moon, planet, sprite, beam,
+198-	// marker, post-FX, Bink video) drew as upper-right triangle only.
+199-	//
+200-	// CODEX Q2: R16_UINT, initial capacity 1024 verts, doubling growth,
+--
+248-	// Iter-18 BSOD root-cause analysis (the never-committed minimum-WVP
+249-	// attempt that BSOD'd the OS via GPU TDR escalation) enumerated 5
+250-	// must-haves; CODEX peer review added a 6th. This block satisfies
+251-	// must-haves #1 (verified D3D9 composition order via Iter-1 source
+252-	// read), #4 (initial-state guarantee via identity-matrix defaults
+253-	// here + primeDefaults at install), #5 (per-draw flush+bind via
+254:	// applyPreDrawState's existing bindVS(0)), #7 (full-fill mandatory:
+255-	// every composeSlot0Shadow() call uploads the entire 1152-byte
+256-	// struct -- partial writes FORBIDDEN per CODEX 6th hypothesis).
+257-	//
+258:	// Identity-initialized at file scope so the first applyPreDrawState
+259-	// call (before any engine setter has fired) finds safe defaults
+260-	// regardless of primeDefaults's success. s_anyMatrixWritten is the
+261-	// belt-and-suspenders sentinel for the first-draw race guard.
+262-
+263-	XMFLOAT4X4 s_cachedView  = XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f,
+264-	                                      0.0f, 1.0f, 0.0f, 0.0f,
+--
+294-	// Plan 11-09 Iter-2.7 Fix C: namespace-scope shadow of the full VS slot 0
+295-	// cbuffer (1152 bytes, Direct3d11_VertexSlot0CB layout). Replaces Plan
+296-	// 11-05's broken function-local-static shadow in Direct3d11.cpp's
+297-	// setVertexShaderUserConstants_impl AND Plan 11-08's first-draw race
+298-	// guard upload pattern. All slot 0 mutations (matrix setters + user
+299-	// constants via setVSConstants) target this shadow + mark dirty; the
+300:	// shadow is uploaded ONCE per applyPreDrawState (lazy flush per CODEX
+301-	// Round 3 guidance: avoids dozens of Map(WRITE_DISCARD) per frame).
+302-	//
+303-	// Coherence with GPU: install() runs composeSlot0Shadow + flushes once
+304-	// so shadow and GPU state both reflect identity matrices + zero defaults
+305-	// (matches primeDefaults' install-time GPU upload).
+306-	Direct3d11_VertexSlot0CB s_slot0Shadow = {};
+--
+325-	//   c10      = fog              (float4, zero for now -- Task 4 if needed)
+326-	//   c11..c71 = material / lightData / gap / extendedLightData / pad,
+327-	//             all zero by {}-init (numLights = lightData[0].x = 0 is
+328-	//             the shader-side loop-bomb guard per Iter-18 must-have #2).
+329-	// Plan 11-09 Iter-2.7 Fix C: composes WVP from cached matrices into the
+330-	// slot 0 shadow's c0..c3 + c4..c7 + c8 regions; marks shadow dirty so
+331:	// the next applyPreDrawState flushes. Other shadow regions (c9..c71)
+332-	// are preserved -- user constants pushed via setVSConstants land at
+333-	// c52..c59 and lighting/material/etc. live elsewhere in slot 0.
+334-	// Renamed from composeAndUploadSlot0 since the upload is now deferred
+335-	// to flushSlot0IfDirty (called once per draw).
+336-	void composeSlot0Shadow()
+337-	{
+--
+488-				}
+489-			}
+490-		}
+491-	}
+492-
+493-	// Plan 11-09 Iter-2.7 Fix C: lazy upload of the slot 0 shadow once per
+494:	// applyPreDrawState. Replaces Plan 11-08's first-draw race guard +
+495-	// setObjectToWorldTransformAndScale-canonical-upload pattern. If no
+496-	// setter has touched the shadow since the last flush, this is a no-op.
+497-	void flushSlot0IfDirty()
+498-	{
+499-		if (!s_slot0Dirty)
+500-			return;
+--
+536-			// confirmed in-world SBSSP transforms are healthy, so the 41%
+537-			// identity-W flushes seen at Iter-34 must come from a different
+538-			// render family. Logging VS+template per flush lets us correlate
+539-			// identity-W cbuffer entries to the responsible engine path
+540-			// (batch skeletal, terrain, particles, attachments, etc.) so we
+541-			// know which prepareToDraw to instrument next. ms_currentVSData
+542:			// is updated when the shader binds (well before applyPreDrawState
+543-			// calls flushSlot0IfDirty), so it reflects THIS draw's VS.
+544-			static int s_iter34Count = 0;
+545-			bool const i34_early  = (s_iter34Count < 20);
+546-			bool const i34_sample = (s_iter34Count >= 20) && (s_flushCount % 200 == 0);
+547-			if (i34_early || i34_sample)
+548-			{
+--
+1057-	// surfaces visibly.
+1058-	//
+1059-	// Plan 11-09.14 (CODEX correction #2): the previous Iter-4 first-dynamic-
+1060-	// PS-bind diagnostic was REMOVED here. PSGetShaderResources/PSGetSamplers
+1061-	// inside selectFallbackPSForVS read DEVICE state, but
+1062-	// PSSetShaderResources/PSSetSamplers don't run until later in
+1063:	// applyPreDrawState's flush block (StateCache.cpp:672-673). So the
+1064-	// diagnostic always saw the previous draw's state, not the state for the
+1065-	// upcoming draw -- it reported sampler0=NULL on the very first per-VS
+1066-	// dynamic-PS bind even though the install-time bootstrap pre-fills
+1067-	// ms_boundSampler[] with ms_defaultSampler.Get(). Replaced by the
+1068-	// lifetime counters logged at Direct3d11_StaticShaderData::remove() +
+1069-	// Direct3d11_StateCache::remove() shutdown.
+--
+1188-			"[P19SKIP] draw skipped (%s) shader='%s'", reason, sn ? sn : "(null)");
+1189-		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+1190-			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, buf);
+1191-	}
+1192-#endif
+1193-
+1194:	bool applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY topology)
+1195-	{
+1196-		ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+1197-		if (!ctx)
+1198-			return false;
+1199-
+1200-		// Plan 11-09 Iter-2.7 Fix C: lazy upload of slot 0 shadow once per
+--
+1233-		ctx->IASetInputLayout(ms_currentInputLayout);
+1234-		ctx->IASetPrimitiveTopology(topology);
+1235-
+1236-		// 3. VB -- Plan 11-09.7 multi-stream path takes precedence.
+1237-		if (ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0)
+1238-		{
+1239:			ctx->IASetVertexBuffers(
+1240-				0,
+1241-				static_cast<UINT>(ms_currentVBVectorStreamCount),
+1242-				ms_currentVBVectorBuffers,
+1243-				ms_currentVBVectorStrides,
+1244-				ms_currentVBVectorOffsets);
+1245-		}
+1246-		else if (ms_currentVBValid && ms_currentVB)
+1247-		{
+1248-			ID3D11Buffer *vbs[1] = { ms_currentVB };
+1249-			UINT strides[1]      = { ms_currentVBStride };
+1250-			UINT offsets[1]      = { ms_currentVBOffset };
+1251:			ctx->IASetVertexBuffers(0, 1, vbs, strides, offsets);
+1252-		}
+1253-
+1254-		// Plan 11-09.8: phantom zero buffer at slot 15. Backs reflection-
+1255-		// driven phantom-element InputSlot=15 entries that
+1256-		// VertexBufferDescriptorMap::augmentWithPhantomElements appended
+1257-		// for VS-declared inputs the VBFormat doesn't cover (vs_4_0
+--
+1261-		// but-bound slots.
+1262-		{
+1263-			ID3D11Buffer *phantomVB    = Direct3d11_Device::getPhantomZeroBuffer();
+1264-			UINT          phantomStride = 0;
+1265-			UINT          phantomOffset = 0;
+1266-			if (phantomVB)
+1267:				ctx->IASetVertexBuffers(15, 1, &phantomVB, &phantomStride, &phantomOffset);
+1268-		}
+1269-
+1270-		// 4. IB (only for indexed draws -- caller passes topology that
+1271-		// implies indexed; we always bind if valid to avoid driver state).
+1272-		if (ms_currentIBValid && ms_currentIB)
+1273:			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+1274-
+1275-		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3 / 17-04 Task 1:
+1276-		// VS<->PS signature pair validation gates the asset-PS bind so D3D11
+1277-		// register-position-strict linkage is honored. When incompatible,
+1278-		// route through selectFallbackPSForVS whose buildHlslForVSOutputs-built
+1279-		// PS mirrors the VS output signature register-for-register).
+--
+1366-		ctx->PSSetShaderResources(0, kMaxSRVs, ms_boundSRV);
+1367-		ctx->PSSetSamplers(0, kMaxSamplers, ms_boundSampler);
+1368-		if (ms_boundSRV[0])
+1369-			++ms_drawsWithSRV0Bound;
+1370-
+1371-		// Plan 11-09.15 Iter-26: log ALL draws (transformed + non-transformed)
+1372:		// for the first applyPreDrawState invocations. Iter-25 only
+1373-		// captured isTransformed() draws and saw nothing but the post-FX
+1374-		// blit. The splash UI must be using non-transformed VBFormat
+1375-		// (clip-space verts) -- this iter captures every draw so we see
+1376-		// the full picture: topology, VS, isTransformed flag, SRV0, RTV.
+1377-		//
+1378-		// Plan 11-09.15 Iter-33: extended with shader template name and
+1379-		// bumped cap from 200 -> 500 to cover the world-content draw
+1380-		// routing investigation. UI rendering is resolved (Iter-32A); the
+1381-		// next frontier is in-world geometry showing skewed textures, which
+1382-		// flows through drawIndexedTriangleList / drawTriangleList / etc.
+1383-		// (NOT drawQuadList, so Iter-29B's UI-focused logger doesn't catch
+1384:		// it). All world draws still go through applyPreDrawState here, so
+1385-		// enhancing this single logger covers every draw path.
+1386-		//
+1387-		// Plan 11-09.15 Iter-33B: split cap into two counters -- one for
+1388-		// xform=1 (UI; XYZRHW pre-projected verts) and one for xform=0
+1389-		// (world content; goes through full WVP). The first 200-cap run
+1390-		// showed all xform=1 (UI), so world content draws AFTER the boot
+--
+1839-				iq35->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf35);
+1840-			}
+1841-		}
+1842-	}
+1843-
+1844-	// Plan 11-09 Iter-2.7 Fix C: re-compose WVP into shadow so the View
+1845:	// change propagates to GPU on next applyPreDrawState. Pre-Fix-C
+1846-	// (Plan 11-08 Task 3b) this was shadow-only because setObjectToWorld-
+1847-	// TransformAndScale was the canonical upload site; but the engine
+1848-	// doesn't always call setObjectToWorld... (Iter-2.6 smoke proved),
+1849-	// so View/Proj changes would never reach GPU. Now every setter
+1850-	// triggers the compose + dirty path.
+1851-	composeSlot0Shadow();
+--
+2027-// ----------------------------------------------------------------------
+2028-
+2029-void Direct3d11_StateCache::setAlphaBlendEnable(bool enabled)
+2030-{
+2031-	// Plan 11-09.15 Iter-39B: mirror Direct3d9::setAlphaBlendEnable. Mutates
+2032-	// the cached BlendState descriptor's RT0.BlendEnable and marks the
+2033:	// blend cache entry dirty so the next applyPreDrawState picks up a
+2034-	// (possibly cached) ID3D11BlendState matching the new descriptor.
+2035-	//
+2036-	// Default at install() is FALSE post-Iter-39A. UI canvas shaders
+2037-	// (uicanvas_filtered.sht etc.), particle billboards, and glow sprites
+2038-	// flip this to TRUE via their per-pass apply() call. Opaque world
+2039-	// shaders leave it FALSE (or explicitly set FALSE if they were last-set
+--
+2050-// ----------------------------------------------------------------------
+2051-
+2052-void Direct3d11_StateCache::setDepthEnable(bool enabled)
+2053-{
+2054-	// Plan 11-09.15 Iter-44A: per-pass z-enable. Mirrors D3D9
+2055-	// RSB(D3DRS_ZENABLE, m_zEnable). Writes ms_dssDesc.DepthEnable + marks
+2056:	// the dss cache dirty. Cache lookup at applyPreDrawState picks up the
+2057-	// matching (cached) ID3D11DepthStencilState.
+2058-	D3D11_DEPTH_STENCIL_DESC &desc = Direct3d11_StateCacheNamespace::ms_dssDesc;
+2059-	BOOL const newVal = enabled ? TRUE : FALSE;
+2060-	if (desc.DepthEnable != newVal)
+2061-	{
+2062-		desc.DepthEnable = newVal;
+--
+2201-}
+2202-
+2203-// ----------------------------------------------------------------------
+2204-// Plan 11-09.14: per-pass PS resource binding setters. Direct3d11_StaticShaderData::
+2205-// apply() routes the per-pass diffuse SRV + sampler through these
+2206-// (CODEX Q1: never call PSSet* directly from StaticShaderData -- preserves
+2207:// the lazy-bind model where applyPreDrawState's single flush writes all
+2208-// 16 slots per draw).
+2209-
+2210-void Direct3d11_StateCache::setPixelShaderResource(int slot, ID3D11ShaderResourceView *srv)
+2211-{
+2212-	if (slot < 0 || slot >= kMaxSRVs)
+2213-		return;
+--
+2239-
+2240-// ----------------------------------------------------------------------
+2241-
+2242-void Direct3d11_StateCache::setVertexBuffer(HardwareVertexBuffer const &vb)
+2243-{
+2244-	// Plan 11-09.7: deactivate multi-stream state (mutual exclusion with
+2245:	// the single-stream path below). resolveShaders + applyPreDrawState
+2246-	// branch on ms_currentVBVectorActive.
+2247-	ms_currentVBVectorActive = false;
+2248-	ms_currentVBVectorStreamCount = 0;
+2249-
+2250-	ms_currentVBValid = false;
+2251-	ms_currentVB = nullptr;
+--
+2275-		if (!data)
+2276-			return;
+2277-		ms_currentVB             = data->getRingBuffer();  // dedicated soft-skin ring vs main ring
+2278-		ms_currentVBStride       = static_cast<UINT>(data->getVertexSize());
+2279-		// Plan 11-09.12 Iter-1: Direct3d11_DynamicVertexBufferData::getOffset()
+2280-		// returns the slice's VERTEX index (Direct3d11_DynamicVertexBufferData.cpp
+2281:		// :234 `m_offset = ms_used / vertexSize`), but IASetVertexBuffers expects
+2282-		// the offset argument in BYTES. The multi-stream path
+2283-		// (Direct3d11_VertexBufferVectorData.cpp:145) correctly multiplies by
+2284-		// stride; the single-stream path here was missing the conversion. Pre-fix
+2285-		// the D3D11 debug-layer fired 152,869 id=366 ERRORs per ~30s session
+2286-		// ("Vertex Buffer Offset (N) at the input vertex slot 0 is not aligned
+2287-		// properly. The current Input Layout imposes an alignment of (4)" with
+--
+2300-
+2301-// ----------------------------------------------------------------------
+2302-// Plan 11-09.7: multi-stream VertexBufferVector bind path. Called by
+2303-// Direct3d11_VertexBufferVectorData::bind, which is the slot wired to
+2304-// Gl_api::setVertexBufferVector. The wrapper class iterates the
+2305-// engine-side VBVector, extracts per-stream ID3D11Buffer + offset +
+2306:// stride + format, and passes them in. resolveShaders + applyPreDrawState
+2307-// branch on ms_currentVBVectorActive.
+2308-
+2309-void Direct3d11_StateCache::setVertexBufferVectorBindState(
+2310-	int streamCount,
+2311-	ID3D11Buffer * const *buffers,
+2312-	UINT const *strides,
+--
+2400-	// ms_currentPSData via the new setCurrentVSData/setCurrentPSData
+2401-	// setters below.
+2402-	//
+2403-	// Plan 11-06's original "no-op record" comment is OBSOLETE -- treating
+2404-	// this slot as a no-op was the root cause of Plan 11-08's post-Task-3b
+2405-	// "zero draws reach the GPU" diagnostic (setStaticShader never wired
+2406:	// ms_currentVSData, so applyPreDrawState's resolveShaders always
+2407-	// short-circuited). Confirmed by CODEX post-implementation consult.
+2408-	//
+2409-	// shader.m_graphicsData was populated by Graphics::createStaticShader
+2410-	// GraphicsData -> Direct3d11::createStaticShaderGraphicsData (Plan 11-06)
+2411-	// -> new Direct3d11_StaticShaderData(shader). It is non-null for every
+2412-	// StaticShader the engine asks us to bind.
+--
+2419-// ----------------------------------------------------------------------
+2420-
+2421-void Direct3d11_StateCache::setCurrentVSData(Direct3d11_VertexShaderData const *vs, uint32 textureCoordinateSetKey)
+2422-{
+2423-	// Plan 11-09 Iter-1: Direct3d11_StaticShaderData::apply calls this
+2424-	// once per draw with the per-pass VS pointer. Trip ms_geometryRebindNeeded
+2425:	// so the next applyPreDrawState reselects the input layout against the
+2426-	// new VS bytecode signature (Pitfall 6 territory).
+2427-	//
+2428-	// Plan 17-09: the per-pass texcoord-set key rides alongside the VS pointer.
+2429-	// The SAME VS asset can bind under different keys across passes -- each key
+2430-	// is a distinct compiled variant (distinct bytecode/signature), so a key
+2431:	// change must also rebind the layout. resolveShaders / applyPreDrawState
+2432-	// read ms_currentVSKey explicitly to resolve the right variant.
+2433-	if (Direct3d11_StateCacheNamespace::ms_currentVSData != vs
+2434-		|| Direct3d11_StateCacheNamespace::ms_currentVSKey != textureCoordinateSetKey)
+2435-	{
+2436-		Direct3d11_StateCacheNamespace::ms_currentVSData = vs;
+2437-		Direct3d11_StateCacheNamespace::ms_currentVSKey  = textureCoordinateSetKey;
+--
+2491-
+2492-// ----------------------------------------------------------------------
+2493-
+2494-void Direct3d11_StateCache::setCurrentPSData(Direct3d11_PixelShaderProgramData const *ps)
+2495-{
+2496-	// Plan 11-09 Iter-1: per-pass PS pointer wiring. May be null per Plan
+2497:	// 11-05 PEXE caveat -- applyPreDrawState's PS-NULL guard at the
+2498-	// PSSetShader call site handles that gracefully (leave previous PS bound).
+2499-	// Iter-2 will replace the leave-previous-PS-bound path with the magenta
+2500-	// fallback PS so geometry surfaces visibly.
+2501-	Direct3d11_StateCacheNamespace::ms_currentPSData = ps;
+2502-}
+2503-
+--
+2514-// ======================================================================
+2515-// Draw-call dispatch
+2516-// ======================================================================
+2517-
+2518-void Direct3d11_StateCache::drawPointList()
+2519-{
+2520:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+2521-		return;
+2522-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2523-}
+2524-
+2525-void Direct3d11_StateCache::drawLineList()
+2526-{
+2527:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+2528-		return;
+2529-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2530-}
+2531-
+2532-void Direct3d11_StateCache::drawLineStrip()
+2533-{
+2534:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+2535-		return;
+2536-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2537-}
+2538-
+2539-void Direct3d11_StateCache::drawTriangleList()
+2540-{
+2541:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2542-		return;
+2543-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2544-}
+2545-
+2546-void Direct3d11_StateCache::drawTriangleStrip()
+2547-{
+2548:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+2549-		return;
+2550-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(ms_currentVBVertexCount), 0);
+2551-}
+2552-
+2553-void Direct3d11_StateCache::drawTriangleFan()
+2554-{
+--
+2569-	if (vertCount > ms_triangleFanMaxVertices)
+2570-		ms_triangleFanMaxVertices = vertCount;
+2571-
+2572-	if (!ensureTriangleFanIB(vertCount))
+2573-		return;  // > 65535 cap or CreateBuffer failure -> skip draw
+2574-
+2575:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2576-		return;
+2577-
+2578-	// Plan 11-09.15 Iter-3 diagnostic: sample fan-draw state at intervals
+2579-	// to attribute the "radiating from world point" artifact. Iter-2's
+2580-	// "first 5" capture showed all from startup-frame intro/loading (one
+2581-	// fan per frame in first 5 frames -> all offset=0 because of frame-
+--
+2933-	if (kBypassFanIBForTestB)
+2934-	{
+2935-		ctx->Draw(static_cast<UINT>(vertCount), 0);
+2936-		return;
+2937-	}
+2938-
+2939:	ctx->IASetIndexBuffer(
+2940-		ms_triangleFanIB.Get(),
+2941-		DXGI_FORMAT_R16_UINT,
+2942-		0);
+2943-
+2944:	ctx->DrawIndexed(
+2945-		static_cast<UINT>(triCount * 3),
+2946-		0,
+2947-		0);
+2948-
+2949-	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind after our DrawIndexed.
+2950:	// CODEX Q4 said "next indexed draw rebinds via applyPreDrawState's existing
+2951-	// guard" so this should be redundant -- Kenny's Iter-2 smoke confirmed the
+2952-	// rebind didn't fix the radiating pattern (i.e. the leak hypothesis was
+2953-	// wrong; the bug is something else). Keep the rebind as defensive
+2954-	// hygiene; harmless ~50ns/call.
+2955-	if (ms_currentIBValid && ms_currentIB)
+2956:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+2957-}
+2958-
+2959-void Direct3d11_StateCache::drawQuadList()
+2960-{
+2961-	// Plan 11-09.15 Iter-27: implementation of the stubbed drawQuadList.
+2962-	// CODEX + Cursor convergent consult on the
+--
+2964-	// root cause of "splash UI never reaches D3D11 plugin": every UI
+2965-	// textured quad goes through CuiLayerRenderer::flushRenderQueueQuads
+2966-	// -> Graphics::drawQuadList -> the stub here -> silent drop.
+2967-	//
+2968-	// Mirrors Plan 11-09.15's fan-list IB pattern (drawTriangleFan):
+2969-	// reusable quad-list IB with pattern (4N+0, 4N+1, 4N+2, 4N+0, 4N+2,
+2970:	// 4N+3) per quad. Bind IB, applyPreDrawState(TRIANGLELIST), issue
+2971:	// DrawIndexed(numQuads * 6, 0, 0). Defensive IB rebind matches the
+2972-	// fan path.
+2973-	//
+2974-	// D3D9 reference: Direct3d9.cpp:4277 uses ms_quadListIndexBuffer
+2975-	// with identical winding + same R16 cap.
+2976-	int const vertCount = ms_currentVBVertexCount;
+2977-	if (vertCount < 4)
+--
+2984-	if (numQuads > ms_quadListMaxQuads)
+2985-		ms_quadListMaxQuads = numQuads;
+2986-
+2987-	if (!ensureQuadListIB(numQuads))
+2988-		return;  // > R16_UINT cap or CreateBuffer failure -- skip draw
+2989-
+2990:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+2991-		return;
+2992-
+2993-	ID3D11DeviceContext * const ctx = Direct3d11_Device::getContext();
+2994:	ctx->IASetIndexBuffer(
+2995-		ms_quadListIB.Get(),
+2996-		DXGI_FORMAT_R16_UINT,
+2997-		0);
+2998-
+2999-	// Plan 11-09.15 Iter-29B: routing diagnostic. Log shader template
+3000-	// name + VS filename + SRV0 + vertCount per drawQuadList call for
+--
+3039-	// Iter-29B routing diagnostic above is preserved (it WORKED the previous
+3040-	// run -- we got 50 lines). A safer readback variant (Iter-30 candidate)
+3041-	// would defer the dump to AFTER Present, capture the atlas SRV by
+3042-	// AddRef'ing it during drawQuadList for later use, and run in a
+3043-	// CallbackEnd-equivalent slot rather than mid-draw.
+3044-
+3045:	ctx->DrawIndexed(
+3046-		static_cast<UINT>(numQuads * 6),
+3047-		0,
+3048-		0);
+3049-
+3050-	// Defensive IB rebind matches the fan-list path: if a downstream
+3051-	// caller assumes its prior setIndexBuffer is still bound on the
+3052-	// device, restore the StateCache shadow's IB.
+3053-	if (ms_currentIBValid && ms_currentIB)
+3054:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+3055-}
+3056-
+3057-void Direct3d11_StateCache::drawIndexedPointList()
+3058-{
+3059:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3060-		return;
+3061:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3062-}
+3063-
+3064-void Direct3d11_StateCache::drawIndexedLineList()
+3065-{
+3066:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3067-		return;
+3068:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3069-}
+3070-
+3071-void Direct3d11_StateCache::drawIndexedLineStrip()
+3072-{
+3073:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3074-		return;
+3075:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3076-}
+3077-
+3078-void Direct3d11_StateCache::drawIndexedTriangleList()
+3079-{
+3080:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3081-		return;
+3082:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3083-}
+3084-
+3085-void Direct3d11_StateCache::drawIndexedTriangleStrip()
+3086-{
+3087:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3088-		return;
+3089:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3090-}
+3091-
+3092-void Direct3d11_StateCache::drawIndexedTriangleFan()
+3093-{
+3094-	// Plan 11-09.15 (CODEX Q3 DEFER + INSTRUMENT): indexed-fan variants
+3095-	// are still broken (TRIANGLELIST topology applied to fan-shaped indexed
+--
+3116-			"Direct3d11_StaticIndexBufferData::lock/unlock first per CODEX 11-09.15 Q3.";
+3117-		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+3118-			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, msg);
+3119-		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+3120-	}
+3121-
+3122:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3123-		return;
+3124:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+3125-}
+3126-
+3127-// ------------------------------------------------------------------
+3128-// Partial draw variants (engine supplies explicit ranges).
+3129-
+3130-void Direct3d11_StateCache::drawPartialPointList(int startVertex, int primitiveCount)
+3131-{
+3132:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3133-		return;
+3134-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount), static_cast<UINT>(startVertex));
+3135-}
+3136-
+3137-void Direct3d11_StateCache::drawPartialLineList(int startVertex, int primitiveCount)
+3138-{
+3139:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3140-		return;
+3141-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount * 2), static_cast<UINT>(startVertex));
+3142-}
+3143-
+3144-void Direct3d11_StateCache::drawPartialLineStrip(int startVertex, int primitiveCount)
+3145-{
+3146:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3147-		return;
+3148-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount + 1), static_cast<UINT>(startVertex));
+3149-}
+3150-
+3151-void Direct3d11_StateCache::drawPartialTriangleList(int startVertex, int primitiveCount)
+3152-{
+3153:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3154-		return;
+3155-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount * 3), static_cast<UINT>(startVertex));
+3156-}
+3157-
+3158-void Direct3d11_StateCache::drawPartialTriangleStrip(int startVertex, int primitiveCount)
+3159-{
+3160:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3161-		return;
+3162-	Direct3d11_Device::getContext()->Draw(static_cast<UINT>(primitiveCount + 2), static_cast<UINT>(startVertex));
+3163-}
+3164-
+3165-void Direct3d11_StateCache::drawPartialTriangleFan(int startVertex, int primitiveCount)
+3166-{
+--
+3175-	if (vertCount > ms_triangleFanMaxVertices)
+3176-		ms_triangleFanMaxVertices = vertCount;
+3177-
+3178-	if (!ensureTriangleFanIB(vertCount))
+3179-		return;
+3180-
+3181:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3182-		return;
+3183-
+3184-	ID3D11DeviceContext *ctx = Direct3d11_Device::getContext();
+3185:	ctx->IASetIndexBuffer(
+3186-		ms_triangleFanIB.Get(),
+3187-		DXGI_FORMAT_R16_UINT,
+3188-		0);
+3189-
+3190:	ctx->DrawIndexed(
+3191-		static_cast<UINT>(primitiveCount * 3),
+3192-		0,
+3193-		static_cast<INT>(startVertex));
+3194-
+3195-	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind (see drawTriangleFan).
+3196-	if (ms_currentIBValid && ms_currentIB)
+3197:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+3198-}
+3199-
+3200-// ------------------------------------------------------------------
+3201-// Partial indexed variants.
+3202-
+3203-void Direct3d11_StateCache::drawPartialIndexedPointList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3204-{
+3205:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST))
+3206-		return;
+3207:	Direct3d11_Device::getContext()->DrawIndexed(
+3208-		static_cast<UINT>(primitiveCount),
+3209-		static_cast<UINT>(startIndex),
+3210-		static_cast<INT>(baseIndex));
+3211-}
+3212-
+3213-void Direct3d11_StateCache::drawPartialIndexedLineList(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3214-{
+3215:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINELIST))
+3216-		return;
+3217:	Direct3d11_Device::getContext()->DrawIndexed(
+3218-		static_cast<UINT>(primitiveCount * 2),
+3219-		static_cast<UINT>(startIndex),
+3220-		static_cast<INT>(baseIndex));
+3221-}
+3222-
+3223-void Direct3d11_StateCache::drawPartialIndexedLineStrip(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+3224-{
+3225:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP))
+3226-		return;
+3227:	Direct3d11_Device::getContext()->DrawIndexed(
+3228-		static_cast<UINT>(primitiveCount + 1),
+3229-		static_cast<UINT>(startIndex),
+3230-		static_cast<INT>(baseIndex));
+3231-}
+3232-
+3233-void Direct3d11_StateCache::drawPartialIndexedTriangleList(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+3234-{
+3235:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3236-		return;
+3237-
+3238-	// CAPE-COLLAPSE DRAW-OFFSET PROBE v2 2026-06-06 (DIAGNOSTIC -- REMOVE after).
+3239-	// Engine skin + D3D11 write are PROVEN clean (cape-collapse-probe / cape-d3d11-probe);
+3240-	// the GPU draw reads collapsed. v1 gated on the SINGLE-stream state (ms_currentVBValid)
+3241-	// and never fired -- SBSSP binds via setVertexBufferVector (the VECTOR path:
+3242-	// ms_currentVBVectorActive=true, ms_currentVBValid=false). This logs the VECTOR stream-0
+3243-	// bound offset at the garment draw and compares to the write offset (cape-d3d11-probe
+3244-	// offsetVerts). boundVertOffset == write offset => bind matches => OVERWRITE/rename of the
+3245-	// slice between write and the deferred draw. boundVertOffset != write offset => MISREAD
+3246:	// (deferred draw binds the wrong offset). Read AFTER applyPreDrawState so the bind state is
+3247-	// settled. stride 48 = the skinned garment format. Writes stage/cape-draw-probe.txt.
+3248-	{
+3249-		bool const cdVec    = ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0;
+3250-		UINT const cdStride = cdVec ? ms_currentVBVectorStrides[0] : ms_currentVBStride;
+3251-		UINT const cdOffset = cdVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
+3252-		ID3D11Buffer * const cdBuf = cdVec ? ms_currentVBVectorBuffers[0] : ms_currentVB;
+--
+3445-					}
+3446-				}
+3447-			}
+3448-		}
+3449-	}
+3450-
+3451:	Direct3d11_Device::getContext()->DrawIndexed(
+3452-		static_cast<UINT>(primitiveCount * 3),
+3453-		static_cast<UINT>(startIndex),
+3454-		static_cast<INT>(baseIndex));
+3455-}
+3456-
+3457-void Direct3d11_StateCache::drawPartialIndexedTriangleStrip(int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount)
+3458-{
+3459:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP))
+3460-		return;
+3461-
+3462-	// CAPE-COLLAPSE STRIP READ-PAST PROBE 2026-06-07 (DIAGNOSTIC -- REMOVE after). CONSULT-24:
+3463-	// tri-LIST draws are in-range (readPast=0). Strips use getTriStripVertexIndex() = the RAW
+3464-	// un-compacted index while m_vertexCount is the COMPACTED count -> strip indices CAN exceed
+3465-	// m_vertexCount-1 -> DrawIndexed fetches the ZERO tail past the locked slice -> collapse to
+--
+3540-					}
+3541-				}
+3542-			}
+3543-		}
+3544-	}
+3545-
+3546:	Direct3d11_Device::getContext()->DrawIndexed(
+3547-		static_cast<UINT>(primitiveCount + 2),
+3548-		static_cast<UINT>(startIndex),
+3549-		static_cast<INT>(baseIndex));
+3550-}
+3551-
+3552-void Direct3d11_StateCache::drawPartialIndexedTriangleFan(int baseIndex, int /*minimumVertexIndex*/, int /*numberOfVertices*/, int startIndex, int primitiveCount)
+--
+3565-			"Plan 11-09.16 territory per CODEX 11-09.15 Q3.";
+3566-		if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
+3567-			iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, msg);
+3568-		DEBUG_REPORT_LOG_PRINT(true, ("%s\n", msg));
+3569-	}
+3570-
+3571:	if (!applyPreDrawState(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST))
+3572-		return;
+3573:	Direct3d11_Device::getContext()->DrawIndexed(
+3574-		static_cast<UINT>(primitiveCount + 2),
+3575-		static_cast<UINT>(startIndex),
+3576-		static_cast<INT>(baseIndex));
+3577-}
+3578-
+3579-// ======================================================================
+
+ succeeded in 1069ms:
+277-	//   - setBrightnessContrastGamma -> DXGI output color-space / per-frame
+278-	//     post-process LUT (D3D11 has no IDirect3DDevice9::SetGammaRamp
+279-	//     equivalent at the device level)
+280-	//   - update -> per-frame elapsed-time bookkeeping (DPVS-style timing,
+281-	//     dynamic-vertex-buffer discard, etc.; Wave 4+ when resource layer
+282-	//     and instrumentation arrive)
+283-
+284-	void setBrightnessContrastGamma_impl(float /*brightness*/, float /*contrast*/, float /*gamma*/)
+285-	{
+286-		// no-op in scaffold; Wave 4+ wires real gamma/contrast/brightness
+287-	}
+288-
+289:	void update_impl(float /*elapsedTime*/)
+290-	{
+291-		// DEDICATED SOFT-SKIN RING (2026-06-07): reset the soft-skin dynamic VB ring once per
+292-		// frame, here -- this is the gl_api update hook (ms_glApi.update), which fires once per
+293-		// frame BEFORE the first beginScene (NOT per-pass; per-pass reset tears geometry since
+294-		// draws defer across passes). First skinned lock of the frame then WRITE_DISCARDs a
+295-		// fresh generation and the rest of the frame appends, so the frame's skinned slices
+296-		// coexist and each deferred draw reads its own data. Main ring is untouched.
+297:		Direct3d11_DynamicVertexBufferData::beginFrameSkin();
+298-	}
+299-
+300-	// Plan 11-09.10: realize the design intent of the comment block at the
+301-	// install-time wire-up below -- D3D11 has no fixed-function point-sprite
+302-	// control (the D3DRS_POINTSIZE / D3DRS_POINTSPRITEENABLE / D3DRS_POINTSCALE*
+303-	// render states D3D9 used were dropped in D3D10+). HLSL SV_POINTSIZE
+304-	// could carry per-vertex point size, but only at Feature Level 9.x; we
+305-	// run vs_4_0 / FL10+ since Plan 11-09.6. These slots no-op so the
+306-	// engine's Graphics::setPointSize / setPointSize{Min,Max} /
+307-	// setPointScale{Enable,Factor} / setPointSpriteEnable callers (notably
+308-	// StarAppearance::draw for night-sky stars) return cleanly. POINTLIST
+309-	// topology draws as 1-pixel hardware-default points (Direct3d11_StateCache
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "ms_sliceFirstVertex|ms_sliceNumberOfVertices|SetStreamSource|setStreamSource|setVertexDeclaration|ms_savedIndexBuffer|ms_sliceFirstIndex|drawIndexedPrimitive|DrawIndexedPrimitive|SetIndices" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "Direct3d9::drawIndexedPrimitive|void Direct3d9::drawIndexedPrimitive|DrawIndexedPrimitive" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 6 "Direct3d9_StateCache::setStreamSource|Direct3d9_StateCache::setIndices|Direct3d9_StateCache::setVertexDeclaration|Direct3d9_StateCache::setIndexBuffer" src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"ms_currentIBOffset|ms_currentIBIndexCount|ms_currentVBVectorOffsets|ms_currentVBOffset|data->getOffset|IASetIndexBuffer|DrawIndexed\\(\" src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp" in D:\Code\swg-client-v2
+ succeeded in 852ms:
+4137:inline void Direct3d9::drawIndexedPrimitive(D3DPRIMITIVETYPE primitiveType, int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, int numberOfIndices)
+4142:	Direct3d9_Metrics::perPassDrawIndexedPrimitiveCalls[ms_currentPassIndex] += 1;
+4157:		HRESULT hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+4170:				hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+4294:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, numberOfTriangles, numberOfTriangles * 3);
+4308:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices, ms_sliceNumberOfIndices);
+4322:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 2, ms_sliceNumberOfIndices);
+4336:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 1, ms_sliceNumberOfIndices);
+4350:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 3, ms_sliceNumberOfIndices);
+4364:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+4378:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+4472:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount);
+4485:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 2);
+4498:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount+1);
+4512:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 3);
+4526:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+4540:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+
+ succeeded in 913ms:
+520:	int                                        ms_sliceNumberOfVertices;
+521:	int                                        ms_sliceFirstVertex;
+523:	IDirect3DIndexBuffer9 *                    ms_savedIndexBuffer;
+525:	int                                        ms_sliceFirstIndex;
+2488:	ms_savedIndexBuffer = NULL;
+3031:	calls     = Direct3d9_Metrics::drawPrimitiveCalls + Direct3d9_Metrics::drawIndexedPrimitiveCalls;
+3724:				ms_sliceNumberOfVertices = staticVertexBuffer->getNumberOfVertices();
+3725:				ms_sliceFirstVertex      = 0;
+3739:				ms_sliceNumberOfVertices = data->getNumberOfVertices();
+3740:				ms_sliceFirstVertex      = data->getOffset();
+3749:	Direct3d9_StateCache::setVertexDeclaration(vertexDeclaration);
+3752:	Direct3d9_StateCache::setStreamSource(0, vb, byteOffset, vertexSize);
+3754:		Direct3d9_StateCache::setStreamSource(i, 0, 0, 0);
+3773:	ms_sliceFirstVertex = 0;
+3812:						DEBUG_FATAL(ms_sliceNumberOfVertices!=staticVertexBuffer->getNumberOfVertices(),
+3815:						DEBUG_FATAL(ms_sliceFirstVertex!=0,
+3824:					ms_sliceNumberOfVertices = staticVertexBuffer->getNumberOfVertices();
+3825:					ms_sliceFirstVertex      = 0;
+3842:						DEBUG_FATAL(ms_sliceNumberOfVertices!=data->getNumberOfVertices(),
+3847:							DEBUG_FATAL(ms_sliceFirstVertex!=data->getOffset(),
+3854:					ms_sliceNumberOfVertices = data->getNumberOfVertices();
+3861:						ms_sliceFirstVertex = data->getOffset();
+3870:		Direct3d9_StateCache::setStreamSource(stream, vb, byteOffset, vertexSize);
+3880:			Direct3d9_StateCache::setStreamSource(i, 0, 0, 0);
+3914:		ms_savedIndexBuffer     = ib->getIndexBuffer();
+3916:		ms_sliceFirstIndex      = 0;
+3925:		ms_savedIndexBuffer     = Direct3d9_DynamicIndexBufferData::getIndexBuffer();
+3927:		ms_sliceFirstIndex      = ib->getOffset();
+3930:	Direct3d9_StateCache::setIndexBuffer(ms_savedIndexBuffer);
+4052:	Direct3d9_Metrics::vertices += ms_sliceNumberOfVertices;
+4101:		HRESULT hresult = ms_device->DrawPrimitive(primitiveType, ms_sliceFirstVertex + startVertex, primitiveCount);
+4115:				hresult = ms_device->DrawPrimitive(primitiveType, ms_sliceFirstVertex + startVertex, primitiveCount);
+4137:inline void Direct3d9::drawIndexedPrimitive(D3DPRIMITIVETYPE primitiveType, int baseIndex, int minimumVertexIndex, int numberOfVertices, int startIndex, int primitiveCount, int numberOfIndices)
+4141:	Direct3d9_Metrics::drawIndexedPrimitiveCalls += 1;
+4142:	Direct3d9_Metrics::perPassDrawIndexedPrimitiveCalls[ms_currentPassIndex] += 1;
+4149:		DEBUG_FATAL(!ms_savedIndexBuffer, ("No saved index buffer"));
+4157:		HRESULT hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+4170:				hresult = ms_device->DrawIndexedPrimitive(primitiveType, ms_sliceFirstVertex + baseIndex, minimumVertexIndex, numberOfVertices, ms_sliceFirstIndex + startIndex, primitiveCount);
+4193:	if (!shouldDraw(false, ms_sliceNumberOfVertices))
+4196:	Direct3d9_Metrics::points += ms_sliceNumberOfVertices;
+4199:	Direct3d9::drawPrimitive(D3DPT_POINTLIST, 0, ms_sliceNumberOfVertices);
+4207:	if (!shouldDraw(false, ms_sliceNumberOfVertices /2))
+4210:	Direct3d9_Metrics::lines += (ms_sliceNumberOfVertices / 2);
+4213:	Direct3d9::drawPrimitive(D3DPT_LINELIST, 0, ms_sliceNumberOfVertices / 2);
+4221:	if (!shouldDraw(false, ms_sliceNumberOfVertices - 1))
+4224:	Direct3d9_Metrics::lines += (ms_sliceNumberOfVertices - 1);
+4227:	Direct3d9::drawPrimitive(D3DPT_LINESTRIP, 0, ms_sliceNumberOfVertices - 1);
+4235:	if (!shouldDraw(false, ms_sliceNumberOfVertices / 3))
+4238:	Direct3d9_Metrics::triangles += (ms_sliceNumberOfVertices / 3);
+4239:	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += (ms_sliceNumberOfVertices / 3);
+4242:	Direct3d9::drawPrimitive(D3DPT_TRIANGLELIST, 0, ms_sliceNumberOfVertices / 3);
+4250:	if (!shouldDraw(false, ms_sliceNumberOfVertices - 2))
+4253:	Direct3d9_Metrics::triangles += (ms_sliceNumberOfVertices - 2);
+4254:	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += (ms_sliceNumberOfVertices - 2);
+4257:	Direct3d9::drawPrimitive(D3DPT_TRIANGLESTRIP, 0, ms_sliceNumberOfVertices - 2);
+4265:	if (!shouldDraw(false, ms_sliceNumberOfVertices - 2))
+4268:	Direct3d9_Metrics::triangles += (ms_sliceNumberOfVertices - 2);
+4269:	Direct3d9_Metrics::perPassTriangles[ms_currentPassIndex] += (ms_sliceNumberOfVertices - 2);
+4272:	Direct3d9::drawPrimitive(D3DPT_TRIANGLEFAN, 0, ms_sliceNumberOfVertices - 2);
+4279:	int const numberOfQuads = ms_sliceNumberOfVertices / 4;
+4294:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, numberOfTriangles, numberOfTriangles * 3);
+4308:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices, ms_sliceNumberOfIndices);
+4322:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 2, ms_sliceNumberOfIndices);
+4336:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 1, ms_sliceNumberOfIndices);
+4350:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices / 3, ms_sliceNumberOfIndices);
+4364:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+4378:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, 0, 0, ms_sliceNumberOfVertices, 0, ms_sliceNumberOfIndices - 2, ms_sliceNumberOfIndices);
+4472:	Direct3d9::drawIndexedPrimitive(D3DPT_POINTLIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount);
+4485:	Direct3d9::drawIndexedPrimitive(D3DPT_LINELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 2);
+4498:	Direct3d9::drawIndexedPrimitive(D3DPT_LINESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount+1);
+4512:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLELIST, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount * 3);
+4526:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLESTRIP, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+4540:	Direct3d9::drawIndexedPrimitive(D3DPT_TRIANGLEFAN, baseIndex, minimumVertexIndex, numberOfVertices, startIndex, primitiveCount, primitiveCount + 2);
+
+ succeeded in 839ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:97:// and dynamic (offset=data->getOffset() in vertices); we encode the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:145:					offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:141:	UINT            ms_currentVBOffset   = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:157:	UINT                          ms_currentVBVectorOffsets[kMaxVBStreams] = {};
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:162:	UINT            ms_currentIBOffset   = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:163:	int             ms_currentIBIndexCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1244:				ms_currentVBVectorOffsets);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1250:			UINT offsets[1]      = { ms_currentVBOffset };
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1273:			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1629:		ms_currentVBVectorOffsets[i] = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2253:	ms_currentVBOffset = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2265:		ms_currentVBOffset       = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2292:		ms_currentVBOffset       = static_cast<UINT>(data->getOffset()) * ms_currentVBStride;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2321:	ms_currentVBOffset = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2334:		ms_currentVBVectorOffsets[i] = (i < streamCount && offsets) ? offsets[i] : 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2353:	ms_currentIBOffset = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2354:	ms_currentIBIndexCount = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2364:		ms_currentIBOffset       = 0;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2365:		ms_currentIBIndexCount   = sib->getNumberOfIndices();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2377:		ms_currentIBOffset       = static_cast<UINT>(data->getOffset() * sizeof(Index));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2378:		ms_currentIBIndexCount   = data->getNumberOfIndices();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2600:				(void *)ms_currentVB, ms_currentVBStride, ms_currentVBOffset, ms_currentVBValid ? 1 : 0,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2602:				static_cast<int>(ms_currentIBFormat), ms_currentIBOffset, ms_currentIBIndexCount,
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2939:	ctx->IASetIndexBuffer(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2944:	ctx->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2956:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2971:	// DrawIndexed(numQuads * 6, 0, 0). Defensive IB rebind matches the
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2994:	ctx->IASetIndexBuffer(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3045:	ctx->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3054:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3061:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3068:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3075:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3082:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3089:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3124:	Direct3d11_Device::getContext()->DrawIndexed(static_cast<UINT>(ms_currentIBIndexCount), 0, 0);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3185:	ctx->IASetIndexBuffer(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3190:	ctx->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3197:		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3207:	Direct3d11_Device::getContext()->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3217:	Direct3d11_Device::getContext()->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3227:	Direct3d11_Device::getContext()->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3251:		UINT const cdOffset = cdVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3290:		UINT const csOffset = csVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3451:	Direct3d11_Device::getContext()->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3471:		UINT const ssOffset = ssVec ? ms_currentVBVectorOffsets[0] : ms_currentVBOffset;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3546:	Direct3d11_Device::getContext()->DrawIndexed(
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3573:	Direct3d11_Device::getContext()->DrawIndexed(
+
+ succeeded in 887ms:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-284-	HRESULT hresult = ms_device->SetIndices(ms_indexBuffer);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-285-	FATAL_DX_HR("SetIndices failed %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-286-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-287-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-288-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-289-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h:290:inline void Direct3d9_StateCache::setIndexBuffer(IDirect3DIndexBuffer9 *indexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-291-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-292-#if !STATE_CACHE_ALWAYS_FORCE
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-293-	if (ms_indexBuffer != indexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-294-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-295-		forceIndexBuffer(indexBuffer);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-296-}
+--
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-314-	HRESULT hresult = ms_device->SetStreamSource(static_cast<DWORD>(streamIndex), stream, byteOffset, stride);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-315-	FATAL_DX_HR("Failed to set stream source %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-316-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-317-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-318-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-319-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h:320:inline void Direct3d9_StateCache::setStreamSource(int streamIndex, IDirect3DVertexBuffer9 *stream, UINT byteOffset, UINT stride)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-321-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-322-	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, streamIndex, ms_maxStreamCount);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-323-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-324-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-325-	++Direct3d9_Metrics::setStreamSourceCalls;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-326-#endif
+--
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-346-	HRESULT hresult = ms_device->SetVertexDeclaration(vertexDeclaration);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-347-	FATAL_DX_HR("SetVertexDeclaration failed %s", hresult);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-348-}
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-349-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-350-// ----------------------------------------------------------------------
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-351-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h:352:inline void Direct3d9_StateCache::setVertexDeclaration(IDirect3DVertexDeclaration9 *vertexDeclaration)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-353-{
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-354-#ifdef _DEBUG
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-355-	++Direct3d9_Metrics::setVertexDeclarationCalls;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-356-#endif
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-357-
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StateCache.h-358-#if !STATE_CACHE_ALWAYS_FORCE
+
+codex
+The draw-side mapping is clear too: D3D9 folds the dynamic VB slice vertex offset into `DrawIndexedPrimitive(BaseVertexIndex = ms_sliceFirstVertex + baseIndex)` while D3D11 uses the dynamic slice as an IA byte offset and passes the engine `baseIndex` unchanged as `BaseVertexLocation`. That is correct if the IA byte offset is stable and bound from the same ring generation that was written.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"createVertexBufferData\\(|createIndexBufferData\\(|createVertexBufferVectorData\\(\" src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"StaticIndexBufferData::|lock\\(|unlock\\(|getIndexBuffer|getNumberOfIndices|CreateIndexBuffer|CreateBuffer|Map\\(|Unmap\" src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.h src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"StaticVertexBufferData::|lock\\(|unlock\\(|getVertexBuffer|getNumberOfVertices|getDescriptor|getVertexSize|CreateVertexBuffer|CreateBuffer|Map\\(|Unmap\" src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "HardwareVertexBuffer::HardwareVertexBuffer|m_graphicsData =|createDynamicVertexBufferData|createStaticVertexBufferData|HardwareIndexBuffer::HardwareIndexBuffer|createDynamicIndexBufferData|createStaticIndexBufferData" src/engine/client/library/clientGraphics/src/shared' in D:\Code\swg-client-v2
+ succeeded in 665ms:
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:18:MemoryBlockManager *  Direct3d9_StaticIndexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:22:void Direct3d9_StaticIndexBufferData::install()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:29:void Direct3d9_StaticIndexBufferData::remove()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:37:void *Direct3d9_StaticIndexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:48:void Direct3d9_StaticIndexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:56:Direct3d9_StaticIndexBufferData::Direct3d9_StaticIndexBufferData(const StaticIndexBuffer &indexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:63:	m_memorySize(indexBuffer.getNumberOfIndices() * sizeof(Index))
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:66:	const int length = indexBuffer.getNumberOfIndices() * sizeof(Index);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:68:	const HRESULT hresult = device->CreateIndexBuffer(length, 0, D3DFMT_INDEX16, D3DPOOL_MANAGED, &m_d3dIndexBuffer, NULL);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:79:Direct3d9_StaticIndexBufferData::~Direct3d9_StaticIndexBufferData()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:91:Index *Direct3d9_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:93:	const int numberOfIndices = m_indexBuffer.getNumberOfIndices();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:110:void Direct3d9_StaticIndexBufferData::unlock()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:112:	const HRESULT hresult = m_d3dIndexBuffer->Unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:120:bool Direct3d9_StaticIndexBufferData::firstTimeUsedThisFrame() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.cpp:135:int Direct3d9_StaticIndexBufferData::getMemorySize() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h:9:// via lock() after CreateBuffer).
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h:44:	virtual Index *lock(bool readOnly);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h:45:	virtual void   unlock();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h:47:	ID3D11Buffer *getIndexBuffer() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.h:69:inline ID3D11Buffer *Direct3d11_StaticIndexBufferData::getIndexBuffer() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.h:38:	virtual Index *lock(bool readOnly);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.h:39:	virtual void   unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.h:41:	IDirect3DIndexBuffer9 *getIndexBuffer() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticIndexBufferData.h:76:inline IDirect3DIndexBuffer9 *Direct3d9_StaticIndexBufferData::getIndexBuffer() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:24:MemoryBlockManager *Direct3d11_StaticIndexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:28:void Direct3d11_StaticIndexBufferData::install()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:38:void Direct3d11_StaticIndexBufferData::remove()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:46:void *Direct3d11_StaticIndexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:57:void Direct3d11_StaticIndexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:65:Direct3d11_StaticIndexBufferData::Direct3d11_StaticIndexBufferData(const StaticIndexBuffer &indexBuffer)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:76:	UINT const byteWidth = static_cast<UINT>(indexBuffer.getNumberOfIndices() * sizeof(Index));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:85:	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dIndexBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:86:	FATAL_DX_HR("Direct3d11_StaticIndexBufferData::CreateBuffer (static IB) failed: %s", hr);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:91:Direct3d11_StaticIndexBufferData::~Direct3d11_StaticIndexBufferData()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:103:Index *Direct3d11_StaticIndexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:107:	int const length = m_indexBuffer.getNumberOfIndices() * static_cast<int>(sizeof(Index));
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticIndexBufferData.cpp:119:void Direct3d11_StaticIndexBufferData::unlock()
+
+ succeeded in 676ms:
+348:	StaticVertexBufferGraphicsData *   createVertexBufferData(const StaticVertexBuffer &vertexBuffer);
+349:	DynamicVertexBufferGraphicsData *  createVertexBufferData(const DynamicVertexBuffer &vertexBuffer);
+350:	VertexBufferVectorGraphicsData *   createVertexBufferVectorData(VertexBufferVector const & vertexBufferVector);
+352:	StaticIndexBufferGraphicsData *    createIndexBufferData(const StaticIndexBuffer &indexBuffer);
+353:	DynamicIndexBufferGraphicsData *   createIndexBufferData();
+3634:StaticVertexBufferGraphicsData *Direct3d9Namespace::createVertexBufferData(const StaticVertexBuffer &vertexBuffer)
+3641:DynamicVertexBufferGraphicsData *Direct3d9Namespace::createVertexBufferData(const DynamicVertexBuffer &vertexBuffer)
+3648:VertexBufferVectorGraphicsData *Direct3d9Namespace::createVertexBufferVectorData(VertexBufferVector const & vertexBufferVector)
+3655:StaticIndexBufferGraphicsData *Direct3d9Namespace::createIndexBufferData(const StaticIndexBuffer &indexBuffer)
+3662:DynamicIndexBufferGraphicsData *Direct3d9Namespace::createIndexBufferData()
+
+ succeeded in 632ms:
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:8:// engine fills the buffer via lock() AFTER CreateBuffer, so true
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:44:	virtual void                            *lock(bool readOnly);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:45:	virtual void                             unlock();
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:46:	virtual const VertexBufferDescriptor    &getDescriptor() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:49:	ID3D11Buffer *getVertexBuffer() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:50:	int           getVertexSize() const;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:73:inline ID3D11Buffer *Direct3d11_StaticVertexBufferData::getVertexBuffer() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.h:80:inline int Direct3d11_StaticVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:19:MemoryBlockManager * Direct3d9_StaticVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:23:void Direct3d9_StaticVertexBufferData::install()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:30:void Direct3d9_StaticVertexBufferData::remove()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:38:void *Direct3d9_StaticVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:49:void Direct3d9_StaticVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:57:Direct3d9_StaticVertexBufferData::Direct3d9_StaticVertexBufferData(const StaticVertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:60:	m_descriptor(Direct3d9_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:66:	m_memorySize(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices())
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:71:	HRESULT hresult = device->CreateVertexBuffer(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices(), 0, 0, D3DPOOL_MANAGED, &m_d3dVertexBuffer, NULL);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:82:Direct3d9_StaticVertexBufferData::~Direct3d9_StaticVertexBufferData()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:95:const VertexBufferDescriptor  &Direct3d9_StaticVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:102:void *Direct3d9_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:121:void Direct3d9_StaticVertexBufferData::unlock()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:123:	const HRESULT hresult = m_d3dVertexBuffer->Unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:129:int Direct3d9_StaticVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:137:bool Direct3d9_StaticVertexBufferData::firstTimeUsedThisFrame() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.cpp:150:int Direct3d9_StaticVertexBufferData::getMemorySize() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:9:// engine fills the buffer via lock() AFTER CreateBuffer (Texture / mesh
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:11:// is not workable. Engine lock() returns a CPU staging block; unlock()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:34:MemoryBlockManager *Direct3d11_StaticVertexBufferData::ms_memoryBlockManager;
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:38:void Direct3d11_StaticVertexBufferData::install()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:48:void Direct3d11_StaticVertexBufferData::remove()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:56:void *Direct3d11_StaticVertexBufferData::operator new(size_t size)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:67:void Direct3d11_StaticVertexBufferData::operator delete(void *memory)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:75:Direct3d11_StaticVertexBufferData::Direct3d11_StaticVertexBufferData(const StaticVertexBuffer &vertexBuffer)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:79:	m_descriptor(Direct3d11_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:87:	UINT const byteWidth = static_cast<UINT>(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices());
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:97:	// CreateBuffer. UpdateSubresource on unlock writes the data.
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:98:	HRESULT const hr = device->CreateBuffer(&bd, nullptr, &m_d3dBuffer);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:99:	FATAL_DX_HR("Direct3d11_StaticVertexBufferData::CreateBuffer (static VB) failed: %s", hr);
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:104:Direct3d11_StaticVertexBufferData::~Direct3d11_StaticVertexBufferData()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:116:const VertexBufferDescriptor &Direct3d11_StaticVertexBufferData::getDescriptor() const
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:123:void *Direct3d11_StaticVertexBufferData::lock(bool readOnly)
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:128:	UINT const byteWidth = static_cast<UINT>(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices());
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:147:void Direct3d11_StaticVertexBufferData::unlock()
+src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticVertexBufferData.cpp:165:int Direct3d11_StaticVertexBufferData::getSortKey()
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:39:	virtual void                            *lock(bool readOnly);
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:40:	virtual void                             unlock();
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:41:	virtual const VertexBufferDescriptor    &getDescriptor() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:44:	IDirect3DVertexBuffer9      *getVertexBuffer() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:45:	int                          getVertexSize() const;
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:80:inline IDirect3DVertexBuffer9 *Direct3d9_StaticVertexBufferData::getVertexBuffer() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:87:inline int Direct3d9_StaticVertexBufferData::getVertexSize() const
+src/engine/client/application/Direct3d9/src/win32/Direct3d9_StaticVertexBufferData.h:94:inline IDirect3DVertexDeclaration9 *Direct3d9_StaticVertexBufferData::getVertexDeclaration() const
+
+ succeeded in 634ms:
+src/engine/client/library/clientGraphics/src/shared\DynamicIndexBuffer.cpp:39:	m_graphicsData = Graphics::createIndexBufferData();
+src/engine/client/library/clientGraphics/src/shared\DynamicVertexBuffer.cpp:82:	m_graphicsData = Graphics::createVertexBufferData(*this);
+src/engine/client/library/clientGraphics/src/shared\HardwareIndexBuffer.h:43:inline HardwareIndexBuffer::HardwareIndexBuffer(Type type)
+src/engine/client/library/clientGraphics/src/shared\HardwareVertexBuffer.cpp:14:HardwareVertexBuffer::HardwareVertexBuffer(Type type, const VertexBufferFormat &format)
+src/engine/client/library/clientGraphics/src/shared\HardwareVertexBuffer.cpp:22:HardwareVertexBuffer::HardwareVertexBuffer(Type type)
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:422:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:482:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:542:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:602:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:674:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:745:		m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:766:	m_graphicsData = Graphics::createShaderImplementationGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2152:		m_graphicsData = 0;
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2164:		m_graphicsData = Graphics::createVertexShaderData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2262:		m_graphicsData = Graphics::createVertexShaderData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2770:		m_graphicsData = Graphics::createPixelShaderProgramData(*this);
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2847:		m_graphicsData = 0;
+src/engine/client/library/clientGraphics/src/shared\ShaderImplementation.cpp:2856:		m_graphicsData = Graphics::createPixelShaderProgramData(*this);
+src/engine/client/library/clientGraphics/src/shared\StaticIndexBuffer.cpp:29:	m_graphicsData = Graphics::createIndexBufferData(*this);
+src/engine/client/library/clientGraphics/src/shared\StaticShader.cpp:274:	m_graphicsData = Graphics::createStaticShaderGraphicsData(*this);
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.cpp:81:	m_graphicsData = Graphics::createVertexBufferData(*this);
+src/engine/client/library/clientGraphics/src/shared\StaticVertexBuffer.cpp:118:	m_graphicsData = Graphics::createVertexBufferData(*this);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:222:	m_graphicsData = Graphics::createTextureData(*this, &sourceFormat, 1);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:259:	m_graphicsData = Graphics::createTextureData(*this, runtimeFormatArray, runtimeFormatCount);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:306:	m_graphicsData = Graphics::createTextureData(*this, runtimeTextureFormats, textureFormatCount);
+src/engine/client/library/clientGraphics/src/shared\Texture.cpp:720:		m_graphicsData = Graphics::createTextureData(*this, ms_conversions[sourceFormat], ms_conversionCount[sourceFormat]);
+src/engine/client/library/clientGraphics/src/shared\VertexBufferVector.cpp:31:	m_graphicsData = Graphics::createVertexBufferVectorData(*this);
+src/engine/client/library/clientGraphics/src/shared\VertexBufferVector.cpp:44:	m_graphicsData = Graphics::createVertexBufferVectorData(*this);
+
+codex
+I’m going to attempt the requested markdown write once with `apply_patch`. Given the read-only sandbox and no approval policy, I expect it may be rejected; if so I’ll provide the content summary and the exact blocking condition in the final response.
+2026-06-07T20:32:46.919896Z ERROR codex_core::tools::router: error=patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"sourceVb|destVbIt|copy\\(|sourceIbIt|copiedVertexCount|submit\\(\" src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "s_batchVertexBuffer|s_batchIndexBuffer|new DynamicVertexBuffer|new DynamicIndexBuffer" src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp' in D:\Code\swg-client-v2
+ succeeded in 598ms:
+124:		SystemVertexBuffer const *const sourceVb = s_vertexBuffers[static_cast<size_t>(bufferIndex)];
+125:		NOT_NULL(sourceVb);
+127:		vertexCount += sourceVb->getNumberOfVertices();
+152:		SystemVertexBuffer const *const sourceVb = s_vertexBuffers[static_cast<size_t>(endIndex)];
+153:		NOT_NULL(sourceVb);
+155:		int const vbVertexCount = sourceVb->getNumberOfVertices();
+183:	int  copiedVertexCount = 0;
+194:	VertexBufferWriteIterator destVbIt = s_batchVertexBuffer->begin();
+205:		SystemVertexBuffer const *const sourceVb = s_vertexBuffers[static_cast<size_t>(bufferIndex)];
+206:		NOT_NULL(sourceVb);
+225:		int const sourceVertexCount = sourceVb->getNumberOfVertices();
+226:		VertexBufferReadIterator sourceVbEndIt = sourceVb->endReadOnly();
+227:		for (VertexBufferReadIterator sourceVbIt = sourceVb->beginReadOnly(); sourceVbIt != sourceVbEndIt; ++sourceVbIt, ++destVbIt)
+230:			destVbIt.setPosition(transform_a2w->rotateTranslate_l2p(sourceVbIt.getPosition()));
+231:			destVbIt.setNormal(transform_a2w->rotate_l2p(sourceVbIt.getNormal()));
+234:			destVbIt.setColor0(color);
+239:		for (Index const *sourceIbIt = sourceIb->beginReadOnly(); sourceIbIt != sourceIbEndIt; ++sourceIbIt, ++destIbIt)
+241:			const int capeRebased = static_cast<int>(*sourceIbIt) + copiedVertexCount; // CAPE-BATCH-PROBE
+244:			*destIbIt = static_cast<unsigned short>(*sourceIbIt + copiedVertexCount);
+251:		copiedVertexCount += sourceVertexCount;
+260:		const bool capeBad = (copiedVertexCount != vertexCount)
+275:					vertexCount, copiedVertexCount, indexCount, capeCopiedIndexCount,
+444:void FullGeometrySkeletalAppearanceBatchRenderer::submit(SkeletalAppearance2 const &appearance)
+
+ succeeded in 585ms:
+80:	DynamicVertexBuffer                         *s_batchVertexBuffer;
+81:	DynamicIndexBuffer                          *s_batchIndexBuffer;
+104:	delete s_batchVertexBuffer;
+105:	s_batchVertexBuffer = 0;
+107:	delete s_batchIndexBuffer;
+108:	s_batchIndexBuffer = 0;
+192:	NOT_NULL(s_batchVertexBuffer);
+193:	s_batchVertexBuffer->lock(vertexCount, allowDiscard);
+194:	VertexBufferWriteIterator destVbIt = s_batchVertexBuffer->begin();
+196:	NOT_NULL(s_batchIndexBuffer);
+197:	s_batchIndexBuffer->lock(indexCount);
+198:	Index *destIbIt = s_batchIndexBuffer->begin();
+284:	s_batchIndexBuffer->unlock();
+285:	s_batchVertexBuffer->unlock();
+288:	Graphics::setVertexBuffer(*s_batchVertexBuffer);
+289:	Graphics::setIndexBuffer(*s_batchIndexBuffer);
+321:	return s_batchVertexBuffer->getSortKey();
+344:	NOT_NULL(s_batchVertexBuffer);
+345:	NOT_NULL(s_batchIndexBuffer);
+358:		int destVerticesAvailable = s_batchVertexBuffer->getNumberOfLockableDynamicVertices(false);
+365:			destVerticesAvailable = s_batchVertexBuffer->getNumberOfLockableDynamicVertices(true);
+422:	s_batchVertexBuffer = new DynamicVertexBuffer(format);
+423:	s_batchIndexBuffer  = new DynamicIndexBuffer();
+
+codex
+I could not write `D:\Code\swg-client-v2\.planning\research\RENDER-PATH-TREE-codex.md`: the session filesystem is read-only and approval is disabled. I did attempt the write with `apply_patch`; it was rejected by the sandbox.
+
+**Plugin-Boundary Call Tree**
+Standard `SoftwareBlendSkeletalShaderPrimitive` path:
+
+| call | D3D9 | D3D11 | divergence |
+| --- | --- | --- | --- |
+| create dynamic VB | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1274) -> [DynamicVertexBuffer.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.cpp:82) -> [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1209) / [Direct3d9_DynamicVertexBufferData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:139) | [Direct3d11.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:374) / [Direct3d11_DynamicVertexBufferData.h](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h:97) | D3D9 uses one shared D3D9 dynamic VB; D3D11 currently routes non-UI/skinned formats to a dedicated skin ring. |
+| set world transform | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:491) -> [Graphics.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/win32/Graphics.cpp:1486) -> [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:3402) | [Direct3d11.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:1060) -> [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1916) | D3D9 caches fixed-function/VS constants immediately; D3D11 composes slot-0 shadow and flushes at `applyPreDrawState()`. Not a tail-only VB corruption fit. |
+| lock dynamic VB | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:737), :754, :776 -> [DynamicVertexBuffer.h](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:186) -> [Direct3d9_DynamicVertexBufferData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:172) | [Direct3d11_DynamicVertexBufferData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:259) | D3D9 `Lock(ms_used, length, D3DLOCK_NOOVERWRITE/DISCARD)` stores `m_offset` as vertex index and advances `ms_used` on unlock. D3D11 `Map(WRITE_NO_OVERWRITE/DISCARD)` returns whole mapped ring, returns `pData + ringUsed`, stores `m_offset=ringUsed/vertexSize`, advances `ringUsed` during lock. Strong suspect class. |
+| begin iterator | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:739), :756, :778 -> [DynamicVertexBuffer.h](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:241) | same shared wrapper | `m_data` is plugin lock pointer. D3D9 pointer is already slice start from `Lock(offset,length)`; D3D11 pointer is computed from mapped whole ring plus `ringUsed`. |
+| skin/copy to dynamic VB | direct `skinData()` [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:757) or system -> dynamic `copy()` at :740/:779 -> [VertexBufferIterator.h](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h:878) | same shared memcpy at [VertexBufferIterator.h](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/VertexBufferIterator.h:884) | Shared code. `m_descriptor->vertexSize` comes from backend descriptor maps; `m_data` differs only by backend lock pointer. If source is sane and D3D11 mapped slice is sane before unmap, `copy()` is exonerated. |
+| unlock dynamic VB | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:742), :759, :781 -> [DynamicVertexBuffer.h](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/DynamicVertexBuffer.h:207) -> [Direct3d9_DynamicVertexBufferData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp:231) | [Direct3d11_DynamicVertexBufferData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp:354), Unmap at :530 | D3D9 advances ring on unlock; D3D11 already advanced during lock. D3D11 mapped memory invalidates after Unmap. Strong suspect only if deferred draw later reads a renamed/reused generation. |
+| bind VB vector | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:819) -> [Graphics.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/win32/Graphics.cpp:2974) -> [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:3764) | [Direct3d11_VertexBufferVectorData.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp:81), dynamic offset multiply at :145, state handoff at :156, IA bind at [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:1239) | D3D9 `SetStreamSource(stream, vb, byteOffset, stride)` plus later `BaseVertexIndex=ms_sliceFirstVertex+baseIndex`; D3D11 IA byte offset absorbs slice offset and draw uses `BaseVertexLocation=baseIndex`. Correct if byte offset and ring pointer match the write. |
+| bind IB | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:823) -> [Graphics.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/win32/Graphics.cpp:2983) -> [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:3891) | [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2349) | Static IB for SBSSP. D3D11 binds `IASetIndexBuffer(..., ms_currentIBOffset)` at :1273. Less likely for source-sane VB tail corruption. |
+| draw commands | [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:828), command render at :306, cull at :311, partial draw at :314 -> [Graphics.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/win32/Graphics.cpp:3315) / :3340 | [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3233) / :3457 | D3D9 calls `DrawIndexedPrimitive(..., ms_sliceFirstVertex + baseIndex, ..., ms_sliceFirstIndex + startIndex, ...)` at [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:4157). D3D11 calls `DrawIndexed(..., startIndex, baseIndex)` at :3451/:3546. Offset semantics differ but should be equivalent. |
+
+Batch path:
+
+| call | shared site | plugin divergence |
+| --- | --- | --- |
+| create batch VB/IB | [FullGeometrySkeletalAppearanceBatchRenderer.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp:422) | Uses dynamic VB and dynamic IB in both plugins. |
+| batch prepare transform | [FullGeometrySkeletalAppearanceBatchRenderer.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp:329) | Vertices are prewritten world-space, so object-to-world is identity. This matches a “world-space stale tail” symptom if batch VB contents are stale. |
+| lock/write batch VB/IB | lock VB :193, begin :194, lock IB :197, begin :198; per-vertex transform/write :227-234; rebased indices :239-244; unlock :284-285 | D3D9 dynamic rings reset in `beginScene()` at [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:2485). D3D11 plain dynamic VB/IB `beginFrame()` methods exist but I found no caller in `Direct3d11.cpp`; only skin ring reset is called from update at [Direct3d11.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:297). Strong batch-path divergence. |
+| batch bind/draw | [FullGeometrySkeletalAppearanceBatchRenderer.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/batch/FullGeometrySkeletalAppearanceBatchRenderer.cpp:288), :289, :290 | Single dynamic VB path in D3D11 uses byte offset at [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2292); draw all indexed triangle list at :3078-3082. |
+
+**Skinning-Mode Selector**
+`m_skinningMode` is set at [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1136). The argument comes from [SkeletalAppearance2.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp:1731): no skinning if screen fraction <= no-skin threshold, hard skinning if allowed and small/forced, otherwise soft skinning at :1737-1742. It is applied to every SBSSP at :1769. Renderer selection should not directly differ by D3D9/D3D11 unless config/caps change `useBatcher` or multi-stream behavior.
+
+Multi-stream selector: SBSSP latches `ms_useMultiStreamVertexBuffers` from `Graphics::getMaximumVertexBufferStreamCount()` and `Graphics::supportsStreamOffsets()` at [SoftwareBlendSkeletalShaderPrimitive.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:340). D3D11 advertises stream offsets and max streams 2 at [Direct3d11.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:228) and :232. D3D9 depends on caps at [Direct3d9.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d9/src/win32/Direct3d9.cpp:1543). This can put the same mesh in different single vs multi-stream VB layout paths.
+
+**Ranked Divergence Suspects**
+1. D3D11 dynamic VB generation/ring reuse between lock/unlock and deferred draw. Best fit for “source sane, GPU-bound dynamic VB corrupt,” especially tail-only stale world-space vertices.
+2. D3D11 batch path world-space dynamic VB plus missing plain dynamic `beginFrame()` caller. Best fit if affected NPCs enter `FullGeometrySkeletalAppearanceBatchRenderer`; batch vertices are explicitly world-space and one bad tail would look like stale world positions.
+3. D3D11 `setVertexBufferVector` offset/ring-buffer mismatch. Current code uses `getRingBuffer()` and multiplies offset by stride, which looks correct, but this is the exact boundary where a stale ring generation or wrong offset would manifest.
+4. Multi-stream capability divergence. Could switch data layout/binding path between D3D9 and D3D11 for the same mesh, but less directly explains “tail-only” unless the dynamic stream tail is underwritten or bound with wrong range.
+5. Draw partial list/strip semantic mismatch. D3D9 uses stream slice in `BaseVertexIndex`; D3D11 uses IA byte offset. This looks intentionally equivalent. Existing comments around D3D11 strip read-past at [Direct3d11_StateCache.cpp](D:/Code/swg-client-v2/src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:3462) are worth cross-checking, but list draws were reportedly in range.
+6. Transform constant path. Could make whole meshes wrong, not just 10-30 tail vertices in the dynamic VB.
+
+No tests were run; this was a read-only source trace.

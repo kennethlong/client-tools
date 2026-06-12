@@ -1,0 +1,582 @@
+Adversarially review this D3D11 dynamic-VB fix diff against CONSULT-22 (.planning/research/CONSULT-22-d3d11-dynamic-vb-churnfree-fence.md) and its -codex.out/-cursor.out. The 3 prior failures: per-generation counter pool (worse/deterministic), per-frame flip with no fence (no change), uniform per-instance buffers (NVIDIA driver crash from resource churn). VERIFY this implementation: (1) fixed N=4 buffers created ONCE at install (no churn); (2) per-frame flip ONLY in beginFrame via Gl_api::update before per-pass beginScene; (3) REAL GPU-query (ID3D11Query EVENT) wait before buffer reuse + signal in present(); (4) D3D9-faithful unlock accounting; (5) no mid-frame discard of a buffer holding deferred slices except logged overflow fallback; (6) fence signal/wait placement correct across frames; (7) any bug that crashes or corrupts. Be specific, cite line numbers in the diff. Flag anything that repeats a prior failure.
+=== DIFF ===
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+index 41dd72ac5..06059c4a6 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp
+@@ -288,7 +288,14 @@ namespace Direct3d11Namespace
+ 
+ 	void update_impl(float /*elapsedTime*/)
+ 	{
+-		// no-op in scaffold; Wave 4+ wires per-frame timing bookkeeping
++		// CONSULT-22 cape/garment-spike fix: once-per-frame dynamic-VB buffer
++		// flip + GPU-fence wait. This is the hook the authors earmarked for
++		// "dynamic-vertex-buffer discard" (comment block above); Graphics::update
++		// fires it every frame BEFORE the first beginScene, the only safe place
++		// to roll the dynamic buffers per-frame (beginScene is per-pass and draws
++		// defer across passes). beginFrame() advances to the next fixed buffer and
++		// waits on its query so the GPU has finished the frame that last used it.
++		Direct3d11_DynamicVertexBufferData::beginFrame();
+ 	}
+ 
+ 	// Plan 11-09.10: realize the design intent of the comment block at the
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+index cd935c62f..6f376ccd3 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_Device.cpp
+@@ -26,6 +26,7 @@
+ 
+ #include "ConfigDirect3d11.h"
+ #include "Direct3d11.h"   // for FATAL_DX_HR + hresultString
++#include "Direct3d11_DynamicVertexBufferData.h"   // CONSULT-22: per-frame dynamic-VB fence signal
+ #include "Direct3d11_StateCache.h"   // Plan 11-09.15 Iter-8: route beginScene viewport setup through setViewport so cb0[9] viewportData lands in slot0 before the first draw
+ 
+ #include "sharedDebug/DebugFlags.h"
+@@ -855,6 +856,13 @@ bool Direct3d11_Device::present()
+ 	// is null (debug layer not live).
+ 	drainInfoQueue();
+ 
++	// CONSULT-22 cape/garment-spike fix: mark the GPU-completion point for the
++	// dynamic-VB buffer this frame used, AFTER all of the frame's draws and
++	// before Present. beginFrame() (next frame, in Gl_api::update) waits on this
++	// query before reusing the buffer N frames later. Present implicitly flushes,
++	// so the End() is reached by the GPU after this frame's submitted work.
++	Direct3d11_DynamicVertexBufferData::signalFrameFence();
++
+ 	HRESULT hr = ms_swapChain->Present(1, 0);  // vsync=1 for Wave 3 MVP (allowTearing override is Wave 4+)
+ 	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+ 	{
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+index 33bb37616..25c9902f9 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+@@ -1,16 +1,23 @@
+ // ======================================================================
+ //
+ // Direct3d11_DynamicVertexBufferData.cpp
+-// Phase 11 D3D11 renderer plugin -- dynamic ring-buffer VB.
+-// Plan 11-04.
++// Phase 11 D3D11 renderer plugin -- dynamic vertex buffer.
++// Plan 11-04. CONSULT-22 fix 2026-06-04 (cape/garment spike fix).
+ //
+-// Ring sized at install() based on DXGI DedicatedVideoMemory (replaces
+-// D3D9's getVideoMemoryInMegabytes -- always shader path, no FFP branch
+-// per Plan 11-01 D-04a DESCOPE verdict).
++// FIXED N-buffer set, per-frame flip, GPU-query retired. See header for
++// the full rationale and the three prior failed approaches.
+ //
+-// Lock/Unlock per RESEARCH Pitfall 5:
+-//   wrap            -> Map(D3D11_MAP_WRITE_DISCARD), reset used=0
+-//   append          -> Map(D3D11_MAP_WRITE_NO_OVERWRITE), advance used
++//   - One buffer holds an entire frame; flip happens ONLY at beginFrame()
++//     (Gl_api::update, before the first per-pass beginScene), gated by a
++//     real ID3D11Query/D3D11_QUERY_EVENT so the GPU has finished the frame
++//     that last used that buffer.
++//   - Within a frame: first lock WRITE_DISCARD, later locks
++//     WRITE_NO_OVERWRITE; D3D9-faithful accounting (advance ms_used on
++//     unlock by ACTUAL count) so CuiLayerRenderer's lock-all-remaining does
++//     not poison the cursor.
++//   - No mid-frame discard of a buffer that holds deferred slices (a fence
++//     can't wait for un-submitted draws). Overflow is logged + falls back
++//     to a discard; size the buffer so it never happens.
+ //
+ // Per D-13: ComPtr ownership; no D3DPOOL_MANAGED / OnLostDevice /
+ // OnResetDevice.
+@@ -31,48 +38,25 @@
+ #include <dxgi.h>
+ #include <wrl/client.h>
+ 
+-// Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). Both
+-// AIs independently fingered the process-wide dynamic VB/IB ring + its
+-// unsynchronized static accounting (ms_used/ms_newFrame) as the #1 suspect
+-// for a live-only, RenderDoc-masked engine-transaction RACE. Smoking-gun test:
+-// log every ring lock that runs OFF the main/render thread. If this fires, an
+-// off-thread graphics transaction is confirmed (the hole the D3D11 runtime
+-// MT-lock does not cover). If it NEVER fires across a corrupt roam, the
+-// threading hypothesis is dead too. REVERT (set to 0) afterward.
+-//
+-// RESULT 2026-05-31: SILENT across a corrupt roam (896 ring unlocks, ~1M draws,
+-// 0 off-thread locks) -> CPU-thread race on the ring is DEAD. Next suspect: the
+-// CPU-races-GPU intra-frame WRITE_NO_OVERWRITE reuse hazard, which the thread
+-// audit cannot see (single CPU thread, but the GPU runs async). P19_DISCARD_ONLY
+-// forces WRITE_DISCARD on every dynamic VB/IB lock so each lock gets a freshly
+-// renamed buffer -> no overlap with an in-flight same-frame draw. Corruption
+-// VANISHES -> ring reuse hazard confirmed. Slow (many renames); diagnostic, REVERT.
+-// RESULT 2026-05-31: DISCARD-only ring = NO CHANGE -> dynamic ring EXONERATED.
+-#define P19_THREAD_AUDIT 0
+-#define P19_DISCARD_ONLY 0
+-
+ // ======================================================================
+ 
+ using Microsoft::WRL::ComPtr;
+ 
+-bool                              Direct3d11_DynamicVertexBufferData::ms_newFrame;
+-int                               Direct3d11_DynamicVertexBufferData::ms_size;
+-int                               Direct3d11_DynamicVertexBufferData::ms_used;
+-ComPtr<ID3D11Buffer>              Direct3d11_DynamicVertexBufferData::ms_d3dRingBuffer;
+-MemoryBlockManager *              Direct3d11_DynamicVertexBufferData::ms_memoryBlockManager;
+-int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceBeginFrame;
+-int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
+-int                               Direct3d11_DynamicVertexBufferData::ms_locksSinceResourceCreation;
+-int                               Direct3d11_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
+-int                               Direct3d11_DynamicVertexBufferData::ms_locksEver;
+-int                               Direct3d11_DynamicVertexBufferData::ms_discardsEver;
+-
+-// Plan 11-09.15 Iter-4 (Test A): stash the slice CPU pointer at lock() so
+-// unlock() can snapshot the engine's written verts BEFORE Unmap invalidates
+-// the mapped memory. Used by the fan-shaped-slice CPU snapshot diagnostic
+-// in unlock(int). File-scope static because the ring buffer is shared; only
+-// one lock can be active at a time.
+-static void *s_lastLockedSliceCPUPtr = nullptr;
++bool                 Direct3d11_DynamicVertexBufferData::ms_newFrame;
++int                  Direct3d11_DynamicVertexBufferData::ms_size;
++int                  Direct3d11_DynamicVertexBufferData::ms_used;
++ComPtr<ID3D11Buffer> Direct3d11_DynamicVertexBufferData::ms_buffers[Direct3d11_DynamicVertexBufferData::kDynamicFrameBuffers];
++ComPtr<ID3D11Query>  Direct3d11_DynamicVertexBufferData::ms_fences[Direct3d11_DynamicVertexBufferData::kDynamicFrameBuffers];
++bool                 Direct3d11_DynamicVertexBufferData::ms_fencePending[Direct3d11_DynamicVertexBufferData::kDynamicFrameBuffers];
++int                  Direct3d11_DynamicVertexBufferData::ms_currentBuffer;
++bool                 Direct3d11_DynamicVertexBufferData::ms_bufferUsedThisFrame;
++MemoryBlockManager * Direct3d11_DynamicVertexBufferData::ms_memoryBlockManager;
++int                  Direct3d11_DynamicVertexBufferData::ms_locksSinceBeginFrame;
++int                  Direct3d11_DynamicVertexBufferData::ms_discardsSinceBeginFrame;
++int                  Direct3d11_DynamicVertexBufferData::ms_locksSinceResourceCreation;
++int                  Direct3d11_DynamicVertexBufferData::ms_discardsSinceResourceCreation;
++int                  Direct3d11_DynamicVertexBufferData::ms_locksEver;
++int                  Direct3d11_DynamicVertexBufferData::ms_discardsEver;
+ 
+ // ======================================================================
+ 
+@@ -83,8 +67,6 @@ void Direct3d11_DynamicVertexBufferData::install()
+ 		"Direct3d11_DynamicVertexBufferData", true,
+ 		sizeof(Direct3d11_DynamicVertexBufferData), 0, 0, 0);
+ 
+-	// Always-shader path (no FFP branch per Plan 11-01 D-04a DESCOPE).
+-	// Query DXGI for DedicatedVideoMemory and pick a ring size.
+ 	ID3D11Device * const device = Direct3d11_Device::getDevice();
+ 	NOT_NULL(device);
+ 
+@@ -104,10 +86,13 @@ void Direct3d11_DynamicVertexBufferData::install()
+ 		}
+ 	}
+ 
+-	if      (videoMemoryMB <=  16) ms_size =  256 * 1024;
+-	else if (videoMemoryMB <=  32) ms_size =  512 * 1024;
+-	else if (videoMemoryMB <=  64) ms_size = 1024 * 1024;
+-	else                           ms_size = 2048 * 1024;
++	// Per-buffer size: one buffer must hold a WHOLE frame of dynamic data
++	// (no mid-frame flip). 4 MB is generous (a busy close scene with correct
++	// accounting is well under 2 MB). N buffers => N * size total VRAM.
++	if      (videoMemoryMB <=  16) ms_size =  512 * 1024;
++	else if (videoMemoryMB <=  32) ms_size = 1024 * 1024;
++	else if (videoMemoryMB <=  64) ms_size = 2048 * 1024;
++	else                           ms_size = 4096 * 1024;
+ 
+ 	D3D11_BUFFER_DESC bd = {};
+ 	bd.ByteWidth      = static_cast<UINT>(ms_size);
+@@ -116,45 +101,119 @@ void Direct3d11_DynamicVertexBufferData::install()
+ 	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+ 	bd.MiscFlags      = 0;
+ 
+-	hr = device->CreateBuffer(&bd, nullptr, &ms_d3dRingBuffer);
+-	FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (dynamic VB ring) failed: %s", hr);
++	D3D11_QUERY_DESC qd = {};
++	qd.Query     = D3D11_QUERY_EVENT;
++	qd.MiscFlags = 0;
++
++	for (int i = 0; i < kDynamicFrameBuffers; ++i)
++	{
++		hr = device->CreateBuffer(&bd, nullptr, &ms_buffers[i]);
++		FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateBuffer (frame buffer) failed: %s", hr);
++
++		hr = device->CreateQuery(&qd, &ms_fences[i]);
++		FATAL_DX_HR("Direct3d11_DynamicVertexBufferData::CreateQuery (frame fence) failed: %s", hr);
++
++		ms_fencePending[i] = false;
++	}
+ 
+-	ms_used     = 0;
+-	ms_newFrame = true;
++	ms_currentBuffer       = kDynamicFrameBuffers - 1;  // first beginFrame() advances to 0
++	ms_used                = 0;
++	ms_newFrame            = true;
++	ms_bufferUsedThisFrame = false;
+ 	ms_locksSinceResourceCreation    = 0;
+ 	ms_discardsSinceResourceCreation = 0;
+ 
+ 	DEBUG_REPORT_LOG_PRINT(true,
+-		("Direct3d11_DynamicVertexBufferData: ring buffer %d KB (videoMemory ~%d MB)\n",
+-		 ms_size / 1024, videoMemoryMB));
++		("Direct3d11_DynamicVertexBufferData: %d frame buffers x %d KB, GPU-query retired (videoMemory ~%d MB)\n",
++		 static_cast<int>(kDynamicFrameBuffers), ms_size / 1024, videoMemoryMB));
+ }
+ 
+ // ----------------------------------------------------------------------
+ 
+ void Direct3d11_DynamicVertexBufferData::remove()
+ {
+-	ms_d3dRingBuffer.Reset();
++	for (int i = 0; i < kDynamicFrameBuffers; ++i)
++	{
++		ms_buffers[i].Reset();
++		ms_fences[i].Reset();
++		ms_fencePending[i] = false;
++	}
+ 
+ 	delete ms_memoryBlockManager;
+ 	ms_memoryBlockManager = nullptr;
+ }
+ 
+ // ----------------------------------------------------------------------
++// Once per frame, from Gl_api::update (Direct3d11.cpp update_impl), BEFORE
++// the first beginScene. Flip to the next buffer and wait until the GPU has
++// finished the frame that last used it -- this is the explicit fence the
++// shared-ring design lacked.
+ 
+ void Direct3d11_DynamicVertexBufferData::beginFrame()
+ {
+-	// Wrap at the start of each frame so per-frame dynamic uploads don't
+-	// stomp on previous-frame data still in-flight.
++	int const next = (ms_currentBuffer + 1) % kDynamicFrameBuffers;
++	waitForBuffer(next);
++
++	ms_currentBuffer           = next;
++	ms_used                    = 0;
+ 	ms_newFrame                = true;
++	ms_bufferUsedThisFrame     = false;
+ 	ms_locksSinceBeginFrame    = 0;
+ 	ms_discardsSinceBeginFrame = 0;
+ }
+ 
++// ----------------------------------------------------------------------
++// Once per frame, from Direct3d11_Device::present() AFTER the frame's last
++// draw and before Present. Marks the GPU-completion point for the buffer
++// this frame used.
++
++void Direct3d11_DynamicVertexBufferData::signalFrameFence()
++{
++	if (!ms_bufferUsedThisFrame)
++		return;
++
++	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
++	if (!context)
++		return;
++
++	context->End(ms_fences[ms_currentBuffer].Get());
++	ms_fencePending[ms_currentBuffer] = true;
++}
++
++// ----------------------------------------------------------------------
++
++void Direct3d11_DynamicVertexBufferData::waitForBuffer(int index)
++{
++	if (!ms_fencePending[index])
++		return;
++
++	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
++	if (!context)
++	{
++		ms_fencePending[index] = false;
++		return;
++	}
++
++	for (;;)
++	{
++		BOOL done = FALSE;
++		HRESULT const hr = context->GetData(ms_fences[index].Get(), &done, sizeof(done), 0);
++		if (hr == S_OK)
++			break;
++		FATAL(FAILED(hr), ("Direct3d11_DynamicVertexBufferData: fence GetData failed 0x%08X", static_cast<unsigned>(hr)));
++		// hr == S_FALSE: GPU not done yet. Spin (matches the proven query
++		// template in Direct3d11_Device::present()). The wait is normally
++		// empty -- a buffer is reused N frames after its query was signalled.
++	}
++
++	ms_fencePending[index] = false;
++}
++
+ // ----------------------------------------------------------------------
+ 
+ ID3D11Buffer *Direct3d11_DynamicVertexBufferData::getSharedRingBuffer()
+ {
+-	return ms_d3dRingBuffer.Get();
++	return ms_buffers[ms_currentBuffer].Get();
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -224,67 +283,57 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
+ 	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+ 	int const length     = numberOfVertices * vertexSize;
+ 
+-#if P19_THREAD_AUDIT
+-	if (!Os::isMainThread())
+-	{
+-		static int s_offThreadVBLocks = 0;
+-		++s_offThreadVBLocks;
+-		char tbuf[160];
+-		_snprintf_s(tbuf, sizeof(tbuf), _TRUNCATE,
+-			"[P19THREAD] dynamic VB ring lock OFF MAIN THREAD tid=%lu count=%d numVerts=%d",
+-			GetCurrentThreadId(), s_offThreadVBLocks, numberOfVertices);
+-		ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+-		if (iq) iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, tbuf);
+-	}
+-#endif
+-
+ 	++ms_locksSinceBeginFrame;
+ 	++ms_locksSinceResourceCreation;
+ 	++ms_locksEver;
+ 
+-	D3D11_MAP    mapType  = D3D11_MAP_WRITE_NO_OVERWRITE;
+-	int          discard  = 0;
+-#if P19_DISCARD_ONLY
+-	forceDiscard = true;  // diagnostic: rename every lock (kills intra-frame reuse hazard)
+-#endif
+-	if (ms_newFrame || forceDiscard || ms_used + length > ms_size)
++	D3D11_MAP mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
++	bool const overflow = (ms_used + length > ms_size);
++
++	if (ms_newFrame || forceDiscard || overflow)
+ 	{
+ 		ms_newFrame = false;
+ 		++ms_discardsSinceBeginFrame;
+ 		++ms_discardsSinceResourceCreation;
+ 		++ms_discardsEver;
+-		discard = 1;
+ 
+ 		DEBUG_FATAL(length > ms_size, ("Too many vertices %d/%d", numberOfVertices, ms_size / vertexSize));
+ 
++		// A mid-frame discard (overflow) invalidates deferred slices already
++		// written into this frame's buffer -- the very hazard this design
++		// avoids. It only fires if a frame exceeds one buffer; log loudly so
++		// we bump ms_size rather than ship the corruption.
++		if (overflow && !ms_newFrame)
++			DEBUG_REPORT_LOG_PRINT(true,
++				("Direct3d11_DynamicVertexBufferData: MID-FRAME OVERFLOW (used=%d + len=%d > %d) -- bump per-buffer size\n",
++				 ms_used, length, ms_size));
++
+ 		mapType = D3D11_MAP_WRITE_DISCARD;
+ 		ms_used = 0;
+ 	}
+ 
++	ID3D11Buffer * const buffer = ms_buffers[ms_currentBuffer].Get();
++
+ 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+ 	NOT_NULL(context);
+ 
+ 	D3D11_MAPPED_SUBRESOURCE mapped = {};
+-	HRESULT const hr = context->Map(ms_d3dRingBuffer.Get(), 0, mapType, 0, &mapped);
++	HRESULT const hr = context->Map(buffer, 0, mapType, 0, &mapped);
+ 	FATAL(FAILED(hr),
+-		("Could not lock dynamic vb %d=err %d=discard %d=offset %d=length %d/%d/%d=locks %d/%d/%d=discards",
+-		 HRESULT_CODE(hr), discard, ms_used, length,
+-		 ms_locksSinceBeginFrame, ms_locksSinceResourceCreation, ms_locksEver,
+-		 ms_discardsSinceBeginFrame, ms_discardsSinceResourceCreation, ms_discardsEver));
++		("Could not lock dynamic vb: err=%d buf=%d used=%d len=%d",
++		 HRESULT_CODE(hr), ms_currentBuffer, ms_used, length));
+ 	NOT_NULL(mapped.pData);
+ 
+-	// Track this lock's slice. The engine writes into the byte range
+-	// [m_offset, m_offset + length); after Unmap the GPU sees the writes.
+-	m_numberOfVertices = numberOfVertices;
+-	m_offset           = ms_used / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
+-
+-	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+-	ms_used += length;
++	ms_bufferUsedThisFrame = true;
+ 
+-	// Plan 11-09.15 Iter-4 (Test A): stash for unlock-time snapshot.
+-	s_lastLockedSliceCPUPtr = sliceStart;
++	// D3D9-faithful accounting: record this slice's start; ms_used is
++	// advanced by the ACTUAL count in unlock(), NOT by the upper-bound
++	// locked length here (so CuiLayerRenderer's lock-all-remaining does not
++	// max the cursor).
++	m_numberOfVertices = numberOfVertices;
++	m_offset           = ms_used / vertexSize;   // VERTEX index; engine binds byteOffset = m_offset*stride
+ 
+-	return sliceStart;
++	return static_cast<char *>(mapped.pData) + ms_used;
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -298,63 +347,18 @@ void Direct3d11_DynamicVertexBufferData::unlock()
+ 
+ void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
+ {
+-	// Plan 11-09.15 Iter-4 (Test A): CPU-side VB snapshot for radial-pattern
+-	// investigation. Iter-3's per-fan-draw state diagnostic showed 15/16 fan
+-	// samples at byte offset 0 + same shared-ring VB pointer; the math on
+-	// the fan-list IB path is clean (CODEX Bucket A verified) so the next
+-	// question is whether the engine is writing a real quad into CPU memory
+-	// or degenerate/collapsed data. Read from s_lastLockedSliceCPUPtr BEFORE
+-	// Unmap -- after Unmap the mapped memory may be rotated by the driver
+-	// (D3D11_USAGE_DYNAMIC + WRITE_DISCARD semantics).
+-	//
+-	// Filtered to fan-shaped slices (numberOfVertices==4 && vertexSize==24:
+-	// position(12)+color(4)+UV(8)) to keep log volume low. Sampled like the
+-	// Iter-3 diagnostic: first 5 + every 500th.
+-	{
+-		int const vertexSize = m_vertexBufferDescriptor.vertexSize;
+-		bool const fanShaped = (numberOfVertices == 4) && (vertexSize == 24);
+-		if (fanShaped && s_lastLockedSliceCPUPtr)
+-		{
+-			static int s_diagFanShapedUnlocks = 0;
+-			++s_diagFanShapedUnlocks;
+-			bool const earlyBucket  = (s_diagFanShapedUnlocks <= 5);
+-			bool const sampleBucket = (s_diagFanShapedUnlocks > 5) && ((s_diagFanShapedUnlocks % 500) == 0);
+-			if (earlyBucket || sampleBucket)
+-			{
+-				uint8_t const *vb = static_cast<uint8_t const *>(s_lastLockedSliceCPUPtr);
+-				ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue();
+-				for (int v = 0; v < 4; ++v)
+-				{
+-					uint8_t const *src = vb + v * vertexSize;
+-					float const px = *reinterpret_cast<float const *>(src + 0);
+-					float const py = *reinterpret_cast<float const *>(src + 4);
+-					float const pz = *reinterpret_cast<float const *>(src + 8);
+-					uint32_t const c = *reinterpret_cast<uint32_t const *>(src + 12);
+-					float const u  = *reinterpret_cast<float const *>(src + 16);
+-					float const tv = *reinterpret_cast<float const *>(src + 20);
+-					char buf[256];
+-					_snprintf_s(buf, sizeof(buf), _TRUNCATE,
+-						"Plan 11-09.15 Iter-4 fan-shaped unlock#%d vert#%d pos=(%.3f,%.3f,%.3f) color=0x%08X uv=(%.3f,%.3f) offsetVerts=%d",
+-						s_diagFanShapedUnlocks, v, px, py, pz, c, u, tv, m_offset);
+-					if (iq)
+-						iq->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_INFO, buf);
+-				}
+-			}
+-		}
+-		s_lastLockedSliceCPUPtr = nullptr;
+-	}
+-
+ 	ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
+ 	NOT_NULL(context);
+ 
+-	context->Unmap(ms_d3dRingBuffer.Get(), 0);
++	context->Unmap(ms_buffers[ms_currentBuffer].Get(), 0);
+ 
+ 	m_numberOfVertices = numberOfVertices;
+-	// Note: ms_used was already advanced in lock(); we don't re-adjust
+-	// here. (D3D9 plugin advances on unlock because Lock takes only an
+-	// upper-bound length and Unlock takes the actual used length; D3D11
+-	// Map gets a slice pointer and the actual-used count only affects
+-	// the draw call, not the buffer accounting.)
++
++	// D3D9-faithful: advance the cursor by the ACTUAL used count
++	// (Direct3d9_DynamicVertexBufferData::unlock@244). lock() set m_offset
++	// from the pre-advance ms_used, so the slice end is (m_offset + n) verts.
++	int const vertexSize = m_vertexBufferDescriptor.vertexSize;
++	ms_used = (m_offset + numberOfVertices) * vertexSize;
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -369,7 +373,7 @@ int Direct3d11_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool
+ 
+ int Direct3d11_DynamicVertexBufferData::getSortKey()
+ {
+-	return static_cast<int>(reinterpret_cast<uintptr_t>(ms_d3dRingBuffer.Get()));
++	return static_cast<int>(reinterpret_cast<uintptr_t>(ms_buffers[ms_currentBuffer].Get()));
+ }
+ 
+ // ======================================================================
+diff --git a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
+index e8355d0eb..2ccd3d678 100644
+--- a/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
++++ b/src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.h
+@@ -1,15 +1,36 @@
+ // ======================================================================
+ //
+ // Direct3d11_DynamicVertexBufferData.h
+-// Phase 11 D3D11 renderer plugin -- dynamic ring-buffer VB.
++// Phase 11 D3D11 renderer plugin -- dynamic vertex buffer.
+ // Plan 11-04 (Wave 4). Replaces createDynamicVertexBufferData stub.
+ //
+-// One process-wide ring buffer (D3D11_USAGE_DYNAMIC), allocated at
+-// install() with videomem-tiered size. Each per-mesh data instance
+-// reserves a slice of the ring via lock() (Map WRITE_DISCARD on wrap;
+-// WRITE_NO_OVERWRITE on append per RESEARCH Pitfall 5).
++// CONSULT-22 FIX 2026-06-04 (cape/garment "black spikes"):
++// FIXED N-buffer set, flipped ONCE PER FRAME, retired by a real GPU
++// query (ID3D11Query / D3D11_QUERY_EVENT). Not the old single shared
++// ring, not per-generation counter rotation, not per-instance buffers
++// (all three failed -- see the .cpp header + CONSULT-21/22).
+ //
+-// Per D-13: no D3DPOOL_MANAGED / OnLostDevice / OnResetDevice.
++//   install()      -> create N buffers + N queries ONCE (no runtime churn)
++//   beginFrame()   -> (once per frame, from Gl_api::update before beginScene)
++//                     advance to next buffer; WAIT on its query so the GPU
++//                     has finished the frame that last used it; ms_used = 0.
++//   lock()         -> first lock of frame: Map(WRITE_DISCARD); later locks:
++//                     Map(WRITE_NO_OVERWRITE) appending into the SAME frame
++//                     buffer. D3D9-faithful accounting (advance ms_used on
++//                     unlock by ACTUAL count).
++//   signalFrameFence() -> (from present(), after the frame's last draw)
++//                     End() the current buffer's query.
++//
++// One buffer holds an ENTIRE frame's dynamic data, so there is no mid-frame
++// WRITE_DISCARD that could invalidate a slice whose deferred draw has not
++// yet been submitted (a GPU fence cannot wait for un-submitted commands --
++// Codex CONSULT-22). All this frame's slices live in the current buffer, so
++// bind sites use the current buffer + the per-slice byte offset (no per-slice
++// buffer identity needed). Overflow (frame > buffer size) is logged + falls
++// back to a discard; size the buffer so it never happens.
++//
++// Per D-13: ComPtr ownership; no D3DPOOL_MANAGED / OnLostDevice /
++// OnResetDevice.
+ //
+ // ======================================================================
+ 
+@@ -32,13 +53,17 @@ class Direct3d11_DynamicVertexBufferData : public DynamicVertexBufferGraphicsDat
+ {
+ public:
+ 
++	enum { kDynamicFrameBuffers = 4 };   // fixed buffer set; GPU may lag up to N-1 frames
++
+ 	static void install();
+ 	static void remove();
+-	static void beginFrame();
++	static void beginFrame();        // once per frame (Gl_api::update): flip + fence-wait
++	static void signalFrameFence();  // once per frame (present): End the current query
+ 
+ 	static void *operator new(size_t size);
+ 	static void  operator delete(void *memory);
+ 
++	// The current frame's dynamic buffer (bound by the IA; offset is per-slice).
+ 	static ID3D11Buffer *getSharedRingBuffer();
+ 
+ public:
+@@ -60,6 +85,7 @@ public:
+ private:
+ 
+ 	void roundUpUsed() const;
++	static void waitForBuffer(int index);
+ 
+ private:
+ 
+@@ -69,11 +95,15 @@ private:
+ 
+ private:
+ 
+-	// Ring-buffer state (process-wide; static).
++	// Fixed per-frame buffer set + GPU-event queries (process-wide; static).
+ 	static bool                                  ms_newFrame;
+-	static int                                   ms_size;
+-	static int                                   ms_used;
+-	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_d3dRingBuffer;
++	static int                                   ms_size;       // per-buffer byte size
++	static int                                   ms_used;       // byte cursor into current buffer
++	static Microsoft::WRL::ComPtr<ID3D11Buffer>  ms_buffers[kDynamicFrameBuffers];
++	static Microsoft::WRL::ComPtr<ID3D11Query>   ms_fences[kDynamicFrameBuffers];
++	static bool                                  ms_fencePending[kDynamicFrameBuffers];
++	static int                                   ms_currentBuffer;
++	static bool                                  ms_bufferUsedThisFrame;
+ 	static MemoryBlockManager                   *ms_memoryBlockManager;
+ 
+ 	static int                                   ms_locksSinceBeginFrame;
+@@ -86,7 +116,7 @@ private:
+ 	// Per-mesh state.
+ 	const VertexBufferDescriptor    &m_vertexBufferDescriptor;
+ 	int                              m_numberOfVertices;
+-	int                              m_offset;     // byte offset into ring at last lock
++	int                              m_offset;     // VERTEX index into the current buffer at lock
+ };
+ 
+ // ======================================================================

@@ -1,0 +1,189 @@
+## Lifecycle trace (code only)
+
+### LOD + skinning-mode selection (`SkeletalAppearance2::objectListCameraRender`)
+
+1. `screenDiameterFraction` from camera projection (`SkeletalAppearance2.cpp:1550-1551`).
+2. `m_displayLodIndex = calculateDisplayLodIndex(...)` (`1631`; hysteresis from `previousLodIndex` at `3888:3903-3932`).
+3. Skinning mode per frame (`1737-1742`):
+   - `SM_noSkinning` if `screenDiameterFraction <= getNoSkinningScreenFraction()`
+   - else `SM_hardSkinning` if not `mustUseSoftSkinning()` and (`m_forceHardSkinningEnabled` or `screenDiameterFraction <= getHardSkinningScreenFraction()`)
+   - else `SM_softSkinning`
+4. Each display-LOD `SoftwareBlendSkeletalShaderPrimitive` gets `setSkinningMode(skinningMode)` (`1769`) — **not stored across frames on the primitive except what was set this frame**.
+5. `prepareToDraw()` runs later on the sorted primitive.
+
+In-world only extras (`3940-3967`): `CharacterLodManager::addCharacter` + `std::max(m_plannedLodIndex, sizeBasedLodIndex)` when planned LOD is recent (`3955-3967`).
+
+### `SoftwareBlendSkeletalShaderPrimitive` lifecycle
+
+| Phase | File:line | What happens |
+|-------|-----------|--------------|
+| Construct | `385-422`, `_initialize` `1235-1507` | `m_vertexCount` set once from mesh (`1277`); `m_systemStream` + `m_dynamicStream` allocated at that count (`1489/1499`, `1364`); constants (UV/color) written once via `fillConstantVertexBufferData` (`1500-1501`); `m_hasBeenSkinned=false` (`403`) |
+| Each frame `prepareToDraw` | `483-914` | Skeleton from `m_lodIndex` (`559`); `skinData` → `m_systemStream` (single-stream `789-790`); `m_dynamicStream->lock(m_vertexCount)` (`839`); `outIt.copy(systemStream, systemStream->getNumberOfVertices())` (`869`); unlock; bind `m_vertexBufferVector` (`909`) |
+| `skinData` | `1802-1915` | Early exits: every-other-frame (`1807-1827`); `SM_noSkinning && m_hasBeenSkinned` (`1829-1831`). `SM_softSkinning` → `fillVertexBuffer` for all `m_vertexCount` (`1837-1839`, `1995-2078`). Sets `m_hasBeenSkinned=true` (`1914`) — **never cleared** |
+| Destroy | `426-444` | Deletes streams; no partial reset path |
+
+`m_vertexCount` is assigned only at `1277`; comment at `1089-1090` states it is never mutated after build.
+
+---
+
+## Ranked persistent-state candidates
+
+Scoring: **Could produce contiguous tail subrange (verts 25..122 = one repeated stale position), sticky per-figure?**
+
+### 1. `m_systemStream` persistent CPU buffer + `lock`/`copy` vertex-count split — **Conditional YES**
+
+**Created:** `SystemVertexBuffer(dynamicFormat, m_vertexCount)` (`1499`); backing store allocated without zero-init (`SystemVertexBuffer.cpp:190`).
+
+**Mutated on soft-skin path:** `skinData` → `fillVertexBuffer` writes position/normal for `i = 0 .. m_vertexCount-1` (`1995-2078`); then `outIt.copy(..., m_systemStream->getNumberOfVertices())` (`869`).
+
+**Reset:** Only on primitive destruction (`435`) or `rebuildMesh` swap (`2268-2271`). No revert when leaving soft skinning.
+
+**Tail mechanism (explicit in code):** `prepareToDraw` locks `m_vertexCount` verts (`839`) but copies `systemStream->getNumberOfVertices()` verts (`869`). Probe comment at `842-844` states if `lockN > copyN`, tail `[copyN, lockN)` is **never written**. That is exactly a contiguous unwritten/stale tail in the dynamic slice.
+
+**Reset of mismatch:** None in normal path; both counts come from same `m_vertexCount` at init (`1277`, `1499`). `collide()` treats `getNumberOfVertices() != m_vertexCount` as dead stream (`1093-1094`) — implies divergence is a known failure mode.
+
+**Sticky per-figure:** YES — buffer object lives for life of that LOD’s SBSSP.
+
+---
+
+### 2. Per-primitive `m_dynamicStream` + `Direct3d11_DynamicVertexBufferData::m_offset` / `m_numberOfVertices` — **Conditional YES**
+
+**Created:** `new DynamicVertexBuffer(dynamicFormat)` (`1364`); D3D11 side stores `m_offset`, `m_numberOfVertices` per instance (`Direct3d11_DynamicVertexBufferData.h:113-114`, set at lock `360-361`).
+
+**Mutated:** Each `prepareToDraw` lock (`839`) updates offset/count for **this** DVB instance.
+
+**Reset:** Next lock on same instance overwrites; destroyed with primitive (`436`).
+
+**Tail mechanism:** `lock(numberOfVertices)` reserves `numberOfVertices * vertexSize` bytes in shared skin ring (`278-307`, `360-373`). Engine must write all `numberOfVertices` before unlock. `unlock` does not shrink ring reservation (`586-590`). Unwritten tail in the reserved slice is what draw binds via `getOffset()` × stride (`Direct3d11_VertexBufferVectorData.cpp:145-146`, `StateCache.cpp:2292-2293`). Same tail-unwritten contract as candidate #1.
+
+**Sticky per-figure:** YES — same DVB object per SBSSP per LOD; offset/count from last lock persist until next `prepareToDraw` on that primitive.
+
+---
+
+### 3. `m_hasBeenSkinned` — **NO (wrong signature)**
+
+**Created:** `false` (`403`). **Set:** `true` at end of every successful `skinData` (`1914`). **Never reset** (only assignment in repo: `1914`).
+
+**Effect:** `SM_noSkinning && m_hasBeenSkinned` → return without any write (`1829-1831`).
+
+**Tail?** Skips the **entire** buffer update, not a tail subrange. Would leave prior frame’s full buffer, not “0..24 valid, 25..122 one point.”
+
+---
+
+### 4. `m_displayLodIndex` + `m_perLodShaderPrimitives[lod]` — **NO for same-mesh tail**
+
+**Created:** `m_perLodShaderPrimitives` sized to max LOD (`1125`); SBSSPs built per LOD in `rebuildMesh` (`2252`, `2268`).
+
+**Mutated:** `calculateDisplayLodIndex` (`1631`, `3888+`); `rebuildOrAdjustDisplayLodIndex` may change and rebuild (`4334-4338`).
+
+**Reset:** `unloadUnusedResources` frees non-lowest LOD vectors and sets `m_appearanceDirty[lod]=true` (`4416-4421`); `rebuildMesh` replaces SBSSPs.
+
+**Effect:** Crossing distance can permanently select a **different LOD’s** SBSSP set (different `m_vertexCount`, different buffers). That is sticky per-figure mesh-LOD state, but each SBSSP’s buffers are sized to **that** LOD’s vertex count at creation (`1277`). No code path resizes a buffer at one count and draws at a larger count on the **same** SBSSP instance.
+
+---
+
+### 5. `m_plannedLodIndex` / `m_plannedLodSetFrameNumber` (CharacterLodManager) — **NO for tail**
+
+**Set:** `CharacterLodManager::planNextFrame` → `setPlannedLodIndex` (`CharacterLodManager.cpp:223`, `SkeletalAppearance2.cpp:3358-3359`).
+
+**Used:** `std::max(m_plannedLodIndex, sizeBasedLodIndex)` when planned LOD is fresh (`3955-3967`).
+
+**Reset:** Overwritten each frame for visible characters; stale after `m_plannedLodSetFrameNumber + 2 < updates` (`3955-3960`).
+
+**Effect:** Sticky **mesh LOD index** elevation, not partial VB tail on a fixed 123-vert primitive.
+
+---
+
+### 6. `m_forceHardSkinningEnabled` — **NO for tail (mode gate only)**
+
+**Set:** `CharacterLodManager.cpp:225` from distance-sort `assignedCount`; stored on appearance (`SkeletalAppearance2.h:465`).
+
+**Effect:** When `true`, blocks `SM_softSkinning` at `1739`. Flipping to `false` **enables** soft path; does not partial-write. Soft path writes all verts when it runs (`1995-2078`).
+
+**Reset:** Only when CharacterLodManager reassigns on next `planNextFrame`.
+
+---
+
+### 7. `m_everyOtherFrameSkinningEnabled` — **NO for persistent tail**
+
+**Set:** `CharacterLodManager.cpp:224` → `setEveryOtherFrameSkinningEnabled` (`1770`).
+
+**Effect:** `skinData` may return without writing (`1807-1827`). Per-frame skip, not a one-time sticky tail; user ruled out per-frame race.
+
+---
+
+### 8. `m_mostRecentRenderUsedBatch` — **NO**
+
+**Set:** `1728` (hysteresis for batch renderer). User stated batch path never runs.
+
+---
+
+### 9. Hard-skin path partial field write (`fill_vb_work::fillVertexBufferHard`) — **NO for position tail**
+
+**Writes:** Only bytes at `viter+0` (position) and `viter+12` (normal) per vertex (`2654-2655`); advances `viter+=vertexSize` for all `m_sourceVectorsEnd` (`2637-2660`).
+
+**Leaves unchanged:** Color/UV bytes from init `fillConstantVertexBufferData` (`1500-1501`, `1753-1797`). Does not leave position tail unwritten when hard path runs to completion.
+
+---
+
+### 10. `RenderCommand::m_numberOfVertices` / `m_minimumVertexBufferIndex` — **NO (per user elimination)**
+
+**Fixed at build:** `(maxVbIndex - minVbIndex) + 1` (`1627`, `1665`).
+
+**Draw:** `RenderCommand::render` → `drawIndexedTriangleStrip/List(0, min, numVerts, ...)` (`314`). D3D11 `DrawIndexed` uses `baseIndex` only (`StateCache.cpp:3451-3454`, `3546-3549`); `minimumVertexIndex` is diagnostic-only on D3D11.
+
+Index over-reference probe exists at `1679-1723`; user reported `overRead=0`.
+
+---
+
+### 11. `m_appearanceDirty[lod]` + `unloadUnusedResources` — **NO (reset path)**
+
+Marks LOD dirty and clears shader prims (`4420-4421`). `rebuildMesh` creates fresh SBSSPs (`2252-2271`). This is eviction/rebuild, not sticky partial state.
+
+---
+
+### 12. `m_boxExtent`, `m_representativeColor`, `m_shadowVolume` — **NO**
+
+Extent updated subset of verts (`1986-1988`, `2074-2077`); color cache (`1044-1047`); shadow volume disabled (`880`). None feed draw VB positions.
+
+---
+
+## Skinning-mode transition map (what flips and what does **not** reset)
+
+| State | Created | Mutated entering close/soft | Reset on back-out / re-LOD? |
+|-------|---------|----------------------------|----------------------------|
+| `m_skinningMode` | ctor default `SM_softSkinning` (`402`) | Set every frame from screen fraction (`1737-1742`, `1769`) | N/A — not persistent |
+| `m_hasBeenSkinned` | `false` (`403`) | → `true` first successful `skinData` (`1914`) | **Never** |
+| `m_systemStream` contents | Alloc + constants (`1499-1501`) | Soft: full position/normal rewrite (`1995-2078`) | **No** content clear on mode change; only overwritten when `skinData` runs |
+| `m_dynamicStream` ring slice | Per-frame lock (`839`) | Soft: lock+copy (`839-871`) | Ring slice not “reverted”; new lock each frame |
+| `m_forceHardSkinningEnabled` | `false` (`1053`) | CharacterLodManager may clear (`225`) | Next `planNextFrame` only |
+| `m_plannedLodIndex` | init (`1050`) | CharacterLodManager (`223`) | Overwritten each planned frame |
+| `m_displayLodIndex` | init (`1031`) | Screen fraction + planned LOD (`1631`, `3967`) | Can stick in LOD band via hysteresis (`3903-3932`) |
+| Per-LOD SBSSP + `m_vertexCount` | `rebuildMesh` (`2252`) | First use / rebuild when dirty | Freed by `unloadUnusedResources` (`4416-4417`) or `rebuildMesh` swap (`2268-2271`) |
+
+---
+
+## Summary ranking (tail subrange + sticky per-figure)
+
+| Rank | Candidate | File:line (anchor) | Tail stale repeat? |
+|------|-----------|-------------------|-------------------|
+| **1** | `lock(m_vertexCount)` vs `copy(systemStream->getNumberOfVertices())` on persistent `m_systemStream`/`m_dynamicStream` | `839`, `869`, `842-844` | **Conditional YES** — only code-documented tail-unwritten path |
+| **2** | Per-SBSSP `Direct3d11_DynamicVertexBufferData` `m_offset`/`m_numberOfVertices` tied to same lock/write contract | `360-361`, `586-590`, `145-146` | **Conditional YES** — GPU-side of #1 |
+| **3** | `m_hasBeenSkinned` + `SM_noSkinning` skip-write | `1829-1831`, `1914` | **NO** — whole-buffer skip |
+| **4** | `m_displayLodIndex` / per-LOD SBSSP swap | `800-803`, `1277`, `2268` | **NO** — different objects per LOD, fixed sizing |
+| **5** | `m_plannedLodIndex` / `m_forceHardSkinningEnabled` | `3967`, `1739`, `CharacterLodManager.cpp:223-225` | **NO** — gates which path/LOD, not partial writes |
+| **6** | Hard-skin pos/normal-only write | `2654-2655` | **NO** — full vertex count, pos tail not left stale |
+| **7** | `RenderCommand` index span vs written verts | `1627`, `1679-1683` | **NO** per reported `overRead=0` |
+
+---
+
+## Code-grounded conclusion
+
+For the specific signature (valid `0..24`, collapsed identical position `25..122`, sticky after entering close/`SM_softSkinning`), the **only engine paths in this codebase that write a contiguous unwritten/stale tail** are:
+
+1. **`prepareToDraw` reserving `m_vertexCount` dynamic verts but copying fewer than that from `m_systemStream`** (`842-865`).
+2. The matching **D3D11 per-lock slice** whose bound byte range exceeds what was memcpy’d (`360-373`, `145-146`).
+
+All other persistent fields either (a) skip the **entire** buffer update, (b) select a **different** LOD primitive with its own fixed-size allocation, or (c) gate **which** skinning path runs without partial iteration in `fillVertexBuffer` (`1995-2078` loops `m_vertexCount` with no early exit).
+
+Under the normal invariant `m_systemStream->getNumberOfVertices() == m_vertexCount` (same assignment at `1277`/`1499`, guarded at `1093`), candidates **#1/#2 require that invariant to break** — which the code acknowledges as a failure mode (`1081-1094`, `842-844`) but does not show a deliberate LOD-promotion sizing bug on a single SBSSP instance.

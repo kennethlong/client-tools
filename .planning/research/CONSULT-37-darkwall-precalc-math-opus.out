@@ -1,0 +1,256 @@
+# CONSULT-37 (math/spec angle) — Opus findings
+
+Independent read of actual source. Every claim cited file:line. I corrected three wrong
+premises in the brief (and one in the 2026-06-08 handoff). Bottom line up front:
+
+**The "full-ambient (1,1,1,0)" term in the brief is almost a red herring. The world/cell VS
+family NEVER reads the ambient register c16. For precalc/cell geometry the entire lit
+appearance is `texture × saturate(vColor0 + Σ directional N·L)`. The baked vertex color
+(COLOR0 / v5) is the floor, NOT ambient. The darkening is a MISSING or ZEROED `vColor0`
+term (and, secondarily, a dropped hemispheric back-fill), not a missing ambient.**
+
+---
+
+## 0. The actual equation the D3D9 world VS/PS produces
+
+Register map (authoritative): `Direct3d9_VertexShaderConstantRegisters.h:22-46` +
+`vsh-extract/registers.inc:25-52`. `VSCR_lightData = 16`, so:
+- c16 = `lightData.ambient`
+- c17-19 = parallelSpecular[0] (dir/diffuse/specular) — THE SUN
+- c20-21 = parallel[0] (fill), c22-23 = parallel[1] (bounce)
+- c28.. = point[0..3], c40-43 = dot3, c60-63 = extended (hemispheric)
+
+### (a) Cell / precalc-vertex-lit surface (the `tfcl` / `c_*` family) — THE BUILDINGS
+
+VS source chain: `tfcl.vsh` (`vsh-extract/tfcl.vsh:10-21`) declares
+`dcl_position0/normal0/color0` and includes, in order,
+`transform.inc → lighting_fog_setup.inc → fog.inc → c_ambient.inc → diffuse.inc`.
+
+- `c_ambient.inc:16` — `mov r7, vColor0`.  ← the "ambient/cell" base IS the baked vertex
+  color. **c16 (`cLightData_ambient_ambientColor`) is never touched.**
+- `diffuse.inc:19-24` — seeds the hemispheric base: `r7 += tangentColor`, then modulates
+  by `tangentMinusDiffuse·(-max(N·L_sun,0).y)` and `tangentMinusBack·(min(N·L_sun,0).y)`.
+- `diffuse.inc:29-38` — `r7 += max(N·dir_parallel0,0)·diffuse0 + max(N·dir_parallel1,0)·diffuse1`
+  (the FILL + BOUNCE directionals at c20-23).
+- `diffuse.inc:44-138` — `+ Σ point/pointSpecular` (attenuated N·L).
+- `diffuse.inc:143-144` — `r7 += cMaterial_emissiveColor; mov oD0, r7`.
+
+PS (`vsh-extract/a_simple.psh:7`): `mul r0.rgb, t0, v0` = **texture × oD0**, clamped to
+[0,1] by the ps_1_1 color register.
+
+So the **exact** final color for a cell surface is:
+
+```
+final.rgb = tex(t0).rgb × saturate(
+              vColor0                                   // baked vertex light  (c_ambient)
+            + tangentColor + hemispheric_modulation     // sky/ground back-fill (diffuse.inc:20-24)
+            + Σ_dir max(N·L,0)·diffuseColor             // sun(spec) + fill(c20-21) + bounce(c22-23)
+            + Σ_pt  atten·max(N·L,0)·diffuseColor       // point lights
+            + emissive )                                 // material
+```
+
+For a precalc building the dynamic light list is EMPTY by design (see §3), so every
+directional/point term is 0 and this collapses to:
+
+```
+final.rgb = tex × saturate(vColor0 + hemispheric(0 light) + emissive) ≈ tex × saturate(vColor0)
+```
+
+i.e. the building shows its **baked vertex colors × texture**. Nothing else. The
+full-ambient (1,1,1,0) seeded at `Direct3d9_LightManager.cpp:404` lands in c16 and is
+**dead** for this shader — c16 is unread.
+
+### (b) Normal dynamic-lit surface (non-precalc)
+
+Identical equation, but the light list is non-empty (`listSz=3`: ambient+sun+fill). vColor0
+is whatever the mesh carries (often white/neutral for non-prelit world meshes), and the
+directional Σ does the work. Same observation: **c16 ambient is still not read by the VS.**
+The only place the engine's accumulated ambient float would matter is a shader whose VS
+actually references `cLightData_ambient` — and a grep of the extracted world shaders shows
+only `cloudlayer.vsh` does (`registers.inc` aside). The building/wall shaders do not.
+
+> CORRECTION #1 to the brief (Q1): there is no "ambient × baked-color" product. Ambient
+> (c16) and baked color (vColor0) are SEPARATE, and the cell VS only uses vColor0. Asking
+> "what does full-ambient multiply against" has no answer because it multiplies against
+> nothing in this path.
+
+---
+
+## 1. What the D3D11 //hlsl reauthored path actually computes
+
+The Phase-19 overrides `stage/override/vertex_program/tfcl.vsh` and `tfcsl.vsh` are the
+live D3D11 world-cell VS for the vs_2_0 fallback tier:
+
+- `tfcl.vsh:30-33` declares `position/normal_o/color0:COLOR0(v5)/texcoord` and
+  `:54` computes `oD0 = saturate(color0 + calculateDiffuseLighting(false, pos, normal))`.
+- `calculateDiffuseLighting` (`vsh-extract/inc_functions.inc:166-221`) =
+  `material.emissiveColor + Σ parallel N·L·diffuse + Σ point ...`.
+
+Two structural facts about this port:
+
+1. **`VERTEX_SHADER_VERSION` is NOT defined for the D3D11 compile**
+   (`Direct3d11_VertexShaderData.cpp:744-748,798` — defines are POSITION, D3D11,
+   D3D11_PROFILE, D3D11_REWRITE_VERSION, texcoord macros only). So every
+   `#if VERTEX_SHADER_VERSION >= 20` block is FALSE. Consequence: the
+   `light_parallel_0_enabled` (b1) / `_1_enabled` (b2) guards are stripped and the parallel
+   + point terms are added UNCONDITIONALLY. Good — there is **no SM4 boolean-register
+   problem** here (the `const bool ... : register(bN)` declarations in
+   `vertex_shader_constants.inc:103-112` are inside the same dead `#if`, so they never
+   exist). The directional diffuse math DOES execute in D3D11.
+
+2. **The //hlsl reauthoring DROPPED the hemispheric back-fill.** The asm `diffuse.inc:20-24`
+   adds `tangentColor` and modulates by tangent/back; `inc_functions.inc:166-221` does NOT —
+   it sums only emissive + parallel + point. So the D3D11 cell VS is missing the sky/ground
+   back term that lifts shadow-facing surfaces in D3D9. (This is the brief's
+   "hemispheric back/tangent" term, and it IS absent in D3D11 — but only matters for the
+   dynamic-lit walls, §2, not the empty-list precalc buildings.)
+
+So the D3D11 cell equation is:
+```
+final = tex × saturate( vColor0 + emissive + Σ_parallel N·L·diffuse + Σ_point ... )
+```
+With listSz=0 (precalc): `final = tex × saturate(vColor0 + emissive)`. **If vColor0 is
+correct, this matches D3D9.** If vColor0 = 0, this is `tex × saturate(emissive)` ≈ black.
+
+---
+
+## 2. Term-by-term: which is PRESENT and which is MISSING in D3D11
+
+| Term | D3D9 | D3D11 (cell/tfcl override) | Status |
+|---|---|---|---|
+| baked vColor0 | from VB COLOR0 (v5) | from VB COLOR0 IFF `format.hasColor0()` else **phantom-ZERO** | **SUSPECT — the deficit** |
+| emissive (c14/material) | present | present (`composeSlot0Shadow` fills material) | OK |
+| sun directional (parallelSpecular[0], c17-19) | present | present (filled 2026-06-08) | OK |
+| fill+bounce (parallel[0..1], c20-23) | present | present (THE 2026-06-08 black-walls fix, `Direct3d11_StateCache.cpp:417-430`) | OK now |
+| point lights | present | present (k0=1 guard `StateCache.cpp:444-448`) | OK |
+| **hemispheric tangent/back** | present (`diffuse.inc:20-24`) | **DROPPED** in `inc_functions.inc` | **MISSING** |
+| ambient c16 | unread by cell VS | unread (correct) | irrelevant |
+
+The two real deficits are **(i) a zeroed vColor0** and **(ii) the dropped hemispheric term.**
+They map to two DIFFERENT symptoms:
+
+- **Precalc building, listSz=0, baked color zeroed → pure/near black.** With no dynamic
+  lights, vColor0 is the ONLY non-emissive term. If it's phantom-zeroed the surface is
+  `tex × emissive` (emissive is usually 0) = black. This is the handoff's "buildings render
+  black."
+- **Dynamic-lit wall facing away from sun, listSz=3, hemispheric dropped → dark but not
+  black.** Here vColor0 may be neutral/white and the ambient (0.130) does NOT enter the VS
+  (c16 unread), so a shadow-facing face gets only `Σ max(N·L,0)·diffuse`, all of which are
+  ~0 because the face points away from every directional. D3D9 lifts it with
+  `tangentColor` (back-fill). D3D11 lost that. Result: noticeably darker than D3D9 but the
+  texture is still modulated by `saturate(vColor0≈neutral)` so it isn't fully black. This is
+  the brief's "dark but NOT black."
+
+> CORRECTION #2: "dark but not black" and "buildings render black" are TWO DISTINCT bugs
+> with two distinct equations. The brief conflates them. The precalc-baked-color story
+> explains BLACK (vColor0=0). The dropped-hemispheric story explains DARK-not-black on
+> dynamic-lit shadow faces. The ambient floor (~0.13) explains NEITHER, because c16 never
+> reaches the cell VS.
+
+---
+
+## 3. Is `listSz=0` correct? (spec confirmation)
+
+YES, it is correct and expected. `ShaderPrimitiveSorter.cpp:1198-1201` (and :1236, :1270,
+:1306) route precalc primitives into the SEPARATE pool
+`ms_lightsAffectingShadersWithPrecalculatedVertexLighting`, which carries no dynamic lights —
+exactly as D3D9 does. D3D9 does not "compensate with ambient"; it renders the baked vColor0
+(c_ambient.inc:16). So D3D11 getting listSz=0 is faithful. The bug is NOT a dropped light;
+it is that the baked-color term that's supposed to carry the lighting is missing/zero.
+
+---
+
+## 4. Is a VS COLOR input strictly necessary? — and the handoff's `46c05cc8` claim
+
+The handoff (2026-06-08, facet REMAINING#1) asserts "the D3D11 asset world VS has NO COLOR
+vertex input (pos/normal/uv/uv/tangent only), verified via VS disasm 46c05cc8." That is true
+**for that particular VS** — but that VS is NOT the tfcl/tfcsl cell VS. The tfcl/tfcsl
+overrides DO declare `color0 : COLOR0 : register(v5)` (`tfcl.vsh:32`, `tfcsl.vsh:31`). A
+pos/normal/uv/uv/**tangent** signature is a **DOT3/bump effect** (tangent stream = dot3),
+which is a higher tier that has NOT been //hlsl-reauthored and therefore either (a) is still
+`//asm` → routed to the **generic fallback VS** (`Direct3d11_VertexShaderData.cpp:188-202`)
+which EMITS const-white COLOR0 and reads NO vColor0, or (b) is a native //hlsl bump VS that
+doesn't declare COLOR0.
+
+> CORRECTION #3: "the D3D11 world VS has no COLOR input" is FALSE as a blanket statement.
+> It is shader-family-specific. The cell VS (tfcl/tfcsl) HAS a COLOR0 input. The disasm
+> 46c05cc8 is a bump/dot3 VS, a different family.
+
+**Whether a COLOR input is *necessary* depends on which VS the dark geometry actually uses:**
+
+- **If the black buildings use tfcl/tfcsl (cell) overrides:** the COLOR0 input already
+  exists in the shader. The fix is NOT a VS-signature change — it's ensuring the VB actually
+  presents a COLOR0 stream so `format.hasColor0()` is true
+  (`Direct3d11_VertexBufferDescriptorMap.cpp:241-242`). If `hasColor0()` is false the input
+  is phantom-zeroed (`:288-290`, stride-0 zero buffer) → vColor0=0 → black. **Minimal fix:
+  verify/repair the VBFormat color flag for precalc meshes; no shader edit.**
+
+- **If the black buildings use a //asm bump VS via the generic fallback:** the fallback
+  emits const-white COLOR0 and would render `tex × white` = OVER-bright/flat, NOT black.
+  So a black building is INCONSISTENT with the generic fallback. (If it looked over-bright
+  and washed-out, THAT would be the fallback.)
+
+- **If they use a native //hlsl bump VS with no COLOR0 + listSz=0:** then `oD0` has no
+  baked term and no lights → near-black. Here a COLOR0 input + VB color stream IS the
+  necessary fix (matching D3D9's bump-cell VS, which does read vColor0).
+
+So the **discriminating fact you still need** (the one experiment): for ONE black-building
+draw, log (i) the bound VS filename/source-tag and whether it's the tfcl override, the //asm
+fallback, or a native bump VS, and (ii) `format.hasColor0()` for its VB. A single RenderDoc
+capture shows the VS input signature + whether a COLOR vertex stream is bound in one look —
+this is the cheapest distinguisher and it directly decides which of the three fixes above
+applies.
+
+---
+
+## 5. Brightness-ratio sanity check (D3D11/D3D9) per hypothesis
+
+Take a representative precalc-building vertex: baked vColor0 ≈ 0.5 (mid-grey baked light),
+emissive 0, listSz=0, D3D9 full-ambient seeded into c16 (dead). D3D9 output = tex×0.5.
+
+| Hypothesis | D3D11 numerator | Ratio vs D3D9 | Matches observation? |
+|---|---|---|---|
+| **A: vColor0 phantom-zeroed** (no VB color / wrong family) | tex×saturate(0) | **0.0** | matches **"black buildings"** (handoff) — STRONGEST for the precalc case |
+| B: vColor0 OK, hemispheric dropped, listSz=0 | tex×0.5 | 1.0 | NO darkening for precalc (hemispheric needs a light; 0 lights ⇒ tangent term=0 anyway) |
+| C: dynamic-lit shadow wall, hemispheric dropped, listSz=3 | tex×saturate(vColor0≈0.6) vs D9 tex×saturate(0.6+tangentColor≈0.85) | ~**0.6–0.7** | matches **"dark but not black"** (brief) — STRONGEST for the wall case |
+| D: "missing ambient floor 0.13" | n/a — c16 unread by cell VS | — | FALSE PREMISE; predicts nothing here |
+| E: generic //asm fallback const-white | tex×1.0 | **>1** (brighter) | would look OVER-bright, opposite of dark — rules fallback OUT for the dark draws |
+
+Ratio 0.0 ⇒ pure black ⇒ Hypothesis A. Ratio ~0.6 ⇒ dark-not-black ⇒ Hypothesis C. The
+report describes BOTH symptoms because there are BOTH bugs on different geometry.
+
+---
+
+## Ranked root causes
+
+1. **(precalc buildings, "black") — vColor0 term is ZERO in the D3D11 cell path.** Either
+   the precalc mesh's VBFormat has `hasColor0()==false` so COLOR0 is phantom-zeroed
+   (`Direct3d11_VertexBufferDescriptorMap.cpp:241-242,288-290`), OR the geometry is routed
+   to a non-cell VS (//asm fallback const-white, or a native bump VS) that never reads the
+   baked color. **Minimal fix path depends on the routing — see §4. Most likely: ensure the
+   VB color stream reaches the tfcl/tfcsl override (no shader change needed) rather than
+   adding a COLOR input to a VS that already has one.** Predicted ratio 0.0 = black. ✔ matches.
+
+2. **(dynamic-lit shadow walls, "dark but not black") — the hemispheric back/tangent term
+   was DROPPED in the //hlsl reauthoring.** `diffuse.inc:20-24` (asm) adds `tangentColor` +
+   tangent/back modulation; `inc_functions.inc:166-221` (the live //hlsl) omits it. Shadow
+   faces get only `Σ max(N·L,0)`≈0 with no back-fill. The engine ambient (0.130) does NOT
+   help because the cell VS never reads c16. **Fix: add the hemispheric term to
+   `calculateDiffuseLighting`/`calculateDiffuseSpecularLighting` using the already-fed
+   `extendedLightData` (c60-63, populated at `StateCache.cpp:411-414`).** Predicted ratio
+   ~0.6–0.7 = dark-not-black. ✔ matches.
+
+3. **(framing correction, low-priority) — full-ambient (1,1,1,0) is a non-fix for cell
+   geometry.** Forcing `lightData[0]=(1,1,1)` (the reverted experiment) was architecturally
+   wrong because the cell VS reads vColor0, not c16; it just floods unrelated shaders that
+   DO read c16 (faces) to white. Confirmed by the dead `#if VERTEX_SHADER_VERSION` and the
+   unread c16. Do not pursue an ambient-based fix for the buildings.
+
+## Premises corrected
+- Brief Q1 "what does full-ambient multiply against" — nothing; c16 is unread by the world
+  cell VS. The baked floor is vColor0, a separate input.
+- Brief conflates "dark not black" and "black" — two different geometries, two equations,
+  two fixes (hemispheric vs vColor0).
+- Handoff "D3D11 world VS has no COLOR input" — true only for the bump/dot3 family
+  (disasm 46c05cc8); the cell tfcl/tfcsl VS DOES declare COLOR0 (v5). The buildings' fix is
+  probably a VB-color-stream / routing issue, not a VS-signature change.

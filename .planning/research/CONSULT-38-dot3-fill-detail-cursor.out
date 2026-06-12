@@ -1,0 +1,215 @@
+# CONSULT-38 (DETAIL): D3D9 dot3/hemispheric seeding for empty-list precalc draws
+
+## Executive answer
+
+**`setFullAmbientOn(true)` does not seed dot3 direction or hemispheric constants in D3D9.** It only sets `ms_fullAmbient` to `(1,1,1,0)` (`Direct3d9_LightManager.h:201-208`), which flows into `lightData.ambient` (VS **c16**) via `selectLights` (`Direct3d9_LightManager.cpp:404`) and `applyLights_vertexShader` (`:536`). Dot3/hemispheric data are filled **only** when `ms_currentLights.parallelSpecular[0]` is non-null — i.e. a `T_parallel` light survived `selectLights` (`:423-440`, `:542-609`). With an empty filtered light list, D3D9 **explicitly uploads zeros** for dot3 RGB and hemispheric RGB (`:610-625`, `:531-533`, `:725`).
+
+**D3D11 gates the same constants on `s_pixelDot3State.valid`**, set only when `psSlot != nullptr` after the directional cascade (`Direct3d11_LightManager.cpp:85`, `:176-196`). Producer B (`StaticShaderData::apply`) writes PS **c0–c4** only inside `if (d3.valid)` (`Direct3d11_StaticShaderData.cpp:945-957`). Producer A for VS (`composeSlot0Shadow`) fills **c40–c43** and **c60–c63** only inside the same gate (`Direct3d11_StateCache.cpp:382-415`).
+
+There are **no** functions named `getDot3*`, `getBackColor`, or `getTangentColor`. Values come from `Light` getters invoked inline.
+
+---
+
+## 1. Getter / writer inventory (file:line)
+
+### D3D9 — data sources (“getters”)
+
+| Role | Actual call site | File:line |
+|------|------------------|-----------|
+| Scaled vs unscaled dispatch | `getPossiblyScaledDiffuseColor`, `getPossiblyScaledDiffuseBackColor`, `getPossiblyScaledDiffuseTangentColor`, `getPossiblyScaledSpecularColor` member pointers | `Direct3d9_LightManager.cpp:63-68`, set at `:318-338` |
+| World light axis | `light->getObjectFrameK_w()` | `:547`, `:785` |
+| Object-local direction (negated) | `ms_objectToWorldTransform.rotate_p2l(direction)` then `-d.{x,y,z}` | `:573-576`, `:786-789` |
+| Dot3 diffuse | `(light->*getPossiblyScaledDiffuseColor)()` | `:552-556`, `:801-805` |
+| Dot3 specular | `(light->*getPossiblyScaledSpecularColor)()` | `:558-562`, `:807-811` |
+| Hemispheric back | `(light->*getPossiblyScaledDiffuseBackColor)()` | `_vsps_setExtendedLightData` `:739-743` |
+| Hemispheric tangent | `(light->*getPossiblyScaledDiffuseTangentColor)()` | `:745-749` |
+| `tangentMinusBack` delta | `tangentColor - backColor` (component-wise) | `:751-754` |
+| `tangentMinusDiffuse` delta | `tangentColor - diffuseColor`; `.a = bloomEnabled` | `:756-759` |
+| Specular power in direction.w | `Direct3d9_StateCache::getSpecularPower()` | `:577`, `:790` |
+| Object-local camera | `ms_objectToWorldTransform.rotateTranslate_p2l(ms_cameraPosition)` | `:567-571`, `:777-781` |
+| Alpha-fade / bloom `.a` packing | `Direct3d9::getAlphaFadeAndBloomSettings()` | `:579`, `:617`, `:799`, `:859` |
+
+`Light::getScaledDiffuseBackColor()` / `getScaledDiffuseTangentColor()` are defined at `Light.h:218-227`. Default construction is `VectorArgb::solidBlack` for both (`Light.cpp:40-45`).
+
+`ms_noDot3Light[3]` is defined (`Direct3d9_LightManager.cpp:53`) but **never referenced** anywhere else in the repo — not a fallback path.
+
+### D3D9 — upload sites
+
+| Target | Function | File:line |
+|--------|----------|-----------|
+| PS **c0–c4** (`PSCR_dot3LightDirection`…`TangentMinusBackColor`) | `applyLights_vertexShader` → `setPixelShaderConstants(PSCR_dot3LightDirection, &pixelDot3Data, 5)` | `:592-601` (lit), `:614-624` (empty slot 0) |
+| PS fast-path direction-only | `applyLights_vertexShader_dot3` | `:823-830`, `:844` |
+| VS **c16–c43** (`VSCR_lightData`, 28 float4) incl. dot3 @ **c40–c43** | `setVertexShaderConstants(VSCR_lightData, &lightData, 28)` | `:723` |
+| VS **c60–c63** (`VCSR_extendedLightData`) | `setVertexShaderConstants(VCSR_extendedLightData, &extendedLightData, …)` | `:725` |
+| Hemispheric fill helper | `_vsps_setExtendedLightData` | `:732-760` |
+| Precalc ambient floor toggle | `setFullAmbientOn(m_fullAmbient)` where `m_fullAmbient = shader.containsPrecalculatedVertexLighting()` | `Direct3d9_StaticShaderData.cpp:776`, `:955` |
+
+Register map: `VSCR_lightData = 16` (`Direct3d9_VertexShaderConstantRegisters.h:28`); dot3 is last 4 float4 of the 28-float4 `LightData` struct (`Direct3d9_LightManager.h:128-136`) → **c40–c43**. `VCSR_extendedLightData = 60` (`Direct3d9_VertexShaderConstantRegisters.h:45`). PS dot3 enum starts at 0 (`Direct3d9_PixelShaderConstantRegisters.h:23-27`).
+
+### D3D11 — equivalent paths
+
+| Role | Site | File:line |
+|------|------|-----------|
+| Snapshot capture (world-space) | `psSlot->getObjectFrameK_w()`, `getScaledDiffuseColor/Specular/Back/Tangent` | `Direct3d11_LightManager.cpp:178-195` |
+| `valid` flag | `s_pixelDot3State.valid = false` on entry; `= true` only inside `if (psSlot)` | `:85`, `:176-196` |
+| PS **c0–c4** (Producer B, object-local at draw) | `if (d3.valid) { … memcpy staging @ PSCR_dot3* }` | `Direct3d11_StaticShaderData.cpp:945-957` |
+| VS **c16** ambient | `s_slot0Shadow.lightData[0] = d3.ambient` (unconditional) | `Direct3d11_StateCache.cpp:380` |
+| VS **c17–c19**, **c40–c43**, **c60–c63** | `if (d3.valid) { … }` | `Direct3d11_StateCache.cpp:382-415` |
+| VS **c20–c23** parallel fill/bounce | unconditional loop over `d3.parallelDirectionWorld[]` | `:425-430` |
+| Hemispheric deltas | same formulas as D3D9 `_vsps_setExtendedLightData` | `Direct3d11_LightManager.cpp:190-193` |
+
+**D3D11 has no `setFullAmbientOn` equivalent** — grep across `Direct3d11/` returns zero matches.
+
+---
+
+## 2. Empty-list + precalc + `setFullAmbientOn(true)` in D3D9
+
+### What “empty list” means in engine code
+
+Per draw, `ShaderPrimitiveSorter::Phase::draw` calls `setLights(i->lightBitSet)` (`ShaderPrimitiveSorter.cpp:718`), which builds `ms_activeLightList` from enabled bits (`:1130-1144`) and passes it to `Graphics::setLights`. Precalc primitives are queued with `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` (`:1198-1199`). Lights default to affecting both precalc and non-precalc shaders (`Light.cpp:61-62`).
+
+An “empty” list means **no lights in that filtered `ms_activeLightList`**, so after `selectLights` all slots including `parallelSpecular[0]` remain `NULL` (`Direct3d9_LightManager.cpp:377-378`, `:407-476`).
+
+### Trace: does full-ambient or a default sun populate dot3?
+
+**No.**
+
+1. `setFullAmbientOn(true)` → `ms_fullAmbient = (1,1,1,0)` (`Direct3d9_LightManager.h:203-208`).
+2. `selectLights` → `ms_currentLights.ambient = ms_fullAmbient` (`Direct3d9_LightManager.cpp:404`). No code assigns a default `T_parallel` when the list is empty.
+3. `applyLights_vertexShader`:
+   - `Zero(lightData)` and `Zero(extendedLightData)` (`:531-533`) → VS dot3 @ c40–c43 and ext @ c60–c63 are **all zero**.
+   - `parallelSpecular[0]` is null → `i == 0` else branch (`:610-625`):
+     - `Zero(pixelDot3Data)` (`:615`)
+     - Only `.a` channels patched from alpha-fade/bloom/time; **`.xyz` and `.rgb` stay zero**
+     - Uploaded to PS c0–c4 (`:624`)
+
+**`setFullAmbientOn` never touches dot3 direction, diffuse/specular RGB, back, tangent, or deltas.** The sun getter (`getObjectFrameK_w`) runs only inside `if (light)` at `:543-609`.
+
+### D3D9 literal values — empty-list precalc draw
+
+| Constant | Register | Value (empty list) | Evidence |
+|----------|----------|-------------------|----------|
+| `dot3.localDirection` (PS c0 / VS c41) | PS c0, VS c41 | `(0, 0, 0, 0)` — **no** `getSpecularPower()` write in empty branch | `:615`, `:531` |
+| `dot3.diffuseColor` (PS c1 / VS c42) | PS c1, VS c42 | `rgb = (0,0,0)`; PS `.a = alphaFade.r` | `:619`, `:615` |
+| `dot3.specularColor` (PS c2 / VS c43) | PS c2, VS c43 | `rgb = (0,0,0)`; PS `.a = alphaFade.a` | `:620` |
+| `tangentMinusDiffuseColor` (PS c3 / VS c63) | PS c3, VS c63 | `rgb = (0,0,0)`; PS `.a = bloom.g` | `:621` |
+| `tangentMinusBackColor` (PS c4 / VS c62) | PS c4, VS c62 | `rgb = (0,0,0)`; PS `.a = currentTime` | `:622` |
+| `backColor` (VS c60) | VS c60 | `(0,0,0,0)` | `Zero(extendedLightData)` `:533` |
+| `tangentColor` (VS c61) | VS c61 | `(0,0,0,0)` | same |
+| `lightData.ambient` (VS c16) | VS c16 | `(1,1,1,0)` when precalc + `setFullAmbientOn(true)` | `:404`, `:536`, `StaticShaderData.cpp:955` |
+
+**Correction vs prior framing:** D3D9 does **not** use full-ambient or a built-in default light to make dot3/hemispheric nonzero on an empty list. Both APIs produce **zero** dot3/hemispheric RGB in that scenario. Your RenderDoc axiom (v1 = 0 in both frames; only PS packedRegister1/3/4 flip) is consistent with this — the variable is the **directional dot3 pack**, not c16.
+
+### D3D9 stale-constant edge case (not empty-list first upload)
+
+If `ms_currentLights` is unchanged and `parallelSpecular[0]` is null, `applyLights_vertexShader_dot3` does **nothing** unless `ms_alphaFadeOpacityDirty` (`:849-893`). That can leave **previous** GPU constants. On a **lights-changed** transition to empty, the full `applyLights_vertexShader` path **does** zero-upload (`:610-625`).
+
+---
+
+## 3. D3D11 gates (exact)
+
+### Gate 1 — snapshot: `psSlot` / `valid`
+
+```85:85:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+	s_pixelDot3State.valid = false;
+```
+
+```176:196:src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+	if (psSlot)
+	{
+		// ... populate localDirectionWorld, diffuse, specular, hemispheric ...
+		s_pixelDot3State.valid = true;
+	}
+```
+
+No `T_parallel` in the incoming `lightList` → `psSlot` stays null → **`valid` remains false**. Dot3 fields (`localDirectionWorld`, `diffuseColor`, `backColor`, etc.) are **not cleared** on that call — only `valid` is flipped.
+
+### Gate 2 — PS Producer B: `d3.valid`
+
+```945:957:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.cpp
+						if (d3.valid)
+						{
+							// ... object-local c0 = (-localDir, specPower) ...
+							std::memcpy(staging.data() + PSCR_dot3LightDirection               * 16, &c0, ...);
+							std::memcpy(staging.data() + PSCR_dot3LightDiffuseColor             * 16, &d3.diffuseColor, ...);
+							std::memcpy(staging.data() + PSCR_dot3LightSpecularColor            * 16, &d3.specularColor, ...);
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusDiffuseColor * 16, &d3.tangentMinusDiffuseColor, ...);
+							std::memcpy(staging.data() + PSCR_dot3LightTangentMinusBackColor    * 16, &d3.tangentMinusBackColor, ...);
+						}
+```
+
+When `!d3.valid`, staging is seeded from the persistent shadow (`:907-911`) and **c0–c4 are not refreshed** for this draw.
+
+### Gate 3 — VS Producer A: `d3.valid` in `composeSlot0Shadow`
+
+```380:415:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+			s_slot0Shadow.lightData[0] = d3.ambient;
+
+			if (d3.valid)
+			{
+				// parallelSpecular[0] @ c17-c19
+				// dot3 @ c40-c43
+				// extendedLightData @ c60-c63
+			}
+```
+
+`parallel[0..1]` @ c20–c23 are filled **outside** the `d3.valid` gate (`:425-430`).
+
+---
+
+## 4. Side-by-side table — empty-list precalc
+
+| Constant (PS packedRegister / engine slot) | D3D9 (empty list) | D3D11 (empty list, `!d3.valid`) | Divergence? |
+|--------------------------------------------|-------------------|----------------------------------|---------------|
+| PS c0 / packedRegister0 `direction_o.xyz` | `(0,0,0)` explicit upload | Not written; shadow value (init `(0,0,0,0)` at `LegacyPSConstants.cpp:31`, or **stale** from prior lit `setLights`) | **Yes** — D3D9 always zeros; D3D11 may retain stale nonzero |
+| PS c0 `.w` spec power | `0` (not set in empty branch) | Not written; stale or `0` | Minor |
+| PS c1 / packedRegister1 diffuse RGB | `(0,0,0)` | Not written; stale or `0` | **Yes** (stale risk) |
+| PS c2 specular RGB | `(0,0,0)` | Not written; stale or `0` | **Yes** (stale risk) |
+| PS c3 / packedRegister3 `tangentMinusDiffuse` RGB | `(0,0,0)` | Not written; stale or `0` | **Yes** — **primary PS black term** per your shader |
+| PS c4 / packedRegister4 `tangentMinusBack` RGB | `(0,0,0)` | Not written; stale or `0` | **Yes** — **dot3 hemispheric term** |
+| VS c40–c43 dot3 block | all `0` from `Zero(lightData)` | not filled; `{}`-init or stale | Aligns if shadow/slot0 zero |
+| VS c60 `backColor` | `(0,0,0,0)` | not filled | Aligns when zero |
+| VS c61 `tangentColor` | `(0,0,0,0)` | not filled | Aligns when zero |
+| VS c62–c63 deltas | `(0,0,0,0)` | not filled | Aligns when zero |
+| VS c16 `ambient` | `(1,1,1,0)` precalc | `d3.ambient` from accumulated `T_ambient` only — **no** `(1,1,1,0)` floor | **Yes**, but **falsified as primary cause** per your axiom #2 |
+
+When a `T_parallel` **is** present (typical outdoor sun), both paths populate from the same `Light` getters; D3D11 mirrors D3D9’s hemispheric math at `Direct3d11_LightManager.cpp:190-193` vs `_vsps_setExtendedLightData` `:751-759`.
+
+---
+
+## 5. Ranked divergences most likely to zero the bump PS (given locked facts)
+
+Your PS (`VS 10950 / PS 10952`) adds **packedRegister1 + packedRegister3** and modulates by **dot3(normalMap)·packedRegister3/4**. With v1 = 0 fixed, black requires those PS constants ≈ 0.
+
+| Rank | Divergence | Why it zeros the PS |
+|------|------------|---------------------|
+| **1** | **`d3.valid` / `psSlot` gate** — no `T_parallel` in the **per-draw** filtered list → D3D11 skips c0–c4 write; D3D9 explicitly zeros | Directly zeroes packedRegister1/3/4 on GPU when shadow is zero |
+| **2** | **D3D11 stale shadow when `!d3.valid`** — unlike D3D9 `:614-624`, D3D11 does not clear dot3 snapshot fields or force-zero PS staging | Could cause **false lit** (opposite of black), not black — unless shadow was never lit |
+| **3** | **Per-primitive light bitset** — precalc draws use `ms_lightsAffectingShadersWithPrecalculatedVertexLighting` (`ShaderPrimitiveSorter.cpp:1198-1199`); a frame can feed terrain (non-precalc bitset, sun present) and buildings (precalc bitset empty) **different** `setLights` lists in the same frame | Explains axiom #4 (terrain lit, bump batch uniformly zero) **without** a global empty list |
+| **4** | **Missing D3D9 directional cascade until 2026-06-08 fix** — D3D11 previously kept “first `T_parallel`” only; sun vs fill/bounce routing now mirrors D3D9 `:423-440` (`Direct3d11_LightManager.cpp:87-138`) | Affects **which** light wins `psSlot`, not empty-list zeros |
+| **5** | **`setFullAmbientOn` / c16 floor** | Affects VS v1 / c16 only; **your captures falsify this as the black→lit driver** |
+
+---
+
+## 6. Inaccuracies to flag (excluding your 5 locked facts)
+
+| Claim | Verdict |
+|-------|---------|
+| “D3D9 seeds dot3 from `setFullAmbientOn` / sun getter when dynamic list is empty” | **False** — code shows zeros (`Direct3d9_LightManager.cpp:610-625`) |
+| “There are `getDot3Direction_o` / `getBackColor` engine getters” | **False** — inline `Light::getObjectFrameK_w`, `getScaledDiffuseBackColor`, etc. |
+| “`ms_noDot3Light` provides a nonzero fallback” | **False** — defined but unused |
+| “D3D11 has `setFullAmbientOn` parity” | **False** — not implemented under `Direct3d11/` |
+| “Empty global light list” = “empty `setLights` for bump building draw” | **Often false** — same frame can call `setLights` with different bitsets per primitive (`ShaderPrimitiveSorter.cpp:718`) |
+
+---
+
+## 7. Bottom line for the parity gap
+
+For a **genuinely empty** filtered dynamic list on a precalc static-shader draw:
+
+- **D3D9:** dot3 `direction_o` and all hemispheric RGB are **literally zero** on the GPU (explicit upload). `setFullAmbientOn(true)` only raises **c16 ambient** to `(1,1,1,0)`; it does **not** make dot3/hemispheric nonzero.
+- **D3D11:** the same constants are **gated off** by `d3.valid`; when false, PS c0–c4 and VS c40–c43/c60–c63 are **not refreshed**, yielding zero only if the b0 shadow / slot0 shadow is zero.
+
+Your black Capture25 (packedRegister1/3/4 = 0) is therefore **not** explained by a D3D9-vs-D3D11 difference in full-ambient seeding. It points to **`psSlot`/`d3.valid` false for that draw’s filtered light list**, or a prior zero shadow — while D3D9 in the **same** condition would also upload zeros for dot3 RGB. The lit Capture26 (~±0.49/−0.20) requires a **`T_parallel` in the filtered list** so `parallelSpecular[0]` / `psSlot` is populated via the getter chain at `Direct3d9_LightManager.cpp:547-589` / `Direct3d11_LightManager.cpp:178-195`.
+
+**Most likely frame-local explanation for axiom #4:** building precalc draws and terrain draws receive **different `setLights` inputs** (different `lightBitSet` masks), not that D3D9 magically seeds dot3 on empty lists.

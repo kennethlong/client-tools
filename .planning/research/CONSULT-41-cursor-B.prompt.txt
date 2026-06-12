@@ -1,0 +1,24 @@
+You are an expert real-time-graphics engineer doing an independent root-cause review of a D3D11
+renderer port of Star Wars Galaxies (engine clientGraphics). Work from SOURCE.
+
+Read this brief IN FULL first:
+  .planning/research/CONSULT-41-hemispheric-blue-face.md
+
+Then read the cited source to verify (relative to repo root D:\Code\swg-client-v2):
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.cpp
+  src/engine/client/application/Direct3d11/src/win32/Direct3d11_LightManager.h
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.cpp
+  src/engine/client/application/Direct3d9/src/win32/Direct3d9_LightManager.h
+
+Answer ONLY section "6 — B (CURSOR, register/offset detail)" and produce the section-7 deliverable
+for your angle. You may CONFIRM or REFUTE the §4 hemispheric theory. RenderDoc measurements in §3 are
+ground truth.
+
+Establish the exact VS lightData + PS dot3 b0 register layout for the hemispheric path and map each
+D3D11 fill (composeSlot0Shadow ambient c16 / parallel c20-23 / dot3 c26-27 / extended hemispheric
+c60-63; LightManager dot3 c1/c3/c4) to its D3D9 origin (PixelDot3Data / ExtendedLightData / LightData /
+_vsps_setExtendedLightData). Is any sky/ground (tangent/back) color or ambient assigned to the WRONG
+slot, swapped (tangent<->back, sky<->ground), or sourced from the wrong getter vs D3D9? Pay special
+attention to which channel the "up/sky" color vs "down/ground" color lands in, and whether D3D11's
+hemispheric weighting matches D3D9. Cite file:line. Give the minimal D3D9-parity fix and exact location.

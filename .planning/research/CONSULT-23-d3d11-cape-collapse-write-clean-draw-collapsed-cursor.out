@@ -1,0 +1,269 @@
+# CONSULT-23 — Mechanism + minimal fix
+
+## Executive summary
+
+The 2026-06-06 probes change the diagnosis from the 2026-06-05 “capture-invisible race” story. **Clean CPU skin + clean pre-`Unmap` slice + collapsed RenderDoc VB at draw + serialization dead + per-buffer isolation dead** narrows this to a **deterministic fetch/bind/accounting problem**, not “the skin is wrong” and not “fix the ring lifetime again.”
+
+The best-fit mechanism is a **two-part D3D11-only failure**:
+
+1. **Ring accounting (`ms_used += requested` at lock, not actual at unlock)** creates bogus 2 MB reservations (CuiLayer) and a high discard rate that accidentally masks overlap.
+2. **At draw time, the IA fetch does not read the same byte band that was written** — most likely **`ms_currentVBVectorOffsets[0]` at `applyPreDrawState` ≠ the slice written in `prepareToDraw`**, producing the signature **25 good verts then one repeated position for the tail**. That pattern is almost never “random GPU garbage”; it is **wrong base offset into the ring + tail reading a repeated-vertex writer (UI quad / fan / degenerate slice)**.
+
+Per-buffer isolation failing is consistent with that: **if the bug is bind offset / path (vector vs single), giving the garment its own `ID3D11Buffer` does nothing.**
+
+---
+
+## What the code actually does (relevant path)
+
+### Write path (proven clean)
+
+```754:814:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp
+m_dynamicStream->lock(m_vertexCount);
+{
+    VertexBufferWriteIterator writeIterator = m_dynamicStream->begin();
+    skinData(transformCount, transformArray, writeIterator);
+}
+m_dynamicStream->unlock();
+// ...
+Graphics::setVertexBuffer(*m_vertexBufferVector);
+Graphics::setIndexBuffer(*m_indexBuffer);
+```
+
+- `prepareToDraw()` skins, locks/writes/unlocks, then stores bind state via **`setVertexBufferVector`** (not single-stream `setVertexBuffer`).
+- `draw()` only runs deferred `RenderCommand`s; **it does not re-bind the VB**.
+
+### D3D11 ring (accounting divergence from D3D9)
+
+```220:282:src/engine/client/application/Direct3d11/src/win32/Direct3d11_DynamicVertexBufferData.cpp
+// lock: ms_used += length  (REQUESTED, at lock time)
+m_offset = ms_used / vertexSize;
+void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
+ms_used += length;
+```
+
+D3D9 reference (works):
+
+```231:244:src/engine/client/application/Direct3d9/src/win32/Direct3d9_DynamicVertexBufferData.cpp
+// unlock: ms_used += actualUsed
+ms_used += length;  // length = numberOfVertices * vertexSize from unlock()
+```
+
+### Bind path at draw
+
+```1229:1244:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+if (ms_currentVBVectorActive && ms_currentVBVectorStreamCount > 0)
+    ctx->IASetVertexBuffers(..., ms_currentVBVectorBuffers, ms_currentVBVectorStrides, ms_currentVBVectorOffsets);
+else if (ms_currentVBValid && ms_currentVB)
+    ctx->IASetVertexBuffers(..., ms_currentVBOffset);
+```
+
+Vector bind stores **byte** offset correctly:
+
+```136:146:src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexBufferVectorData.cpp
+offsets[stream] = static_cast<UINT>(data->getOffset()) * strides[stream];
+```
+
+### CuiLayer “lock the whole ring”
+
+```62:68:src/engine/client/library/clientUserInterface/src/shared/core/CuiLayerRenderer.cpp
+s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(false);
+if (s_maxNumberOfVertices < 128)
+    s_maxNumberOfVertices = s_vertexBuffer->getNumberOfLockableDynamicVertices(true);
+s_vertexBuffer->lock(s_maxNumberOfVertices);
+```
+
+Unlock uses **actual** count (`flushRenderQueueQuads` → `unlock(s_numberOfVertices)`), but D3D11 already charged **`ms_used` for the full lock request**.
+
+---
+
+## Mechanism consistent with ALL constraints
+
+### A. Why “clean at write, collapsed at draw” (RenderDoc deterministic)
+
+Your unlock probe reads **`s_lastLockedSliceCPUPtr` before `Unmap`** — that is the CPU mapping of the slice that was just written. RenderDoc at eid 2497 shows **IA-fetched inputs** at draw time. If those differ, only three classes remain (given serialization + isolation dead):
+
+| Class | Fits? |
+|-------|-------|
+| Async CPU/GPU race | **No** — serialization dead; collapse is in capture |
+| Skin math wrong | **No** — engine-side replicate of `fillVertexBuffer` clean |
+| **Wrong IA byte offset / wrong bind path at draw** | **Yes** |
+| **Slice bytes overwritten after `Unmap` before `DrawIndexed`** | **Possible on shared ring across other work, not within same SBSSP prepare→draw pair** |
+
+Within `ShaderPrimitiveSorter::Phase::draw()`, for one primitive the order is strictly:
+
+```725:781:src/engine/client/library/clientGraphics/src/shared/ShaderPrimitiveSorter.cpp
+shaderPrimitive.prepareToDraw();   // lock/write/unlock + setVertexBufferVector
+// ...
+shaderPrimitive.draw();          // applyPreDrawState → IASetVertexBuffers → DrawIndexed
+```
+
+So **no other primitive’s `lock()` runs between this garment’s `unlock()` and its `DrawIndexed`**. Overwrite of *this* slice in that window is not the sorter path.
+
+That pushes the collapse to **`applyPreDrawState` binding a different byte band than the slice that was written** — i.e. **`ms_currentVBVectorOffsets[0]` at draw ≠ `m_offset × stride` from the write**.
+
+### B. Why the tail is “25 good, 98 identical”
+
+That pattern is characteristic of:
+
+```text
+GPU slot i  reads  ring byte  (bindOffset + i × stride)
+```
+
+If **`bindOffset = writeOffset + 25 × stride`** (off by +25 verts):
+
+- Slots 0–24 show garment verts 25–49 → still plausible robe geometry.
+- Slots 25+ read from bytes that may be **unwritten ring tail, next writer, or a repeated UI vertex** → one position replicated ~98 times after WVP.
+
+The collapsed post-WVP value ×4096 ≈ integers strongly suggests **one specific replicated source vertex**, not NaN garbage — consistent with **reading into a quad/fan/degenerate writer**, not random memory.
+
+### C. Why per-buffer isolation didn’t help
+
+Dead end #5 bound per-slice buffers “at both bind sites” and still saw the same spikes. That is expected if the failure is:
+
+- **Stale / wrong offset in `Direct3d11_StateCache` shadow state**, or
+- **Vector vs single-stream path flip** (`setVertexBuffer` clears `ms_currentVBVectorActive`; `setVertexBufferVector` clears `ms_currentVBValid`),
+
+not “another consumer discarded my shared ring.”
+
+**Important diagnostic gap:** your draw probe only fires on **`ms_currentVBValid && ms_currentVBStride == 48`**:
+
+```3233:3253:src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp
+if (ms_currentVBValid && ms_currentVBStride == 48 && ...)
+```
+
+SBSSP uses **`setVertexBufferVector`**, which sets **`ms_currentVBValid = false`**. The garment draw probe likely **never logged the actual bind used for the spiking draw**. You may have been comparing write offset 2670 against a non-garment single-stream draw.
+
+### D. Why “fewer discards = worse; more discards = protective”
+
+This is the CONSULT-20 paradox, still real, but it explains **scene-wide tearing**, not necessarily this garment’s clean-unlock capture:
+
+- **Baseline:** `ms_used += requested` → CuiLayer charges ~2 MB per lock → ~370 `WRITE_DISCARD`/frame → driver rename pool accidentally limits reuse collisions.
+- **D3D9-faithful accounting:** `ms_used` stays low → CuiLayer gets a **giant `WRITE_NO_OVERWRITE` map** → more bytes nominally “appendable” while **deferred draws from earlier in the frame still reference earlier bands** → **worse** tearing (not better).
+
+That does **not** contradict clean-at-unlock for *this* draw; it explains why ring-lifetime “fixes” felt like the right family but failed or regressed.
+
+### E. Why serialization didn’t help
+
+If collapse is **already visible in RenderDoc at the draw event**, the GPU is reading bad bytes **deterministically at bind time**, not “sometimes racing.” Full-frame `Flush`+`GetData` won’t fix wrong `IASetVertexBuffers` offset/path.
+
+---
+
+## Answers to your specific questions
+
+### “How can 25 good then 98 identical from a 110-distinct slice?”
+
+Most likely: **draw IA offset is ~25 vertices higher than write offset** (or equivalently, fetches start 1200 bytes into the slice), so the first 25 fetches still land in valid garment data; the rest land in a region filled with **one repeated vertex** (often UI/screen-space geometry written later in the ring, or unwritten tail that hardware/driver treats as repeating last cache line — less likely given integer-like collapsed values).
+
+Second possibility to verify: **write `numVerts=110` vs draw span 123** — if the IB truly uses indices up to 122 but lock only reserves 110, indices 110–122 read past the slice. That alone **does not** explain slots 25–109 collapsed; it only explains 110–122. Treat 110 vs 123 as a **separate sizing bug** to confirm on the same `this` pointer / same frame.
+
+### “WRITE_NO_OVERWRITE + deferred draw + IA offset interaction?”
+
+Yes, but **not** between a single SBSSP’s unlock and draw in the sorter. The interaction is **frame-wide**:
+
+- Ring bytes must remain valid for all draws issued in the frame (multi-`beginScene` passes).
+- **`ms_used` over-charge** + **`CuiLayer` whole-ring lock** distort where “append” thinks it is vs what is still in flight when discards are reduced.
+
+### “Is CuiLayer relevant to a skinned slice that already wrote?”
+
+**Indirectly, yes** — not by clobbering the same primitive’s unlock→draw window, but by:
+
+1. Forcing **`WRITE_DISCARD`** storms that define which ring generation everyone lives in.
+2. After accounting fixes, reserving **megabytes of NO_OVERWRITE VA** that overlaps the deferred lifetime of earlier slices.
+3. Writing **few verts with repeated positions** into the ring — the natural source of the **one replicated collapsed value** in the tail if IA offset is wrong.
+
+### “Could IA binding reset between garment bind and DrawIndexed?”
+
+**Between `prepareToDraw`’s `setVertexBufferVector` and `draw()`’s `applyPreDrawState`:** only `setStaticShader` runs; it does **not** touch VB shadow state.
+
+**Across the frame:** any intervening `Graphics::setVertexBuffer(single)` (UI flush, compositing, debug) clears vector state. That matters **only if** something calls `draw()` without a preceding `prepareToDraw()` on that primitive — not the SBSSP sorter path, but worth auditing for alternate render entry points.
+
+---
+
+## Minimal fix (not a dead-end restructure)
+
+Do these in order; each is small and testable.
+
+### 1. Fix the draw probe first (1 hour, decisive)
+
+Extend the cape-draw probe to log when **`ms_currentVBVectorActive`**:
+
+- `ms_currentVBVectorOffsets[0]`, `ms_currentVBVectorStrides[0]`, ring pointer
+- Compare to unlock log `offsetVerts × 48`
+
+**If draw offset ≠ write offset → MISREAD (bind/path bug).**  
+**If equal → OVERWRITE (something maps into that band after write).**
+
+Right now you likely haven’t measured the garment’s actual bind.
+
+### 2. D3D9-faithful `ms_used` on unlock + CuiLayer cap (paired, minimal)
+
+In `Direct3d11_DynamicVertexBufferData.cpp`:
+
+- **Remove** `ms_used += length` from `lock()`.
+- **Add** to `unlock(int numberOfVertices)`:
+
+```cpp
+ms_used = (m_offset + numberOfVertices) * vertexSize;
+```
+
+(Or equivalent: advance by actual bytes used, with `roundUpUsed()` semantics preserved.)
+
+In `CuiLayerRenderer.cpp`, **do not lock `getNumberOfLockableDynamicVertices()`**; cap to something like `min(remaining, 4096)` or `minVerticesRequired + smallSlack`.
+
+**Why this isn’t dead end #2 alone:** `beginFrame()` per-frame flip did nothing because it didn’t fix **CuiLayer’s whole-ring NO_OVERWRITE map** or **unlock accounting**. You need **both** accounting + cap — the paradox’s second half.
+
+### 3. Re-bind VB at draw from the writer instance (cheap insurance)
+
+In `SoftwareBlendSkeletalShaderPrimitive::RenderCommand::render()` (or `draw()`), before `drawIndexedTriangleList`:
+
+```cpp
+Graphics::setVertexBuffer(*m_vertexBufferVector);
+```
+
+This ensures `applyPreDrawState` sees the **`Direct3d11_DynamicVertexBufferData` instance that owns the last `m_offset`**, even if shadow state was clobbered elsewhere in the frame.
+
+Cost: one shadow-state update per draw call; acceptable for SBSSP.
+
+### 4. If 110 vs 123 is confirmed on the same primitive
+
+Ensure dynamic lock covers **max index referenced**, not just `m_vertexCount`:
+
+```cpp
+int const vertsNeeded = maxIndexInIB + 1; // or max(m_vertexCount, renderCommand span)
+m_dynamicStream->lock(vertsNeeded);
+```
+
+And/or pass correct `numberOfVertices` to unlock.
+
+---
+
+## What I would **not** do (given dead ends)
+
+| Proposal | Why skip |
+|----------|----------|
+| Another N-buffer / fence ring redesign | #4, #5, #6 failed; isolation + serialization already falsify “just need more fences” |
+| Per-instance dynamic buffers everywhere | #3 driver crash |
+| `beginFrame()` alone | #2 no change without accounting + CuiLayer |
+| “Fix the skinning math” | Proven clean |
+
+---
+
+## Paradox in one paragraph
+
+**More discards helped because the buggy lock-time charge made discards so frequent that the driver’s rename pool prevented NO_OVERWRITE append from reusing byte bands still referenced by deferred draws. Fixing accounting without stopping CuiLayer’s 2 MB NO_OVERWRITE reservation removed the accidental renames and exposed the real overlap. Your 2026-06-06 probes then prove that, for at least one failing garment draw, the CPU write itself is fine — so the remaining bug is either wrong IA offset at draw (strongest; check vector bind probe) or deterministic post-write byte overwrite elsewhere in the frame (weaker for SBSSP’s paired prepare/draw, stronger if another render path skips re-bind).**
+
+---
+
+## Recommended next measurement (single decisive experiment)
+
+On the **same frame / same primitive pointer** for a spiking eid:
+
+1. Unlock log: `offsetVerts`, `numVerts`, first position.
+2. Draw log (**vector path**): `ms_currentVBVectorOffsets[0]`, stride, buffer ptr.
+3. RenderDoc: VB slot 25 input POSITION (object space, pre-WVP).
+
+If draw offset = write offset but slot 25 POSITION is already collapsed in the VB resource → overwrite after Unmap (shared ring, other consumer).  
+If draw offset = write offset + 25×48 → bind/path bug (fix #3 + audit who clears vector state).  
+If draw offset ≠ write offset with vector inactive → single-stream stale bind (fix #3).
+
+I’m in Ask mode, so I can’t apply these changes; switch to Agent mode if you want the probe fix + accounting patch implemented.
