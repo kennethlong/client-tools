@@ -11,6 +11,7 @@
 
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/DebugPrimitive.h"
+#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/RenderWorldCamera.h"
 #include "clientGraphics/RenderWorldCommander.h"
@@ -24,6 +25,7 @@
 #include "sharedMath/Sphere.h"
 #include "sharedMath/IndexedTriangleList.h"
 #include "sharedDebug/DebugFlags.h"
+#include "sharedDebug/PerformanceTimer.h"
 #include "sharedDebug/Profiler.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedFoundation/Production.h"
@@ -899,9 +901,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 		dpvsFrustum.zFar   = ms_cameraFrustum[Camera::FV_FarUpperLeft].z;
 		ms_dpvsCamera->setFrustum(dpvsFrustum);
 	#ifdef _DEBUG
-		// Phase 10 D-13: OCCLUSION_CULLING bit dropped per docs/recon/10-dpvs-profiling.md
-		// (Option α: apply remove globally; aggregate user experience favors outdoor wins).
-		uint const cullingParameters = (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
+		// Phase 23 -- DPVS D3D11 remeasure: re-introduce the OCCLUSION_CULLING bit
+		// for the A/B toggle, gated on the surviving ms_forceDisableOcclusionCulling
+		// DebugFlag (F11). Kept inside _DEBUG so the shipped Option α #else branch
+		// is byte-for-byte unchanged. (Phase 10 D-13 dropped this bit globally.)
+		uint const cullingParameters =
+			  (ms_forceDisableOcclusionCulling ? 0 : DPVS::Camera::OCCLUSION_CULLING)
+			| (ms_disableViewFrustumCulling    ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
 		portalRecusionDepth = ms_disablePortalTraversal ? 0 : 8;
 	#else
 		// Phase 10 D-13: OCCLUSION_CULLING bit dropped (Option α).
@@ -1040,6 +1046,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 #endif
 	{
 		clearVisibleCells();
+
+		// Phase 23 -- DPVS D3D11 remeasure: QPC bracket around the CPU-side
+		// resolveVisibility() cull. (The pre-cleanup form also wrapped this with
+		// Graphics::dpvsGpuTimingBegin/End -- DROPPED here; DPVS issues no GPU
+		// work so gpu_us is structurally zero.)
+		PerformanceTimer dpvsCpuTimer;
+		dpvsCpuTimer.start();
 		{
 			NP_PROFILER_AUTO_BLOCK_DEFINE("resolveVisibility");
 
@@ -1048,6 +1061,11 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 
 			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
 		}
+		dpvsCpuTimer.stop();
+
+		DpvsProfileInstrumentation::recordCpuQpcUs(static_cast<uint32>(dpvsCpuTimer.getElapsedTime() * 1e6f));
+		DpvsProfileInstrumentation::recordVisibleObjectCount(RenderWorldCommander::getNumberOfVisibleObjects());
+		DpvsProfileInstrumentation::recordProfilerUs(0u);
 	}
 
 	{
@@ -1160,6 +1178,25 @@ bool RenderWorld::wasObjectRenderedThisFrame(NetworkId const & id)
 // ----------------------------------------------------------------------
 
 #ifdef _DEBUG
+
+// Phase 23 -- DPVS D3D11 remeasure. Replaces the deleted Option-alpha
+// get/setDisableOcclusionCulling pair; operates on the surviving
+// ms_forceDisableOcclusionCulling DebugFlag (declared at file scope,
+// registered as [ClientGraphics/Dpvs] disableOcclusionCulling). When the
+// flag is set, drawScene() clears the OCCLUSION_CULLING bit (A/B "OFF").
+bool RenderWorld::getForceDisableOcclusionCulling()
+{
+	return ms_forceDisableOcclusionCulling;
+}
+
+// ----------------------------------------------------------------------
+
+void RenderWorld::toggleForceDisableOcclusionCulling()
+{
+	ms_forceDisableOcclusionCulling = !ms_forceDisableOcclusionCulling;
+}
+
+// ----------------------------------------------------------------------
 
 void RenderWorldNamespace::reportMetrics()
 {

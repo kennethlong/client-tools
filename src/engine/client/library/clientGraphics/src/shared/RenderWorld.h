@@ -103,6 +103,15 @@ public:
 
 	static bool wasObjectRenderedThisFrame(NetworkId const & id);
 
+#ifdef _DEBUG
+	// Phase 23 -- DPVS D3D11 remeasure. Replaces the deleted Option-alpha
+	// get/setDisableOcclusionCulling pair; operates on the surviving
+	// ms_forceDisableOcclusionCulling DebugFlag. F11 (CuiIoWin) flips it;
+	// DpvsProfileInstrumentation reads it for the dpvs_occlusion_flag column.
+	static bool                     getForceDisableOcclusionCulling();
+	static void                     toggleForceDisableOcclusionCulling();
+#endif
+
 private:
 
 	static void                     remove();
