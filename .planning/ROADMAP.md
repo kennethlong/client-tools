@@ -68,7 +68,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 - [ ] **Phase 20: Open-World PS Extension + Minimap** - Extend the PS pipeline to open-world surfaces, multi-stage compositing, and the round minimap
 - [ ] **Phase 21: Particles & Ribbon Effects** - Restore correct particle blending and ribbon/swoosh rendering under D3D11
 - [ ] **Phase 22: Exterior Geometry / Skeletal Shards** - Resolve exterior static-mesh shard distortion after a settled re-capture
-- [ ] **Phase 23: DPVS D3D11 Remeasure** - Re-measure DPVS occlusion-culling cost under D3D11 and record a keep/remove verdict (strictly last)
+- [x] **Phase 23: DPVS D3D11 Remeasure** - Re-measure DPVS occlusion-culling cost under D3D11 and record a keep/remove verdict (strictly last) (completed 2026-06-12)
 
 ## Phase Details
 
@@ -167,7 +167,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 **Plans**: 3 plans (3 waves — sequential; restore-core gates wiring gates live-capture+verdict)
 - [x] 23-01-PLAN.md — restore DpvsProfileInstrumentation.{h,cpp} (CPU-only, GPU stripped) + re-gate OCCLUSION_CULLING on ms_forceDisableOcclusionCulling + QPC bracket; dual-renderer boot gate
 - [x] 23-02-PLAN.md — restore wiring: install hook + onFrameEnd + F10/F11 (F11 rewired to surviving flag) + /setrunlabel; smoke toggle + analysis.py schema
-- [ ] 23-03-PLAN.md — live gl11 occlusion A/B capture (outdoor+indoor) + analysis.py verdict + docs/recon/23-dpvs-d3d11-profiling.md (confirm/revise Option α)
+- [x] 23-03-PLAN.md — live gl11 occlusion A/B capture (outdoor+indoor) + analysis.py verdict + docs/recon/23-dpvs-d3d11-profiling.md (confirm/revise Option α)
 **Research:** Standard patterns — mirrors the Phase 10 DPVS methodology. No new patterns needed.
 
 ## Progress
@@ -194,4 +194,4 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
 | 21. Particles & Ribbon Effects | v2.2 | 0/TBD | Not started | - |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | 0/TBD | Not started | - |
-| 23. DPVS D3D11 Remeasure | v2.2 | 2/3 | In Progress|  |
+| 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete   | 2026-06-12 |
