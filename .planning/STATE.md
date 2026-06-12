@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
-status: ready_to_plan
-last_updated: "2026-05-29T22:46:53.967Z"
-last_activity: "2026-05-30 -- Phase 17 COMPLETE + VERIFIED. GAP-3/4/5/6 all closed → char-select renders LIT+textured for ALL parts. 17-05 T4-5 done (commit bb4b13a00): matched A/B (D3D9 screenShot0029 vs D3D11 0030), CHAR-01/02/03 = PASS (asset-PS lane, 9/9 binds). UAT 3/3 pass; security 28/28 threats closed (17-SECURITY.md). Phase advanced 17→18. Pushed to origin."
+status: executing
+last_updated: "2026-06-12T15:06:51.665Z"
+last_activity: 2026-06-12 -- Phase 23 planning complete
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 7
-  percent: 29
+  completed_phases: 1
+  total_plans: 15
+  completed_plans: 10
+  percent: 67
 ---
 
 # Project State
@@ -55,9 +55,9 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 Phase: 19
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Resume: None — Phase 17 complete + verified + secured. Ready to plan Phase 18 (load-screen half-texel seam, UI-01 — `getOneToOneUVMapping` stub; independent of the PS pipeline). gl11_d.dll = HEAD a0d5ac80f (5/30 13:24). See memory project_phase17_charselect_d3d11_parity_verified.
-Last activity: 2026-05-30
+Last activity: 2026-06-12 -- Phase 23 planning complete
 
 ## Accumulated Context
 
