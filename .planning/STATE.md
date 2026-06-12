@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
-status: verifying
+status: milestone_complete
 last_updated: "2026-06-12T17:13:55.647Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
   completed_plans: 13
-  percent: 87
+  percent: 43
 ---
 
 # Project State
@@ -53,9 +53,9 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 23 (dpvs-d3d11-remeasure) — COMPLETE (3/3 plans), ready for phase verification
-Plan: 3 of 3 — DONE
-Status: Phase complete — ready for verification
+Phase: 23
+Plan: Not started
+Status: Milestone complete
 Resume: None — Phase 23 DPVS D3D11 remeasure COMPLETE. Both occlusion verdicts FLIPPED vs Phase 10 D3D9: outdoor `remove→keep` (occlusion culls ~140 objects, now net-positive ON), indoor `keep→remove` (portals already bind the set, occlusion query is dead overhead). Option α (`remove` globally) premise REVISED under D3D11 — outdoor now prefers occlusion ON. Verdict recorded in `docs/recon/23-dpvs-d3d11-profiling.md`; shipped Option α `#else` branch UNTOUCHED (acting on the verdict — scene-aware split or outdoor-revert — is a follow-up for a future phase). DPVS-01 closed. This was the STRICTLY-LAST v2.2 requirement.
 Last activity: 2026-06-12
 

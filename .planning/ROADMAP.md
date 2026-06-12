@@ -194,4 +194,4 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
 | 21. Particles & Ribbon Effects | v2.2 | 0/TBD | Not started | - |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | 0/TBD | Not started | - |
-| 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete   | 2026-06-12 |
+| 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete    | 2026-06-12 |
