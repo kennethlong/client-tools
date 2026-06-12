@@ -4,7 +4,23 @@
 
 **D3D11 visual parity achieved.** The D3D11 renderer (`rasterMajor=11`) now visually matches the known-good D3D9 baseline (`rasterMajor=5`) across characters, interiors, open world, terrain, gamma, UI, and effects — all 13 v2.2 requirements satisfied (audit: `tech_debt`, 0 blockers; see `milestones/v2.2-MILESTONE-AUDIT.md`). The core delivery is the **asset pixel-shader pipeline**: recompiling the discarded `TAG_PSRC` shader source (instead of the D3D11-rejected PEXE bytecode) with reflection-driven constants, plus the FFP combiner-cascade fallback PS, per-pixel fog in all three PS lanes, lighting parity fixes, the gamma pre-Present curve pass, and a git-tracked `stage/override/` shader-override workflow. Phases 17/18/23 ran through GSD; the Phase 19–22 work shipped ad-hoc (2026-06-08..12) with the milestone audit as its verification record. DPVS verdict: both Phase 10 calls **flipped** under D3D11 (outdoor `keep`, indoor `remove`) — Option α revised on paper, shipped culling code untouched (config-gate follow-up pending). Bonus: audio fully restored (missing `stage/miles/` redist), combat kill-crash fixed, warning-flood perf drag eliminated.
 
-**Next milestone:** not yet defined — run `/gsd-new-milestone`. Leading candidates from the deferred list: acting on the DPVS verdict, D-15 instrumentation removal, machine-portability of `stage/override`/`stage/miles` paths, SWG-Source community-compat sync, the pre-existing Options-window FATAL.
+## Current Milestone: v2.3 Hardening
+
+**Goal:** Consolidate the v2.2 parity win — act on the DPVS verdict, strip the accumulated debug instrumentation, make the staged client machine-portable, fix the known runtime crashes/quirks, and ship a modern web-based TRE compare tool for cross-installation data diagnostics.
+
+**Target features:**
+- **DPVS config-gate** — act on the Phase 23 verdict: occlusion outdoor-on / indoor-off (auto mode = occlusion bit only outside POB cells)
+- **Instrumentation removal** — D-15 DPVS instrumentation + CORNERSNAP `_DEBUG` probes stripped
+- **Machine portability** — de-hardcode `stage/override` + `stage/miles` paths, clean up `stage/client_d.cfg` accumulated test settings
+- **Options-window FATAL** — fix the pre-existing `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch crash
+- **D3DCompile port** — replace `D3DXCompileShader` in the D3D9 plugin (Fix B), superseding the Phase-19 SEH guard
+- **Cantina corner-snap fix** — re-entrancy guard on the same-frame portal ping-pong
+- **TRE compare tool (web app)** — compare two SWG installations' TRE sets (e.g. SWGEmu vs SWGSource): set-level archive deltas, file-level merged-virtual-tree diffs (search-path-order resolution, per-file added/removed/changed), modern clean web UI
+
+**Key context:**
+- Excluded: SWG-Source community-compat sync and gameplay-parity work; Nyquist validation backfill for phases 18/19–22 skipped (milestone audit stands as the verification record)
+- Core invariant: every client change leaves it bootable to character select under both `rasterMajor=5` and `=11` (the TRE tool is a standalone web app, outside that invariant)
+- The TRE tool's first real use case is the parked space-asset diff research todo (SWGSource vs whitengold); TRE-format reading knowledge exists in `D:/Code/swg-tools` (swg-blender tre extract/repack) as parser reference
 
 ## Prior State: v2.1 Decruft SHIPPED (2026-05-27)
 
@@ -248,4 +264,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after v2.2 milestone — **v2.2 Visual Parity SHIPPED + tagged `v2.2`** (13/13 requirements; phases 17/18/23 via GSD, 19–22 ad-hoc with the milestone audit as verification record). D3D11 now matches the D3D9 baseline; DPVS Option α revised on paper (outdoor keep / indoor remove), config-gate follow-up pending. Archives: `milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`, `milestones/v2.2-MILESTONE-AUDIT.md`. Next: `/gsd-new-milestone`.*
+*Last updated: 2026-06-12 — **milestone v2.3 Hardening started** (DPVS config-gate, instrumentation removal, machine portability, Options-window FATAL, D3DCompile port, cantina corner-snap fix, web-based TRE compare tool). Prior: v2.2 Visual Parity SHIPPED + tagged `v2.2` (13/13 requirements). Archives: `milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`, `milestones/v2.2-MILESTONE-AUDIT.md`.*

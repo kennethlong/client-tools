@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Visual Parity
-status: completed
-last_updated: "2026-06-12T18:39:55.799Z"
+milestone: v2.3
+milestone_name: Hardening
+status: planning
+last_updated: "2026-06-12T22:24:01.067Z"
 last_activity: 2026-06-12
 progress:
-  total_phases: 7
-  completed_phases: 2
-  total_plans: 15
-  completed_plans: 13
-  percent: 87
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -69,11 +69,10 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: — (v2.2 SHIPPED 2026-06-12, tagged `v2.2`; next milestone not yet defined — phase numbering continues from 24)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Between milestones — run `/gsd-new-milestone`
-Resume: None — Phase 23 DPVS D3D11 remeasure COMPLETE. Both occlusion verdicts FLIPPED vs Phase 10 D3D9: outdoor `remove→keep` (occlusion culls ~140 objects, now net-positive ON), indoor `keep→remove` (portals already bind the set, occlusion query is dead overhead). Option α (`remove` globally) premise REVISED under D3D11 — outdoor now prefers occlusion ON. Verdict recorded in `docs/recon/23-dpvs-d3d11-profiling.md`; shipped Option α `#else` branch UNTOUCHED (acting on the verdict — scene-aware split or outdoor-revert — is a follow-up for a future phase). DPVS-01 closed. This was the STRICTLY-LAST v2.2 requirement.
-Last activity: 2026-06-12
+Status: Defining requirements
+Last activity: 2026-06-12 — Milestone v2.3 started
 
 ## Accumulated Context
 
