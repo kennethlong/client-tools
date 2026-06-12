@@ -1,17 +1,55 @@
 ---
 created: 2026-05-15
-title: Cantina interior corner-snap — pre-existing SOE engine quirk, engine-improvement candidate
+updated: 2026-06-12
+title: Cantina interior corner-snap — mechanism FOUND (same-frame portal ping-pong), fix deferred
 area: rendering / collision response / portal traversal
-next_action: defer — known engine behavior; revisit when a phase touches collision pushback or portal traversal
+next_action: defer — mechanism documented + instrumentation committed; fix = re-entrancy guard in CellProperty::positionChanged when someone wants it
 files:
-  - src/engine/shared/library/sharedCollision/  (collision response — needs site grep)
-  - src/engine/shared/library/sharedObject/src/shared/object/CellProperty.cpp  (Notification::positionChanged, line ~115)
+  - src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp  (Notification::positionChanged ~line 115; CORNERSNAP-PORTAL instrumentation at the targetCell branch)
+  - src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp  (resolveCollisions rewind/replay ~line 313; CORNERSNAP-RESOLVE/CELLJUMP instrumentation)
   - src/engine/shared/library/sharedObject/src/shared/object/Object.cpp  (setParentCell, line ~1387)
 references:
   - .planning/debug/cantina-corner-snap.md  (closed debug session, cycles 1-5)
   - .planning/todos/pending/2026-05-14-safecast-null-dynamic-cast-world-load.md  (orthogonal; cross-linked because the v1 GOOD-reference revival attempt during Cycle 4 hit a related but unrelated SafeCast issue)
 status: known_engine_behavior
 priority: low (annoying but not blocking; workaround available)
+---
+
+## 2026-06-12 instrumented session — MECHANISM FOUND, fix deferred
+
+Ran the instrumentation plan below in-game (Debug client under cdb, Mos Eisley
+cantina, ~10 min of wall-grazing traffic by both Claude-pilot and Kenny).
+Full capture: `.planning/todos/cornersnap-instrumentation-capture-2026-06-12.txt`
+(2,679 events). Instrumentation is committed, `_DEBUG`-only, tagged `CORNERSNAP`.
+
+**The original pushback hypothesis is FALSIFIED.** Zero `CORNERSNAP-CELLJUMP`
+events: the `CollisionResolve::resolveCollisions` rewind/replay
+(`CollisionResolve.cpp:313-323` — rewinds the object to timestep start, then
+replays resolved waypoints) never produced a net parent-cell change, despite
+continuous wall contact. Don't pursue the "clamp pushback" fix.
+
+**Actual anomaly: same-frame portal ping-pong (re-entrant positionChanged).**
+On 8 frames, all at portal planes (world/foyer1, foyer1/foyer2, foyer2/cantina),
+the PLAYER transitioned cells 3-5 times within ONE frame, each segment the exact
+reversal of the previous (cross → cross back → cross again). Frame 13019 did
+this with a 3.6 m segment — visibly a snap. Mechanism: `setParentCell` from the
+portal walk triggers another position notification whose old/new segment is
+reversed, which walks back through the portal, recursively. The `dueToParent`
+early-out does not catch this re-entry.
+
+**Camera churn:** the chase camera (NetworkId 0) flaps cells EVERY frame for
+dozens of consecutive frames whenever the camera boom straddles a doorway
+portal (constant `foyer2→foyer1` walks). Each pays full cell-reparent cost.
+Consistent with Kenny's 2026-06-12 observation that the snap is much less
+visible under D3D11 — better frame times absorb the churn.
+
+**Fix target when picked up:** re-entrancy/oscillation guard in
+`CellPropertyNamespace::Notification::positionChanged`
+(`sharedObject/src/shared/portal/CellProperty.cpp:115`) — e.g. suppress a
+second transition for the same object within the same frame, or detect the
+A→B→A reversal and keep the first result. Camera churn may deserve a separate
+hysteresis (don't re-walk the camera's cell every frame at a portal plane).
+
 ---
 
 ## What this is

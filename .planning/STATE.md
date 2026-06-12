@@ -106,14 +106,13 @@ Last activity: 2026-06-12
 
 ### Pending Todos
 
-4 pending:
+5 pending:
 
 - [Config-gate DPVS occlusion per Phase 23 verdict (outdoor on, indoor off)](todos/pending/2026-06-12-config-gate-dpvs-occlusion-per-phase-23-verdict.md) — acts on the Phase 23 REVISED Option α verdict; auto mode = occlusion bit only outside POB cells
 - [Sync community compat fixes from SWG-Source/client-tools master](todos/pending/2026-05-08-sync-swg-source-community-compat.md) — future milestone (not v2.2)
+- [Cantina corner-snap engine improvement](todos/pending/2026-05-15-cantina-corner-snap-engine-improvement.md) — mechanism FOUND 2026-06-12 (same-frame portal ping-pong, re-entrant positionChanged; pushback hypothesis falsified); CORNERSNAP instrumentation committed; fix deferred
 - [SWGSource vs whitengold TRE asset diff](todos/pending/2026-05-15-swgsource-vs-whitengold-tre-asset-diff.md) — space-scene graphics artifacts research
 - [Options toolbar cooldown UI data mismatch crash](todos/pending/2026-05-27-options-toolbar-cooldown-ui-data-mismatch-crash.md) + [Port D3D9 shader compile to D3DCompile](todos/pending/2026-05-31-port-d3d9-shader-compile-to-d3dcompile.md)
-
-In progress: [Cantina corner-snap engine improvement](todos/completed/2026-05-15-cantina-corner-snap-engine-improvement.md) — started 2026-06-12
 
 ### Blockers/Concerns
 
