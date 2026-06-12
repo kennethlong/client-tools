@@ -1652,10 +1652,9 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 			// Direct3d9::setAlphaBlendEnable. UI canvas / particles / glow get
 			// blend ON; opaque world content gets blend OFF.
 			//
-			// Still-deferred (small follow-on): m_alphaBlendSource/Dest, m_alphaBlendOperation,
-			// m_writeEnable, m_zEnable/Write/Compare. Existing install() defaults
-			// (SrcAlpha/InvSrcAlpha "over", DepthEnable=TRUE, LESSEQUAL, write-all)
-			// match what typical UI/particle/opaque shaders need.
+			// (Historical note: blend factors / depth / alpha-test / write mask were
+			// "still-deferred" here for a long stretch; all are wired below as of the
+			// Iter-44A/B work + the 2026-06-12 blend-factors re-land, fcfbb2226.)
 			if (m_implementation && m_implementation->m_pass
 				&& idx < m_implementation->m_pass->size())
 			{
