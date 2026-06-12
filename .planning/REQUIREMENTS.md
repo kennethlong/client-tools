@@ -15,27 +15,27 @@
 
 ### World Surface Rendering — open world
 
-- [ ] **WORLD-01**: Open-world surfaces (terrain, buildings, props) render with correct diffuse textures under D3D11, matching D3D9.
-- [ ] **WORLD-02**: Multi-texture material stages (detail / specular / overlay) composite correctly under D3D11 (the engine's multi-stage `TextureOperation` cascade is evaluated, not slot-0-only).
-- [ ] **WORLD-03**: Interior lighting renders with correct ambient/diffuse under D3D11 — not blown-out flat white.
+- [x] **WORLD-01**: Open-world surfaces (terrain, buildings, props) render with correct diffuse textures under D3D11, matching D3D9.
+- [x] **WORLD-02**: Multi-texture material stages (detail / specular / overlay) composite correctly under D3D11 (the engine's multi-stage `TextureOperation` cascade is evaluated, not slot-0-only).
+- [x] **WORLD-03**: Interior lighting renders with correct ambient/diffuse under D3D11 — not blown-out flat white.
 
 ### Color / Gamma
 
-- [ ] **GAMMA-01**: Overall scene tone/brightness under D3D11 matches the D3D9 baseline (no washed-out sky/tone), via a gamma path that replicates D3D9's gamma ramp — without sRGB-view double-correction.
+- [x] **GAMMA-01**: Overall scene tone/brightness under D3D11 matches the D3D9 baseline (no washed-out sky/tone), via a gamma path that replicates D3D9's gamma ramp — without sRGB-view double-correction.
 
 ### 2D / UI
 
 - [x] **UI-01**: The loading screen renders with no vertical centerline seam under D3D11 (half-texel fullscreen-blit fix). Image-independent: verified across multiple splash images.
-- [ ] **UI-02**: The minimap/radar renders round (not square) under D3D11, matching D3D9. *(Verified by screenshot diff — a prior iteration falsely pre-claimed this; do not mark done without a diff.)*
+- [x] **UI-02**: The minimap/radar renders round (not square) under D3D11, matching D3D9. *(Verified by screenshot diff — a prior iteration falsely pre-claimed this; do not mark done without a diff.)*
 
 ### Effects
 
-- [ ] **FX-01**: Particle effects render correctly under D3D11 (blending, textures, additive/alpha modes match D3D9).
-- [ ] **FX-02**: Ribbon / swoosh effects render without distortion or stretch under D3D11.
+- [x] **FX-01**: Particle effects render correctly under D3D11 (blending, textures, additive/alpha modes match D3D9).
+- [x] **FX-02**: Ribbon / swoosh effects render without distortion or stretch under D3D11.
 
 ### Geometry Integrity
 
-- [ ] **GEO-01**: Exterior static-mesh geometry renders without shard/stretch distortion under D3D11. *(Investigation-gated: a fully-settled exterior re-capture must first separate real distortion from mid-load LOD streaming before a fix is scoped. The skeletal-path twin was already fixed at `905fb5d64`.)*
+- [x] **GEO-01**: Exterior static-mesh geometry renders without shard/stretch distortion under D3D11. *(Investigation-gated: a fully-settled exterior re-capture must first separate real distortion from mid-load LOD streaming before a fix is scoped. The skeletal-path twin was already fixed at `905fb5d64`.)*
 
 ### Performance / Culling
 
