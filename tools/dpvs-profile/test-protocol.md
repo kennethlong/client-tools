@@ -1,7 +1,88 @@
-# Phase 10 DPVS Profiling — Capture Protocol
+# DPVS Profiling — Capture Protocol
 
 > **Read this top-to-bottom at capture time.** The capture session is the
-> validation of the Phase 10 goal per `.planning/phases/10-dpvs-culling-experiment/10-VALIDATION.md` §Manual-Only Verifications.
+> validation of DPVS-01 (Phase 23, D3D11 re-measure) and — historically — the
+> Phase 10 goal per `.planning/phases/10-dpvs-culling-experiment/10-VALIDATION.md` §Manual-Only Verifications.
+>
+> **Phase 23 update (2026-06-12):** This protocol now drives the **D3D11**
+> re-measure. Read the *Phase 23 Delta* section immediately below FIRST — it
+> overrides the Phase 10 specifics (renderer, F11 target, scene set) wherever
+> they conflict. The original Phase 10 body is retained verbatim below the
+> delta as the historical decision trail and the baseline-table reference.
+
+---
+
+## Phase 23 Delta — D3D11 re-measure (READ FIRST, overrides Phase 10 below)
+
+This is the live capture for **DPVS-01**: re-run the occlusion-vs-no-occlusion
+A/B under the D3D11 renderer and record a keep/remove verdict that confirms or
+revises the Phase 10 Option α decision (remove outdoor occlusion, keep indoor
+portals). What changes from the Phase 10 body:
+
+1. **Renderer = `rasterMajor=11` (gl11), Debug build.**
+   Launch `D:/Code/swg-client-v2/stage/SwgClient_d.exe`. The **Debug** exe reads
+   **`stage/client_d.cfg`** (NOT `client.cfg` — that is the Release exe; memory
+   `feedback_debug_exe_reads_client_d_cfg`). Set `rasterMajor=11` in
+   `stage/client_d.cfg`. Debug is intentional: the F10/F11 toggle, the occlusion
+   re-gate, and the visible-object count are all `_DEBUG`-only, and the verdict
+   turns on the **relative** ON-vs-OFF delta (which Debug preserves), not absolute
+   fps (23-RESEARCH Open Question 1 / Pitfall 3). Note the Debug caveat in the
+   verdict doc.
+
+2. **F11 calls `RenderWorld::toggleForceDisableOcclusionCulling()`** — the
+   surviving-flag accessor introduced in Plan 23-01. (The Phase 10 D-07 target
+   `RenderWorld::setDisableOcclusionCulling()` was DELETED by Option α and no
+   longer exists; do not look for it.) F11 flips the surviving
+   `ms_forceDisableOcclusionCulling` DebugFlag; the `_DEBUG` `cullingParameters`
+   branch ORs `DPVS::Camera::OCCLUSION_CULLING` gated on it. The shipped
+   Release Option α `#else` branch is untouched.
+
+3. **Scene set: at minimum one OUTDOOR (Mos Eisley plaza) AND one INDOOR
+   (cantina interior).** Option α is fundamentally an outdoor-vs-indoor
+   tradeoff, so a single scene cannot confirm or revise it (23-RESEARCH Open
+   Question 3). All four Phase 10 scenes (plaza, starport, walking, cantina) are
+   ideal; outdoor-plaza + indoor-cantina is the defensible minimum.
+
+4. **≥3 passes per condition, alternating ON-OFF-ON-OFF-ON-OFF**, retained from
+   D-08. Label each pass `/setrunlabel <scene>-pass<i>-on` /
+   `<scene>-pass<i>-off`. The **`-on` / `-off` suffix is what `analysis.py`
+   groups on** — keep it exact. Use a distinct `<scene>` prefix per scene
+   (e.g. `mosEisley`, `cantina`) so the two scenes' CSVs don't pool together.
+
+5. **`gpu_us` is expected to be 0 in every row** — DPVS is CPU-only software
+   occlusion (Umbra issues no draw calls; 23-RESEARCH Pitfall 1). An all-zero
+   `gpu_us` column is the CORRECT answer, not a measurement failure. The DPVS
+   cost lives in `cpu_qpc_us` and `total_frame_ms`. Additionally, the
+   **`dpvs_occlusion_flag` CSV column is authoritative over `run_label`**: if the
+   inverted-default trap (Pitfall 4 — client launches with occlusion OFF by
+   default, persisted in `local_machine_options.iff`) mislabels a pass, trust
+   the flag column, not the typed label.
+
+6. **gl11 noise guidance (Pitfall 5):** the D3D11 path has known intermittent
+   furniture LOD-thrash flicker and async-asset load races that inject
+   single-frame transients. Hold the camera still ~10 s per pass and rely on
+   **median + p95** (single-frame outliers don't move them). **Re-capture a side
+   if the median across same-side passes differs by >30%.**
+
+7. **Optional fresh same-session D3D9 baseline (23-RESEARCH Open Question 2):**
+   for a clean same-hardware A/B/A you may also capture a `rasterMajor=5` (gl05)
+   pass per scene. If skipped, the Phase 10 baseline is the **summary tables** in
+   `docs/recon/10-dpvs-profiling.md` §Summary Statistics (the raw Phase 10 CSVs
+   were gitignored and are gone).
+
+**Post-capture (Phase 23):** run `analysis.py` against `stage/dpvs-profile/` as
+below, then write the verdict to **`docs/recon/23-dpvs-d3d11-profiling.md`**
+(NEW doc, sibling to the Phase 10 doc), stating whether Option α is confirmed or
+revised under D3D11.
+
+---
+
+## Phase 10 historical protocol (baseline reference)
+
+> The section below is the original Phase 10 D3D9 protocol, retained verbatim as
+> the decision trail and the source of the baseline summary tables. Where it
+> says "Mos Eisley plaza only", "F11 → setDisableOcclusionCulling", or
+> "rasterMajor=5/D3D9", the **Phase 23 Delta above takes precedence**.
 >
 > Decision-ID trail: this protocol implements **D-05** (scene = Mos Eisley
 > plaza), **D-06** (keybind-toggle capture, no scripted replay), **D-07**
