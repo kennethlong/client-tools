@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: executing
-last_updated: "2026-06-12T15:06:51.665Z"
-last_activity: 2026-06-12 -- Phase 23 planning complete
+last_updated: "2026-06-12T15:40:11.988Z"
+last_activity: 2026-06-12
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 15
-  completed_plans: 10
-  percent: 67
+  completed_plans: 11
+  percent: 73
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-27 after v2.1 close)
 
 **Core value:** Every change must leave the client bootable to character select — and for v2.2, D3D11 (`rasterMajor=11`) must visually match the known-good D3D9 (`rasterMajor=5`) baseline. Never regress the D3D9 reference path.
-**Current focus:** Phase 18 — load-screen-half-texel-seam (UI-01)
+**Current focus:** Phase 23 — dpvs-d3d11-remeasure
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -53,11 +53,11 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
+Phase: 23 (dpvs-d3d11-remeasure) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
 Resume: None — Phase 17 complete + verified + secured. Ready to plan Phase 18 (load-screen half-texel seam, UI-01 — `getOneToOneUVMapping` stub; independent of the PS pipeline). gl11_d.dll = HEAD a0d5ac80f (5/30 13:24). See memory project_phase17_charselect_d3d11_parity_verified.
-Last activity: 2026-06-12 -- Phase 23 planning complete
+Last activity: 2026-06-12
 
 ## Accumulated Context
 
@@ -84,6 +84,7 @@ Last activity: 2026-06-12 -- Phase 23 planning complete
 - [2026-05-25] v2.1 framed as **cleanup-only**: re-apply the orphaned CLEAN-01..04 removals to the active MSBuild tree. Visual Parity reordered to v2.2 (cleanup-first shrinks surface area before upstream imports). Reference diff template: the original whitengold (swg-client) **Phase 07** removal commits, retargeted CMake → MSBuild.
 - [2026-05-25] Phase ordering is **risk-gradient, low-first**: pure deletes (Phase 12) → lib unlink (Phase 13) → live-source surgery (Phases 14 Vivox, 15 XPCOM). Re-establishes the boot baseline before the riskier source removals.
 - [2026-05-25] DECRUFT-07 (dual-renderer boot gate) is a cross-cutting milestone gate owned by the final phase (15) but **verified incrementally** after every removal in Phases 12–15 — mirrors v2.0 CLEAN-05.
+- [Phase ?]: [2026-06-12] Phase 23-01: DPVS instrumentation core restored CPU-only from tag phase-10-instrumentation-pre-cleanup; gpu_us GPU-stripped to structural 0; occlusion A/B bit re-gated on the surviving ms_forceDisableOcclusionCulling DebugFlag via two _DEBUG accessors; shipped Option α #else branch byte-for-byte unchanged.
 
 ### Pending Todos
 
@@ -111,7 +112,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-05-27T20:59:43.979Z
+Last session: 2026-06-12T15:40:11.968Z
 Resume (2026-05-27): **v2.2 Visual Parity ROADMAP CREATED** (Phases 17–23; 13/13 requirements mapped 100%). v2.1 Decruft shipped + tagged `v2.1`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.2 Visual Parity — the plan (7 phases):**

@@ -165,7 +165,7 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
   2. A keep/remove verdict is recorded, confirming or revising the Phase 10 Option α decision (remove outdoor occlusion, keep indoor portals) under the D3D11 path (DPVS-01).
   3. The measurement is taken against clean-geometry rendering (not a mis-shaded scene), making the timing meaningful.
 **Plans**: 3 plans (3 waves — sequential; restore-core gates wiring gates live-capture+verdict)
-- [ ] 23-01-PLAN.md — restore DpvsProfileInstrumentation.{h,cpp} (CPU-only, GPU stripped) + re-gate OCCLUSION_CULLING on ms_forceDisableOcclusionCulling + QPC bracket; dual-renderer boot gate
+- [x] 23-01-PLAN.md — restore DpvsProfileInstrumentation.{h,cpp} (CPU-only, GPU stripped) + re-gate OCCLUSION_CULLING on ms_forceDisableOcclusionCulling + QPC bracket; dual-renderer boot gate
 - [ ] 23-02-PLAN.md — restore wiring: install hook + onFrameEnd + F10/F11 (F11 rewired to surviving flag) + /setrunlabel; smoke toggle + analysis.py schema
 - [ ] 23-03-PLAN.md — live gl11 occlusion A/B capture (outdoor+indoor) + analysis.py verdict + docs/recon/23-dpvs-d3d11-profiling.md (confirm/revise Option α)
 **Research:** Standard patterns — mirrors the Phase 10 DPVS methodology. No new patterns needed.
@@ -194,4 +194,4 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23. (
 | 20. Open-World PS Extension + Minimap | v2.2 | 0/TBD | Not started | - |
 | 21. Particles & Ribbon Effects | v2.2 | 0/TBD | Not started | - |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | 0/TBD | Not started | - |
-| 23. DPVS D3D11 Remeasure | v2.2 | 0/TBD | Not started | - |
+| 23. DPVS D3D11 Remeasure | v2.2 | 1/3 | In Progress|  |
