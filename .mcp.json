@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "renderdoc-mcp": {
+      "command": "D:\\Code\\renderdoc-mcp\\v0.3.0\\renderdoc-mcp-windows-x64-v0.3.0\\bin\\renderdoc-mcp.exe",
+      "args": []
+    },
+    "windows-mcp": {
+      "command": "C:\\Users\\kenne\\.local\\bin\\uvx.exe",
+      "args": ["windows-mcp", "serve"],
+      "env": {
+        "ANONYMIZED_TELEMETRY": "false"
+      }
+    }
+  }
+}
