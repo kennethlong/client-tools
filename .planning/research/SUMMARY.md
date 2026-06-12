@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** v2.2 Visual Parity — D3D9 to D3D11 Renderer/Shader-Pipeline Parity
-**Domain:** Legacy game-engine renderer porting (D3D9 to D3D11 asset pixel-shader pipeline, SWG/whitengold client)
-**Researched:** 2026-05-27
+**Project:** whitengold (swg-client-v2) -- Milestone v2.3 Hardening
+**Domain:** (1) In-client C++ hardening fixes; (2) standalone web-based TRE archive compare tool
+**Researched:** 2026-06-12
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone closes the remaining visual gap between the D3D11 (gl11_d.dll) and D3D9 (gl05_d.dll) renderer paths in the whitengold SWG client. The Phase 11 work achieved geometry, matrix, blend, depth, and alpha-test parity; what remains is almost entirely one root cause: the engine asset pixel-shader pipeline never landed. The engine ships .psh assets containing pre-compiled D3D9-era bytecode (TAG_PEXE) that ID3D11Device::CreatePixelShader rejects outright. D3D11 therefore falls back to a dynamic PS that samples only texture slot 0 / TEXCOORD0, uploads no per-pass material or lighting constants, and ignores the engine 8-stage TextureOperation cascade. Every named visual symptom — untextured surfaces, gray eyes, eyes through skull, square minimap, missing specular/glow, flat-white interiors, magenta slivers — is a different face of this single gap.
+v2.3 Hardening has two distinct, non-interfering work streams. The first is a set of six in-client C++ fixes: a DPVS config-gate (default and auto-mode logic), removal of diagnostic instrumentation (DPVS D-15 probes and the CORNERSNAP debug harness), machine-portability de-hardcoding (paths and stage/client_d.cfg cleanup), an Options-window FATAL fix, a D3DXCompileShader-to-D3DCompile API port, and the cantina corner-snap re-entrancy guard. The second is a genuinely new user-facing deliverable: a modern web-based tool for comparing two SWG installations at both the archive-set level and the merged-virtual-file-tree level -- a capability that does not exist anywhere in the SWG tooling ecosystem. These two streams share zero code and can be phased independently.
 
-The critical reframe for implementation is that every .psh asset already carries the original shader source text (TAG_PSRC), which the engine loads and then discards at ShaderImplementation.cpp:2904. The correct fix is NOT decompiling bytecode, NOT a runtime D3D9-asm interpreter, and NOT per-asset hand-authored replacements. It is: load the discarded PSRC chunk and recompile it via the existing Phase-11 VS-compile toolchain (D3DCompile + Direct3d11_HlslRewrite + .cso ShaderCache + D3DReflect). PSRC is either HLSL (recompile to ps_4_0 via lane b) or D3D9 assembly (generate equivalent HLSL from the pass TextureOperation stage model via lane d). Both lanes emit DXBC through the same compilePixelShaderFromHlsl machinery that already exists in Direct3d11_PixelShaderProgramData.cpp. The HLSL:ASM ratio across the live .psh population is the single open measurement that governs how much of the milestone is lane b vs lane d — a D3DReflect census tool is the mandatory first task.
+The TRE compare tool recommendation is decisive: a mature, version-aware, golden-file-tested Python TRE parser already exists at D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py and handles all five format variants plus the COT2000 and SearchTOC master-index layouts. Reimplementing this in any other language is the single largest risk and offers no functional return. The correct architecture is a thin Python/FastAPI backend that reuses this parser, wrapped by a Vite+React+shadcn/ui SPA, served as a localhost server. The tool should live at tools/tre-compare/ inside this repo, co-located with the authoritative TreeFile.cpp engine source it mirrors. While v2.3 scope is read-only compare, the architecture must be designed so that write/extract/repack/override-management capabilities can be added in future milestones without structural rewrites.
 
-Two gaps are architecturally independent of the PS-pipeline blocker and can land in any order: the load-screen half-texel seam (D3D9 vertex data bakes in -0.5 via the live constant CuiManager::ms_pixelOffset = -0.5f; the D3D11 fix is a central correction to the c9 viewportData XYZRHW->NDC convention in Direct3d11_StateCache.cpp:1593-1602, sign/magnitude consult-gated per Phase 18 D-01 — NOT the dead getOneToOneUVMapping scaffold_fatal_stub at Direct3d11.cpp:1056, which has zero callers and must not be implemented) and the gamma LUT post-pass (the setBrightnessContrastGamma_impl no-op at Direct3d11.cpp:253; replicate D3D9 pow() ramp as a fullscreen pass — do NOT flip to sRGB views, which double-corrects). The seam fix is a safe early canary; gamma must come after PS-pipeline so the corrected image is shaded correctly before the LUT is calibrated.
+The dominant risks are: (a) for the TRE tool -- getting the merged-virtual-tree resolution semantics wrong (the engine highest-priority-number-wins first-hit-wins-within-priority rule is non-obvious and easy to invert), and misidentifying the TOC crc field as a content checksum (it is a path-CRC used as binary-search key, not a content hash; content-change detection requires size comparison + optional real hashing); (b) for the client hardening -- the CORNERSNAP instrumentation removal must be sequenced after the corner-snap fix that uses it as its acceptance harness, and the D3DCompile port must not silently drop the assembly-shader (D3DXAssembleShader) path.
 
 ---
 
@@ -19,191 +19,153 @@ Two gaps are architecturally independent of the PS-pipeline blocker and can land
 
 ### Recommended Stack
 
-The stack is entirely in-tree — this milestone wires and extends existing infrastructure, introducing no new dependencies. D3DCompile (d3dcompiler_47, targeting ps_4_0) is already the engine VS compile path and becomes the PS compile path via the same route. Direct3d11_HlslRewrite (Rules A-E) already clears D3D9-era HLSL idioms for SM4 and applies identically to PS source. Direct3d11_ShaderCache (FNV-1a hash + .cso disk cache) already avoids per-boot recompilation and just needs its cache key extended to cover the pass-material signature. D3DReflect is already used for VS output-signature matching and extends to PS input/cbuffer layout. Compile flags are settled: D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY + PACK_MATRIX_ROW_MAJOR, no ENABLE_STRICTNESS — mirror the VS choice, since strictness and backwards-compat are mutually exclusive. The profile is ps_4_0 — not ps_5_0 (reserved keywords), not *_level_9_x (re-imposes the SM2 instruction cap that already broke a VS). DXC/SM6/DXIL are explicitly out of scope.
+The TRE compare tool should be built as a **Python 3.12 + FastAPI 0.136 + Uvicorn 0.34** backend paired with a **React 19 + Vite 8 + TypeScript + Tailwind v4 + shadcn/ui** frontend, delivered as a single-port localhost server. The decisive rationale is the existing tre_reader.py parser: ~470 lines of pure-stdlib Python, version-aware across all five TREE tags plus COT2000/SearchTOC, with golden-file tests. Every other technology choice follows from the constraint that the backend must be Python. No desktop shell (Tauri, Electron) is warranted for a single-developer local tool -- a browser tab is sufficient.
 
-The gamma fix uses a fullscreen post-process LUT pass implementing pow(0.5 + contrast*((f*brightness)-0.5), 1/gamma) — the same formula D3D9 used for SetGammaRamp. An sRGB RTV is technically permitted on a DXGI_FORMAT_B8G8R8A8_UNORM back-buffer but does NOT match the D3D9 parity baseline (D3D9 applied a ramp curve, not sRGB transfer), so sRGB-as-primary-gamma is rejected. All texture SRVs stay _UNORM (mirroring D3D9 D3DSAMP_SRGBTEXTURE=0). The persistent baked RT stays B8G8R8A8_UNORM per d3d11_baked_rt_bgra_format. Any cbuffer matrix requires XMMatrixTranspose per d3d11_cbuffer_transpose_quirk.
+The note in project memory referencing D:/Code/swg-tools as the parser location is stale. **The live parser is D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py.** Prefer vendoring tre_reader.py + tre_decrypt.py into tools/tre-compare/backend/tre/ (both pure-stdlib, no Blender imports) to keep the tool self-contained and portable.
 
-**Core technologies (all already in-tree):**
-- D3DCompile / ps_4_0: Compile asset PSRC to DXBC — mirrors the working VS path; zero new infrastructure.
-- Direct3d11_HlslRewrite Rules A-E: Clear D3D9 HLSL idioms (cbuffer-wrap, #pragma def strip) — same rewriter applies to PS source.
-- Direct3d11_ShaderCache + FNV-1a: Cache compiled PS by (VS-sig + material-sig) hash — avoids per-boot recompile; bump D3D11_REWRITE_VERSION on any generator change.
-- D3DReflect / ID3D11ShaderReflection: Read VS output signature for PS input struct matching — already used; extend to PS cbuffer layout.
-- ID3D11InfoQueue to stage/d3d11-debug.log: Route diagnostics (PS compile failures, census output, id=342/343 linkage errors) — the established safe channel.
-- RenderDoc: Frame capture for per-draw SRV/cbuffer/PS state inspection; A/B D3D9 vs D3D11 per gap.
+**Core technologies:**
+- **Python 3.12**: Backend runtime -- existing parser is pure-stdlib Python; reuse eliminates the largest risk
+- **FastAPI 0.136 + Uvicorn 0.34**: API + server -- typed endpoints, automatic OpenAPI, trivially serves built SPA as static files
+- **React 19 + Vite 8 + TypeScript**: Frontend -- broadest support for tree/diff UI components; Vite proxy eliminates CORS in dev
+- **Tailwind v4 + shadcn/ui**: Styling + components -- Table, ScrollArea, Tabs, Command palette; owned as source, no runtime lock-in
+- **TanStack Virtual v3 + TanStack Query v5**: Virtualized tree rendering (mandatory at 10k-100k entry counts) + async scan lifecycle
+- **xxhash (Python)**: Content hashing on the deep-diff path -- ~10x faster than SHA-256; cryptographic strength unnecessary
+- **uv**: Python env management -- faster and cleaner than pip/venv on Windows 11
 
 ### Expected Features
 
-The features are visual behaviors that already exist under D3D9 and must be replicated under D3D11. They fall into three dependency tiers.
+The TRE compare tool fills a gap that no existing SWG tool addresses: install-vs-install comparison at both the archive-set and merged-virtual-file-tree levels. Every existing tool (TRE Explorer, Swg.Explorer) is single-archive-centric, uses archived WinForms or 2000s-era UIs, and has no comparison concept at all.
 
-**Must have — character-select beachhead (P1, gates everything):**
-- Asset-textured surfaces on char-select avatar — proves the FFP-stage PS generator binds real diffuse textures; smoke test for the whole pipeline.
-- Character eyes correct on char-select (sul_eye.sht, 3-stage) — colored irises, correct eye-color from customization palette, occluded by head, not gray / not through-skull; the headline milestone target.
-- Character head shape correct (sul_m_head.sht) — same 3-stage multi-stage gap, validates together with eyes.
-- Multi-stage texture sampling (detail/specular/overlay cascade) — the core PS generator output; unblocks eyes, head, terrain, minimap together.
-- Pass::apply per-pass constant uploads — material (VSCR_material, 5 regs), textureFactor x2, textureScroll, alpha-test ref; mirrors Direct3d9_StaticShaderData::Pass::apply at :820-966.
+**Must have (table stakes for v2.3):**
+- TRE archive parser (header + zlib TOC + name block) -- irreducible foundation
+- client.cfg [SharedFile] search-priority parse -- required for correct overlay order; cannot substitute a directory glob
+- Set-level archive list + delta (added/removed/size/version/file-count)
+- Merged virtual file tree per install with engine-faithful overlay resolution
+- File-level diff (added/removed/changed) via (length, compressedLength) comparison -- NOT via the TOC crc field (path-CRC, not content hash; see resolved conflict below)
+- Tree view with status badges + folder roll-up
+- Status filter + name/path search + summary stats
+- Per-file detail panel (winning archive, shadowed archives, size, CRC display)
+- Virtualised tree rendering (mandatory -- non-virtualised rendering hangs on real data sizes)
+- Modern clean web UI
 
-**Must have — extend outward (P2, depends on P1):**
-- World/terrain textured surfaces + detail-blend multi-stage — same generator, broader TextureOperation coverage.
-- Minimap round disc — circular alpha-mask in uicanvas_radar.sht; gates on multi-stage PS; MUST be screenshot-diff verified (Iter-44B falsely pre-claimed).
-- Gamma/tone LUT post-pass — independent of PS pipeline; fixes cream-washed sky; schedule after PS so a correctly-shaded image is calibrated.
-- Load-screen half-texel seam — independent 2D canary; central c9 viewportData fix in Direct3d11_StateCache.cpp:1593-1602 (sign consult-gated, Phase 18 D-01); NOT the dead getOneToOneUVMapping stub at Direct3d11.cpp:1056; best early win.
-- FFP lighting / material-source parity — fixes blown-out flat-white interiors once the PS lighting cbuffer constants are wired.
+**Should have (add after validation):**
+- Hex view of a single selected file (lazy decompress on click)
+- Single-file extract / download
+- Permalink / shareable diff state (URL-encoded install pair + filter + path)
+- Loose-file (searchAbsolute) overlay support
 
-**Should have — post-baseline (P3):**
-- Particles / ribbon — needs PS-gen AND Pass::apply constants; instrument draw path before fixing; ribbon stretch is NOT a transform bug.
-- Stencil-dependent effects (decals, outlines, portals).
-- Skeletal-shard resolution (single-stream-skinning: choose multi-stream caps flip or single-stream math fix).
-- DPVS D3D11 remeasure (SPEC R7, deferred from v2.0) — strictly last.
+**Defer to future milestones (v2+):**
+- In-tool TRE editing/repacking -- future milestone capability; architecture must accommodate it but v2.3 is read-only
+- IFF-aware chunk-tree preview
+- Structural IFF diff (chunk-tree diff of two file versions)
+- N-way (3+ install) compare
 
-**Defer / anti-scope:**
-- More render-state-only iterations (proven to amplify the PS-gen gap — the Iter-43/44C reverts).
-- Modulate-everything naive multi-stage PS (actively wrong for additive glow, alpha-lerp, specular).
-- Re-enabling per-pass blend factors before multi-stage PS sampling lands (reverted Iter-44C; do not re-enable early).
-- sRGB framebuffer as the gamma fix (double-correction trap).
-- Decompiling D3D9 PEXE bytecode (PSRC source already exists).
-- DXC / SM6 / DXIL (needless scope for SM2-era assets).
-- Chasing exterior static-mesh shards before a settled re-capture separates real distortion from mid-load LOD smear.
-- DPVS remeasure before geometry renders cleanly.
-- All 26 TextureOperation modes up front (implement dominant ~10-12; log+fallback the rare ones).
+**Architecture trajectory note:** v2.3 delivers a read-only compare tool. Future milestones will extend toward browse, extract, repack/build, and override management. Architecture decisions in v2.3 (parser abstraction in backend/tre/, vtree.py as an isolated pure module, clean API shape, in-repo location) are explicitly chosen to support this trajectory without a structural rewrite. Any v2.3 design choice that forecloses write capabilities is a known anti-pattern.
 
 ### Architecture Approach
 
-All new work plugs into the existing gl11_d.dll plugin at named, already-present seams — no new engine-level subsystems. The divergence point is precisely located at Direct3d11_PixelShaderProgramData.cpp:716-756 (constructor): the ctor reads m_exe D3D9 bytecode, looksLikeDxbc() fails, m_d3dPS is left NULL, and at draw time Direct3d11_StateCache::applyPreDrawState falls through to the per-VS dynamic PS (slot-0-only sample + vertex color) or magenta. The fix extends buildHlslForVSOutputs (:339) so the generated body evaluates the full TextureOperation stage cascade rather than sampling slot 0 only, re-keys the cache on (VS-sig hash + pass-material-sig hash), and adds the deferred Pass::apply constant uploads to Direct3d11_StaticShaderData::apply (:587). The compilePixelShaderFromHlsl helper (:86-261) already exists and is dead-but-correct — it just needs to be fed real material-driven HLSL bodies instead of returning NULL.
+The tool is a single Python process (uvicorn app:app) that serves both the JSON API and the built Vite SPA on 127.0.0.1:8000. All filesystem work happens server-side; the browser renders JSON only. The project structure lives at tools/tre-compare/ inside this repo, co-located with the TreeFile.cpp engine source it mirrors.
 
-**Major components and their v2.2 roles:**
+The single most important correctness decision is that vtree.py must mirror the engine TreeFile::install + TreeFile::find semantics exactly: nodes sorted by (priority DESC, parseOrder ASC), first-hit-wins, length-0 entries treated as tombstones. This module must have its own unit tests against the real stage/client.cfg before any UI code exists.
 
-1. Direct3d11_PixelShaderProgramData.cpp (MODIFY) — primary locus: extend buildHlslForVSOutputs into a stage-op evaluator; re-key getOrCompilePSForVS on (VS-sig + material-sig); keep magenta fallback as visible diagnostic tombstone. Add a Direct3d11_PassMaterialPSGenerator helper implementing the dominant TextureOperation subset (TO_disable, selectArg1/2, modulate/2x/4x, add/subtract, blendTextureAlpha, lerp, plus alpha-op equivalents and TA_* arg modifiers) with log-and-fallback for rare ops.
-2. Direct3d11_StaticShaderData.cpp ::apply (MODIFY) — add deferred per-pass constant uploads: material (VSCR_material c11-c15), textureFactor x2 (c44/c45), textureScroll (c47), alpha-test ref, stencil ref; mirror Direct3d9_StaticShaderData::Pass::apply:820-966. Pass per-stage TextureOperation + coord-set through to the PS generator. Add stencil state mapping into DSS.
-3. ShaderImplementation.cpp:2900-2901 (ENGINE EDIT, gated) — change the PSRC load to KEEP the source text (mirror how m_text is kept for VS at :2155-2159). Gate behind D3D9-ignore so the working reference path is unaffected.
-4. Direct3d11.cpp:253 setBrightnessContrastGamma_impl + new LUT-pass module (NEW) — wire the no-op stub; add a fullscreen LUT post-pass in the present path using the D3D9 pow() formula.
-5. Direct3d11_StateCache.cpp:1593-1602 c9 viewportData (MODIFY) — fold the central half-pixel correction into the .z/.w offset terms of the screen-space->NDC convention; sign/magnitude consult-gated per Phase 18 D-01. The getOneToOneUVMapping stub at Direct3d11.cpp:1056 is a DEAD scaffold_fatal_stub with zero callers — do NOT implement it.
-6. Direct3d11_ConstantBuffer.h (MODIFY as needed) — extend Direct3d11_PerMaterialCB / add stage-params struct if the 4 userConstants[4] slots are insufficient.
-
-**Key integration invariants that must not break:**
-- Cbuffer matrices: always XMMatrixTranspose at upload (d3d11_cbuffer_transpose_quirk).
-- Persistent render targets: B8G8R8A8_UNORM, not BGRX8 (d3d11_baked_rt_bgra_format).
-- Compare[] swap: C_GreaterOrEqual <-> C_NotEqual is intentional asset-parity; mirror it, never fix it (d3d9_compare_table_swap).
-- D3D9 reference path: boot-test BOTH rasterMajor=5 AND rasterMajor=11 before any shared-code edit is claimed done.
-- Koogie patches: fix callers/data, not Koogie diagnostic strictness.
-- Per-pass state wires to Direct3d11_StaticShaderData::apply(passNumber), NOT to the dead Direct3d11_ShaderImplementationData::apply().
+**Major components:**
+1. **TRE/TOC parser** (backend/tre/) -- vendored tre_reader.py + tre_decrypt.py; reads all format variants; do not rewrite
+2. **Installation scanner** (scanner.py) -- hand-parses client.cfg [SharedFile]; stdlib configparser cannot handle repeated keys; yields priority-ordered node list
+3. **Virtual-tree builder** (vtree.py) -- first-hit-wins merge + tombstones + fixUpFileName canonicalization; the correctness keystone
+4. **Diff engine** (diff.py) -- set-delta + file-level diff using (length, compressedLength) as change signal; never decompresses up front
+5. **Index cache** (cache.py) -- sqlite persistence keyed by (abspath, mtime, size); makes re-runs instant after initial parse
+6. **Web API** (api.py/app.py) -- FastAPI routes; paginated file lists; lazy file-detail on demand; serves static frontend
+7. **Frontend SPA** -- install picker, set-delta table, filterable virtualised tree-diff, file-detail compare
 
 ### Critical Pitfalls
 
-1. **Gamma double-correction** — using sRGB backbuffer or sRGB SRVs instead of a single LUT post-pass replicating the D3D9 SetGammaRamp formula. D3D9 sampled textures raw (D3DSAMP_SRGBTEXTURE=0) and applied gamma only at scanout. Prevention: keep all texture SRVs _UNORM; implement a single fullscreen post-process LUT using pow(0.5+contrast*((f*brightness)-0.5), 1/gamma); schedule after PS-pipeline so you correct a correctly-shaded image.
+**Cross-document conflict resolved:** FEATURES.md states the TOC per-entry crc field enables free changed detection. PITFALLS.md (verified against engine source) establishes that crc is Crc::calculate(fileName) -- a CRC of the path string, not the file content. It is the binary-search key inside each archive, not a content checksum. Two archives can have the same path-CRC for the same filename while the file bytes differ entirely -- that is the purpose of override TREs. **PITFALLS.md wins.** Content-change detection must use (length, compressedLength) as the cheap first signal and a real content hash for confirmation.
 
-2. **Claiming visual wins without D3D9/D3D11 screenshot diff** — the Iter-44B minimap over-claim propagated a false win through a full plan cycle. The minimap was never round in D3D11. Every parity claim requires a matched D3D9/D3D11 pair from the same scene/pose.
-
-3. **PS-VS input linkage mismatch (id=342/id=343)** — the D3D11 runtime enforces that the PS input signature is a strict subset of the VS output signature, matched by semantic AND register position. Prevention: keep the reflection-driven input struct generation (buildHlslForVSOutputs :350-513); gate every PS-generator change on id=342==0 && id=343==0 in d3d11-debug.log.
-
-4. **Re-enabling per-pass blend factors before multi-stage PS sampling lands** — Iter-44C demonstrated that wiring blend factors while the PS still ignores slots 1..7 amplifies unsampled-slot content into a whitening/brightening regression. Do not re-enable until the stage-op evaluator samples all bound SRVs and material constants upload.
-
-5. **Single-stream skeletal shards** — the crash fix (905fb5d64) used defensive guards rather than flipping to multi-stream caps. The draw-side distortion likely persists. Must be resolved at the char-select beachhead: (a) flip Direct3d11_VertexBufferVectorData to report multi-stream support, or (b) correct single-stream skinning math. Confirm via RenderDoc mesh-viewer A/B. Do not conflate with exterior static-mesh shards (0013/0014 were mid-load captures).
-
-6. **Textures appear is not pipeline complete** — when single-diffuse textured surfaces land, eyes will still be wrong (multi-stage), minimap still square (alpha-mask stage), specular absent (textureFactor constant), interiors blown-out (lighting constant). Track residual magenta and multi-stage gaps as explicit open items.
+1. **TOC crc is a path-CRC, not a content checksum** -- use (length, compressedLength) for changed-file detection; document this distinction in the diff UI
+2. **Search-path precedence inversion** -- higher priority number = searched first (front of list); first-hit-wins; test against real stage/client.cfg that searchPath_00_10 beats searchTOC_00_0
+3. **Directory-glob instead of client.cfg parse** -- stdlib configparser mangles repeated keys; hand-parse [SharedFile]
+4. **TRE version hardcoding** -- branch on (token, version) exactly as the engine does; COT2000 fileNameOffset-is-length quirk is a known silent mis-parse trap
+5. **Eager full-archive hashing** -- compare by TOC metadata first; decompress only on file-detail drill-in; 30-archive compare must complete in seconds
+6. **CORNERSNAP removal sequencing** -- CORNERSNAP _DEBUG probes (a9b419daf) are the acceptance harness for the corner-snap fix; strip them only after the fix is verified
+7. **D3DCompile assembly-path gap** -- D3DCompile compiles HLSL only; census the asm (.vsh) shader count before starting; keep D3DXAssemble + SEH guard until the asm path is explicitly handled
 
 ---
 
 ## Implications for Roadmap
 
-All phases continue from Phase 16 (v2.1 Decruft). v2.2 starts at Phase 17.
+The two work streams are independent and can be parallelised. Within client hardening: CORNERSNAP removal must follow the corner-snap fix; D3DCompile needs an asm-shader census first. Within the TRE tool: parser -> scanner -> vtree -> diff -> API -> UI is a hard dependency chain.
 
-### Phase 17: Asset-PS Census + Generator Core (Character-Select Beachhead)
+### Phase 1: DPVS Config-Gate + Machine Portability
 
-**Rationale:** The single root cause blocker. Everything else gates on the PS generator landing on a known, bounded, deterministic shader surface (char-select exercises sul_m_head.sht / sul_eye.sht and a small body/clothing set enumerated by the Iter-44E multi-stage log). The census tool converts the biggest open risk (HLSL:ASM ratio) into a measured number before any generator work begins.
+**Rationale:** Least-risky hardening items; provide early dual-renderer boot confidence before touching more complex items.
+**Delivers:** DPVS occlusion auto-mode keyed on POB-cell membership; de-hardcoded stage/override + stage/miles paths; stage/client_d.cfg cleanup; dual-renderer (rasterMajor=5 + 11) boot verified on a non-dev machine.
+**Avoids:** Pitfall 11 -- config-gate default flip without dual-renderer test; portability change that assumes stage/miles/ present on a fresh machine.
+**Research flags:** None -- DPVS verdict doc docs/recon/23-dpvs-d3d11-profiling.md is the spec.
 
-**Delivers:** (1) One-shot D3DReflect/D3DDisassemble census tool measuring PSRC-present / asm-vs-hlsl / ps-version across char-select .psh population. (2) Stage-op evaluator body in buildHlslForVSOutputs implementing the dominant ~10-12 TextureOperation modes. (3) Pass::apply constant uploads (material, textureFactor x2, textureScroll, alpha-test ref). (4) PSRC chunk retained at ShaderImplementation.cpp:2900-2901. (5) Cache re-keyed on VS-sig + material-sig. Result: char-select avatar renders with correct diffuse textures + correct eyes (colored irises, occluded by head).
+### Phase 2: Cantina Corner-Snap Fix
 
-**Addresses:** Single-diffuse textured surfaces (P1), character eyes (P1), character head (P1), multi-stage texture sampling (P1), Pass::apply constants (P1).
+**Rationale:** Root cause is fully known; CORNERSNAP instrumentation is the acceptance harness; must complete before Phase 3 removes that harness.
+**Delivers:** Re-entrancy guard that suppresses A->B->A oscillation specifically; fast door-traversal regressions absent; instrumentation confirms zero ping-pong frames.
+**Avoids:** Pitfall 8 -- blanket one-transition-per-frame guard that breaks legitimate door traversals.
+**Research flags:** None -- mechanism is committed to memory; implement against existing instrumentation.
 
-**Avoids:** Pitfall 5 (magenta/flat-white as same bug), Pitfall 4 (PS-VS linkage), Pitfall 6 (render-state defaults), Pitfall 9 (missing constants). Do NOT re-enable per-pass blend factors. Do NOT claim minimap fixed without screenshot diff.
+### Phase 3: Instrumentation Removal (D-15 DPVS + CORNERSNAP)
 
-**Research flag:** NEEDS per-phase research. Open questions: (a) HLSL:ASM ratio — census tool is the gating deliverable; (b) dominant TextureOperation subset that char-select exercises; (c) single-stream-skinning fix strategy.
+**Rationale:** Sequenced after Phase 2 (CORNERSNAP harness needed through acceptance) and after Phase 1 (D-15 profiling purpose superseded by DPVS verdict).
+**Delivers:** Both probe sets removed; callers + config-flag registrations + build-graph entries stripped atomically; Debug+Release link clean with zero unresolved externals (grep link output -- not just MSBuild exit 0).
+**Avoids:** Pitfall 10 -- stripping the symbol without stripping callers; /FORCE masking makes MSBuild exit 0 insufficient.
+**Research flags:** None -- atomic removal pattern in project_decruft_removal_build_graph_gotchas.
 
-**Verification gate:** D3D9/D3D11 matched screenshot diff at char-select default pose. Eyes: colored irises on face, occluded, match selected color. Clothing/skin: diffuse texture visible. id=342==0 && id=343==0 in d3d11-debug.log. Both rasterMajor=5 and =11 boot to char-select without crash.
+### Phase 4: Options-Window FATAL Fix
 
-### Phase 18: Load-Screen Half-Texel Seam (Independent Canary)
+**Rationale:** Self-contained; no sequencing dependencies; placed after build is clean.
+**Delivers:** Options window no longer produces a FATAL under D3D11 or D3D9; both renderers verified.
+**Research flags:** None -- targeted bug fix; root cause investigation is the first step.
 
-**Rationale:** Architecturally independent of Phase 17. Zero dependency on the PS pipeline. A small, isolated, deterministic win that exercises the 2D screen-space vertex/UV path. Best scheduled in parallel with Phase 17 or immediately after.
+### Phase 5: D3DCompile Port (D3DXCompileShader to D3DCompile)
 
-**Delivers:** Centerline seam eliminated on all D3D11 load screens. Half-pixel convention fixed once centrally at the c9 viewportData .z/.w offset terms in Direct3d11_StateCache.cpp:1593-1602 (sign/magnitude consult-gated, Phase 18 D-01). The getOneToOneUVMapping stub at Direct3d11.cpp:1056 is a DEAD scaffold_fatal_stub (zero callers) and is explicitly NOT implemented.
+**Rationale:** Most technically complex hardening item. Requires asm-shader census before starting. SEH guard (Fix A, db83b0f5c) remains as safety net until port is proven.
+**Delivers:** D3DXCompileShader replaced with D3DCompile (HLSL path); include handler reimplemented against ID3DInclude; d3dcompiler_47.dll staged; asm-input shaders explicitly handled (via D3DAssemble or confirmed HLSL-available); D3D9 visual parity A/B baseline held; SEH guard retained until assembly path is also off D3DX.
+**Avoids:** Pitfall 9 -- silently dropping the asm path (null VS -> skipped draws); copying D3DXSHADER_* flag values verbatim (re-derive by intent); removing SEH guard prematurely.
+**Research flags:** Needs pre-phase asm-shader census (grep D3DXAssembleShader + .vsh reference count). D3DAssemble is sparsely documented; census result determines the approach.
 
-**Addresses:** Load-screen fullscreen blit (P2).
+### Phase 6: TRE Compare Tool -- Foundation (Parser + Scanner + Virtual Tree)
 
-**Avoids:** Pitfall 2 (half-texel seam). Do NOT scatter +0.5 fudge factors per draw — fix the convention once centrally.
+**Rationale:** Backend correctness must be locked before any web code exists. This phase is entirely headless and fully unit-testable.
+**Delivers:** tools/tre-compare/ scaffolded; backend/tre/ vendored from swg-blender-plugin; scanner.py parses client.cfg [SharedFile] correctly (repeated keys, priority extraction); vtree.py implements first-hit-wins + tombstones + fixUpFileName; unit tests verify correct override shadowing and tombstone behavior against real stage/client.cfg.
+**Addresses:** TRE parser, client.cfg parse, merged virtual tree (all P1 features).
+**Avoids:** Pitfalls 1 (version hardcoding), 2 (precedence inversion), 3 (directory glob), 4 (case/slash mismatch).
+**Research flags:** None -- format spec fully derived from engine source in ARCHITECTURE.md; vtree pseudocode provided; vendor existing parser.
 
-**Research flag:** Standard patterns (D3D9 to D3D10+ half-pixel fix is well-documented). No per-phase research needed.
+### Phase 7: TRE Compare Tool -- Diff Engine + API
 
-### Phase 19: Gamma/Tone LUT + Lighting Constants
+**Rationale:** With vtree proven, diff is a pure dict-vs-dict pass with no I/O, fully testable headless. Building diff before UI means the UI works against real data from day one.
+**Delivers:** diff.py set-delta + file-level diff ((length, compressedLength) change signal, not CRC); cache.py sqlite index cache keyed by mtime+size; FastAPI routes for summary + paginated file rows + lazy file-detail; correct diff JSON for the SWGSource-vs-whitengold pair.
+**Avoids:** Pitfalls 5 (eager hashing), 6 (CRC misuse), 7 (Windows file-locking).
+**Research flags:** None -- tiered comparison design fully specified in PITFALLS.md.
 
-**Rationale:** Depends on Phase 17. Gamma judgment is invalid while surfaces are untextured because blown-out white is ambiguous between missing LUT and missing PS lighting. Must correct a correctly-shaded image, not a magenta one.
+### Phase 8: TRE Compare Tool -- Frontend SPA
 
-**Delivers:** (1) setBrightnessContrastGamma_impl at Direct3d11.cpp:253 wired to a fullscreen LUT/color-correction post-pass using D3D9 pow() formula. (2) Light-data + fog constant uploads (VSCR_lightData c16-c43, VSCR_extendedLightData c60-c67, fog c10) mirroring Direct3d9_LightManager::applyLights. Result: sky shows correct sunset tone; interiors show ambient/diffuse falloff instead of flat white.
-
-**Addresses:** Lighting + gamma/tone (P2), blown-out flat-white interiors (P2).
-
-**Avoids:** Pitfall 1 (gamma double-correction — no sRGB view flip, no sRGB SRVs, single LUT only).
-
-**Research flag:** Standard for the LUT pass. The LightManager constant layout needs a focused code read against Direct3d9_LightManager to confirm offset-for-offset mapping into Direct3d11_VertexSlot0CB — flag that sub-area for brief per-phase research.
-
-### Phase 20: Open-World PS Pipeline Extension + Minimap
-
-**Rationale:** Phase 17 proves the generator on the bounded char-select set. Phase 20 extends it to the open-world shader population, which introduces the long tail of TextureOperation modes, per-stage texture-coordinate indices, and texture transforms. Minimap is gated here because it requires the multi-stage combiner (circular alpha-mask in uicanvas_radar.sht).
-
-**Delivers:** (1) Extended TextureOperation coverage (terrain detail blends, specular/overlay composite, per-stage coord-set + textureScroll). (2) Stencil state mapping into DSS for decals/outlines/portals. (3) Minimap confirmed round via D3D9/D3D11 screenshot diff. (4) Shader permutation cache scale validation.
-
-**Addresses:** World/terrain textured surfaces (P2), minimap round disc (P2), multi-stage sampling at world scale (P2), stencil-dependent effects (P3 start).
-
-**Avoids:** Pitfall 5 (do not pre-claim minimap without screenshot diff). State-descriptor cache poisoning (zero-init all descriptors; verify create-count is stable).
-
-**Research flag:** NEEDS per-phase research. Open questions: (a) extended TextureOperation census from an open-world session; (b) settled re-capture of exterior static-mesh shards (0013/0014) to scope real vs LOD-streaming distortion.
-
-### Phase 21: Particles, Ribbon, and Swoosh Effects
-
-**Rationale:** Depends on Phase 17 (PS-gen) AND Pass::apply constants (textureFactor, textureScroll). Ribbon/swoosh stretch is confirmed NOT a transform bug — needs draw-path instrumentation before a fix can be scoped.
-
-**Delivers:** (1) Draw-path instrumentation to classify particle/ribbon/swoosh draws (appearance type, topology, VB format, transform class). (2) Particle billboard materials fixed (additive/alpha-blend PS correctly evaluated; textureFactor/scroll constants flowing). (3) Ribbon/swoosh fix based on what instrumentation surfaces.
-
-**Addresses:** Particles/ribbon (P3).
-
-**Research flag:** NEEDS per-phase research. The ribbon-stretch draw-path instrumentation output is the gating deliverable before any fix is designed.
-
-### Phase 22: Exterior Geometry Distortion + Skeletal Shards (if not resolved in 17)
-
-**Rationale:** Exterior static-mesh shards (0013/0014 captures) are potentially transient LOD smear. Skeletal shards may be resolved in Phase 17. This phase handles whatever skeletal question remains and resolves the exterior distortion question definitively via settled-frame re-capture.
-
-**Delivers:** (1) Settled re-capture of 0013/0014 exterior frames to scope real vs LOD-streaming distortion. (2) Skeletal single-stream fix if not already resolved. (3) Any static-mesh distortion fix that the settled capture confirms as real.
-
-**Research flag:** NEEDS per-phase research on single-stream-skinning-fix vs multi-stream-flip decision and settled re-capture findings.
-
-### Phase 23: DPVS D3D11 Remeasure (SPEC R7 Deferral)
-
-**Rationale:** Strictly last. Occlusion cost measurement is meaningless while geometry mis-shades. Only valid after all previous phases have produced clean-geometry rendering. Mirrors Phase 10 DpvsProfileInstrumentation methodology.
-
-**Delivers:** PIX/RenderDoc timing harness; occlusion vs no-occlusion frame-time comparison under D3D11; final verdict confirming or revising Phase 10 Option alpha decision.
-
-**Research flag:** Standard patterns (mirrors Phase 10 methodology). No per-phase research needed.
+**Rationale:** Last phase; builds web UI over a proven running API. TanStack Virtual must be wired from the first working tree view -- not retrofitted.
+**Delivers:** React+Vite+shadcn/ui SPA with install picker, set-delta table, filterable virtualised file-tree diff, per-file detail panel; tool works end-to-end for the SWGSource-vs-whitengold space-asset diagnosis.
+**Addresses:** All remaining P1 features: modern clean UI, virtualised tree, status filter, search, summary stats, per-file detail.
+**Research flags:** None -- shadcn/ui + TanStack Virtual + TanStack Query are well-documented.
 
 ### Phase Ordering Rationale
 
-- Phase 17 first: single root cause that blocks all visual parity work.
-- Phase 18 independent: safe early win; establishes 2D sampling convention before Phase 20 minimap work.
-- Phase 19 after Phase 17: gamma calibration against a magenta scene gives meaningless results.
-- Phase 20 after Phase 17: TextureOperation combiner must prove out on char-select before world-scale extension.
-- Phases 21-22 after Phase 20: particles need Pass::apply constants; settled exterior re-capture benefits from a fully-working PS pipeline.
-- Phase 23 strictly last: Phase 10 reasoning and v2.0 deferral contract.
+- Client hardening (Phases 1-5) and TRE tool (Phases 6-8) are independent streams; parallelise or reorder by priority. If the space-artifact diagnosis is urgent, Phases 6-8 can run concurrently with or ahead of Phases 1-5.
+- Within client hardening: Phase 2 (corner-snap) must precede Phase 3 (removal). Phase 5 (D3DCompile) requires the census but is otherwise independent. Phases 1 and 4 have no dependencies on each other.
+- Within the TRE tool: Phase 6 -> Phase 7 -> Phase 8 is a hard dependency chain.
+- The architecture-forward structure of Phases 6-7 (no UI until backend logic proven) is specifically motivated by Pitfalls 2, 3, and 4 -- all produce silent wrong answers not visible until real data was flowing.
 
 ### Research Flags
 
 Phases needing deeper research during planning:
-- **Phase 17:** HLSL:ASM ratio (census tool is mandatory first deliverable); dominant TextureOperation subset on char-select; single-stream-skinning strategy.
-- **Phase 19:** LightManager constant offset-for-offset mapping into Direct3d11_VertexSlot0CB.
-- **Phase 20:** Extended TextureOperation census from open-world session; settled exterior re-capture scope.
-- **Phase 21:** Ribbon/swoosh draw-path instrumentation (output scopes the fix; no fix design before the log).
-- **Phase 22:** Single-stream-skinning-fix vs multi-stream-flip decision; settled re-capture findings.
+- **Phase 5 (D3DCompile port):** Pre-phase asm-shader census required to scope the D3DXAssembleShader replacement. D3DAssemble is sparsely documented; census output determines the approach.
 
-Phases with standard patterns (skip research):
-- **Phase 18:** D3D9 to D3D10+ half-pixel offset is well-documented; the central fix is the c9 viewportData convention in Direct3d11_StateCache.cpp:1593-1602 (sign consult-gated, Phase 18 D-01) — NOT the dead getOneToOneUVMapping stub at Direct3d11.cpp:1056.
-- **Phase 23:** Mirrors Phase 10 DPVS methodology; no new patterns needed.
+Phases with standard patterns (skip research-phase):
+- **Phases 1-4 (client hardening):** All have documented patterns in project memory or existing verdict docs.
+- **Phases 6-8 (TRE tool):** Format spec fully derived from engine source; parser already exists; architecture fully specified in ARCHITECTURE.md.
 
 ---
 
@@ -211,21 +173,19 @@ Phases with standard patterns (skip research):
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All APIs, compile flags, format constraints, and invariants read directly from the live plugin source and cross-checked against Microsoft docs. No ambiguity in the two-lane strategy. |
-| Features | HIGH | Root cause confirmed from direct code reads (ShaderImplementation.cpp:2904, Direct3d11_PixelShaderProgramData.cpp:716-756). Feature boundaries and dependency graph derived from Phase 11/12 artifacts and the Iter-44 CODEX/Cursor deep-dive. |
-| Architecture | HIGH | All integration points named with exact file:line. Divergence chain fully traced. Phase 11 precedent (VS compile pipeline) de-risks the PS generator approach. The compilePixelShaderFromHlsl dead-but-correct path reduces implementation risk significantly. |
-| Pitfalls | HIGH | Most pitfalls are already-confirmed-in-this-engine (Iter-38B transpose, Iter-44B minimap over-claim, Iter-44C blend-factor revert, Iter-32A global blend trap, Phase 11 X4016 saga). Not predictions — recorded history. |
+| Stack | HIGH | TRE parser confirmed on disk and read in full; FastAPI/Vite/shadcn/ui version compatibility confirmed. Stale D:/Code/swg-tools pointer confirmed absent -- correct path is D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py. |
+| Features | HIGH | Engine source for TRE format read directly (authoritative); competitor landscape surveyed; CRC conflict with PITFALLS.md resolved (PITFALLS.md wins). |
+| Architecture | HIGH | Engine source (TreeFile.cpp, TreeFile_SearchNode.cpp, Crc.cpp) read in full; resolution semantics, canonicalization, tombstone behavior all derived from source. stage/client.cfg confirmed as canonical test fixture. |
+| Pitfalls | HIGH | TRE pitfalls derived from engine source. Client-hardening pitfalls from project memory. D3DCompile pitfalls from MS docs + in-tree D3D9 source. One MEDIUM area: cross-distribution TRE variant claims (community data real but under-documented; in-tree source is authoritative regardless). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **HLSL:ASM ratio across live .psh population** — the single largest open unknown. Governs lane b vs lane d split. Handle by building the census tool as the FIRST deliverable in Phase 17.
-- **Dominant TextureOperation subset** — which of the 26 ops actually appear in char-select + Mos Eisley live draws. Handle by extending the census tool to log op usage per draw; implement only the confirmed dominant subset and log+fallback the rest.
-- **Single-stream-skinning-fix vs multi-stream-flip** — crash fix (905fb5d64) chose defensive guards over a caps change. The draw-side distortion likely persists. Requires a RenderDoc mesh-viewer capture during Phase 17 planning.
-- **Ribbon/swoosh root cause** — confirmed NOT a transform bug but cause unknown from source search alone. Handle by instrumenting the live draw path in Phase 21 before designing a fix.
-- **Exterior static-mesh shards (0013/0014)** — potentially transient LOD smear from mid-load captures. Handle by re-capturing fully-settled exterior frames in Phase 22.
-- **Eye color mechanism** — confirmed palette-driven via CustomizableShader hue (NOT animated UV). The multi-stage PS fix is the correct path. No additional validation needed before Phase 17.
+- **Asm-shader census (Phase 5):** Count of .vsh / D3DXAssembleShader call sites unknown; run as first step of Phase 5 planning.
+- **CORNERSNAP guard exact implementation:** Root cause known (A->B->A reversal per frame); exact reversal-detection logic should be written against committed instrumentation output to confirm snap-gone AND traversal-correct before closing the phase.
+- **Future TRE tool write-path architecture:** v2.3 is read-only; parser abstraction boundary, API surface, and vtree/diff module separation should be made with explicit awareness that write capabilities are the next milestone target. Phase docs should flag this so future work requires no structural changes.
+- **searchAbsolute loose-file overlay support:** Confirmed gap for v2.3; both installs are TRE-driven for the immediate use case. Flagged as v1.x addition.
 
 ---
 
@@ -233,23 +193,30 @@ Phases with standard patterns (skip research):
 
 ### Primary (HIGH confidence)
 
-- Live source tree: ShaderImplementation.cpp:2895-2911 (PSRC discarded / PEXE kept); ShaderImplementation.h:498-526 (26-op TextureOperation enum); Direct3d11_PixelShaderProgramData.cpp:716-756 (divergence ctor), :339-513 (generator), :605-623 (magenta fallback), :86-261 (compilePixelShaderFromHlsl); Direct3d11_StaticShaderData.cpp:587 (apply), :820-966 (D3D9 Pass::apply parity reference); Direct3d11.cpp:253 (gamma no-op), :1056 (dead getOneToOneUVMapping scaffold_fatal_stub, zero callers); Direct3d11_StateCache.cpp:1029 (applyPreDrawState), :1107-1123 (PS-bind chain); Direct3d11_ConstantBuffer.h; Direct3d9_VertexShaderConstantRegisters.h / Direct3d9_PixelShaderConstantRegisters.h; ShaderBuilder PixelShaderProgramView.cpp:172,308 (PSRC is asm or HLSL); Node.cpp:5843-5849 (PSRC+PEXE both written to asset).
-- Phase 11 artifacts: 11-SUMMARY.md; 11-09.15-CODEX-CONSULT-iter44-pipeline-deepdive.md (+ RESPONSES); 11-07-LEARNINGS.md.
-- docs/research/phase12-baseline/COMPARISON.md — authoritative 5-bucket gap catalogue with matched D3D9/D3D11 image evidence.
-- Project memory records: d3d11_cbuffer_transpose_quirk, d3d11_baked_rt_bgra_format, d3d9_compare_table_swap, project_phase11_close_pass_with_deferrals, project_phase11_minimap_never_round, project_phase12_visual_baseline, project_d3d11_collide_use_after_free, project_rastermajor_values.
+- src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp -- install, find/open, fixUpFileName, searchNodePriorityOrder
+- src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode.{h,cpp} -- binary layout, CRC binary search, length-0 tombstone, COT2000 quirk
+- src/engine/shared/library/sharedFoundation/src/shared/Crc.cpp -- CRC-32/MPEG-2 variant (poly 0x04C11DB7, MSB-first)
+- D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py -- existing version-aware parser (read in full, confirmed on disk)
+- src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp -- D3DXCompileShader/D3DXAssembleShader + include handler
+- stage/client.cfg / stage/client_d.cfg -- real [SharedFile] layout (maxSearchPriority=12, 4x searchTOC, 2x searchTree, searchPath @priority 10/11)
+- Microsoft Learn D3DCompile: https://learn.microsoft.com/en-us/windows/win32/api/d3dcompiler/nf-d3dcompiler-d3dcompile
+- FastAPI release notes: https://fastapi.tiangolo.com/release-notes/
+- Vite releases: https://vite.dev/releases
+- React 19.2 blog: https://react.dev/blog/2025/10/01/react-19-2
+- shadcn/ui Tailwind v4 docs: https://ui.shadcn.com/docs/tailwind-v4
 
 ### Secondary (MEDIUM confidence)
 
-- Specifying Compiler Targets (Microsoft Learn) — D3DCompile drops legacy ps_1_x; *_4_0_level_9_x backward-compat profiles.
-- Converting data for the color space (Microsoft Learn) — sRGB RTV special exception on *_UNORM swap-chain buffers (documented but rejected as the primary gamma fix).
-- Directly Mapping Texels to Pixels D3D9 (Microsoft Learn) + Solving DX9 Half-Pixel Offset (Aras Pranckevicius) + Half-Pixel Offset in DirectX 11 (Adam Sawicki) — canonical D3D9 -0.5 rule and removal in D3D10+.
-- HLSL, FXC, and D3DCompile (Chuck Walbourn) — fxc/D3DCompile status, SM4/5 support, fxc maintenance posture.
-- RenderDoc docs — D3D11 vertex/pixel/compute shader debugging; mesh viewer; D3DCOMPILE_DEBUG required for symbols.
+- swg_tre Rust crate: https://lib.rs/crates/swg_tre -- parser cross-reference; in-tree source supersedes for exact layout
+- Swg.Explorer (wverkley): https://github.com/wverkley/Swg.Explorer -- competitor feature baseline
+- TRE Explorer (MTGUli/ilikenwf): https://github.com/MTGUli/TREExplorer -- competitor feature baseline
+- Electron vs Tauri 2026 guide: https://www.pkgpulse.com/guides/electron-vs-tauri-2026 -- bundle-size comparison informing no-desktop-shell decision
+- Project memory records: project_cantina_corner_snap_engine_quirk, project_decruft_removal_build_graph_gotchas, project_audio_fixed_missing_miles_redist, project_phase23_dpvs_verdict_option_alpha_revised
 
-### Tertiary (LOW confidence — listed to substantiate rejections)
+### Tertiary (LOW confidence)
 
-- HlslDecompiler / dx-shader-decompiler — referenced only to substantiate rejection of bytecode-decompile option (a); PSRC source already exists.
+- SWGANH Wiki TRE breakdown: http://wiki.swganh.org/index.php/TRE:TRE_Breakdown -- community format documentation; superseded by in-tree source for exact layout
 
 ---
-*Research completed: 2026-05-27*
+*Research completed: 2026-06-12*
 *Ready for roadmap: yes*

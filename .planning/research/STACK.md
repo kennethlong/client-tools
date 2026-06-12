@@ -1,181 +1,207 @@
-# Stack Research — D3D11 Asset Pixel-Shader Pipeline & Visual-Parity Gaps
+# Stack Research — Web-based TRE Compare Tool (v2.3 Hardening)
 
-**Domain:** Legacy game-engine renderer porting (D3D9 → D3D11 shader-pipeline engineering) — SWG "whitengold" client, v2.2 Visual Parity
-**Researched:** 2026-05-27
-**Confidence:** HIGH (codebase-grounded; all D3D11/DXGI/HLSL API claims verified against current Microsoft docs)
+**Domain:** Local web-based TRE archive compare/diff tool (single-user, Windows 11, hobby)
+**Researched:** 2026-06-12
+**Confidence:** HIGH
 
-> This is renderer engineering, not a greenfield stack pick. "Stack" here = the APIs, tooling,
-> and techniques to bind real asset pixel shaders in the existing `gl11_d.dll` plugin and close
-> the catalogued visual gaps. Everything is grounded in the actual engine source, not generic advice.
+> Scope note: this file covers ONLY the v2.3 new capability — the TRE compare web tool. The C++/MSBuild
+> client and its D3D9/D3D11 renderers need no stack research (existing validated toolchain). The prior
+> v2.2 renderer-stack research is archived as `STACK-v2.2-d3d11-shader-pipeline.md`.
 
----
+## TL;DR Recommendation
 
-## The Headline Finding (changes the whole framing)
+**Python 3.12 + FastAPI + Uvicorn backend, React 19 + Vite 8 + TypeScript + Tailwind v4 + shadcn/ui frontend, shipped as a localhost server you open in a browser.**
 
-The "PEXE rejection" blocker has been framed as "we have only D3D9 bytecode; we must decompile or
-re-author from scratch." **The engine asset format already carries the original shader SOURCE.**
+The single decisive factor: a mature, version-aware TRE parser **already exists in Python** at
+`D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` (~470 lines; handles 5 version tags —
+`0004/0005/6000/0006/5000` — plus COT2000 and SearchTOC master indexes, zlib decompression, and
+filename-block walking; backed by golden-file tests). Reimplementing that version matrix in
+Go/Rust/TypeScript is the largest single risk and effort sink in the entire tool, and it buys nothing
+for a tool that scans a few thousand files once per run on a local SSD. **Reuse the parser; wrap it in
+a thin API; spend the effort budget on the UI.**
 
-`ShaderImplementation.cpp::ShaderImplementationPassPixelShaderProgram::load_0000()` (line 2895) reads
-a `PSHP` form with **two chunks**:
-- `TAG_PSRC` — the original shader **source text** (line 2900–2901: *entered and immediately exited — discarded*)
-- `TAG_PEXE` — the pre-compiled D3D9 bytecode kept as `m_exe` (line 2904–2908)
+This is **not** a desktop-shell (Tauri/Electron) candidate — see "What NOT to Use." A plain localhost
+FastAPI server with a Vite-built SPA is simpler, needs no packaging/signing/WebView toolchain, and uses
+the natural local-data model: the server reads the disk, the browser just renders JSON.
 
-The same dual-chunk structure is written by the original `ShaderBuilder` tool
-(`ShaderBuilder/src/win32/Node.cpp:5843–5849` inserts both `PSRC` and `PEXE`), and
-`PixelShaderProgramView.cpp` shows the source is **either**:
-- hand-written **D3D9 shader assembly** (`D3DXAssembleShader`, the default path, line 172), **or**
-- **HLSL** flagged by a `//hlsl <target>` directive line, compiled via `D3DXCompileShader` (line 308–328).
-
-**Implication for the recommended path:** the realistic option is NOT "decompile bytecode." It is
-**"load the discarded `PSRC` chunk and recompile it with `D3DCompile`"** — the engine already has a
-working HLSL→DXBC path (the Phase 11 VS pipeline + `Direct3d11_HlslRewrite` rules A–E + the
-`Direct3d11_CompileIncludeHandler`). The asset PS path becomes a near-mirror of the VS path that
-already renders the world. The split (HLSL vs ASM) determines how much per-shader work each asset costs.
-
-**Confidence:** HIGH — read directly from the engine + ShaderBuilder source. The one open question is
-the HLSL-vs-ASM ratio across the live `.psh` asset population (must be measured — see Pitfall in PITFALLS.md
-and the char-select proving path below).
-
----
+> NOTE ON THE PROJECT'S MEMORY: the sibling parser repo is referenced in `PROJECT.md` as `D:/Code/swg-tools`,
+> but it actually lives at **`D:/Code/swg-blender-plugin/swg_pipeline/`** (verified this session;
+> `D:/Code/swg-tools` does not exist). Use the real path.
 
 ## Recommended Stack
 
-### Core Technologies (already present in the tree — this milestone wires/extends them)
+### Core Technologies
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| `D3DCompile` (d3dcompiler_47) | SDK-current (Win10/11 SDK 26100) | Compile asset HLSL `PSRC` → `ps_4_0` DXBC at load | Already the engine's VS compile path; the PS path is `[[maybe_unused]]` plumbing waiting for a source feed. Lowest-risk reuse. Verified: legacy `ps_1_x`/`ps_2_x` *bytecode* and `ps_1_x` *profiles* are unsupported by `D3DCompile`, but **HLSL source** recompiles to `ps_4_0` cleanly. |
-| `ID3D11Device::CreatePixelShader` | D3D11 | Create the PS object from DXBC | Rejects D3D9 bytecode (the blocker) but accepts `ps_4_0` DXBC from `D3DCompile`. Already wired in `Direct3d11_PixelShaderProgramData`. |
-| `ID3D11ShaderReflection` / `D3DReflect` | d3dcompiler_47 | Read VS output signature + cbuffer layout | Already in use (`Direct3d11_VertexShaderData` reflected outputs drive the per-VS dynamic PS). Extend to drive PS-input matching and `Pass::apply` constant offsets. |
-| `Direct3d11_HlslRewrite` (Rules A–E) | in-repo | Rewrite D3D9-era HLSL idioms for SM4 | Already clears the `register(cN)` overlap (Rule D cbuffer-wrap) + `#pragma def` strip (Rule E) for VS. PS source uses the same idioms → same rewriter applies. |
-| `Direct3d11_ShaderCache` (`.cso` + FNV-1a hash) | in-repo | Cache compiled DXBC keyed on source+defines+rewrite-version | Avoids recompiling every `.psh` each boot. Already keyed by `D3D11_REWRITE_VERSION`; bump it when PS rules change. |
-| DXGI `*_UNORM_SRGB` RTV on a `*_UNORM` back-buffer | DXGI 1.1+ | Hardware gamma at present | Microsoft-documented special exception: an sRGB RTV is allowed on a non-typeless `*_UNORM` swap-chain buffer. The hardware-correct way to match D3D9's `SetGammaRamp`, which flip-model swap chains no longer expose. |
+| **Python** | 3.12.x | Backend runtime + TRE parsing | The existing `tre_reader.py` reference is Python; reuse beats reimplementation. 3.12 is stable, fast, fully supported on Win11. (Parser is pure-stdlib so 3.13/3.14 also work; 3.12 is the safe floor.) |
+| **FastAPI** | 0.136.x | HTTP/JSON API layer | Minimal-ceremony typed endpoints, automatic OpenAPI docs, async file streaming, trivial to serve a built SPA as static files. Latest 0.136.3 (2026-05-23). |
+| **Uvicorn** | 0.34.x | ASGI server | Standard FastAPI dev+prod server; `uvicorn app:app` binds `127.0.0.1` and you're done. `--reload` in dev. |
+| **React** | 19.2.x | Frontend UI framework | Latest stable 19.2.7 (2026-06-01). Broadest component-lib support for tree/diff UIs; React Compiler removes most manual memoization (helps a virtualized 10k-row file tree stay snappy). |
+| **Vite** | 8.0.x | Frontend build/dev tooling | Latest 8.0.9 (2026-04-20). Instant HMR, one-command React+TS scaffold, Rust-based toolchain; zero-config SPA that proxies `/api` to Python in dev. |
+| **TypeScript** | 5.6+ | Frontend type safety | Catches shape drift between API DTOs and UI; pairs with FastAPI's OpenAPI to optionally codegen client types. |
 
-### Supporting Libraries / APIs
+### Supporting Libraries
 
-| API | Purpose | When to Use |
-|---------|---------|-------------|
-| `D3DDisassemble` (d3dcompiler_47) | Disassemble a DXBC/D3D9 blob to text | Asset audit only — confirm what a given `.psh` actually contains (asm vs hlsl, ps version) when triaging a shader that renders wrong. Not a runtime path. |
-| `ID3D11InfoQueue::AddApplicationMessage` | Route diagnostics into `stage/d3d11-debug.log` | Already the working diagnostic channel (explorer-launched smokes drop `OutputDebugString`). Use it to log PS compile failures + asset format census during char-select. |
-| `clip()` in HLSL PS | Alpha-test emulation (no FFP alpha-test in D3D11) | Already used in the dynamic fallback PS (Iter-44B). Carry the `PSAlphaTest` cbuffer pattern into the asset PS path. |
-| D3D11 `D3D11_DEPTH_STENCIL_DESC` stencil fields | Stencil ref/op mapping (decals, outlines, interiors) | `Pass::apply` stencil-ref upload is currently missing in D3D11; map through DSS, mirroring the D3D9 `Compare[]` table **including its intentional `C_GreaterOrEqual`↔`C_NotEqual` swap**. |
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| **Tailwind CSS** | v4.x | Utility-first styling | Always — the "clean modern UI" requirement. shadcn/ui CLI initializes v4 projects natively (OKLCH theme, `@theme` directive, no `tailwind.config.js`). |
+| **shadcn/ui** | latest (CLI) | Copy-in component primitives | Always — accessible, themed Table, Tabs, Command-palette, ScrollArea, Badge components you own as source (no runtime dep lock-in). Updated for Tailwind v4 + React 19 (`data-slot`). |
+| **TanStack Virtual** | v3.x | Row virtualization | Required for the file-level diff view — the merged virtual tree can be 10k–100k+ entries; render only visible rows or the tree janks. |
+| **TanStack Query** | v5.x | Server-state fetching/cache | Recommended — manages the scan-A / scan-B / diff async lifecycle, loading/error states, and caches scan results so re-diffing is instant. |
+| **xxhash** (Python) | latest | Fast content hashing | Recommended over `hashlib.sha256` for change-detection: xxh3 is ~10x faster; you need change-detection, not cryptographic strength. Used only on the deep-diff path (see fast path below). |
+| **orjson** (Python) | latest | Fast JSON serialization | Optional — large diff payloads (tens of thousands of entries) serialize much faster than stdlib `json`; FastAPI supports `ORJSONResponse`. |
 
-### Development / Debugging Tools
+### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| **RenderDoc** (latest) | Frame capture, per-draw state, live PS source/DXBC view, texture/SRV inspection | Primary tool. Capture a char-select frame under both `gl05`(D3D9) and `gl11`(D3D11); diff the bound PS + SRV + samplers per draw. Free, excellent D3D11 support, shows the exact DXBC and reflected resources. Best first instrument for "which draw binds magenta and why." |
-| **PIX on Windows** (latest) | GPU timing, deeper HW counters, shader debugging | Secondary; use when RenderDoc's shader debugger is insufficient or for DPVS-remeasure perf counters. Heavier setup than RenderDoc. |
-| **`fxc.exe`** (Win SDK) | Offline compile/disassemble a `.psh` source extracted from TRE | Sanity-check that a specific asset's `PSRC` compiles to `ps_4_0` outside the engine before wiring it. `fxc /T ps_4_0 /Fc out.asm shader.psh`. Note `fxc` is in maintenance mode (Microsoft steers new work to DXC), but `ps_4_0`/SM4–5 + `D3DCompile` are fully supported and exactly what this engine targets — **do NOT introduce DXC/`dxc.exe`/DXIL** (SM6 is needless scope for an SM2-era asset set). |
-| **`D3DReflect` census script** (in-engine, one-shot) | Count asset `.psh` by `PSRC`-present / asm-vs-hlsl / ps-version | Build this first (char-select scope). It converts the biggest open risk (HLSL:ASM ratio) into a measured number that scopes the rest of the milestone. |
+| **uv** (Astral) | Python env + deps | Fast modern pip/venv replacement; `uv venv` + `uv pip install`. Cleaner than Conda for one tool. |
+| **pnpm** (or npm) | Frontend package manager | pnpm is faster/disk-cheaper; npm is fine. Either works with Vite. |
+| **Ruff** | Python lint/format | Single fast tool. |
+| **Vite proxy** | Dev-time API routing | `server.proxy: { '/api': 'http://127.0.0.1:8000' }` so the SPA dev server forwards API calls — no CORS dance in dev. |
 
-## Recommended Path for the PEXE Blocker — Compared
+## Architecture Shape: "Web-based but local-filesystem"
 
-The question lists four options. Grounded in the codebase, here is the comparison and the pick.
+**Recommended shape — localhost server + browser (NOT a desktop shell):**
 
-| Option | What it is | Verdict | Why |
-|--------|-----------|---------|-----|
-| **(b) Recompile `PSRC` HLSL → `ps_4_0` via `D3DCompile`** | Load the discarded `PSRC` chunk; for `//hlsl`-flagged sources, feed through the existing VS-style rewrite + `D3DCompile` + cache | **RECOMMENDED (primary)** | Reuses the entire working Phase 11 VS pipeline (`HlslRewrite`, `CompileIncludeHandler`, `ShaderCache`, reflection). For the HLSL subset of assets this is near-free. Highest fidelity, no per-shader hand-work. |
-| **(d) Reconstruct from `.sht`/effect/material + a small FFP-stage generator** | For asset passes whose `PSRC` is D3D9 *assembly* (not HLSL), or FFP-only passes, generate an HLSL PS from the pass's TextureSampler stages + `TextureOperation` combiners | **RECOMMENDED (fallback for the ASM subset)** | D3D9 PS assembly cannot go through `D3DCompile` (asm → DXBC is not a supported path; `ps_1_x`/`ps_2_x` *profiles* are gone). But the engine already exposes the stage/sampler/combiner model that the asm shader *implements*. Generate equivalent HLSL from the structured pass data. Implement the dominant ~10–12 of 26 `TextureOperation` modes; log+fallback the rest. This is the path the Phase 11 SUMMARY already named (#5 "optional FFP stage-cascade generator"). |
-| **(a) Decompile/translate D3D9 PS bytecode → DXBC** | Run `m_exe` through a bytecode→HLSL decompiler (HlslDecompiler / dx-shader-decompiler) then recompile | **REJECT** | Pointless given `PSRC` source exists. Decompilers are best-effort/WIP, produce unreviewed HLSL, and add an offline asset-rebuild dependency. Only consider for a one-off asset whose `PSRC` is missing AND whose stage model is too exotic for (d) — not expected at char-select scope. |
-| **(c) Hybrid/interpreter** (runtime D3D9-asm VM emulating PS in a generic SM4 shader) | Bind a generic PS that interprets D3D9 PS tokens via a uniform-uploaded program | **REJECT** | Massive complexity, performance cliff, and a research project of its own. The asset set is small and fixed-function-ish; (b)+(d) cover it. Anti-scope. |
+```
+┌─────────────────┐         ┌──────────────────────────┐
+│  Browser tab    │  HTTP   │  FastAPI / Uvicorn       │
+│  (Vite SPA,     │ ──────► │  127.0.0.1:8000          │
+│   React+shadcn) │ ◄────── │   ├─ /api/scan?path=...  │
+└─────────────────┘  JSON   │   ├─ /api/diff           │
+                            │   └─ serves built SPA    │
+                            │  tre_reader.py (REUSED)  │
+                            │   reads C:\...\*.tre      │
+                            └──────────────────────────┘
+```
 
-**Net recommendation:** a two-lane strategy — **(b) for HLSL-source passes, (d) for assembly/FFP passes** —
-both emitting `ps_4_0` DXBC through the existing compile+cache+`CreatePixelShader` path. The per-VS dynamic
-PS that exists today (`getOrCompilePSForVS`) is the scaffold to evolve: keep it as the universal safety-net,
-but prefer the asset's real shader when `PSRC` yields a compilable PS. **The HLSL:ASM ratio (measured by the
-census tool) decides how much of the milestone is lane (b) vs lane (d).**
+- The **Python server** does all filesystem work (enumerate `.tre` archives, read TOCs, hash payloads,
+  build the merged virtual tree). The browser never touches the disk — it renders JSON. This sidesteps
+  the browser sandbox's filesystem restrictions entirely, which is the whole reason "web-based local
+  tool" is usually awkward.
+- **Production run** = `uvicorn app:app` + `vite build` output served as static files from the same
+  FastAPI app on one port. Open `http://127.0.0.1:8000`. One process, no installer.
+- **Dev run** = Uvicorn on :8000, Vite dev server on :5173 with a proxy to :8000. HMR on the UI,
+  `--reload` on the API.
+- A trivial launcher (`.bat` or `python -m`) can `start` the browser at the URL once the server binds.
+  That's the entire "desktop integration" a single-user local tool needs.
 
-## Adjacent Gaps — Recommended Technique per Gap
+**Why a server, not just static files in the browser:** the browser File System Access API is
+Chromium-only, needs per-folder user-gesture grants, can't efficiently random-access read inside large
+`.tre` archives, and can't background-hash thousands of entries — you'd fight the sandbox the whole way.
+A local server is the standard friction-free answer for local-data tools (cf. Jupyter, Streamlit,
+ComfyUI — all localhost servers).
 
-| Gap | Recommended technique | Why this fits THIS engine |
-|-----|----------------------|---------------------------|
-| **Gamma / sRGB (washed sky, blown-out interiors)** | Create an `*_UNORM_SRGB` **RTV** over the existing `*_UNORM` back-buffer (DXGI special exception). Keep linear texture content sampling correct. **Verify against D3D9 first** — D3D9 used `SetGammaRamp` (a post-tonemap ramp), not sRGB framebuffer encoding. | The Phase 11 SUMMARY proposed an explicit LUT post-pass encoding `pow(0.5 + contrast*(x*brightness-0.5), 1/gamma)`. That LUT **exactly reproduces D3D9's gamma-ramp semantics**, whereas an sRGB RTV reproduces *physically-correct* gamma, which D3D9 did NOT do. **Recommendation: implement the engine's gamma-ramp LUT pass to match the D3D9 baseline (the parity target), not an sRGB swap-chain.** Reserve the sRGB-RTV option only if the LUT proves visually off. The blown-out interiors are more likely the missing PS lighting/material constants (`Pass::apply`) than gamma — fix the PS pipeline first, then re-judge gamma. |
-| **Half-texel fullscreen-blit seam (load screen)** | Remove the engine's baked **`-0.5` half-pixel offset** for transformed (XYZRHW) vertices on the D3D11 path. | CONFIRMED from the Iter-4 XYZRHW capture: the splash quad is submitted at pixel coords `(-0.5,-0.5)…(1023.5,767.5)` — the D3D9 half-pixel convention is *in the vertex data*. D3D11 has no half-pixel offset (SV_Position of pixel 0 is `0.5`, not `0`), so the `-0.5` now **over-corrects** → the centerline seam where two splash halves meet. Fix: in the D3D11 transformed-vertex path, add `+0.5` back (or zero the engine's offset) so texels map to pixel centers. This is the canonical D3D9→D3D10+ porting fix. Deterministic 2D canary — fix it standalone, second after the PS pipeline. |
-| **Multi-stage texture sampling** | Generate PS that samples all bound stages and composites per the pass's `TextureSampler` + `TextureOperation` combiner chain (lane (d) territory). | Today the dynamic PS samples only `t0`. The engine already binds all 8 SRV stages (Iter-44E) — plumbing is correct, the PS just ignores stages 1–7. Drive the composite from the reflected/structured stage data. |
-| **Square → round minimap** | Falls out of multi-stage sampling: sample the circular alpha-mask texture stage and apply it. | Confirmed same PS-gen family (`project_phase11_minimap_never_round`). Not a separate technique — re-check after multi-stage lands; do NOT claim fixed without a D3D9-vs-D3D11 screenshot diff. |
-| **Particles / ribbon** | Post-PS-pipeline. Particle/swoosh use identity-W (verts already world-space); ribbon uses owner-W. Classify with draw-time logging, not transform changes. | Phase 11 SUMMARY note #4: ribbon stretch is NOT a transform bug. Defer until asset PS + `Pass::apply` constants land, then triage. |
-| **DPVS D3D11 remeasure (SPEC R7)** | Re-run the occlusion measurement once geometry renders cleanly; use PIX counters. | Explicitly deferred in Phase 11 ("DPVS math is meaningless until geometry renders cleanly"). Last step of the milestone, after parity. |
+## TRE Parser Reuse — the Integration Point
 
-## Integration Points into the Existing `gl11` Plugin
+**Do NOT reimplement TRE parsing.** `D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` already
+provides, version-aware:
 
-The work threads into named, existing code — not new subsystems:
+- `read_tre_header()` / `read_tre_entries()` — per-archive TOC + filename-block parse (`0004/0005`
+  24-byte stride, `6000/0006` 32-byte stride).
+- `read_search_toc_entries()` / `read_cot2000_entries()` — the two master-index layouts that map a
+  merged virtual tree across many `.tre` files (exactly the "search-path-order resolution, later archive
+  wins" model the tool needs).
+- **`TreEntry.crc` — every TOC entry already carries SOE's per-file CRC.** For set-level and file-level
+  "changed?" detection, compare `(length, crc)` straight from the TOCs **without decompressing payloads
+  at all** in the fast path; only zlib-decompress + xxhash when CRCs collide or you want byte-exact
+  confirmation. This makes "diff two whole installations" cheap (TOC reads are tiny).
+- `read_tre_payload()` — on-demand zlib decompress for the deep-diff path.
 
-1. **Feed `PSRC` to the PS path.** Change `ShaderImplementation.cpp:2900–2901` to *keep* the `PSRC` text
-   (store on `ShaderImplementationPassPixelShaderProgram`, mirroring how `m_text` is kept for VS at
-   line 2156–2159). This is a clientGraphics engine edit (allowed in v2; keep it gated so D3D9 ignores it).
-2. **Compile in `Direct3d11_PixelShaderProgramData`.** The `compilePixelShaderFromHlsl` helper +
-   `D3DCompile`/`ps_4_0`/rewrite/cache machinery already exists and is exercised by the magenta fallback —
-   point it at the real `PSRC` source instead of returning NULL.
-3. **`Pass::apply` constant uploads.** Mirror `Direct3d9_StaticShaderData::Pass::apply` (verified at
-   `Direct3d9_StaticShaderData.cpp:820–966`): per-pass material (`VSCR_material`, 5 regs), textureFactor
-   (`VSCR_/PSCR_textureFactor`, 2 regs), textureScroll (time-modulated, 1 reg), alpha-test ref, stencil ref,
-   fog mode, fullAmbient. Iter-45 already fixed the PS slot-2 dead-write prerequisite; the per-pass uploads
-   themselves are TODO in `Direct3d11_StaticShaderData::apply`.
-4. **cbuffer matrices stay transposed** (`d3d11_cbuffer_transpose_quirk`) and any **persistent RT stays BGRA8**
-   (`d3d11_baked_rt_bgra_format`) — invariants any new PS-pipeline RT must honor.
-5. **`Compare[]` swap** — any new alpha/depth/stencil compare translation mirrors the D3D9 table's actual
-   (swapped) mapping, not the enum comments (`d3d9_compare_table_swap`).
+**Integration recommendation:** `pip install -e D:/Code/swg-blender-plugin` (editable local install)
+so `import swg_pipeline.tre_reader` works and fixes to the version matrix propagate — single source of
+truth. Vendoring a copy of `tre_reader.py` (+ `tre_decrypt.py`) is the more self-contained alternative;
+editable-install is preferred since both repos are local and single-developer.
 
-## What NOT to Use / Attempt (Anti-Scope)
+The tool's own code is then thin: walk a SWG install dir for `.tre` files in `searchPath` order, build
+a `{logical_path: winning_entry}` map per installation (later archive wins), set-diff the archive lists,
+file-diff the two merged maps by `(length, crc)` → emit added/removed/changed JSON.
+
+## Installation
+
+```bash
+# --- Backend (Python) ---
+uv venv && . .venv/Scripts/activate            # or: python -m venv .venv
+uv pip install "fastapi==0.136.*" "uvicorn[standard]==0.34.*" xxhash orjson
+uv pip install -e D:/Code/swg-blender-plugin   # reuse swg_pipeline.tre_reader (single source of truth)
+
+# --- Frontend (Node) ---
+pnpm create vite@latest web -- --template react-ts   # Vite 8 + React 19 + TS
+cd web
+pnpm add -D tailwindcss@4 @tailwindcss/vite
+pnpm add @tanstack/react-virtual @tanstack/react-query
+pnpm dlx shadcn@latest init                          # Tailwind v4 + React 19 components
+pnpm dlx shadcn@latest add table tabs scroll-area badge command
+```
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| **Python + FastAPI** | **Go** | If the parser did NOT already exist and you wanted one static `.exe`, no runtime. Go's stdlib (`hash`, `compress/zlib`, `net/http`) is great for this and ships one binary — but you'd reimplement the whole 5-version TRE matrix, the tool's hardest part. Not worth it here. |
+| **Python + FastAPI** | **Rust (axum/actix)** | If hashing throughput on millions of files were the bottleneck. It isn't — the TOC `(length, crc)` fast path avoids decompression, and a few thousand files on an SSD is sub-second in Python. Rust would also mean a full parser rewrite. |
+| **Python + FastAPI** | **Node/TypeScript backend** | If you wanted one language across the stack. Still means porting the TRE parser to TS (the version-matrix logic is the cost) and Node's CPU-bound hashing isn't faster than Python+xxhash. The unified-language win doesn't pay for the rewrite. |
+| **React + Vite** | **SvelteKit** | Smallest bundle / least boilerplate for a personal tool. A fine choice; React is recommended only because shadcn/ui + TanStack Virtual/Query give the richest *off-the-shelf* table/tree/diff components. Pick Svelte if you already prefer it. |
+| **React + Vite** | **FastAPI + Jinja2 + htmx** | Zero frontend build step; viable and low-ceremony when the UI is mostly tables. Rejected as primary because "modern clean diff/tree UI with virtualization" benefits from a real component framework. |
+| **localhost server** | **Tauri 2** | If this ever became a *distributable* app for non-developers (single signed installer, native window). For a single-developer local tool it adds a Rust toolchain + WebView + packaging for no benefit. |
+
+## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **DXC / `dxc.exe` / SM6 / DXIL** | These assets are SM2-era; SM6 is a toolchain migration with zero parity benefit | `D3DCompile` → `ps_4_0` (already in the tree) |
-| **Decompiling `m_exe` D3D9 bytecode** | The `PSRC` source already exists in the asset | Load `PSRC`; recompile (lane b) or generate from stage model (lane d) |
-| **A runtime D3D9-asm interpreter PS** | Enormous complexity + perf cliff for a small fixed-function-ish set | Lanes (b)+(d) |
-| **Re-authoring/rebuilding the `.tre` shader assets offline** | Adds an asset-pipeline dependency + redistribution concerns; the user runs a retail install | Compile from `PSRC` at load time, in-process |
-| **sRGB swap-chain as the gamma fix (as the primary)** | D3D9 used a gamma *ramp*, not sRGB framebuffer encoding → sRGB would NOT match the parity baseline | Engine gamma-ramp LUT post-pass; sRGB-RTV only as a fallback if the LUT looks wrong |
-| **All 26 `TextureOperation` combiner modes up front** | Most never appear in live assets (BUMPENVMAP/DOTPRODUCT3/MULTIPLYADD are rare) | Implement the dominant ~10–12; log+fallback the rest until an asset surfaces them |
-| **DPVS remeasure before parity** | Occlusion math is meaningless on broken geometry | Defer to the last phase |
-| **"Fixing" the `Compare[]` swap** | Assets authored against the swap for years; fixing breaks content | Mirror the swap intentionally |
+| **Electron** | 100s of MB bundle (ships Chromium + Node), heavy RAM, packaging/signing/auto-update machinery — all pure overhead for a single-user localhost tool. | localhost FastAPI + browser |
+| **Tauri 2 (this milestone)** | Adds a Rust toolchain, WebView capability/permission config, and an installer build just to wrap a UI you can open in a browser you already have. Justified only if distribution to non-devs becomes a goal. | localhost FastAPI + browser |
+| **Reimplementing the TRE parser** (Go/Rust/TS) | The 5-version TOC matrix + COT2000/SearchTOC master indexes + zlib + filename-block walking is ~470 lines of carefully version-aware Python that already works and is golden-file tested. Rewriting it is the project's biggest risk for zero functional gain. | Reuse `swg_pipeline.tre_reader` |
+| **Browser File System Access API** (static SPA, no server) | Chromium-only, per-folder gesture grants, no efficient random-access into large archives, can't background-hash thousands of files. Fights the sandbox. | Server-side filesystem access |
+| **`hashlib.sha256` for change-detection** | Cryptographic strength is unnecessary and ~10x slower; you're detecting changes, not defending against adversaries. | Compare TOC `(length, crc)` first; xxh3 only for byte-exact confirmation |
+| **Conda** for env management | Heavyweight for one small tool; slow solves on Windows. | `uv` (or plain `venv`) |
 
-## The Char-Select-First Proving Path (concrete)
+## Stack Patterns by Variant
 
-The first vertical slice is deterministic and isolated. Recommended order:
+**If you want the absolute minimum surface area (acceptable UI):**
+- Drop React/Vite; serve Jinja2 templates from FastAPI with htmx for partial updates.
+- Because: no Node toolchain at all, one language; the diff/tree views are mostly tables, and htmx
+  handles "scan / expand node / load diff" with server-rendered fragments. Trade-off: less polished
+  virtualized scrolling. Keep React as primary if the "modern clean UI" bar is high.
 
-1. **Census tool** — one-shot `D3DReflect`/`D3DDisassemble` pass over every `.psh` loaded during a char-select
-   session: count `PSRC` present, asm-vs-hlsl, ps-version. Logs via `ID3D11InfoQueue`. **Output: the HLSL:ASM
-   ratio** that scopes lanes (b)/(d).
-2. **Lane (b) on char-select textures** — keep `PSRC` for HLSL passes; recompile to `ps_4_0`; bind real PS.
-   Char-select character textures + skin should go from untextured/magenta to correct.
-3. **`Pass::apply` constants** — wire material/textureFactor/scroll so lit surfaces shade correctly.
-4. **Eyes** (the named char-select target) — likely a multi-stage/`sul_eye.sht` sampling case (lane d
-   multi-stage). Validate eyes render in the correct place with the right texture.
-5. **Half-texel seam** — standalone 2D canary; verify the load screen has no centerline seam under D3D11.
-6. **Then extend outward** to open-world surfaces, minimap, particles/ribbon, and finally DPVS remeasure.
+**If this tool ever ships to non-developer SWG community users:**
+- Wrap the same React SPA + a bundled Python (PyInstaller), or move the backend into Tauri 2. Tauri's
+  scoped-folder filesystem permissions fit a "pick two install dirs" UX well.
+- Because: distribution to non-devs wants a single signed installer, not "run uvicorn then open a
+  browser." Out of scope for v2.3 (single-developer, local).
 
-Each step gated by a **D3D9-vs-D3D11 screenshot diff** at the same char-select pose (the Phase 11 over-claim
-lesson: never claim a visual win without the diff).
+**If the dataset grows to millions of files and hashing dominates:**
+- Parallelize hashing with a `ProcessPoolExecutor` (sidesteps the GIL for CPU-bound zlib+hash); keep
+  the TOC-CRC fast path. Only then consider a Go/Rust hashing core called from Python.
+- Because: real SWG installs are ~thousands of archives / low-hundreds-of-thousands of entries —
+  comfortably within single-process Python with the CRC fast path. Don't pre-optimize.
 
-## Version Compatibility / Invariants
+## Version Compatibility
 
-| Item | Constraint | Notes |
-|------|-----------|-------|
-| `D3DCompile` profile | `ps_4_0` (not `ps_5_0`, not `*_level_9_x`) | `ps_5_0` reserves D3D9-era HLSL identifiers as keywords; `level_9_x` re-imposes the SM2 256-instruction cap that already broke a VS (X5615). Mirror the VS choice exactly. |
-| Compile flags | `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` + `PACK_MATRIX_ROW_MAJOR`, **no** `ENABLE_STRICTNESS` | Strictness is mutually exclusive with backwards-compat (X3116). Already settled for VS; PS mirrors it. |
-| cbuffer matrices | Must be `XMMatrixTranspose`'d on upload | Col-vec engine vs row-vec bytecode dual (`d3d11_cbuffer_transpose_quirk`). |
-| Persistent render targets | BGRA8 (`B8G8R8A8_UNORM`), not BGRX8 | `CopySubresourceRegion` strict typeless-family match (`d3d11_baked_rt_bgra_format`). |
-| `rasterMajor` | `11` selects `gl11_d.dll` | Engine multiplexes `Gl_api`; D3D9 (`=5`) stays the known-good reference (invariant D-05). |
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| FastAPI 0.136.x | Python 3.12 / Uvicorn 0.34.x | Use `uvicorn[standard]` for http-tools/websocket extras. |
+| React 19.2.x | Vite 8.0.x / TypeScript 5.6+ | `@vitejs/plugin-react` (or `-swc`) supports React 19. |
+| Tailwind v4 | shadcn/ui (latest CLI) / Vite 8 | shadcn CLI initializes v4 natively; use `@tailwindcss/vite` plugin; v4 config moves to CSS `@theme` (no `tailwind.config.js`). |
+| shadcn/ui (latest) | React 19 / Tailwind v4 | Components updated for both (`data-slot`, OKLCH, `forwardRef` removed per React 19). |
+| `swg_pipeline.tre_reader` | Python 3.12 / 3.13 / 3.14 | Pure-stdlib (`struct`, `zlib`, `pathlib`); no version constraint. Golden-tested against a `0005` TRE. |
+| TanStack Virtual v3 / Query v5 | React 19 | Both support React 19. |
 
 ## Sources
 
-- Engine source (HIGH — read directly): `ShaderImplementation.cpp:2895–2911` (PSRC discarded / PEXE kept),
-  `ShaderImplementation.h:626–682` (PixelShaderProgram + `m_exe`), `Direct3d9_StaticShaderData.cpp:820–966`
-  (working `Pass::apply` constant uploads — the parity reference), `Direct3d9_PixelShaderProgramData.cpp:34`
-  (`CreatePixelShader(m_exe)` D3D9 path), `Direct3d11_PixelShaderProgramData.cpp` (current NULL-PS handling +
-  `D3DCompile`/`ps_4_0` machinery + per-VS dynamic generator), `ShaderBuilder/.../PixelShaderProgramView.cpp:172,308`
-  (asset built via `D3DXAssembleShader` for asm + `D3DXCompileShader` for `//hlsl`), `Node.cpp:5843–5849`
-  (PSRC+PEXE both written).
-- Memory files (HIGH — hard-won renderer facts): `d3d11_cbuffer_transpose_quirk`, `d3d11_baked_rt_bgra_format`,
-  `d3d9_compare_table_swap`, `project_phase11_close_pass_with_deferrals`, `project_phase11_minimap_never_round`,
-  `project_phase12_visual_baseline`. Phase 11 docs: `11-SUMMARY.md`, the XYZRHW CODEX consult (half-texel seam evidence).
-- [Specifying Compiler Targets — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/specifying-compiler-targets) (HIGH) — `D3DCompile` drops legacy `ps_1_x`; `*_4_0_level_9_x` backward-compat profiles.
-- [HLSL, FXC, and D3DCompile — Chuck Walbourn](https://walbourn.github.io/hlsl-fxc-and-d3dcompile/) (MEDIUM) — `fxc`/`D3DCompile` status, SM4/5 support, fxc maintenance posture.
-- [Converting data for the color space — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/converting-data-color-space) (HIGH) — sRGB RTV special exception on `*_UNORM` swap-chain buffers.
-- [Directly Mapping Texels to Pixels (D3D9) — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/direct3d9/directly-mapping-texels-to-pixels) + [Solving DX9 Half-Pixel Offset — Aras Pranckevičius](https://aras-p.info/blog/2016/04/08/solving-dx9-half-pixel-offset/) + [Half-Pixel Offset in DirectX 11 — Adam Sawicki](https://asawicki.info/news_1516_half-pixel_offset_in_directx_11) (HIGH/MEDIUM) — D3D9 `-0.5` rule removed in D3D10+; the fullscreen-blit fix.
-- [HlslDecompiler](https://github.com/AndresTraks/HlslDecompiler) / [dx-shader-decompiler](https://github.com/aizvorski/dx-shader-decompiler) (LOW — listed only to substantiate the REJECT of option (a)).
+- `D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` — HIGH: the existing version-aware TRE parser
+  (read directly this session); confirms reuse is viable and that the per-entry CRC in the TOC enables a
+  decompression-free diff fast path.
+- `D:/Code/swg-blender-plugin/docs/research/tre-project-roundtrip-SPEC.md` — HIGH: confirms the Python
+  pipeline is the established TRE tooling line.
+- [FastAPI release notes / PyPI](https://fastapi.tiangolo.com/release-notes/) — HIGH: latest 0.136.3 (2026-05-23).
+- [Vite releases](https://vite.dev/releases) — HIGH: latest 8.0.9 (2026-04-20).
+- [React 19.2 blog / GitHub releases](https://react.dev/blog/2025/10/01/react-19-2) — HIGH: latest 19.2.7 (2026-06-01).
+- [shadcn/ui Tailwind v4 docs](https://ui.shadcn.com/docs/tailwind-v4) — HIGH: confirms Tailwind v4 + React 19 support.
+- [Electron vs Tauri 2026 guide](https://www.pkgpulse.com/guides/electron-vs-tauri-2026) — MEDIUM: bundle-size/permission-model comparison informing the "no desktop shell" decision.
 
 ---
-*Stack research for: D3D11 asset pixel-shader pipeline + visual-parity gaps (v2.2)*
-*Researched: 2026-05-27*
+*Stack research for: local web-based TRE archive compare/diff tool (v2.3 Hardening)*
+*Researched: 2026-06-12*

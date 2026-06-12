@@ -1,199 +1,230 @@
-# Feature Research — v2.2 Visual Parity (D3D11 → D3D9 baseline)
+# Feature Research
 
-**Domain:** Legacy game-engine renderer porting — closing D3D11 visual gaps against a known-good D3D9 reference path in the SWG/whitengold client.
-**Researched:** 2026-05-27
-**Confidence:** HIGH
+**Domain:** Web-based archive/asset comparison tool for SWG `.tre` installations
+**Researched:** 2026-06-12
+**Confidence:** HIGH (TRE format verified from the engine source itself; community-tool landscape and diff-UX patterns verified via web survey)
 
-> **Framing note.** This is not greenfield product research — these "features" are
-> already-shipped visual behaviors that render *correctly under D3D9* (`rasterMajor=5`,
-> `gl05_d.dll`) and render *wrong under D3D11* (`rasterMajor=11`, `gl11_d.dll`). "Table
-> stakes" = behaviors that must match the D3D9 baseline for the client to be called
-> visually at parity. The MVP target is the **character-select beachhead** (textures +
-> eyes), then the open world. Sources are the codebase itself plus the Phase 11
-> closeout artifacts — especially the CODEX+Cursor Iter-44 pipeline deep-dive
-> (`.planning/phases/11-d3d11-renderer-plugin/11-09.15-CODEX-CONSULT-iter44-pipeline-deepdive.md`),
-> `11-SUMMARY.md`, and `docs/research/phase12-baseline/COMPARISON.md`.
+> Supersedes the prior v2.2 Visual Parity FEATURES.md (archived content was renderer-porting research; see `milestones/v2.2-*` for that milestone's record).
+
+## Scope note
+
+This file covers ONLY the **TRE compare tool** (the one new user-facing capability in v2.3 Hardening). The other v2.3 items (DPVS config-gate, instrumentation removal, machine portability, Options-window FATAL, D3DCompile port, cantina corner-snap fix) are internal client fixes with no feature-research need and are excluded per the milestone brief.
+
+The tool compares two SWG installations at two levels:
+1. **Set level** — which `.tre` archives exist in each install; size/version/file-count deltas.
+2. **File level** — the merged virtual file tree each install presents after the search-path overlay resolves (later-priority archive wins per filename), with per-file added/removed/changed status.
+
+First real use case: diagnosing the parked space-scene graphics-artifact diff (SWGSource Client v3.0 vs whitengold's data set).
 
 ---
 
-## The single root cause behind almost every gap
+## Ground truth: how a TRE actually resolves (from the engine, not guessed)
 
-The dominant blocker is **the asset pixel-shader pipeline**. Confirmed mechanism (HIGH):
+Verified directly in `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp` and `TreeFile_SearchNode.{h,cpp}` — this is the authoritative spec the tool must mirror, not a third-party reverse-engineering.
 
-1. The engine ships **pre-compiled D3D9-era pixel-shader bytecode** (PEXE / `.psh`).
-   `ID3D11Device::CreatePixelShader` rejects it (wrong bytecode container/SM level).
-2. D3D11 therefore falls back to a **dynamic fallback PS keyed only by the VS output
-   signature** (`Direct3d11_PixelShaderProgramData.cpp` dynamic-gen path). That fallback
-   evaluates `sample(t0, uv0) * COLOR0` only — it samples **slot 0 with TEXCOORD0** and
-   ignores everything bound to texture stages 1..7.
-3. Where even that fails to bind, a **magenta debug PS** shows through (the magenta
-   slivers in `spotA_interior_0009`, `spotB_exterior_0013/0014`).
-4. The engine's real material model is a **D3D9 fixed-function texture-stage cascade**
-   (`ShaderImplementation::Pass::Stage`, up to 8 stages, ~26 `TextureOperation` modes:
-   modulate/add/lerp/blend*/dot3/bumpenv/…). The D3D11 backend **binds SRVs to all 8
-   stages** (Iter-44E) but **never evaluates the stage cascade**, so multi-texture
-   materials are structurally wrong even though the textures are correctly bound.
+**Archive header** (`SearchTree::Header`, 32 bytes, read from offset 0):
 
-Consequence: **eyes, head, mini-map, terrain detail-blends, specular/overlay surfaces,
-and particle materials are all the same bug wearing different costumes.** They will not
-resolve via more render-state tuning (the Iter-43/44C reverts proved this); they need a
-**generated FFP texture-stage PS evaluator** (CODEX recommendation: read engine
-`TextureOperation` data, implement the dominant ~12 ops, log+fallback the rare ones).
+| Field | Type | Meaning |
+|-------|------|---------|
+| `token` | Tag | `'TREE'` magic (`TAG_TREE`) — validate this first |
+| `version` | Tag | only `TAG_0004` accepted by `validate()`; `0005` also handled in the ctor switch |
+| `numberOfFiles` | uint32 | TOC entry count |
+| `tocOffset` | uint32 | byte offset of the TOC block |
+| `tocCompressor` | uint32 | compressor code for the TOC block |
+| `sizeOfTOC` | uint32 | compressed TOC size |
+| `blockCompressor` | uint32 | compressor code for the name block |
+| `sizeOfNameBlock` / `uncompSizeOfNameBlock` | uint32 | filename-table sizes |
 
-Two gaps are **independent** of this blocker and can be done in isolation:
-**gamma/lighting tone** (a missing post-process LUT pass) and the **load-screen seam**
-(a 2D fullscreen-blit half-texel sampling bug).
+**Per-file TOC entry** (`TableOfContentsEntry`): `crc`, `length` (uncompressed), `offset`, `compressor`, `compressedLength`, `fileNameOffset`. Filenames live in a separate (zlib-compressed) name block indexed by `fileNameOffset`.
+
+**Compression:** zlib (`ZlibCompressor`); `isCompressed()` gates per-block; `CT_deprecated` is a fatal/unsupported code. The TOC and name block are themselves zlib-compressed; individual file records may be stored or zlib-compressed per their `compressor` field.
+
+**Two load-bearing consequences for the tool:**
+- **Per-file CRC is in the TOC.** Content-identity comparison is *free* — you do NOT need to decompress every record to tell "changed" from "identical". CRC + uncompressed `length` is the cheap, correct change signal. (Confidence: HIGH — `crc` field read straight from the struct.)
+- **Search-path resolution is priority-ordered, later-wins-per-filename.** `TreeFile::install` adds `searchPath%d` / `searchTree%d` / `searchTOC%d` by numeric priority from `client.cfg`; the merged virtual tree is the union of all archives, with the highest-priority archive supplying each filename. The tool's file-level view is meaningless unless it replicates this exact overlay order — that IS the feature.
+
+---
+
+## Competitor landscape (surveyed, not invented)
+
+| Tool | Tech / era | Does | Falls short |
+|------|-----------|------|-------------|
+| **TRE Explorer** (MTGUli / ilikenwf fork) | C# WinForms, archived Aug 2022 | TOC/TRE view, extract, edit, repack; aggregates older tools (TRE Archiver, InsideSWG, Kadoo, STF Edit, IFF Reader) | Single-archive-centric, dated WinForms UI, no install-vs-install diff, no merged-tree-with-overlay-resolution, no comparison concept at all |
+| **Swg.Explorer** (wverkley) | C# / MonoGame, mid-late-2000s look | **Multi-archive combined view**, IFF + STF preview, mesh→Collada export, STF→CSV | Combined VIEW only (no diff/compare), no per-file change status, no two-install comparison, no search/filter across archives, desktop-only |
+| **swg_tre** (Rust crate) | library, current | read + write TRE programmatically | Library, not an app — useful as a parser-reference cross-check, no UI |
+| **treLib / SWGEmu tre tools** | C++/scripts | extract/pack for server data prep | CLI/build-pipeline oriented, no comparison UI |
+| **WPS Toolchain IFF Inspector / SWG IFF Viewer** (VS Code ext) | modern dark webview | clean chunk-hierarchy IFF inspection with offsets | IFF-file-level only — no archive set/diff layer; *but proves the "modern clean UI" bar the user wants and shows it's achievable in a webview* |
+
+**The gap the user named ("modern looking unlike most of these tools") is real:** every TRE-archive tool is either an archived WinForms app or a 2000s-MonoGame desktop viewer, and **none of them do install-vs-install comparison at all.** The comparison capability is genuinely new for the SWG ecosystem; the modern web UI is the second differentiator. The only modern-looking SWG tooling (WPS IFF viewer) operates one level below (inside a single IFF), not at the archive-set level.
 
 ---
 
 ## Feature Landscape
 
-### Table Stakes (must match the D3D9 baseline for "parity")
+### Table Stakes (Users Expect These)
 
-| Feature | What "correct" looks like (D3D9 baseline) | Complexity | Notes / mechanism |
-|---------|-------------------------------------------|------------|-------------------|
-| **Asset-textured surfaces** (single-diffuse world + character meshes) | Meshes show their full diffuse textures (walls, armor, terrain ground texture). D3D11 today: flat white/mauve untextured + magenta slivers. | **HIGH** | The headline blocker. Single-diffuse + vertex-color materials are the *simplest* class and may improve with the first FFP-stage PS pass. Geometry is already correct (post Iter-38B transpose + Iter-42v2 row-scale). Recognize "correct" = char-select avatar's clothing/skin shows texture, not flat white. |
-| **Character EYES** (char-select headline target) | Eyes are a **distinct iris/sclera texture** on the head, correct color (driven by `pn_hum_eyes` customization palette), correctly occluded by the head — NOT showing through the back of the skull, NOT flat gray. | **HIGH** | `sul_eye.sht` is a **3-stage** material; eye texture sits on **stage 1+**, not stage 0. Iter-44E confirmed: before it, no SRV was bound on stage 1+, so the PS read *sticky gray* from the previous draw → "gray eyes." Iter-44E binds the SRVs but the slot-0-only PS still ignores them → eyes stay wrong. "Eyes through back of head" is the **same multi-stage gap** combined with the missing per-pass depth/alpha-test compositing the eye material relies on. **No evidence of animated UV or a separate eye-blink shader** — eye color is customization-palette-driven (CustomizableShader hue), and the "specialized shader" is simply the multi-stage `sul_eye.sht`. Recognize "correct" = colored irises sitting on the face, occluded by the head, matching the chosen eye color. |
-| **Lighting + gamma / tone** | Interiors show proper ambient + diffuse falloff and atmospheric haze; sky shows sunset tone. D3D11 today: blown-out flat white interiors, cream-washed sky. | **MEDIUM** (gamma LUT) + **HIGH** (FFP lighting) | **Two sub-parts, decouple them.** (a) **Gamma/tone** is *independent* of the PS blocker: D3D9 used `SetGammaRamp` with `pow(0.5 + contrast*(x*brightness-0.5), 1/gamma)`; DXGI flip-model has no `SetGammaRamp`, so `setBrightnessContrastGamma_impl` is a **no-op stub** → needs a fullscreen LUT/color-correction post pass. (b) **FFP lighting/material-source** (ambient/diffuse/specular sources, `Direct3d9_LightManager` parity) is *coupled* to the PS pipeline — light/material cbuffer ranges init to zero in the default D3D11 path. The "blown-out flat white" is mostly (b) (no lighting term applied → texture+light missing reads as white); the sky wash is mostly (a). |
-| **Multi-stage texture sampling** (detail / specular / overlay stages) | Terrain shows detail-texture blends; surfaces with specular/overlay stages composite correctly. D3D11 today: only the stage-0 texture (if any) shows. | **HIGH** | This *is* the core of the asset-PS work — the generated PS must evaluate `ShaderImplementation::Pass::Stage` ops (modulate/add/lerp/blend-alpha/selectArg, plus alpha-op equivalents) honoring per-stage texcoord index. CODEX: implement the dominant ~12 ops; log+magenta the rare ones (BUMPENVMAP, DOTPRODUCT3, MULTIPLYADD) until a live asset needs them. **This unblocks eyes, head, terrain detail, and specular together.** |
-| **Minimap / radar shape** (round vs square) | Radar is a **round disc** clipped to a circle, with a compass overlay. D3D11 today: square/diamond. | **MEDIUM** | NOT a separate geometry bug. D3D9 renders terrain into an offscreen ARGB8888 texture (`ClientProceduralTerrainAppearance::Radar::createShader` + `renderChunksInto`), then draws it through **`shader/uicanvas_radar.sht`** whose **circular alpha-mask** clips the square texture to a disc (`CuiWidgetGroundRadar::Render`, `m_clipToCircle`). The D3D11 dynamic PS doesn't sample/apply that alpha-mask stage → no circular clip → square. **Same multi-stage / alpha-mask sampling family as eyes.** Strong candidate to resolve *for free* once the asset-PS / multi-stage pipeline lands; re-check with a screenshot diff, do not pre-claim (Iter-44B falsely claimed it). |
-| **Loading-screen fullscreen blit** (centerline seam) | The fullscreen splash blits seamlessly edge-to-edge. D3D11 today: faint vertical seam dead-center (x≈512). | **LOW–MEDIUM** | **Independent of the PS blocker** — best standalone first win + sampling-path canary. It is a 2D UI image (Backdrop/Splash mediators → UI canvas textured-quad path), no 3D/skinning/lighting. Confirmed *image-independent + renderer-specific* (many D3D11 screens seam; ~20 D3D9 load-ins never did). Most likely the splash drawn as **two side-by-side halves** with a **half-texel offset** at the shared edge — the canonical D3D9 (−0.5 texel rule) → D3D10+ porting bug. May also implicate `getOneToOneUVMapping` (currently a D3D11 stub). |
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **TRE archive parser (header + TOC + name block)** | Nothing works without reading the format | MEDIUM | Mirror `TreeFile_SearchNode` exactly: `'TREE'` magic, version `0004/0005`, zlib-decompress TOC + name block. swg_tre (Rust) and the C++ engine source are both reference parsers. Do NOT decompress record payloads at this stage. |
+| **Set-level archive list per install** | User explicitly asked "which TRE archives exist in each installation" | LOW | Enumerate `.tre` files; the priority order comes from parsing each install's `client.cfg` `searchTree%d`/`searchPath%d` entries, not directory order |
+| **Set-level delta (added / removed / in-common)** | Core ask — "size/version deltas" between the two sets | LOW | Archive-name set difference + per-archive size + `numberOfFiles` + version |
+| **Merged virtual file tree per install (overlay resolution)** | User's exact words: archives "overlay in search-path order, later wins per-file" | MEDIUM | The differentiator-grade feature most tools lack; table stakes *here* because it's the named requirement. Resolution must match `client.cfg` priority semantics |
+| **File-level diff: added / removed / changed status** | The whole point of a compare tool | MEDIUM | "Changed" = CRC differs OR uncompressed length differs (both already in TOC — no payload decompression). "Added/removed" = filename present on only one side |
+| **Tree view with per-node status badges** | Universal diff-tool expectation (WinMerge, Beyond Compare, every git UI) | MEDIUM | Folder-path tree (`.tre` filenames are slash-pathed virtual paths); roll child status up to parent folders (folder = "has changes" if any descendant changed) |
+| **Filter by status (only changed / added / removed / hide identical)** | Beyond Compare & WinMerge both default-hide identical files; mandatory with tens of thousands of files | LOW | Client-side filter over the diff result |
+| **Summary stats (X added, Y removed, Z changed, N identical)** | Users expect an at-a-glance verdict before drilling | LOW | Header bar; cheap from the diff pass |
+| **Per-file detail (winning archive, size, CRC, compressor)** | Needed to answer "why did this file change" — overlay-winner identity | LOW | Show the resolved winning archive + the shadowed losers; directly serves the space-artifact diagnosis |
+| **Search / filter file list by name or path** | Tens of thousands of entries; can't scroll | LOW | Substring + glob; Swg.Explorer notably *lacks* this and it's a known pain point |
+| **Modern, clean UI** | Explicit user requirement; the named reason for building new | LOW-MEDIUM | The bar is "not WinForms / not 2000s MonoGame". A standard modern web stack clears it trivially; the WPS IFF viewer proves a clean dark webview is the expected aesthetic |
 
-### Differentiators / nice-to-have (visual fidelity beyond baseline-correct)
+### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Particles / ribbon effects** | Smoke, glows, weapon swooshes, contrails look like effects, not solid squares/stretched bands. | **HIGH** | Two distinct sub-issues. (a) **Particle billboards render as solid colored squares** — the additive/alpha-blended particle *material* isn't evaluated (PS-gen + `Pass::apply` textureFactor/scroll constants gap) and point-sprite sizing is a deliberate no-op. (b) **Ribbon/swoosh stretching** — CODEX ruled this is **NOT a transform bug** (RibbonAppearance/TrailAppearance *do* call `setObjectToWorldTransformAndScale`; identity-W is intentional for ParticleEmitter/Swoosh whose verts are already world-space). More likely a dynamic-VB count/stride or topology (strip/fan) mismatch, or the PS mishandling the strip's texture/alpha making it *look* like a stretched band. Needs draw-path instrumentation (log appearance/shader/topology/VB-format/transform-class) before fixing. Defer until after the char-select beachhead and the FFP-stage PS lands — particles depend on both PS-gen and per-pass `Pass::apply` constants. |
-| **Stencil-dependent effects** (decals, outlines, some interior portals) | Decals/outlines composite correctly. | **MEDIUM** | D3D9 pushes full stencil state per pass; D3D11 `D3D11_DEPTH_STENCIL_DESC` defaults stencil **disabled, ref 0**. Low visibility on char-select; surfaces in-world. |
-| **Bloom / HDR-ish glow** | Bright sources bloom as on D3D9. | **MEDIUM** | `setBloomEnabled` is a D3D11 stub. Part of output/lighting parity; trails the baseline. |
-| **Alpha-test compare-function fidelity** | Foliage/cutout edges match exactly. | **LOW** | Iter-44B ported alpha-test as `clip(a - ref)` assuming `>= ref`; the D3D9 `m_alphaTestFunction` enum (less/equal/never/not-equal…) is ignored. Fold into the PS-gen key. |
+| **Install-vs-install comparison at all** | No existing SWG tool does this — it is the entire reason to build | (covered above) | Category-defining; everything else is presentation |
+| **Two-level drill (set → merged file tree)** | "Which archive set differs" then "which files within" in one tool | MEDIUM | The two requested levels as linked views; click a set-level delta to filter the file tree to that archive |
+| **Overlay-shadowing visualisation** | Show file X exists in 3 archives but archive-N wins; reveals when a later install *masks* a file differently | MEDIUM | Exactly the failure mode behind the space-artifact bug — a later archive in one install overriding a file the other resolves differently. High diagnostic value, unique |
+| **Virtualised tree rendering** | A retail SWG merged tree is tens of thousands of files; naive DOM dies | MEDIUM | Virtual scroll / windowing separates "modern" from "hangs on real data". Near-table-stakes at real input sizes |
+| **CRC/size-only fast diff (no payload decompression)** | Diff a whole install pair in seconds, not minutes | LOW | Free because CRC is in the TOC. Default mode; full-content diff is the opt-in escalation |
+| **Permalink / shareable diff result** | "Here's the exact file that differs" in a bug thread | LOW-MEDIUM | Serialize install pair + filter + selected path into URL state |
+| **Hex view of an individual file's bytes** | When CRC differs, see *how* | MEDIUM | Decompress the single selected record (cheap — one record). Useful for binary asset diagnosis |
+| **IFF-aware structural preview (chunk tree)** | Most SWG assets are IFF; a nested FORM/chunk tree beats raw hex for "what changed semantically" | HIGH | WPS/VS-Code IFF viewers prove demand + feasibility. High effort; defer past MVP. A *structural IFF diff* would be best-in-class but is clearly v2+ |
 
-### Anti-Features (do NOT chase in this milestone)
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Feature | Why it seems worth doing | Why problematic | Do instead |
-|---------|--------------------------|-----------------|------------|
-| **More render-state-only iterations** to "fix" eyes/head/mini-map | Each prior state tweak closed *something* | The Iter-43 / Iter-44C reverts proved state-only iteration **amplifies** the PS-gen gap and creates false wins + regressions. Both CODEX and Cursor converged on this. | Build the generated FFP texture-stage PS evaluator. Treat state tuning as done. |
-| **"Modulate-everything" naive multi-stage PS** | Quick, would improve some eye/head cases | Actively *wrong* for additive glow, alpha-lerp masks, specular, reflection, dot3 — and it *hides* which semantic was needed, worsening future diagnosis. | Read engine `TextureOperation` per stage; implement the dominant ~12 ops; log+fallback the rest (CODEX option (e)). |
-| **Per-asset hand-authored PS bytecode injection** (first move) | Would give true parity for authored D3D9 PS passes | Per-asset churn before the renderer can even express the engine's common material algebra; doesn't solve FFP-stage assets generically. | Do the generic FFP-stage generator first; treat authored-D3D9-PS translation/reauthoring as a **separate later track**. |
-| **`IDXGIOutput6` for gamma** | "Native" display-side gamma | Output/HDR-metadata oriented, not a portable per-swap-chain replacement for the D3D9 gamma ramp; won't reproduce the formula. | Fullscreen post-process color-correction/LUT pass using the D3D9 `pow()` formula. |
-| **Chasing the exterior "shard/stretched geometry"** as a parity blocker | Looks dramatic in `spotC_0014` | The skeletal twin was already fixed (`905fb5d64`); the remaining exterior shards in 0013/0014 were **captured mid-load** — some smear is LOD streaming, not a settled bug. | Re-capture fully-settled exterior frames first to separate transient LOD smear from a real bug before committing scope. |
-| **Fixing dither / hardware point-sprite size exactly** | Completeness | No clean D3D11 equivalent; negligible visual impact. | Document as accepted known limitations. |
-| **DPVS occlusion re-measure now** | It's a v2.0 deferral (SPEC R7) | Occlusion math is meaningless while geometry mis-shades; would corrupt the measurement. | Defer until after the asset-PS pipeline lands and geometry renders cleanly. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **In-tool TRE editing / repacking** | TRE Explorer & Swg.Explorer do it, so users assume parity | Doubles format risk (write path), turns a read-only diagnostic into a modding tool, invites "corrupted my install" bugs; out of scope for the stated purpose | Stay read-only; single-file extract is the most you should offer, and even that is optional |
+| **Full byte-level content diff of every file by default** | "Show me all the differences" | Requires decompressing every record in both installs (tens of thousands × 2); slow, memory-heavy, and the CRC already answers added/removed/changed | CRC/size fast-diff by default; decompress-and-diff only the single opened file |
+| **Asset rendering (mesh/texture preview, Collada export)** | Swg.Explorer does it; feels expected for an SWG tool | Pulls in the whole asset pipeline (mesh/shader/texture decode) — months of work orthogonal to "compare two installs"; that's the client's job | Leave to Swg.Explorer; the compare tool answers "which files differ", not "what does this asset look like" |
+| **Desktop-native rewrite (Electron/native) for "performance"** | Belief that web can't handle big trees | The data sizes (TOC metadata, not payloads) are modest; virtualised web rendering handles them, and "web app" is an explicit requirement | Virtual scroll + Web Worker for the parse/diff keeps the UI responsive in-browser |
+| **Live filesystem watching / auto-rescan** | "Re-diff when I patch" | Adds filesystem-access + state complexity for a one-shot diagnostic workflow | Manual "re-run compare" button; investigate-then-done, not continuous |
+| **N-way compare (3+ installs)** | "Why stop at two" | Multiplies the diff matrix and UI complexity; the use case is strictly pairwise (SWGSource vs whitengold) | Two-install compare only; revisit if a concrete 3-install need appears |
+| **`searchAbsolute` / loose-file overlays in v1** | The engine supports loose-file search paths above TREs | Real but a corner case for the diagnostic use case (both installs are TRE-driven); adds a second resolution mechanism | TRE-archive overlay only for MVP; flag loose-path support as a known v1.x gap |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Asset PS pipeline (PEXE→SM5 translate OR generated FFP texture-stage PS)
-    ├──unblocks──> Asset-textured surfaces (single-diffuse) [partial: simplest class first]
-    ├──unblocks──> Multi-stage texture sampling (detail/specular/overlay)
-    │                   ├──unblocks──> Character EYES (sul_eye.sht, 3-stage)
-    │                   ├──unblocks──> Character HEAD shape (sul_m_head.sht, 3-stage)
-    │                   └──unblocks──> Minimap round clip (uicanvas_radar.sht alpha-mask)
-    └──+ Pass::apply per-pass constants (material/textureFactor/scroll/stencil-ref/fog)
-            └──unblocks──> Particles / ribbon materials
+TRE archive parser (header + TOC + name block, zlib)
+    └──required by──> Set-level archive list
+    └──required by──> Merged virtual file tree (overlay resolution)
+                          └──requires──> client.cfg search-priority parse
+                          └──required by──> File-level diff (added/removed/changed)
+                                                └──required by──> Tree view + status badges
+                                                                      └──enhanced by──> Status filter
+                                                                      └──enhanced by──> Summary stats
+                                                                      └──enhanced by──> Overlay-shadowing view
 
-FFP lighting / material-source parity (light+material cbuffer)
-    └──fixes──> "blown-out flat white" interior lighting   [coupled to PS pipeline]
+File-level diff ──enables──> Hex view (decompress single record)
+                                  └──enhanced by──> IFF-aware preview (v2+)
 
-Gamma/tone LUT post-process pass   ── INDEPENDENT ──> sky/terrain/UI tone (cream wash)
-
-Load-screen seam (2D blit half-texel + getOneToOneUVMapping)  ── INDEPENDENT ──> seam
-
-Alpha-test compare function  ──folds-into──> Asset PS pipeline (PS key)
-Stencil state in DSS         ── INDEPENDENT-ish ──> decals/outlines/portals
+Virtualised tree rendering ──enhances──> Tree view  (mandatory at real data sizes)
 ```
 
 ### Dependency Notes
 
-- **Eyes / head / minimap all require the multi-stage PS.** They are the *same* root
-  cause (slot-0-only PS) — schedule them to be **verified together** the moment the
-  FFP-stage PS evaluator lands. Do not plan them as separate fixes.
-- **Single-diffuse surfaces may resolve before multi-stage.** The simplest material
-  class ("multiply a couple of ordinary textures with vertex color") is the first thing
-  the FFP-stage PS will get right — so char-select clothing/skin texture is a plausible
-  *early* win even before eyes.
-- **Gamma and the load-screen seam are independent** of the big blocker → schedule them
-  as parallel, low-coupling wins (good morale/canary milestones).
-- **"Blown-out white" lighting is coupled** to the PS/lighting cbuffer, but the **sky
-  cream-wash is the gamma LUT** — split the lighting requirement into the gamma half
-  (independent) and the FFP-lighting half (coupled).
-- **Particles depend on TWO things** (PS-gen *and* `Pass::apply` per-pass constants) →
-  necessarily later than the char-select beachhead.
+- **Everything depends on the parser.** It's the one irreducible piece; get the `'TREE'`/version/TOC/name-block decode exactly right against the engine source (cross-check with the swg_tre Rust crate). Confidence HIGH that the spec is fully known.
+- **Merged tree requires the client.cfg priority parse.** The overlay order is *config-driven*, not directory-driven. Reading `searchTree%d`/`searchPath%d` priorities from each install's `client.cfg` is a prerequisite for any correct file-level diff — without it the "later wins" resolution is wrong and the file-level view is misleading.
+- **File-level diff is cheap because CRC lives in the TOC.** This dependency *removes* a dependency: diff does NOT require a decompress pass. Only the optional hex/IFF view does.
+- **Virtual scroll is a hard dependency of "usable", not a nice-to-have.** Real merged trees are large enough that non-virtualised rendering is the difference between "modern tool" and "browser tab hangs".
 
 ---
 
 ## MVP Definition
 
-### Launch With (the character-select beachhead — first vertical slice)
+### Launch With (v1)
 
-- [ ] **Single-diffuse textured surfaces on the char-select avatar** — proves the FFP-stage PS binds real asset textures (essential; the whole pipeline's smoke test).
-- [ ] **Character EYES render correctly on char-select** — colored irises, occluded by head, not gray, not through-the-skull (the headline target; validates multi-stage sampling).
-- [ ] **Character HEAD shape correct on char-select** (`sul_m_head.sht`) — same multi-stage gap, same fix, free to verify alongside eyes.
+Minimum to satisfy the named requirement and serve the space-artifact diagnosis:
 
-### Add After Validation (extend the working PS pipeline outward)
+- [ ] **TRE parser** (header + zlib TOC + name block) — irreducible foundation
+- [ ] **client.cfg search-priority parse** — required for correct overlay order
+- [ ] **Set-level archive list + delta** (added/removed/size/version/file-count) — directly requested
+- [ ] **Merged virtual file tree per install with overlay resolution** — directly requested, the hard part
+- [ ] **File-level diff** (added/removed/changed via CRC+size) — the core value
+- [ ] **Tree view with status badges + folder roll-up** — table-stakes presentation
+- [ ] **Status filter + name/path search + summary stats** — usable at real data sizes
+- [ ] **Per-file detail panel** (winning archive, shadowed archives, size, CRC, compressor) — the diagnostic payoff
+- [ ] **Modern clean web UI + virtualised tree** — the explicit reason for building
 
-- [ ] **World/terrain textured surfaces + detail-blend multi-stage** — same pipeline, applied to the open world.
-- [ ] **Minimap round clip** — re-check after multi-stage lands (screenshot diff; do not pre-claim).
-- [ ] **Gamma/tone LUT post pass** — independent; can land in parallel any time (fixes sky wash).
-- [ ] **Load-screen seam fix** — independent; small isolated half-texel win + sampling canary (good early standalone).
-- [ ] **FFP lighting / material-source parity** — fixes blown-out interiors once the PS lighting path is wired.
+### Add After Validation (v1.x)
 
-### Future Consideration (after baseline parity)
+- [ ] **Hex view of a single selected file** — trigger: a CRC diff that needs byte-level inspection
+- [ ] **Single-file extract / download** — trigger: wanting the actual bytes outside the tool
+- [ ] **Permalink / shareable diff state** — trigger: collaboration / bug-thread sharing
+- [ ] **Loose-file (`searchAbsolute`) overlay support** — trigger: an install that overlays loose files above TREs
 
-- [ ] **Particles / ribbon** — needs PS-gen + `Pass::apply` constants; instrument the live draw path first.
-- [ ] **Stencil-dependent effects** (decals/outlines/portals).
-- [ ] **Bloom enable + alpha-fade/bloom packing**.
-- [ ] **Exterior geometry-distortion investigation** — only after a settled re-capture confirms it's real, not LOD smear.
-- [ ] **DPVS D3D11 remeasure** (SPEC R7) — only after geometry renders cleanly.
-- [ ] **Authored-D3D9-PS translation track** — separate, for passes that use real PS bytecode rather than FFP stages.
+### Future Consideration (v2+)
+
+- [ ] **IFF-aware chunk-tree preview** — defer: high effort; existing IFF viewers cover it standalone
+- [ ] **Structural IFF diff (chunk-tree diff of two file versions)** — defer: best-in-class but large; only after IFF preview exists
+- [ ] **N-way (3+ install) compare** — defer: no current use case beyond pairwise
+
+---
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Asset PS pipeline (generated FFP-stage PS) | HIGH | HIGH | **P1** (gates almost everything) |
-| Character eyes (char-select) | HIGH | (rides PS pipeline) | **P1** (headline) |
-| Single-diffuse textured surfaces | HIGH | (rides PS pipeline) | **P1** |
-| Multi-stage sampling (detail/specular/overlay) | HIGH | HIGH | **P1** |
-| Gamma/tone LUT post pass | MEDIUM | MEDIUM | **P2** (independent) |
-| Load-screen seam | LOW–MEDIUM | LOW–MEDIUM | **P2** (independent canary) |
-| Minimap round | MEDIUM | (likely rides PS pipeline) | **P2** (re-check, don't pre-claim) |
-| FFP lighting / material-source | HIGH | HIGH | **P2** |
-| Particles / ribbon | MEDIUM | HIGH | **P3** (needs PS-gen + Pass::apply) |
-| Stencil / bloom / alpha-test fidelity | LOW–MEDIUM | MEDIUM | **P3** |
-| Exterior geometry distortion | MEDIUM | (investigate) | **P3** (confirm real first) |
-| DPVS remeasure | LOW (internal) | MEDIUM | **P3** (after clean geometry) |
+| TRE parser (header/TOC/name block) | HIGH | MEDIUM | P1 |
+| client.cfg priority parse | HIGH | LOW | P1 |
+| Set-level archive list + delta | HIGH | LOW | P1 |
+| Merged virtual tree + overlay resolution | HIGH | MEDIUM | P1 |
+| File-level diff (CRC/size) | HIGH | MEDIUM | P1 |
+| Tree view + status badges + folder roll-up | HIGH | MEDIUM | P1 |
+| Status filter + search + summary stats | HIGH | LOW | P1 |
+| Per-file detail (overlay winner/shadowed) | HIGH | LOW | P1 |
+| Virtualised tree rendering | HIGH | MEDIUM | P1 |
+| Modern clean UI | HIGH | LOW-MEDIUM | P1 |
+| Hex view (single file) | MEDIUM | MEDIUM | P2 |
+| Single-file extract | MEDIUM | LOW | P2 |
+| Permalink / shareable state | MEDIUM | LOW-MEDIUM | P2 |
+| Loose-file overlay support | LOW-MEDIUM | MEDIUM | P2 |
+| IFF chunk-tree preview | MEDIUM | HIGH | P3 |
+| Structural IFF diff | HIGH | HIGH | P3 |
+| N-way compare | LOW | HIGH | P3 |
 
-**Priority key:** P1 = char-select beachhead / core blocker; P2 = extend outward + independent wins; P3 = post-baseline polish.
+**Priority key:** P1 = launch · P2 = add when possible · P3 = future.
 
-## Per-gap "what correct looks like" + recognition cheatsheet
+---
 
-| Gap | Recognize CORRECT by (vs D3D9) | Coupling |
-|-----|-------------------------------|----------|
-| Textured surfaces | Avatar clothing/skin shows diffuse texture, not flat white; no magenta slivers | Core PS blocker |
-| Eyes | Colored irises on the face, occluded by head, match selected eye color; not gray, not through-skull | Multi-stage PS (rides core) |
-| Head | Full head shape (e.g. Ithorian hammerhead), not simplified/clipped | Multi-stage PS (rides core) |
-| Lighting | Interior ambient+diffuse falloff, not blown-out white | FFP lighting (coupled to PS) |
-| Gamma/tone | Sunset sky tone, not cream wash | **Independent** LUT pass |
-| Multi-stage | Terrain detail blend visible; specular/overlay composite | Core PS blocker |
-| Minimap | Round disc + compass, not square/diamond | Multi-stage alpha-mask (likely rides core) |
-| Load-screen | Seamless fullscreen splash, no centerline line | **Independent** 2D blit half-texel |
-| Particles | Soft smoke/glow, not solid colored squares | PS-gen + Pass::apply (later) |
-| Ribbon/swoosh | Tapered trails, not stretched solid bands | Draw-path instrumentation first (NOT transform) |
+## Competitor Feature Analysis
+
+| Feature | TRE Explorer | Swg.Explorer | Our Approach |
+|---------|--------------|--------------|--------------|
+| Read TRE archive | Yes | Yes | Yes (parser mirrors engine + swg_tre) |
+| Multi-archive merged VIEW | Partial | Yes (combined view) | Yes — but as a *resolved overlay*, not a flat union |
+| Install-vs-install COMPARE | No | No | **Yes — the differentiator** |
+| Per-file added/removed/changed | No | No | **Yes (CRC/size, no decompress)** |
+| Overlay-shadowing (winner vs masked) | No | No | **Yes — serves the space-artifact diagnosis** |
+| Search across files | No | No | **Yes** |
+| File preview (IFF/STF/mesh) | Yes | Yes | Defer (P3) / leave to existing tools |
+| Edit / repack | Yes | No | **No (anti-feature — read-only)** |
+| Modern UI | No (WinForms) | No (2000s MonoGame) | **Yes (web, virtualised) — the explicit ask** |
+| Platform | Windows desktop | Windows desktop | **Web app** |
+
+---
+
+## Dependencies on existing assets
+
+- **TRE parser reference:** the *authoritative* spec is THIS repo's engine — `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp` and `TreeFile_SearchNode.{h,cpp}` (header struct, TOC entry, zlib decode, search-priority install). Cross-check with the `swg_tre` Rust crate and Swg.Explorer's C# reader. **Note:** the PROJECT.md pointer to `D:/Code/swg-tools` (swg-blender tre extract/repack) is stale — that path does not exist on disk; the live tre tooling reference is `D:/Code/swg-blender-plugin` plus the engine source above. (Confidence: HIGH for the engine source — read directly; the swg-tools path was confirmed absent.)
+- **Real input data for the first use case:** two installations on disk — `D:/Code/SWGSource Client v3.0` (confirmed present) and the whitengold/retail data set. Both supply `.tre` archives + a `client.cfg` defining search priority.
+- **Standalone, outside the boot invariant:** PROJECT.md is explicit that the TRE tool is a standalone web app, NOT bound by the "bootable to character select under rasterMajor 5 and 11" invariant. It can use any modern web stack independent of the C++ client.
+
+---
 
 ## Sources
 
-- `docs/research/phase12-baseline/COMPARISON.md` — authoritative 5-bucket gap catalogue with matched D3D9/D3D11 image evidence (HIGH).
-- `.planning/phases/11-d3d11-renderer-plugin/11-SUMMARY.md` — Phase 11 closeout, Phase 12 successor scope, eyes/head/minimap/particle/ribbon classification (HIGH).
-- `.planning/phases/11-d3d11-renderer-plugin/11-09.15-CODEX-CONSULT-iter44-pipeline-deepdive.md` (+ `-RESPONSES`) — full D3D9→D3D11 pipeline gap inventory + PS-gen recommendation; the single richest source (HIGH).
-- `src/engine/client/application/Direct3d11/src/win32/Direct3d11_StaticShaderData.h` — confirms slot-0-only PS, 8-stage SRV binding, "gray eyes" diagnosis (HIGH, code).
-- `src/engine/client/library/clientUserInterface/src/shared/widget/CuiWidgetGroundRadar.cpp` + `clientTerrain/.../ClientProceduralTerrainAppearance_Radar.cpp` — radar offscreen-texture + `uicanvas_radar.sht` circular-alpha-mask clip mechanism (HIGH, code).
-- `src/engine/shared/library/sharedGame/src/shared/core/CustomizationManager.cpp` + `clientGraphics/.../CustomizableShader.cpp` — eye color is `pn_hum_eyes` palette-driven customization (CustomizableShader hue), not an animated shader (HIGH, code).
-- `src/engine/client/library/clientGame/src/shared/core/Game.cpp` (Backdrop/Splash mediators) + `CuiLoadingManager.cpp` — load screen is a fullscreen UI image on the 2D canvas blit path (HIGH, code).
-- Project memories: `project_open_runtime_issues_2026_05_25` (eyes flagged v2.2), `project_phase11_minimap_never_round`, `project_phase11_close_pass_with_deferrals`, `project_phase12_visual_baseline` (HIGH).
+- **Engine source (authoritative, HIGH):** `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp`, `TreeFile_SearchNode.h`, `TreeFile_SearchNode.cpp` (this repo) — TRE header/TOC/CRC/zlib/search-priority semantics read directly.
+- [Swg.Explorer (wverkley)](https://github.com/wverkley/Swg.Explorer) — combined-view TRE viewer, IFF/STF preview, Collada export (C#/MonoGame).
+- [TRE Explorer (MTGUli)](https://github.com/MTGUli/TREExplorer) / [ilikenwf fork](https://github.com/ilikenwf/TREExplorer) — archived WinForms modding tool (TOC view/extract/edit/repack).
+- [swg_tre (Rust crate)](https://lib.rs/crates/swg_tre) — TRE read/write library; parser cross-reference + compressor-code confirmation.
+- [Beyond Compare folder-compare filtering docs](https://documentation.help/BeyondCompare4/dir_filtering_the_view.html) — show-orphans / hide-identical / structure filters (status-filter UX pattern).
+- [WinMerge folder-compare manual](https://manual.winmerge.org/en/Compare_dirs.html) — expandable tree, show-identical toggle, recursive tree view (tree-badge UX pattern).
+- [SWG IFF Viewer (VS Code, WPS)](https://marketplace.visualstudio.com/items?itemName=WastedPotentialStudiosLLC.swg-iff-viewer) + [WPS Toolchain dev tools](https://swgnb.com/dev-tools/) — modern dark webview IFF chunk-tree inspection (proves the "modern UI" bar + the deferred IFF-preview feasibility).
+- [EA IFF 85 standard](https://wiki.amigaos.net/wiki/EA_IFF_85_Standard_for_Interchange_Format_Files) — FORM/nested-chunk structure underlying SWG `.iff` assets (for the deferred IFF-preview tier).
 
 ---
-*Feature research for: D3D11 visual parity (char-select beachhead → open world)*
-*Researched: 2026-05-27*
+*Feature research for: web-based TRE compare tool (v2.3 Hardening)*
+*Researched: 2026-06-12*

@@ -1,331 +1,351 @@
 # Pitfalls Research
 
-**Domain:** D3D9 -> D3D11 asset pixel-shader + visual-parity porting in the SWG/whitengold legacy game-engine client (`gl11_d.dll` plugin; `gl05_d.dll` D3D9 is the known-good reference)
-**Researched:** 2026-05-27
-**Confidence:** HIGH (most pitfalls are *already-confirmed in this engine* — Phase 11 iteration log + memory record + direct code reads; D3D9-vs-D3D11 semantic facts cross-checked against the live plugin source and D3D9 sibling)
+**Domain:** v2.3 Hardening — web-based SWG TRE compare tool + in-client hardening fixes (DPVS config-gate, instrumentation removal, machine portability, re-entrancy guard, D3DXCompileShader→D3DCompile port)
+**Researched:** 2026-06-12
+**Confidence:** HIGH for the TRE-format and client-hardening pitfalls (derived from the in-tree authoritative parser source + the existing handoff/memory records); MEDIUM for the cross-distribution TRE-variant claims (community-distribution variance is real but under-documented publicly); HIGH for the D3DCompile API-difference pitfalls (MS docs + in-tree D3D9 source).
 
-> **Scope note for the roadmapper:** This is a parity port, not a clean-room shader rewrite. The single most important meta-pitfall is **"correct by D3D11 spec" != "matches D3D9 output."** The engine and its assets were authored against D3D9 behaviour (including bugs — see the deliberate `Compare[]` swap). Every D3D11 decision must be validated against the D3D9 sibling's *actual* behaviour, not against what the API "should" do. Phase ordering should follow the COMPARISON.md beachhead: character-select textures + eyes first, then world.
-
----
+> **Authoritative reference for the TRE tool:** the engine's own parser is the spec. Read these before writing any TRE reader:
+> - `src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode.h` — `SearchTree::Header` / `SearchTree::TableOfContentsEntry` / `SearchTOC::Header` structs (the on-disk layout)
+> - `src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode.cpp` — the actual read/decompress/binary-search logic
+> - `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp` — `fixUpFileName` (path normalization), `searchNodePriorityOrder` (precedence), `installSearches` (cfg key parsing)
+> - `D:/Code/swg-tools` swg-blender tre extract/repack — a second, independently-written reader to cross-check against.
 
 ## Critical Pitfalls
 
-### Pitfall 1: Gamma DOUBLE-correction — the "blown-out flat white" prime suspect
+### Pitfall 1: Hardcoding the TRE version and rejecting valid archives (or accepting garbage)
 
 **What goes wrong:**
-D3D11 interiors render as washed-out flat white (COMPARISON.md bucket 2), while D3D9 shows correct ambient/diffuse interior lighting and atmospheric haze. The naive D3D11 fix — "use an `_SRGB` backbuffer/SRV so colours are correct" — makes it *worse*, because it linearises on sample AND on output where the content never expected either.
+The reader assumes one TRE layout and either FATALs on a legitimate archive from a different SWG distribution, or silently mis-parses one whose header it doesn't actually understand.
 
 **Why it happens:**
-D3D9 in this engine applies gamma **only at scanout**, via `IDirect3DDevice9::SetGammaRamp` (a hardware LUT on the way to the monitor — `Direct3d9.cpp:2198 setBrightnessContrastGamma`), and it explicitly sets **`D3DSAMP_SRGBTEXTURE = 0`** (`Direct3d9_StateCache.cpp:193,424`) so textures are sampled **raw** (no de-gamma on read) and the framebuffer is a plain `B8G8R8A8_UNORM` non-sRGB surface. All shader math runs in the texture's native (gamma) space; the ramp is a final cosmetic curve. D3D11/DXGI has **no `SetGammaRamp` equivalent** for the swapchain, so a porter is tempted to instead: (a) make the backbuffer `_SRGB`, and/or (b) sample textures through `_SRGB` SRVs, and/or (c) add an output LUT — and if more than one of those is applied, colours are corrected twice -> blown out. The current plugin has gamma as a **no-op stub** (`Direct3d11.cpp:253 setBrightnessContrastGamma_impl`) and uses **non-sRGB** formats everywhere (backbuffer `DXGI_FORMAT_B8G8R8A8_UNORM` at `Direct3d11_Device.cpp:313`; texture table is all `_UNORM`, zero `_SRGB`, at `Direct3d11_TextureData.cpp:56-77`), so today there is *no* gamma curve at all — interiors look flat-white partly because the LUT that D3D9 applies is simply missing, and partly because PS lighting is stubbed (Pitfall 5/9).
+The SWG `TREE` format is versioned in the header's second field (`Tag version`). The in-tree client validates `header.version < TAG_0004 || header.version > TAG_0004` in `SearchTree::validate` (only `'0004'`) **but the constructor accepts both `TAG_0004` and `TAG_0005`** (`TreeFile_SearchNode.cpp:278-279`) and FATALs on anything else. There is also a completely separate `TOC` container format (`TAG3(T,O,C)`, version `TAG_0001`) with a *different* header struct and a *different* `TableOfContentsEntry` layout (`SearchTOC::Header` / `SearchTOC::TableOfContentsEntry`). Community distributions (SWGEmu, SWGSource, retail NGE, pre-CU) were repacked by different tools over ~20 years and ship a mix of `0004`/`0005` TREEs and occasional `.toc`+TRE-set bundles. A reader that hardcodes one struct silently reads the wrong fields.
+
+**The two on-disk layouts (from the in-tree structs — these ARE the spec):**
+- **TREE v0004/v0005 `TableOfContentsEntry`** (24 bytes, all 32-bit): `crc, length, offset, compressor, compressedLength, fileNameOffset`. Header has `tocOffset, tocCompressor, sizeOfTOC, blockCompressor, sizeOfNameBlock, uncompSizeOfNameBlock`.
+- **TOC v0001 `TableOfContentsEntry`** (different!): `uint8 compressor, uint8 unused, uint16 treeFileIndex, uint32 crc, uint32 fileNameOffset, uint32 offset, uint32 length, uint32 compressedLength`. AND in the `.toc` the on-disk `fileNameOffset` field actually stores a **name length**, post-processed into a running offset after load (`TreeFile_SearchNode.cpp:687-699`). Getting this wrong shifts every filename.
 
 **How to avoid:**
-Replicate D3D9's model exactly: **sample raw (non-sRGB SRVs), do all math in gamma space, apply the brightness/contrast/gamma curve ONCE as a final full-screen post-process** (a fullscreen pass over the rendered backbuffer using the same `pow(0.5 + contrast*((f*brightness)-0.5), 1/gamma)` formula from `Direct3d9.cpp:2207`, or a 256-entry 1D LUT built from it). Do **not** flip the backbuffer or texture SRVs to `_SRGB` as a shortcut — that changes sampling and blending math the assets never expected. Keep `D3DSAMP_SRGBTEXTURE`-off parity: the D3D11 samplers are already raw, leave them raw. Separate this from the PS-lighting work: the LUT may be independent of the asset-PS bug (COMPARISON.md explicitly says "track separately in case the LUT is independent").
+Branch on `(token, version)` exactly like the engine: dispatch `TREE/0004`, `TREE/0005`, `TOC/0001` to distinct parsers; on an unknown `(token,version)` surface a clean "unsupported TRE variant vX in <file>" diagnostic, never a crash and never a best-effort guess. Validate `numberOfFiles`, `sizeOfTOC`, and name-block sizes against the actual file length before allocating.
 
 **Warning signs:**
-- Whole scene uniformly brighter/whiter than D3D9, *including* UI and load screens (a global curve problem, not a per-material one).
-- Toggling an sRGB SRV makes mid-tones shift in the wrong direction (double-correction).
-- Dark areas crush to black while highlights blow out (an sRGB-applied-twice S-curve signature).
-- `setBrightnessContrastGamma_impl` still a no-op while the scene is too bright -> the missing LUT, not double-correction; if you've *added* a LUT and it's still too bright, suspect a second correction sneaking in via format.
+Filenames come out shifted/garbled by a constant; CRCs don't match the names; one distribution's archives parse and another's produce nonsense; an allocation size read from the header is implausibly large (multi-GB) — that's a wrong-struct read, not a huge archive.
 
-**Phase to address:**
-Dedicated **Gamma/LUT + lighting** phase, sequenced *after* the asset-PS pipeline lands on character-select (so you're correcting a correctly-shaded image, not a magenta one). Verify on the character-select screen + a known interior A/B against D3D9.
+**Phase to address:** TRE-tool foundation phase (format reader / model layer), before any UI.
 
 ---
 
-### Pitfall 2: Half-texel offset — the load-screen centerline seam (D3D9 -0.5 rule, removed in D3D10+)
+### Pitfall 2: Getting search-path precedence backwards in the merged virtual tree
 
 **What goes wrong:**
-A faint vertical seam appears dead-center (x~512) on D3D11 load screens (COMPARISON.md bucket 5). Confirmed **image-independent and renderer-specific** — many D3D11 splashes show it, ~20 D3D9 load-ins never did — so it's a path-level sampling/blit bug, not a bad texture.
+The merged-virtual-tree diff resolves each logical file to the *wrong* physical archive, so "added/removed/changed" verdicts are inverted or attributed to the wrong TRE. The whole tool's core value (a trustworthy diff) is then quietly wrong.
 
 **Why it happens:**
-D3D9's rasterizer placed pixel centers at integer coordinates, so fullscreen blits and screen-space UI needed the canonical **-0.5 texel offset** on output vertex positions to align texels to pixels. D3D10+ moved pixel centers to (x+0.5, y+0.5) and **removed the -0.5 rule**. The SWG load screen is drawn as **two side-by-side halves** (the splash exceeds max single-texture width), so each half is a screen-space quad; if the engine's screen-space vertex positions still carry the D3D9 half-pixel bias (or the D3D11 path fails to account for the convention change), the shared inner edge of the two halves samples a half-texel off, leaving a seam exactly at center. With clamp addressing, the seam is a duplicated/missing column; with wrap, it can be a colour bleed.
+SWG's override semantics are non-obvious and easy to invert. The engine's rule (`TreeFile.cpp`):
+- Search nodes are ordered by `searchNodePriorityOrder`: **`a->getPriority() > b->getPriority()`** — i.e. **higher priority number is searched FIRST** (it's at the front of the list).
+- The config keys are `searchTree<priority>`, `searchPath<priority>`, `searchTOC<priority>` (optionally with a `_NN_` SKU infix); `installSearches` walks `priority` 0..`maxSearchPriority` (default 20). Within the same priority, **same-priority nodes are inserted AFTER existing matches** (`std::lower_bound` + the "insert after last priority match" comment) — so among equal priorities, *config/parse order wins ties*, first-listed resolves first.
+- `TreeFile::open` walks the list front-to-back and returns the **first** node that has the (non-deleted) file. So the *winner* is the highest-priority-number node, then earliest-listed at that priority.
+
+A naive implementation that sorts ascending, or that treats "later searchTree entry overrides earlier," or that ignores the priority number entirely and just uses archive filename order, will resolve backwards.
 
 **How to avoid:**
-Decide the convention **once**, centrally: either (a) bake the half-pixel adjustment into the screen-space/UI viewport-to-clip transform (the `setViewport` c9 `viewportData` already does the screen-space->clip mapping at `Direct3d11_StateCache.cpp:1504-1511` — that's the right single chokepoint), or (b) ensure the two-half blit uses **clamp** addressing with UVs computed so the inner edges share exactly the texel boundary. Do NOT scatter +0.5 fudge factors into individual draw paths. Use the load screen as the deterministic isolation harness (no 3D, no skinning, no lighting) before touching in-world UV math.
+Model resolution as: stable-sort nodes by `(priority DESC, parseOrder ASC)`, then first-match-wins, exactly mirroring `addSearchNode` + `open`. Unit-test against a known retail `client.cfg`'s actual `searchTree*`/`searchPath*` ordering and confirm the tool's "winner" for a file matches what `TreeFileExtractor`/the client actually loads.
 
 **Warning signs:**
-- One-pixel-wide seam/duplication at a texture-tile boundary, stable across different images.
-- UI text/icons look subtly soft or shifted half a pixel vs D3D9 (same root cause leaking into the HUD).
-- Seam moves or vanishes when you nudge the viewport `viewportData` offsets by a half-texel — confirms the convention is the lever.
+Patch/override TREs (which are *supposed* to win) show as "shadowed"; the base data TRE shows as the live source for files a patch clearly replaces; flipping two archives in the input changes nothing (means you're ignoring precedence) or flips everything (means you inverted it).
 
-**Phase to address:**
-**Load-screen / 2D-blit phase** (small, isolated, deterministic — good standalone win and sampling-path canary). Owns the screen-space->clip half-pixel convention for the whole 2D path. Verify: zone repeatedly, confirm no seam on multiple splash images, and confirm HUD text crispness matches D3D9.
+**Phase to address:** TRE-tool merged-virtual-tree phase.
 
 ---
 
-### Pitfall 3: Matrix transpose at cbuffer upload — the dual-convention trap (ALREADY HIT, will recur)
+### Pitfall 3: Reading the wrong searchPath set — inventing your own instead of parsing `client.cfg`
 
 **What goes wrong:**
-Any matrix uploaded to a D3D11 cbuffer without `XMMatrixTranspose` produces catastrophic clip-space coordinates — the "radial-fan stretched-sliver" symptom that uniformly broke all in-world geometry at Iter-38A (resolved Iter-38B).
+The tool globs `*.tre` from the install directory in alphabetical/filesystem order and calls that the search set. The real client only loads the archives named by `searchTree*`/`searchPath*`/`searchTOC*` keys in `[SharedFile]`, in the priority order above — and SKU-gated keys (`searchTree_00_0`, `_01_`, …) are conditionally included based on account SKU bits. A directory glob includes archives the client never loads and omits the priority semantics entirely.
 
 **Why it happens:**
-The SOE engine builds matrices in **column-vector convention** (translation in the last *column*, e.g. `Transform.getMatrix()[*][3]`), but HLSL bytecode compiled with `D3DCOMPILE_PACK_MATRIX_ROW_MAJOR` does **row-vector left-multiply** (`pos_row * M`). These are duals: `pos_row * stored` only equals `M * pos_col` when `stored = transpose(M)`. This is a downstream-of-packing issue — and it is a *known consult trap*: the row/col-major packing hypothesis "checks out" (the `#pragma`/`row_major` disassembly looks right) while the actual content-vs-multiply dual is the real bug. CODEX+Cursor both missed it twice before empirical clip.w instrumentation forced the conclusion.
+It's far easier to enumerate the directory than to parse the SWG `.cfg` format (INI-ish but with repeated keys, `key=value` accumulation by index, `[Section]`s, and `@import`/`@include`-style chaining in some configs). The repeated-key accumulation (`getKeyString(section, key, index, default)`) is the part people miss — multiple `searchTree0=...` lines all coexist.
 
 **How to avoid:**
-**Every** matrix added to any D3D11 cbuffer (WVP, World, and any *new* one — bone palettes, shadow/reflection projections, texture matrices) MUST be `XMMatrixTranspose`'d before `XMStoreFloat4x4`. Canonical pattern: `composeSlot0Shadow` in `Direct3d11_StateCache.cpp`. Do not be reassured by `D3DCOMPILE_PACK_MATRIX_ROW_MAJOR` being set or `row_major` appearing in disassembly — those describe *packing*, not the multiply convention.
+Parse the actual `client.cfg` (and any chained configs) `[SharedFile]` section: collect all `searchPath<P>[_SKU_]`, `searchTree<P>[_SKU_]`, `searchTOC<P>[_SKU_]` keys with their repeated values, reconstruct the priority-ordered node list. Offer a directory-glob mode only as an explicit fallback clearly labeled "all archives on disk (not load order)". Treat the `.cfg` as the source of truth for *which* archives and *in what order*.
 
 **Warning signs:**
-- Geometry collapses to a fan from the origin, or stretches into slivers toward a point.
-- A new matrix-driven feature (skeletal bones, projected shadows, scrolling-texture matrix) renders garbage while the rest of the scene is fine — you added a cbuffer matrix and forgot the transpose.
-- clip.w goes hugely negative for vertices that should be in front of the camera.
+The tool's archive list differs from `TreeFile`'s reportTreeFilePaths debug dump; SKU/locale archives appear that the user's account never loads; two installs with identical files but different `.cfg`s diff as "identical" (you ignored the cfg).
 
-**Phase to address:**
-Cross-cutting; flag in **any** phase that adds a cbuffer matrix. Particularly the **skeletal/eyes** phase (bone matrices) and any **reflection/shadow** work. Verify by capturing a known WVP and checking clip.w sign both ways (`M*pos` vs `pos*M`).
+**Phase to address:** TRE-tool config-ingestion phase (precedes virtual-tree).
 
 ---
 
-### Pitfall 4: PS-input ⊆ VS-output is a HARD linkage contract, by semantic AND register position (ALREADY HIT)
+### Pitfall 4: Case-sensitivity and path-normalization mismatch in the virtual tree
 
 **What goes wrong:**
-Draws silently vanish (all black) or get rejected by the runtime when the pixel shader declares an input the vertex shader doesn't output at the *exact* semantic index AND hardware register. Iter-1 of the dynamic-PS work produced **483,451 `id=342` errors/session**; the register-position fix still left **65,034 `id=343`/session** until the PS was generated register-for-register from the VS reflection.
+The same logical asset appears as two different entries (`appearance/Mesh.msh` vs `appearance/mesh.msh`, or `texture\font\x` vs `texture/font/x`), so the diff reports spurious add/remove pairs, and CRC-based lookups miss.
 
 **Why it happens:**
-D3D9 was permissive about shader linkage; D3D11 enforces `D3D11_FATAL_INPUT_SUBSET` — the PS input signature must be a subset of the VS output signature, matched by semantic name+index **and** by the hardware register the compiler assigned. The engine ships *pre-compiled D3D9 PEXE bytecode* that `CreatePixelShader` rejects, so the plugin **generates** a PS per VS. A hand-authored or "one-size" fallback PS will mismatch most VSes' output layouts.
+SWG internal paths are **case-insensitive and slash-normalized**, but the *stored* name-block bytes preserve whatever case the packer used. The engine canonicalizes every lookup through `fixUpFileName` (`TreeFile.cpp:511`): lowercases all chars, converts `\`→`/`, strips leading `\`,`/`,`./`,`../`, and collapses repeated slashes. The TOC binary search then compares with `_stricmp` after a CRC match. A tool that compares raw stored names byte-for-byte will treat case/slash variants as distinct files; one that lowercases for comparison but displays the raw name is correct.
 
 **How to avoid:**
-Keep the established Bucket-2 approach: reflect each VS's output signature, sort outputs by `Register`, and generate the PS input struct **register-for-register** (the compiler assigns PS inputs in declaration order). See `Direct3d11_PixelShaderProgramData.cpp:350-513`. Cache compiled PS by VS bytecode hash; tombstone compile failures. When extending the generator (e.g. to add lighting/multi-stage sampling), preserve the reflection-driven input struct — don't hardcode `TEXCOORD0 at v0`.
+Apply the exact `fixUpFileName` normalization (lowercase, `\`→`/`, strip `./`,`../`,leading-slashes, collapse `//`) to produce the *key* for virtual-tree matching and for CRC computation, but retain the original-case stored name for display. Match the engine's `_stricmp` tie-break semantics. Do NOT assume the name block is unique or sorted by name — it's sorted by CRC, then name.
 
 **Warning signs:**
-- `d3d11-debug.log` floods with `id=342` (semantic subset violation) or `id=343` (register-position mismatch).
-- A specific asset class renders black/invisible while others are fine (its VS has an output layout the generator mishandles).
-- `PSInvocations == 0` despite non-zero `CPrimitives` (draws submitted, nothing shaded).
+Diffs full of "renamed" pairs that differ only in case/slashes; CRC verification fails on files that clearly exist; the same asset listed twice in a single archive's tree view.
 
-**Phase to address:**
-**Asset-PS pipeline** phase (the #1 blocker, owns the generator). Any later phase that touches PS generation must re-run the `id=342/343 == 0` gate. Verify via InfoQueue drain to `stage/d3d11-debug.log`.
+**Phase to address:** TRE-tool virtual-tree phase (the normalization layer is shared with Pitfall 2).
 
 ---
 
-### Pitfall 5: Magenta fallback masking the real PS gap — "geometry shows, so shading must be close" fallacy
+### Pitfall 5: Eager full-archive hashing — memory blowup and minutes-long diffs
 
 **What goes wrong:**
-Surfaces render flat-white/mauve where D3D9 shows full diffuse textures, with scattered **magenta patches** (COMPARISON.md bucket 1). It's tempting to treat the magenta as a few stray bad shaders; in reality the magenta is the *universal fallback PS* firing wherever the per-VS generator can't produce a correct sampling body, and the flat-white surfaces are the generator producing a body that samples but does **no material/lighting/multi-stage math**.
+Comparing two installs (~30+ archives × tens of thousands of records each) by decompressing and MD5-hashing every file eagerly turns a "should be seconds" set-delta into a multi-minute, multi-GB-RAM operation, and can OOM the browser/Node process.
 
 **Why it happens:**
-The dynamic PS generator currently emits only: `t.Sample(s, uv)`, `tex*color0` modulate, vertex-color passthrough, or magenta (`Direct3d11_PixelShaderProgramData.cpp:447-509`). It binds **diffuse at slot 0** and (since Iter-44E) other stages at slots 1..7 (`Direct3d11_StaticShaderData.cpp:717-736`) — but the generated PS **does not sample slots 1..7**, ignores `material`/`textureFactor`/`textureScroll`, and does no lighting. So multi-stage materials (eyes, terrain detail blends, specular/normal/glow, the round minimap mask) look wrong even though "textures appear." VSes lacking `TEXCOORD0` (vertex-color-only UI, particles, debug lines, non-UV coordinate gen) fall to magenta.
+The "compare two installs" framing tempts a content-hash-everything approach. But the TRE TOC **already carries per-entry metadata that answers most diff questions without decompressing anything**: each `TableOfContentsEntry` has `crc` (a CRC of the *path*, not the content — see Pitfall 6), `length` (uncompressed), `offset`, `compressor`, `compressedLength`. Two same-named entries with identical `length` + `compressedLength` + identical compressed bytes are almost certainly identical; content hashing is only needed to disambiguate the rare collision or to *prove* equality. Decompressing 30 archives × 50k files to MD5 each is the brute-force path.
 
 **How to avoid:**
-Treat "textured but wrong" and "magenta" as the **same** unfinished-PS-pipeline problem, not two bugs. Prioritise a generator (or a real asset-PS bridge) that consumes the engine's `ShaderImplementation` pass description: multi-stage texture combiners, `material`/`textureFactor` constants, alpha-test, and lighting. Mirror the D3D9 sibling's `Pass::apply` + `Stage::apply` constant uploads (`Direct3d9_StaticShaderData.cpp`). Use the lifetime counters already in place (`s_passesWithSampler0TextureResolved`, `ms_drawsWithSRV0Bound`, Iter-44E multi-stage log) to see which assets exercise slots > 0.
+Tiered comparison: (1) set-level archive delta from the TOC alone (present/absent, size deltas) — no decompression; (2) file-level "changed" detection from `(length, compressedLength)` and a cheap hash of the *compressed* bytes (skip the zlib expand); (3) only fall back to decompress-and-content-hash for entries that are ambiguous or that the user explicitly drills into. Stream from the archive (seek to `offset`, read `compressedLength`) rather than loading whole TREs into memory. Cap concurrency.
 
 **Warning signs:**
-- Eyes render gray/through-the-head; minimap stays square; specular/glow absent — all multi-stage-sampling tells.
-- Magenta correlates with non-textured geometry (particles, lines, UI fills) -> generator hit the magenta branch.
-- `Iter-44E multi-stage` log shows `maxSlot > 0` with `_` (present but unresolved) entries.
+Comparing two installs spins for minutes; RAM climbs to GB; the tool reads every archive fully before showing anything; progress is all-or-nothing instead of incremental.
 
-**Phase to address:**
-**Asset-PS pipeline** phase, with **multi-stage sampling** as a tightly-coupled sub-area (and **minimap** + **eyes** as acceptance cases). Verify against D3D9 A/B on character-select first (eyes), then world.
+**Phase to address:** TRE-tool diff-engine phase (design the tiering up front; retrofitting laziness is painful).
 
 ---
 
-### Pitfall 6: Render-state defaults silently diverge from D3D9 (per-pass blend / depth / alpha-test / color-write)
+### Pitfall 6: Misusing the TOC `crc` field as a content checksum
 
 **What goes wrong:**
-Subtle parity drift: content that should be opaque is translucent (or vice-versa), eyes/decals depth-fail "through the back of the head," washed-out particles. A *global* blend-default-on (Iter-32A) once masked the matrix bug AND washed world content — a classic "fixed one symptom, introduced another."
+The tool reports files as "unchanged" because their TOC `crc` matches, when in fact the *contents* differ — or it tries to verify file integrity with `crc` and is confused when it never matches the data.
 
 **Why it happens:**
-D3D9 pushes per-pass render states via `RSB/RSM` writes (`ZENABLE`, `ZWRITEENABLE`, `ZFUNC`, `COLORWRITEENABLE`, blend factors, alpha-test). D3D11 has **immutable state objects** and **no fixed-function alpha-test**, so a porter must (a) translate each engine pass's state into BS/DSS/RS descriptors per draw, and (b) emulate alpha-test in the PS via `clip()`. If the per-pass apply site is wrong, *install-time defaults* leak onto every draw. The engine has a dead `Direct3d11_ShaderImplementationData::apply()` (no virtual base — nothing calls it); the **real** per-draw apply site is `Direct3d11_StaticShaderData::apply(passNumber)` (`:587`). Wiring state to the dead method = silent no-op using defaults.
+The `crc` field in `TableOfContentsEntry` is `Crc::calculate(fileName)` — a CRC of the **normalized path string**, used as the primary key for the binary search (`localExists`: compare `crc`, then `_stricmp` the name on collision). It is NOT a checksum of the file's bytes. Two archives can have the same path-CRC for the same filename while the file contents differ entirely (that's the whole point of an override TRE). The format carries `length`/`compressedLength` but **no content checksum/MD5 field at all**.
 
 **How to avoid:**
-Route all per-pass state through `Direct3d11_StaticShaderData::apply` (blend enable `:639`, alpha-test `:660`, depth enable/write/compare `:675-677`, color-write `:684`). **Mirror the D3D9 sibling's actual mapping**, including the deliberate `Compare[]` swap (see Pitfall 7). Note the per-pass blend *factors* re-land (Iter-44C) was correctly **reverted** — it amplified the multi-stage-PS gap; do NOT re-enable blend factors until the PS pipeline samples slots 1..7 correctly. State objects are hash-cached (`getOrCreateBS/DSS/RS`), so **zero-initialise every descriptor** (`= {}`) before filling — uninitialised padding poisons the cache key and explodes the cache (Plan 11-06 Risk #3).
+Treat `crc` strictly as a path-identity key (and a fast equality pre-filter for the binary search). For genuine content-equality, compare `(length, compressedLength)` first, then the actual (compressed or decompressed) bytes. Document clearly in the UI that "changed" is content-based, not crc-based.
 
 **Warning signs:**
-- A pass renders with default depth (LESS_EQUAL, write-all) when the asset wanted Z-disabled/Always -> "eyes through head."
-- Re-enabling blend factors brightens/whitens the scene (snow patches, bigger white particles — the Iter-44C regression signature).
-- State-object cache count balloons (a `getOrCreateBS` miss per draw) -> a descriptor field isn't zeroed.
+Files with obviously different sizes report "same crc → unchanged"; integrity checks using `crc` always fail against the data bytes; an override TRE's replacement files show as identical to the base.
 
-**Phase to address:**
-Folded into **asset-PS pipeline** (state travels with the pass) and revisited in **particles/ribbon**. Verify: A/B the eye pass and a known alpha-tested foliage/decal vs D3D9; watch state-object create counts in `Direct3d11_Metrics`.
+**Phase to address:** TRE-tool diff-engine phase.
 
 ---
 
-### Pitfall 7: "Fixing" the deliberate Compare[] swap (and other authored-against-bug behaviours)
+### Pitfall 7: Windows file-locking the live install while the game is running
 
 **What goes wrong:**
-Someone sees `C_GreaterOrEqual -> D3D11_COMPARISON_NOT_EQUAL` and `C_NotEqual -> D3D11_COMPARISON_GREATER_EQUAL` in `translateCompare` (`Direct3d11_StaticShaderData.cpp:169-170`), assumes it's a typo, "fixes" it to match the enum names — and breaks content that's been authored against the swap for years.
+The tool opens TREs without share-read, or holds exclusive handles, and either fails to open archives the running client has mapped, or blocks the client / gets blocked. The TRE tool's first real use case (SWGSource-vs-whitengold space-asset diff) is exactly the scenario where someone has the client running.
 
 **Why it happens:**
-The D3D9 sibling's `Compare[]` table (`Direct3d9_ShaderImplementationData.cpp:31-40`) has these two entries swapped relative to the enum comments. Assets (depth/alpha/stencil compare funcs) were authored against that *actual* behaviour. The enum comments lie. CODEX flagged this in the Iter-44 deep-dive; the swap is **intentional parity**, not a bug to fix.
+Default file-open modes on Windows can request exclusive access; a long-lived read handle held across the whole diff keeps the file busy. The client opens its TREs read-mostly but a careless writer-mode or non-shared open from the tool collides.
 
 **How to avoid:**
-Treat the D3D9 sibling's runtime behaviour as ground truth over enum comments / API "correctness." Mirror any Compare-based translation (depth func, alpha-test func, stencil func) including the swap. More broadly: before "correcting" any D3D11 mapping, diff against the D3D9 sibling and ask "would this change what the asset sees?"
+Open every TRE **read-only with FILE_SHARE_READ|FILE_SHARE_WRITE** (Node: plain `'r'` read streams are fine; if using native handles, set share flags explicitly). Never open for write. Read-seek-close per entry instead of holding handles open for the whole session where practical. Treat the install dirs as strictly read-only inputs.
 
 **Warning signs:**
-- A depth/stencil/alpha-test "cleanup" commit changes how foliage/decals/transparency sort or clip vs D3D9.
-- You're about to edit a translation table because the comment disagrees with the enum name.
+"File in use / access denied" when the client is running; the client stutters or fails an async load while the tool runs; the tool works only when the game is closed.
 
-**Phase to address:**
-Cross-cutting guard in **asset-PS pipeline** and **particles**. Document the swap inline (already done) and gate any compare-table edit on a D3D9 A/B.
+**Phase to address:** TRE-tool foundation phase (file-access layer).
 
 ---
 
-### Pitfall 8: Single-stream skeletal path — shard/stretch geometry twin of the c0000005 crash
+### Pitfall 8: Re-entrancy guard that swallows legitimate same-frame portal transitions
 
 **What goes wrong:**
-Skeletal characters (NPCs, the char-select avatar) render as **white shards/spikes** in D3D11 (COMPARISON.md bucket 3). This is the *render-side twin* of the already-fixed `c0000005` use-after-free (commit `905fb5d64`): same branch, `SoftwareBlendSkeletalShaderPrimitive` with `ms_useMultiStreamVertexBuffers == false`.
+The cantina corner-snap "fix" adds a guard in `CellProperty::Notification::positionChanged` that suppresses *any* second cell transition in a frame — but legitimately traversing a doorway can require a genuine A→B transition in the same frame (e.g. fast movement crossing a thin portal cell). Over-suppression leaves the avatar/camera in the wrong cell, causing worse artifacts (clipping through walls, wrong-cell render/cull) than the snap it replaced.
 
 **Why it happens:**
-The D3D11 plugin reports `supportsStreamOffsets = false` / `maxStreamCount = 1`, so `SoftwareBlendSkeletalShaderPrimitive::install` takes the **single-stream** branch (D3D9 on real HW takes multi-stream). The crash was `collide` *reading* a freed/reused single-stream vertex buffer; the stretch is the *draw* path skinning into bad/misaligned vertex positions on the same branch. The fix for the crash was defensive guards, **not** flipping the caps — so the draw-side distortion likely persists.
+The mechanism (already root-caused, memory `project_cantina_corner_snap_engine_quirk` + `.planning/todos/pending/2026-05-15-cantina-corner-snap-engine-improvement.md`) is specifically a **re-entrant A→B→A reversal ping-pong** (3–5 transitions/frame, each the exact reversal of the prior), NOT "more than one transition is bad." A blanket "one transition per object per frame" guard cannot distinguish the pathological reversal from a valid multi-cell traverse. The `dueToParent` early-out already exists and does NOT catch the re-entry — naively widening it risks suppressing parent-propagated updates that other systems depend on.
 
 **How to avoid:**
-Decide deliberately between two routes: (a) make the D3D11 plugin report multi-stream support (the *not-taken* alternative from the crash fix — `Direct3d11_VertexBufferVectorData`, Plan 11-09.7), aligning skinning with D3D9's known-good multi-stream path; or (b) correct the single-stream skinning math/buffer layout so the draw path produces correct positions. Capture a skeletal draw in RenderDoc and inspect the post-skinning vertex positions vs D3D9. Note: distinguish from the **exterior static-mesh** shards (0014 wreck) which may be a *separate* (non-skeletal) distortion — re-capture fully-settled frames first (0013/0014 were mid-load, some smear is LOD streaming).
+Guard the **reversal/oscillation specifically**: detect that this same-frame re-entry would move back through the portal it just crossed (A→B then B→A with the same portal/old-new reversed) and keep the *first* result, rather than capping transition count. Verify with the committed `_DEBUG` `CORNERSNAP-PORTAL/RESOLVE/CELLJUMP` instrumentation (a9b419daf) — ping-pong frames gone AND legitimate door traversals still land in the right cell. Test fast doorway run-throughs and the camera-boom-straddling-portal case separately (camera churn may want its own hysteresis, not the same guard).
 
 **Warning signs:**
-- Skeletal meshes spike/shard while static world geometry is coherent -> single-stream skinning path.
-- The shard pattern is stable per-character (not transient streaming smear).
-- Static large objects *also* shard -> a broader distortion, investigate separately (OPEN per COMPARISON.md).
+After the fix: avatar ends up in the wrong room after running through a door; camera renders the wrong cell; objects flicker between cells; the instrumentation shows transitions being dropped that aren't reversals. Don't ship without the dual check (snap gone + traversal correct).
 
-**Phase to address:**
-**Skeletal/eyes** phase (character-select beachhead). Verify with a RenderDoc mesh-viewer capture of a skinned draw, A/B against D3D9. Re-capture settled exterior frames to scope the static-mesh question into its own investigation.
+**Phase to address:** Cantina corner-snap phase. Re-use the existing instrumentation as the acceptance harness; do not re-derive the mechanism.
 
 ---
 
-### Pitfall 9: Missing engine constant uploads — `material`, `textureFactor`, light data, fog, texture scroll
+### Pitfall 9: D3DXCompileShader→D3DCompile port silently changes shader behavior
 
 **What goes wrong:**
-Even with a sampling PS, materials look flat/unlit, glow/specular missing, fogged scenes lack depth haze, scrolling textures (water, conveyor) sit still. The geometry and base texture are right; the *material math* is absent.
+The Fix B port (replace `D3DXCompileShader`/`D3DXAssembleShader` with `D3DCompile`) compiles fine but produces subtly different bytecode/behavior, OR fails to handle the **assembly** path at all, regressing the D3D9 visual parity that v2.2 just achieved.
 
 **Why it happens:**
-The X4016 saga (Phase 11) was about the engine's `vertex_shader_constants.inc` declaring ~15 D3D9-era globals at explicit `register(cN)` (Material c11, LightData c16, textureFactor c44 ... b0..b7) for programmer-managed constant space. The plugin's PS generator currently reads **none** of these (`apply()` explicitly defers "material / textureFactor / textureScroll / alpha-test / stencil / fog" to Phase 12). The D3D9 sibling uploads them in `Pass::apply` / `Stage::apply`. Until D3D11 uploads the same constants into the matching cbuffer slots, lit/material content can't match.
+`d3dx9shader` and `d3dcompiler` are *similar but not drop-in*:
+- **Macro struct:** `D3DXMACRO` → `D3D_SHADER_MACRO` (same shape, different type — every `ms_defines` array and the include handler signatures change).
+- **Include interface:** `LPD3DXINCLUDE` (`ID3DXInclude`, `D3DXINCLUDE_TYPE`) → `ID3DInclude` (`D3D_INCLUDE_TYPE`). The existing `IncludeHandler` (`Direct3d9_VertexShaderData.cpp:144`) with its `../../`-strip hack and TreeFile-backed `Open`/`Close` must be reimplemented against `ID3DInclude`.
+- **Flags:** `D3DXSHADER_*` → `D3DCOMPILE_*`. The numeric values are NOT all identical and the set differs; copying the old flag DWORD verbatim binds wrong options (mirrors the v2.2 "copied D3D9 register indices" trap). Re-derive intent (debug/skip-opt/etc.), don't copy bits.
+- **Output blob:** `LPD3DXBUFFER` → `ID3DBlob` (different `Release` discipline).
+- **No assembly path:** `D3DCompile` compiles **HLSL only**. The current code calls `D3DXAssembleShader` at `Direct3d9_VertexShaderData.cpp:567` for the `.vsh`/assembly path. `d3dcompiler` exposes `D3DAssemble`/`D3DDisassemble`, but `D3DAssemble` is sparsely documented and not a clean equivalent. **Any asm-input shader path must be handled deliberately** — either route it through `D3DAssemble`, or confirm those assets are also available as HLSL, or keep the D3DX assemble path for asm-only inputs. Dropping it silently breaks every asm shader (null VS → skipped draws).
+- The whole point of Fix B is that `D3DCompile` is immune to the modern-toolchain D3DX FP-cleanup fault (the 0xC0000090 crash the Phase-19 SEH guard works around). Once D3DCompile is in for the *compile* path, the SEH guard becomes dead for that path — but **do not remove it until the assemble path is also off D3DX**, or you reintroduce the fault on asm shaders.
 
 **How to avoid:**
-Port `Pass::apply` constant uploads from the D3D9 sibling into the D3D11 per-pass apply, filling the slot-0 cbuffer regions the rewritten HLSL expects (the cbuffer-wrap + reflection-driven offsets from the X4016 fix established the layout). Every uploaded matrix still needs the transpose (Pitfall 3). Light data and fog feed the lighting math that, together with the gamma LUT (Pitfall 1), fixes the flat-white interiors.
+Port the compile path first, keep `D3DXAssembleShader` (still SEH-guarded) until its replacement is proven, and **A/B the rendered output** against the D3D9 baseline (the v2.2 reference-sequence-first method) for the specific shaders that previously faulted AND a broad scene. Map flags by intent, not by value. Reimplement the include handler against `ID3DInclude`. Link `d3dcompiler_47` and confirm the redist is staged (see Pitfall 11).
 
 **Warning signs:**
-- Surfaces textured but uniformly unlit / no specular / no rim.
-- Animated/scrolling-UV materials are static.
-- Distant geometry lacks fog falloff vs D3D9.
+Shaders compile but lighting/UV/fog look subtly off vs the gl05 baseline; asm-input shaders fail to load (null VS) → draws skipped; `D3DCompile` returns errors on `#include` (include handler not wired); the SEH guard never fires anymore but a different crash appears on an asm shader.
 
-**Phase to address:**
-**Asset-PS pipeline** + **gamma/lighting** phases (constants and the LUT together unblock interiors). Verify per-material against D3D9 A/B; instrument cbuffer contents in RenderDoc.
+**Phase to address:** D3DCompile-port phase. Invariant: client still boots to character select under `rasterMajor=5` AND `=11` (PROJECT.md core invariant), with D3D9 visual parity intact.
+
+---
+
+### Pitfall 10: Removing instrumentation that something else still references
+
+**What goes wrong:**
+Stripping the D-15 DPVS instrumentation or CORNERSNAP `_DEBUG` probes breaks the build (orphaned callers), silently leaves a registered debug flag dangling, or removes the very instrumentation a sibling fix (corner-snap) is being verified with — sequencing the removal too early.
+
+**Why it happens:**
+Dead code in this engine is still *linked* via callers, config-flag registration, and `.vcxproj` build-graph references — not just the symbol. The D-15 DPVS instrumentation spans `DpvsProfileInstrumentation.{h,cpp}`, `RenderWorld.cpp`, `ConfigClientGraphics.cpp`, and `clientGraphics.vcxproj`. The CORNERSNAP probes live in `CellProperty.cpp` + `CollisionResolve.cpp` and are wired to the `.planning/todos` capture workflow that the corner-snap fix (Pitfall 8) uses for acceptance. And the engine links under `/FORCE`, which downgrades unresolved externals to warnings — MSBuild exit 0 is NOT proof of a clean removal (the recurring v2.1 Decruft lesson).
+
+**How to avoid:**
+Strip the symbol AND its callers AND its config-flag registration AND the build-graph reference **atomically**. Gate on `unresolved external symbol` == 0 in the link output, not just MSBuild exit 0. Boot under BOTH `rasterMajor=5` and `=11`. **Sequence instrumentation removal AFTER the corner-snap fix that uses the CORNERSNAP probes** — don't strip the harness before the fix it verifies is done.
+
+**Warning signs:**
+Link warnings about unresolved externals (masked by `/FORCE`); a `DebugFlags::registerFlag` left without its variable; the corner-snap fix can't be verified because its instrumentation is gone; a `_DEBUG`-only block referencing a now-deleted symbol breaks the Debug config only.
+
+**Phase to address:** Instrumentation-removal phase (sequenced after corner-snap fix).
+
+---
+
+### Pitfall 11: Config-gate default flips and de-hardcoded paths silently change shipped behavior / break a fresh machine
+
+**What goes wrong:**
+Two related traps: (a) the DPVS config-gate changes the *default* shipped behavior (occlusion outdoor-on/indoor-off, auto = occlusion bit only outside POB cells) and one renderer regresses because the change wasn't boot-tested under both; (b) de-hardcoding `stage/override` + `stage/miles` paths "works on my box" but a fresh checkout/copy can't resolve them (and `stage/miles/` is famously NOT in git and NOT copied by postbuild — memory `project_audio_fixed_missing_miles_redist`), so audio half-dies or shaders fall to fallback on another machine.
+
+**Why it happens:**
+"It's just a default" / "it's just a path" understates that both are observable behavior changes to the shipped client. The DPVS verdict was *revised* precisely because both Phase-10 verdicts flipped under D3D11 — the auto-mode logic must actually key on "outside POB cell," and the two renderers have different driver-overhead profiles. The path work touches a redist (`stage/miles/`) that isn't tracked or auto-copied, so a portability change that assumes it's present passes on the author's machine and fails elsewhere.
+
+**How to avoid:**
+Treat config-gate defaults as behavior changes: boot-verify under `rasterMajor=5` AND `=11`, confirm the auto-mode actually gates occlusion on POB-cell membership, and that neither renderer regresses. For paths: resolve relative to a discoverable root (exe dir / a documented env var or cfg key), test from a fresh copy on a non-dev machine, and document the `stage/miles/` redist requirement explicitly (it must still be present even after de-hardcoding the path). Clean up `stage/client_d.cfg`'s accumulated test settings as part of this, not separately.
+
+**Warning signs:**
+DPVS change boots one renderer fine, the other regresses/over-culls; auto-mode culls occluders indoors (POB) or fails to outdoors; a fresh copy boots silent (Miles redist missing) or magenta/fallback shaders (override path unresolved); absolute author paths left in cfg/stage.
+
+**Phase to address:** DPVS config-gate phase + machine-portability phase.
 
 ---
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems in *this* port.
+Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Magenta/passthrough fallback PS for any VS the generator can't handle | Geometry visible, client boots, unblocks downstream work | Masks which asset classes still lack real shading; "looks mostly fine" hides eyes/minimap/particle gaps | As a *visible diagnostic*, never as the parity endpoint — keep it but track residual magenta as open work |
-| Flipping backbuffer/SRVs to `_SRGB` to "get gamma right" | One-line, colours shift toward "correct" | Double-correction (Pitfall 1); diverges from D3D9's sample-raw + LUT-at-scanout model; breaks blend math | Never — replicate the D3D9 LUT post-process instead |
-| Global render-state defaults (blend-on, depth LESS_EQUAL) instead of per-pass | Lots of content renders immediately | Silently washes/over-occludes content; masks other bugs (the Iter-32A trap) | Only as a temporary bring-up step, with a TODO to wire per-pass before any parity claim |
-| Re-enabling per-pass blend *factors* before multi-stage PS sampling works | Matches D3D9 blend descriptors on paper | Amplifies the unsampled-slot PS gap -> brighter/washed regression (Iter-44C, correctly reverted) | Only after the PS samples slots 1..7 and material constants upload |
-| Reporting `maxStreamCount=1` and guarding the skeletal path defensively | Stops the c0000005 crash without caps surgery | Leaves single-stream skinning shard/stretch unresolved | Acceptable for crash-safety; revisit caps for visual parity |
-| Hand-tuning +0.5 texel fudges per-draw to kill the seam | Seam disappears on the one screen you tested | Half-pixel bias leaks inconsistently into HUD/UI; whack-a-mole | Never — fix the screen-space->clip convention once at the viewport transform |
-| Non-zeroed D3D11 state descriptors before hash-caching | Less typing | Padding bytes poison the cache key -> per-draw state-object churn (Plan 11-06 Risk #3) | Never — always `D3D11_..._DESC d = {};` |
+| Directory-glob `*.tre` instead of parsing `client.cfg` search keys | Skips cfg parsing | Wrong archive set + no precedence → diffs subtly wrong (P3) | Only as an explicit, labeled "all-on-disk" fallback mode |
+| Decompress + MD5 everything eagerly | Simple, obviously-correct equality | Minutes-long diffs, GB RAM, OOM (P5) | Tiny test corpora only; never for the real 30-archive case |
+| Hardcode TREE v0005 struct only | Fastest reader to write | FATALs/mis-parses other distributions' archives (P1) | Never — branch on (token,version) from day one |
+| Reuse the old `D3DXSHADER_*` flag DWORD verbatim in D3DCompile | No flag re-research | Wrong compile options, subtle shader regressions (P9) | Never — re-derive by intent |
+| Blanket "one cell transition per frame" guard | One-line corner-snap fix | Breaks legitimate door traversals (P8) | Never — guard the reversal specifically |
+| Remove the D3DX SEH guard the moment D3DCompile compiles | Cleaner diff | Reintroduces 0xC0000090 on asm-input shaders still on D3DXAssemble | Only after the assemble path is also off D3DX |
+| Flip a config-gate default without dual-renderer boot test | "It's just a default" | Silent behavior change; one renderer regresses (P11) | Never — gate changes are behavior changes |
+| De-hardcode a path but assume the redist is present | Path looks portable | Fresh machine boots silent/fallback (`stage/miles/`) (P11) | Never — document + test the redist requirement |
 
 ## Integration Gotchas
 
-Connecting the D3D11 plugin to the existing engine and shared code.
+Common mistakes when connecting to external services / formats.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Plugin DLL calling clientGraphics members | Use the public getter chain (`getShaderEffect().get...`) — LNK2019, methods are non-inline non-DLLEXPORT | Direct field access via `friend` declarations, mirroring the D3D9 sibling's friend set (4 engine headers) |
-| Wiring per-pass state | Wire to `Direct3d11_ShaderImplementationData::apply()` | That method is **dead code** (no virtual base); the live per-draw site is `Direct3d11_StaticShaderData::apply(passNumber)` |
-| Editing shared engine code (clientGraphics, skeletal, shader abstraction) for the D3D11 fix | Change shared math/state and regress the working D3D9 path | Gate the renderer behind the plugin where possible; if shared code must change, **boot-test BOTH `rasterMajor=5` and `=11`** before claiming done (the project invariant) |
-| Koogie's diagnostic/modernization patches | Revert/weaken a Koogie patch when its strict assert fires | Fix the **caller/data/underlying bug**; Koogie's stricter behaviour is surfacing real latent bugs by design |
-| Pre-compiled D3D9 PEXE pixel bytecode | Feed it to `CreatePixelShader` | It's rejected (Plan 11-05 caveat); generate/bridge a real D3D11 PS instead |
-| Async `.mgn` loads | Chase the intermittent `0x087a` crash as a renderer bug | It's **pre-existing and NOT D3D11-related** (cross-client confirmed); don't burn cycles on it |
-| `CopySubresourceRegion` between RT and texture | Reuse the D3D9 `X8R8G8B8` (BGRX) format for the persistent baked RT | D3D11 strict-rejects across typeless families; the baked RT must be **BGRA8** (`B8G8R8A8_UNORM`), matching `TF_ARGB_8888` dest |
+| SWG `client.cfg` parsing | Treating it as plain INI; one value per key | Repeated keys accumulate by index (`searchTree0=` multiple times); honor `[SharedFile]` section + SKU-infix keys + priority ordering |
+| zlib decompression of TOC/name-block | Assuming the whole TRE is zlib | Compression is **per-section** and **per-entry**: `tocCompressor`/`blockCompressor` in the header gate the TOC and name block independently; each file entry has its own `compressor`. `CT_none=0, CT_deprecated=1 (FATAL if seen), CT_zlib=2`; `isCompressed()` = `!= CT_none` |
+| Name block | Reading fixed-width or assuming sorted-by-name | Null-terminated strings concatenated; entries reference them via `fileNameOffset`; TOC sorted by **CRC then name**, not name alone. For `.toc` variant, on-disk `fileNameOffset` is a *length* to be running-summed post-load |
+| `d3dcompiler` include handling | Passing a `D3DX`-style include object | `ID3DInclude` (not `ID3DXInclude`); or `D3D_COMPILE_STANDARD_FILE_INCLUDE` — but SWG needs the TreeFile-backed custom handler, so reimplement against `ID3DInclude` |
+| Win32 file open on a live install | Exclusive/default share mode | `FILE_SHARE_READ|FILE_SHARE_WRITE`, read-only, never hold handles for the whole session |
 
-## Color / Format Parity Traps
+## Performance Traps
 
-D3D9->D3D11 component-ordering and format facts that silently corrupt colour if mishandled.
-
-| Trap | Symptoms | Prevention | Status in plugin |
-|------|----------|------------|------------------|
-| Vertex color D3DCOLOR/PackedArgb ordering | Red/blue swapped on vertex-colored UI/particles | Engine `PackedArgb` is ARGB-packed == `DXGI_FORMAT_B8G8R8A8_UNORM`; HLSL `.rgba` then reads engine's (a,r,g,b) — use B8G8R8A8 for COLOR0/COLOR1 input-layout elements | Correct: `Direct3d11_VertexBufferDescriptorMap.cpp:167-173, 240-244` |
-| sRGB texture sampling | Mid-tones shifted; interacts with gamma double-correction | Keep all texture SRVs non-sRGB `_UNORM` to mirror D3D9's `D3DSAMP_SRGBTEXTURE=0` | Correct: texture table is all `_UNORM` (`Direct3d11_TextureData.cpp:56-77`) |
-| Backbuffer format | Wrong blend/output gamma | Non-sRGB `B8G8R8A8_UNORM` to match D3D9 PackedArgb framebuffer | Correct: `Direct3d11_Device.cpp:313` |
-| `L8` luminance textures | Black where D3D9 showed gray luminance | `TF_L_8 -> R8_UNORM`, sample with `.rrr` swizzle in the generated PS | Mapped (`Direct3d11_TextureData.cpp:71`); confirm the PS swizzles |
-| Premultiplied/24bpp formats (DXT2/4, RGB_888, P_8) | Asset fails to create texture, falls to fallback | These map to `DXGI_FORMAT_UNKNOWN`; engine promotes via `runtimeFormats` | Mapped as UNKNOWN by design; verify the engine's promotion path is exercised |
-| BC sub-block bottom mips | `CreateTexture2D (staging)` E_INVALIDARG on small mips | Pad staging desc to 4x4 block boundary for BC formats | Handled (`isBlockCompressedFormat` pad in `lock()`) |
-
-## Performance / Scale Traps
-
-This is a single-client renderer; "scale" = scene complexity, draw count, and shader-permutation count.
+Patterns that work at small scale but fail as usage grows.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Shader permutation explosion | Hitch on first sight of each new VS; growing compile time; cache misses | Cache compiled PS by VS bytecode hash; persist `.cso` to disk (`Direct3d11_ShaderCache`); tombstone failures; include `D3D11_REWRITE_VERSION` in the hash key so cache invalidates on generator changes | When a zone introduces many distinct VS output layouts (open-world, vs the bounded char-select set) |
-| State-object cache poisoning | `getOrCreateBS/DSS/RS` miss per draw; create count climbs | Zero-init every descriptor before hashing (Plan 11-06 Risk #3) | Immediately, if any descriptor field is uninitialised |
-| fxc compile-time stalls in-frame | Frame spikes when entering new areas | Compile on first-encounter + cache to disk; consider pre-warm for the char-select set | Open-world streaming of varied materials |
-| Per-frame InfoQueue drain volume | Log floods (483k id=342/session at worst) | Fix the underlying linkage so the queue is quiet; keep one-shot/capped diagnostics (the code already caps several at 50/100) | When a regression reintroduces id=342/343/353 floods |
+| Decompress-and-hash every file for diff | Multi-minute compares, GB RAM | Tier on TOC metadata first (size/compressedLength), content-hash only ambiguous entries | ~30 archives × tens of thousands of records (the stated real case) |
+| Load whole TREs into memory | RAM = sum of all archive sizes | Seek to `offset`, read `compressedLength` per entry; stream | Multi-GB install sets |
+| O(n²) virtual-tree merge (linear scan per file across archives) | Diff time quadratic in file count | Build a normalized-path → entry map (hash) once per archive, then merge keys | 50k+ files × 30 archives |
+| Synchronous/blocking decompression on the UI thread | Frozen web UI during compare | Stream results incrementally; worker thread/process; cap concurrency | Any real compare |
+| Re-reading/re-parsing TOCs on every UI interaction | Sluggish drill-down | Parse TOCs once into an in-memory model; cache | Interactive use |
 
-## Debugging Without Source — Tooling Strategy
+## Security Mistakes
 
-The asset shaders ship as opaque pre-compiled D3D9 PEXE bytecode (no HLSL source), and explorer-launched smokes lose `OutputDebugString`/stdout. Debug accordingly.
+Domain-specific issues (this is a local-only Windows tool reading a proprietary binary format).
 
-| Need | Wrong approach | Right approach |
-|------|----------------|----------------|
-| See what's actually bound/drawn per frame | Guess from symptoms | **RenderDoc** frame capture — D3D11 fully supported (up to 11.4); inspect input/output textures per draw, SRV/sampler/cbuffer state, and the mesh viewer for pre/post-VS vertex positions (skeletal shards) |
-| Step a shader | printf-style guessing | RenderDoc **vertex & pixel shader debugging** (D3D11-supported); compile generated PS with `D3DCOMPILE_DEBUG` / `/Zi` so symbols are present |
-| Capture diagnostics under explorer launch | `DEBUG_REPORT_LOG_PRINT` (goes to OutputDebugString/stdout — invisible on smokes) | `ID3D11InfoQueue::AddApplicationMessage` -> drained to `stage/d3d11-debug.log`; or direct file I/O (the `iter18-stage0-resolve.txt` pattern); attach DebugView for OutputDebugString |
-| Validate runtime correctness | Trust exit code | Watch the InfoQueue error classes: `id=342` (input subset), `id=343` (register position), `id=353` (SRV slot unbound), `id=281` (format-castable) |
-| Confirm a fix didn't regress D3D9 | Only test D3D11 | Boot **both** `rasterMajor=5` and `=11` to the same scene; the project invariant requires it |
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Trusting header size fields to allocate | Malformed/hostile TRE → huge alloc or OOB read (the community-distribution "malformed archive" case) | Validate `numberOfFiles`, `sizeOfTOC`, name-block sizes, and every `offset+compressedLength` against actual file length before allocating/reading |
+| Path-traversal on extract/export | A crafted entry name (`..\..\system32\...`) writes outside the export dir | Apply `fixUpFileName`'s `../`/`..\`/leading-slash stripping to *output* paths too; sandbox the export root |
+| zlib decompression bomb | Tiny compressed entry claims huge `length` → memory exhaustion on expand | Cap decompressed size to `length` from the TOC and sanity-bound it; stream-expand with a ceiling |
+| Web server binds to 0.0.0.0 | Local tool exposed to the network | Bind to `127.0.0.1` only; it "runs locally on Windows 11" — keep it local |
+
+## UX Pitfalls
+
+Common user-experience mistakes for a diff/compare tool.
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No progress / all-or-nothing diff | User stares at a frozen page on a 30-archive compare | Incremental streaming: show set-level deltas immediately, file-level as it computes |
+| Presenting raw stored names (mixed case/slashes) | Confusing "duplicate" entries that are the same asset | Display normalized paths (or original-case but de-duped by normalized key) |
+| Conflating "in a different archive" with "changed" | False positives when a file just moved between TREs in the search order | Distinguish "moved/shadowed" (precedence) from "content changed" |
+| No indication of which archive *wins* | User can't tell what the client actually loads | Show the resolved winner per file + the shadowed copies |
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete on a D3D11 smoke but fail parity against D3D9.
+Things that appear complete but are missing critical pieces.
 
-- [ ] **Textures appear:** Often missing material/lighting/multi-stage math — verify eyes aren't gray, minimap is round, specular/glow present, A/B against D3D9.
-- [ ] **Geometry renders:** Often a matrix-transpose or single-stream-skinning issue lurking — verify skeletal characters aren't sharded and a new cbuffer matrix is transposed.
-- [ ] **Gamma "looks fine":** Often the LUT is missing (too bright) OR double-applied (washed) — verify the post-process LUT runs once and matches D3D9 interior haze.
-- [ ] **Load screen shows:** Often the half-texel seam at center — verify no seam across multiple splash images.
-- [ ] **UI/fonts render:** Often a global blend-default masking a per-pass bug — verify blend is per-pass, not globally on; verify font crispness (half-pixel).
-- [ ] **No crash in a quick smoke:** Often the c0000005 single-stream path or the pre-existing 0x087a — verify with an NPC-heavy mouse-over loop; don't conflate the two.
-- [ ] **InfoQueue "quiet enough":** Often residual id=342/343/353 — verify exact zero on the linkage classes after PS-generator changes.
-- [ ] **Particles/ribbons appear:** Often wrong blend mode / premultiplied-alpha / sort — verify additive vs alpha-over matches D3D9, and ribbon trails aren't black-boxed.
+- [ ] **TRE reader:** Often missing the **TOC (`.toc`) container variant** — verify it parses a `.toc`+TRE-set bundle, not just standalone TREEs (different struct, `fileNameOffset`=length quirk).
+- [ ] **TRE reader:** Often missing **per-entry/per-section compression branching** — verify uncompressed AND zlib entries both extract; verify `CT_deprecated` is rejected cleanly not crashed.
+- [ ] **Virtual tree:** Often missing **case/slash normalization** — verify `Mesh.MSH` and `mesh\msh` collapse to one entry (P4).
+- [ ] **Virtual tree:** Often missing **correct precedence direction** — verify against a real `client.cfg` that the highest-priority override TRE wins (P2/P3).
+- [ ] **Diff:** Often missing **the size pre-filter** — verify it does NOT decompress unchanged files (watch time/RAM on the real 30-archive case).
+- [ ] **Corner-snap fix:** Often missing **the legitimate-traversal regression test** — verify fast door run-throughs land in the correct cell, not just that the snap is gone (P8).
+- [ ] **D3DCompile port:** Often missing **the assembly-input path** — verify asm-input shaders still load (else null VS → skipped draws), and the SEH guard isn't removed while D3DXAssemble remains (P9).
+- [ ] **D3DCompile port:** Often missing **`d3dcompiler_47.dll` staging** — verify the redist is in `stage/` and gl05 boots (P9/P11).
+- [ ] **Instrumentation removal:** Often missing **the things that REFERENCE the instrumentation** — verify removal doesn't break callers, config flags, or the build, and that the corner-snap fix is done first (P10).
+- [ ] **Machine portability:** Often missing **a non-dev-machine test** — verify de-hardcoded `stage/override` + `stage/miles` resolve from a fresh copy, and that `stage/miles/` redist is still present (P11).
 
 ## Recovery Strategies
 
+When pitfalls occur despite prevention, how to recover.
+
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Gamma double-correction | LOW | Remove the redundant correction (revert sRGB format flip); keep only the single LUT post-process; A/B interior vs D3D9 |
-| Half-texel seam | LOW | Centralise the half-pixel offset in the viewport/screen-space transform; remove per-draw fudges; re-test multiple splashes |
-| Forgotten matrix transpose | LOW | Add `XMMatrixTranspose` at the cbuffer store for the offending matrix; verify clip.w sign |
-| Wired state to dead `ShaderImplementationData::apply` | LOW | Move the wiring to `StaticShaderData::apply(passNumber)`; re-smoke |
-| "Fixed" the Compare swap | LOW (if caught fast) | Restore the swap to mirror D3D9; A/B foliage/decals/transparency |
-| Re-enabled blend factors prematurely | LOW | Revert (as Iter-44C was); defer until multi-stage PS sampling + material constants land |
-| Regressed the D3D9 path via shared-code edit | MEDIUM | `git` bisect the shared edit; gate behind the plugin or guard with renderer check; re-establish dual-renderer boot |
-| Single-stream skeletal shards | MEDIUM-HIGH | Choose: enable multi-stream caps (`Direct3d11_VertexBufferVectorData`) OR fix single-stream skinning math; RenderDoc mesh-viewer verify |
-| Shader permutation explosion / state-object churn | MEDIUM | Add disk `.cso` cache + zero-init descriptors; instrument create counts |
+| Wrong precedence direction (P2/P3) | LOW | Centralize resolution in one comparator; flip + re-test against `client.cfg`; all diffs recompute |
+| Eager hashing perf (P5) | MEDIUM | Retrofit TOC-metadata pre-filter; add streaming; usually a diff-engine rewrite, not a UI change |
+| Wrong TRE struct (P1) | MEDIUM | Re-derive structs from the in-tree headers (authoritative); add (token,version) dispatch |
+| Over-suppressing portal transitions (P8) | LOW–MEDIUM | Narrow guard to reversal-only using committed instrumentation; re-test door traversals |
+| D3DCompile behavioral regression (P9) | MEDIUM–HIGH | A/B vs gl05 baseline; revert to SEH-guarded D3DX path (still present) per-shader-path while fixing |
+| Removed referenced instrumentation (P10) | LOW | Build break catches most; revert the removal, strip caller+probe atomically |
+| Config-gate/path regression on another machine (P11) | LOW–MEDIUM | Re-test fresh copy under both renderers; restore redist; resolve paths relative to discoverable root |
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls. (Phases continue from 16; v2.2 starts at **Phase 17**. Names below are the COMPARISON.md gap buckets / milestone target features — the roadmapper assigns final numbers.)
+How roadmap phases should address these pitfalls.
 
-| Pitfall | Prevention Phase(s) | Verification |
-|---------|---------------------|--------------|
-| 1. Gamma double-correction / flat-white | Gamma-LUT + lighting (after asset-PS) | Single LUT post-process; interior A/B vs D3D9; no sRGB format flips |
-| 2. Half-texel seam | Load-screen / 2D-blit (early, isolated canary) | No center seam across multiple splashes; HUD text crispness matches D3D9 |
-| 3. Matrix transpose dual | Cross-cutting; esp. skeletal/eyes + any cbuffer-matrix work | clip.w sign check; new matrix renders correctly |
-| 4. PS-VS linkage contract | Asset-PS pipeline (#1) | `id=342 == 0 && id=343 == 0` in d3d11-debug.log |
-| 5. Magenta + flat-white (one bug) | Asset-PS pipeline + multi-stage sampling (eyes, minimap as cases) | Eyes correct, minimap round, residual magenta tracked; D3D9 A/B |
-| 6. Render-state defaults divergence | Asset-PS pipeline; revisited in particles/ribbon | Per-pass state via `StaticShaderData::apply`; eye/decal/foliage A/B; state-object create count stable |
-| 7. "Fixing" the Compare swap | Cross-cutting guard (asset-PS, particles) | Compare-table edits gated on D3D9 A/B; swap documented inline |
-| 8. Single-stream skeletal shards | Skeletal/eyes (char-select beachhead) | RenderDoc mesh-viewer A/B of a skinned draw; settled-frame re-capture scopes static-mesh question |
-| 9. Missing material/light/fog constants | Asset-PS pipeline + gamma/lighting | Per-material A/B; cbuffer contents in RenderDoc |
-| Permutation explosion / state churn | Folds into asset-PS pipeline; matters at world-streaming scale | Disk `.cso` cache; zero-init descriptors; create-count metrics |
-| Exterior static-mesh distortion (OPEN) | Geometry-distortion investigation phase | Re-capture settled exterior frames; determine skeletal vs static; RenderDoc |
-| DPVS D3D11 remeasure | DPVS remeasure (deferred SPEC R7, "after asset-PS" = now) | Stable visible geometry to instrument; PIX/Nsight/RenderDoc timing |
-
-**Suggested phase ordering (from COMPARISON.md + dependency analysis):**
-1. **Asset-PS pipeline** (#1 blocker) on **character-select** — unblocks textures, magenta, and feeds lighting + minimap. Owns Pitfalls 4, 5, 6 (state), 9 (constants).
-2. **Load-screen seam** — small, isolated, deterministic; sampling-path canary. Owns Pitfall 2. (Can run in parallel; no dependency on #1.)
-3. **Gamma/LUT + lighting** — after #1 so you correct a correctly-shaded image. Owns Pitfall 1.
-4. **Skeletal/eyes + multi-stage sampling** — char-select beachhead completion. Owns Pitfalls 8, 5 (eyes), 3 (bone matrices).
-5. **Extend PS pipeline to open world** — permutation/cache scale concerns surface here.
-6. **Geometry-distortion investigation** (static-mesh shards, OPEN) + **particles/ribbon** + **minimap** as it rides the multi-stage work.
-7. **DPVS D3D11 remeasure** — last, needs stable visible geometry.
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| P1 TRE version/variant hardcoding | TRE reader foundation | Parses retail + SWGEmu + SWGSource samples; unknown variant → clean error not crash |
+| P3 Inventing the search set | TRE config-ingestion | Tool's archive list matches `client.cfg` `[SharedFile]` keys + order |
+| P2 Precedence backwards | TRE virtual-tree | Override TRE wins for replaced files vs a real cfg |
+| P4 Case/slash mismatch | TRE virtual-tree | `fixUpFileName`-normalized keys; no spurious case-only renames |
+| P5/P6 Eager hashing / crc misuse | TRE diff-engine | 30-archive compare in seconds; "changed" content-based; size pre-filter active |
+| P7 File locking | TRE foundation (file layer) | Compare runs with the client open |
+| Malformed-archive safety | TRE reader foundation | Garbage/fuzz TRE → bounded error, no OOB/OOM |
+| P8 Re-entrancy guard | Cantina corner-snap | Snap gone AND door traversals land correctly (committed instrumentation) |
+| P9 D3DCompile port | D3DCompile port | gl05 boots to char-select; D3D9 visual parity A/B holds; asm path handled |
+| P10 Instrumentation removal | Instrumentation removal (after corner-snap) | Debug+Release link clean (0 unresolved); both renderers boot; no orphaned callers/flags |
+| P11 Config-gate default flips | DPVS config-gate | Dual-renderer (5 + 11) boot; auto-mode = occlusion only outside POB cells, measured |
+| P11 Machine portability | Portability/cfg cleanup | Fresh-copy/non-dev-box boot; redist present; no absolute author paths in cfg/stage |
 
 ## Sources
 
-- **This engine's own iteration record (HIGH):** Phase 11 memory notes — `phase11-x4016-overlapping-registers`, `phase11-font-rendering-resolved`, `d3d11-cbuffer-transpose-quirk`, `d3d11-baked-rt-bgra-format`, `d3d9-compare-table-greater-equal-not-equal-swap`, `project-d3d11-collide-use-after-free`, `project-phase11-minimap-never-round`, `project-phase12-visual-baseline`, `feedback_dont_modify_koogie_changes`.
-- **Visual baseline (HIGH):** `docs/research/phase12-baseline/COMPARISON.md` (5 gap buckets, matched D3D9/D3D11 pairs).
-- **Live plugin source reads (HIGH):** `Direct3d11_StaticShaderData.cpp` (per-pass apply, state, sampler/stage), `Direct3d11_PixelShaderProgramData.cpp` (dynamic PS generator), `Direct3d11_StateCache.cpp` (viewport c9, state-object cache, gamma), `Direct3d11_Device.cpp` (backbuffer format), `Direct3d11_TextureData.cpp` (format table, BC pad), `Direct3d11_VertexBufferDescriptorMap.cpp` (BGRA color ordering); D3D9 siblings `Direct3d9.cpp` (`setBrightnessContrastGamma` LUT), `Direct3d9_StateCache.cpp` (`D3DSAMP_SRGBTEXTURE=0`), `Direct3d9_ShaderImplementationData.cpp` (Compare table).
-- **D3D9->D3D10/11 semantics (HIGH, cross-checked against source):** half-texel -0.5 rule removed in D3D10+ (pixel-center convention change); no swapchain `SetGammaRamp` in DXGI; `D3D11_FATAL_INPUT_SUBSET` linkage contract; immutable state objects + no FFP alpha-test.
-- **RenderDoc D3D11 capability (HIGH):** [How do I debug a shader? — RenderDoc docs](https://renderdoc.org/docs/how/how_debug_shader.html), [Features — RenderDoc docs](https://renderdoc.org/docs/getting_started/features.html) — D3D11 vertex/pixel/compute shader debugging, mesh viewer, texture/RT inspection; `D3DCOMPILE_DEBUG`/`/Zi` required for symbols.
+- **`src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode.{h,cpp}`** — authoritative on-disk TRE/TOC struct layout, version handling, zlib branching, CRC binary search (in-tree, HIGH).
+- **`src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp`** — `fixUpFileName` normalization, `searchNodePriorityOrder` precedence, `installSearches` cfg-key parsing (in-tree, HIGH).
+- **`src/engine/shared/application/TreeFileExtractor/src/shared/TreeFileExtractor.cpp`** — reference traversal/extract loop (in-tree, HIGH).
+- **`src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp`** — the SEH-guarded `D3DXCompileShader`/`D3DXAssembleShader` (Fix B target) + include handler (in-tree, HIGH).
+- **Microsoft Learn — `D3DCompile` (d3dcompiler.h)** — `D3D_SHADER_MACRO`, `ID3DInclude`, `D3DCOMPILE_*` flags, `d3dcompiler_47.dll` (HIGH): https://learn.microsoft.com/en-us/windows/win32/api/d3dcompiler/nf-d3dcompiler-d3dcompile
+- **Memory `project_cantina_corner_snap_engine_quirk`** + `.planning/todos/pending/2026-05-15-cantina-corner-snap-engine-improvement.md` — root-caused re-entrant ping-pong mechanism + committed instrumentation (project record, HIGH).
+- **Memory `project_decruft_removal_build_graph_gotchas`** — `/FORCE` masking, atomic caller+symbol removal, link-grep gate (project record, HIGH).
+- **Memory `project_audio_fixed_missing_miles_redist`** — `stage/miles/` not in git / not copied by postbuild; relevant to machine-portability de-hardcoding (project record, HIGH).
+- **SWGANH Wiki TRE breakdown / Swg.Explorer / swg_tre (Rust)** — community corroboration that multiple TRE versions + zlib + path-CRC exist across distributions (community, MEDIUM; in-tree source supersedes for exact layout): http://wiki.swganh.org/index.php/TRE:TRE_Breakdown , https://github.com/wverkley/Swg.Explorer , https://lib.rs/crates/swg_tre
 
 ---
-*Pitfalls research for: D3D9->D3D11 asset-shader + visual-parity porting (SWG/whitengold client, v2.2 Visual Parity)*
-*Researched: 2026-05-27*
+*Pitfalls research for: v2.3 Hardening (TRE compare web tool + in-client hardening)*
+*Researched: 2026-06-12*
