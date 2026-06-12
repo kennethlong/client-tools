@@ -123,7 +123,11 @@
     <PostBuildEvent>
       <Message>Stage Debug exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage\"
-copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
+copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"
+rem 2026-06-12: ensure the Miles codec redist exists in stage (mssmp3.asi mp3 decoder + .m3d/.flt 3D providers).
+rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
+rem No-op when present; never fails the build when the source dir is absent on this machine.
+if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" if exist "D:\Code\SWGSource Client v3.0\miles\mssmp3.asi" xcopy /E /I /Y "D:\Code\SWGSource Client v3.0\miles" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
@@ -222,7 +226,11 @@ copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
     <PostBuildEvent>
       <Message>Stage Release exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage\"
-copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage\"</Command>
+copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage\"
+rem 2026-06-12: ensure the Miles codec redist exists in stage (mssmp3.asi mp3 decoder + .m3d/.flt 3D providers).
+rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
+rem No-op when present; never fails the build when the source dir is absent on this machine.
+if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" if exist "D:\Code\SWGSource Client v3.0\miles\mssmp3.asi" xcopy /E /I /Y "D:\Code\SWGSource Client v3.0\miles" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
