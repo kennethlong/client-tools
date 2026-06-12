@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Visual Parity
 status: executing
-last_updated: "2026-06-12T15:40:11.988Z"
+last_updated: "2026-06-12T16:13:32.962Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -54,7 +54,7 @@ Plus v2.2-coupled deferrals (milestone-audit `tech_debt`): `stage/client_d.cfg` 
 ## Current Position
 
 Phase: 23 (dpvs-d3d11-remeasure) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Resume: None — Phase 17 complete + verified + secured. Ready to plan Phase 18 (load-screen half-texel seam, UI-01 — `getOneToOneUVMapping` stub; independent of the PS pipeline). gl11_d.dll = HEAD a0d5ac80f (5/30 13:24). See memory project_phase17_charselect_d3d11_parity_verified.
 Last activity: 2026-06-12
@@ -85,6 +85,7 @@ Last activity: 2026-06-12
 - [2026-05-25] Phase ordering is **risk-gradient, low-first**: pure deletes (Phase 12) → lib unlink (Phase 13) → live-source surgery (Phases 14 Vivox, 15 XPCOM). Re-establishes the boot baseline before the riskier source removals.
 - [2026-05-25] DECRUFT-07 (dual-renderer boot gate) is a cross-cutting milestone gate owned by the final phase (15) but **verified incrementally** after every removal in Phases 12–15 — mirrors v2.0 CLEAN-05.
 - [Phase ?]: [2026-06-12] Phase 23-01: DPVS instrumentation core restored CPU-only from tag phase-10-instrumentation-pre-cleanup; gpu_us GPU-stripped to structural 0; occlusion A/B bit re-gated on the surviving ms_forceDisableOcclusionCulling DebugFlag via two _DEBUG accessors; shipped Option α #else branch byte-for-byte unchanged.
+- [Phase ?]: Phase 23-02: DPVS harness wiring restored + activated (install() at SetupClientGraphics, onFrameEnd per-frame in Game.cpp, F10/F11 _DEBUG keybinds in CuiIoWin with F11 rewired to toggleForceDisableOcclusionCulling, /setrunlabel in SwgCuiCommandParserDefault); both renderers link clean, Debug boots D3D11 present loop, analysis.py accepts the writer header (verdict line emitted).
 
 ### Pending Todos
 
@@ -112,7 +113,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-12T15:40:11.968Z
+Last session: 2026-06-12T16:13:26.868Z
 Resume (2026-05-27): **v2.2 Visual Parity ROADMAP CREATED** (Phases 17–23; 13/13 requirements mapped 100%). v2.1 Decruft shipped + tagged `v2.1`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.2 Visual Parity — the plan (7 phases):**

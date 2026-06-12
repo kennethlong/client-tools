@@ -39,7 +39,7 @@
 
 ### Performance / Culling
 
-- [ ] **DPVS-01**: DPVS occlusion-culling performance is re-measured under D3D11 (the v2.0 SPEC R7 deferral) and a keep/remove verdict recorded — performed last, once geometry renders cleanly enough for the measurement to be meaningful.
+- [x] **DPVS-01**: DPVS occlusion-culling performance is re-measured under D3D11 (the v2.0 SPEC R7 deferral) and a keep/remove verdict recorded — performed last, once geometry renders cleanly enough for the measurement to be meaningful.
 
 ## Future Requirements (deferred — not in v2.2)
 
