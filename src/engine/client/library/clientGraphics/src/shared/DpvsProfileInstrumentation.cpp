@@ -402,12 +402,13 @@ std::string currentIsoTimestamp()
 // RenderWorld::getForceDisableOcclusionCulling() (_DEBUG-only accessor).
 void reportOverlay()
 {
-	DEBUG_REPORT_PRINT(true, ("DPVS:%s run=%s %s frame=%d capturedRows=%d\n",
 #ifdef _DEBUG
-		RenderWorld::getForceDisableOcclusionCulling() ? "OFF" : "ON",
+	char const * const occlusionState = RenderWorld::getForceDisableOcclusionCulling() ? "OFF" : "ON";
 #else
-		"ON",
+	char const * const occlusionState = "ON";
 #endif
+	DEBUG_REPORT_PRINT(true, ("DPVS:%s run=%s %s frame=%d capturedRows=%d\n",
+		occlusionState,
 		ms_runLabel.empty() ? "(unlabeled)" : ms_runLabel.c_str(),
 		ms_captureActive ? "REC" : "...",
 		Graphics::getFrameNumber(),

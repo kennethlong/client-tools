@@ -1064,7 +1064,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 		dpvsCpuTimer.stop();
 
 		DpvsProfileInstrumentation::recordCpuQpcUs(static_cast<uint32>(dpvsCpuTimer.getElapsedTime() * 1e6f));
+#ifdef _DEBUG
+		// RenderWorldCommander::getNumberOfVisibleObjects() is _DEBUG-only; in a
+		// Release/Optimized build the visible-object count is unavailable (0).
 		DpvsProfileInstrumentation::recordVisibleObjectCount(RenderWorldCommander::getNumberOfVisibleObjects());
+#else
+		DpvsProfileInstrumentation::recordVisibleObjectCount(0);
+#endif
 		DpvsProfileInstrumentation::recordProfilerUs(0u);
 	}
 
