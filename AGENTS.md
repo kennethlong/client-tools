@@ -23,7 +23,7 @@ Handoffs live in **`.planning/handoff/`** — one markdown file per workstream, 
 | Area | Where to look |
 | --- | --- |
 | MSVC / Decruft milestone | `.planning/STATE.md`, `.planning/ROADMAP.md` |
-| SWG Blender IFF import | `.planning/handoff/swg-blender-import.md`, `tools/swg_blender/`, `.cursor/skills/swg-blender-pipeline/` |
+| SWG Blender IFF import | [`D:/Code/swg-tools`](../../swg-tools) (moved out of this repo 2026-06-12; was `tools/swg_blender/`) |
 | MayaExporter / asset parity | `docs/research/maya-exporter-parity-checklist.md` |
 | Engine / client code | `src/engine/` |
 
