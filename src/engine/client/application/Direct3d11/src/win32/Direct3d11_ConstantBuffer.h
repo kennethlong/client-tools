@@ -110,11 +110,26 @@ namespace Direct3d11Namespace
 // GreaterOrEqual (keep alpha >= ref, discard otherwise), so we emit
 // clip(alpha - ref) which has that semantic. If a future asset needs
 // other compare modes we can plumb a func index here.
+// Detail-blend fix 2026-06-11: textureFactor added for the FFP-combiner
+// generated PS (TA_textureFactor arg = D3D9 D3DRS_TEXTUREFACTOR, fed from
+// the pass's resolved textureFactor in Direct3d11_StaticShaderData::apply).
+// Existing generated PSes that declare only alphaTest in b1 are unaffected
+// (bound buffer larger than the shader's declared cbuffer is legal).
+//
+// Fog fix 2026-06-11: fogColor added for per-pixel fog in the generated
+// PSes. D3D9 applies FFP fog POST-PS in hardware from the VS oFog factor
+// (lerp toward D3DRS_FOGCOLOR, set per-pass from m_fogMode -- see
+// Direct3d9_StaticShaderData.cpp:932-948); D3D11 has no fog stage so the
+// generated PS does `col.rgb = lerp(fogColor.rgb, col.rgb, saturate(fog))`
+// when fogColor.w (enable) is set. rgb = the pass-mode-resolved color
+// (Normal = scene fog color, Black = 0, White = 1).
 struct Direct3d11_PSAlphaTestCB
 {
-	DirectX::XMFLOAT4 alphaTest;   // x = enable (0/1), y = reference (0..1), z/w = pad
+	DirectX::XMFLOAT4 alphaTest;       // x = enable (0/1), y = reference (0..1), z/w = pad
+	DirectX::XMFLOAT4 textureFactor;   // rgba 0..1 (D3D9 TFACTOR); white when pass has none
+	DirectX::XMFLOAT4 fogColor;        // rgb = per-pass fog color, w = fog enable (0/1)
 };
-static_assert(sizeof(Direct3d11_PSAlphaTestCB) == 16,               "Direct3d11_PSAlphaTestCB size mismatch");
+static_assert(sizeof(Direct3d11_PSAlphaTestCB) == 48,               "Direct3d11_PSAlphaTestCB size mismatch");
 
 // ======================================================================
 

@@ -394,6 +394,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	m_passTexcoordKey.clear();   // Plan 17-09
 	m_passStages.clear();
 	m_passMaterial.clear();
+	m_passFfpCombiner.clear();   // detail-blend fix 2026-06-11
+	m_passFfpValid.clear();      // detail-blend fix 2026-06-11
 
 	if (!m_implementation)
 		return;
@@ -405,6 +407,8 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 	m_passVSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
 	m_passPSSlot.assign(passCount, nullptr);   // UAF fix: live-deref slots
 	m_passTexcoordKey.assign(passCount, 0u);   // Plan 17-09
+	m_passFfpCombiner.assign(passCount, Direct3d11_FfpCombinerDesc{});   // detail-blend fix 2026-06-11
+	m_passFfpValid.assign(passCount, 0);                                 // detail-blend fix 2026-06-11
 	{
 		PerPassStages emptyStages;
 		for (auto &s : emptyStages)
@@ -718,17 +722,64 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 		{
 			using SIPStage = ShaderImplementation::Pass::Stage;
 			ShaderImplementation::Pass::Stages const &ffpStages = *pass->m_stage;
+			// Detail-blend fix 2026-06-11: snapshot the stage cascade
+			// (ops/args/modifiers) alongside the texture bindings so the
+			// generated PS can emulate the D3D9 FFP combiner. ffpOk drops to
+			// false on anything the emulation can't represent (null stage
+			// entry, camera-space coordinate generation) -- the pass then
+			// stays m_passFfpValid=0 and falls back to single-texture.
+			Direct3d11_FfpCombinerDesc &ffpDesc = m_passFfpCombiner[passIndex];
+			bool ffpOk = true;
 			int stageIndex = 0;
 			for (ShaderImplementation::Pass::Stages::const_iterator si = ffpStages.begin();
 			     si != ffpStages.end() && stageIndex < kMaxStages; ++si, ++stageIndex)
 			{
 				SIPStage const * const st = *si;
 				if (!st)
+				{
+					ffpOk = false;
 					continue;
+				}
 				// D3D9 FFP disables this and all later stages at the first
 				// TO_disable color op -- stop populating there.
 				if (st->m_colorOperation == SIPStage::TO_disable)
 					break;
+
+				// Combiner snapshot. Coordinate generation: passThru and
+				// scroll1/scroll2 sample the VS texcoord directly (scroll's
+				// UV animation is deferred -- static UVs first cut);
+				// camera-space generation needs VS-side support -> reject.
+				if (st->m_textureCoordinateGeneration != SIPStage::CG_passThru
+					&& st->m_textureCoordinateGeneration != SIPStage::CG_scroll1
+					&& st->m_textureCoordinateGeneration != SIPStage::CG_scroll2)
+					ffpOk = false;
+
+				Direct3d11_FfpCombinerStage &cs = ffpDesc.stages[stageIndex];
+				cs.colorOp   = static_cast<uint8_t>(st->m_colorOperation);
+				cs.colorArg0 = static_cast<uint8_t>(st->m_colorArgument0);
+				cs.colorArg1 = static_cast<uint8_t>(st->m_colorArgument1);
+				cs.colorArg2 = static_cast<uint8_t>(st->m_colorArgument2);
+				cs.colorMod0 = static_cast<uint8_t>((st->m_colorArgument0Complement ? 1 : 0) | (st->m_colorArgument0AlphaReplicate ? 2 : 0));
+				cs.colorMod1 = static_cast<uint8_t>((st->m_colorArgument1Complement ? 1 : 0) | (st->m_colorArgument1AlphaReplicate ? 2 : 0));
+				cs.colorMod2 = static_cast<uint8_t>((st->m_colorArgument2Complement ? 1 : 0) | (st->m_colorArgument2AlphaReplicate ? 2 : 0));
+				cs.alphaOp   = static_cast<uint8_t>(st->m_alphaOperation);
+				cs.alphaArg0 = static_cast<uint8_t>(st->m_alphaArgument0);
+				cs.alphaArg1 = static_cast<uint8_t>(st->m_alphaArgument1);
+				cs.alphaArg2 = static_cast<uint8_t>(st->m_alphaArgument2);
+				cs.alphaMod0 = static_cast<uint8_t>(st->m_alphaArgument0Complement ? 1 : 0);
+				cs.alphaMod1 = static_cast<uint8_t>(st->m_alphaArgument1Complement ? 1 : 0);
+				cs.alphaMod2 = static_cast<uint8_t>(st->m_alphaArgument2Complement ? 1 : 0);
+				cs.resultArg = static_cast<uint8_t>(st->m_resultArgument);
+				cs.hasTexture = st->m_textureTag ? 1 : 0;
+				{
+					// D3D9 TEXCOORDINDEX parity (Direct3d9_StaticShaderData.cpp:213-217):
+					// resolve via the shader's tag->set map, fallback 1 on miss.
+					uint8 tcs = 1;
+					if (!shader.getTextureCoordinateSet(st->m_textureCoordinateSetTag, tcs))
+						tcs = 1;
+					cs.texcoordIndex = static_cast<uint8_t>(tcs);
+				}
+				ffpDesc.stageCount = stageIndex + 1;
 
 				Stage &stage = m_passStages[passIndex][stageIndex];
 				stage.m_present = true;
@@ -771,6 +822,18 @@ void Direct3d11_StaticShaderData::construct(StaticShader const &shader)
 					++s_passesWithSampler0TextureResolved;
 
 				stage.m_samplerDesc = buildSamplerDescForStage0(textureData, *st);
+			}
+
+			// Detail-blend fix 2026-06-11: cascade snapshot complete -- hash
+			// it (PS cache key component) and mark the pass FFP-valid. A
+			// 0-stage cascade (all stages disabled) stays invalid -> legacy
+			// vertex-color path. Op/arg support is validated at GENERATION
+			// time (buildHlslForVSOutputsFfp rejects -> single-texture
+			// fallback), not here -- the descriptor just records the data.
+			if (ffpOk && ffpDesc.stageCount > 0)
+			{
+				ffpDesc.computeHash();
+				m_passFfpValid[passIndex] = 1;
 			}
 		}
 	}
@@ -1639,6 +1702,12 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					Direct3d11_StateCache::setDepthWriteEnable(engPass->m_zWrite);
 					Direct3d11_StateCache::setDepthCompareFunc(translateCompare(engPass->m_zCompare));
 
+					// Fog fix 2026-06-11: per-pass fog color mode (Normal/
+					// Black/White), consumed by the generated-PS fog lerp.
+					// Mirrors D3D9's m_fogMode FOGCOLOR switch
+					// (Direct3d9_StaticShaderData.cpp:932-948).
+					Direct3d11_StateCache::setPsFogMode(static_cast<int>(engPass->m_fogMode));
+
 					// Plan 11-09.15 Iter-44A: per-pass COLOR-WRITE mask.
 					// Mirrors D3D9's RSB-equivalent push of COLORWRITEENABLE.
 					// Engine bits are D3D9 D3DCOLORWRITEENABLE_* which are
@@ -1711,6 +1780,25 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 				if (stage.m_present)
 					Direct3d11_StateCache::setPixelShaderSampler(slotIdx, stage.m_samplerDesc);
 			}
+
+			// Detail-blend fix 2026-06-11: push (or clear) this pass's FFP
+			// combiner cascade for the fallback-PS generator, plus the pass's
+			// TFACTOR (white when undeclared -- D3D9 default). The clear on
+			// the non-FFP branch is load-bearing: without it a stale cascade
+			// would leak onto the next asset-PS-less draw.
+			if (idx < m_passFfpValid.size() && m_passFfpValid[idx])
+			{
+				Direct3d11_StateCache::setFfpCombiner(&m_passFfpCombiner[idx]);
+				PerPassMaterial const &ffpPm = m_passMaterial[idx];
+				if (ffpPm.m_textureFactorValid)
+					Direct3d11_StateCache::setPsTextureFactor(
+						ffpPm.m_textureFactor.x, ffpPm.m_textureFactor.y,
+						ffpPm.m_textureFactor.z, ffpPm.m_textureFactor.w);
+				else
+					Direct3d11_StateCache::setPsTextureFactor(1.0f, 1.0f, 1.0f, 1.0f);
+			}
+			else
+				Direct3d11_StateCache::setFfpCombiner(nullptr);
 
 #if P19_LIGHTDUMP
 			// Phase 19 (19-04 Task 0b) DEV-ONLY: the ACTUAL SRVs bound for THIS draw,

@@ -58,6 +58,8 @@ class StaticShader;
 
 #include "clientGraphics/StaticShader.h"
 
+#include "Direct3d11_PixelShaderProgramData.h"   // detail-blend fix 2026-06-11: Direct3d11_FfpCombinerDesc
+
 #include <DirectXMath.h>   // Plan 17-03 SR-1: XMFLOAT4 for PerPassMaterial cache
 #include <d3d11.h>
 #include <array>
@@ -211,6 +213,16 @@ private:
 		DirectX::XMFLOAT4 m_textureFactor2;
 	};
 	std::vector<PerPassMaterial>                              m_passMaterial;
+
+	// Detail-blend fix 2026-06-11: per-pass FFP texture-stage combiner
+	// snapshot for FFP stage-based passes (pass->m_pixelShader NULL).
+	// m_passFfpValid gates it -- non-FFP passes and FFP passes with an
+	// unsupported coordinate generation (camera-space) stay invalid and
+	// apply() clears the StateCache combiner so they take the legacy
+	// single-texture fallback path. Consumed by the cascade PS generator
+	// via Direct3d11_StateCache::setFfpCombiner -> selectFallbackPSForVS.
+	std::vector<Direct3d11_FfpCombinerDesc>                   m_passFfpCombiner;
+	std::vector<uint8>                                        m_passFfpValid;
 };
 
 // ======================================================================

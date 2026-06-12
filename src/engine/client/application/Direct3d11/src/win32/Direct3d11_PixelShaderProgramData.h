@@ -90,6 +90,58 @@ struct Direct3d11_ReflectedPSInputSig
 };
 
 // ======================================================================
+//
+// Detail-blend fix 2026-06-11: FFP texture-stage combiner descriptor.
+//
+// FFP stage-based passes (pass->m_pixelShader NULL, pass->m_stage holds
+// D3D9 fixed-function texture stages) have no asset PS; D3D11 must emulate
+// the stage cascade in the generated fallback PS. Direct3d11_StaticShaderData::
+// construct() snapshots the engine's parsed ShaderImplementationPassStage
+// data (ops/args/modifiers, per D3D9 reference tables at
+// Direct3d9_ShaderImplementationData.cpp:86-124) into this POD; apply()
+// pushes it to Direct3d11_StateCache::setFfpCombiner; selectFallbackPSForVS
+// forwards it to getOrCompilePSForVS which generates + caches a cascade PS
+// per (VS bytecode, combiner hash).
+//
+// Field values are the raw engine enums (ShaderImplementationPassStage::
+// TextureOperation / TextureArgument) stored as uint8. Modifier bits:
+// bit0 = complement (1-x), bit1 = alphaReplicate (.aaaa, color args only).
+
+struct Direct3d11_FfpCombinerStage
+{
+	uint8_t colorOp;                                  // TextureOperation
+	uint8_t colorArg0, colorArg1, colorArg2;          // TextureArgument
+	uint8_t colorMod0, colorMod1, colorMod2;          // bit0 complement, bit1 alphaReplicate
+	uint8_t alphaOp;                                  // TextureOperation
+	uint8_t alphaArg0, alphaArg1, alphaArg2;          // TextureArgument
+	uint8_t alphaMod0, alphaMod1, alphaMod2;          // bit0 complement
+	uint8_t resultArg;                                // TextureArgument (TA_current supported; TA_temp -> unsupported)
+	uint8_t texcoordIndex;                            // TEXCOORD semantic index this stage samples with (D3D9 TEXCOORDINDEX parity)
+	uint8_t hasTexture;                               // stage declares a texture tag (SRV expected at this stage's slot)
+};
+
+struct Direct3d11_FfpCombinerDesc
+{
+	int                          stageCount;          // 0 = no stages (diffuse only); <0 never stored
+	Direct3d11_FfpCombinerStage  stages[8];
+	uint32_t                     hash;                // FNV-1a over stageCount+stages, computed at construct
+
+	void computeHash()
+	{
+		uint32_t h = 2166136261u;
+		auto mix = [&h](uint8_t b) { h ^= b; h *= 16777619u; };
+		mix(static_cast<uint8_t>(stageCount));
+		for (int i = 0; i < stageCount && i < 8; ++i)
+		{
+			uint8_t const *p = reinterpret_cast<uint8_t const *>(&stages[i]);
+			for (size_t b = 0; b < sizeof(Direct3d11_FfpCombinerStage); ++b)
+				mix(p[b]);
+		}
+		hash = h;
+	}
+};
+
+// ======================================================================
 
 class Direct3d11_PixelShaderProgramData : public ShaderImplementationPassPixelShaderProgramGraphicsData
 {
@@ -265,7 +317,14 @@ public:
 	// take the sampling branch (FFP semantics: no texture -> diffuse).
 	// Caller passes the StateCache's ms_boundSRV[0] shadow, which is
 	// current for the upcoming draw at applyPreDrawState time.
-	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound);   // Plan 17-09
+	//
+	// Detail-blend fix 2026-06-11: ffpDesc (nullable) carries the active
+	// pass's FFP texture-stage cascade. When present, a multi-stage
+	// combiner-emulation PS is generated + cached per (VS, combiner hash);
+	// if the cascade uses an unsupported op/arg the generator returns
+	// empty and this falls back to the srv0Bound single-texture variant
+	// (never magenta for a previously-rendering draw).
+	static ID3D11PixelShader *getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound, Direct3d11_FfpCombinerDesc const *ffpDesc);   // Plan 17-09
 
 private:
 

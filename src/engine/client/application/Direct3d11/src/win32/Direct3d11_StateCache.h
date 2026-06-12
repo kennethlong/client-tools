@@ -41,6 +41,7 @@
 
 class Direct3d11_PixelShaderProgramData;
 class Direct3d11_VertexShaderData;
+struct Direct3d11_FfpCombinerDesc;   // detail-blend fix 2026-06-11
 class StaticShader;
 class Texture;
 class HardwareVertexBuffer;
@@ -73,6 +74,13 @@ public:
 	static void setWorldToCameraTransform(Transform const &objectToWorld, Vector const &cameraPosition);
 	static void setProjectionMatrix(GlMatrix4x4 const &projectionMatrix);
 	static void setFog(bool enabled, real density, PackedArgb const &color);
+
+	// Fog fix 2026-06-11: per-pass fog COLOR mode for the generated-PS fog
+	// lerp (engine ShaderImplementationPass::FogMode passed as int:
+	// 0=Normal scene color, 1=Black, 2=White). Mirrors D3D9's per-pass
+	// D3DRS_FOGCOLOR resolve (Direct3d9_StaticShaderData.cpp:932-948).
+	// Called per-pass from Direct3d11_StaticShaderData::apply.
+	static void setPsFogMode(int fogMode);
 	static void setObjectToWorldTransformAndScale(Transform const &objectToWorld, Vector const &scale);
 
 	// Plan 17-08 (GAP-4) Producer A: map a WORLD-space direction into the
@@ -155,6 +163,23 @@ public:
 	// from engine's uint8 via /255.0f). Caller (StaticShaderData::apply)
 	// resolves the engine's TAG-based reference to a uint8 before normalizing.
 	static void setAlphaTest(bool enabled, float reference);
+
+	// Detail-blend fix 2026-06-11: per-pass texture factor for the FFP
+	// combiner-cascade generated PS (TA_textureFactor = D3D9 TFACTOR).
+	// Shares the b1 cbuffer with alpha-test (Direct3d11_PSAlphaTestCB).
+	// Caller (StaticShaderData::apply) passes the pass's resolved
+	// textureFactor, or white when the pass declares none (D3D9 default
+	// TFACTOR is 0xFFFFFFFF).
+	static void setPsTextureFactor(float r, float g, float b, float a);
+
+	// Detail-blend fix 2026-06-11: per-pass FFP texture-stage combiner
+	// descriptor for the cascade PS generator (see Direct3d11_FfpCombinerDesc
+	// in Direct3d11_PixelShaderProgramData.h). StaticShaderData::apply pushes
+	// the active pass's descriptor for FFP stage-based passes and null for
+	// asset-PS passes (clears -- prevents a stale cascade leaking onto the
+	// next fallback-PS draw). The descriptor is COPIED into shadow state;
+	// the caller's storage may be rebuilt on graphics-data restore.
+	static void setFfpCombiner(Direct3d11_FfpCombinerDesc const *desc);
 
 	// Pitfall 4: SRV binding only -- sampler is bound independently.
 	static void setGlobalTexture(Tag textureTag, Texture const &texture);

@@ -172,6 +172,46 @@ namespace Direct3d11_StateCacheNamespace
 	ID3D11InputLayout *                           ms_currentInputLayout = nullptr;
 	bool                                          ms_geometryRebindNeeded = true;
 
+	// Detail-blend fix 2026-06-11: PS slot-1 cbuffer shadow (alpha-test +
+	// textureFactor + fogColor share Direct3d11_PSAlphaTestCB) + the active
+	// pass's FFP texture-stage combiner descriptor for the cascade PS
+	// generator. Shadow fields start at -1 sentinels (impossible real
+	// values) so the FIRST setter call always mismatches and uploads -- the
+	// GPU buffer is primed to ZEROS at install, so a shadow that started at
+	// the "right" default would dirty-skip the first upload and leave zeros
+	// live.
+	Direct3d11_PSAlphaTestCB     ms_psSlot1CB = { DirectX::XMFLOAT4(-1.0f, -1.0f, 0.0f, 0.0f),
+	                                              DirectX::XMFLOAT4(-1.0f, -1.0f, -1.0f, -1.0f),
+	                                              DirectX::XMFLOAT4(-1.0f, -1.0f, -1.0f, -1.0f) };
+	Direct3d11_FfpCombinerDesc   ms_ffpCombiner = {};
+	bool                         ms_ffpCombinerValid = false;
+
+	// Fog fix 2026-06-11: scene fog state (from the engine's setFog slot) +
+	// the active pass's fog MODE (from StaticShaderData::apply, engine
+	// ShaderImplementationPass::FogMode: 0=Normal scene color, 1=Black,
+	// 2=White -- mirrors D3D9's per-pass D3DRS_FOGCOLOR resolve at
+	// Direct3d9_StaticShaderData.cpp:932-948).
+	bool              ms_sceneFogEnabled = false;
+	DirectX::XMFLOAT4 ms_sceneFogColor   = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	int               ms_psFogMode       = 0;
+
+	// Recompute the b1 fogColor from scene state + pass mode; upload on
+	// change. Called from setFog (scene change) and setPsFogMode (per-pass).
+	void refreshPsFogColor()
+	{
+		DirectX::XMFLOAT4 c;
+		if (ms_psFogMode == 1)      c = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);   // FM_Black
+		else if (ms_psFogMode == 2) c = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 0.0f);   // FM_White
+		else                        c = ms_sceneFogColor;                            // FM_Normal
+		c.w = ms_sceneFogEnabled ? 1.0f : 0.0f;
+		if (ms_psSlot1CB.fogColor.x == c.x && ms_psSlot1CB.fogColor.y == c.y
+			&& ms_psSlot1CB.fogColor.z == c.z && ms_psSlot1CB.fogColor.w == c.w)
+			return;
+		ms_psSlot1CB.fogColor = c;
+		Direct3d11_ConstantBuffer::updatePS(1, &ms_psSlot1CB, sizeof(ms_psSlot1CB));
+		Direct3d11_ConstantBuffer::bindPS(1);
+	}
+
 	// ------------------------------------------------------------------
 	// Frame counters / metrics (Direct3d11_Metrics consumes these in Task 3).
 
@@ -1099,7 +1139,13 @@ namespace Direct3d11_StateCacheNamespace
 		// read -- the Plan 11-09.14 staleness caveat above applied to device
 		// reads only. Textured draws get the sampling variant; untextured
 		// draws get the vertex-color variant (FFP: no texture -> diffuse).
-		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(vsData, textureCoordinateSetKey, ms_boundSRV[0] != nullptr);
+		//
+		// Detail-blend fix 2026-06-11: forward the active pass's FFP combiner
+		// descriptor (set/cleared per-pass by StaticShaderData::apply) so FFP
+		// stage-based passes get the full multi-texture cascade PS.
+		ID3D11PixelShader *perVS = Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(
+			vsData, textureCoordinateSetKey, ms_boundSRV[0] != nullptr,
+			ms_ffpCombinerValid ? &ms_ffpCombiner : nullptr);
 		if (!perVS)
 			return variantM;   // tombstone -> magenta safety net
 
@@ -1385,6 +1431,7 @@ namespace Direct3d11_StateCacheNamespace
 		Direct3d11_ConstantBuffer::bindVS(0);
 		Direct3d11_ConstantBuffer::bindVS(1);
 		Direct3d11_ConstantBuffer::bindPS(0);
+		Direct3d11_ConstantBuffer::bindPS(1);   // fog fix 2026-06-11: alphaTest/textureFactor/fogColor -- generated PSes AND the 17-07 asset wrapper read b1 now
 		Direct3d11_ConstantBuffer::bindPS(2);
 
 		// 7. SRVs + samplers (Pitfall 4 split)
@@ -1937,6 +1984,37 @@ void Direct3d11_StateCache::setFog(bool enabled, real density, PackedArgb const 
 	// CONSULT-39 (2026-06-08): same b0 zero-tail clobber as setAlphaFadeOpacity -- drop the apply()
 	// cache so the dot3 block is re-uploaded on the next setStaticShader.
 	Direct3d11_StaticShaderData::invalidateApplyCache();
+
+	// Fog fix 2026-06-11: feed the VS fog constant c10 = {0, 0, density,
+	// density^2} -- EXACT D3D9 parity (Direct3d9.cpp:3390-3391, VSCR_fog=10).
+	// The reauthored //hlsl VSes compute the per-vertex EXP2 fog factor
+	// 1/exp(d^2 * fog.w) (functions.inc calculateFog); pre-fix c10 was NEVER
+	// written ("zero for now") so every VS emitted factor 1.0 = no fog.
+	// Zeroed when disabled -> factor stays 1.0 (D3D9 just flips FOGENABLE;
+	// the PS-side enable gate in b1 fogColor.w covers that as well).
+	float const d = enabled ? static_cast<float>(density) : 0.0f;
+	s_slot0Shadow.c8_to_c10[2] = XMFLOAT4(0.0f, 0.0f, d, d * d);
+	s_slot0Dirty = true;
+
+	// Fog fix 2026-06-11: PS-side scene fog snapshot + b1 fogColor refresh
+	// (the per-pass MODE resolve lives in setPsFogMode).
+	ms_sceneFogEnabled = enabled;
+	ms_sceneFogColor   = XMFLOAT4(r, g, b, 1.0f);
+	refreshPsFogColor();
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setPsFogMode(int fogMode)
+{
+	// Fog fix 2026-06-11: per-pass fog COLOR mode (engine FogMode enum:
+	// 0=Normal scene color, 1=Black, 2=White). Mirrors D3D9's per-pass
+	// D3DRS_FOGCOLOR switch at Direct3d9_StaticShaderData.cpp:932-948.
+	// Called per-pass from StaticShaderData::apply.
+	if (ms_psFogMode == fogMode)
+		return;
+	ms_psFogMode = fogMode;
+	refreshPsFogColor();
 }
 
 // ----------------------------------------------------------------------
@@ -2148,21 +2226,49 @@ void Direct3d11_StateCache::setAlphaTest(bool enabled, float reference)
 	// cbuffer slot 1; the dynamic-generated PS reads it and conditionally
 	// clip()s. Dirty-skip when already-current to avoid per-draw cbuffer
 	// updates for repeating values.
-	static float s_lastEnable    = -1.0f;
-	static float s_lastReference = -1.0f;
+	//
+	// Detail-blend fix 2026-06-11: slot 1 now shares Direct3d11_PSAlphaTestCB
+	// with textureFactor -- writes go through the ms_psSlot1CB shadow so each
+	// setter uploads the full struct without clobbering the other's state
+	// (WRITE_DISCARD full-write discipline).
 	float const newEnable = enabled ? 1.0f : 0.0f;
-	if (s_lastEnable == newEnable && s_lastReference == reference)
+	if (ms_psSlot1CB.alphaTest.x == newEnable && ms_psSlot1CB.alphaTest.y == reference)
 		return;
-	s_lastEnable    = newEnable;
-	s_lastReference = reference;
+	ms_psSlot1CB.alphaTest.x = newEnable;
+	ms_psSlot1CB.alphaTest.y = reference;
 
-	Direct3d11_PSAlphaTestCB cb = {};
-	cb.alphaTest.x = newEnable;
-	cb.alphaTest.y = reference;
-	cb.alphaTest.z = 0.0f;
-	cb.alphaTest.w = 0.0f;
-	Direct3d11_ConstantBuffer::updatePS(1, &cb, sizeof(cb));
+	Direct3d11_ConstantBuffer::updatePS(1, &ms_psSlot1CB, sizeof(ms_psSlot1CB));
 	Direct3d11_ConstantBuffer::bindPS(1);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setPsTextureFactor(float r, float g, float b, float a)
+{
+	// Detail-blend fix 2026-06-11: per-pass TFACTOR for the FFP combiner-
+	// cascade generated PS. Same shadow + dirty-skip model as setAlphaTest.
+	if (ms_psSlot1CB.textureFactor.x == r && ms_psSlot1CB.textureFactor.y == g
+		&& ms_psSlot1CB.textureFactor.z == b && ms_psSlot1CB.textureFactor.w == a)
+		return;
+	ms_psSlot1CB.textureFactor = DirectX::XMFLOAT4(r, g, b, a);
+
+	Direct3d11_ConstantBuffer::updatePS(1, &ms_psSlot1CB, sizeof(ms_psSlot1CB));
+	Direct3d11_ConstantBuffer::bindPS(1);
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_StateCache::setFfpCombiner(Direct3d11_FfpCombinerDesc const *desc)
+{
+	// Detail-blend fix 2026-06-11: copy (descriptor storage is rebuilt on
+	// graphics-data restore) or clear the active pass's combiner cascade.
+	if (desc)
+	{
+		ms_ffpCombiner      = *desc;
+		ms_ffpCombinerValid = true;
+	}
+	else
+		ms_ffpCombinerValid = false;
 }
 
 // ----------------------------------------------------------------------

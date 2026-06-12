@@ -583,6 +583,32 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			break;
 		}
 
+		// Fog fix 2026-06-11: FOG0 detection. The reauthored //hlsl VSes
+		// output a per-vertex EXP2 fog factor (1 = no fog .. 0 = full fog)
+		// at semantic FOG; D3D9 hardware consumed it post-PS, D3D11 must
+		// lerp in the PS. Build the access expression (field may be wider
+		// than 1 component on exotic packings -> take .x).
+		std::string fogStmt;
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			if (_stricmp(o.SemanticName, "FOG") != 0) continue;
+			if (o.SemanticIndex != 0) continue;
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			int componentCount = 0;
+			if (o.ComponentMask & 0x1) ++componentCount;
+			if (o.ComponentMask & 0x2) ++componentCount;
+			if (o.ComponentMask & 0x4) ++componentCount;
+			if (o.ComponentMask & 0x8) ++componentCount;
+			if (componentCount < 1) continue;
+			char buf[128];
+			snprintf(buf, sizeof(buf),
+				"    if (fogColor.w > 0.5) col.rgb = lerp(fogColor.rgb, col.rgb, saturate(input._v%zu%s));\n",
+				i, componentCount > 1 ? ".x" : "");
+			fogStmt = buf;
+			break;
+		}
+
 		std::string hlsl;
 		hlsl.reserve(1024);
 
@@ -593,19 +619,21 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		{
 			hlsl += "Texture2D    t : register(t0);\n";
 			hlsl += "SamplerState s : register(s0);\n";
-
-			// Plan 11-09.15 Iter-44B: per-pass alpha-test parameters.
-			// alphaTest.x = enable (0/1), alphaTest.y = reference (0..1).
-			// State pushed by Direct3d11_StateCache::setAlphaTest from
-			// StaticShaderData::apply per-pass. Only matters when sampling
-			// a texture, so we only declare the cbuffer in branches that
-			// have texcoord0. Test semantics emulate D3D9's dominant
-			// GreaterOrEqual: discard pixel when sampled alpha < ref.
-			// Other compare functions are not currently supported in this
-			// scaffold; if a future asset needs them we extend the cbuffer
-			// with a function index.
-			hlsl += "cbuffer PSAlphaTest : register(b1) { float4 alphaTest; };\n";
 		}
+
+		// Plan 11-09.15 Iter-44B: per-pass alpha-test parameters.
+		// alphaTest.x = enable (0/1), alphaTest.y = reference (0..1).
+		// State pushed by Direct3d11_StateCache::setAlphaTest from
+		// StaticShaderData::apply per-pass. Test semantics emulate D3D9's
+		// dominant GreaterOrEqual: discard pixel when sampled alpha < ref.
+		// Other compare functions are not currently supported in this
+		// scaffold; if a future asset needs them we extend the cbuffer
+		// with a function index.
+		//
+		// Fog fix 2026-06-11: declared unconditionally now (the color-only
+		// branch needs fogColor too); textureFactor/fogColor layout shared
+		// with the FFP cascade builder (Direct3d11_PSAlphaTestCB).
+		hlsl += "cbuffer PSAlphaTest : register(b1) { float4 alphaTest; float4 textureFactor; float4 fogColor; };\n";
 
 		hlsl += "struct PSIn\n{\n";
 		hlsl += "    float4 _pos : SV_POSITION;\n";
@@ -656,6 +684,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			hlsl += colField;
 			hlsl += ";\n";
 			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
+			hlsl += fogStmt;   // fog fix 2026-06-11: post-alpha-test fog lerp (D3D9 pipeline order)
 			hlsl += "    return col;\n";
 		}
 		else if (texcoord0Index >= 0)
@@ -675,6 +704,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			hlsl += field;
 			hlsl += ".xy);\n";
 			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
+			hlsl += fogStmt;   // fog fix 2026-06-11
 			hlsl += "    return col;\n";
 		}
 		else if (color0Index >= 0)
@@ -684,16 +714,313 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// with SRV0=NULL -- colored quads (panel fills, separators).
 			// Previously fell through to magenta because no TEXCOORD0
 			// output; now emits the vertex color directly.
+			// Fog fix 2026-06-11: routed through `col` so the fog lerp
+			// applies (UI VSes output no FOG -> fogStmt empty -> unchanged).
 			char colField[32];
 			snprintf(colField, sizeof(colField), "_v%d", color0Index);
-			hlsl += "    return input.";
+			hlsl += "    float4 col = input.";
 			hlsl += colField;
 			hlsl += ";\n";
+			hlsl += fogStmt;
+			hlsl += "    return col;\n";
 		}
 		else
 		{
 			hlsl += "    return float4(1.0f, 0.0f, 1.0f, 1.0f);\n";
 		}
+		hlsl += "}\n";
+
+		return hlsl;
+	}
+
+	// ------------------------------------------------------------------
+	// Detail-blend fix 2026-06-11: which combiner args an op consumes.
+	// Every supported op reads arg1 except selectArg2, and arg2 except
+	// selectArg1; arg0 consumption (lerp/multiplyAdd) is checked at the
+	// opExpr site. Used to decide whether an empty (unsupported) argument
+	// expression should abort cascade generation.
+	bool usesArg1(uint8_t op) { return op != static_cast<uint8_t>(ShaderImplementationPassStage::TO_selectArg2); }
+	bool usesArg2(uint8_t op) { return op != static_cast<uint8_t>(ShaderImplementationPassStage::TO_selectArg1); }
+
+	// ------------------------------------------------------------------
+	// Detail-blend fix 2026-06-11: FFP texture-stage cascade PS generator.
+	//
+	// Emulates the D3D9 fixed-function multi-texture cascade (D3DTSS_COLOROP/
+	// ALPHAOP + args, reference semantics per the D3D9 translation tables at
+	// Direct3d9_ShaderImplementationData.cpp:86-124 and Stage::apply) in a
+	// generated PS, so FFP stage-based .shts (interior wall/floor detail
+	// blends -- c_2blend_dirt etc.) render their full layer stack instead of
+	// the single-texture first cut. Per D3D9 semantics:
+	//   * stage 0 CURRENT = DIFFUSE (interpolated vertex color, COLOR0)
+	//   * each stage computes color and alpha independently, result is
+	//     saturated and becomes CURRENT for the next stage
+	//   * cascade terminates at the first TO_disable colorOp (construct
+	//     already stops there, so stageCount is the live count)
+	//   * TFACTOR = the pass's textureFactor (b1 cbuffer, pushed by apply())
+	//
+	// Returns empty string when the cascade uses anything unsupported
+	// (TA_specular/TA_temp args, result-to-temp, dot3/bumpenv/premodulate
+	// ops, texture arg on a textureless stage, texcoord index the VS does
+	// not provide) -- the caller then falls back to the single-texture
+	// builder above, never magenta.
+	std::string buildHlslForVSOutputsFfp(std::vector<Direct3d11_ReflectedVSOutput> const &outputsIn, Direct3d11_FfpCombinerDesc const &desc)
+	{
+		using SIPStage = ShaderImplementationPassStage;
+
+		if (desc.stageCount <= 0 || desc.stageCount > 8)
+			return std::string();
+
+		for (Direct3d11_ReflectedVSOutput const &o : outputsIn)
+		{
+			if (!isValidHlslIdentifier(o.SemanticName))
+				return std::string();
+		}
+
+		// Sort identical to buildHlslForVSOutputs (register, then first
+		// component, then semantic index) -- the declaration-order packing
+		// invariant is shared.
+		auto firstComponent = [](UINT mask) -> UINT {
+			if (mask & 0x1) return 0;
+			if (mask & 0x2) return 1;
+			if (mask & 0x4) return 2;
+			if (mask & 0x8) return 3;
+			return 0;
+		};
+		std::vector<Direct3d11_ReflectedVSOutput> outputs = outputsIn;
+		std::sort(outputs.begin(), outputs.end(),
+			[&firstComponent](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+				if (a.Register != b.Register) return a.Register < b.Register;
+				UINT const fa = firstComponent(a.ComponentMask);
+				UINT const fb = firstComponent(b.ComponentMask);
+				if (fa != fb) return fa < fb;
+				return a.SemanticIndex < b.SemanticIndex;
+			});
+
+		// Locate COLOR0 (diffuse), every TEXCOORD index (>=2 FLOAT32
+		// components, same gate as the single-texture builder), and the
+		// FOG0 factor (fog fix 2026-06-11).
+		int colorField = -1;
+		int texcoordField[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+		std::string fogStmt;
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			if (_stricmp(o.SemanticName, "COLOR") == 0 && o.SemanticIndex == 0
+				&& (o.ComponentMask & 0xF) == 0xF)
+			{
+				colorField = static_cast<int>(i);
+			}
+			else if (_stricmp(o.SemanticName, "TEXCOORD") == 0 && o.SemanticIndex < 8)
+			{
+				int componentCount = 0;
+				if (o.ComponentMask & 0x1) ++componentCount;
+				if (o.ComponentMask & 0x2) ++componentCount;
+				if (o.ComponentMask & 0x4) ++componentCount;
+				if (o.ComponentMask & 0x8) ++componentCount;
+				if (componentCount >= 2)
+					texcoordField[o.SemanticIndex] = static_cast<int>(i);
+			}
+			else if (_stricmp(o.SemanticName, "FOG") == 0 && o.SemanticIndex == 0 && fogStmt.empty())
+			{
+				int componentCount = 0;
+				if (o.ComponentMask & 0x1) ++componentCount;
+				if (o.ComponentMask & 0x2) ++componentCount;
+				if (o.ComponentMask & 0x4) ++componentCount;
+				if (o.ComponentMask & 0x8) ++componentCount;
+				if (componentCount < 1) continue;
+				char buf[128];
+				snprintf(buf, sizeof(buf),
+					"    if (fogColor.w > 0.5) cur.rgb = lerp(fogColor.rgb, cur.rgb, saturate(input._v%zu%s));\n",
+					i, componentCount > 1 ? ".x" : "");
+				fogStmt = buf;
+			}
+		}
+
+		// Per-stage argument expression builder. channelColor selects the
+		// .rgb (with alphaReplicate -> .aaa) vs .a form. Returns empty on
+		// unsupported argument.
+		auto argExpr = [&](int stageIdx, uint8_t arg, uint8_t mods, bool channelColor) -> std::string {
+			char buf[64];
+			std::string e;
+			bool const alphaReplicate = channelColor && (mods & 0x2) != 0;
+			char const *suffix = channelColor ? (alphaReplicate ? ".aaa" : ".rgb") : ".a";
+			switch (arg)
+			{
+				case SIPStage::TA_current:        e = std::string("cur") + suffix; break;
+				case SIPStage::TA_diffuse:        e = std::string("dif") + suffix; break;
+				case SIPStage::TA_texture:
+					if (!desc.stages[stageIdx].hasTexture)
+						return std::string();
+					snprintf(buf, sizeof(buf), "tex%d%s", stageIdx, suffix);
+					e = buf;
+					break;
+				case SIPStage::TA_textureFactor:  e = std::string("textureFactor") + suffix; break;
+				case SIPStage::TA_specular:       // VS provides no COLOR1 -- unsupported
+				case SIPStage::TA_temp:           // result-to-temp routing -- unsupported
+				default:
+					return std::string();
+			}
+			if (mods & 0x1)
+				e = "(1.0 - " + e + ")";
+			return e;
+		};
+
+		// Per-stage op expression. blendTex/blendDif/blendCur/blendFac are
+		// the scalar blend factors. Returns empty on unsupported op.
+		auto opExpr = [&](int stageIdx, uint8_t op, std::string const &a0, std::string const &a1, std::string const &a2,
+		                  std::string const &a1Alpha, bool /*channelColor*/) -> std::string {
+			char texA[32];
+			snprintf(texA, sizeof(texA), "tex%d.a", stageIdx);
+			bool const stageHasTexture = desc.stages[stageIdx].hasTexture != 0;
+			switch (op)
+			{
+				case SIPStage::TO_selectArg1:        return a1;
+				case SIPStage::TO_selectArg2:        return a2;
+				case SIPStage::TO_modulate:          return "(" + a1 + " * " + a2 + ")";
+				case SIPStage::TO_modulate2x:        return "((" + a1 + " * " + a2 + ") * 2.0)";
+				case SIPStage::TO_modulate4x:        return "((" + a1 + " * " + a2 + ") * 4.0)";
+				case SIPStage::TO_add:               return "(" + a1 + " + " + a2 + ")";
+				case SIPStage::TO_addSigned:         return "(" + a1 + " + " + a2 + " - 0.5)";
+				case SIPStage::TO_addSigned2x:       return "((" + a1 + " + " + a2 + " - 0.5) * 2.0)";
+				case SIPStage::TO_subtract:          return "(" + a1 + " - " + a2 + ")";
+				case SIPStage::TO_addSmooth:         return "(" + a1 + " + " + a2 + " * (1.0 - " + a1 + "))";
+				case SIPStage::TO_blendDiffuseAlpha: return "lerp(" + a2 + ", " + a1 + ", dif.a)";
+				case SIPStage::TO_blendTextureAlpha:
+					if (!stageHasTexture) return std::string();
+					return "lerp(" + a2 + ", " + a1 + ", " + texA + ")";
+				case SIPStage::TO_blendFactorAlpha:  return "lerp(" + a2 + ", " + a1 + ", textureFactor.a)";
+				case SIPStage::TO_blendTextureAlphapm:
+					if (!stageHasTexture) return std::string();
+					return "(" + a1 + " + " + a2 + " * (1.0 - " + texA + "))";
+				case SIPStage::TO_blendCurrentAlpha: return "lerp(" + a2 + ", " + a1 + ", cur.a)";
+				case SIPStage::TO_modulateAlpha_addColor:
+					if (a1Alpha.empty()) return std::string();
+					return "(" + a1 + " + " + a1Alpha + " * " + a2 + ")";
+				case SIPStage::TO_modulateColor_addAlpha:
+					if (a1Alpha.empty()) return std::string();
+					return "(" + a1 + " * " + a2 + " + " + a1Alpha + ")";
+				case SIPStage::TO_modulateInvalpha_addColor:
+					if (a1Alpha.empty()) return std::string();
+					return "((1.0 - " + a1Alpha + ") * " + a2 + " + " + a1 + ")";
+				case SIPStage::TO_modulateInvcolor_addAlpha:
+					if (a1Alpha.empty()) return std::string();
+					return "((1.0 - " + a1 + ") * " + a2 + " + " + a1Alpha + ")";
+				case SIPStage::TO_multiplyAdd:
+					if (a0.empty()) return std::string();
+					return "(" + a0 + " + " + a1 + " * " + a2 + ")";
+				case SIPStage::TO_lerp:
+					if (a0.empty()) return std::string();
+					return "lerp(" + a2 + ", " + a1 + ", " + a0 + ")";
+				default:
+					// TO_disable mid-list (construct stops there), dot3,
+					// premodulate, bumpEnvMap* -- unsupported.
+					return std::string();
+			}
+		};
+
+		// Validate + build per-stage bodies first so any unsupported feature
+		// aborts before we commit to the cascade.
+		std::string stageBodies;
+		for (int s = 0; s < desc.stageCount; ++s)
+		{
+			Direct3d11_FfpCombinerStage const &st = desc.stages[s];
+
+			if (st.resultArg != static_cast<uint8_t>(SIPStage::TA_current))
+				return std::string();
+
+			char line[160];
+			if (st.hasTexture)
+			{
+				if (st.texcoordIndex >= 8 || texcoordField[st.texcoordIndex] < 0)
+					return std::string();
+				snprintf(line, sizeof(line), "    float4 tex%d = t%d.Sample(s%d, input._v%d.xy);\n",
+					s, s, s, texcoordField[st.texcoordIndex]);
+				stageBodies += line;
+			}
+
+			// Color channel. Ops referencing only specific args evaluate
+			// lazily -- build all arg expressions but tolerate empties for
+			// args the op doesn't consume.
+			std::string const c0 = argExpr(s, st.colorArg0, st.colorMod0, true);
+			std::string const c1 = argExpr(s, st.colorArg1, st.colorMod1, true);
+			std::string const c2 = argExpr(s, st.colorArg2, st.colorMod2, true);
+			std::string const c1a = argExpr(s, st.colorArg1, st.colorMod1, false);
+			bool const colorActive = (st.colorOp != static_cast<uint8_t>(SIPStage::TO_disable));
+			std::string colorExpr;
+			if (colorActive)
+			{
+				if (c1.empty() && usesArg1(st.colorOp)) return std::string();
+				if (c2.empty() && usesArg2(st.colorOp)) return std::string();
+				colorExpr = opExpr(s, st.colorOp, c0, c1, c2, c1a, true);
+				if (colorExpr.empty())
+					return std::string();
+			}
+			else
+				colorExpr = "cur.rgb";
+
+			// Alpha channel. TO_disable while color is active = passthrough.
+			std::string const a0 = argExpr(s, st.alphaArg0, st.alphaMod0, false);
+			std::string const a1 = argExpr(s, st.alphaArg1, st.alphaMod1, false);
+			std::string const a2 = argExpr(s, st.alphaArg2, st.alphaMod2, false);
+			std::string alphaExpr;
+			if (st.alphaOp != static_cast<uint8_t>(SIPStage::TO_disable))
+			{
+				if (a1.empty() && usesArg1(st.alphaOp)) return std::string();
+				if (a2.empty() && usesArg2(st.alphaOp)) return std::string();
+				alphaExpr = opExpr(s, st.alphaOp, a0, a1, a2, a1, false);
+				if (alphaExpr.empty())
+					return std::string();
+			}
+			else
+				alphaExpr = "cur.a";
+
+			stageBodies += "    cur = saturate(float4(" + colorExpr + ", " + alphaExpr + "));\n";
+		}
+
+		// Cascade validated -- emit the full PS.
+		std::string hlsl;
+		hlsl.reserve(2048);
+		hlsl += "// Detail-blend FFP combiner-cascade PS (auto-generated).\n";
+		hlsl += "// Mirrors VS output struct register-for-register; emulates the\n";
+		hlsl += "// D3D9 fixed-function texture stage cascade for this pass.\n";
+
+		char decl[96];
+		for (int s = 0; s < desc.stageCount; ++s)
+		{
+			if (!desc.stages[s].hasTexture)
+				continue;
+			snprintf(decl, sizeof(decl), "Texture2D    t%d : register(t%d);\nSamplerState s%d : register(s%d);\n", s, s, s, s);
+			hlsl += decl;
+		}
+		hlsl += "cbuffer PSAlphaTest : register(b1) { float4 alphaTest; float4 textureFactor; float4 fogColor; };\n";
+
+		hlsl += "struct PSIn\n{\n";
+		hlsl += "    float4 _pos : SV_POSITION;\n";
+		for (size_t i = 0; i < outputs.size(); ++i)
+		{
+			Direct3d11_ReflectedVSOutput const &o = outputs[i];
+			std::string type = hlslTypeFor(o.ComponentType, o.ComponentMask);
+			char field[48];
+			snprintf(field, sizeof(field), "    %s _v%zu : %s%u;\n", type.c_str(), i, o.SemanticName, o.SemanticIndex);
+			hlsl += field;
+		}
+		hlsl += "};\n\n";
+
+		hlsl += "float4 main(PSIn input) : SV_TARGET\n{\n";
+		if (colorField >= 0)
+		{
+			char difLine[48];
+			snprintf(difLine, sizeof(difLine), "    float4 dif = input._v%d;\n", colorField);
+			hlsl += difLine;
+		}
+		else
+			hlsl += "    float4 dif = float4(1.0, 1.0, 1.0, 1.0);\n";
+		hlsl += "    float4 cur = dif;\n";
+		hlsl += stageBodies;
+		hlsl += "    if (alphaTest.x > 0.5) clip(cur.a - alphaTest.y);\n";
+		hlsl += fogStmt;   // fog fix 2026-06-11: post-alpha-test fog lerp (D3D9 pipeline order)
+		hlsl += "    return cur;\n";
 		hlsl += "}\n";
 
 		return hlsl;
@@ -905,14 +1232,28 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 				return result;
 		}
 
-		// Sort a copy of VS outputs by Register (ties: SemanticIndex) -- mirror
-		// buildHlslForVSOutputs:487-492. Validate each semantic is a clean identifier.
+		// Sort a copy of VS outputs by Register (ties: first component, then
+		// SemanticIndex) -- mirror buildHlslForVSOutputs. The first-component
+		// tie-break (fog fix 2026-06-11) keeps declaration order deterministic
+		// when two semantics share a register with complementary masks (e.g.
+		// FOG at oN.x + TEXCOORD at oN.yz) so fxc re-derives the VS packing.
+		// Validate each semantic is a clean identifier.
 		std::vector<Direct3d11_ReflectedVSOutput> vsOutputs = vsOutputsIn;
 		for (Direct3d11_ReflectedVSOutput const &o : vsOutputs)
 			if (!isValidHlslIdentifier(o.SemanticName)) return result;
+		auto firstComponent1707 = [](UINT mask) -> UINT {
+			if (mask & 0x1) return 0;
+			if (mask & 0x2) return 1;
+			if (mask & 0x4) return 2;
+			if (mask & 0x8) return 3;
+			return 0;
+		};
 		std::sort(vsOutputs.begin(), vsOutputs.end(),
-			[](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
+			[&firstComponent1707](Direct3d11_ReflectedVSOutput const &a, Direct3d11_ReflectedVSOutput const &b) {
 				if (a.Register != b.Register) return a.Register < b.Register;
+				UINT const fa = firstComponent1707(a.ComponentMask);
+				UINT const fb = firstComponent1707(b.ComponentMask);
+				if (fa != fb) return fa < fb;
 				return a.SemanticIndex < b.SemanticIndex;
 			});
 
@@ -948,9 +1289,34 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		// alignment). The asset main() is renamed assetMain1707 and called from a new
 		// wrapper main(PsIn1707), sourcing each asset param from its mirror field --
 		// so the asset's real shading body is preserved verbatim.
+		// Fog fix 2026-06-11: locate the VS's FOG0 output among the mirrored
+		// fields. D3D9 applied EXP2 fog POST-PS in hardware from the VS oFog
+		// factor; D3D11 has no fog stage, so the wrapper lerps the asset PS
+		// result toward the per-pass fog color (b1, fed by StateCache
+		// setFog/setPsFogMode). Field names carry the 1707 suffix so they
+		// cannot collide with asset globals (pixel_shader_constants.inc
+		// declares `textureFactor` etc.; asset register(cN) globals live in
+		// $Globals at b0 -- b1 is the plugin's alphaTest/textureFactor/fog
+		// slot, layout = Direct3d11_PSAlphaTestCB).
+		int fogVsIndex = -1;
+		for (size_t j = 0; j < vsOutputs.size(); ++j)
+		{
+			Direct3d11_ReflectedVSOutput const &o = vsOutputs[j];
+			if (_stricmp(o.SemanticName, "FOG") != 0) continue;
+			if (o.SemanticIndex != 0) continue;
+			if (o.ComponentType != D3D_REGISTER_COMPONENT_FLOAT32) continue;
+			if ((o.ComponentMask & 0xF) == 0) continue;
+			fogVsIndex = static_cast<int>(j);
+			break;
+		}
+		bool const fogFieldIsScalar = (fogVsIndex >= 0)
+			&& (((vsOutputs[fogVsIndex].ComponentMask & 0xF) & ((vsOutputs[fogVsIndex].ComponentMask & 0xF) - 1)) == 0);   // single bit set
+
 		std::string mirror;
 		mirror.reserve(1024);
 		mirror += "\n\n// Plan 17-07 VS-mirror wrapper (register-base alignment; project_17_07_ps_register_base_offset).\n";
+		if (fogVsIndex >= 0)
+			mirror += "cbuffer PSFog1707 : register(b1) { float4 alphaTest1707; float4 textureFactor1707; float4 fogColor1707; };\n";
 		mirror += "struct PsIn1707\n{\n";
 		mirror += "    float4 f_pos1707 : SV_Position;\n";
 		for (size_t j = 0; j < vsOutputs.size(); ++j)
@@ -963,7 +1329,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			mirror += " : "; mirror += o.SemanticName; mirror += idx; mirror += ";\n";
 		}
 		mirror += "};\n\n";
-		mirror += "float4 main(PsIn1707 i1707) : SV_Target\n{\n    return assetMain1707(";
+		mirror += "float4 main(PsIn1707 i1707) : SV_Target\n{\n    float4 c1707 = assetMain1707(";
 		for (size_t k = 0; k < params.size(); ++k)
 		{
 			if (k) mirror += ", ";
@@ -993,7 +1359,19 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 				mirror += arg;
 			}
 		}
-		mirror += ");\n}\n";
+		mirror += ");\n";
+		// Fog fix 2026-06-11: post-PS fog lerp (D3D9 pipeline order -- fog is
+		// the last stage before blend). Gated on fogColor1707.w (enable) so
+		// fog-disabled scenes pay one branch.
+		if (fogVsIndex >= 0)
+		{
+			char fogLine[160];
+			_snprintf_s(fogLine, sizeof(fogLine), _TRUNCATE,
+				"    if (fogColor1707.w > 0.5) c1707.rgb = lerp(fogColor1707.rgb, c1707.rgb, saturate(i1707.f_%d%s));\n",
+				fogVsIndex, fogFieldIsScalar ? "" : ".x");
+			mirror += fogLine;
+		}
+		mirror += "    return c1707;\n}\n";
 
 		// Rename the asset entry main -> assetMain1707 (so it is a plain function
 		// defined before the wrapper), then append the mirror struct + wrapper.
@@ -1156,7 +1534,7 @@ void Direct3d11_PixelShaderProgramData::remove()
 
 // ----------------------------------------------------------------------
 
-ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound)
+ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct3d11_VertexShaderData const *vsData, uint32 textureCoordinateSetKey, bool srv0Bound, Direct3d11_FfpCombinerDesc const *ffpDesc)
 {
 	// Plan 11-09.13 Iter-4: lazy per-VS PS generation + cache. Keyed by
 	// VS bytecode hash so identical bytecode shares a PS. Cache miss
@@ -1178,7 +1556,13 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	// have no texture). The textured and untextured generated PSes differ
 	// (sample-modulate vs vertex-color), so each gets its own cache entry --
 	// salt the untextured key. Same VS + same srv0Bound -> same entry.
-	uint64_t const cacheKey = srv0Bound ? hash : (hash ^ 0x5EBAF00D5EBAF00Dull);
+	//
+	// Detail-blend fix 2026-06-11: FFP combiner cascades additionally key on
+	// the combiner hash -- the same VS is shared by many .shts with different
+	// stage cascades (op/arg/texcoord permutations).
+	uint64_t cacheKey = srv0Bound ? hash : (hash ^ 0x5EBAF00D5EBAF00Dull);
+	if (ffpDesc)
+		cacheKey ^= 0x9E3779B97F4A7C15ull * (static_cast<uint64_t>(ffpDesc->hash) | 1ull);
 	auto it = ms_perVSCache.find(cacheKey);
 	if (it != ms_perVSCache.end())
 		return it->second.Get();   // hit (may be null tombstone)
@@ -1189,7 +1573,20 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	// Empty PS generator output (validation failure) -> tombstone.
 	// Compile failure -> tombstone. All paths cache-miss-then-tombstone
 	// to avoid retry storms across thousands of draws using the same VS.
-	std::string const hlsl = buildHlslForVSOutputs(outputs, srv0Bound);
+	//
+	// Detail-blend fix 2026-06-11: try the FFP cascade first; on
+	// unsupported-feature rejection (empty string) fall back to the
+	// single-texture builder so previously-rendering draws never regress
+	// to magenta.
+	bool builtFfpCascade = false;
+	std::string hlsl;
+	if (ffpDesc)
+	{
+		hlsl = buildHlslForVSOutputsFfp(outputs, *ffpDesc);
+		builtFfpCascade = !hlsl.empty();
+	}
+	if (hlsl.empty())
+		hlsl = buildHlslForVSOutputs(outputs, srv0Bound);
 	if (hlsl.empty())
 	{
 		ms_perVSCache[cacheKey] = ComPtr<ID3D11PixelShader>();
@@ -1199,8 +1596,10 @@ ID3D11PixelShader *Direct3d11_PixelShaderProgramData::getOrCompilePSForVS(Direct
 	emitFirstGeneratorLog(cacheKey, hlsl);
 
 	char displayName[64];
-	snprintf(displayName, sizeof(displayName), "perVS_dyn_%016llX%s.hlsl",
-	         static_cast<unsigned long long>(hash), srv0Bound ? "" : "_notex");
+	snprintf(displayName, sizeof(displayName), "perVS_dyn_%016llX%s%s.hlsl",
+	         static_cast<unsigned long long>(hash),
+	         srv0Bound ? "" : "_notex",
+	         builtFfpCascade ? "_ffp" : "");
 
 	ComPtr<ID3D11PixelShader> ps;
 	bool const compiled = compilePixelShaderFromHlsl(
