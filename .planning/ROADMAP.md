@@ -61,7 +61,8 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
 
 **Root cause (research + CODEX/Cursor consult):** the engine ships pre-compiled D3D9 PEXE pixel-shader bytecode (`TAG_PEXE`) that `ID3D11Device::CreatePixelShader` rejects, leaving `m_d3dPS` null and falling back to a slot-0-only dynamic PS (or magenta), with per-pass `Pass::apply` constants never uploaded. The fix recompiles the discarded `TAG_PSRC` source (primary: `//hlsl` → `compilePixelShaderFromHlsl`; secondary: asm `PSRC` ported to HLSL → `ps_4_0`; tertiary/narrow: FFP `TextureOperation` generator only for genuine FFP-only passes) and uploads per-pass constants **reflection-driven (D3DReflect)**, not via copied D3D9 register indices. Re-assembling asm just reproduces the rejected D3D9 bytecode — a named landmine.
 
-- [x] **Phase 17: PSRC Census + Char-Select Beachhead** - Census the real asset PS source, then prove the recompile + reflection-driven constant pipeline on char-select textures, eyes, and head (completed 2026-05-30; CHAR-01/02/03 PASS, verified + secured)
+- [x] **Phase 17: PSRC Census + Char-Select Beachhead** - Census the real asset PS source, then prove the recompile + reflection-driven constant pipeline on char-select textures, eyes, and head
+ (completed 2026-05-30; CHAR-01/02/03 PASS, verified + secured)
 - [x] **Phase 18: Load-Screen Half-Texel Seam** - Eliminate the load-screen centerline seam via the half-pixel UV-mapping fix (independent 2D canary) (completed 2026-05-30)
 - [ ] **Phase 19: Gamma LUT + Interior Lighting** - Replicate the D3D9 gamma ramp as a LUT post-pass and fix blown-out flat-white interior lighting
 - [ ] **Phase 20: Open-World PS Extension + Minimap** - Extend the PS pipeline to open-world surfaces, multi-stage compositing, and the round minimap
@@ -163,7 +164,10 @@ Full detail + per-plan history + success criteria: `milestones/v2.1-ROADMAP.md`.
   1. DPVS occlusion-culling performance is re-measured under D3D11 with an occlusion-vs-no-occlusion frame-time comparison (PIX/RenderDoc timing harness, Phase 10 methodology).
   2. A keep/remove verdict is recorded, confirming or revising the Phase 10 Option α decision (remove outdoor occlusion, keep indoor portals) under the D3D11 path (DPVS-01).
   3. The measurement is taken against clean-geometry rendering (not a mis-shaded scene), making the timing meaningful.
-**Plans**: TBD
+**Plans**: 3 plans (3 waves — sequential; restore-core gates wiring gates live-capture+verdict)
+- [ ] 23-01-PLAN.md — restore DpvsProfileInstrumentation.{h,cpp} (CPU-only, GPU stripped) + re-gate OCCLUSION_CULLING on ms_forceDisableOcclusionCulling + QPC bracket; dual-renderer boot gate
+- [ ] 23-02-PLAN.md — restore wiring: install hook + onFrameEnd + F10/F11 (F11 rewired to surviving flag) + /setrunlabel; smoke toggle + analysis.py schema
+- [ ] 23-03-PLAN.md — live gl11 occlusion A/B capture (outdoor+indoor) + analysis.py verdict + docs/recon/23-dpvs-d3d11-profiling.md (confirm/revise Option α)
 **Research:** Standard patterns — mirrors the Phase 10 DPVS methodology. No new patterns needed.
 
 ## Progress
