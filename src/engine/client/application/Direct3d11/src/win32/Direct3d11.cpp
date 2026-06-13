@@ -540,8 +540,9 @@ namespace Direct3d11Namespace
 					jpeg_set_defaults(&cinfo);
 					if (quality > 0)
 					{
+						// 24 WR-04: the (q < 0) branch was dead -- q == quality is already > 0 here.
+						// Keep the upper clamp; quality <= 0 still means "use libjpeg's jpeg_set_defaults value".
 						int q = quality;
-						if (q < 0)   q = 0;
 						if (q > 100) q = 100;
 						jpeg_set_quality(&cinfo, q, TRUE);
 					}
