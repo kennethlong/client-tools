@@ -79,9 +79,9 @@ src/external/3rd/library/udplibrary/UdpLibrary.cpp~RF869406.TMP
 src/external/3rd/library/wolfssl/
 src/build/win32/.vs/*
 *.unrealvs
-# Entire runtime staging dir: build outputs, CMake-generated machine-specific
+# Entire runtime staging dir: build outputs, generated machine-specific
 # cfgs, crash dumps, profiling CSVs, screenshots, runtime state. None of it is
-# a source of truth (the cfg template lives in src/cmake/config/). Supersedes
+# a source of truth (the cfg template lives in tools/setup/). Supersedes
 # the old stage/shader-cache/ rule.
 #
 # EXCEPTION (2026-06-11): stage/override/ IS a source of truth -- the loose

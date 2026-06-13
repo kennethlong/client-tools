@@ -166,38 +166,41 @@ target:
 
 `/WX` (warnings-as-errors) is explicitly NOT enabled in v1.
 
-## Runtime asset setup (Phase 6 configuration)
+## Runtime asset setup
 
-The built exe requires a retail SWG install for game assets (`.tre` archives).
-After building, edit `build/bin/Debug/client.cfg`:
+The built exe requires a retail/SWGSource install for game assets (`.tre`/`.toc`
+archives). Generate the runtime cfgs with the setup script, then build:
 
-```ini
-[SharedFile]
-searchPath0=C:/SWG
-searchPath1=C:/SWG/patch
+```powershell
+# From the repo root. Prompts for your TRE asset root (e.g. D:/Code/SWGSource Client v3.0/).
+./tools/setup/setup-client.ps1
 
-[ClientGame]
-loginServerAddress0=127.0.0.1
-loginServerPort0=44453
-
-[Station]
-gameFeatures=15
-
-[ClientGame]
-freeChaseCameraMaximumDistance=75.0
+# Non-interactive / other-network clone:
+./tools/setup/setup-client.ps1 -TreRoot "D:/Code/SWGSource Client v3.0/" -LoginServer 192.168.1.200
 ```
 
-Replace `C:/SWG` with the path to your retail Star Wars Galaxies installation.
-`gameFeatures=15` enables all four SKU bits (base game + Jump to Lightspeed +
-Rage of the Wookiees + Trials of Obi-Wan). `loginServerAddress0` points to the
-local SWG-Source VM.
+The script reads the tracked template `tools/setup/client.cfg.template` and writes
+`stage/client_d.cfg` (Debug) + `stage/client.cfg` (Release). It substitutes:
 
-Full Phase 6 configuration (boot sequence, login handshake, character select) is
-covered in the Phase 6 planning documents.
+- your machine's **TRE asset root** (the `TOCTreePath` / `searchTOC_*` / `searchTree_*`
+  paths) — prompted, or `-TreRoot`;
+- this clone's own **repo-relative `stage/override`** path — auto-substituted, no input;
+- the **login server** — `-LoginServer` (default `192.168.1.200`, the local SWG-Source VM);
+- the **renderer** — `-RasterMajor` (default `11` = D3D11; `5` = D3D9 for the dual-renderer gate);
+- the **resolution** — `-Resolution` (default `1920x1080`).
+
+`gameFeatures=15` (in the template) enables all four SKU bits (base game + Jump to
+Lightspeed + Rage of the Wookiees + Trials of Obi-Wan).
+
+Then build `SwgClient` (the postbuild stages `stage/miles` from the vendored redist
+`src/external/3rd/library/miles-7.2e/redist`) and launch `stage/SwgClient_d.exe`. The
+generated `stage/client*.cfg` are intentionally **untracked** (gitignored via `stage/*`);
+the template under `tools/setup/` is the tracked source of truth — edit it, not the
+generated cfgs.
 
 Note: `exe/linux/loginServer.cfg` in the repo contains historical SOE DSNs and
-hostnames. These are not live credentials and are not referenced by the CMake
-build. They are preserved as reference material only.
+hostnames. These are not live credentials and are not referenced by the build.
+They are preserved as reference material only.
 
 ## Reference links
 
