@@ -313,6 +313,24 @@ namespace Direct3d11Namespace
 	void setPointScaleFactor_impl(real /*A*/, real /*B*/, real /*C*/)  {}
 	void setPointSpriteEnable_impl(bool /*bEnable*/)                   {}
 
+	// Phase 24 (Plan 24-01) / D-07: Bloom is not implemented in the D3D11 plugin.
+	// This no-op replaces the scaffold_fatal_stub binding for the setBloomEnabled
+	// slot at install, so enabling Bloom no longer FATALs and the [ClientGame/Bloom]
+	// enable=0 cfg override key becomes redundant (deleted in plan 24-03). One-shot
+	// DEBUG_REPORT_LOG_PRINT noting Bloom is unimplemented; empty no-op body
+	// otherwise (mirrors setPointSize_impl).
+	void setBloomEnabled_impl(bool /*enabled*/)
+	{
+#ifdef _DEBUG
+		static bool s_loggedBloomUnimplemented = false;
+		if (!s_loggedBloomUnimplemented)
+		{
+			s_loggedBloomUnimplemented = true;
+			DEBUG_REPORT_LOG_PRINT(true, ("[Direct3d11] setBloomEnabled: Bloom is unimplemented on D3D11; no-op (D-07).\n"));
+		}
+#endif
+	}
+
 	// Plan 11-09.11: PIX markers / events are pure runtime instrumentation
 	// for the D3D PIX-for-Windows debugger. With no attached PIX session
 	// they're silent no-ops in BOTH D3D9 and D3D11; the engine guards its
@@ -1131,7 +1149,9 @@ bool Direct3d11::install(Gl_install * gl_install)
 
 	STUB(optimizeIndexBuffer);
 
-	STUB(setBloomEnabled);
+	// Phase 24 (Plan 24-01) / D-07: bind setBloomEnabled to the non-fatal no-op
+	// _impl (was the fatal-stub binding) so enabling Bloom no longer FATALs.
+	ms_glApi.setBloomEnabled = setBloomEnabled_impl;
 
 	// Plan 11-09.11: PIX instrumentation slots as inline no-ops. See the
 	// _impl block above for the design rationale (Graphics.cpp guards calls

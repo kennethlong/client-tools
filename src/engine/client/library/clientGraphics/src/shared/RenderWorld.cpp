@@ -900,18 +900,47 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 		dpvsFrustum.zNear  = ms_cameraFrustum[Camera::FV_NearUpperLeft].z;
 		dpvsFrustum.zFar   = ms_cameraFrustum[Camera::FV_FarUpperLeft].z;
 		ms_dpvsCamera->setFrustum(dpvsFrustum);
+		// Phase 24 (Plan 24-01) / HARD-01, D-01: config-gated OCCLUSION_CULLING bit,
+		// computed identically in Debug and Release (replaces the Phase 10 Option α
+		// #else hardcode). The occlusion bit is selected from the tri-state knob:
+		//   DOM_on   -> always set the bit
+		//   DOM_auto -> set the bit only outside POB cells (outdoor on / interior off),
+		//               keying on null-guarded ms_cameraCell->isWorldCell() per the
+		//               Phase 23 verdict. (T-24-02 ELIMINATED: a null ms_cameraCell
+		//               defaults the bit to 0 instead of dereferencing.)
+		//   DOM_off  -> never set the bit (default, D-02)
+		// REVIEW/Cursor: Debug builds without an occlusionMode key now default to OFF
+		// (no longer occlusion-on-by-default in Debug). The Phase-23 A/B posture is
+		// restored via occlusionMode=auto (shipped in the Debug template, plan 24-03)
+		// or an F11 press.
+		uint occlusionBit = 0;
+		switch (ConfigClientGraphics::getDpvsOcclusionMode())
+		{
+			case ConfigClientGraphics::DOM_on:
+				occlusionBit = DPVS::Camera::OCCLUSION_CULLING;
+				break;
+			case ConfigClientGraphics::DOM_auto:
+				occlusionBit = (ms_cameraCell && ms_cameraCell->isWorldCell()) ? DPVS::Camera::OCCLUSION_CULLING : 0;
+				break;
+			case ConfigClientGraphics::DOM_off:
+			default:
+				occlusionBit = 0;
+				break;
+		}
+
 	#ifdef _DEBUG
-		// Phase 23 -- DPVS D3D11 remeasure: re-introduce the OCCLUSION_CULLING bit
-		// for the A/B toggle, gated on the surviving ms_forceDisableOcclusionCulling
-		// DebugFlag (F11). Kept inside _DEBUG so the shipped Option α #else branch
-		// is byte-for-byte unchanged. (Phase 10 D-13 dropped this bit globally.)
+		// D-04: F11 force-disable wins. Applied AFTER the config/auto logic
+		// (RESEARCH Pitfall 3) so it clears the occlusion bit regardless of mode.
+		if (ms_forceDisableOcclusionCulling)
+			occlusionBit = 0;
+		// ms_disableViewFrustumCulling is _DEBUG-only; in Release the viewfrustum bit
+		// is set unconditionally (preserves the prior Option α Release shape).
 		uint const cullingParameters =
-			  (ms_forceDisableOcclusionCulling ? 0 : DPVS::Camera::OCCLUSION_CULLING)
-			| (ms_disableViewFrustumCulling    ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
+			  occlusionBit
+			| (ms_disableViewFrustumCulling ? 0 : DPVS::Camera::VIEWFRUSTUM_CULLING);
 		portalRecusionDepth = ms_disablePortalTraversal ? 0 : 8;
 	#else
-		// Phase 10 D-13: OCCLUSION_CULLING bit dropped (Option α).
-		uint const cullingParameters = DPVS::Camera::VIEWFRUSTUM_CULLING;
+		uint const cullingParameters = occlusionBit | DPVS::Camera::VIEWFRUSTUM_CULLING;
 		portalRecusionDepth = 8;
 	#endif
 
