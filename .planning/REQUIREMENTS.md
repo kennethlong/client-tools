@@ -9,7 +9,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Client Hardening
 
-- [ ] **HARD-01**: DPVS occlusion is config-gated per the Phase 23 verdict — auto mode enables the occlusion bit only outside POB cells (outdoor on / indoor off), with an explicit config override for forcing either mode
+- [x] **HARD-01**: DPVS occlusion is config-gated per the Phase 23 verdict — auto mode enables the occlusion bit only outside POB cells (outdoor on / indoor off), with an explicit config override for forcing either mode
 - [ ] **HARD-02**: Cantina corner-snap no longer occurs — re-entrancy guard stops the same-frame portal ping-pong without breaking legitimate fast door traversals (verified with the committed CORNERSNAP instrumentation before it is removed)
 - [ ] **HARD-03**: D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are removed from shipped code paths (sequenced after HARD-02 is verified — the probes are its acceptance harness)
 - [ ] **HARD-04**: Opening the Options window no longer FATALs — `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch fixed (pre-existing, from feature commit `d1b3c0eaf`)
@@ -17,8 +17,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Machine Portability
 
-- [ ] **PORT-01**: A fresh clone + build produces a bootable client with no machine-specific absolute paths — `stage/override` and `stage/miles` handling documented and/or automated (miles redist is not in git; postbuild doesn't copy it)
-- [ ] **PORT-02**: `stage/client_d.cfg` is cleaned of accumulated Phase-11+ test settings; client boots clean under both `rasterMajor=5` and `rasterMajor=11` afterward
+- [x] **PORT-01**: A fresh clone + build produces a bootable client with no machine-specific absolute paths — `stage/override` and `stage/miles` handling documented and/or automated (miles redist is not in git; postbuild doesn't copy it)
+- [x] **PORT-02**: `stage/client_d.cfg` is cleaned of accumulated Phase-11+ test settings; client boots clean under both `rasterMajor=5` and `rasterMajor=11` afterward
 
 ### TRE Compare Tool
 
@@ -62,13 +62,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HARD-01 | Phase 24 | Pending |
+| HARD-01 | Phase 24 | Complete |
 | HARD-02 | Phase 25 | Pending |
 | HARD-03 | Phase 26 | Pending |
 | HARD-04 | Phase 26 | Pending |
 | HARD-05 | Phase 27 | Pending |
-| PORT-01 | Phase 24 | Pending |
-| PORT-02 | Phase 24 | Pending |
+| PORT-01 | Phase 24 | Complete |
+| PORT-02 | Phase 24 | Complete |
 | TRE-01 | Phase 28 | Pending |
 | TRE-02 | Phase 29 | Pending |
 | TRE-03 | Phase 29 | Pending |

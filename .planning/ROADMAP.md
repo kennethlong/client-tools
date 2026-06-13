@@ -188,7 +188,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 21. Particles & Ribbon Effects | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete | 2026-06-12 |
-| 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete   | 2026-06-13 |
+| 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete    | 2026-06-13 |
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/TBD | Not started | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 0/TBD | Not started | - |
 | 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |

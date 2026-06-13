@@ -1,8 +1,8 @@
 ---
 phase: 24-dpvs-config-gate-machine-portability
 verified: 2026-06-13T00:00:00Z
-status: human_needed
-score: 11/11 must-haves verified (code); 4 items require human runtime verification
+status: passed
+score: 11/11 must-haves verified (code); 4 runtime items confirmed by user (approved 2026-06-13)
 overrides_applied: 0
 human_verification:
   - test: "DPVS occlusion-mode in-game: set occlusionMode=auto in client_d.cfg, walk Mos Eisley -> cantina. With the Phase-23 DPVS DebugMonitor overlay open, confirm the occlusion bit is SET outdoors and CLEAR inside the cantina (visible-object signal changes). Press F11 — confirm it force-disables occlusion regardless of mode (D-04). Then test occlusionMode=on (bit unconditional) and occlusionMode=off (bit never set). Also confirm that a Debug build with NO occlusionMode key in the cfg defaults to OFF (no longer on-by-default)."
