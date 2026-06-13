@@ -16,6 +16,20 @@ class ConfigClientGraphics
 {
 public:
 
+	// Phase 24 (Plan 24-01) / HARD-01: tri-state DPVS occlusion-culling knob read
+	// from [ClientGraphics/Dpvs] occlusionMode. DOM_off = 0 so a zero-init is the
+	// safe default (D-02: shipped behavior stays Option alpha when the key is absent).
+	//   DOM_off  - never set the OCCLUSION_CULLING bit (default)
+	//   DOM_on   - set the bit unconditionally
+	//   DOM_auto - set the bit only outside POB cells (outdoor on / interior off),
+	//              per the Phase 23 verdict (D-01)
+	enum DpvsOcclusionMode
+	{
+		DOM_off  = 0,
+		DOM_on,
+		DOM_auto
+	};
+
 	struct Defaults
 	{
 		int   rasterMajor;
@@ -49,6 +63,9 @@ public:
 
 	static bool           getValidateShaderImplementations();
 	static bool           getDisableMultiStreamVertexBuffers();
+
+	// Phase 24 (Plan 24-01) / HARD-01: tri-state DPVS occlusion knob (default DOM_off, D-02).
+	static DpvsOcclusionMode getDpvsOcclusionMode();
 
 	static bool           getLogBadCustomizationData();
 

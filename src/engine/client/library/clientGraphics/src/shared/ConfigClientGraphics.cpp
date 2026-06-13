@@ -61,6 +61,10 @@ namespace ConfigClientGraphicsNamespace
 	// section (NOT [Direct3d11] — clientGraphics cannot link the plugin's
 	// ConfigDirect3d11). Default false; D3D9 behavior unchanged when off.
 	bool  ms_psrcCensus;
+
+	// Phase 24 (Plan 24-01) / HARD-01: cached tri-state DPVS occlusion knob, parsed
+	// once at install from [ClientGraphics/Dpvs] occlusionMode. Default DOM_off (D-02).
+	ConfigClientGraphics::DpvsOcclusionMode ms_dpvsOcclusionMode;
 }
 
 using namespace ConfigClientGraphicsNamespace;
@@ -126,6 +130,22 @@ void ConfigClientGraphics::install (const Defaults &defaults)
 
 	// Phase 17 (Plan 17-01): default false so D3D9 behavior is unchanged when off.
 	KEY_BOOL(psrcCensus,                          false);
+
+	// Phase 24 (Plan 24-01) / HARD-01: tri-state DPVS occlusion knob. This is a
+	// STRING in the [ClientGraphics/Dpvs] section (NOT a bool in [ClientGraphics]),
+	// so it is read directly via getKeyString rather than the KEY_BOOL macro. Parse
+	// the value to the cached enum with case-insensitive compares; any unrecognized
+	// or empty value falls back to DOM_off (D-02 default off; T-24-01 safe fallback,
+	// no array indexing on the raw string).
+	{
+		char const * const occlusionModeStr = ConfigFile::getKeyString("ClientGraphics/Dpvs", "occlusionMode", "off");
+		if (occlusionModeStr != NULL && _stricmp(occlusionModeStr, "auto") == 0)
+			ms_dpvsOcclusionMode = ConfigClientGraphics::DOM_auto;
+		else if (occlusionModeStr != NULL && _stricmp(occlusionModeStr, "on") == 0)
+			ms_dpvsOcclusionMode = ConfigClientGraphics::DOM_on;
+		else
+			ms_dpvsOcclusionMode = ConfigClientGraphics::DOM_off; // D-02: default off
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -348,6 +368,15 @@ bool ConfigClientGraphics::getSkipInitialClearViewport()
 bool ConfigClientGraphics::getPsrcCensus()
 {
 	return ms_psrcCensus;
+}
+
+// ----------------------------------------------------------------------
+
+// Phase 24 (Plan 24-01) / HARD-01: return the cached tri-state DPVS occlusion knob
+// (D-01 knob; D-02 default off). Consumed per-frame by RenderWorld::drawScene.
+ConfigClientGraphics::DpvsOcclusionMode ConfigClientGraphics::getDpvsOcclusionMode()
+{
+	return ms_dpvsOcclusionMode;
 }
 
 // ======================================================================
