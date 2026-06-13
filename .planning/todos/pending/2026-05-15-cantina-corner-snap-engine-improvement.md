@@ -1,10 +1,10 @@
 ---
 created: 2026-05-15
-updated: 2026-06-12
-title: Cantina interior corner-snap — mechanism FOUND (same-frame portal ping-pong), fix deferred
+updated: 2026-06-13
+title: Cantina interior corner-snap — cell-ping-pong premise FALSIFIED 2026-06-13; real target is the CollisionResolve position rewind
 area: rendering / collision response / portal traversal
 resolves_phase: 25
-next_action: defer — mechanism documented + instrumentation committed; fix = re-entrancy guard in CellProperty::positionChanged when someone wants it
+next_action: re-root-cause against the CollisionResolve position rewind (setPosition_p), NOT the cell ping-pong. The cell-reversal-guard approach was built, runtime-tested (gl05), and reverted (see 2026-06-13 section). Likely /gsd-debug + consult crew.
 files:
   - src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp  (Notification::positionChanged ~line 115; CORNERSNAP-PORTAL instrumentation at the targetCell branch)
   - src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp  (resolveCollisions rewind/replay ~line 313; CORNERSNAP-RESOLVE/CELLJUMP instrumentation)
@@ -16,7 +16,51 @@ status: known_engine_behavior
 priority: low (annoying but not blocking; workaround available)
 ---
 
+## 2026-06-13 — cell-ping-pong premise FALSIFIED by runtime capture; guard reverted
+
+Phase 25 plan 25-01 implemented the re-entrancy guard the 2026-06-12 section
+proposed (frame-scoped reversal suppressor in `positionChanged`, keyed on
+`Object const *`, comparing `CellProperty const *` from/to pointers, with a new
+APPLIED/SUPPRESSED `_DEBUG` counter). It was built (Debug+Release, 0 unresolved),
+runtime-tested under gl05/D3D9, and **REVERTED** (`a6df32348`, reverting
+`7820aea50`). The original CORNERSNAP instrumentation (`a9b419daf`) is untouched.
+
+**What the gl05 capture proved (evidence:
+`stage/cornersnap-capture/EVIDENCE-25-01-gl05-guard-regression-20260613.log`):**
+
+1. The guard's premise is WRONG. The "reversed" second portal segment is the
+   LEGITIMATE collision correction, not a spurious ping-pong. Raw interleaving,
+   player obj 127040355, frame 4250:
+     `PORTAL foyer1(1)->foyer2(2)  z -4844.290 -> -4844.121  APPLIED 1->2`   (overshoot)
+     `PORTAL foyer2(2)->foyer1(1)  z -4844.121 -> -4844.280  SUPPRESSED 2->1` (correction)
+   The FINAL position (z -4844.280) is on the foyer1 side, but the guard pinned
+   membership in foyer2 (the overshoot). Cell/position desync.
+
+2. That desync IS the visible breakage: the portal renderer culls from the wrong
+   cell → cantina interior drops to skybox (Kenny: "looking toward the bar, saw
+   sky"; "popped back after a second" = a later clean frame re-applied the
+   correcting transition and re-synced membership). It also produced "snapping
+   almost every time I left the cantina."
+
+3. Without the guard, BOTH segments apply and membership tracks position — the
+   cell ping-pong is SELF-CORRECTING. Suppressing any segment is harmful.
+
+4. The actual VISIBLE SNAP is a POSITION rewind in CollisionResolve, a different
+   code path the cell guard never touches: capture frame 7593, player rewind of
+   **4.04m vertical** `(3468.364,1.063,-4850.307)->(3468.286,5.100,-4850.180)`
+   via `setPosition_p`. CORNERSNAP-CELLJUMP was 0 — confirming net cell change is
+   fine; the snap is positional.
+
+**Corrected next-step:** re-diagnose against `CollisionResolve.cpp` rewind/replay
+(`setPosition_p` at ~:337 + `moveObjectAlong` at ~:339) — why does resolve rewind
+the player up to ~4m (esp. vertically) at a wall graze? The fix likely lives in
+collision response, not portal cell membership. The 2026-06-12 "re-entrancy guard
+in positionChanged" recommendation below is SUPERSEDED — do not re-attempt it.
+
 ## 2026-06-12 instrumented session — MECHANISM FOUND, fix deferred
+(SUPERSEDED 2026-06-13 — see section above. The "same-frame portal ping-pong"
+was a correlate/symptom, not the cause of the visible snap.)
+
 
 Ran the instrumentation plan below in-game (Debug client under cdb, Mos Eisley
 cantina, ~10 min of wall-grazing traffic by both Claude-pilot and Kenny).

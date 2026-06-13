@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-13T03:22:12.157Z"
-last_activity: 2026-06-13 -- Phase 25 planning complete
+last_updated: "2026-06-13T03:57:19.353Z"
+last_activity: 2026-06-13 -- Phase 25 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 24 — dpvs-config-gate-machine-portability
+**Current focus:** Phase 25 — cantina-corner-snap-fix
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,10 +69,11 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 25
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-13 -- Phase 25 planning complete
+Phase: 25 (cantina-corner-snap-fix) — BLOCKED (guard reverted, mechanism falsified; HARD-02 re-diagnosis pending)
+Plan: 1 of 1 (25-01 guard approach ABANDONED)
+Status: Plan 25-01 Task 2 gl05 human-verify FAILED. The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348, Debug+Release rebuilt clean 0 unresolved, restaged 12:23/12:24). Runtime capture falsified the plan's mechanism: the "reversed" 2nd portal segment is the LEGITIMATE collision correction — suppressing it desynced cell membership from final position → cantina interior dropped to skybox + snap on exit. The real visible snap is a POSITION rewind in CollisionResolve (frame 7593: 4.04m vertical setPosition_p), NOT the cell ping-pong (which self-corrects when left alone). Original CORNERSNAP instrumentation (a9b419daf) intact. Evidence: stage/cornersnap-capture/EVIDENCE-25-01-gl05-guard-regression-20260613.log
+Next: re-diagnose HARD-02 against the CollisionResolve position rewind (likely /gsd-debug + consult crew); replan 25-01 once root cause confirmed. client_d.cfg left on rasterMajor=5 for re-capture.
+Last activity: 2026-06-13 -- Phase 25 guard reverted after gl05 capture falsified the cell-ping-pong premise; re-diagnosis pending
 
 ## Accumulated Context
 
