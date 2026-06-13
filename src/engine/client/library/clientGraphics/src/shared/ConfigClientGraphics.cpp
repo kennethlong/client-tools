@@ -105,7 +105,10 @@ void ConfigClientGraphics::install (const Defaults &defaults)
 
 	KEY_BOOL(validateShaderImplementations,       true);
 	KEY_BOOL(screenShotBackBuffer,                false);
-	KEY_BOOL(disableMultiStreamVertexBuffers,     true);
+	// Phase 24 (Plan 24-01) / D-07: default flipped from true to false so multi-stream
+	// skinned VBs are the engine default, making the disableMultiStreamVertexBuffers=false
+	// cfg override key redundant (deleted in plan 24-03).
+	KEY_BOOL(disableMultiStreamVertexBuffers,     false);
 	KEY_BOOL(nPatchTest,                          false);
 
 	KEY_BOOL(logBadCustomizationData,             false);
