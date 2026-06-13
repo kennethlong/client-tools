@@ -95,7 +95,10 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   1. With auto mode set, the DPVS occlusion bit is enabled outdoors and disabled inside POB cells (matching the Phase 23 verdict), and an explicit config override can force either mode regardless of cell membership
   2. A fresh clone + build boots to character select with no machine-specific absolute paths — `stage/override` and `stage/miles` handling is documented and/or automated (miles redist absence is detected/handled, not a silent half-dead-audio failure)
   3. `stage/client_d.cfg` contains no leftover Phase-11+ test settings, and the client boots clean to character select under both `rasterMajor=5` and `rasterMajor=11`
-**Plans**: TBD
+**Plans**: 3 plans (2 waves)
+  - [ ] 24-01-PLAN.md — DPVS occlusionMode knob (HARD-01) + D-07 engine-default flips (multi-stream VB, D3D11 Bloom no-op)
+  - [ ] 24-02-PLAN.md — Miles redist reconcile + postbuild repoint + D-12 one-shot absence warning (PORT-01)
+  - [ ] 24-03-PLAN.md — cfg template + setup-client.ps1 generator + PORT-02 key cleanup + fresh-clone & dual-renderer gate
 
 ### Phase 25: Cantina Corner-Snap Fix
 **Goal**: Eliminate the cantina corner-snap by stopping the same-frame portal ping-pong, while preserving legitimate fast door traversals.
