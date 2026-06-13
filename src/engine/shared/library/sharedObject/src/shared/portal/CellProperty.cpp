@@ -31,6 +31,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <map>
 
 // ======================================================================
 
@@ -132,6 +133,39 @@ bool CellPropertyNamespace::Notification::positionChanged(Object &object, bool c
 	if (start == end)
 		return true;
 
+	// --------------------------------------------------------------------
+	// Frame-scoped reversal guard (HARD-02, cantina corner-snap).
+	//
+	// The collision-resolution replay (CollisionResolve.cpp ~337-339:
+	// setPosition_p(resetPos) + moveObjectAlong) re-fires positionChanged in
+	// the SAME frame with the exact reverse of the segment that just crossed a
+	// portal, producing the A->B->A ping-pong snap. (setParentCell->cellChanged
+	// does NOT re-fire positionChanged — verified — so this guard targets the
+	// collision replay, not the reparent.) The existing dueToParent early-out
+	// does not catch it because each re-entrant notification is a real
+	// (non-parent) position change.
+	//
+	// We record, per object, the (fromCell,toCell) of the transition we applied
+	// this frame, and suppress a later transition that is its exact reverse.
+	// Keyed on Object const* (a frame-local stable identity safe for
+	// invalid/default-ID objects like the camera, NetworkId 0); from/to compared
+	// by CellProperty const* POINTER, never the POB-local reusable cell index.
+	// The map is CLEARED WHOLE on frame change (bounded to one frame's live
+	// moving-object set; an object can always transition again next frame, so no
+	// permanent stuck-in-cell state). This is reversal-detection, NOT a per-frame
+	// transition cap, so a legitimate fast forward chain (A->B then B->C) passes
+	// through untouched. This logic ships in both Debug and Release.
+	struct CellTransition { CellProperty const *fromCell; CellProperty const *toCell; };
+	static int s_lastFrame = -1;
+	static std::map<Object const *, CellTransition> s_lastTransition;
+
+	int const currentFrame = Os::getNumberOfUpdates();
+	if (currentFrame != s_lastFrame)
+	{
+		s_lastTransition.clear();
+		s_lastFrame = currentFrame;
+	}
+
 #ifdef _DEBUG
 	// CORNERSNAP instrumentation (cantina corner-snap todo) — capture the
 	// unmodified world-space segment before the up-shift and portal walk
@@ -200,6 +234,50 @@ bool CellPropertyNamespace::Notification::positionChanged(Object &object, bool c
 			cornersnapEnd_w.x, cornersnapEnd_w.y, cornersnapEnd_w.z,
 			cornersnapStart_w.magnitudeBetween(cornersnapEnd_w)));
 #endif
+
+		// Frame-scoped reversal guard: this candidate crosses fromCell -> toCell.
+		// Compare against the transition we already applied to THIS object this
+		// frame (if any). Because the map is cleared on frame change, any record
+		// present is necessarily from the current frame.
+		CellProperty const * const candidateFromCell = object.getParentCell();
+		CellProperty const * const candidateToCell   = targetCell;
+
+		std::map<Object const *, CellTransition>::const_iterator const itGuard = s_lastTransition.find(&object);
+		if (itGuard != s_lastTransition.end()
+			&& itGuard->second.fromCell == candidateToCell
+			&& itGuard->second.toCell   == candidateFromCell)
+		{
+			// Exact reverse of the transition just applied this frame -> the
+			// A->B->A collision-replay ping-pong. Suppress it: do NOT reparent,
+			// leave the object in cell B (a real crossed cell, a safe resting
+			// state), and consume the notification just like the crossed path
+			// (return false), but with strictly less work (no reparent). Do NOT
+			// update the record on a suppressed reversal.
+#ifdef _DEBUG
+			DEBUG_REPORT_LOG(true, ("CORNERSNAP-SUPPRESSED: frame %d obj %s cellidx %d -> %d (reverse of same-frame apply)\n",
+				currentFrame,
+				object.getNetworkId().getValueString().c_str(),
+				candidateFromCell ? candidateFromCell->getCellIndex() : -1,
+				candidateToCell ? candidateToCell->getCellIndex() : -1));
+#endif
+			return false;
+		}
+
+		// Not a same-frame reversal (first transition, or a forward A->B->C
+		// traversal). Record it for this object and apply normally.
+		CellTransition record;
+		record.fromCell = candidateFromCell;
+		record.toCell   = candidateToCell;
+		s_lastTransition[&object] = record;
+
+#ifdef _DEBUG
+		DEBUG_REPORT_LOG(true, ("CORNERSNAP-APPLIED: frame %d obj %s cellidx %d -> %d\n",
+			currentFrame,
+			object.getNetworkId().getValueString().c_str(),
+			candidateFromCell ? candidateFromCell->getCellIndex() : -1,
+			candidateToCell ? candidateToCell->getCellIndex() : -1));
+#endif
+
 		// object changed portals, don't continue with this position change because the cell change will handle all that as well
 		object.setParentCell(targetCell);
 		return false;
