@@ -2,6 +2,7 @@
 created: 2026-06-12T17:51:06.531Z
 title: Config-gate DPVS occlusion per Phase 23 verdict (outdoor on, indoor off)
 area: rendering / DPVS culling / clientGraphics
+resolves_phase: 24
 files:
   - src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp (Option α #else culling-parameter branch, ~line 914; _DEBUG re-gate at the cullingParameters block)
   - docs/recon/23-dpvs-d3d11-profiling.md (the verdict + per-scene data)

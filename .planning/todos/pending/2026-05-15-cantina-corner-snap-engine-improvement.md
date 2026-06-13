@@ -3,6 +3,7 @@ created: 2026-05-15
 updated: 2026-06-12
 title: Cantina interior corner-snap — mechanism FOUND (same-frame portal ping-pong), fix deferred
 area: rendering / collision response / portal traversal
+resolves_phase: 25
 next_action: defer — mechanism documented + instrumentation committed; fix = re-entrancy guard in CellProperty::positionChanged when someone wants it
 files:
   - src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp  (Notification::positionChanged ~line 115; CORNERSNAP-PORTAL instrumentation at the targetCell branch)

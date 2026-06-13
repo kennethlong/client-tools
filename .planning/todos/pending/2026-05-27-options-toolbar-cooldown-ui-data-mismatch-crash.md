@@ -2,6 +2,7 @@
 created: 2026-05-27
 title: Options window FATAL — checkShowToolbarCommandCooldownTimer CodeData property missing from GroundHUD options .ui
 area: client UI / CuiMediator CodeData binding / GroundHUD options layout
+resolves_phase: 26
 next_action: add the checkShowToolbarCommandCooldownTimer TUICheckbox to the GroundHUD options .ui layout (or guard the lookup) so opening Options does not FATAL
 files:
   - src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiOptUi.cpp  (line 219 — getCodeDataObject(TUICheckbox, checkbox, "checkShowToolbarCommandCooldownTimer"))

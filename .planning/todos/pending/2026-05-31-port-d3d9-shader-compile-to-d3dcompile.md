@@ -2,6 +2,7 @@
 created: 2026-05-31
 title: Port D3D9 shader compile from D3DXCompileShader to D3DCompile (Fix B — supersede the Phase-19 SEH guard)
 area: client graphics / Direct3d9 plugin / shader compilation toolchain
+resolves_phase: 27
 next_action: replace D3DXCompileShader in Direct3d9_VertexShaderData.cpp (+ any D3DXCompilePixelShader sites) with D3DCompile, porting the include handler + macro defines; then remove the SEH FP guard
 files:
   - src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp  (createVertexShader -> compileVertexShaderFpGuarded -> D3DXCompileShader; the SEH guard to remove)
