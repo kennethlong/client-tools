@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: ready_to_plan
-last_updated: "2026-06-12T22:24:01.067Z"
-last_activity: 2026-06-12
+status: planning
+last_updated: "2026-06-13T00:55:22.842Z"
+last_activity: 2026-06-12 — v2.3 Hardening roadmap created (Phases 24–30; 12/12 requirements mapped)
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -139,18 +138,20 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-12T22:24:01.067Z
+Last session: 2026-06-13T00:55:22.820Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
 
 Client-hardening stream (boot-invariant on both renderers):
+
 1. **Phase 24** (HARD-01, PORT-01, PORT-02) — DPVS occlusion config-gate (auto = POB-cell-keyed, outdoor on / indoor off, per Phase 23 verdict) + machine portability (de-hardcode `stage/override` + `stage/miles`, clean `client_d.cfg`). Least-risky first; establishes dual-renderer boot confidence.
 2. **Phase 25** (HARD-02) — cantina corner-snap re-entrancy guard (suppress A→B→A same-frame portal ping-pong; preserve fast door traversals). Verified via the committed CORNERSNAP `_DEBUG` instrumentation. MUST precede Phase 26.
 3. **Phase 26** (HARD-03, HARD-04) — strip D-15 DPVS + CORNERSNAP instrumentation atomically (grep link for 0 unresolved) + fix the Options-window FATAL (`checkShowToolbarCommandCooldownTimer`, commit `d1b3c0eaf`).
 4. **Phase 27** (HARD-05) — port `D3DXCompileShader`→`D3DCompile` (Fix B). Asm-shader census FIRST. Most complex item; SEH guard retained until asm path off D3DX.
 
 TRE compare tool stream (standalone web app, hard chain, can interleave):
+
 5. **Phase 28** (TRE-01) — headless foundation: scaffold `tools/tre-compare/`, vendor `tre_reader.py`/`tre_decrypt.py`, `scanner.py` ([SharedFile] hand-parse), `vtree.py` (first-hit-wins + tombstones + fixUpFileName) unit-tested vs real `stage/client.cfg`.
 6. **Phase 29** (TRE-02/03/04) — `diff.py` set + file-level diff ((length,compressedLength) signal, on-demand xxhash), `cache.py` sqlite index, FastAPI routes (summary + paginated rows + lazy file-detail).
 7. **Phase 30** (TRE-05) — React+Vite+shadcn SPA: install picker, set-delta table, virtualized (TanStack Virtual) filterable tree-diff, per-file detail. UI hint.
