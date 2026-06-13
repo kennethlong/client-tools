@@ -18,6 +18,9 @@ findings:
   warning: 4
   info: 5
   total: 9
+resolved:
+  fixed: 2
+  wontfix: 2
 status: issues_found
 ---
 
@@ -46,6 +49,8 @@ correctness/portability gaps that should be addressed but are not ship-blockers.
 
 ### WR-01: Miles-redist postbuild repair guard misses a missing/stale `mssmp3.asi`
 
+**Resolution:** fixed (commit abbcdcd81) — added a `mssmp3.asi` existence guard alongside the existing `.m3d` guards in BOTH the Debug and Release `<PostBuildEvent>` blocks, so a stale stage missing the mp3 decoder is now repaired.
+
 **File:** `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj:134-135` (Debug), `:242-243` (Release)
 **Issue:** The repair path only fires when `Msseax.m3d` OR `msssoft.m3d` is absent:
 ```
@@ -70,6 +75,8 @@ required file — or simply running it unconditionally — is safer than the par
 
 ### WR-02: Optimized configuration has no postbuild — `_o.exe` runs against an unstaged/stale `stage/miles`
 
+**Resolution:** wontfix — the Optimized config is a known-broken link target (pre-existing LNK1281 SAFESEH image-gen failure documented in project history); it never produces a runnable exe, so a postbuild there is dead weight. Pre-existing broken config, out of scope.
+
 **File:** `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj:138-183`
 **Issue:** The `Optimized|Win32` `ItemDefinitionGroup` closes at line 183 with NO
 `<PostBuildEvent>`. Only Debug (:123) and Release (:231) stage the exe/pdb and repair
@@ -84,6 +91,8 @@ Optimized is not a supported standalone-clone target.
 
 ### WR-03: `setup-client.ps1` Miles repair is warn-only and points devs at a postbuild that may not run for their config
 
+**Resolution:** wontfix — by design (D-11). Staging is deliberately owned by the SwgClient postbuild, not the setup generator; copying the redist from the script would duplicate the staging responsibility.
+
 **File:** `tools/setup/setup-client.ps1:118-130`
 **Issue:** The cfg generator validates `stage/miles` and, on a miss, only prints a WARNING
 ("Build SwgClient -- the postbuild stages stage/miles"). Combined with WR-02, a dev who
@@ -96,6 +105,8 @@ already computes `$repoRoot`), or make the warning conditional on the redist sou
 actually existing and accurate about which configs stage it.
 
 ### WR-04: `screenShot_impl` quality clamp is dead/unreachable — out-of-range quality is not clamped
+
+**Resolution:** fixed (commit 91f37b243) — removed the unreachable `if (q < 0)` branch and kept the `> 100` upper clamp. Scoped narrower than the suggested fix: the `quality <= 0` => libjpeg-default behavior is preserved so externally-observable output for valid quality values is unchanged.
 
 **File:** `src/engine/client/application/Direct3d11/src/win32/Direct3d11.cpp:541-547`
 **Issue:** (Touched file under review.) The clamp is gated inside `if (quality > 0)`, then
