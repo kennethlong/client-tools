@@ -77,7 +77,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 **Core invariant (every client-touching phase, 24–27):** the client stays bootable to character select under BOTH `rasterMajor=5` (D3D9) and `rasterMajor=11` (D3D11) after the phase. The TRE tool (Phases 28–30) is a standalone web app, outside that invariant but inside the milestone.
 
-- [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified (completed 2026-06-13)
+- [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
+ (completed 2026-06-13)
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
 - [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS + CORNERSNAP probes stripped atomically; Options window no longer FATALs
 - [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
@@ -108,7 +109,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   1. Walking into a cantina corner no longer snaps/teleports the player — the A→B→A same-frame cell oscillation is suppressed by a re-entrancy guard
   2. Fast legitimate door traversals still complete correctly (no regression — the guard targets the reversal pattern specifically, not a blanket one-transition-per-frame cap)
   3. The committed CORNERSNAP `_DEBUG` instrumentation reports zero ping-pong frames in the previously-failing cantina corner under both renderers
-**Plans**: TBD
+**Plans**: 1 plan (2 waves)
+  - [ ] 25-01-PLAN.md — frame-scoped A->B->A reversal guard in CellProperty::positionChanged (HARD-02) + dual-renderer CORNERSNAP capture verify
 
 ### Phase 26: Instrumentation Removal + Options-Window FATAL
 **Goal**: Strip the now-superseded debug instrumentation from shipped code paths and fix the pre-existing Options-window crash.
@@ -189,7 +191,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete | 2026-06-12 |
 | 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete    | 2026-06-13 |
-| 25. Cantina Corner-Snap Fix | v2.3 | 0/TBD | Not started | - |
+| 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 0/TBD | Not started | - |
 | 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |
 | 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
