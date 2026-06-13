@@ -377,21 +377,21 @@ bool ConfigClientGraphics::getPsrcCensus() { return ms_psrcCensus; }  // getter
 | A3 | `searchPath_00_12=D:/swg_dev_bundle` is safely removable — it's referenced only in client_d.cfg, absent from client.cfg (which boots), and the dir holds Phase-7 dev scratch, not boot-required TREs. | PORT-02 audit | Low — D-05 mandates a verify-then-remove boot test anyway. If something silently depends on it, the boot test catches it. |
 | A4 | The `disableMultiStreamVertexBuffers` and Bloom engine-default flips (D-07) are each a one-line change (`KEY_BOOL` default; STUB→no-op) — small and reversible. | PORT-02 audit | Medium — the Bloom STUB currently FATALs when Bloom enabled (Direct3d11.cpp:1134); the no-op must be verified not to break the post-FX chain. Boot-verify both renderers. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Which Miles byte-set is canonical (redist's newer vintage vs stage's Oct-2017 verified set)?**
    - What we know: stage/miles is the runtime-verified working set (2026-06-12 audio fix). redist differs in size for `.asi`/`.flt`.
    - What's unclear: whether the newer redist Miles build also works (untested at runtime in this tree).
-   - Recommendation: make redist = stage/miles bytes + the 2 `.m3d`; boot-verify audio. Lowest-risk path to a known-good fresh clone.
+   - **RESOLVED:** redist = the proven stage/miles bytes + the 2 `.m3d` (A1 recommendation adopted; Plan 24-02 Task 1, with mandatory boot-verify).
 
 2. **One template with a `rasterMajor` parameter, or two templates (client.cfg + client_d.cfg)?**
    - What we know: the two cfgs differ in rasterMajor history, resolution (1920×1080 vs 1600×900), skipSplash, and a few diagnostic keys; both share the TRE-root + override paths.
    - What's unclear: how much per-file divergence to preserve vs unify.
-   - Recommendation: one parameterized template emitting both (DRY for the shared TRE/path block), with a `-RasterMajor` and `-Resolution` parameter. Discretion per D-08/CONTEXT.
+   - **RESOLVED:** one parameterized template emitting both cfgs, `-RasterMajor`/`-Resolution` parameters (Plan 24-03 Task 2).
 
 3. **Where does the template dir live (`tools/` vs `scripts/` vs `src/cmake/config/`)?**
    - What we know: must be outside `stage/*`; the dead CMake template lived at `src/cmake/config/client.cfg.in`.
-   - Recommendation: a fresh `tools/setup/` (the CMake dir name is misleading now). Discretion.
+   - **RESOLVED:** `tools/setup/` (Plan 24-03; the CMake dir name is misleading now).
 
 ## Environment Availability
 
