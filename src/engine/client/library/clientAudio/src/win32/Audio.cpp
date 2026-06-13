@@ -95,6 +95,10 @@ namespace AudioNamespace
 	QueuedSamplesToStartList     s_queuedSamplesToStartList;
 	ProviderMap                  s_3dProviderMap;
 	bool                         s_debugPrintAllocations = false;
+	// 24-02 (D-12): true until Audio::install's startup probe finds the Miles codec/provider redist absent.
+	// When false, it gates the per-sample DEBUG_WARNING flood site below (REVIEW/Codex HIGH — the one-shot
+	// startup warning alone does NOT stop the 141k-line "Error loading and allocating the sample" flood).
+	bool                         s_milesCodecRedistAvailable = true;
 	HDIGDRIVER                   s_digitalDevice2d = NULL;              // Digital playback device for 2d sounds
 	MSS_MC_SPEC                  s_speakers;
 	DataTable *                  s_musicDataTable;
@@ -1279,6 +1283,37 @@ bool Audio::install()
 
 	AIL_startup();
 
+	// 24-02 (D-12): one-shot Miles codec/provider redist presence probe.
+	// redistDirectory is the RELATIVE string Miles returns (typically "miles"), resolved against the
+	// process working dir (stage/ at launch) -- build probe paths the same way Miles loads them so the
+	// check matches actual load resolution. A fresh clone or a stale/partial stage/miles makes music +
+	// in-world audio silent while UI 2D wavs still play (the codec-only "half-dead audio" case that the
+	// AIL_open_digital_driver failure path at :1292 does NOT catch, since the digital driver opens via
+	// system DirectSound). Emit EXACTLY ONE clear startup warning here and set s_milesCodecRedistAvailable
+	// so the per-sample flood site below stays quiet (REVIEW/Codex HIGH: loud-once-then-quiet).
+	{
+		static char const * const s_requiredMilesCodecs[] = { "mssmp3.asi", "mssogg.asi", "Msseax.m3d", "msssoft.m3d" };
+		bool allCodecsPresent = true;
+		for (size_t i = 0; i < sizeof(s_requiredMilesCodecs) / sizeof(s_requiredMilesCodecs[0]); ++i)
+		{
+			std::string const codecPath(redistDirectory + "\\" + s_requiredMilesCodecs[i]);
+			FILE * const codecFile = fopen(codecPath.c_str(), "rb");
+			if (codecFile)
+				fclose(codecFile);
+			else
+			{
+				allCodecsPresent = false;
+				break;
+			}
+		}
+
+		if (!allCodecsPresent)
+		{
+			s_milesCodecRedistAvailable = false;
+			WARNING(true, ("Audio: Miles codec/provider redist missing in '%s' -- music and world audio will be silent. Run tools/setup/setup-client.ps1 or rebuild to stage stage/miles.", redistDirectory.c_str()));
+		}
+	}
+
 	// Set the file system callbacks
 
 	AIL_set_file_callbacks(fileOpenCallBack, fileCloseCallBack, fileSeekCallBack, fileReadCallBack);
@@ -1522,7 +1557,11 @@ void AudioNamespace::cacheSample(TemporaryCrcString const &path, AbstractFile *f
 		}
 		else
 		{
-			DEBUG_WARNING(true, ("Error loading and allocating the sample: %s", path.getString()));
+			// 24-02 (D-12, REVIEW/Codex HIGH): gate the per-sample flood on the codec-availability flag.
+			// When the Miles codec/provider redist is known-absent (the startup probe already warned once),
+			// suppress this per-sample warning so a missing-codec state does not flood the log 141k lines.
+			// When codecs ARE present (flag stays true), genuine one-off bad samples still warn as before.
+			DEBUG_WARNING(s_milesCodecRedistAvailable, ("Error loading and allocating the sample: %s", path.getString()));
 		}
 	}
 }
