@@ -130,7 +130,10 @@ rem NOT a machine-specific external install -- a fresh clone now stages working 
 rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
 rem REVIEW (Cursor HIGH / Codex MEDIUM): guard on the .m3d 3D providers (the files most likely absent from a stale/partial
 rem pre-reconciliation stage that has mssmp3.asi but lacks the reconciled bytes/.m3d), so a stale stage is REPAIRED, not skipped.
+rem 24 WR-01: also guard on mssmp3.asi -- Audio::install probes for the mp3 decoder too, so a stale stage with both .m3d
+rem providers but a missing/outdated mssmp3.asi must ALSO be repaired (its absence = silent music, the bug this phase fixes).
 rem xcopy /Y overwrites, so re-running on a populated stage is a safe refresh.
+if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
 if not exist "..\..\..\..\..\..\..\stage\miles\Msseax.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
 if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
@@ -238,7 +241,10 @@ rem NOT a machine-specific external install -- a fresh clone now stages working 
 rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
 rem REVIEW (Cursor HIGH / Codex MEDIUM): guard on the .m3d 3D providers (the files most likely absent from a stale/partial
 rem pre-reconciliation stage that has mssmp3.asi but lacks the reconciled bytes/.m3d), so a stale stage is REPAIRED, not skipped.
+rem 24 WR-01: also guard on mssmp3.asi -- Audio::install probes for the mp3 decoder too, so a stale stage with both .m3d
+rem providers but a missing/outdated mssmp3.asi must ALSO be repaired (its absence = silent music, the bug this phase fixes).
 rem xcopy /Y overwrites, so re-running on a populated stage is a safe refresh.
+if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
 if not exist "..\..\..\..\..\..\..\stage\miles\Msseax.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
 if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
