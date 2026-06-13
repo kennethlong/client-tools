@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-13T01:47:07.868Z"
-last_activity: 2026-06-13 -- Phase 24 planning complete
+last_updated: "2026-06-13T01:49:23.962Z"
+last_activity: 2026-06-13 -- Phase 24 execution started
 progress:
   total_phases: 7
   completed_phases: 0
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** v2.3 Hardening roadmap created (Phases 24–30). Next: `/gsd-plan-phase 24`.
+**Current focus:** Phase 24 — dpvs-config-gate-machine-portability
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,10 +69,10 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 24 (not started)
-Plan: —
-Status: Ready to execute
-Last activity: 2026-06-13 -- Phase 24 planning complete
+Phase: 24 (dpvs-config-gate-machine-portability) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 24
+Last activity: 2026-06-13 -- Phase 24 execution started
 
 ## Accumulated Context
 

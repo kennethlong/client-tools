@@ -77,7 +77,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 **Core invariant (every client-touching phase, 24–27):** the client stays bootable to character select under BOTH `rasterMajor=5` (D3D9) and `rasterMajor=11` (D3D11) after the phase. The TRE tool (Phases 28–30) is a standalone web app, outside that invariant but inside the milestone.
 
-- [ ] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
+- [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified (completed 2026-06-13)
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
 - [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS + CORNERSNAP probes stripped atomically; Options window no longer FATALs
 - [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
@@ -96,9 +96,9 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. A fresh clone + build boots to character select with no machine-specific absolute paths — `stage/override` and `stage/miles` handling is documented and/or automated (miles redist absence is detected/handled, not a silent half-dead-audio failure)
   3. `stage/client_d.cfg` contains no leftover Phase-11+ test settings, and the client boots clean to character select under both `rasterMajor=5` and `rasterMajor=11`
 **Plans**: 3 plans (2 waves)
-  - [ ] 24-01-PLAN.md — DPVS occlusionMode knob (HARD-01) + D-07 engine-default flips (multi-stream VB, D3D11 Bloom no-op)
-  - [ ] 24-02-PLAN.md — Miles redist reconcile + postbuild repoint + D-12 one-shot absence warning (PORT-01)
-  - [ ] 24-03-PLAN.md — cfg template + setup-client.ps1 generator + PORT-02 key cleanup + fresh-clone & dual-renderer gate
+  - [x] 24-01-PLAN.md — DPVS occlusionMode knob (HARD-01) + D-07 engine-default flips (multi-stream VB, D3D11 Bloom no-op)
+  - [x] 24-02-PLAN.md — Miles redist reconcile + postbuild repoint + D-12 one-shot absence warning (PORT-01)
+  - [x] 24-03-PLAN.md — cfg template + setup-client.ps1 generator + PORT-02 key cleanup + fresh-clone & dual-renderer gate
 
 ### Phase 25: Cantina Corner-Snap Fix
 **Goal**: Eliminate the cantina corner-snap by stopping the same-frame portal ping-pong, while preserving legitimate fast door traversals.
@@ -188,7 +188,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 21. Particles & Ribbon Effects | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete | 2026-06-12 |
-| 24. DPVS Config-Gate + Machine Portability | v2.3 | 0/TBD | Not started | - |
+| 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete   | 2026-06-13 |
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/TBD | Not started | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 0/TBD | Not started | - |
 | 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |
