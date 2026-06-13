@@ -1,0 +1,220 @@
+## (a) Mechanism hypothesis
+
+On **interior→exterior exit**, the ~4 m Y step is a **same-frame, two-phase handoff inside shared simulation**, not a renderer fork:
+
+1. **Alter phase (controller move):** horizontal `setPosition_w` triggers portal detection; `setParentCell(world)` **reparents first** and **preserves interior world-Y (~5.1)** via `detachFromObject(DF_world)` writing the full world transform into `m_objectToParent`.
+2. **Post-alter collision pass:** with `parentCell == world` but object Y still ~5.1, `Footprint::updateHeights` samples **terrain (~1.06)**; the **`snapObjectToGround` loop** (not `snapToGround`) then writes that terrain Y onto the **object** via `setObjectPosition_p`.
+
+That produces a **one-frame discontinuity vs the prior frame** (interior ~5.1 → exterior ~1.06). `Footprint::snapToGround` only updates footprint `m_position_p`; the visible object-Y pop is **`snapObjectToGround` → `setObjectPosition_p`**.
+
+A **second mechanism** (wall-graze only, not every-exit per locked #4) is `resolveCollisions` `resetPos = transformToCell(foyer1, lastPos, world)` reintroducing pre-crossing interior height — opposite direction (terrain → interior floor).
+
+**Renderer note:** No `#ifdef` D3D9/D3D11 branch exists on this Y path. A plausible **presentation amplifier** (not contradicting shared `Camera::applyState`): `FreeChaseCamera::alter` runs **before** post-alter `CollisionWorld::update`, so the camera can capture target at Y~5.1 while the player object is dropped to Y~1.06 later the same frame — a camera/object vertical desync at draw time, modulated cross-frame by `elapsedTime`/`Clock::frameTime()` (timestep), not by different view-matrix push code.
+
+---
+
+## (b) File:line evidence — field ownership and ordering
+
+### Which field holds Y at each step (exit frame)
+
+| Step | Parent cell | Object Y authority | Footprint Y authority |
+|------|-------------|-------------------|----------------------|
+| End of prior frame | `foyer1` | `m_objectToParent` (cell-local ~0.1) → `getTransform_o2w()` ≈ **5.1** | `m_position_p` (cell-local floor); `m_position_w` cached |
+| Controller move | `foyer1` → **`world`** | `setPosition_w` / portal reframe | unchanged until collision |
+| After `setParentCell(world)` | **`world`** | **`m_objectToParent` = world transform, Y still ≈ 5.1** (`detachFromObject`) | `Footprint::cellChanged` (client): floor attach only, **no Y write** |
+| After `updatePostResolve` | `world` | object Y still ≈ 5.1 | `snapToGround` sets **`m_position_p.y = m_groundHeight`** only |
+| After `snapObjectToGround` loop | `world` | **`getOwner()->setPosition_p` → world Y ≈ 1.06** | footprint already at ground height |
+
+### Phase 1 — Portal reparent (preserves interior world-Y)
+
+Portal detection uses world segment; crossing calls `setParentCell`:
+
+```129:204:src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp
+	Vector start = object.getTransform_p2w().rotateTranslate_l2p(oldPosition_p);
+	Vector end   = object.getPosition_w();
+	// ...
+		object.setParentCell(targetCell);
+```
+
+`setParentCell` on exit to world:
+
+```1399:1408:src/engine/shared/library/sharedObject/src/shared/object/Object.cpp
+	if (!isInWorldCell())
+		detachFromObject(DF_world);
+	if (cellProperty != CellProperty::getWorldCellProperty())
+		attachToObject_w(&cellProperty->getOwner(), false);
+	cellChanged(false);
+```
+
+`detachFromObject(DF_world)` preserves world pose in parent transform (Y unchanged):
+
+```1996:2005:src/engine/shared/library/sharedObject/src/shared/object/Object.cpp
+	m_objectToParent = shouldAttach ? getTransform_o2c() : getTransform_o2w();
+	deleteLocalTransform(m_objectToWorld);
+	m_objectToWorld = NULL;
+```
+
+World cell, unattached: `getTransform_o2w()` **is** `m_objectToParent`; world position comes from that:
+
+```1418:1445:src/engine/shared/library/sharedObject/src/shared/object/Object.cpp
+	if (m_attachedToObject)
+	{
+		m_objectToWorld->multiply(m_attachedToObject->getTransform_o2w(), m_objectToParent);
+		return *m_objectToWorld;
+	}
+	return m_objectToParent;
+```
+
+```691:694:src/engine/shared/library/sharedObject/src/shared/object/Object.h
+inline const Vector Object::getPosition_w() const
+{
+	return getTransform_o2w().getPosition_p();
+}
+```
+
+### Phase 2 — Ground snap AFTER reparent (same frame, post-alter)
+
+Frame order: **all `alter`s → post-alter hook → draw**
+
+```1136:1136:src/engine/client/library/clientGame/src/shared/core/Game.cpp
+			GameScheduler::alter(elapsedTime);
+```
+
+```695:695:src/engine/client/library/clientGame/src/shared/scene/GroundScene.cpp
+	AlterScheduler::setPostAlterHookFunction (CollisionWorld::update);
+```
+
+```1410:1411:src/engine/shared/library/sharedObject/src/shared/object/AlterScheduler.cpp
+	if (s_postAlterHookFunction)
+		s_postAlterHookFunction(schedulerElapsedTime);
+```
+
+Inside collision update, **XZ-only** move (Y not integrated here):
+
+```631:633:src/engine/shared/library/sharedCollision/src/shared/core/CollisionWorld.cpp
+	Vector delta = pointB_w - pointA_w;
+	delta.y = 0.0f;
+```
+
+**Terrain impassability skipped on portal frames** (`cellA != world`):
+
+```130:134:src/engine/shared/library/sharedCollision/src/shared/core/CollisionWorld.cpp
+		if (cellA != CellProperty::getWorldCellProperty() || cellB != CellProperty::getWorldCellProperty())
+			return;
+```
+
+Footprint height: **`snapToGround` → footprint only**:
+
+```1013:1021:src/engine/shared/library/sharedCollision/src/shared/core/Footprint.cpp
+void Footprint::snapToGround ( void )
+{
+	Vector pos = getPosition_p();
+	pos.y = m_groundHeight;
+	setPosition_p(pos);
+}
+```
+
+```478:483:src/engine/shared/library/sharedCollision/src/shared/core/Footprint.cpp
+void Footprint::setPosition_p ( Vector const & pos )
+{
+	m_position_p = pos;
+	m_position_w = CollisionUtils::transformToWorld(getCell(),pos);
+}
+```
+
+**Object Y write** — post-resolve loop:
+
+```774:776:src/engine/shared/library/sharedCollision/src/shared/core/CollisionWorld.cpp
+	for(j = 0; j < 10; j++)
+	{
+		IGNORE_RETURN(foot->snapObjectToGround());
+```
+
+```1079:1087:src/engine/shared/library/sharedCollision/src/shared/core/Footprint.cpp
+bool Footprint::snapObjectToGround ( void )
+{
+	if(m_hasGroundHeight)
+	{
+		Vector newPos = getObjectPosition_p();
+		newPos.y = m_groundHeight;
+		setObjectPosition_p(newPos);
+```
+
+```1209:1215:src/engine/shared/library/sharedCollision/src/shared/core/Footprint.cpp
+void	Footprint::setObjectPosition_p	( Vector const & newPos )
+{
+	if(getObjectPosition_p() == newPos) return;
+	getOwner()->setPosition_p(newPos);
+```
+
+Once in world cell, terrain is sampled (`isInCell()` false):
+
+```939:947:src/engine/shared/library/sharedCollision/src/shared/core/Footprint.cpp
+	if (isInCell () || !TerrainObject::getConstInstance ())
+	{
+		m_hasTerrainHeight = false;
+	}
+	else
+	{
+		m_hasTerrainHeight = TerrainObject::getConstInstance ()->getLogicalHeight(getPosition_w(), ...);
+```
+
+**Anchor for next frame** (still foyer1-local from *previous* frame at resolve start):
+
+```267:270:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+	moveSeg.m_cellA  = colliderA->getLastCell();
+	moveSeg.m_pointA = colliderA->getLastPos_p();
+	moveSeg.m_cellB  = objectA->getParentCell();
+	moveSeg.m_pointB = objectA->getPosition_p();
+```
+
+```1169:1171:src/engine/shared/library/sharedCollision/src/shared/core/CollisionProperty.cpp
+void CollisionProperty::storePosition ( void )
+{
+	setLastPos( getCell(), getTransform_o2p() );
+```
+
+### Single-frame mismatch?
+
+**Yes — intentional transient, same frame:**
+
+- **After reparent (alter):** `getParentCell() == world`, **`getPosition_w().y ≈ 5.1`** (interior height preserved).
+- **Before draw, after `snapObjectToGround`:** same parent cell, **`getPosition_w().y ≈ 1.06`**.
+
+**Reverse mismatch** (interior parent + terrain world-Y) does **not** occur on exit: reparent to `world` precedes terrain snap. While still in `foyer1`, world-Y stays ~5.1 consistently.
+
+### Renderer-conditional ordering?
+
+**No** on the Y handoff chain. Closest client-only hooks:
+
+- `#ifdef WIN32` cross-portal floor **attach** in `updatePreResolve` (`Footprint.cpp:630-640`) — attach only, not Y snap.
+- `handleTerrainImpassability` / `shoveAway` gate client vs server, not D3D9 vs D3D11.
+
+Ground snap vs reparent ordering is **identical across renderers**: reparent in **alter** → snap in **post-alter collision**.
+
+### Camera timing (presentation channel)
+
+Camera alter **precedes** collision update and captures target before `snapObjectToGround`:
+
+```604:626:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+		if (getParentCell () != targetCell)
+			setParentCell (const_cast<CellProperty*> (targetCell));
+		// ...
+		setTransform_o2p (targetObject->getTransform_o2c ());
+```
+
+So on exit frames the camera can hold a **pre-terrain-snap** vertical relationship while the player object is snapped afterward — same `Camera::applyState` path for both backends, but **stale camera alter vs fresh post-collision player**.
+
+---
+
+## (c) One empirical discriminator
+
+**Three-point same-frame probe on the player NetworkId** (Debug, any `rasterMajor`):
+
+1. Immediately after `CellProperty.cpp:204` `setParentCell` on exit  
+2. Entry to `Footprint::updatePostResolve` (`Footprint.cpp:754`)  
+3. Immediately after `Footprint::snapObjectToGround` (`Footprint.cpp:1087`)
+
+Log: `frame`, `getParentCell()->getCellName()`, `object->getPosition_w().y`, `footprint->getObjectPosition_p().y`, `m_groundHeight`.
+
+**Prediction if this hypothesis is correct:** on every visible exit snap, (1) and (2) show `parentCell=world`, **Y ≈ 5.1**; (3) shows **Y ≈ 1.06** — **regardless of D3D9 vs D3D11**. If (1)-(3) are identical across backends but D3D9 still snaps visually, add **`camera->getTransform_o2w().y - player->getPosition_w().y`** at `Camera::applyState` (`Camera.cpp:629`) on the same frames; a ~4 m gap there would confirm **presentation desync (camera alter before ground snap)**, not divergent view-matrix construction between plugins.

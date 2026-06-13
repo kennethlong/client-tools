@@ -1,0 +1,254 @@
+# CONSULT-43 Lateral Seat — Output
+
+Angle: non-obvious mechanisms for a D3D9-only one-frame positional snap at the cantina door.
+Honoring all LOCKED facts and BANNED frames. All hypotheses grounded in source file:line.
+
+---
+
+## Mechanism 1: D3DX FPU state corruption changes float-precision of the portal Y math mid-frame (D3D9-exclusive side-effect)
+
+### Hypothesis
+
+The D3D9 plugin (gl05/gl07) calls `D3DXMatrixMultiply` from the legacy d3dx9 SDK on
+EVERY frame at `Direct3d9.cpp:3291` inside `setWorldToCameraTransform`, which runs
+during the draw phase of `Game.cpp:1199-1228`. This codebase already documents that
+D3DX functions disturb the FPU control word — the `_fpreset`/SEH wrapper at
+`Direct3d9_VertexShaderData.cpp:87-114` was built precisely because D3DX's own shader
+compiler unmasks FP exceptions and resets precision during its post-compile FWAIT, and
+`Report.cpp:166-168` has a known hack to restore the FPU after `OutputDebugString` resets
+it to 53-bit precision.
+
+`FloatingPointUnit::install` at `FloatingPointUnit.cpp:45-56` sets the x87 FPU to
+24-bit single precision (`PRECISION_24 = 0x0000`) with all exceptions masked
+(fpcw=0x007f). If `D3DXMatrixMultiply` or any D3DX call inside the D3D9 plugin
+temporarily widens precision to 64-bit (`PRECISION_64 = 0x0300`) or 53-bit
+(`PRECISION_53 = 0x0200`) BEFORE returning to the simulation code, arithmetic in
+`CollisionUtils::transformToCell` (which is called FROM the simulation alter loop, which
+runs in the SAME main thread as the draw, but BEFORE the draw; see `Game.cpp:1136/1168`)
+would not be affected by the current frame's D3DX call.
+
+HOWEVER: the disturbing direction goes the other way. `FloatingPointUnit::update()` is
+called at `Os.cpp:705` inside `Os::processMessages`, which is called inside
+`IoWinManager::processEvents(elapsedTime)` at `Game.cpp:1168` — AFTER the alter/collision
+phase but BEFORE the draw. If any D3DX call in the D3D9 plugin during the PREVIOUS
+frame's draw left the FPU in a wider-precision mode (64-bit), and the engine's
+`FloatingPointUnit::update()` / `Report.cpp` guard failed to catch it before the NEXT
+frame's collision/portal math runs, the portal Y arithmetic would execute at 64-bit
+(extended) precision instead of 24-bit. 64-bit precision changes floating-point
+comparison thresholds and rounding — specifically, the portal-crossing line test in
+`CellProperty::Notification::positionChanged` uses the START and END positions of the
+movement segment. At the exact boundary of a door plane, a 64-bit vs 24-bit comparison
+can flip which side of the plane the segment is deemed to end on, changing whether a
+portal crossing fires on THIS frame or the NEXT, and therefore whether
+`CollisionResolve::resolveCollisions` sees `m_cellA != m_cellB` on the SAME frame as the
+player physically crosses the door.
+
+The D3D11 plugin does NOT call D3DX at all — it uses DirectXMath (XMMatrixTranspose via
+`Direct3d11_StateCache.cpp:1868`) and D3DCompile, both of which are modern Win SDK
+code that does not touch the x87 FPU on 32-bit builds. So D3D11 never introduces this
+per-frame FPU precision perturbation.
+
+### File:line evidence
+
+- `Direct3d9.cpp:3291` — `D3DXMatrixMultiply` called every frame in `setWorldToCameraTransform`
+- `Direct3d9_VertexShaderData.cpp:77-114` — documented D3DX FPU exception unmasking,
+  `_fpreset()` guard; confirms D3DX disturbs FPU state in this build
+- `Report.cpp:162-168` — documented `OutputDebugString` resets FPU to 53-bit; same pattern
+- `FloatingPointUnit.cpp:45-56` — engine sets 24-bit precision; `update()` at :100-111 can
+  DETECT drift but only restores if `currentStatus != status`; there is a one-frame window
+  if D3DX stomps the control word AFTER `update()` ran for that frame
+- `Os.cpp:705` — `FloatingPointUnit::update()` is called once per frame inside
+  `Os::processMessages` -> `IoWinManager::processEvents`; runs before draw, not after
+- `Game.cpp:1168` — `IoWinManager::processEvents` (FPU update happens here)
+- `Game.cpp:1199-1227` — draw + present happen AFTER processEvents; D3DX stomps FPU here
+- Next frame's collision alter runs before the next draw, so D3DX precision stomp from
+  frame N persists into frame N+1's collision math unless `FloatingPointUnit::update()`
+  catches it — it will catch it ONLY if the stomp is still active when `processMessages`
+  runs again, which requires the stomp to survive through present and the top of the loop
+- `dpvsVisibilityQuery_Resolve.cpp:268-269` — DPVS also calls `_controlfp` in DEBUG
+  builds (unmasks FP exceptions), adding another FPU perturber in the D3D9 Debug path
+
+### One empirical discriminator
+
+Force the FPU control word back to 24-bit precision (0x007f) IMMEDIATELY after
+`Graphics::present()` returns at `Game.cpp:1227` — add one call to
+`FloatingPointUnit::setControlWord(FloatingPointUnit::getControlWord())` (or
+`_fpreset(); _clearfp();`) as a one-line additive `_DEBUG` probe after the present call.
+If the cantina door snap disappears or its frequency drops significantly under D3D9, the
+D3DX-induced FPU precision change is a real contributor. This is a zero-logic change —
+it does not alter simulation math, only resets FPU state to where the engine believes
+it already is.
+
+---
+
+## Mechanism 2: Clock::maxFrameTime clamp asymmetrically truncates D3D9 timestep at the portal frame
+
+### Hypothesis
+
+`Clock::update()` at `Clock.cpp:251-254` clamps `ms_lastFrameTime` to `ms_maxFrameTime`
+when the raw QPC delta exceeds the cap (which is `1 / minFrameRate`; defaults from config).
+If `minFrameRate=15` (a common SWG default), `ms_maxFrameTime = 1/15 ≈ 66.7 ms`.
+
+Under D3D9 with vsync ON (Run B in the Cycle-9 data — the WORST case, 8/10 snap), the
+present call is `D3DPRESENT_INTERVAL_ONE` with `SwapEffect=COPY`, 1 backbuffer
+(`Direct3d9.cpp:2230/2255-2256`). On Win11/NVIDIA in windowed mode, this can produce
+frame times significantly LARGER than 16.6 ms in certain vblank-interrupt states (the
+"stall indefinitely" risk noted in `client_d.cfg:69-71`). If a frame takes e.g. 100 ms
+(D3D9 stall), `Clock::update` clamps to ~66 ms and the next frame starts with a large
+timestep.
+
+Under D3D11 FLIP_DISCARD 2-buffer `Present(1,0)` (`Direct3d11_Device.cpp:1137`), the
+present returns promptly (DXGI flip model does not stall in windowed mode on Win11), so
+frame times stay ~16-20 ms and never approach the clamp. The D3D11 path therefore NEVER
+gets the clamped 66 ms timestep that D3D9 occasionally produces.
+
+The critical interaction: `CollisionResolve::resolveCollisions`'s rewind magnitude scales
+with the penetration depth = velocity * elapsedTime. A clamped 66 ms timestep vs a
+normal 16 ms timestep is a 4x difference in penetration depth at the door plane. The
+Cycle-9 smoking gun (vsync-ON worse than vsync-OFF) is consistent: `INTERVAL_ONE`
+produces LARGER, steadier timesteps than `INTERVAL_IMMEDIATE` on Win11/NVIDIA windowed,
+not just tighter — the windowed vblank polling produces systematic overshoots that
+`INTERVAL_IMMEDIATE` avoids by not waiting at all. So it is not just "bigger average
+timestep" but OCCASIONAL LARGE SPIKES at vblank-miss moments that push the penetration
+over the perceptible threshold.
+
+The LOCKED data point from Cycle-3 (FPS cap 30 vs 250 had "maybe slight" effect) is
+consistent here too: a global NVIDIA FPS cap changes AVERAGE rate without changing the
+per-frame jitter pattern that windowed D3D9 vblank polling produces — a capped-to-30
+D3D9 with INTERVAL_ONE windowed still has the exact same per-frame stall risk, just a
+different average. D3D11 flip model does not have this stall path at all.
+
+This mechanism is ADDITIVE to the timestep-modulation root cause from Cycle 9 — it
+explains the specific SPIKE characteristic of the snap (fires ~80% at vsync-ON, not
+100%) better than a smooth "bigger average timestep" argument: it is the stochastic
+vblank-miss events that push individual frames over the threshold.
+
+### File:line evidence
+
+- `Clock.cpp:251-254` — maxFrameTime clamp: `if (ms_lastFrameTime > ms_maxFrameTime) ms_lastFrameTime = ms_maxFrameTime`
+- `Direct3d9.cpp:2230` — `SwapEffect = D3DSWAPEFFECT_COPY` (windowed)
+- `Direct3d9.cpp:2253-2256` — `INTERVAL_IMMEDIATE` (vsync OFF) vs `INTERVAL_ONE` (vsync ON)
+- `Direct3d11_Device.cpp:1137` — `Present(1,0)` with `DXGI_SWAP_EFFECT_FLIP_DISCARD`,
+  2 buffers (`Device.cpp:560-577`) — DXGI flip model does not stall in windowed Win11
+- `client_d.cfg:69-71` — documented "Modern NVIDIA drivers emulate windowed vsync in
+  user-space; it can stall indefinitely when the compositor vblank signal is interrupted"
+  — confirms the per-frame stall risk is KNOWN and D3D9-specific in this setup
+- `Game.cpp:1092` — `elapsedTime = Clock::frameTime()` — the clamped value drives ALL
+  per-frame alter calls including player movement and collision integration
+- `CollisionResolve.cpp:320` — `resetPos = moveSeg.getBegin(moveSeg.m_cellB)`;
+  penetration depth (and therefore rewind magnitude) scales directly with the per-frame
+  move distance = velocity * elapsedTime
+
+### One empirical discriminator
+
+Log `Clock::frameTime()` values in a ring buffer of the last 10 frames, then at every
+`CollisionResolve::resolveCollisions` RR_Resolved branch log the current `elapsedTime`
+alongside the rewind delta magnitude. Prediction: the D3D9 snapping frames will show a
+preceding frame time spike (>20 ms), while D3D11 non-snapping frames will show a flat
+~16-17 ms cadence. This is an additive one-liner inside the existing CORNERSNAP-RESOLVE
+`#ifdef _DEBUG` block — log `Clock::frameTime()` alongside the existing before/after
+position — no new instrumentation infrastructure needed.
+
+---
+
+## Mechanism 3: FreeChaseCamera::alter sets camera parent cell BEFORE portal crossing fires, causing getTransform_o2c() to resolve through the wrong cell's hierarchy for one frame
+
+### Hypothesis
+
+`FreeChaseCamera::alter` at `FreeChaseCamera.cpp:604-651` runs during `GameScheduler::alter`
+(`Game.cpp:1136`) every frame BEFORE collision (`IoWinManager::processEvents:1168` includes
+the world alter which runs `CollisionWorld::update`). At line 607-608:
+
+```cpp
+const CellProperty* const targetCell = m_target->getParentCell();
+if (getParentCell() != targetCell) setParentCell(const_cast<CellProperty*>(targetCell));
+```
+
+It forces the camera's parent cell to match the player's current parent cell IMMEDIATELY,
+BEFORE portal transitions have been processed for this frame. Then at line 626:
+
+```cpp
+setTransform_o2p(targetObject->getTransform_o2c());
+```
+
+`getTransform_o2c()` is `getTransform_o2w()` of the target inverted through the camera's
+own parent cell. The camera's parent cell has JUST been snapped to `targetCell` — but
+`targetObject->getTransform_o2w()` still resolves through the player's cell as it was at
+the START of alter, before any portal crossing. At the cantina door portal frame, there
+is a one-tick window where:
+
+1. Camera parent cell = world (snapped to player's new "world" cell)
+2. Player's `m_objectToParent` (local transform) still contains the FOYER1-local
+   position (it has not yet been re-expressed in world coordinates by
+   `Object::setParentCell`)
+
+This makes `getTransform_o2c()` compose the foyer1-local player transform AGAINST the
+world camera cell — producing a camera world-position that is `~4 m` off in Y for one
+frame. The snap the player SEES is the camera jumping, not just the player object moving.
+
+Under D3D11 the timestep is shorter and more uniform. The window where the camera and
+player disagree about cell context may not accumulate enough camera-position-frame-delta
+to produce a perceptible jump because the flip-model present queue keeps rendering the
+PREVIOUS frame's correct camera position while the simulation catches up. Under D3D9
+COPY/1-buffer, there is no queued buffer — the current frame's stale camera transform is
+immediately what gets rendered.
+
+The discriminator from Cycle 7 is consistent: the logged PLAYER position was clean
+(y=5.106, tiny segs) but the CAMERA (obj 0) flapped world<->foyer1 EVERY frame. If the
+camera's o2c is being computed with a cell mismatch, the camera's WORLD position would
+jump even if the player's does not.
+
+### File:line evidence
+
+- `FreeChaseCamera.cpp:604-651` — the cell-force at :607-608 and transform set at :626
+- `Object.cpp:1418-1446` — `getTransform_o2w()` resolves via
+  `m_attachedToObject->getTransform_o2w() * m_objectToParent`; the cell-change path
+  (via `setParentCell`) would need to have updated `m_objectToParent` before this point
+  for the camera's o2c to be correct
+- Cycle-9 evidence evidence log (EVIDENCE-25-01-gl05-guard-regression-20260613.log):
+  f7593 PORTAL for obj 0 (chase cam): `world(0)->foyer1(1)` logged — camera DID
+  cross a portal on the same frame as the player snap; this is the cell-flip in progress
+- Camera.cpp:629-640 — `applyState()` uses `getTransform_o2w()` at render time;
+  if the camera's o2w is stale/mis-resolved at render time due to the cell-vs-transform
+  mismatch above, the view matrix for THAT FRAME would be wrong by ~4 m in world-Y
+- Direct3d9.cpp:2230/COPY-1-buffer vs Direct3d11_Device.cpp:FLIP_DISCARD-2-buffer:
+  D3D11 can be rendering frame N-1's view matrix while frame N's simulation resolves;
+  D3D9 COPY/1-buffer renders frame N's view matrix immediately after present
+
+### One empirical discriminator
+
+Add a `_DEBUG` one-liner to `Camera::applyState()` (Camera.cpp:629) that logs
+`getTransform_o2w().getPosition_p()` and `getParentCell()` every frame. The prediction:
+on the D3D9 snap frames, `getPosition_p()` of the camera at applyState time will show a
+~4 m Y deviation from the preceding frame's camera world position, AND the parent cell
+logged in applyState will disagree with `m_target->getParentCell()` (one is `world`,
+the other is `foyer1`). On D3D11 non-snap frames, camera world position will be smooth.
+This is a pure observer log — no simulation changes — and directly tests whether the
+applyState view matrix has the ~4 m jump vs a clean camera trajectory.
+
+---
+
+## Summary of what distinguishes these three angles
+
+- **Mechanism 1 (D3DX FPU precision stomp)** acts on the PORTAL CROSSING DETECTION
+  threshold (whether the line test fires THIS frame), not on the magnitude of the rewind.
+  Discriminator: adding a post-present FPU reset changes WHEN the collision resolve fires,
+  not how large the rewind is.
+
+- **Mechanism 2 (Clock::maxFrameTime vblank-miss spike)** acts on the REWIND MAGNITUDE
+  by scaling penetration depth with sporadic oversized timesteps. Discriminator: the snap
+  frames will show a preceding frame-time spike in the ring buffer log.
+
+- **Mechanism 3 (FreeChaseCamera cell/transform mismatch at applyState)** produces the
+  snap as a CAMERA VIEW MATRIX jump independent of the player object position.
+  Discriminator: the camera's `getTransform_o2w().getPosition_p()` at `applyState` time
+  will show the ~4 m Y deviation on snap frames even if the logged PLAYER position is
+  already clean (consistent with the Cycle-7 data).
+
+Note: Mechanism 3 is NOT the renderer-as-cause (banned); it is the CAMERA's per-frame
+cell handling introducing a view-matrix discontinuity that the 2-deep flip-model queue
+in D3D11 incidentally absorbs by continuing to display the prior frame's correct view
+while the camera resolves. D3D9's 1-buffer COPY path immediately presents the stale view.
+This does not contradict "view matrix is renderer-identical within a frame" (Cycle-8
+claim) — it says the view matrix IS wrong for the snap frame in both renderers, but D3D11
+renders the previous frame's correct matrix from its queued buffer while D3D9 does not.

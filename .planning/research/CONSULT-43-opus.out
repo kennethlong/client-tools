@@ -1,0 +1,102 @@
+# CONSULT-43 — Opus angle (coordinate-frame math + the "identical matrices" paradox)
+
+## (a) Mechanism hypothesis
+
+The "matrices identical across backends" lead is **TRUE within a frame and is NOT the
+snap source** — and that fact, taken to its logical conclusion, *refutes* a render-side /
+transform-composition origin for the snap. The cell→world reparent math is provably
+world-position-PRESERVING (zero-delta by construction), so a mixed-frame composition does
+**NOT** predict the observed ~4 m door pop. The ~4 m discontinuity is real but it is
+**injected upstream into `m_objectToParent` itself** (the simulation's per-frame position),
+not introduced by `getTransform_o2w` composition and not by the camera/view path. The
+camera then faithfully renders whatever world position it is handed — identically in both
+backends. Therefore the D3D9-vs-D3D11 correlation cannot be a frame-math difference; it is
+a **timestep/scheduling difference that decides WHETHER the upstream 4 m transient is
+sampled into a presented frame** (consistent with the crew's timestep channel — I do not
+re-derive it; I bound out the math lane).
+
+Plainly: **the matrices ARE identical across backends, and that is exactly why the math
+lane produces no backend-specific snap. The snap is data fed into the (shared) matrix, not
+the matrix assembly.**
+
+## (b) File:line evidence + the transform composition
+
+The cell→world reparent is a closed loop that preserves world position to float precision:
+
+1. `Object::setParentCell` (`src/engine/shared/library/sharedObject/src/shared/object/Object.cpp:1387-1409`):
+   - `detachFromObject(DF_world)` → `m_objectToParent = getTransform_o2w()` (`:2002`):
+     bakes the CURRENT world position into o2p (object now lives in the world cell, same
+     world Y).
+   - `attachToObject_w(&newCell->getOwner(), false)` (`:1956-1978`): recomputes o2p in the
+     NEW cell's frame from the *current world* frame:
+        `p = newCellOwner->rotateTranslate_w2o(getPosition_w())`  (`:1965`)
+        `m_objectToParent.setPosition_p(p)`                        (`:1969`)
+
+   Composition check — what `getTransform_o2w` yields after reparent
+   (`:1418-1446`, attached branch `:1438`):
+        o2w_new = CellOwner_o2w · m_objectToParent
+                = CellOwner_o2w · (CellOwner_o2w⁻¹ · world_pos)   [from :1965 w2o]
+                = world_pos.
+   **Net Y delta from the reparent = 0, exactly.** The interior-floor (≈5.1) vs terrain
+   (≈1.06) offset is fully absorbed: o2p carries the inverse-cell term, the cell-owner
+   transform re-applies it, and they cancel. There is **no frame where an interior cell
+   offset is applied while the parent is already the world cell** — `detach` zeroes o2p
+   into world space *before* `attach` re-expresses it, in one synchronous call, same stack
+   frame, same thread. A "mixed-frame composition" cannot persist because the two steps are
+   not separable across a frame boundary.
+
+2. The o2w cache cannot strand a stale 4 m value either. Every mutator
+   (`positionChanged:1207`, `cellChanged:1278`, `attachToObject_w` via `:1935`,
+   `setParentCell` via `cellChanged`) calls `setObjectToWorldDirty(true)`, which also
+   dirties all attached children (`:3127-3134`), and `getTransform_o2w` recomputes whenever
+   dirty (`ENABLE_OBJECTTOWORLDDIRTY==1`, `:52`, `:1430-1440`). The cache is renderer-blind;
+   neither plugin participates.
+
+3. Camera consumes that same world transform once, for both backends:
+   `Camera::applyState` (`src/engine/client/library/clientGraphics/src/shared/Camera.cpp:629-640`)
+   inverts `getTransform_o2w()` (`:632`) and pushes a single
+   `Graphics::setWorldToCameraTransform` (`:637`). **VERIFIED, lead CONFIRMED:** there is no
+   per-renderer branch here, and the cantina log already shows the *player's* portal segment
+   clean at world-Y 5.100 (`cantina-corner-snap.md` f7593 PORTAL seg) — the 4 m collapse to
+   1.063 appears *between* `positionChanged` and `resolveCollisions` in the SAME frame, i.e.
+   it is written into `m_objectToParent`/`getPosition_p` upstream, not produced by o2w
+   assembly. The matrix faithfully renders 1.063 when fed 1.063.
+
+**Conclusion on the paradox:** option (a) "matrices not identical" is **FALSE** — they are
+identical (confirmed at `:632/:637`, single shared push, lazy renderer-blind recompute).
+Option (b) "one backend applies the cell offset at a different stage" is **FALSE** — the
+offset is applied/un-applied entirely inside one synchronous `setParentCell` call, before
+any render. The math lane yields **no backend-specific snap**, which is the correct,
+falsifying result: the 4 m delta is an upstream *position* value sampled (or not) into a
+frame depending on timestep — outside my lane to localize further, but the frame math
+positively excludes the transform-composition and camera-matrix hypotheses.
+
+## (c) ONE empirical discriminator
+
+In `Object::getTransform_o2w` (Object.cpp:1438, attached branch, just after the
+`multiply`), add a `#ifdef _DEBUG` probe that logs, for the player NetworkId only, the
+recomposed `m_objectToWorld->getPosition_p().y` together with the input
+`m_objectToParent.getPosition_p().y` and `m_attachedToObject->getTransform_o2w()`'s Y —
+**tagged with the current `Graphics` frame counter and call-site (camera applyState vs
+collision)** — across a door crossing in BOTH gl05 and gl11.
+
+- If the recomposed o2w Y ever differs from the (cell-owner-Y + o2p-world-Y) sum by ≫ float
+  epsilon, or differs *between the two backends for the same frame number*, the matrix lane
+  is alive → reopen (a)/(b). **Prediction: it will not** — recomposed Y will exactly equal
+  the upstream o2p-derived world Y, identical in both plugins per frame.
+- The discriminating signal is instead *temporal*: the count/placement of frames where the
+  fed o2p world-Y = 1.063 (vs 5.100) will differ between gl05 and gl11 even though each
+  individual recompose is byte-identical. That isolates the cause to timestep sampling of an
+  upstream position, and **conclusively clears the coordinate-frame composition and the
+  shared camera matrix.**
+
+---
+Summary: The cell→world reparent (`setParentCell:1387` → `detach:2002` →
+`attachToObject_w:1965-1969`) is algebraically world-position-preserving (net Y delta = 0),
+so a mixed-frame composition does NOT predict the ~4 m pop. The "identical matrices across
+backends" lead is CONFIRMED, not refuted (Camera.cpp:632/637 single shared push; o2w cache
+is renderer-blind, dirtied on every mutation). That makes a backend-specific snap
+logically impossible in the transform lane — the 4 m delta is an upstream *position* fed
+into the (shared) matrix between positionChanged and resolve, and the D3D9/D3D11 split is
+which frame samples it (timestep), not how the matrix is built. Math lane positively
+excludes transform-composition and camera-matrix as the snap source.

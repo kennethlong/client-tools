@@ -2,7 +2,7 @@
 created: 2026-05-15
 title: Diff SWGSource (Restoration / community) vs whitengold codebase + TRE files for space-scene graphics artifacts
 area: research / data-content / space rendering
-next_action: defer — research item; revisit when JTL/space scenes become a priority (likely post-Phase-11)
+next_action: becomes actionable once the v2.3 TRE compare tool (Phases 28-30) exists — diff our TREs vs D:\SWG Restoration + D:\SWGEmu-Client, mine their D3D9 shaders/assets (see 2026-06-13 expansion). Original space-asset diff still valid.
 files:
   - D:/Code/swg-client-v2/  (codebase)
   - D:/Code/SWGSource Client v3.0/  (TRE/TOC tree this client points at)
@@ -12,6 +12,34 @@ references:
 status: research
 priority: low (not blocking; informational for post-Phase-11)
 ---
+
+## 2026-06-13 — EXPANDED: use the v2.3 TRE compare tool to mine Restoration/SWGEmu shaders
+
+Kenny (2026-06-13, during the Phase 25 door-snap investigation): once the **v2.3 TRE
+compare tool (Phases 28-30)** is built, point it at the reference clients' TRE files —
+not just for the space-asset question below, but to **inspect their shaders and assets**.
+Restoration and SWGEmu have run this codebase for years and have likely worked out shader
+glitches we're still fighting; the tool lets us see exactly **what shaders they ship and
+run under D3D9**, and diff them against ours.
+
+Reference clients are now located on this machine (found while comparing configs for the
+cantina door snap):
+- **`D:\SWG Restoration`** — SWGSource lineage, runs **D3D9/gl07 in x64**, ships
+  `SwgRestoration_*.tre` + `d3dcompiler_47` (modern, no legacy d3dx9). Their config:
+  `options.cfg` sets `rasterMajor=7`, `useSafeRenderer=0`.
+- **`D:\SWGEmu-Client`** — unmodified original SOE client, also `rasterMajor=7`.
+
+High-value diffs once the tool exists:
+- `shader/*` — compare their D3D9 shader set (`.sht` and the referenced vertex/pixel
+  programs) against ours. They may have fixes for glitches the v2.2 D3D11 parity work
+  and the open rendering bugs touched.
+- The space assets in the section below (the tool's original use case).
+- General asset deltas (templates, appearances) that explain behavioral differences.
+
+This is a concrete first/second real use case for the TRE compare tool. It also pairs with
+the door-snap finding: Restoration is the **clean D3D9 reference** (see
+`.planning/debug/cantina-corner-snap.md` Cycle 10-11) — their TREs + binaries are a
+working baseline to learn from.
 
 ## What this is
 
