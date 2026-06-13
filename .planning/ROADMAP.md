@@ -6,7 +6,7 @@
 - ✅ **v2.0 Modernisation** — Phases 7–11 (shipped 2026-05-25). Dead-code removal, STLPort→MSVC STL (via Koogie MSBuild adoption), DPVS verdict, D3D11 renderer plugin. Full detail: `milestones/v2.0-ROADMAP.md`.
 - ✅ **v2.1 Decruft** — Phases 12–16 (shipped 2026-05-27). Re-applied the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree; five dormant subsystems unlinked + deleted, client kept bootable under both renderers. Full detail: `milestones/v2.1-ROADMAP.md`. Audit: `milestones/v2.1-MILESTONE-AUDIT.md`.
 - ✅ **v2.2 Visual Parity** — Phases 17–23 (shipped 2026-06-12). D3D11 (`rasterMajor=11`) now matches the known-good D3D9 (`rasterMajor=5`) baseline: asset PS pipeline (PSRC recompile + reflection constants), FFP combiner cascade, lighting/gamma parity, round minimap, particles/ribbons, exterior geometry closure, DPVS remeasure (Option α REVISED). 13/13 requirements. Full detail: `milestones/v2.2-ROADMAP.md`. Audit: `milestones/v2.2-MILESTONE-AUDIT.md`.
-- 📋 **Next milestone** — not yet defined; run `/gsd-new-milestone`. Candidate seeds: act on the DPVS verdict (config-gate occlusion), D-15 instrumentation removal, machine-portability (`stage/override` + `stage/miles` paths), SWG-Source community-compat sync, pre-existing Options-window FATAL.
+- 🚧 **v2.3 Hardening** — Phases 24–30 (in progress, started 2026-06-12). Consolidate the v2.2 parity win: act on the DPVS verdict (config-gate occlusion), machine-portability (`stage/override` + `stage/miles` paths, `client_d.cfg` cleanup), cantina corner-snap fix, D-15 + CORNERSNAP instrumentation removal, Options-window FATAL fix, `D3DXCompileShader`→`D3DCompile` port — PLUS a new standalone web-based TRE compare tool (two-install archive-set + merged-virtual-tree diff). 12 requirements (HARD-01..05, PORT-01/02, TRE-01..05).
 
 ## Phases
 
@@ -71,11 +71,99 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 </details>
 
-### 📋 Next milestone — not yet defined
+### 🚧 v2.3 Hardening (Phases 24–30) — In Progress
 
-Run `/gsd-new-milestone` to define requirements + roadmap. Phase numbering continues from 24.
+**Milestone Goal:** Consolidate the v2.2 parity win. Two independent streams: (A) in-client C++ hardening — operationalize the DPVS verdict, make the staged client machine-portable, fix the known runtime crashes/quirks, strip accumulated debug instrumentation, port the D3D9 shader-compile API; (B) a new standalone web-based TRE compare tool for cross-installation data diagnostics. The two streams share zero code and can interleave.
+
+**Core invariant (every client-touching phase, 24–27):** the client stays bootable to character select under BOTH `rasterMajor=5` (D3D9) and `rasterMajor=11` (D3D11) after the phase. The TRE tool (Phases 28–30) is a standalone web app, outside that invariant but inside the milestone.
+
+- [ ] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
+- [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
+- [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS + CORNERSNAP probes stripped atomically; Options window no longer FATALs
+- [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
+- [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
+- [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
+- [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
+
+## Phase Details
+
+### Phase 24: DPVS Config-Gate + Machine Portability
+**Goal**: Operationalize the Phase 23 DPVS verdict behind config and make a fresh clone+build produce a bootable, machine-independent client.
+**Depends on**: Phase 23 (DPVS verdict doc `docs/recon/23-dpvs-d3d11-profiling.md` is the spec)
+**Requirements**: HARD-01, PORT-01, PORT-02
+**Success Criteria** (what must be TRUE):
+  1. With auto mode set, the DPVS occlusion bit is enabled outdoors and disabled inside POB cells (matching the Phase 23 verdict), and an explicit config override can force either mode regardless of cell membership
+  2. A fresh clone + build boots to character select with no machine-specific absolute paths — `stage/override` and `stage/miles` handling is documented and/or automated (miles redist absence is detected/handled, not a silent half-dead-audio failure)
+  3. `stage/client_d.cfg` contains no leftover Phase-11+ test settings, and the client boots clean to character select under both `rasterMajor=5` and `rasterMajor=11`
+**Plans**: TBD
+
+### Phase 25: Cantina Corner-Snap Fix
+**Goal**: Eliminate the cantina corner-snap by stopping the same-frame portal ping-pong, while preserving legitimate fast door traversals.
+**Depends on**: Phase 24 (clean dual-renderer boot baseline; CORNERSNAP instrumentation already committed `a9b419daf`)
+**Requirements**: HARD-02
+**Success Criteria** (what must be TRUE):
+  1. Walking into a cantina corner no longer snaps/teleports the player — the A→B→A same-frame cell oscillation is suppressed by a re-entrancy guard
+  2. Fast legitimate door traversals still complete correctly (no regression — the guard targets the reversal pattern specifically, not a blanket one-transition-per-frame cap)
+  3. The committed CORNERSNAP `_DEBUG` instrumentation reports zero ping-pong frames in the previously-failing cantina corner under both renderers
+**Plans**: TBD
+
+### Phase 26: Instrumentation Removal + Options-Window FATAL
+**Goal**: Strip the now-superseded debug instrumentation from shipped code paths and fix the pre-existing Options-window crash.
+**Depends on**: Phase 25 (CORNERSNAP probes are the acceptance harness for HARD-02 and must survive until it is verified); Phase 24 (D-15 DPVS profiling purpose superseded by the shipped verdict)
+**Requirements**: HARD-03, HARD-04
+**Success Criteria** (what must be TRUE):
+  1. The D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are gone from shipped code paths — callers, config-flag registrations, and build-graph entries removed atomically, with Debug+Release link clean (zero unresolved externals, link output grepped — not just MSBuild exit 0)
+  2. Opening the Options window no longer FATALs — the `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch (from feature commit `d1b3c0eaf`) is fixed
+  3. The client boots to character select and the Options window opens cleanly under both `rasterMajor=5` and `rasterMajor=11`
+**Plans**: TBD
+
+### Phase 27: D3DCompile Port
+**Goal**: Replace `D3DXCompileShader` with `D3DCompile` (Fix B) in the D3D9 plugin, superseding the Phase-19 SEH guard where the path is ported.
+**Depends on**: Phase 26 (clean tree); independent of Phases 25/26 in code surface but scheduled last in the hardening stream as the most complex item. Requires an asm-shader census as its first task.
+**Requirements**: HARD-05
+**Success Criteria** (what must be TRUE):
+  1. An asm-shader census (count of `.vsh` / `D3DXAssembleShader` call sites) is produced first and scopes the assembly-path handling — the port does not silently drop the asm path (which would null the VS and skip draws)
+  2. D3D9 HLSL shader compilation runs through `D3DCompile` (with a reimplemented `ID3DInclude` handler and `d3dcompiler_47.dll` staged) instead of `D3DXCompileShader`
+  3. D3D9 visual parity is held against an A/B baseline (no shader-compile regression), and the Phase-19 SEH guard is retained for any path still on D3DX and removed only where the port supersedes it
+**Plans**: TBD
+
+### Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)
+**Goal**: Stand up the headless, fully unit-tested backend foundation for the TRE compare tool — parser reuse, cfg search-path scanning, and engine-faithful virtual-tree merging.
+**Depends on**: Nothing (independent stream; can run concurrently with Phases 24–27)
+**Requirements**: TRE-01
+**Success Criteria** (what must be TRUE):
+  1. The tool scaffold lives at `tools/tre-compare/` with the parser vendored from `D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` (+ `tre_decrypt.py`), reading all TREE format variants plus COT2000/SearchTOC without rewriting
+  2. A scanner hand-parses `client.cfg` `[SharedFile]` (repeated keys handled — not stdlib configparser) and yields a priority-ordered node list matching the engine's `searchTree`/`searchTOC`/`searchPath` precedence
+  3. The virtual-tree builder merges archives with first-hit-wins precedence (higher priority number searched first), length-0 tombstone handling, and `fixUpFileName` canonicalization — with unit tests against the real `stage/client.cfg` proving correct override shadowing and tombstone behavior
+**Plans**: TBD
+
+### Phase 29: TRE Compare Tool — Diff Engine + API
+**Goal**: Build the set-level + file-level diff engine and the FastAPI surface over the proven virtual tree, so the UI works against real data from day one.
+**Depends on**: Phase 28
+**Requirements**: TRE-02, TRE-03, TRE-04
+**Success Criteria** (what must be TRUE):
+  1. A user can request a set-level compare between two installations and get which TRE archives are added/removed/changed, with size/version deltas
+  2. A user can request a file-level compare of the merged virtual trees with per-file added/removed/changed status, where "changed" is detected via `(length, compressedLength)` — NOT the TOC `crc` field (a path-CRC, not a content hash)
+  3. A user can drill into any file via the API and get its metadata, winning archive, shadowed copies in other archives, and an on-demand real content hash (xxhash) computed only on drill-in — never eager full-archive hashing
+  4. A sqlite index cache keyed by `(abspath, mtime, size)` makes re-runs instant, and the API returns correct diff JSON for the SWGSource-vs-whitengold install pair
+**Plans**: TBD
+
+### Phase 30: TRE Compare Tool — Frontend SPA
+**Goal**: Ship the modern web UI over the proven running API — a virtualized, filterable install-vs-install tree-diff that solves the space-asset diagnosis use case end-to-end.
+**Depends on**: Phase 29
+**Requirements**: TRE-05
+**Success Criteria** (what must be TRUE):
+  1. A user can pick two installations, see a set-delta table, and browse a virtualized merged file-tree (TanStack Virtual — no hang on real 10k–100k-entry data) with added/removed/changed badges and folder roll-up
+  2. A user can filter by status (hide-identical), search by name/path, and read summary stats
+  3. A user can select any file and see a detail panel with the winning archive, shadowed copies, sizes, and CRC display
+  4. The tool runs end-to-end as a single localhost server and answers the SWGSource-vs-whitengold space-asset diff
+**Plans**: TBD
+**UI hint**: yes
 
 ## Progress
+
+**Execution Order:**
+Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29 → 30) are independent and may interleave. Within each stream, phases execute in numeric order.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -97,3 +185,10 @@ Run `/gsd-new-milestone` to define requirements + roadmap. Phase numbering conti
 | 21. Particles & Ribbon Effects | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 22. Exterior Geometry / Skeletal Shards | v2.2 | ad-hoc | Complete (ad-hoc) | 2026-06-12 |
 | 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete | 2026-06-12 |
+| 24. DPVS Config-Gate + Machine Portability | v2.3 | 0/TBD | Not started | - |
+| 25. Cantina Corner-Snap Fix | v2.3 | 0/TBD | Not started | - |
+| 26. Instrumentation Removal + Options FATAL | v2.3 | 0/TBD | Not started | - |
+| 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |
+| 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
+| 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |
+| 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |

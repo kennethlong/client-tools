@@ -62,24 +62,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HARD-01 | — | Pending |
-| HARD-02 | — | Pending |
-| HARD-03 | — | Pending |
-| HARD-04 | — | Pending |
-| HARD-05 | — | Pending |
-| PORT-01 | — | Pending |
-| PORT-02 | — | Pending |
-| TRE-01 | — | Pending |
-| TRE-02 | — | Pending |
-| TRE-03 | — | Pending |
-| TRE-04 | — | Pending |
-| TRE-05 | — | Pending |
+| HARD-01 | Phase 24 | Pending |
+| HARD-02 | Phase 25 | Pending |
+| HARD-03 | Phase 26 | Pending |
+| HARD-04 | Phase 26 | Pending |
+| HARD-05 | Phase 27 | Pending |
+| PORT-01 | Phase 24 | Pending |
+| PORT-02 | Phase 24 | Pending |
+| TRE-01 | Phase 28 | Pending |
+| TRE-02 | Phase 29 | Pending |
+| TRE-03 | Phase 29 | Pending |
+| TRE-04 | Phase 29 | Pending |
+| TRE-05 | Phase 30 | Pending |
 
 **Coverage:**
 - v2.3 requirements: 12 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 12 ⚠️ (expected — roadmap not yet created)
+- Mapped to phases: 12 ✓ (100% — Phases 24–30)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-12*
-*Last updated: 2026-06-12 after initial definition*
+*Last updated: 2026-06-12 — roadmap created (Phases 24–30); all 12 requirements mapped*
