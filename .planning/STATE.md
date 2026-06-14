@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-14T19:24:59.139Z"
+last_updated: "2026-06-14T19:30:47.386Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 13
-  completed_plans: 9
-  percent: 69
+  completed_plans: 10
+  percent: 77
 ---
 
 # Project State
@@ -70,12 +70,14 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 ## Current Position
 
 Phase: 28 (tre-compare-tool-foundation-parser-scanner-virtual-tree) — EXECUTING
-Plan: 2 of 4
-Plans: 1/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632).
+Plan: 3 of 4
+Plans: 2/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632; 28-02 vendor parser — DONE: f222dc876 + de4f3f64d).
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
-Next: Phase 28 Plan 02 — vendor `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin into `src/tre_compare/parser/` (D-03), rewrite the single line-251 import, add provenance headers.
+Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
+Next: Phase 28 Plan 03 — `scanner.py` (`[SharedFile]` hand-parse, priority-ordered nodes) + `virtual_tree.py` (first-hit-wins merge, per-node-type tombstone, `fix_up_file_name`) + the T-28-02-01 hostile-header bounds preflight at the merge boundary.
 
 ### Prior — Phase 26 (instrumentation removal / Options FATAL) — DONE
+
 Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 Options FATAL / HARD-04 — DONE, audit confirmed already-fixed in 5fce7bb83, no code change). Docs commit afd2a65bf. D-15 DpvsProfileInstrumentation fully removed (grep-zero), CORNERSNAP probes preserved (door-snap harness, deferred to x64/HARD-05). Release "not starting" was a PRE-EXISTING `stage/client.cfg` UTF-8 BOM — see [[reference_client_cfg_bom_release_crash]].
 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
@@ -126,6 +128,8 @@ Last activity: 2026-06-14
 - [2026-06-12] Phase 23-03: D3D11 DPVS verdicts FLIP vs Phase 10 D3D9 — outdoor remove→keep, indoor keep→remove. Option α REVISED; shipped #else branch untouched. `docs/recon/23-dpvs-d3d11-profiling.md`. (This verdict is the spec for v2.3 HARD-01.)
 - [Phase ?]: [2026-06-14] Phase 28-01: tre-compare uv scaffold pinned to the 3.11 floor; uv.lock re-resolved under 3.11 for clone/CI portability; requires-python >=3.11 keeps 3.12-3.14 working
 - [Phase ?]: [2026-06-14] Phase 28-01: kept [build-system].requires at uv_build>=0.11.7,<0.12 (no forward-pin) and proved it resolves via uv build exit 0 (review finding #11)
+- [Phase ?]: [2026-06-14] Phase 28-02: vendored tre_reader.py + tre_decrypt.py from swg-blender-plugin (commit f803f587) per D-03 — provenance headers + the single import rewrite (swg_pipeline.tre_decrypt -> .tre_decrypt); zero swg_pipeline/engine imports (D-01 extractability)
+- [Phase ?]: [2026-06-14] Phase 28-02: all three entry dataclasses already expose snake_case length + compressed_length verbatim — no wrapper; Phase-29 changed-detection contract asserted via dataclasses.fields()
 
 ### Pending Todos
 
@@ -160,7 +164,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T19:24:41.622Z
+Last session: 2026-06-14T19:30:40.384Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
