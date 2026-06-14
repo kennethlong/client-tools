@@ -569,9 +569,9 @@ Use `tmp_path` for the DB file (no shared state); drive MISS→HIT→invalidate 
 | A4 | Re-expressing the merge loop in `cache.py` (option a) stays parity with Phase-28 `build_virtual_tree` | Cache Design | Drift between cached and uncached merge → wrong diffs. MEDIUM — mitigate with a parity test (cached vs builder on the same synthetic install). |
 | A5 | ~200k-row/side lean payload serializes fast enough with stdlib JSON | FastAPI surface / D-08 | If slow, add orjson. LOW — few MB on localhost; verified entry scale is ~193k/side. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Second real install cfg for the SC#4 pair.**
+1. **RESOLVED — Second real install cfg for the SC#4 pair.** Env-gate the integration test with `TRE_COMPARE_LEFT_CFG` / `TRE_COMPARE_RIGHT_CFG`, skip cleanly when unset (implemented in Plan 29-03 Task 3). Original write-up:
    - What we know: the existing integration test points only at `stage/client.cfg` (the SWGSource/whitengold composite). SC#4 wants a *pair* (SWGSource vs whitengold as two distinct installs).
    - What's unclear: the path to the second install's cfg.
    - Recommendation: parameterize the integration test with two env-var cfg paths (`TRE_COMPARE_LEFT_CFG`, `TRE_COMPARE_RIGHT_CFG`), skip cleanly when unset — keeps the default run machine-independent (matches Phase-28 gating discipline). Kenny supplies the two real cfg paths at verify time. (This is the only remaining open item; the TOC-payload binding that was Open-Q1 in the draft is now RESOLVED — see §Verified Findings.)
