@@ -80,7 +80,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
  (completed 2026-06-13)
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
-- [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
+- [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs (completed 2026-06-14)
 - [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
 - [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
@@ -122,8 +122,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. Opening the Options window no longer FATALs — the `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch (from feature commit `d1b3c0eaf`) is fixed
   3. The client boots to character select and the Options window opens cleanly under both `rasterMajor=5` and `rasterMajor=11`
 **Plans**: 2 plans (1 wave)
-  - [ ] 26-01-PLAN.md — atomically remove D-15 DpvsProfileInstrumentation (CORNERSNAP probes KEPT) + Debug/Release /FORCE link-grep + dual-renderer boot (HARD-03 D-15)
-  - [ ] 26-02-PLAN.md — verify/audit Options-window FATAL fix (checkShowToolbarCommandCooldownTimer, commit d1b3c0eaf) + dual-renderer Options-open smoke (HARD-04)
+  - [x] 26-01-PLAN.md — atomically remove D-15 DpvsProfileInstrumentation (CORNERSNAP probes KEPT) + Debug/Release /FORCE link-grep + dual-renderer boot (HARD-03 D-15)
+  - [x] 26-02-PLAN.md — verify/audit Options-window FATAL fix (checkShowToolbarCommandCooldownTimer, commit d1b3c0eaf) + dual-renderer Options-open smoke (HARD-04)
 
 ### Phase 27: D3DCompile Port
 **Goal**: Replace `D3DXCompileShader` with `D3DCompile` (Fix B) in the D3D9 plugin, superseding the Phase-19 SEH guard where the path is ported.
@@ -195,7 +195,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 23. DPVS D3D11 Remeasure | v2.2 | 3/3 | Complete | 2026-06-12 |
 | 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete    | 2026-06-13 |
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
-| 26. Instrumentation Removal + Options FATAL | v2.3 | 0/TBD | Not started | - |
+| 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
 | 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |
 | 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |

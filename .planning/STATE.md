@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-13T20:30:00.000Z"
-last_activity: 2026-06-13 -- Phase 26 planned (2 plans, verification passed); branch promotion noted for v2.3 close
+last_updated: "2026-06-14T01:31:41.067Z"
+last_activity: 2026-06-14
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 4
+  total_plans: 6
   completed_plans: 3
-  percent: 75
+  percent: 50
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 25 — cantina-corner-snap-fix
+**Current focus:** Phase 26 — instrumentation-removal-options-window-fatal
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,20 +69,22 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 26 (instrumentation-removal-options-window-fatal) — PLANNED, ready to execute
+Phase: 26 (instrumentation-removal-options-window-fatal) — EXECUTING
+Plan: 1 of 2
 Plans: 2 (26-01 D-15 removal / HARD-03 partial; 26-02 Options FATAL verify / HARD-04). plan-checker VERIFICATION PASSED first pass.
 Scope (locked 2026-06-13): strip ONLY D-15 DpvsProfileInstrumentation; KEEP CORNERSNAP probes (door-snap harness, deferred to x64). HARD-04 already fixed in tree (commit 5fce7bb83) → 26-02 is verify/audit + dual-renderer Options-open smoke.
 Next: `/gsd-execute-phase 26` (both plans end in human-driven GUI checkpoints — boot to char-select + open Options under rasterMajor=5 AND 11).
 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
+
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Long investigation (debug session cantina-corner-snap, Cycles 1-11; CONSULT-43 crew). OUTCOME:
+Status: Executing Phase 26
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
   • Debug session PARKED. Evidence: stage/cornersnap-capture/EVIDENCE-*.log; .planning/research/CONSULT-43-*.out.
 Next: baseline the DOOR snap from the HARD-05 (Phase 27 D3DCompile) build; real resolution likely ship-D3D11 (clean for us now) or a future 64-bit conversion (matches Restoration; also fixes the chronic 32-bit OOM crash). cfgs restored to rasterMajor=11; working tree clean.
-Last activity: 2026-06-13 -- Phase 25: interior snap resolved-by-config; door snap root-caused to 32-bit build/codegen, parked for HARD-05
+Last activity: 2026-06-14
 
 ## v2.3 Milestone-Close Actions (DO AT CLOSE)
 
