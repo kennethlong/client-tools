@@ -79,6 +79,10 @@ Status: Long investigation (debug session cantina-corner-snap, Cycles 1-11; CONS
 Next: baseline the DOOR snap from the HARD-05 (Phase 27 D3DCompile) build; real resolution likely ship-D3D11 (clean for us now) or a future 64-bit conversion (matches Restoration; also fixes the chronic 32-bit OOM crash). cfgs restored to rasterMajor=11; working tree clean.
 Last activity: 2026-06-13 -- Phase 25: interior snap resolved-by-config; door snap root-caused to 32-bit build/codegen, parked for HARD-05
 
+## v2.3 Milestone-Close Actions (DO AT CLOSE)
+
+- [ ] **Promote koogie → master (fast-forward) and retire/rename the branch.** `master` is the stale Jan-2025 SWG-Source baseline; `koogie-msvc-cpp20-base` is the real trunk (732+ ahead, 0 behind → pure FF, zero conflicts). Decided 2026-06-13: keep committing trunk-style on koogie through v2.3, then FF master to it at close (same pattern as the v2.2 tag). **Push to `origin` ONLY, never the `koogie` (KoogieKepler) upstream.**
+
 ## Accumulated Context
 
 ### Roadmap Evolution
