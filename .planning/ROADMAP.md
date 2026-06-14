@@ -148,7 +148,11 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   1. The tool scaffold lives at `tools/tre-compare/` with the parser vendored from `D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` (+ `tre_decrypt.py`), reading all TREE format variants plus COT2000/SearchTOC without rewriting
   2. A scanner hand-parses `client.cfg` `[SharedFile]` (repeated keys handled — not stdlib configparser) and yields a priority-ordered node list matching the engine's `searchTree`/`searchTOC`/`searchPath` precedence
   3. The virtual-tree builder merges archives with first-hit-wins precedence (higher priority number searched first), length-0 tombstone handling, and `fixUpFileName` canonicalization — with unit tests against the real `stage/client.cfg` proving correct override shadowing and tombstone behavior
-**Plans**: TBD
+**Plans**: 4 plans (4 waves)
+  - [ ] 28-01-PLAN.md — isolated uv library scaffold + zero-dep pyproject + .gitignore + pytest `integration` marker + test root (D-01/D-05; SC#1)
+  - [ ] 28-02-PLAN.md — vendor tre_reader.py + tre_decrypt.py (provenance + line-251 import rewrite) + parser import/data-model smoke test (D-03; SC#1)
+  - [ ] 28-03-PLAN.md — scanner.py ([SharedFile] hand-parse, priority-sorted, cfg-path param) + virtual_tree.py (fixUpFileName + first-hit-wins + per-node-type tombstone + searchPath walk) (D-08; SC#2/SC#3)
+  - [ ] 28-04-PLAN.md — synthetic byte-built fixtures + full behavioral suite (both tombstone cases, override shadowing, traversal/malformed guards) + one gated real-cfg integration test (D-06/D-07; SC#3)
 
 ### Phase 29: TRE Compare Tool — Diff Engine + API
 **Goal**: Build the set-level + file-level diff engine and the FastAPI surface over the proven virtual tree, so the UI works against real data from day one.
