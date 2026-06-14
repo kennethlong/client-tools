@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-14T19:14:26.280Z"
+last_updated: "2026-06-14T19:24:59.139Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 13
-  completed_plans: 8
-  percent: 62
+  completed_plans: 9
+  percent: 69
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 28 — TRE compare tool (foundation); Phase 27 complete (HARD-05 satisfied-by-Fix-A, D3DCompile port deferred to x64)
+**Current focus:** Phase 28 — tre-compare-tool-foundation-parser-scanner-virtual-tree
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,12 +69,14 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 Options FATAL / HARD-04 — DONE, audit confirmed already-fixed in 5fce7bb83, no code change). Docs commit afd2a65bf.
-Outcome: D-15 DpvsProfileInstrumentation fully removed (grep-zero), CORNERSNAP probes preserved (door-snap harness, deferred to x64/HARD-05), F11 occlusion pair kept. Debug+Release link clean (0 unresolved, /FORCE-grep). Dual-renderer boot+Options human-approved: Debug/D3D11 in-game + Options; Release/D3D9 char-select + Options.
-Surprise (resolved): "Release client not starting" was a PRE-EXISTING `stage/client.cfg` UTF-8 BOM (ConfigFile null-section deref in Release; Debug's DEBUG_FATAL masked it) — NOT the D-15 change. Fixed by stripping the BOM from the gitignored staged cfg. See [[reference_client_cfg_bom_release_crash]].
-Next: Phase 27 (HARD-05 — port D3D9 D3DXCompileShader → D3DCompile; census asm shaders first). cfgs at rasterMajor=11 end-state; working tree clean.
+Phase: 28 (tre-compare-tool-foundation-parser-scanner-virtual-tree) — EXECUTING
+Plan: 2 of 4
+Plans: 1/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632).
+Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
+Next: Phase 28 Plan 02 — vendor `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin into `src/tre_compare/parser/` (D-03), rewrite the single line-251 import, add provenance headers.
+
+### Prior — Phase 26 (instrumentation removal / Options FATAL) — DONE
+Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 Options FATAL / HARD-04 — DONE, audit confirmed already-fixed in 5fce7bb83, no code change). Docs commit afd2a65bf. D-15 DpvsProfileInstrumentation fully removed (grep-zero), CORNERSNAP probes preserved (door-snap harness, deferred to x64/HARD-05). Release "not starting" was a PRE-EXISTING `stage/client.cfg` UTF-8 BOM — see [[reference_client_cfg_bom_release_crash]].
 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
@@ -122,6 +124,8 @@ Last activity: 2026-06-14
 
 - [2026-05-25] v2.1 framed as **cleanup-only**; phase ordering risk-gradient, low-first (pure deletes → lib unlink → live-source surgery).
 - [2026-06-12] Phase 23-03: D3D11 DPVS verdicts FLIP vs Phase 10 D3D9 — outdoor remove→keep, indoor keep→remove. Option α REVISED; shipped #else branch untouched. `docs/recon/23-dpvs-d3d11-profiling.md`. (This verdict is the spec for v2.3 HARD-01.)
+- [Phase ?]: [2026-06-14] Phase 28-01: tre-compare uv scaffold pinned to the 3.11 floor; uv.lock re-resolved under 3.11 for clone/CI portability; requires-python >=3.11 keeps 3.12-3.14 working
+- [Phase ?]: [2026-06-14] Phase 28-01: kept [build-system].requires at uv_build>=0.11.7,<0.12 (no forward-pin) and proved it resolves via uv build exit 0 (review finding #11)
 
 ### Pending Todos
 
@@ -156,7 +160,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T16:52:24.793Z
+Last session: 2026-06-14T19:24:41.622Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**

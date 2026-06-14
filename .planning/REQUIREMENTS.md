@@ -22,7 +22,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### TRE Compare Tool
 
-- [ ] **TRE-01**: User can point the tool at two SWG installations and scan their TRE sets — archives discovered plus each install's cfg search-path order parsed (engine-faithful: `searchTree`/`searchTOC`/`searchPath` priorities)
+- [x] **TRE-01**: User can point the tool at two SWG installations and scan their TRE sets — archives discovered plus each install's cfg search-path order parsed (engine-faithful: `searchTree`/`searchTOC`/`searchPath` priorities)
 - [ ] **TRE-02**: User can see a set-level compare — which TRE archives are added/removed/changed between the two installations, with size/version deltas
 - [ ] **TRE-03**: User can see a file-level compare of the merged virtual trees — first-match-wins precedence mirroring `TreeFile.cpp` semantics (incl. `fixUpFileName` normalization), per-file added/removed/changed status
 - [ ] **TRE-04**: User can drill into any file — metadata, which archive wins, shadowed copies in other archives, and on-demand content comparison (TOC `crc` is a path CRC; content change detection uses length/compressedLength + real hashing on demand)
@@ -69,7 +69,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HARD-05 | Phase 27 (satisfied-by-Fix-A) + x64 (clean port) | Satisfied-by-Fix-A; clean D3DCompile port deferred to x64 |
 | PORT-01 | Phase 24 | Complete |
 | PORT-02 | Phase 24 | Complete |
-| TRE-01 | Phase 28 | Pending |
+| TRE-01 | Phase 28 | Complete |
 | TRE-02 | Phase 29 | Pending |
 | TRE-03 | Phase 29 | Pending |
 | TRE-04 | Phase 29 | Pending |

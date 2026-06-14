@@ -149,7 +149,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. A scanner hand-parses `client.cfg` `[SharedFile]` (repeated keys handled — not stdlib configparser) and yields a priority-ordered node list matching the engine's `searchTree`/`searchTOC`/`searchPath` precedence
   3. The virtual-tree builder merges archives with first-hit-wins precedence (higher priority number searched first), length-0 tombstone handling, and `fixUpFileName` canonicalization — with unit tests against the real `stage/client.cfg` proving correct override shadowing and tombstone behavior
 **Plans**: 4 plans (4 waves)
-  - [ ] 28-01-PLAN.md — isolated uv library scaffold + zero-dep pyproject + .gitignore + pytest `integration` marker + test root (D-01/D-05; SC#1)
+  - [x] 28-01-PLAN.md — isolated uv library scaffold + zero-dep pyproject + .gitignore + pytest `integration` marker + test root (D-01/D-05; SC#1)
   - [ ] 28-02-PLAN.md — vendor tre_reader.py + tre_decrypt.py (provenance + line-251 import rewrite) + parser import/data-model smoke test (D-03; SC#1)
   - [ ] 28-03-PLAN.md — scanner.py ([SharedFile] hand-parse, priority-sorted, cfg-path param) + virtual_tree.py (fixUpFileName + first-hit-wins + per-node-type tombstone + searchPath walk) (D-08; SC#2/SC#3)
   - [ ] 28-04-PLAN.md — synthetic byte-built fixtures + full behavioral suite (both tombstone cases, override shadowing, traversal/malformed guards) + one gated real-cfg integration test (D-06/D-07; SC#3)
@@ -206,6 +206,6 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
-| 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
+| 28. TRE Tool — Foundation | v2.3 | 1/4 | In Progress|  |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
