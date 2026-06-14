@@ -11,7 +11,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **HARD-01**: DPVS occlusion is config-gated per the Phase 23 verdict — auto mode enables the occlusion bit only outside POB cells (outdoor on / indoor off), with an explicit config override for forcing either mode
 - [ ] **HARD-02**: Cantina corner-snap no longer occurs — re-entrancy guard stops the same-frame portal ping-pong without breaking legitimate fast door traversals (verified with the committed CORNERSNAP instrumentation before it is removed)
-- [ ] **HARD-03**: D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are removed from shipped code paths (sequenced after HARD-02 is verified — the probes are its acceptance harness)
+- [ ] **HARD-03**: D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are removed from shipped code paths. **SPLIT (2026-06-13):** Phase 26 removes ONLY the D-15 DPVS instrumentation (its purpose is superseded by the shipped Phase-24 config-gate). The CORNERSNAP probes are KEPT — they are the acceptance harness for the still-open door snap (Phase 25's fix was reverted/parked-for-x64), so their removal is deferred to the x64/HARD-05 work, after the door snap is fixed and verified against them.
 - [ ] **HARD-04**: Opening the Options window no longer FATALs — `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch fixed (pre-existing, from feature commit `d1b3c0eaf`)
 - [ ] **HARD-05**: D3D9 shader compilation uses `D3DCompile` instead of `D3DXCompileShader` (Fix B) — preceded by an asm-shader census (`D3DCompile` is HLSL-only); the Phase-19 SEH guard is retained for any path still on D3DX and superseded where ported
 
@@ -64,7 +64,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | HARD-01 | Phase 24 | Complete |
 | HARD-02 | Phase 25 | Pending |
-| HARD-03 | Phase 26 | Pending |
+| HARD-03 | Phase 26 (D-15 only) + x64/HARD-05 (CORNERSNAP) | Pending |
 | HARD-04 | Phase 26 | Pending |
 | HARD-05 | Phase 27 | Pending |
 | PORT-01 | Phase 24 | Complete |

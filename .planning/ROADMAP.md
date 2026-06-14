@@ -80,7 +80,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
  (completed 2026-06-13)
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
-- [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS + CORNERSNAP probes stripped atomically; Options window no longer FATALs
+- [ ] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
 - [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
 - [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
@@ -115,9 +115,10 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 ### Phase 26: Instrumentation Removal + Options-Window FATAL
 **Goal**: Strip the now-superseded debug instrumentation from shipped code paths and fix the pre-existing Options-window crash.
 **Depends on**: Phase 25 (CORNERSNAP probes are the acceptance harness for HARD-02 and must survive until it is verified); Phase 24 (D-15 DPVS profiling purpose superseded by the shipped verdict)
-**Requirements**: HARD-03, HARD-04
+**Requirements**: HARD-03 (PARTIAL — D-15 only), HARD-04
+**Scope note (2026-06-13):** HARD-03 is split. Phase 26 removes ONLY the D-15 DPVS instrumentation. The CORNERSNAP `_DEBUG` probes are KEPT — Phase 25's door-snap fix was reverted and the snap is parked for x64, so the probes remain the acceptance harness and their removal is deferred to the x64/HARD-05 work.
 **Success Criteria** (what must be TRUE):
-  1. The D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are gone from shipped code paths — callers, config-flag registrations, and build-graph entries removed atomically, with Debug+Release link clean (zero unresolved externals, link output grepped — not just MSBuild exit 0)
+  1. The D-15 DPVS instrumentation is gone from shipped code paths — callers, config-flag registrations, and build-graph entries removed atomically, with Debug+Release link clean (zero unresolved externals, link output grepped — not just MSBuild exit 0). The CORNERSNAP probes are intentionally LEFT IN PLACE (CollisionResolve.cpp + CellProperty.cpp) and must remain compilable.
   2. Opening the Options window no longer FATALs — the `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch (from feature commit `d1b3c0eaf`) is fixed
   3. The client boots to character select and the Options window opens cleanly under both `rasterMajor=5` and `rasterMajor=11`
 **Plans**: TBD
