@@ -26,8 +26,9 @@
 #include <map>
 #include <vector>
 #include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded D3DX compile (FP-fault fix)
-#include <d3dx9.h>
-#include <d3dx9shader.h>
+#include <d3dx9.h>        // Phase 27: retained -- asm path (D3DXAssembleShader) + D3DX matrix/surface APIs in sibling files
+#include <d3dx9shader.h>  // Phase 27: retained -- asm path still uses D3DX
+#include <d3dcompiler.h>  // Phase 27 (HARD-05 Fix B): D3DCompile / ID3DInclude / D3D_SHADER_MACRO for the HLSL VS compile
 
 // ======================================================================
 
@@ -52,14 +53,14 @@ namespace Direct3d9_VertexShaderDataNamespace
 		Include & operator =(Include const &);
 	};
 
-	class IncludeHandler : public ID3DXInclude
+	class IncludeHandler : public ID3DInclude
 	{
 	public:
-		virtual HRESULT STDMETHODCALLTYPE Open(D3DXINCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
+		virtual HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
 		virtual HRESULT STDMETHODCALLTYPE Close(LPCVOID pData);
 	};
 
-	typedef std::vector<D3DXMACRO>  Defines;
+	typedef std::vector<D3D_SHADER_MACRO>  Defines;
 	typedef std::map<CrcString const *, Include *, LessPointerComparator> IncludeCache;
 
 	void getToken(char const *& s, char * d);
@@ -141,7 +142,7 @@ Direct3d9_VertexShaderDataNamespace::Include::~Include()
 
 // ======================================================================
 
-HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3DXINCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
+HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3D_INCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
 {
 	// hack to support relative path includes when using the command line compiler
 	if (strncmp(pFileName, "../../", 6) == 0)
@@ -411,7 +412,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 					DEBUG_FATAL(textureCoordinateSetDimension[textureCoordinateSet] != 0 && textureCoordinateSetDimension[textureCoordinateSet] != dimension, ("Competing dimensions (existing %d, new %d) for texture coordinate %d", textureCoordinateSetDimension[textureCoordinateSet], dimension, textureCoordinateSet));
 					textureCoordinateSetDimension[textureCoordinateSet] = dimension;
 
-					D3DXMACRO macro;
+					D3D_SHADER_MACRO macro;
 
 					// here's an example of what we are defining:
 					// #define textureCoordinateSetMAIN textureCoordinateSet0
@@ -434,7 +435,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				// here's an example of what we are defining:
 				// #define DECLARE_textureCoordinateSets  float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
 
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				macro.Name = scratchBuffer;
 				SCRATCH_STRING("DECLARE_textureCoordinateSets", 29);
@@ -466,7 +467,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3DXMACRO empty = { NULL, NULL };
+			D3D_SHADER_MACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
@@ -518,7 +519,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				if (textureCoordinateSet > maxTextureCoordinateSet)
 					maxTextureCoordinateSet = textureCoordinateSet;
 
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				// here's an example of what we are defining:
 				// #define vTextureCoordinateSetDTLA vTextureCoordinateSet0
@@ -539,7 +540,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 			{
 				// here's an example of what we are defining:
 				// #define maxTextureCoordinate 2
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				macro.Name = "maxTextureCoordinate";
 
@@ -554,12 +555,12 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3DXMACRO d = { "TARGET", target };
+			D3D_SHADER_MACRO d = { "TARGET", target };
 			ms_defines.push_back(d);
 		}
 
 		{
-			D3DXMACRO empty = { NULL, NULL };
+			D3D_SHADER_MACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
