@@ -120,3 +120,8 @@ package-lock.json
 .planning/debug/
 # Local corner-snap build helper (machine-specific)
 build-cornersnap.ps1
+
+# AI agent operating manual + personal dev aid (loaded by Claude/Codex/Cursor off
+# disk; kept out of git so machine-specific paths + AI-workflow notes don't enter PRs)
+AGENTS.md
+CLAUDE.md
