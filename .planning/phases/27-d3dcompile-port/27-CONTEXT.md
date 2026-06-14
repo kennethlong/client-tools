@@ -37,12 +37,16 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
 >   approach the original D-01 explicitly rejected — it is now the chosen path because the lift premise
 >   is impossible and our text is already clean. Do NOT lift Restoration shaders. Do NOT port gl11's
 >   `Direct3d11_HlslRewrite` rules (those bridge SM2→SM4; we recompile to the SAME SM2/SM3 profile).
-> - **D-02-R (asm path):** The asm path does NOT dissolve (96 `//asm` shaders: sabers/decals/detail).
->   **Port the asm path to `D3DAssemble`** (exported by `d3dcompiler_47.dll`) for **full D3DX
->   retirement** from the runtime compile. FALLBACK: if `D3DAssemble` fails on SWG's exact `vs_1_1`/
->   `vs_2_0` asm dialect or the injected `TARGET`/`maxTextureCoordinate` defines, keep those residual
->   shaders on `D3DXAssembleShader` + SEH guard (HARD-05 still satisfied). Validate the asm dialect
->   early — it is the LOW-confidence item (RESEARCH A3).
+> - **D-02-R (asm path) — REVISED 2026-06-14:** The asm path does NOT dissolve (96 `//asm` shaders:
+>   sabers/decals/detail). **This phase ports the HLSL path ONLY.** The 96 `//asm` shaders STAY on the
+>   proven `D3DXAssembleShader` + SEH-guard path — this satisfies HARD-05's "SEH guard retained for any
+>   path still on D3DX". The asm→`D3DAssemble` port (the LOW-confidence SWG-asm-dialect item,
+>   RESEARCH A3) and **complete D3DX removal for D9** are DEFERRED to the **x64 conversion milestone**
+>   (where `d3dx9.lib` removal becomes tractable alongside the 4 other D3DX uses). Rationale: the FP
+>   crash HARD-05 targets is the HLSL `D3DXCompileShader` path; `d3dx9.lib` must stay linked this phase
+>   regardless (4 other gl05/gl07 files use D3DX), so porting the asm compile now buys no lib removal
+>   and only adds dialect risk. (Kenny, AskUserQuestion 2026-06-14, superseding the earlier
+>   "port asm to D3DAssemble" choice.)
 > - **Cache:** No bytecode disk cache this phase (out of HARD-05 scope; compile-per-launch is current
 >   acceptable behaviour).
 > - **`d3dx9.lib` STAYS LINKED.** PATTERNS.md verified D3DX is used in 4 OTHER gl05/gl07 files beyond
@@ -70,10 +74,10 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
   goal is full D3DX retirement from the runtime compile.
 - **D-03 (SEH guard):** `D3DCompile` is immune to the modern-toolchain post-compile FP fault that
   Fix-A (`db83b0f5c`) guards, so the SEH wrapper (`compileVertexShaderFpGuarded`) can be **relaxed /
-  removed on the HLSL path** once it is on `D3DCompile`. With the asm path also on `D3DAssemble`
-  (D-02-R), the guard can target full removal from the runtime compile — but retain it through
-  validation and drop it only after the Tatooine bump/dot3 spot (Fix-A, `db83b0f5c`) renders clean
-  under the new path (D-05). Keep it on any residual D3DX fallback shader.
+  removed on the HLSL path** once it is on `D3DCompile` — but retain it through validation and drop it
+  from the HLSL path only after the Tatooine bump/dot3 spot (Fix-A, `db83b0f5c`) renders clean under
+  `D3DCompile` (D-05). **The asm path KEEPS the SEH guard** this phase (it stays on
+  `D3DXAssembleShader`, D-02-R revised).
 
 ### CORNERSNAP / door snap boundary
 - **D-04:** Phase 27 is the D3DCompile port ONLY. The CORNERSNAP `_DEBUG` probes
