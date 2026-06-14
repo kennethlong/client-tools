@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 28 — tre-compare-tool-foundation-parser-scanner-virtual-tree
+**Current focus:** v2.3 client-hardening stream COMPLETE (Phases 24–28: 24/26/27/28 done, 25 closed-by-deferral → x64). Next: plan Phase 29 (TRE compare diff engine + FastAPI). Phases 29–30 are the remaining TRE web-tool stream.
 
 ## Deferred Items (acknowledged at v2.0 close)
 

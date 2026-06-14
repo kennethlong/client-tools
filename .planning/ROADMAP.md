@@ -79,7 +79,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 - [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
  (completed 2026-06-13)
-- [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
+- [x] **Phase 25: Cantina Corner-Snap Fix** - HARD-02 closed-by-deferral 2026-06-14: interior snap resolved-by-config; residual door-snap root-caused as a 32-bit codegen float transient (cell→world Y), parked for x64 (CONSULT-43). Planned re-entrancy guard 25-01 superseded by the diagnostic finding, not executed
+ (closed-by-deferral 2026-06-14)
 - [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
  (completed 2026-06-14)
 - [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
@@ -104,14 +105,15 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 ### Phase 25: Cantina Corner-Snap Fix
 **Goal**: Eliminate the cantina corner-snap by stopping the same-frame portal ping-pong, while preserving legitimate fast door traversals.
+**Outcome (2026-06-14): HARD-02 CLOSED-BY-DEFERRAL.** The CONSULT-43 investigation superseded the planned re-entrancy guard: the cantina **interior** snap was **resolved-by-config**, and the **residual door-snap** was root-caused as a **32-bit build/codegen float transient** in the cell→world Y transform (not a portal-replay re-entrancy bug) — the real fix is ship-D3D11 or a 64-bit build, so it is **parked for the x64 milestone**. The committed CORNERSNAP `_DEBUG` probes are intentionally retained as the x64 acceptance harness (see Phase 26 scope note). Plan 25-01 (the reversal guard) was therefore NOT executed — superseded, not abandoned. See `docs`/debug `cantina-corner-snap` + memory `project_cantina_corner_snap_engine_quirk`.
 **Depends on**: Phase 24 (clean dual-renderer boot baseline; CORNERSNAP instrumentation already committed `a9b419daf`)
-**Requirements**: HARD-02
+**Requirements**: HARD-02 (closed-by-deferral; residual door-snap parked for x64)
 **Success Criteria** (what must be TRUE):
   1. Walking into a cantina corner no longer snaps/teleports the player — the A→B→A same-frame cell oscillation is suppressed by a re-entrancy guard
   2. Fast legitimate door traversals still complete correctly (no regression — the guard targets the reversal pattern specifically, not a blanket one-transition-per-frame cap)
   3. The committed CORNERSNAP `_DEBUG` instrumentation reports zero ping-pong frames in the previously-failing cantina corner under both renderers
-**Plans**: 1 plan (2 waves)
-  - [ ] 25-01-PLAN.md — frame-scoped A->B->A reversal guard in CellProperty::positionChanged (HARD-02) + dual-renderer CORNERSNAP capture verify
+**Plans**: 1 plan (SUPERSEDED — not executed)
+  - [~] 25-01-PLAN.md — frame-scoped A->B->A reversal guard in CellProperty::positionChanged (HARD-02). SUPERSEDED by CONSULT-43: the snap was not a portal-replay re-entrancy bug (interior = config; door = 32-bit codegen float transient → parked for x64). Guard not implemented. See 25-SUMMARY.md.
 
 ### Phase 26: Instrumentation Removal + Options-Window FATAL
 **Goal**: Strip the now-superseded debug instrumentation from shipped code paths and fix the pre-existing Options-window crash.
