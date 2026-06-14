@@ -117,7 +117,16 @@ compare tool at `tools/tre-compare/`. Three pieces only:
 ### Established Patterns
 - The `searchXXX_NN_P` key convention encodes priority in the key name; **higher
   priority number is searched FIRST** (override dir at 10 beats TREs at 7/8).
-- Tombstone = length-0 entry shadows/removes a lower-priority file of the same path.
+- **Tombstone is PER-NODE-TYPE — NOT a blanket "length-0 removes a lower copy" rule**
+  (the #1 correctness nuance the phase hinges on; see RESEARCH §Patterns and
+  `TreeFile_SearchNode.cpp`). A length-0 entry in a **SearchTree (`.tre`)** node
+  sets `deleted=true` and the engine's `!deleted` find-guard STOPS the search →
+  the file is **removed globally** (override-delete). A length-0 OR offset-0 entry
+  in a **SearchTOC (`.toc`)** node returns "not here" but leaves `deleted=false` →
+  it is **absent-here-keep-searching** and does **NOT** shadow a real lower-priority
+  copy. SearchPath (loose dir) nodes have no tombstone concept (filesystem existence
+  only). Implementers MUST branch on node kind; treating length-0 as a uniform
+  "remove lower copy" is the regression this phase exists to prevent.
 - `fixUpFileName` canonicalization must run before path comparison/merge.
 
 ### Integration Points
@@ -159,3 +168,4 @@ compare tool at `tools/tre-compare/`. Three pieces only:
 
 *Phase: 28-TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)*
 *Context gathered: 2026-06-14*
+*Revised 2026-06-14 (cross-AI review, finding #9): corrected the blanket "length-0 tombstone removes lower copy" Established-Patterns line to the per-node-type distinction (tree=global-remove vs toc=skip-only) to prevent a downstream-regression trap.*
