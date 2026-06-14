@@ -3,7 +3,7 @@ phase: 28
 slug: tre-compare-tool-foundation-parser-scanner-virtual-tree
 status: planned
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-06-14
 revised: 2026-06-14
 ---
@@ -54,10 +54,10 @@ revised: 2026-06-14
 | 28-02-02 | 02 | 2 | TRE-01 | T-28-02-01 | both length fields, all 5 tags | unit | `cd tools/tre-compare && uv run pytest tests/test_parser.py -x -q` | ❌ W0 | ⬜ pending |
 | 28-03-01 | 03 | 3 | TRE-01 | T-28-03-03 | hand-parse (no configparser), engine-faithful (-priority, kind_rank, cfg_seq) sort (#1), bare-priority grammar (#6), cfg-path param | smoke | `cd tools/tre-compare && uv run python -c "from tre_compare.scanner import parse_shared_file, SearchNode"` | ❌ W0 | ⬜ pending |
 | 28-03-02 | 03 | 3 | TRE-01 | T-28-03-01 / T-28-03-02 / T-28-03-04 | fix_up_file_name verbatim + safe_virtual_key split (#3) + per-node tombstone + shadowed=REAL-only (#4) + .tre & .toc bounds preflight (#6/#2a) + reparse-dir-prune walk (#5/#7) + malformed-node skip | smoke | `cd tools/tre-compare && uv run python -c "from tre_compare.virtual_tree import fix_up_file_name, safe_virtual_key, build_virtual_tree"` | ❌ W0 | ⬜ pending |
-| 28-04-01 | 04 | 4 | TRE-01 | T-28-04-03 | byte-built TRE/SearchTOC(two-phase)/COT2000 + compressed-block fixtures round-trip parser; cfg writer lays out tombstone-vs-real node pairs | unit | `cd tools/tre-compare && uv run python -c "import sys; sys.path.insert(0,'tests'); import _fixtures"` | ❌ W0 | ⬜ pending |
-| 28-04-02 | 04 | 4 | TRE-01 | T-28-04-01 | BOTH+inverse tombstone cases, same-priority cross-kind tree-wins (#1), searchPath override, traversal/malformed/.tre+.toc-preflight guards | unit | `cd tools/tre-compare && uv run pytest -m "not integration" -q` | ❌ W0 | ⬜ pending |
-| 28-04-04 | 04 | 4 | TRE-01 / SC#3 | T-28-04-01 | cfg-driven END-TO-END tombstone proof: `test_tombstone_end_to_end_via_cfg` drives real `parse_shared_file → build_virtual_tree` over purpose-built genuine on-disk TRE/TOC archives wired through a live-modeled `client.cfg` (tree length-0 → global tombstone; toc length-0/offset-0 → no shadow). SC#3 met LITERALLY (user decision 2026-06-14); D-03 read-only not violated (authoring a test `.tre` ≠ mutating an installed one) | unit | `cd tools/tre-compare && uv run pytest tests/test_virtual_tree.py -k tombstone_end_to_end -q` | ❌ W0 | ⬜ pending |
-| 28-04-03 | 04 | 4 | TRE-01 | T-28-04-02 | gated, default-off, clean-skip when absent (PowerShell `$env:` syntax, #9); proves override-shadowing/precedence on the REAL cfg | integration (gated) | `cd tools/tre-compare && $env:TRE_COMPARE_INTEGRATION=1; uv run pytest -m integration -q` (POSIX: `TRE_COMPARE_INTEGRATION=1 uv run pytest -m integration -q`) | ❌ W0 | ⬜ pending |
+| 28-04-01 | 04 | 4 | TRE-01 | T-28-04-03 | byte-built TRE/SearchTOC(two-phase)/COT2000 + compressed-block fixtures round-trip parser; cfg writer lays out tombstone-vs-real node pairs | unit | `cd tools/tre-compare && uv run python -c "import sys; sys.path.insert(0,'tests'); import _fixtures"` | ✅ exists | ✅ green |
+| 28-04-02 | 04 | 4 | TRE-01 | T-28-04-01 | BOTH+inverse tombstone cases, same-priority cross-kind tree-wins (#1), searchPath override, traversal/malformed/.tre+.toc-preflight guards | unit | `cd tools/tre-compare && uv run pytest -m "not integration" -q` | ✅ exists | ✅ green |
+| 28-04-04 | 04 | 4 | TRE-01 / SC#3 | T-28-04-01 | cfg-driven END-TO-END tombstone proof: `test_tombstone_end_to_end_via_cfg` drives real `parse_shared_file → build_virtual_tree` over purpose-built genuine on-disk TRE/TOC archives wired through a live-modeled `client.cfg` (tree length-0 → global tombstone; toc length-0/offset-0 → no shadow). SC#3 met LITERALLY (user decision 2026-06-14); D-03 read-only not violated (authoring a test `.tre` ≠ mutating an installed one) | unit | `cd tools/tre-compare && uv run pytest tests/test_virtual_tree.py -k tombstone_end_to_end -q` | ✅ exists | ✅ green |
+| 28-04-03 | 04 | 4 | TRE-01 | T-28-04-02 | gated, default-off, clean-skip when absent (PowerShell `$env:` syntax, #9); proves override-shadowing/precedence on the REAL cfg | integration (gated) | `cd tools/tre-compare && $env:TRE_COMPARE_INTEGRATION=1; uv run pytest -m integration -q` (POSIX: `TRE_COMPARE_INTEGRATION=1 uv run pytest -m integration -q`) | ✅ exists | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

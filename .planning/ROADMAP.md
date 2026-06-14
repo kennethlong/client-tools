@@ -83,7 +83,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
  (completed 2026-06-14)
 - [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
-- [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
+- [x] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder (completed 2026-06-14)
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
 - [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
 
@@ -152,7 +152,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   - [x] 28-01-PLAN.md — isolated uv library scaffold + zero-dep pyproject + .gitignore + pytest `integration` marker + test root (D-01/D-05; SC#1)
   - [x] 28-02-PLAN.md — vendor tre_reader.py + tre_decrypt.py (provenance + line-251 import rewrite) + parser import/data-model smoke test (D-03; SC#1)
   - [x] 28-03-PLAN.md — scanner.py ([SharedFile] hand-parse, priority-sorted, cfg-path param) + virtual_tree.py (fixUpFileName + first-hit-wins + per-node-type tombstone + searchPath walk) (D-08; SC#2/SC#3)
-  - [ ] 28-04-PLAN.md — synthetic byte-built fixtures + full behavioral suite (both tombstone cases, override shadowing, traversal/malformed guards) + one gated real-cfg integration test (D-06/D-07; SC#3)
+  - [x] 28-04-PLAN.md — synthetic byte-built fixtures + full behavioral suite (both tombstone cases, override shadowing, traversal/malformed guards) + one gated real-cfg integration test (D-06/D-07; SC#3)
 
 ### Phase 29: TRE Compare Tool — Diff Engine + API
 **Goal**: Build the set-level + file-level diff engine and the FastAPI surface over the proven virtual tree, so the UI works against real data from day one.
@@ -206,6 +206,6 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
-| 28. TRE Tool — Foundation | v2.3 | 3/4 | In Progress|  |
+| 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete   | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
