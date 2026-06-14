@@ -201,7 +201,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete    | 2026-06-13 |
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
-| 27. D3DCompile Port | v2.3 | 1/3 | In Progress|  |
+| 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
 | 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |

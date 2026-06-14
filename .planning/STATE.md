@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: executing
-last_updated: "2026-06-14T02:48:11.229Z"
+status: ready_to_plan
+last_updated: "2026-06-14T15:14:54.347Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 6
+  completed_phases: 3
+  total_plans: 9
   completed_plans: 5
-  percent: 83
+  percent: 43
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 26 — instrumentation-removal-options-window-fatal
+**Current focus:** Phase 28 — TRE compare tool (foundation); Phase 27 complete (HARD-05 satisfied-by-Fix-A, D3DCompile port deferred to x64)
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,8 +69,8 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 26 (instrumentation-removal-options-window-fatal) — COMPLETE (verification passed 2026-06-13)
-Plan: 2 of 2 done
+Phase: 28
+Plan: Not started
 Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 Options FATAL / HARD-04 — DONE, audit confirmed already-fixed in 5fce7bb83, no code change). Docs commit afd2a65bf.
 Outcome: D-15 DpvsProfileInstrumentation fully removed (grep-zero), CORNERSNAP probes preserved (door-snap harness, deferred to x64/HARD-05), F11 occlusion pair kept. Debug+Release link clean (0 unresolved, /FORCE-grep). Dual-renderer boot+Options human-approved: Debug/D3D11 in-game + Options; Release/D3D9 char-select + Options.
 Surprise (resolved): "Release client not starting" was a PRE-EXISTING `stage/client.cfg` UTF-8 BOM (ConfigFile null-section deref in Release; Debug's DEBUG_FATAL masked it) — NOT the D-15 change. Fixed by stripping the BOM from the gitignored staged cfg. See [[reference_client_cfg_bom_release_crash]].
@@ -79,7 +79,7 @@ Next: Phase 27 (HARD-05 — port D3D9 D3DXCompileShader → D3DCompile; census a
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Executing Phase 26
+Status: Ready to plan
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
