@@ -11,7 +11,6 @@
 
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/DebugPrimitive.h"
-#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/RenderWorldCamera.h"
 #include "clientGraphics/RenderWorldCommander.h"
@@ -1091,16 +1090,6 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
 		}
 		dpvsCpuTimer.stop();
-
-		DpvsProfileInstrumentation::recordCpuQpcUs(static_cast<uint32>(dpvsCpuTimer.getElapsedTime() * 1e6f));
-#ifdef _DEBUG
-		// RenderWorldCommander::getNumberOfVisibleObjects() is _DEBUG-only; in a
-		// Release/Optimized build the visible-object count is unavailable (0).
-		DpvsProfileInstrumentation::recordVisibleObjectCount(RenderWorldCommander::getNumberOfVisibleObjects());
-#else
-		DpvsProfileInstrumentation::recordVisibleObjectCount(0);
-#endif
-		DpvsProfileInstrumentation::recordProfilerUs(0u);
 	}
 
 	{

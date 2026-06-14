@@ -56,8 +56,6 @@
 #include "clientGame/TestIoWin.h"
 #include "clientGame/TimeOfDayTest.h"
 #include "clientGame/WaterTest.h"
-// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/Shader.h"
 #include "clientGraphics/ShaderCapability.h"
@@ -1226,14 +1224,6 @@ void Game::runGameLoopOnce(bool presentToWindow, HWND hwnd, int width, int heigh
 			else
 				IGNORE_RETURN(Graphics::present());
 		}
-
-		// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target).
-		// elapsedTime read at the top of this loop (Clock::frameTime ()) is the
-		// previous frame's duration in seconds; convert to ms for the CSV row.
-		// Per RESEARCH.md Pitfall 6 there is a 1-frame skew between this frame's
-		// frame_no (Graphics::getFrameNumber() inside the module) and the
-		// total_frame_ms below; insensitive to median/p95 over ~600-row samples.
-		DpvsProfileInstrumentation::onFrameEnd(elapsedTime * 1000.0f);
 
 #if 0
 		// this is here to be consistent with the behavior when PIX is running, since the polling will happen when Graphics::present() is called

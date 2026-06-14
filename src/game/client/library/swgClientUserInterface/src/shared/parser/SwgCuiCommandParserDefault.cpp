@@ -26,8 +26,6 @@
 #include "clientGame/PlayerObject.h"
 #include "clientGame/Species.h"
 #include "clientGame/WhoManager.h"
-// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-#include "clientGraphics/DpvsProfileInstrumentation.h"
 #include "clientGraphics/Graphics.h"
 #include "clientGraphics/TextureList.h"
 #include "clientUserInterface/CuiActionManager.h"
@@ -131,7 +129,6 @@ namespace SwgCuiCommandParserDefaultNamespace
 		MAKE_COMMAND (afk);
 		MAKE_COMMAND (afktime);
 		MAKE_COMMAND (afkmessage);
-		MAKE_COMMAND (setrunlabel);   // Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
 		MAKE_COMMAND (match);
 		MAKE_COMMAND (flushGraphicsResources);
 		MAKE_COMMAND (copyCrashReportInformation);
@@ -199,8 +196,6 @@ namespace SwgCuiCommandParserDefaultNamespace
 		{ Commands::afk,                         0, "",                                   "Toggle away from keyboard status"},
 		{ Commands::afktime,                     0, "<minutes>",                          "Set the time in minutes until you are automatically set to away from keyboard"},
 		{ Commands::afkmessage,                  0, "<message>",                          "Set the auto-response message to people who message you while you are away from the keyboard"},
-		// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-		{ Commands::setrunlabel,                 0, "<label>",                            "Phase 10 -- set the DPVS profiling run-label written to subsequent CSV rows. THROWAWAY; D-15."},
 		{ Commands::match,                       1, "[match] <category or type>",         "Quick single parameter matchmaking"},
 		{ Commands::flushGraphicsResources,      1, "<fullReset>",                        "Flush the graphics resources, or perform a full reset"},
 		{ Commands::copyCrashReportInformation,  0, "",                                   "Copy the test that would be sent with a client crash to the windows clipboard"},
@@ -1770,26 +1765,6 @@ bool SwgCuiCommandParserDefault::performParsing (const NetworkId & userId, const
 		result += AwayFromKeyBoardManager::getAutomaticResponseMessagePrefix();
 		result += AwayFromKeyBoardManager::getAutomaticResponseMessage();
 
-		return true;
-	}
-
-	//-----------------------------------------------------------------
-
-	// Phase 10 -- DPVS profiling instrumentation (THROWAWAY; D-15 cleanup target)
-	// Joins argv[1..] with underscores so a multi-word label like
-	// "/setrunlabel mosEisley pass1 on" becomes "mosEisley_pass1_on". The
-	// module's setRunLabel() also runs the sanitizer per RESEARCH.md
-	// Security Domain (T-10-W3-01/02) so path-traversal, formula-injection,
-	// CSV-cell-injection, and filename-component-injection are normalized.
-	else if (isCommand(argv[0], Commands::setrunlabel))
-	{
-		std::string label;
-		for (unsigned int i = 1; i < argv.size(); ++i)
-		{
-			if (i > 1) label += "_";
-			label += Unicode::wideToNarrow(argv[i]);
-		}
-		DpvsProfileInstrumentation::setRunLabel(label);
 		return true;
 	}
 
