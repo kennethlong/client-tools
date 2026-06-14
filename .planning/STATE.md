@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-14T19:30:47.386Z"
+last_updated: "2026-06-14T19:40:57.337Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
-  percent: 77
+  completed_plans: 11
+  percent: 85
 ---
 
 # Project State
@@ -70,11 +70,12 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 ## Current Position
 
 Phase: 28 (tre-compare-tool-foundation-parser-scanner-virtual-tree) — EXECUTING
-Plan: 3 of 4
-Plans: 2/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632; 28-02 vendor parser — DONE: f222dc876 + de4f3f64d).
+Plan: 4 of 4
+Plans: 3/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632; 28-02 vendor parser — DONE: f222dc876 + de4f3f64d; 28-03 scanner + virtual-tree — DONE: d0a784c16 + 3a1d3df83).
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
 Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
-Next: Phase 28 Plan 03 — `scanner.py` (`[SharedFile]` hand-parse, priority-ordered nodes) + `virtual_tree.py` (first-hit-wins merge, per-node-type tombstone, `fix_up_file_name`) + the T-28-02-01 hostile-header bounds preflight at the merge boundary.
+Outcome (28-03): `scanner.py` hand-parses `[SharedFile]` repeated/indexed keys (NOT configparser; both `_NN_` and bare-priority grammars; cfg path a parameter, D-08) into an engine-faithful `(-priority, KIND_RANK[kind], cfg_seq)`-ordered `SearchNode` list (path<tree<toc within priority — review #1). `virtual_tree.py` ports `fix_up_file_name` VERBATIM (leading-`..` only) + a SEPARATE `safe_virtual_key` hardening wrapper (rejects interior-`..`/drive/UNC/empty — T-28-03-01), and merges first-hit-wins on canonical path in a SINGLE descending pass (guard BEFORE the tree-length-0 branch; no `claimed.pop` — review #1) with PER-NODE-TYPE tombstone (tree length-0 = global remove; toc length-0/offset-0 = skip-only, never shadows), `shadowed`=REAL-copies-only (review #4), eager deterministic `searchPath` `os.walk` (reparse-dir prune before descent; Open-Q1 RESOLVED), `.tre` AND `.toc` header bounds preflight + count×stride cap (T-28-03-04), and observable `node_errors`/`rejected` diagnostics (review #8). All behaviors smoke-verified; behavioral suite gated by Plan 04. Commits d0a784c16 + 3a1d3df83.
+Next: Phase 28 Plan 04 — synthetic byte-built TRE/TOC/COT2000 fixtures + the behavioral test suite (test_scanner.py + test_virtual_tree.py incl. the inverse lower-priority-tombstone + same-priority cross-kind + oversized-header `.toc` + searchPath override/missing/empty-dir tests) + the env-gated D-07 integration test against real `stage/client.cfg`.
 
 ### Prior — Phase 26 (instrumentation removal / Options FATAL) — DONE
 
@@ -130,6 +131,7 @@ Last activity: 2026-06-14
 - [Phase ?]: [2026-06-14] Phase 28-01: kept [build-system].requires at uv_build>=0.11.7,<0.12 (no forward-pin) and proved it resolves via uv build exit 0 (review finding #11)
 - [Phase ?]: [2026-06-14] Phase 28-02: vendored tre_reader.py + tre_decrypt.py from swg-blender-plugin (commit f803f587) per D-03 — provenance headers + the single import rewrite (swg_pipeline.tre_decrypt -> .tre_decrypt); zero swg_pipeline/engine imports (D-01 extractability)
 - [Phase ?]: [2026-06-14] Phase 28-02: all three entry dataclasses already expose snake_case length + compressed_length verbatim — no wrapper; Phase-29 changed-detection contract asserted via dataclasses.fields()
+- [Phase ?]: Phase 28-03: scanner.py engine-faithful sort (-priority, KIND_RANK, cfg_seq) + both key grammars; virtual_tree.py first-hit-wins single-pass, per-node-type tombstone (tree=global, toc=skip), fix_up_file_name verbatim + separate safe_virtual_key hardening; eager searchPath walk (Open-Q1); .tre/.toc bounds preflight
 
 ### Pending Todos
 
@@ -164,7 +166,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T19:30:40.384Z
+Last session: 2026-06-14T19:40:39.798Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
