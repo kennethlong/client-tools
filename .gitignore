@@ -118,3 +118,5 @@ package-lock.json
 # Planning subsystem runtime state (the .md docs under .planning/ stay tracked)
 .planning/config.json
 .planning/debug/
+# Local corner-snap build helper (machine-specific)
+build-cornersnap.ps1
