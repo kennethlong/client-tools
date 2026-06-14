@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-13T03:57:19.353Z"
-last_activity: 2026-06-13 -- Phase 25 execution started
+last_updated: "2026-06-13T20:30:00.000Z"
+last_activity: 2026-06-13 -- Phase 26 planned (2 plans, verification passed); branch promotion noted for v2.3 close
 progress:
   total_phases: 7
   completed_phases: 1
@@ -69,7 +69,12 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
+Phase: 26 (instrumentation-removal-options-window-fatal) — PLANNED, ready to execute
+Plans: 2 (26-01 D-15 removal / HARD-03 partial; 26-02 Options FATAL verify / HARD-04). plan-checker VERIFICATION PASSED first pass.
+Scope (locked 2026-06-13): strip ONLY D-15 DpvsProfileInstrumentation; KEEP CORNERSNAP probes (door-snap harness, deferred to x64). HARD-04 already fixed in tree (commit 5fce7bb83) → 26-02 is verify/audit + dual-renderer Options-open smoke.
+Next: `/gsd-execute-phase 26` (both plans end in human-driven GUI checkpoints — boot to char-select + open Options under rasterMajor=5 AND 11).
+
+### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
 Status: Long investigation (debug session cantina-corner-snap, Cycles 1-11; CONSULT-43 crew). OUTCOME:
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
