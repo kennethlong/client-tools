@@ -121,7 +121,9 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   1. The D-15 DPVS instrumentation is gone from shipped code paths — callers, config-flag registrations, and build-graph entries removed atomically, with Debug+Release link clean (zero unresolved externals, link output grepped — not just MSBuild exit 0). The CORNERSNAP probes are intentionally LEFT IN PLACE (CollisionResolve.cpp + CellProperty.cpp) and must remain compilable.
   2. Opening the Options window no longer FATALs — the `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch (from feature commit `d1b3c0eaf`) is fixed
   3. The client boots to character select and the Options window opens cleanly under both `rasterMajor=5` and `rasterMajor=11`
-**Plans**: TBD
+**Plans**: 2 plans (1 wave)
+  - [ ] 26-01-PLAN.md — atomically remove D-15 DpvsProfileInstrumentation (CORNERSNAP probes KEPT) + Debug/Release /FORCE link-grep + dual-renderer boot (HARD-03 D-15)
+  - [ ] 26-02-PLAN.md — verify/audit Options-window FATAL fix (checkShowToolbarCommandCooldownTimer, commit d1b3c0eaf) + dual-renderer Options-open smoke (HARD-04)
 
 ### Phase 27: D3DCompile Port
 **Goal**: Replace `D3DXCompileShader` with `D3DCompile` (Fix B) in the D3D9 plugin, superseding the Phase-19 SEH guard where the path is ported.
