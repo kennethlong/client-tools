@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: ready_to_plan
-last_updated: "2026-06-14T19:52:41.526Z"
+status: planning
+last_updated: "2026-06-14T23:09:45.273Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 13
-  completed_plans: 12
-  percent: 71
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -166,7 +166,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T19:52:41.510Z
+Last session: 2026-06-14T23:09:45.246Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
