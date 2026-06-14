@@ -136,6 +136,13 @@ def safe_virtual_key(name: str) -> str | None:
     ``None`` for an unsafe/empty key (skip-and-record, NOT raise, so a hostile archive cannot
     DoS the whole scan).
     """
+    # UNC reject on the RAW name FIRST: fix_up_file_name strips leading slashes, so a
+    # `//host/share` / `\\host\share` form would otherwise canonicalize to a benign-looking
+    # `host/share` key and the post-canonicalization guard below could never fire (review
+    # finding #3 — the wrapper's documented "reject UNC first segment" intent).
+    raw = name.replace("\\", "/")
+    if raw.startswith("//"):
+        return None
     key = fix_up_file_name(name)
     if not key:
         return None
@@ -145,8 +152,6 @@ def safe_virtual_key(name: str) -> str | None:
     first = segs[0]
     # drive-letter absolute (`c:` / `c:/x`) — first segment ends with ':' or is like `c:...`
     if first.endswith(":") or (len(first) >= 2 and first[1] == ":"):
-        return None
-    if key.startswith("//"):  # UNC (guard for pre-collapse forms; fix_up collapses repeats)
         return None
     return key
 
