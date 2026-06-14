@@ -135,7 +135,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. D3D9 HLSL shader compilation runs through `D3DCompile` (with a reimplemented `ID3DInclude` handler and `d3dcompiler_47.dll` staged) instead of `D3DXCompileShader`
   3. D3D9 visual parity is held against an A/B baseline (no shader-compile regression), and the Phase-19 SEH guard is retained for any path still on D3DX and removed only where the port supersedes it
 **Plans**: 3 plans (3 waves)
-  - [ ] 27-01-PLAN.md — asm-shader census artifact + stage d3dcompiler_47.dll + link d3dcompiler.lib (keep d3dx9.lib) + pre-port A/B baseline
+  - [x] 27-01-PLAN.md — asm-shader census artifact + stage d3dcompiler_47.dll + link d3dcompiler.lib (keep d3dx9.lib) + pre-port A/B baseline
   - [ ] 27-02-PLAN.md — HLSL path D3DXCompileShader->D3DCompile swap (ID3DInclude + D3D_SHADER_MACRO, vs_2_0/vs_1_1, SEH retained) + rasterMajor=5 boot smoke
   - [ ] 27-03-PLAN.md — asm path D3DAssemble-or-D3DXAssembleShader+SEH decision + dual-renderer parity + Tatooine Fix-A spot + SEH-guard finalize
 
@@ -200,7 +200,7 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 24. DPVS Config-Gate + Machine Portability | v2.3 | 3/3 | Complete    | 2026-06-13 |
 | 25. Cantina Corner-Snap Fix | v2.3 | 0/1 | Planned | - |
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
-| 27. D3DCompile Port | v2.3 | 0/TBD | Not started | - |
+| 27. D3DCompile Port | v2.3 | 1/3 | In Progress|  |
 | 28. TRE Tool — Foundation | v2.3 | 0/TBD | Not started | - |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 0/TBD | Not started | - |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
