@@ -8,9 +8,21 @@ refactor-free:
 """
 
 from .scanner import ScanResult, SearchNode, parse_shared_file
+from .virtual_tree import (
+    MergedEntry,
+    VirtualTree,
+    build_virtual_tree,
+    fix_up_file_name,
+    safe_virtual_key,
+)
 
 __all__ = [
     "ScanResult",
     "SearchNode",
     "parse_shared_file",
+    "MergedEntry",
+    "VirtualTree",
+    "build_virtual_tree",
+    "fix_up_file_name",
+    "safe_virtual_key",
 ]
