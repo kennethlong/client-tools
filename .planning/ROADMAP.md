@@ -84,7 +84,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
  (completed 2026-06-14)
 - [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
-- [x] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder (completed 2026-06-14)
+- [x] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
+ (completed 2026-06-14)
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
 - [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
 
@@ -165,7 +166,10 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. A user can request a file-level compare of the merged virtual trees with per-file added/removed/changed status, where "changed" is detected via `(length, compressedLength)` — NOT the TOC `crc` field (a path-CRC, not a content hash)
   3. A user can drill into any file via the API and get its metadata, winning archive, shadowed copies in other archives, and an on-demand real content hash (xxhash) computed only on drill-in — never eager full-archive hashing
   4. A sqlite index cache keyed by `(abspath, mtime, size)` makes re-runs instant, and the API returns correct diff JSON for the SWGSource-vs-whitengold install pair
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 29-01-PLAN.md — deps (FastAPI/uvicorn/xxhash) + pure diff.py (set/file tri-state/drill-in+xxhash) + Wave-0 test_diff.py
+- [ ] 29-02-PLAN.md — stdlib-sqlite3 cache (archive_meta/archive_entry/file_hash) + build_virtual_tree_cached parity + test_cache.py
+- [ ] 29-03-PLAN.md — FastAPI api.py (4 stateless routes) + config.py (installs.toml) + localhost __main__ + test_api.py + env-gated real-pair integration (SC#4)
 
 ### Phase 30: TRE Compare Tool — Frontend SPA
 **Goal**: Ship the modern web UI over the proven running API — a virtualized, filterable install-vs-install tree-diff that solves the space-asset diagnosis use case end-to-end.
