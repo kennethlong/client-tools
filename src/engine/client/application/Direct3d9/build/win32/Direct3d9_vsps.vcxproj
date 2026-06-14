@@ -112,7 +112,7 @@
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;d3dcompiler.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Debug\gl07_d.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\libjpeg\lib;..\..\..\..\..\..\external\3rd\library\directx9\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -130,9 +130,10 @@
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Debug/Direct3d9_vsps.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Stage Debug gl07_d.dll + pdb</Message>
+      <Message>Stage Debug gl07_d.dll + pdb + d3dcompiler_47.dll</Message>
       <Command>copy /Y "$(OutDir)gl07_d.dll" "..\..\..\..\..\..\..\stage\"
-copy /Y "$(OutDir)gl07_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
+copy /Y "$(OutDir)gl07_d.pdb" "..\..\..\..\..\..\..\stage\"
+copy /Y "..\..\..\..\..\..\external\3rd\library\directx9\lib\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
@@ -169,7 +170,7 @@ copy /Y "$(OutDir)gl07_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;d3dcompiler.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Optimized\gl07_o.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\libjpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -187,9 +188,10 @@ copy /Y "$(OutDir)gl07_d.pdb" "..\..\..\..\..\..\..\stage\"</Command>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Optimized/Direct3d9_vsps.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Stage Optimized gl07_o.dll + pdb</Message>
+      <Message>Stage Optimized gl07_o.dll + pdb + d3dcompiler_47.dll</Message>
       <Command>copy /Y "$(OutDir)gl07_o.dll" "..\..\..\..\..\..\..\stage\"
-copy /Y "$(OutDir)gl07_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
+copy /Y "$(OutDir)gl07_o.pdb" "..\..\..\..\..\..\..\stage\"
+copy /Y "..\..\..\..\..\..\external\3rd\library\directx9\lib\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -229,7 +231,7 @@ copy /Y "$(OutDir)gl07_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libjpeg.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dx9.lib;d3dcompiler.lib;ddraw.lib;dxerr9.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Release\gl07_r.dll</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\directx9\lib;..\..\..\..\..\..\external\3rd\library\libjpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -247,9 +249,10 @@ copy /Y "$(OutDir)gl07_o.pdb" "..\..\..\..\..\..\..\stage\"</Command>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\Direct3d9_vsps\Release/Direct3d9_vsps.bsc</OutputFile>
     </Bscmake>
     <PostBuildEvent>
-      <Message>Stage Release gl07_r.dll + pdb</Message>
+      <Message>Stage Release gl07_r.dll + pdb + d3dcompiler_47.dll</Message>
       <Command>copy /Y "$(OutDir)gl07_r.dll" "..\..\..\..\..\..\..\stage\"
-copy /Y "$(OutDir)gl07_r.pdb" "..\..\..\..\..\..\..\stage\"</Command>
+copy /Y "$(OutDir)gl07_r.pdb" "..\..\..\..\..\..\..\stage\"
+copy /Y "..\..\..\..\..\..\external\3rd\library\directx9\lib\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
