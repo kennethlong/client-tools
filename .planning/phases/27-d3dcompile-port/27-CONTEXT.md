@@ -25,6 +25,25 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
 <decisions>
 ## Implementation Decisions
 
+> **⚠ CLOSE-OUT DECISION 2026-06-14 (post-execution — supersedes D-01-R/D-03/D-05 below for THIS phase).**
+> The D-01-R in-place `D3DCompile` swap was implemented (Plan 02) and **REVERTED** after the boot smoke.
+> Modern `d3dcompiler_47` is strict where 2003 `D3DXCompileShader` is lenient, so gl05/gl07 re-fight the
+> entire gl11 Phase-11 shader-modernization battle: `X3000` reserved-keyword `point` (fixable via a ported
+> `Direct3d11_HlslRewrite` Rule A) → `X3202` struct-member `register(vN)` from the engine-injected
+> `DECLARE_textureCoordinateSets` macro (gl11 omits it) → behind it cbuffer wrapping, X4016 register
+> management, reauthored override shaders (stage/override/), and a VS fallback. That is x64-milestone-sized.
+> - **D-07 (close-out, Kenny 2026-06-14):** KEEP the proven **Fix-A SEH guard** on `D3DXCompileShader`
+>   (it catches the 0xC0000090 FP fault and rendered the Plan 01 baselines). Mark **HARD-05 satisfied-by-Fix-A**.
+>   **Defer** the clean `D3DCompile` / D3DX-removal port to the **x64 milestone** (D3DX removal unavoidable
+>   there + a working x64 reference exists). Revert commit `c0f890875`; finding in `27-02-SUMMARY.md`; memory
+>   `project_hard05_d3dcompile_deferred_to_x64`. Both the HLSL and asm VS paths now stay on D3DX with the guard.
+> - **D-06 unchanged:** gl06 (FFP) was never in scope — the entire VS compile branch is `#ifdef VSPS`-excluded
+>   for gl06, so it has no `D3DXCompileShader` call and no FP fault to fix.
+> - **Kept as x64 inputs:** `27-ASM-CENSUS.md`, `docs/research/phase27-baseline/`, tracked `d3dcompiler_47.dll`,
+>   the (unused, harmless) `d3dcompiler.lib` link, and the ported-but-reverted rewrite approach (documented).
+>
+> The D-01-R/D-02-R/D-03/D-05 text below is retained for history; for THIS phase D-07 governs.
+
 > **⚠ RE-DECISION 2026-06-14 (post-research — supersedes D-01/D-02 below).** Phase-27 research
 > (`27-RESEARCH.md`) FALSIFIED the D-01 premise by direct tool extraction: Restoration's
 > `SwgRestoration_*.tre` `.vsh`/`.psh` are **binary/encrypted, NOT HLSL source** (header `AD F0 C2 26`,

@@ -82,7 +82,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
 - [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
  (completed 2026-06-14)
-- [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
+- [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
 - [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
 - [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
@@ -128,16 +128,17 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 
 ### Phase 27: D3DCompile Port
 **Goal**: Replace `D3DXCompileShader` with `D3DCompile` (Fix B) in the D3D9 plugin, superseding the Phase-19 SEH guard where the path is ported.
+**Outcome (2026-06-14): D3DCompile swap ATTEMPTED → REVERTED → DEFERRED to x64; HARD-05 satisfied-by-Fix-A.** The boot smoke proved gl05/gl07 re-fight the entire gl11 Phase-11 shader-modernization battle (modern `d3dcompiler_47` is strict where 2003 `D3DXCompileShader` is lenient): `X3000` reserved-keyword `point` → `X3202` struct-member `register(vN)` semantics → behind it cbuffer wrapping, X4016 register management, reauthored override shaders, and a VS fallback — x64-milestone-sized work, not an in-place swap. Decision (Kenny): keep the proven Fix-A SEH guard (it catches the modern-toolchain D3DX FP fault and rendered the Plan 01 baselines), defer the clean port to the x64 milestone (where D3DX removal is unavoidable + a working x64 reference exists). Revert commit `c0f890875`; finding in `27-02-SUMMARY.md`; memory `project_hard05_d3dcompile_deferred_to_x64`.
 **Depends on**: Phase 26 (clean tree); independent of Phases 25/26 in code surface but scheduled last in the hardening stream as the most complex item. Requires an asm-shader census as its first task.
-**Requirements**: HARD-05
+**Requirements**: HARD-05 (satisfied-by-Fix-A; clean D3DCompile port deferred to x64)
 **Success Criteria** (what must be TRUE):
   1. An asm-shader census (count of `.vsh` / `D3DXAssembleShader` call sites) is produced first and scopes the assembly-path handling — the port does not silently drop the asm path (which would null the VS and skip draws)
   2. D3D9 HLSL shader compilation runs through `D3DCompile` (with a reimplemented `ID3DInclude` handler and `d3dcompiler_47.dll` staged) instead of `D3DXCompileShader`
   3. D3D9 visual parity is held against an A/B baseline (no shader-compile regression), and the Phase-19 SEH guard is retained for any path still on D3DX and removed only where the port supersedes it
 **Plans**: 3 plans (3 waves)
-  - [x] 27-01-PLAN.md — asm-shader census artifact + stage d3dcompiler_47.dll + link d3dcompiler.lib (keep d3dx9.lib) + pre-port A/B baseline
-  - [ ] 27-02-PLAN.md — HLSL path D3DXCompileShader->D3DCompile swap (ID3DInclude + D3D_SHADER_MACRO, vs_2_0/vs_1_1, SEH retained) + rasterMajor=5 boot smoke
-  - [ ] 27-03-PLAN.md — asm path D3DAssemble-or-D3DXAssembleShader+SEH decision + dual-renderer parity + Tatooine Fix-A spot + SEH-guard finalize
+  - [x] 27-01-PLAN.md — asm-shader census artifact + stage d3dcompiler_47.dll + link d3dcompiler.lib (keep d3dx9.lib) + pre-port A/B baseline (DONE; artifacts kept as x64 inputs)
+  - [x] 27-02-PLAN.md — HLSL path D3DXCompileShader->D3DCompile swap: ATTEMPTED, REVERTED (`c0f890875`), DEFERRED to x64; Fix-A retained (see 27-02-SUMMARY.md)
+  - [x] 27-03-PLAN.md — MOOT/DEFERRED: validated nothing-to-validate (port reverted); asm path stays on D3DXAssembleShader+SEH, HLSL path stays on D3DXCompileShader+Fix-A (see 27-03-SUMMARY.md)
 
 ### Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)
 **Goal**: Stand up the headless, fully unit-tested backend foundation for the TRE compare tool — parser reuse, cfg search-path scanning, and engine-faithful virtual-tree merging.

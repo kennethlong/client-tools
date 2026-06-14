@@ -13,7 +13,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [ ] **HARD-02**: Cantina corner-snap no longer occurs — re-entrancy guard stops the same-frame portal ping-pong without breaking legitimate fast door traversals (verified with the committed CORNERSNAP instrumentation before it is removed)
 - [ ] **HARD-03**: D-15 DPVS instrumentation and CORNERSNAP `_DEBUG` probes are removed from shipped code paths. **SPLIT (2026-06-13):** Phase 26 removes ONLY the D-15 DPVS instrumentation (its purpose is superseded by the shipped Phase-24 config-gate). The CORNERSNAP probes are KEPT — they are the acceptance harness for the still-open door snap (Phase 25's fix was reverted/parked-for-x64), so their removal is deferred to the x64/HARD-05 work, after the door snap is fixed and verified against them.
 - [ ] **HARD-04**: Opening the Options window no longer FATALs — `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch fixed (pre-existing, from feature commit `d1b3c0eaf`)
-- [ ] **HARD-05**: D3D9 shader compilation uses `D3DCompile` instead of `D3DXCompileShader` (Fix B) — preceded by an asm-shader census (`D3DCompile` is HLSL-only); the Phase-19 SEH guard is retained for any path still on D3DX and superseded where ported
+- [~] **HARD-05**: D3D9 shader compilation immune to the modern-toolchain D3DX FP fault. **SATISFIED-BY-FIX-A + CLEAN PORT DEFERRED TO x64 (2026-06-14):** the `D3DXCompileShader`→`D3DCompile` swap (Fix B) was attempted in Phase 27 and reverted — gl05/gl07 re-fight the entire gl11 Phase-11 shader-modernization battle (modern `d3dcompiler_47` is strict: `X3000` reserved keyword `point` → `X3202` struct-member `register(vN)` → cbuffer wrapping / X4016 / reauthored override shaders / VS fallback), which is x64-milestone-sized. The proven Fix-A SEH guard around `D3DXCompileShader` (Phase 19, `db83b0f5c`) already catches the FP fault (0xC0000090) and keeps the bytecode — HARD-05's intent is met. The asm-shader census was produced (Phase 27 Plan 01); the clean D3DCompile / D3DX-removal port moves to the x64 milestone (D3DX removal unavoidable there). See `27-02-SUMMARY.md`, memory `project_hard05_d3dcompile_deferred_to_x64`.
 
 ### Machine Portability
 
@@ -66,7 +66,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HARD-02 | Phase 25 | Pending |
 | HARD-03 | Phase 26 (D-15 only) + x64/HARD-05 (CORNERSNAP) | Pending |
 | HARD-04 | Phase 26 | Pending |
-| HARD-05 | Phase 27 | Pending |
+| HARD-05 | Phase 27 (satisfied-by-Fix-A) + x64 (clean port) | Satisfied-by-Fix-A; clean D3DCompile port deferred to x64 |
 | PORT-01 | Phase 24 | Complete |
 | PORT-02 | Phase 24 | Complete |
 | TRE-01 | Phase 28 | Pending |
