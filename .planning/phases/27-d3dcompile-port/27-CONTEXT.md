@@ -44,9 +44,12 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
 >   shaders on `D3DXAssembleShader` + SEH guard (HARD-05 still satisfied). Validate the asm dialect
 >   early — it is the LOW-confidence item (RESEARCH A3).
 > - **Cache:** No bytecode disk cache this phase (out of HARD-05 scope; compile-per-launch is current
->   acceptable behaviour). `d3dx9.lib` may be removable from gl05/gl07 once BOTH paths leave D3DX —
->   verify no other D3DX use remains in the plugins before dropping the lib (grep + /FORCE false-pass
->   guard: link must show 0 `unresolved external symbol`).
+>   acceptable behaviour).
+> - **`d3dx9.lib` STAYS LINKED.** PATTERNS.md verified D3DX is used in 4 OTHER gl05/gl07 files beyond
+>   the compile surface (`D3DXMatrixMultiply`, `D3DXLoadSurfaceFromSurface`, `D3DXSaveSurfaceToFile`,
+>   `D3DXMesh`, `D3DXMATRIX`). The port retires D3DX from the runtime *compile* surface only; do NOT
+>   drop `d3dx9.lib`. ADD `d3dcompiler.lib`. (/FORCE false-pass guard still applies: link must show 0
+>   `unresolved external symbol`.)
 >
 > The D-01/D-02 text below is retained for history. Where it conflicts with D-01-R/D-02-R, the
 > re-decision wins.
