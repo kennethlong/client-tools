@@ -80,7 +80,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 24: DPVS Config-Gate + Machine Portability** - Occlusion auto-gated on POB-cell membership; de-hardcoded stage paths + cleaned `client_d.cfg`; dual-renderer boot verified
  (completed 2026-06-13)
 - [ ] **Phase 25: Cantina Corner-Snap Fix** - Re-entrancy guard stops the same-frame portal ping-pong without breaking fast door traversals (verified via committed CORNERSNAP instrumentation)
-- [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs (completed 2026-06-14)
+- [x] **Phase 26: Instrumentation Removal + Options-Window FATAL** - D-15 DPVS instrumentation stripped atomically (CORNERSNAP probes KEPT as the door-snap harness — deferred to x64/HARD-05); Options window no longer FATALs
+ (completed 2026-06-14)
 - [ ] **Phase 27: D3DCompile Port** - `D3DXCompileShader` replaced with `D3DCompile` (Fix B), asm-shader census first, D3D9 visual parity held
 - [ ] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
 - [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
@@ -133,7 +134,10 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   1. An asm-shader census (count of `.vsh` / `D3DXAssembleShader` call sites) is produced first and scopes the assembly-path handling — the port does not silently drop the asm path (which would null the VS and skip draws)
   2. D3D9 HLSL shader compilation runs through `D3DCompile` (with a reimplemented `ID3DInclude` handler and `d3dcompiler_47.dll` staged) instead of `D3DXCompileShader`
   3. D3D9 visual parity is held against an A/B baseline (no shader-compile regression), and the Phase-19 SEH guard is retained for any path still on D3DX and removed only where the port supersedes it
-**Plans**: TBD
+**Plans**: 3 plans (3 waves)
+  - [ ] 27-01-PLAN.md — asm-shader census artifact + stage d3dcompiler_47.dll + link d3dcompiler.lib (keep d3dx9.lib) + pre-port A/B baseline
+  - [ ] 27-02-PLAN.md — HLSL path D3DXCompileShader->D3DCompile swap (ID3DInclude + D3D_SHADER_MACRO, vs_2_0/vs_1_1, SEH retained) + rasterMajor=5 boot smoke
+  - [ ] 27-03-PLAN.md — asm path D3DAssemble-or-D3DXAssembleShader+SEH decision + dual-renderer parity + Tatooine Fix-A spot + SEH-guard finalize
 
 ### Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)
 **Goal**: Stand up the headless, fully unit-tested backend foundation for the TRE compare tool — parser reuse, cfg search-path scanning, and engine-faithful virtual-tree merging.
