@@ -25,7 +25,33 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
 <decisions>
 ## Implementation Decisions
 
-### Port approach — lift Restoration shaders, write our own D3DCompile call
+> **⚠ RE-DECISION 2026-06-14 (post-research — supersedes D-01/D-02 below).** Phase-27 research
+> (`27-RESEARCH.md`) FALSIFIED the D-01 premise by direct tool extraction: Restoration's
+> `SwgRestoration_*.tre` `.vsh`/`.psh` are **binary/encrypted, NOT HLSL source** (header `AD F0 C2 26`,
+> ~42% printable, 0 of 275 contain `//hlsl`/`//asm`, 531 use a non-zlib compressor). There is nothing
+> to lift. Meanwhile OUR own shaders are already clean ASCII HLSL/asm in the SWGSource TREs (census:
+> **286 unique `.vsh` = 190 `//hlsl` + 96 `//asm`**). Kenny re-decided (AskUserQuestion 2026-06-14):
+> - **D-01-R (core approach):** Do the **in-place `D3DXCompileShader → D3DCompile` swap on our own
+>   HLSL** in `Direct3d9_VertexShaderData.cpp` (`vs_2_0`/`vs_3_0`, `ENABLE_BACKWARDS_COMPATIBILITY`,
+>   adapt the existing `ID3DXInclude` handler → `ID3DInclude`, stage `d3dcompiler_47.dll`). This is the
+>   approach the original D-01 explicitly rejected — it is now the chosen path because the lift premise
+>   is impossible and our text is already clean. Do NOT lift Restoration shaders. Do NOT port gl11's
+>   `Direct3d11_HlslRewrite` rules (those bridge SM2→SM4; we recompile to the SAME SM2/SM3 profile).
+> - **D-02-R (asm path):** The asm path does NOT dissolve (96 `//asm` shaders: sabers/decals/detail).
+>   **Port the asm path to `D3DAssemble`** (exported by `d3dcompiler_47.dll`) for **full D3DX
+>   retirement** from the runtime compile. FALLBACK: if `D3DAssemble` fails on SWG's exact `vs_1_1`/
+>   `vs_2_0` asm dialect or the injected `TARGET`/`maxTextureCoordinate` defines, keep those residual
+>   shaders on `D3DXAssembleShader` + SEH guard (HARD-05 still satisfied). Validate the asm dialect
+>   early — it is the LOW-confidence item (RESEARCH A3).
+> - **Cache:** No bytecode disk cache this phase (out of HARD-05 scope; compile-per-launch is current
+>   acceptable behaviour). `d3dx9.lib` may be removable from gl05/gl07 once BOTH paths leave D3DX —
+>   verify no other D3DX use remains in the plugins before dropping the lib (grep + /FORCE false-pass
+>   guard: link must show 0 `unresolved external symbol`).
+>
+> The D-01/D-02 text below is retained for history. Where it conflicts with D-01-R/D-02-R, the
+> re-decision wins.
+
+### Port approach — lift Restoration shaders, write our own D3DCompile call [SUPERSEDED by D-01-R]
 - **D-01:** The port is **Restoration's TRE shaders + our own `D3DCompile` call**, NOT a 1:1
   `D3DXCompileShader → D3DCompile` swap and NOT lifting Restoration's plugin *source* (we have their
   `gl0X_r.dll` as binaries only). We extract Restoration's modernized (assumed HLSL / non-D3DX)
@@ -41,8 +67,10 @@ fix; the x64 port; gl06 FFP (no HLSL compile); gl11 D3D11 (already on `D3DCompil
   goal is full D3DX retirement from the runtime compile.
 - **D-03 (SEH guard):** `D3DCompile` is immune to the modern-toolchain post-compile FP fault that
   Fix-A (`db83b0f5c`) guards, so the SEH wrapper (`compileVertexShaderFpGuarded`) can be **relaxed /
-  removed on the HLSL path** once it is on `D3DCompile`. Retain it only on any residual D3DX path.
-  Decide during validation (D-05).
+  removed on the HLSL path** once it is on `D3DCompile`. With the asm path also on `D3DAssemble`
+  (D-02-R), the guard can target full removal from the runtime compile — but retain it through
+  validation and drop it only after the Tatooine bump/dot3 spot (Fix-A, `db83b0f5c`) renders clean
+  under the new path (D-05). Keep it on any residual D3DX fallback shader.
 
 ### CORNERSNAP / door snap boundary
 - **D-04:** Phase 27 is the D3DCompile port ONLY. The CORNERSNAP `_DEBUG` probes
