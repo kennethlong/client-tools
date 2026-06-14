@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: verifying
+status: ready_to_plan
 last_updated: "2026-06-14T19:52:41.526Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 13
   completed_plans: 12
-  percent: 92
+  percent: 71
 ---
 
 # Project State
@@ -69,8 +69,8 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 28 (tre-compare-tool-foundation-parser-scanner-virtual-tree) — EXECUTING
-Plan: 4 of 4
+Phase: 29
+Plan: Not started
 Plans: 3/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632; 28-02 vendor parser — DONE: f222dc876 + de4f3f64d; 28-03 scanner + virtual-tree — DONE: d0a784c16 + 3a1d3df83).
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
 Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
@@ -84,7 +84,7 @@ Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Phase complete — ready for verification
+Status: Ready to plan
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
