@@ -1,0 +1,23 @@
+[project]
+name = "tre-compare"
+version = "0.1.0"
+description = "Standalone TRE/TOC compare tool — engine-faithful search-path virtual-tree builder (Phase 28, D-01: zero engine imports, copy-paste extractable)"
+readme = "README.md"
+authors = [
+    { name = "Kenny Long", email = "kenny.alan.long@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]
+
+[tool.pytest.ini_options]
+markers = ["integration: real-install test against stage/client.cfg (env-gated, default off)"]
+testpaths = ["tests"]
