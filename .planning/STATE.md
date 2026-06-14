@@ -4,12 +4,12 @@ milestone: v2.3
 milestone_name: Hardening
 status: executing
 last_updated: "2026-06-14T01:31:41.067Z"
-last_activity: 2026-06-14
+last_activity: 2026-06-13 -- Phase 26 COMPLETE (D-15 removed, HARD-04 verified both renderers; client.cfg BOM crash fixed)
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 5
   percent: 50
 ---
 
@@ -69,11 +69,12 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 26 (instrumentation-removal-options-window-fatal) — EXECUTING
-Plan: 1 of 2
-Plans: 2 (26-01 D-15 removal / HARD-03 partial; 26-02 Options FATAL verify / HARD-04). plan-checker VERIFICATION PASSED first pass.
-Scope (locked 2026-06-13): strip ONLY D-15 DpvsProfileInstrumentation; KEEP CORNERSNAP probes (door-snap harness, deferred to x64). HARD-04 already fixed in tree (commit 5fce7bb83) → 26-02 is verify/audit + dual-renderer Options-open smoke.
-Next: `/gsd-execute-phase 26` (both plans end in human-driven GUI checkpoints — boot to char-select + open Options under rasterMajor=5 AND 11).
+Phase: 26 (instrumentation-removal-options-window-fatal) — COMPLETE (verification passed 2026-06-13)
+Plan: 2 of 2 done
+Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 Options FATAL / HARD-04 — DONE, audit confirmed already-fixed in 5fce7bb83, no code change). Docs commit afd2a65bf.
+Outcome: D-15 DpvsProfileInstrumentation fully removed (grep-zero), CORNERSNAP probes preserved (door-snap harness, deferred to x64/HARD-05), F11 occlusion pair kept. Debug+Release link clean (0 unresolved, /FORCE-grep). Dual-renderer boot+Options human-approved: Debug/D3D11 in-game + Options; Release/D3D9 char-select + Options.
+Surprise (resolved): "Release client not starting" was a PRE-EXISTING `stage/client.cfg` UTF-8 BOM (ConfigFile null-section deref in Release; Debug's DEBUG_FATAL masked it) — NOT the D-15 change. Fixed by stripping the BOM from the gitignored staged cfg. See [[reference_client_cfg_bom_release_crash]].
+Next: Phase 27 (HARD-05 — port D3D9 D3DXCompileShader → D3DCompile; census asm shaders first). cfgs at rasterMajor=11 end-state; working tree clean.
 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
