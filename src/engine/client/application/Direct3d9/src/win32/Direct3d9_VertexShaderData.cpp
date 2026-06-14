@@ -26,9 +26,8 @@
 #include <map>
 #include <vector>
 #include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded D3DX compile (FP-fault fix)
-#include <d3dx9.h>        // Phase 27: retained -- asm path (D3DXAssembleShader) + D3DX matrix/surface APIs in sibling files
-#include <d3dx9shader.h>  // Phase 27: retained -- asm path still uses D3DX
-#include <d3dcompiler.h>  // Phase 27 (HARD-05 Fix B): D3DCompile / ID3DInclude / D3D_SHADER_MACRO for the HLSL VS compile
+#include <d3dx9.h>
+#include <d3dx9shader.h>
 
 // ======================================================================
 
@@ -53,14 +52,14 @@ namespace Direct3d9_VertexShaderDataNamespace
 		Include & operator =(Include const &);
 	};
 
-	class IncludeHandler : public ID3DInclude
+	class IncludeHandler : public ID3DXInclude
 	{
 	public:
-		virtual HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
+		virtual HRESULT STDMETHODCALLTYPE Open(D3DXINCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
 		virtual HRESULT STDMETHODCALLTYPE Close(LPCVOID pData);
 	};
 
-	typedef std::vector<D3D_SHADER_MACRO>  Defines;
+	typedef std::vector<D3DXMACRO>  Defines;
 	typedef std::map<CrcString const *, Include *, LessPointerComparator> IncludeCache;
 
 	void getToken(char const *& s, char * d);
@@ -83,10 +82,8 @@ namespace Direct3d9_VertexShaderDataNamespace
 	// bytecode is fully produced BEFORE the cleanup fault, so wrap the call in SEH, reset the FPU,
 	// and keep the compiled result. Extracted to a helper because __try/__except cannot live in a
 	// function that needs C++ object unwinding (C2712). One fix covers all VSPS plugins (gl05/07).
-	// Phase 27 (HARD-05 Fix B, 2026-06-14): the HLSL compile below now uses D3DCompile (not
-	// D3DXCompileShader), which is immune to this D3DX-era FPU bug. The SEH guard is RETAINED through
-	// Plan 02 validation (D-03/D-05) and dropped only in Plan 03 once the Tatooine spot proves clean.
-	// The asm path still calls D3DXAssembleShader (D-02-R; not wrapped here -- unchanged this phase).
+	// TODO (Fix B, deferred): port D3D9 shader compile to D3DCompile, which is immune to this
+	// D3DX-era FPU bug (the D3D11 path already uses it). See .planning todo.
 	inline int direct3d9CompileFpExceptionFilter(unsigned long code)
 	{
 		// STATUS_FLOAT_* SEH codes occupy 0xC000008D..0xC0000093 (denormal..underflow).
@@ -94,36 +91,19 @@ namespace Direct3d9_VertexShaderDataNamespace
 	}
 
 	HRESULT compileVertexShaderFpGuarded(
-		LPCSTR src, UINT srcLen, LPCSTR sourceName, D3D_SHADER_MACRO const *defines, ID3DInclude *includeHandler,
-		LPCSTR functionName, LPCSTR profile,
-		ID3DBlob **outShader, ID3DBlob **outErrors)
+		LPCSTR src, UINT srcLen, D3DXMACRO const *defines, LPD3DXINCLUDE includeHandler,
+		LPCSTR functionName, LPCSTR profile, DWORD flags,
+		LPD3DXBUFFER *outShader, LPD3DXBUFFER *outErrors)
 	{
-		// Phase 27 (HARD-05 Fix B): the HLSL VS compile now runs through D3DCompile (d3dcompiler_47),
-		// which is immune to the modern-toolchain D3DX post-compile FP fault (0xC0000090). The
-		// __try/__except + _clearfp/_fpreset SEH wrapper is RETAINED through validation per D-03/D-05;
-		// it is dropped only in Plan 03 after the Tatooine bump/dot3 spot proves the fault is gone.
-		//
-		// Flags: mirror gl11's structure but DROP the SM4-coupled flags (PATTERNS anti-patterns 2/3):
-		//   - NO D3DCOMPILE_PACK_MATRIX_ROW_MAJOR  (would transpose transforms vs D3D9 SetVertexShaderConstantF)
-		//   - NO D3DCOMPILE_ENABLE_STRICTNESS      (mutually exclusive with BACKWARDS_COMPATIBILITY)
-		// Profile (vs_2_0 / vs_1_1) is selected by the caller and passed through unchanged.
-		UINT flags = 0;
-#ifdef _DEBUG
-		flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-		flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif
-		flags |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;   // accept SOE's D3D9-era HLSL leniently
-
 		HRESULT hr = E_FAIL;
 		__try
 		{
-			hr = D3DCompile(src, srcLen, sourceName, defines, includeHandler, functionName, profile, flags, 0, outShader, outErrors);
+			hr = D3DXCompileShader(src, srcLen, defines, includeHandler, functionName, profile, flags, outShader, outErrors, NULL);
 			_clearfp();
 		}
 		__except (direct3d9CompileFpExceptionFilter(GetExceptionCode()))
 		{
-			// Compiler faulted during its post-compile FP cleanup; *outShader already holds the
+			// D3DX faulted during its post-compile FP cleanup; *outShader already holds the
 			// compiled bytecode. Reset the FPU to a sane masked state and report success when
 			// we have bytecode (mirrors the no-fault path's result on the old toolchain).
 			_fpreset();
@@ -161,7 +141,7 @@ Direct3d9_VertexShaderDataNamespace::Include::~Include()
 
 // ======================================================================
 
-HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3D_INCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
+HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3DXINCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
 {
 	// hack to support relative path includes when using the command line compiler
 	if (strncmp(pFileName, "../../", 6) == 0)
@@ -405,7 +385,7 @@ Direct3d9_VertexShaderData::~Direct3d9_VertexShaderData()
 
 IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 textureCoordinateSetKey) const
 {
-	ID3DBlob *compiledShader = NULL;
+	ID3DXBuffer *compiledShader = NULL;
 
 	ms_defines.clear();
 	char const * target = NULL;
@@ -431,7 +411,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 					DEBUG_FATAL(textureCoordinateSetDimension[textureCoordinateSet] != 0 && textureCoordinateSetDimension[textureCoordinateSet] != dimension, ("Competing dimensions (existing %d, new %d) for texture coordinate %d", textureCoordinateSetDimension[textureCoordinateSet], dimension, textureCoordinateSet));
 					textureCoordinateSetDimension[textureCoordinateSet] = dimension;
 
-					D3D_SHADER_MACRO macro;
+					D3DXMACRO macro;
 
 					// here's an example of what we are defining:
 					// #define textureCoordinateSetMAIN textureCoordinateSet0
@@ -454,7 +434,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				// here's an example of what we are defining:
 				// #define DECLARE_textureCoordinateSets  float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
 
-				D3D_SHADER_MACRO macro;
+				D3DXMACRO macro;
 
 				macro.Name = scratchBuffer;
 				SCRATCH_STRING("DECLARE_textureCoordinateSets", 29);
@@ -486,15 +466,15 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3D_SHADER_MACRO empty = { NULL, NULL };
+			D3DXMACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
 		IncludeHandler includeHandler;
-		ID3DBlob *error = NULL;
-		// Phase 27 (HARD-05 Fix B): compile via D3DCompile, SEH-guarded through validation (D-03/D-05).
-		// pSourceName = the asset filename so D3DCompile's error messages point at something useful.
-		HRESULT result = compileVertexShaderFpGuarded(m_compileText, m_compileTextLength, m_vertexShader->m_fileName.getString(), &(ms_defines.front()), &includeHandler, "main", target, &compiledShader, &error);
+		ID3DXBuffer *error = NULL;
+		// Phase 19: SEH-guarded to survive the modern-toolchain D3DX post-compile FP fault
+		// (0xC0000090) -- see compileVertexShaderFpGuarded above.
+		HRESULT result = compileVertexShaderFpGuarded(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, "main", target, 0, &compiledShader, &error);
 
 		//-----------------------------------------------------------------------------------
 		// DBE - I was getting strange Float Invalid Operation Exceptions (0xC0000090) in the
@@ -538,7 +518,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				if (textureCoordinateSet > maxTextureCoordinateSet)
 					maxTextureCoordinateSet = textureCoordinateSet;
 
-				D3D_SHADER_MACRO macro;
+				D3DXMACRO macro;
 
 				// here's an example of what we are defining:
 				// #define vTextureCoordinateSetDTLA vTextureCoordinateSet0
@@ -559,7 +539,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 			{
 				// here's an example of what we are defining:
 				// #define maxTextureCoordinate 2
-				D3D_SHADER_MACRO macro;
+				D3DXMACRO macro;
 
 				macro.Name = "maxTextureCoordinate";
 
@@ -574,23 +554,17 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3D_SHADER_MACRO d = { "TARGET", target };
+			D3DXMACRO d = { "TARGET", target };
 			ms_defines.push_back(d);
 		}
 
 		{
-			D3D_SHADER_MACRO empty = { NULL, NULL };
+			D3DXMACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
 		IncludeHandler includeHandler;
-		// Phase 27 (D-02-R): the asm path stays on D3DXAssembleShader this phase. Plan 02 migrated the
-		// shared types (Defines vector, IncludeHandler, compiledShader) to the d3dcompiler equivalents
-		// for the HLSL D3DCompile path; D3DXMACRO/D3D_SHADER_MACRO, ID3DXInclude/ID3DInclude and
-		// ID3DXBuffer/ID3DBlob are field-/vtable-identical (shared IIDs), so reinterpret_cast bridges
-		// them back to the D3DX types this legacy call still expects. The CALL itself is unchanged
-		// (Plan 03 owns any D3DAssemble move).
-		HRESULT result = D3DXAssembleShader(m_compileText, m_compileTextLength, reinterpret_cast<D3DXMACRO const *>(&(ms_defines.front())), reinterpret_cast<LPD3DXINCLUDE>(&includeHandler), 0, reinterpret_cast<LPD3DXBUFFER *>(&compiledShader), NULL);
+		HRESULT result = D3DXAssembleShader(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, 0, &compiledShader, NULL);
 		FATAL(FAILED(result), ("Could not compile shader %s %d", m_vertexShader->m_fileName.getString(), HRESULT_CODE(result)));
 	}
 
