@@ -69,24 +69,24 @@ Which phases cover which requirements. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| X64-01 | — | Pending |
-| X64-02 | — | Pending |
-| X64-03 | — | Pending |
-| X64-04 | — | Pending |
-| BITS-01 | — | Pending |
-| BITS-02 | — | Pending |
-| BITS-03 | — | Pending |
-| AUDIO-01 | — | Pending |
-| AUDIO-02 | — | Pending |
-| SHADER-01 | — | Pending |
-| VERIFY-01 | — | Pending |
-| VERIFY-02 | — | Pending |
-| VERIFY-03 | — | Pending |
+| X64-01 | Phase 33 | Pending |
+| X64-02 | Phase 33 | Pending |
+| X64-03 | Phase 34 | Pending |
+| X64-04 | Phase 33 | Pending |
+| BITS-01 | Phase 31 | Pending |
+| BITS-02 | Phase 31 | Pending |
+| BITS-03 | Phase 31 | Pending |
+| AUDIO-01 | Phase 35 | Pending |
+| AUDIO-02 | Phase 35 | Pending |
+| SHADER-01 | Phase 32 | Pending |
+| VERIFY-01 | Phase 36 | Pending |
+| VERIFY-02 | Phase 36 | Pending |
+| VERIFY-03 | Phase 36 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 13 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 13
+- Mapped to phases: 13 (Phases 31-36; roadmap created 2026-06-15)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-15 — v3.0 x64 Port milestone start*

@@ -7,6 +7,7 @@
 - ✅ **v2.1 Decruft** — Phases 12–16 (shipped 2026-05-27). Re-applied the orphaned CLEAN-01..04 dead-code removals against the active Koogie/MSBuild tree; five dormant subsystems unlinked + deleted, client kept bootable under both renderers. Full detail: `milestones/v2.1-ROADMAP.md`. Audit: `milestones/v2.1-MILESTONE-AUDIT.md`.
 - ✅ **v2.2 Visual Parity** — Phases 17–23 (shipped 2026-06-12). D3D11 (`rasterMajor=11`) now matches the known-good D3D9 (`rasterMajor=5`) baseline: asset PS pipeline (PSRC recompile + reflection constants), FFP combiner cascade, lighting/gamma parity, round minimap, particles/ribbons, exterior geometry closure, DPVS remeasure (Option α REVISED). 13/13 requirements. Full detail: `milestones/v2.2-ROADMAP.md`. Audit: `milestones/v2.2-MILESTONE-AUDIT.md`.
 - ✅ **v2.3 Hardening** — Phases 24–30 (shipped 2026-06-15). Consolidated the v2.2 parity win: DPVS verdict config-gated, machine-portability (`stage/override` + `stage/miles` paths, `client_d.cfg` cleanup), Options-window FATAL fixed, D-15 instrumentation stripped — PLUS a new standalone web-based TRE compare tool (two-install archive-set + merged-virtual-tree diff). 10/12 requirements satisfied; HARD-02 (corner-snap) + HARD-05 clean port + HARD-03 CORNERSNAP-probe removal deferred to x64 (root-caused 32-bit-bound). Full detail: `milestones/v2.3-ROADMAP.md`. Audit: `milestones/v2.3-MILESTONE-AUDIT.md`.
+- 🚧 **v3.0 x64 Port** — Phases 31–36 (in progress, started 2026-06-15). Native 64-bit build keeping BOTH renderers (D3D9 gl05/06/07 + D3D11 gl11) bootable to character select — eliminating the 32-bit-bound defects (cantina door-snap float-codegen transient, the chronic address-space OOM) and removing the x64-hostile legacy D3DX dependency. Reference: SWG Restoration's stable x64 D3D9 client (`D:\SWG Restoration\x64`). Absorbs the v2.3 carry-forwards HARD-02 / HARD-05 / HARD-03-CORNERSNAP. 13 requirements (X64-01..04, BITS-01..03, AUDIO-01/02, SHADER-01, VERIFY-01..03).
 
 ## Phases
 
@@ -88,10 +89,108 @@ Full detail + success criteria: `milestones/v2.3-ROADMAP.md`. Audit: `milestones
 
 </details>
 
+### 🚧 v3.0 x64 Port (Phases 31-36) - In Progress
+
+**Milestone Goal:** Port the modernized client to a native **x64** build, keeping **both** renderers
+(D3D9 gl05/06/07 + D3D11 gl11) bootable to character select, to eliminate the 32-bit-bound defects
+root-caused across v2.x (the cantina door-snap float-codegen transient, the chronic address-space OOM
+crash) and remove the x64-hostile legacy D3DX dependency. **Core invariant (extended):** every
+client-touching phase must reach boot-to-character-select parity in the **x64** build under both
+`rasterMajor=5` (D3D9) and `=11` (D3D11), and must never regress either renderer in the 32-bit build.
+Debug exe reads `client_d.cfg`. A proven reference exists: SWG Restoration ships a stable x64 D3D9
+client at `D:\SWG Restoration\x64` (door-snap-free; the third-party x64-lib availability map);
+the Miles 9.3b SDK is cloned at `D:/Code/milesss-v9.3b/`.
+
+**Dependency chain (why this order):** the 64-bit-correctness source work (BITS) and the D3DX removal
+(SHADER) are *prerequisites* for a clean x64 build - D3DX is x64-hostile and the x87 inline asm /
+truncation defects block compile/link - so they front-load (Phases 31-32) before the first linking
+x64 client (Phase 33). The two renderers are separately-verifiable boot gates (D3D9 in 33, D3D11 in
+34). The Miles 7.2e->9.3b port is the one third-party that needs real code work, a self-contained chunk
+(Phase 35). Verification + CORNERSNAP cleanup come last (Phase 36): VERIFY-01 (door-snap) and VERIFY-02
+(OOM) can only be checked once the x64 build runs in-world, and VERIFY-03 (strip the CORNERSNAP probes)
+must come AFTER VERIFY-01 confirms the door-snap clean against them - they are its acceptance harness.
+
+- [ ] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03)
+- [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
+- [ ] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02)
+- [ ] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03)
+- [ ] **Phase 35: Miles 9.3b Audio Port** - vendor + port clientAudio from the 7.2e to the 9.3b API and stage the x64 redist/provider set; in-game audio works on the x64 client (AUDIO-01/02)
+- [ ] **Phase 36: Verification & CORNERSNAP Cleanup** - confirm the door-snap + OOM-crash classes resolved against the Restoration x64 reference, then strip the CORNERSNAP `_DEBUG` probes (VERIFY-01/02/03)
+
+#### Phase 31: 64-bit Correctness Foundation
+**Goal**: The whole source tree compiles x64-clean - x64-illegal inline asm replaced with intrinsics, pointer/integer truncation defects fixed, and data-layout (struct packing / hardcoded `sizeof` / serialization width) audited for IFF/TRE + network-message correctness - so the build path is ready for the x64 platform add.
+**Depends on**: Nothing (first phase of v3.0; builds on the shipped 32-bit tree)
+**Requirements**: BITS-01, BITS-02, BITS-03
+**Success Criteria** (what must be TRUE):
+  1. The x87 FPU-control inline asm (`FloatingPointUnit.cpp` `__asm fnstcw/fldcw`) is gone, replaced with `_controlfp`/`_control87`, and a tree-wide `__asm` sweep shows no x64-illegal inline asm survivors in the build path
+  2. The touched code compiles with truncation warnings (C4311 / C4312 / C4244) treated as errors - no `(int)pointer` / `DWORD`-holds-pointer survivors
+  3. IFF/TRE and network-message struct packing / hardcoded-`sizeof` / serialization-width assumptions are audited and corrected; the 32-bit build still loads assets, parses saved data, and exchanges network messages correctly (no data-layout regression)
+  4. The 32-bit client still boots to character select under both `rasterMajor=5` and `=11` after the source changes (no regression while x64 is not yet building)
+**Plans**: TBD
+
+#### Phase 32: D3DX to d3dcompiler_47
+**Goal**: The legacy D3DX shader-compile path is ported to `d3dcompiler_47` (`D3DCompile`) and D3DX is removed from the build, eliminating the x64-hostile dependency that blocks a clean x64 link - landing the v2.3-deferred HARD-05 as a true prerequisite for the first x64 client.
+**Depends on**: Phase 31
+**Requirements**: SHADER-01
+**Success Criteria** (what must be TRUE):
+  1. The `D3DXCompileShader` call sites are ported to `D3DCompile` (`d3dcompiler_47`); an asm-shader census is done first so the assembly path is explicitly handled and no VS is silently nulled (no skipped draws)
+  2. D3DX (`d3dx9*`) is removed from the build's link/include path - `dumpbin`/grep shows no D3DX dependency in the shader-compile path
+  3. Both renderers still compile and load their shaders correctly in the 32-bit build; the client boots to character select and renders under both `rasterMajor=5` and `=11` (the Fix-A SEH guard retained until the asm path is also off D3DX)
+**Plans**: TBD
+**UI hint**: yes
+
+#### Phase 33: x64 Build Platform + D3D9 Renderers
+**Goal**: A native 64-bit client builds and boots - the `x64` platform is added to the solution and every `.vcxproj`, all third-party dependencies resolve as x64, and the D3D9 renderer plugins (gl05/06/07) carry the x64 client to character select. This is the first fully-linking x64 client.
+**Depends on**: Phase 32 (D3DX must be gone before the x64 link is clean)
+**Requirements**: X64-01, X64-04, X64-02
+**Success Criteria** (what must be TRUE):
+  1. `SwgClient_d.exe` / `SwgClient_r.exe` build as x64 binaries - `dumpbin` confirms `machine (x64)`; the `x64` platform exists in `src/build/win32/swg.sln` and every dependent `.vcxproj`
+  2. All third-party dependencies resolve as x64 (dpvs, bink, pcre, libxml2, icu, jpeg, zlib, discord-rpc, ...) - the x64 client launches with no missing-DLL popup or load failure at boot (Restoration's `D:\SWG Restoration\x64\` is the availability reference)
+  3. The gl05 / gl06 / gl07 plugins build as x64 and the x64 client boots to character select under `rasterMajor=5`, `=6`, and `=7`
+  4. The 32-bit build still boots to character select under both renderers (the x64 add does not regress Win32)
+**Plans**: TBD
+**UI hint**: yes
+
+#### Phase 34: x64 D3D11 Renderer
+**Goal**: The D3D11 renderer plugin (gl11) builds as x64 and carries the x64 client to character select under `rasterMajor=11`, bringing the second renderer to x64 parity.
+**Depends on**: Phase 33
+**Requirements**: X64-03
+**Success Criteria** (what must be TRUE):
+  1. The gl11 plugin builds as x64 (`gl11_d.dll` / `gl11_r.dll`, `dumpbin` machine x64)
+  2. The x64 client boots to character select under `rasterMajor=11` and renders the world at the v2.2 visual-parity bar
+  3. The 32-bit gl11 build still boots to character select under `rasterMajor=11` (no Win32 regression)
+**Plans**: TBD
+**UI hint**: yes
+
+#### Phase 35: Miles 9.3b Audio Port
+**Goal**: The client links the vendored x64 Miles 9.3b SDK with the `clientAudio` call sites ported from the 7.2e API, and the x64 redist + provider set is staged so in-game audio (music, 2D UI, 3D positional, reverb/room-type) works without the half-dead-audio / warning-flood failure mode.
+**Depends on**: Phase 33 (needs a linking x64 client to link the x64 Miles lib into)
+**Requirements**: AUDIO-01, AUDIO-02
+**Success Criteria** (what must be TRUE):
+  1. The Miles 9.3b SDK is vendored into `src/external/3rd/library/miles-9.3b/` and the `clientAudio` call sites (`Audio.cpp`, `SoundObject3d.cpp`, `FirstClientAudio.h`) are ported from 7.2e to the 9.x API (incl. the `AIL_room_type` `, 0` signature edit); the x64 client links `mss64.lib`
+  2. The x64 Miles redist + provider set (`mss64.dll` + `mss64mp3.asi` / `mss64ogg.asi` / `mss64dsp.flt` / `binkawin64.asi`) is staged next to the x64 exe
+  3. In-game audio works on the x64 client - music, 2D UI, 3D positional, and reverb/room-type - with no half-dead-audio / warning-flood failure mode
+  4. The 32-bit client (still on Miles 7.2e) is unregressed, or the 7.2e->9.3b swap is applied consistently and audio still works in Win32
+**Plans**: TBD
+
+#### Phase 36: Verification & CORNERSNAP Cleanup
+**Goal**: Confirm the two headline 32-bit-bound defect classes are resolved by the x64 build - the cantina door-snap (against the kept CORNERSNAP probes and the clean Restoration x64 reference) and the address-space OOM crash - then strip the CORNERSNAP `_DEBUG` instrumentation now that it has served as the door-snap acceptance harness, completing the deferred half of HARD-03.
+**Depends on**: Phase 34 (x64 must run in-world under both renderers); Phase 35 (full-session play needs working audio)
+**Requirements**: VERIFY-01, VERIFY-02, VERIFY-03
+**Success Criteria** (what must be TRUE):
+  1. The cantina door-snap is confirmed resolved in the x64 build - verified against the kept CORNERSNAP `_DEBUG` probes and the clean Restoration x64 D3D9 reference behavior (door-exit cell->world handoff stable, no one-frame Y transient)
+  2. An extended world-load / play session on the x64 build no longer hits the `MemoryManager` OOM FATAL (`b0780503` class) that 32-bit address-space exhaustion produced
+  3. The CORNERSNAP `_DEBUG` instrumentation (`CollisionResolve.cpp` + `CellProperty.cpp`) is removed from shipped code paths **after** the door-snap is verified clean - link-grep shows 0 unresolved on removal
+  4. After cleanup, the x64 client still boots to character select and traverses the cantina door cleanly under both `rasterMajor=5` and `=11`
+**Plans**: TBD
+
+
 ## Progress
 
 **Execution Order:**
 Within v2.3, the client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29 → 30) were independent and interleaved. Within each stream, phases executed in numeric order.
+
+v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 → 36, gated by the dependency chain: correctness foundation + D3DX removal (31–32) before the first x64 link (33); D3D11 (34) after D3D9 (33); audio (35) after a linking x64 client (33); verification + CORNERSNAP cleanup (36) last.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -120,3 +219,9 @@ Within v2.3, the client-hardening stream (24 → 25 → 26 → 27) and TRE-tool 
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
+| 31. 64-bit Correctness Foundation | v3.0 | 0/TBD | Not started | - |
+| 32. D3DX → d3dcompiler_47 | v3.0 | 0/TBD | Not started | - |
+| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
+| 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
+| 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
+| 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |

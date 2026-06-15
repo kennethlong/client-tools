@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
-status: planning
-last_updated: "2026-06-15T19:49:54.095Z"
+status: roadmap_complete
+last_updated: "2026-06-15T20:30:00.000Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15 after v2.3 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
-**Current focus:** v2.3 Hardening SHIPPED + tagged `v2.3` (2026-06-15; 10/12 requirements, the rest deferred-to-x64). Planning next milestone — **x64 Port** (`/gsd-new-milestone`), which absorbs the v2.3 32-bit-bound deferrals (HARD-02 corner-snap, HARD-05 clean D3DCompile port, HARD-03 CORNERSNAP-probe removal).
+**Current focus:** **v3.0 x64 Port ROADMAP CREATED** (2026-06-15) — 6 phases (31–36), 13/13 requirements mapped 100%. Native 64-bit build keeping BOTH renderers (D3D9 + D3D11) bootable to character select; absorbs the v2.3 32-bit-bound deferrals (HARD-02 corner-snap → VERIFY-01, HARD-05 clean D3DCompile/D3DX-removal → SHADER-01, HARD-03 CORNERSNAP-probe removal → VERIFY-03). Next: `/gsd-plan-phase 31`.
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -86,10 +86,23 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 31 — 64-bit Correctness Foundation (Not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-15 — Milestone v3.0 started
+Status: Roadmap created; ready to plan Phase 31
+Last activity: 2026-06-15 — v3.0 x64 Port roadmap created (Phases 31–36)
+
+### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
+
+Core invariant (extended): every client-touching phase must reach boot-to-character-select parity in the **x64** build under BOTH `rasterMajor=5` (D3D9) and `=11` (D3D11), and must never regress either renderer in the 32-bit build. Debug exe reads `client_d.cfg`. Reference: SWG Restoration's stable x64 D3D9 client at `D:\SWG Restoration\x64`; Miles 9.3b SDK cloned at `D:/Code/milesss-v9.3b/`.
+
+1. **Phase 31** (BITS-01/02/03) — 64-bit Correctness Foundation: x87 `__asm fnstcw/fldcw` → `_controlfp`/`_control87` + tree-wide `__asm` sweep; pointer/int truncation (C4311/C4312/C4244 as errors); struct-packing/hardcoded-sizeof/serialization-width audit (IFF/TRE + network). Source work, no x64 build yet — front-loaded enabling correctness.
+2. **Phase 32** (SHADER-01) — D3DX → `d3dcompiler_47`: the v2.3-deferred HARD-05, now a true prerequisite (D3DX is x64-hostile). Asm-shader census FIRST; Fix-A SEH guard retained until the asm path is also off D3DX.
+3. **Phase 33** (X64-01/04/02) — x64 Build Platform + D3D9 Renderers: add `x64` to swg.sln + every .vcxproj, resolve all third-party x64 libs (dpvs/bink/pcre/libxml2/icu/jpeg/zlib/discord-rpc — Restoration's `x64/` is the availability map), gl05/06/07 boot under rasterMajor=5/6/7. FIRST linking x64 client.
+4. **Phase 34** (X64-03) — x64 D3D11 Renderer: gl11 as x64, boots under rasterMajor=11 at the v2.2 parity bar.
+5. **Phase 35** (AUDIO-01/02) — Miles 9.3b Audio Port: the one third-party needing real code work. Port `clientAudio` call sites 7.2e→9.x (only signature edit `AIL_room_type(dig, 0)` at Audio.cpp:3852), vendor SDK to `src/external/3rd/library/miles-9.3b/`, stage `mss64.dll` + `.asi`/`.flt` provider set.
+6. **Phase 36** (VERIFY-01/02/03) — Verification & CORNERSNAP Cleanup: confirm door-snap clean (vs the kept CORNERSNAP probes + Restoration x64 reference) + OOM-crash class eliminated (extended session, no `MemoryManager` `b0780503` FATAL), THEN strip the CORNERSNAP `_DEBUG` probes (link-grep 0 unresolved) — completing the deferred half of HARD-03.
+
+**Next action:** `/gsd-plan-phase 31` — plan the 64-bit correctness foundation.
 
 ### Prior — Phase 26 (instrumentation removal / Options FATAL) — DONE
 
@@ -115,11 +128,21 @@ Last activity: 2026-06-15
 
 ### Roadmap Evolution
 
+- [2026-06-15] **v3.0 x64 Port ROADMAP CREATED** — 6 phases (31–36), 13/13 requirements mapped 100% (X64-01..04, BITS-01..03, AUDIO-01/02, SHADER-01, VERIFY-01..03). Standard granularity. Phases continue from 30 → start at 31. Dependency-chained, strict numeric order: correctness foundation (31) + D3DX removal (32) front-load as prerequisites for the first x64 link (33); D3D9 (33) before D3D11 (34); audio (35) after a linking x64 client; verify + CORNERSNAP cleanup (36) last (VERIFY-03 strips the door-snap acceptance harness only after VERIFY-01 confirms it clean).
 - [2026-06-12] **v2.3 Hardening ROADMAP CREATED** — 7 phases (24–30), 12/12 requirements mapped (HARD-01..05, PORT-01/02, TRE-01..05). Standard granularity. Phases continue from 23 → start at 24. Two independent streams: client hardening (24–27) and the new TRE compare tool (28–30). Consolidated HARD-03 (instrumentation removal) + HARD-04 (Options FATAL) into one cleanup phase (26); PORT-01/02 bundled with HARD-01 (DPVS config-gate) into the low-risk first phase (24).
 - [2026-05-27] **v2.2 Visual Parity ROADMAP CREATED** — 7 phases (17–23), 13/13 requirements mapped (CHAR/WORLD/GAMMA/UI/FX/GEO/DPVS). Standard granularity. Phases continue from 16 → start at 17.
 - Phase 16 added: v2.1 tech-debt cleanup (SwgGodClient 989crypt.lib + P12-P15 residue) — from milestone audit
 
 ### Decisions
+
+**v3.0 x64 Port (roadmap):**
+
+- [2026-06-15] **SHADER-01 (D3DX → d3dcompiler_47) sequenced BEFORE the first x64 link (Phase 32 before 33).** D3DX is x64-hostile, so the D3DCompile port (the v2.3-deferred HARD-05) becomes mandatory and must land before the x64 platform add can link cleanly — not after. Restoration did exactly this for their x64 build.
+- [2026-06-15] **BITS-01/02/03 front-load as Phase 31 (the enabling correctness work).** x64 forbids inline asm (`__asm fnstcw/fldcw`) and surfaces pointer/int truncation + data-layout defects — fix the source x64-clean on the still-32-bit tree first so the platform add is a build/link exercise, not a debugging swamp.
+- [2026-06-15] **Both renderers are separate, separately-verifiable x64 boot gates.** X64-02 (D3D9 gl05/06/07, Phase 33) and X64-03 (D3D11 gl11, Phase 34) are distinct requirements with distinct boot smokes; D3D9 lands first (it's the door-snap/OOM verification reference — Restoration runs x64 D3D9), D3D11 second.
+- [2026-06-15] **AUDIO-01/02 is a self-contained chunk (Phase 35), gated on a linking x64 client (33).** Miles is the one third-party that needs real code work, not a relink: the engine is on Miles 7.2e and the only x64 Miles is 9.x (9.3b SDK cloned at `D:/Code/milesss-v9.3b/`). API is ~source-compatible (single signature edit `AIL_room_type(dig, 0)`); the real risk is reverb/room-type behavior + the .asi/.flt provider set staging (the half-dead-audio/warning-flood failure mode).
+- [2026-06-15] **VERIFY-03 (strip CORNERSNAP probes) comes AFTER VERIFY-01 (door-snap clean), both in Phase 36.** The CORNERSNAP `_DEBUG` probes are the door-snap's acceptance harness (intentionally KEPT through v2.3); they can only be removed once the x64 build verifies the door-snap clean against them — completing the deferred half of HARD-03. VERIFY-01/02 can only be checked once the x64 build runs in-world (Phases 34 + 35 done).
+- [2026-06-15] **Core invariant extended, not replaced.** Every client-touching phase must reach boot-to-character-select parity in the x64 build under both `rasterMajor=5` and `=11`, AND never regress either renderer in the 32-bit build (the shipped v2.2/v2.3 baseline). `/FORCE` link-grep (0 unresolved) applies to every x64 link gate.
 
 **v2.3 Hardening (roadmap):**
 
@@ -187,7 +210,8 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. Next: v2.3 milestone close.)
+Last session: 2026-06-15T20:30:00.000Z (v3.0 x64 Port ROADMAP CREATED — Phases 31–36, 13/13 requirements mapped 100%. Next: `/gsd-plan-phase 31`.)
+Prior session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. v2.3 milestone closed + tagged.)
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
