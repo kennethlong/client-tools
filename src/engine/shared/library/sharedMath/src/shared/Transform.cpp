@@ -29,6 +29,9 @@
 #endif
 
 #include <cfloat>
+#ifdef _DEBUG
+#include <cmath>     // fabsf for the _DEBUG numeric-equivalence oracle
+#endif
 
 // ======================================================================
 
@@ -272,120 +275,101 @@ static void xf_matrix_3x4(float *out, const float *left, const float *right)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #if TRY_FOR_SSE
-__declspec(naked) void sse_xf_matrix_3x4(float *out, const float *left, const float *right)
+//
+// BITS-01 / D-05: this was a naked-declspec inline-asm SSE 3x4 matrix
+// concatenation -- the LIVE primary matrix-concat path (Transform::install
+// selects it when SseMath::canDoSseMath()). x64 forbids inline asm AND naked
+// functions with asm bodies (always error C4235), so it is rewritten as a
+// normal C++ function using register-faithful _mm_* intrinsics.
+//
+// VERIFIED lane semantics reproduced (review #2):
+//   For each output row i: out_row = left[i][0]*right_row0
+//                                  + left[i][1]*right_row1
+//                                  + left[i][2]*right_row2
+//                                  + translate_i
+//   where the original `movss xmm7,[left+i*16+12]; shufps xmm7,xmm7,0x15`
+//   loaded left[i][3] into lane 0 (zeroing lanes 1-3) then shuffled to
+//   {0, 0, 0, left[i][3]} -- i.e. the translate term adds left[i][3] ONLY to
+//   lane 3 (the 4th column). A naive _mm_set1_ps(left[i][3]) (broadcast to all
+//   4 lanes) is WRONG; use _mm_set_ps(left[i][3], 0, 0, 0).
+//
+// ALIGNMENT (review #2): `out`/`left`/`right` are raw float* from embedded
+// Transform members with no alignas(16). Loads use _mm_loadu_ps and the store
+// uses _mm_storeu_ps (the original used movups for the right rows and the final
+// out store; only its private stack scratch was movaps-aligned). We stage the 3
+// result rows in a __declspec(align(16)) local then store -- so the function is
+// also alias-safe (out may equal left or right), matching the asm's behavior of
+// computing into stack scratch before writing out.
+//
+void sse_xf_matrix_3x4(float *out, const float *left, const float *right)
 {
-	UNREF(left);
-	UNREF(right);
-	UNREF(out);
-	__asm {
-		push eax
-		push ebx
-		add  esp, -48
+	const __m128 rRow0 = _mm_loadu_ps(right + 0);   // right row0
+	const __m128 rRow1 = _mm_loadu_ps(right + 4);   // right row1
+	const __m128 rRow2 = _mm_loadu_ps(right + 8);   // right row2
 
-		// [esp + 60] == out
-		// [esp + 64] == left
-		// [esp + 68] == right
-		mov  eax, [esp + 64] // left
-		mov  ebx, [esp + 68] // right
+	__declspec(align(16)) float scratch[12];
 
-		movups	xmm0, [ebx +  0]	// right: row0
-		movups	xmm1, [ebx + 16]	// right: row1
-		movups	xmm2, [ebx + 32]	// right: row2
+	for (int i = 0; i < 3; ++i)
+	{
+		const float *lrow = left + i * 4;
 
-		// 16-byte align data pointer
-		lea	ebx, [esp+15]
-		and	ebx, -16
+		__m128 acc = _mm_mul_ps(rRow0, _mm_set1_ps(lrow[0]));        // left[i][0]*right_row0
+		acc = _mm_add_ps(acc, _mm_mul_ps(rRow1, _mm_set1_ps(lrow[1])));  // + left[i][1]*right_row1
+		acc = _mm_add_ps(acc, _mm_mul_ps(rRow2, _mm_set1_ps(lrow[2])));  // + left[i][2]*right_row2
 
-		///////////////////////////////////////////////////
-		movaps	xmm3, xmm0			// right: row0
-		movss		xmm4, [eax + 0]   // left[0][0]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
+		// translate term: add left[i][3] to LANE 3 only ({0,0,0,left[i][3]}),
+		// faithfully reproducing the shufps ...,0x15 of the original asm.
+		acc = _mm_add_ps(acc, _mm_set_ps(lrow[3], 0.0f, 0.0f, 0.0f));
 
-		movaps	xmm5, xmm1			// right: row1
-		movss		xmm6, [eax + 4]	// left[0][1]
-		shufps	xmm6, xmm6, 0
-		mulps		xmm5, xmm6
-
-		addps		xmm5, xmm3
-
-		movaps	xmm3, xmm2			// right: row2
-		movss		xmm4, [eax + 8]   // left[0][2]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
-
-		addps		xmm5, xmm3
-
-		movss		xmm7, [eax + 12] // left[0][3]
-		shufps   xmm7, xmm7,  0x15 //0001 0101
-		addps		xmm5, xmm7
-
-		movaps	[ebx], xmm5
-		///////////////////////////////////////////////////
-		movaps	xmm3, xmm0			// right: row0
-		movss		xmm4, [eax + 16]  // left[1][0]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
-
-		movaps	xmm5, xmm1			// right: row1
-		movss		xmm6, [eax + 20]	// left[1][1]
-		shufps	xmm6, xmm6, 0
-		mulps		xmm5, xmm6
-
-		addps		xmm5, xmm3
-
-		movaps	xmm3, xmm2			// right: row2
-		movss		xmm4, [eax + 24]   // left[1][2]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
-
-		addps		xmm5, xmm3
-
-		movss		xmm7, [eax + 28] // left[1][3]
-		shufps   xmm7, xmm7,  0x15 //0001 0101
-		addps		xmm5, xmm7
-
-		movaps	[ebx+16], xmm5
-		///////////////////////////////////////////////////
-		movaps	xmm3, xmm0			// right: row0
-		movss		xmm4, [eax + 32]  // left[2][0]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
-
-		movaps	xmm5, xmm1			// right: row1
-		movss		xmm6, [eax + 36]	// left[2][1]
-		shufps	xmm6, xmm6, 0
-		mulps		xmm5, xmm6
-
-		addps		xmm5, xmm3
-
-		movaps	xmm3, xmm2			// right: row2
-		movss		xmm4, [eax + 40]   // left[2][2]
-		shufps	xmm4, xmm4, 0
-		mulps		xmm3, xmm4
-
-		addps		xmm5, xmm3
-
-		movss		xmm7, [eax + 44] // left[2][3]
-		shufps   xmm7, xmm7,  0x15 //0001 0101
-		addps		xmm5, xmm7
-
-		mov		eax, [esp+60]
-
-		movups	[eax+32], xmm5
-		///////////////////////////////////////////////////
-
-		movaps   xmm1, [ebx+ 0]
-		movaps   xmm2, [ebx+16]
-		movups   [eax+0 ], xmm1
-		movups   [eax+16], xmm2
-
-		mov	ebx, [esp + 48]
-		mov	eax, [esp + 52]
-		add   esp, 56
-		ret
+		_mm_store_ps(scratch + i * 4, acc);   // aligned local staging buffer
 	}
+
+	// Store all 12 elements to the (possibly unaligned, possibly aliased) out.
+	_mm_storeu_ps(out + 0, _mm_load_ps(scratch + 0));
+	_mm_storeu_ps(out + 4, _mm_load_ps(scratch + 4));
+	_mm_storeu_ps(out + 8, _mm_load_ps(scratch + 8));
 }
+
+#ifdef _DEBUG
+namespace
+{
+	// _DEBUG numeric-equivalence oracle (review #2): prove sse_xf_matrix_3x4
+	// reproduces the scalar reference xf_matrix_3x4 -- in particular the
+	// translate term lands in lane 3 only ({0,0,0,left[i][3]}), NOT broadcast.
+	// A transposed lane / wrong-lane translate is invisible to boot smoke and to
+	// the compile-only harness; this static-init self-test DEBUG_FATALs on a
+	// mismatch > 1e-4f at startup.
+	struct SseMatrixSelfTest
+	{
+		SseMatrixSelfTest()
+		{
+			// Two fixed, non-trivial 3x4 matrices (distinct translate columns).
+			const float L[12] = {
+				0.36f, -0.48f, 0.80f,  1.50f,
+				0.80f,  0.60f, 0.00f, -2.25f,
+			   -0.48f,  0.64f, 0.60f,  0.75f };
+			const float R[12] = {
+				0.60f,  0.00f, -0.80f, 3.10f,
+				0.00f,  1.00f,  0.00f, -1.20f,
+				0.80f,  0.00f,  0.60f, 0.40f };
+
+			float sseOut[12];
+			float refOut[12];
+			sse_xf_matrix_3x4(sseOut, L, R);
+			xf_matrix_3x4(refOut, L, R);
+
+			for (int i = 0; i < 12; ++i)
+			{
+				DEBUG_FATAL(fabsf(sseOut[i] - refOut[i]) >= 1e-4f,
+					("Transform sse_xf_matrix_3x4 oracle: element %d mismatch (sse=%g ref=%g)",
+						i, sseOut[i], refOut[i]));
+			}
+		}
+	};
+
+	SseMatrixSelfTest s_sseMatrixSelfTest;
+}
+#endif
 #endif
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
