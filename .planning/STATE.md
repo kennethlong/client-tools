@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
-status: roadmap_complete
-last_updated: "2026-06-15T20:30:00.000Z"
-last_activity: 2026-06-15
+status: planning
+last_updated: "2026-06-15T20:14:25.307Z"
+last_activity: 2026-06-15 — v3.0 x64 Port roadmap created (Phases 31–36)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -210,7 +209,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:30:00.000Z (v3.0 x64 Port ROADMAP CREATED — Phases 31–36, 13/13 requirements mapped 100%. Next: `/gsd-plan-phase 31`.)
+Last session: 2026-06-15T20:14:25.296Z
 Prior session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. v2.3 milestone closed + tagged.)
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
