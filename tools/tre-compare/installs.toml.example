@@ -1,0 +1,17 @@
+# tre-compare installs picker config (EXAMPLE — copy to installs.toml and edit).
+#
+# The GET /installs route reads a tool-local `installs.toml` (this file's untracked
+# sibling) and offers each entry in the SPA's install picker. The real `installs.toml`
+# carries machine-specific ABSOLUTE install paths and is GITIGNORED — never commit it.
+# Only this `installs.toml.example` is tracked.
+#
+# Each [[installs]] table needs a human `name` and the `cfg_path` of that install's
+# client.cfg. A missing installs.toml simply yields an empty picker (not an error).
+
+[[installs]]
+name = "SWGSource"
+cfg_path = "D:/Code/SWGSource Client v3.0/client.cfg"
+
+[[installs]]
+name = "whitengold"
+cfg_path = "D:/Code/whitengold/client.cfg"
