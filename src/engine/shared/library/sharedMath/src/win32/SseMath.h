@@ -11,6 +11,10 @@
 
 // ======================================================================
 
+#include <xmmintrin.h>   // _mm_prefetch (SseMath::prefetch)
+
+// ======================================================================
+
 class Transform;
 class Vector;
 
@@ -40,17 +44,12 @@ public:
 
 inline void SseMath::prefetch(void const * const sourceData, size_t const objectSize)
 {
-#if defined(_MSC_VER)
-	_asm
-	{ 
-		mov esi, sourceData
-		prefetchnta objectSize[esi]
-	}
-#else
-	// rls - add linux version here.
-	UNREF(sourceData);
-	UNREF(objectSize);
-#endif
+	// BITS-01 / D-05: the old MSVC branch was an inline-asm prefetchnta block
+	// (x64-illegal -> C4235). Ported to the _mm_prefetch intrinsic,
+	// which compiles on BOTH x86 and x64 (no #ifdef fork). _MM_HINT_NTA matches
+	// the original prefetchnta (non-temporal) hint. The asm prefetched the byte at
+	// (sourceData + objectSize); reproduce that address faithfully.
+	_mm_prefetch(reinterpret_cast<char const *>(sourceData) + objectSize, _MM_HINT_NTA);
 }
 
 // ======================================================================
