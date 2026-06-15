@@ -3,7 +3,7 @@ created: 2026-05-15
 updated: 2026-06-13
 title: Cantina interior corner-snap — cell-ping-pong premise FALSIFIED 2026-06-13; real target is the CollisionResolve position rewind
 area: rendering / collision response / portal traversal
-resolves_phase: 25
+resolves_phase: 36
 next_action: re-root-cause against the CollisionResolve position rewind (setPosition_p), NOT the cell ping-pong. The cell-reversal-guard approach was built, runtime-tested (gl05), and reverted (see 2026-06-13 section). Likely /gsd-debug + consult crew.
 files:
   - src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp  (Notification::positionChanged ~line 115; CORNERSNAP-PORTAL instrumentation at the targetCell branch)
