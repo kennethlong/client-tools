@@ -2,25 +2,25 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: milestone_complete
-last_updated: "2026-06-15T16:30:00.000Z"
+status: completed
+last_updated: "2026-06-15T18:36:26.095Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 7
-  completed_phases: 8
+  completed_phases: 7
   total_plans: 19
   completed_plans: 19
-  percent: 114
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
+See: .planning/PROJECT.md (updated 2026-06-15 after v2.3 close)
 
-**Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** v2.3 milestone close — all 7 phases (24–30) complete (19/19 plans). Phase 30 (tre-compare-tool-frontend-spa) shipped 2026-06-15.
+**Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
+**Current focus:** v2.3 Hardening SHIPPED + tagged `v2.3` (2026-06-15; 10/12 requirements, the rest deferred-to-x64). Planning next milestone — **x64 Port** (`/gsd-new-milestone`), which absorbs the v2.3 32-bit-bound deferrals (HARD-02 corner-snap, HARD-05 clean D3DCompile port, HARD-03 CORNERSNAP-probe removal).
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -67,6 +67,23 @@ Plus v2.2-coupled deferrals: `stage/client_d.cfg` accumulated test-settings clea
 
 Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`): D-15 instrumentation removal (→ **HARD-03 / Phase 26**), machine-specific stage/override + stage/miles paths (→ **PORT-01 / Phase 24**), `stage/client_d.cfg` cleanup (→ **PORT-02 / Phase 24**), blend-factor scene-sweep risk, stale comment at Direct3d11_StaticShaderData.cpp:1655, missing Nyquist VALIDATIONs (18, 19–22 — deferred as VAL-01, milestone audit stands as the verification record).
 
+## Deferred Items (acknowledged at v2.3 close)
+
+8 open artifacts acknowledged at v2.3 Hardening milestone close (2026-06-15). None are v2.3 regressions; the headline three are root-caused 32-bit-bound carry-forwards to the **x64 Port** milestone:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | parked — root cause found (32-bit codegen float transient, CONSULT-43); **→ x64 (HARD-02)** |
+| debug | safecast-null-cast | closed (resolved 2026-05-15) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low — **→ x64 (HARD-02)**; cell-ping-pong premise falsified, guard reverted |
+| todo | 2026-05-31-port-d3d9-shader-compile-to-d3dcompile | low — satisfied-by-Fix-A for v2.3; **clean port → x64 (HARD-05)** |
+| todo | 2026-06-13-64bit-x64-port | **medium-high value, large effort — the next milestone**; absorbs HARD-02/HARD-05/HARD-03-CORNERSNAP |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational; now unblocked by the shipped TRE compare tool |
+| todo | 2026-06-13-test-jtl-space-rendering-post-v2.2 | low — informational; gauges JTL revivability (future) |
+| uat | Phase 24 `24-HUMAN-UAT.md` | `passed` / 0 pending scenarios (no action — surfaces only because the file exists) |
+
+Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD-03 CORNERSNAP `_DEBUG` probes intentionally KEPT (x64 harness); backend `/compare/files` bare-500 on a missing searchTree archive + relative-searchTree paths not anchored to the cfg dir (WARNING — workaround = absolute-path verify-*.cfg); `api.py` couples to private `diff.py` symbols; code-review WR-01..04 / IN-01..03 (buildFolderTree bare-segment key collision, tree-row keyboard nav, SPA 404→index masking, silent re-Compare no-op); `29-*-SUMMARY.md` frontmatter omits `requirements-completed`.
+
 ## Current Position
 
 Phase: 30
@@ -99,9 +116,10 @@ Status: Milestone complete
 Next: baseline the DOOR snap from the HARD-05 (Phase 27 D3DCompile) build; real resolution likely ship-D3D11 (clean for us now) or a future 64-bit conversion (matches Restoration; also fixes the chronic 32-bit OOM crash). cfgs restored to rasterMajor=11; working tree clean.
 Last activity: 2026-06-15
 
-## v2.3 Milestone-Close Actions (DO AT CLOSE)
+## v2.3 Milestone-Close Actions
 
-- [ ] **Promote koogie → master (fast-forward) and retire/rename the branch.** `master` is the stale Jan-2025 SWG-Source baseline; `koogie-msvc-cpp20-base` is the real trunk (732+ ahead, 0 behind → pure FF, zero conflicts). Decided 2026-06-13: keep committing trunk-style on koogie through v2.3, then FF master to it at close (same pattern as the v2.2 tag). **Push to `origin` ONLY, never the `koogie` (KoogieKepler) upstream.**
+- [x] **Promote koogie → master (fast-forward) and retire the branch.** DONE 2026-06-14 — `koogie-msvc-cpp20-base` was FF-merged into `master` and retired; the repo is now trunk-based directly on `master` (the v2.3 work and this milestone close all landed on `master`). **Push to `origin` ONLY, never the `koogie` (KoogieKepler) upstream.**
+- [ ] **Tag `v2.3` + push (origin only).** Tag created at close; push pending user confirmation.
 
 ## Accumulated Context
 

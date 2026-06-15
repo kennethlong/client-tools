@@ -2,6 +2,41 @@
 
 Living retrospective across milestones. Newest milestone first.
 
+## Milestone: v2.3 — Hardening
+
+**Shipped:** 2026-06-15
+**Phases:** 24–30 (7) | **Plans:** 19 (35 tasks) | **Audit:** gaps_found (10/12 requirements; HARD-02 deferred-to-x64; 12/12 integration WIRED, 2/2 E2E flows, 0 silent gaps)
+
+### What Was Built
+Two independent streams. **(A) Client hardening (24–27):** DPVS occlusion config-gate (`occlusionMode = auto|on|off`, POB-cell auto-gate, F11 override — operationalizing the Phase 23 verdict); machine portability (Miles redist vendored + postbuild-repointed with a codec-repair guard, `client.cfg.template` + `setup-client.ps1` de-hardcoding stage paths, `client_d.cfg` cleaned); D-15 DPVS instrumentation stripped atomically (grep-zero, /FORCE link-grep clean); Options-window FATAL confirmed fixed. The two open client items were **root-caused, not skipped**: the cantina door-snap reduced to a 32-bit codegen float transient (CONSULT-43) and the `D3DXCompileShader`→`D3DCompile` port shown to re-fight the entire gl11 shader battle — both parked for x64 (HARD-05 satisfied-by-Fix-A). **(B) TRE compare tool (28–30):** the repo's first web app — an isolated `tools/tre-compare/` uv package (vendored stdlib parser → `[SharedFile]` scanner → first-hit-wins merged-virtual-tree → set/file diff with `(length, compressedLength)` signal + on-demand xxhash → sqlite cache → 4 FastAPI routes) under a Vite/React/Tailwind/shadcn virtualized tree-diff SPA, single 127.0.0.1 process. SC#4 human-approved on a real 231,086-row diff (SWGSource × SWG Infinity).
+
+### What Worked
+- **TDD on the new greenfield Python/TS tool.** Unlike the legacy C++ tree (no unit harness), the TRE tool was built RED→GREEN throughout — 72 backend + 23 frontend tests, parity-matrix fixtures for the virtual-tree merge, an `iter_node_entries` spy proving the cache HIT by call-count (not row-equality). The frozen Phase-29 contract let the SPA be built against real data from day one.
+- **Root-cause-then-defer over force-fix.** The CONSULT-43 crew (Cursor/Codex/Sonnet/Opus on non-overlapping angles) overturned the planned re-entrancy-guard hypothesis with a runtime capture — the cell-ping-pong premise was falsified, the guard reverted, and the residual snap correctly attributed to 32-bit codegen. Honest `gaps_found` beats a papered-over guard that doesn't fix it.
+- **Extractability as a standing constraint.** Keeping the tool a zero-engine-coupling uv package (parser vendored, no MSBuild graph touch, localhost-only) means it can move to its own repo and grow write/repack (TREM-01..03) without a structural rewrite — designed at the boundary, not retrofitted.
+- **The honesty distinction in the UI.** Reserving solid-green exclusively for post-xxhash content-confirmed-identical (metadata match = neutral "≈") encodes the TOC-crc-is-a-path-CRC trap directly into what the user sees — a correctness invariant made visible.
+
+### What Was Inefficient
+- **`milestone.complete --help` is destructive.** The CLI parsed `--help` as the version arg and actually executed a close with version=`--help`, writing junk archive files + a MILESTONES entry that had to be reverted. Lesson: never probe this CLI with `--help`; the tree was clean so `git checkout` + `rm` recovered cleanly.
+- **Auto-extracted accomplishments were noise.** `milestone.complete` pulled "Rule 3 - Blocking" deviation lines from SUMMARYs as headline accomplishments; the MILESTONES entry needed a full hand-rewrite (same pattern flagged in the v2.1 retro).
+- **REQUIREMENTS checkbox drift.** HARD-04 stayed `[ ]` after Phase 26 passed; the audit's doc-hygiene list caught it. Per-phase checkbox flips still lag verification.
+
+### Patterns Established
+- **Greenfield-tool TDD** as the default when a real test harness is possible (Python/TS) — distinct from the legacy C++ tree's grep+link+boot triad.
+- **`(length, compressedLength)` tri-state changed-signal + on-demand hash**, never the path-CRC, for archive-diff tooling; surfaced as the metadata-vs-content honesty distinction.
+- **Root-cause-to-the-toolchain-boundary**: when a quirk reduces to 32-bit codegen, defer to the x64 milestone rather than guard-patch in 32-bit — three v2.3 deferrals (HARD-02/03/05) converge on it.
+
+### Key Lessons
+1. An honest `gaps_found` with a documented, root-caused deferral is a better close than forcing a fix that doesn't hold — the audit's strict gate is a feature, not a failure.
+2. Don't `--help` an action CLI that takes a positional arg; it may execute. Keep the tree clean before milestone ops so recovery is a one-liner.
+3. A frozen API contract between backend and frontend phases lets the UI be built against real data immediately — the single biggest accelerant of the TRE-tool stream.
+
+### Cost Observations
+- Model: Opus/Fable (quality profile) + the 4-consultant crew on the corner-snap root-cause (CONSULT-43).
+- Timeline: 2026-06-12 → 06-15; two streams interleaved. `master` is a live upstream-integration branch, so milestone-scoped counts (7 phases / 19 plans) are authoritative, not the upstream-inflated diffstat.
+
+---
+
 ## Milestone: v2.2 — Visual Parity
 
 **Shipped:** 2026-06-12
@@ -121,5 +156,6 @@ A modern MSVC/C++20/MSBuild SWG client booting to character select and rendering
 | v2.0 Modernisation | 7–11 | tech_debt | MSVC/C++20/MSBuild client; D3D9+D3D11 selectable |
 | v2.1 Decruft | 12–16 | tech_debt | 5 dormant subsystems unlinked + deleted; client stays bootable both renderers |
 | v2.2 Visual Parity | 17–23 | tech_debt | D3D11 matches D3D9 baseline; asset-PS pipeline + 12 visual gaps closed; DPVS verdict revised |
+| v2.3 Hardening | 24–30 | gaps_found | DPVS config-gate + portability + Options-FATAL + D-15 removal; repo's first web app (TRE compare tool); 3 quirks root-caused → x64 |
 
-**Recurring trend:** every milestone closes `tech_debt` (never `gaps_found`, never pristine `passed`) — functional reality ships ahead of artifact hygiene, and the audit + close reconciliation absorbs the drift. Working as intended for a solo hobby cadence; the per-close reconciliation cost is stable (~1 session).
+**Recurring trend:** milestones close `tech_debt` (v2.0–v2.2) — functional reality ships ahead of artifact hygiene, the audit + close reconciliation absorbs the drift. v2.3 broke the streak with `gaps_found`, but for a healthy reason: a single in-scope requirement (HARD-02) was root-caused as 32-bit-bound and honestly deferred to x64 rather than papered over — `gaps_found` here means transparency, not regression. Per-close reconciliation cost stays stable (~1 session); the CLI's auto-extracted accomplishments + lagging REQUIREMENTS checkboxes remain the recurring hand-fix items.

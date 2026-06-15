@@ -1,30 +1,30 @@
 # whitengold — SWG Client Modernisation Port
 
-## Current State: v2.2 Visual Parity SHIPPED (2026-06-12)
+## Current State: v2.3 Hardening SHIPPED (2026-06-15)
 
-**D3D11 visual parity achieved.** The D3D11 renderer (`rasterMajor=11`) now visually matches the known-good D3D9 baseline (`rasterMajor=5`) across characters, interiors, open world, terrain, gamma, UI, and effects — all 13 v2.2 requirements satisfied (audit: `tech_debt`, 0 blockers; see `milestones/v2.2-MILESTONE-AUDIT.md`). The core delivery is the **asset pixel-shader pipeline**: recompiling the discarded `TAG_PSRC` shader source (instead of the D3D11-rejected PEXE bytecode) with reflection-driven constants, plus the FFP combiner-cascade fallback PS, per-pixel fog in all three PS lanes, lighting parity fixes, the gamma pre-Present curve pass, and a git-tracked `stage/override/` shader-override workflow. Phases 17/18/23 ran through GSD; the Phase 19–22 work shipped ad-hoc (2026-06-08..12) with the milestone audit as its verification record. DPVS verdict: both Phase 10 calls **flipped** under D3D11 (outdoor `keep`, indoor `remove`) — Option α revised on paper, shipped culling code untouched. Bonus: audio fully restored (missing `stage/miles/` redist), combat kill-crash fixed, warning-flood perf drag eliminated.
+**v2.3 Hardening shipped — 10/12 requirements satisfied, the rest root-caused as x64 carry-forwards.** Two independent streams closed. **(A) In-client C++ hardening (Phases 24–27):** DPVS occlusion is config-gated (`[ClientGraphics/Dpvs] occlusionMode = auto|on|off`, auto-gated on POB-cell membership, F11 override preserved) — HARD-01; the staged client is machine-portable (Miles redist vendored + postbuild-repointed with a codec-repair guard, a tracked `client.cfg.template` + `setup-client.ps1` generator de-hardcoding `stage/override`+`stage/miles` and cleaning the Phase-11+ test keys) — PORT-01/02; the D-15 DPVS instrumentation was stripped atomically and the Options-window FATAL fixed — HARD-03 (D-15)/HARD-04. The two remaining client items were **root-caused, not skipped**: the cantina corner-snap (HARD-02) reduced to a 32-bit codegen float transient in the cell→world Y transform (CONSULT-43), and the `D3DXCompileShader`→`D3DCompile` port (HARD-05) was attempted, reverted, and shown to re-fight the entire gl11 shader-modernization battle — both are 32-bit-bound and parked for the x64 milestone (HARD-05 is satisfied-by-Fix-A for v2.3; HARD-03's CORNERSNAP probes are intentionally kept as the x64 acceptance harness). **(B) TRE compare tool (Phases 28–30):** the repo's first web app — an isolated, extractable `tools/tre-compare/` uv package (vendored stdlib parser → `[SharedFile]` scanner → first-hit-wins merged-virtual-tree → set/file diff with `(length, compressedLength)` signal + on-demand xxhash → sqlite cache → 4 FastAPI routes) under a Vite 8 / React 19 / Tailwind 4 / shadcn virtualized tree-diff SPA, served from a single 127.0.0.1 process. SC#4 human-approved on a real 231,086-row cross-distribution diff (SWGSource × SWG Infinity). Audit `gaps_found` (the single gap = the pre-decided HARD-02 x64 deferral), 12/12 integration links WIRED, 2/2 E2E flows complete.
 
-**Phase 24 complete (2026-06-13, v2.3 Hardening):** DPVS occlusion is now config-gated (`[ClientGraphics/Dpvs] occlusionMode = auto|on|off`, auto-gated on POB-cell membership, F11 override preserved) — HARD-01; the Miles audio redist is machine-portable (vendored byte-set + postbuild repoint with codec-repair guard) and a tracked `client.cfg.template` + `setup-client.ps1` generator de-hardcodes stage paths and cleans the Phase-11+ test keys — PORT-01/02. Dual-renderer boot (D3D9/D3D11) user-verified.
+**Prior:** v2.2 Visual Parity (shipped 2026-06-12) — D3D11 (`rasterMajor=11`) reached full visual parity with the known-good D3D9 baseline across characters, interiors, open world, terrain, gamma, UI, and effects (13/13 requirements; asset-PS pipeline + FFP combiner cascade + gamma curve pass + round minimap). See `milestones/v2.2-*`.
 
-**Phase 30 complete (2026-06-15) — v2.3 phases all done (24–30):** The TRE compare tool's frontend SPA shipped — the repo's first frontend (`tools/tre-compare/web/`, Vite 8 / React 19 / TS 6 / Tailwind 4 / shadcn), a virtualized install-vs-install tree-diff over the proven Phase-29 API, served from FastAPI on a single 127.0.0.1 port (SpaStaticFiles mounted last). TRE-05 satisfied; verifier 4/4, code review 0 blockers. SC#4 was human-approved against a real cross-distribution diff — **SWGSource × SWG Infinity, 231,086 file rows** (the original whitengold target has no install on this machine, so four real open-zlib installs — SWGSource, SWG Infinity, SWGEmu, SWG Stardust — were registered as the acceptance fixtures). With Phase 30 closed, all seven v2.3 Hardening phases (24–30) are complete and the milestone is ready for close.
+## Shipped Milestone: v2.3 — Hardening (closed 2026-06-15)
 
-## Current Milestone: v2.3 Hardening
+**Goal (MET, with documented x64 deferrals):** Consolidate the v2.2 parity win — act on the DPVS verdict, strip the accumulated debug instrumentation, make the staged client machine-portable, fix the known runtime crashes/quirks, and ship a modern web-based TRE compare tool for cross-installation data diagnostics. 10/12 requirements fully satisfied; HARD-02 (corner-snap), HARD-05's clean D3DCompile port, and HARD-03's CORNERSNAP-probe removal deferred to the x64 milestone (all root-caused 32-bit-bound). Per-phase detail archived in `milestones/v2.3-ROADMAP.md`; audit `milestones/v2.3-MILESTONE-AUDIT.md`.
 
-**Goal:** Consolidate the v2.2 parity win — act on the DPVS verdict, strip the accumulated debug instrumentation, make the staged client machine-portable, fix the known runtime crashes/quirks, and ship a modern web-based TRE compare tool for cross-installation data diagnostics.
-
-**Target features:**
-- **DPVS config-gate** — act on the Phase 23 verdict: occlusion outdoor-on / indoor-off (auto mode = occlusion bit only outside POB cells)
-- **Instrumentation removal** — D-15 DPVS instrumentation + CORNERSNAP `_DEBUG` probes stripped
-- **Machine portability** — de-hardcode `stage/override` + `stage/miles` paths, clean up `stage/client_d.cfg` accumulated test settings
-- **Options-window FATAL** — fix the pre-existing `checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch crash
-- **D3DCompile port** — replace `D3DXCompileShader` in the D3D9 plugin (Fix B), superseding the Phase-19 SEH guard
-- **Cantina corner-snap fix** — re-entrancy guard on the same-frame portal ping-pong
-- **TRE compare tool (web app)** — compare two SWG installations' TRE sets (e.g. SWGEmu vs SWGSource): set-level archive deltas, file-level merged-virtual-tree diffs (search-path-order resolution, per-file added/removed/changed), modern clean web UI
+**Delivered:**
+- **DPVS config-gate (HARD-01)** — occlusion outdoor-on / indoor-off as `occlusionMode = auto|on|off`, F11 override preserved
+- **Machine portability (PORT-01/02)** — Miles redist vendored + postbuild-repointed (codec-repair guard); `client.cfg.template` + `setup-client.ps1` de-hardcode stage paths + clean `client_d.cfg`
+- **Instrumentation removal + Options FATAL (HARD-03 D-15 / HARD-04)** — `DpvsProfileInstrumentation` grep-zero; Options window no longer FATALs; CORNERSNAP probes kept as the x64 harness
+- **32-bit-bound quirks root-caused → x64 (HARD-02 / HARD-05)** — corner-snap = 32-bit codegen float transient; D3DCompile port re-fights the gl11 shader battle (satisfied-by-Fix-A for v2.3)
+- **TRE compare tool (TRE-01..05)** — standalone localhost web app: two-install set-delta + merged-virtual-tree file diff, virtualized filterable tree UI, per-file drill-in with the metadata-vs-content honesty distinction
 
 **Key context:**
-- Excluded: SWG-Source community-compat sync and gameplay-parity work; Nyquist validation backfill for phases 18/19–22 skipped (milestone audit stands as the verification record)
-- Core invariant: every client change leaves it bootable to character select under both `rasterMajor=5` and `=11` (the TRE tool is a standalone web app, outside that invariant)
-- The TRE tool's first real use case is the parked space-asset diff research todo (SWGSource vs whitengold); TRE-format reading knowledge exists in `D:/Code/swg-tools` (swg-blender tre extract/repack) as parser reference
+- Core invariant held: every client-touching phase (24–27) left the client bootable to character select under both `rasterMajor=5` and `=11` (the TRE tool is a standalone web app, outside that invariant)
+- The TRE tool's first real use case (SWGSource-vs-whitengold space-asset diff) is unblocked; the parser is vendored from `D:/Code/swg-blender-plugin/swg_pipeline/` (the stale `D:/Code/swg-tools` pointer is wrong)
+- Excluded: SWG-Source community-compat sync, gameplay-parity work, Nyquist validation backfill for phases 18/19–22 (milestone audit stands as the verification record)
+
+## Next Milestone: x64 Port (planned)
+
+The v2.3 deferrals converge on one milestone. The cantina door-snap (HARD-02), the clean `D3DXCompileShader`→`D3DCompile` / D3DX-removal port (HARD-05), and the CORNERSNAP-probe removal (HARD-03 remainder) are all bound to the 32-bit toolchain — the x64 build is where the codegen environment changes, D3DX removal becomes unavoidable, and a working x64 reference exists (Restoration). The 64-bit port also addresses the chronic 32-bit OOM crash. Tracked in `todos/pending/2026-06-13-64bit-x64-port.md`. Run `/gsd-new-milestone` to scope it (questioning → research → requirements → roadmap).
 
 ## Prior State: v2.1 Decruft SHIPPED (2026-05-27)
 
@@ -98,6 +98,16 @@ orphaned dead-code removals to the active MSBuild tree; v2.2 targets D3D11 visua
   `animation-system.md`, `foliage-system.md`)
 - ✓ **SWG-Source diff** — confirmed server-only fork, no client patches to adopt;
   build patterns are transferable (`docs/recon/07-swg-source-diff-findings.md`)
+
+**v2.3 Hardening (shipped 2026-06-15) — consolidation + first web tool:**
+
+- ✓ **HARD-01** — DPVS occlusion config-gated (`occlusionMode = auto|on|off`, POB-cell auto-gate, F11 override) — v2.3 (Phase 24)
+- ✓ **HARD-04** — Options-window FATAL fixed (`checkShowToolbarCommandCooldownTimer` CodeData/.ui mismatch) — v2.3 (Phase 26)
+- ✓ **PORT-01/02** — machine-portable stage (Miles redist vendored/repointed; `client.cfg.template` + `setup-client.ps1`; `client_d.cfg` cleaned) — v2.3 (Phase 24)
+- ✓ **TRE-01..05** — standalone localhost TRE compare tool: cfg search-path scan, set-delta, merged-virtual-tree file diff, per-file drill-in, virtualized filterable SPA — v2.3 (Phases 28–30)
+- ◑ **HARD-03 (D-15)** — D-15 DPVS instrumentation stripped (grep-zero); CORNERSNAP-probe removal deferred to x64 — v2.3 (Phase 26)
+- ◑ **HARD-05** — satisfied-by-Fix-A SEH guard; clean D3DCompile/D3DX-removal port deferred to x64 — v2.3 (Phase 27)
+- ⏸ **HARD-02** — corner-snap root-caused as a 32-bit codegen float transient (CONSULT-43); deferred to x64
 
 **v2.2 Visual Parity (shipped 2026-06-12) — D3D11 matches the D3D9 baseline:**
 
@@ -248,7 +258,10 @@ be configured to read its data tree at runtime via `searchPath*` entries.
 | **Reflection-driven constant upload (D3DReflect), not copied D3D9 register indices** | fxc assigns SM4 registers by first-use order — copied indices silently bind wrong slots (the purple/green bump-arm bug proved it) | ✓ Good — stage→SRV-slot remap + cbuffer offset discovery made multi-texture materials correct |
 | **Ad-hoc execution for Phases 19–22** (fix-to-advance debugging sessions instead of plan/execute cycles) | The remaining gaps were entangled runtime bugs best cracked by iterative RenderDoc-driven diagnosis; GSD artifacts would have lagged reality anyway | ✓ Good — all 8 remaining requirements closed in 5 days; milestone audit serves as the verification record. Cost: no per-phase PLAN/VERIFICATION artifacts, Nyquist gaps |
 | **Read the D3D9 reference sequence FIRST on any parity bug** (the reference IS the spec) | Symptom-chasing on the broken target invites guessing; diffing against the working renderer cracks it in one read (lighting flicker, blend factors, sticky dot3 all fell this way) | ✓ Good — adopted as default parity-work method (memory: feedback_parity_work_start_from_reference_sequence) |
-| **DPVS Option α REVISED, code untouched** (outdoor keep / indoor remove under D3D11) | Both Phase 10 verdicts flipped under the D3D11 driver-overhead profile; acting on a measurement belongs in its own change, not the measurement phase | — Pending — config-gate follow-up todo recorded (`2026-06-12-config-gate-dpvs-occlusion-per-phase-23-verdict`) |
+| **DPVS Option α REVISED, code untouched** (outdoor keep / indoor remove under D3D11) | Both Phase 10 verdicts flipped under the D3D11 driver-overhead profile; acting on a measurement belongs in its own change, not the measurement phase | ✓ Good — operationalized in v2.3 HARD-01 as `occlusionMode = auto|on|off` (auto-gated on POB-cell membership), shipped culling code still untouched |
+| **Defer 32-bit-bound quirks to the x64 milestone** (corner-snap HARD-02, clean D3DCompile port HARD-05, CORNERSNAP-probe removal HARD-03) instead of forcing fixes in v2.3 | CONSULT-43 root-caused the residual door-snap as a 32-bit codegen float transient, and the D3DCompile swap re-fights the whole gl11 shader battle — both change correctly only when the codegen environment changes (x64), where D3DX removal is unavoidable and a working x64 reference (Restoration) exists | ✓ Good — root-caused not skipped; Fix-A SEH guard keeps HARD-05's intent met; probes retained as the x64 acceptance harness; audit `gaps_found` reflects the one honest open requirement |
+| **TRE compare tool as an isolated, extractable `tools/tre-compare/` package** (uv lib + vendored stdlib parser, zero engine/MSBuild coupling; FastAPI + Vite/React/shadcn, localhost-only) | Keep the new tool outside the client's build graph and boot invariant so it can ship independently and move to its own repo later; read-only v2.3 scope must not preclude future write/extract/repack (TREM-01..03) | ✓ Good — first repo web app shipped; backend importable with zero engine deps; SC#4 verified on a real 231k-row cross-distribution diff |
+| **`(length, compressedLength)` as the changed-file signal, never the TOC `crc`** (real xxhash only on drill-in) | The per-entry `crc` is a path-CRC (`Crc::calculate(fileName)`), not a content hash — two archives share it for the same filename while bytes differ; eager full-archive hashing would be prohibitively slow on 100k-entry sets | ✓ Good — cheap tri-state diff + on-demand hash; the metadata-vs-content "honesty distinction" surfaced in the UI (solid-green = content-confirmed only) |
 
 ## Evolution
 
@@ -268,4 +281,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 — **Phase 28 complete** (TRE compare tool foundation TRE-01: isolated, extractable `tools/tre-compare/` uv package — vendored stdlib parser, engine-faithful cfg search-path scanner, first-hit-wins virtual-tree merge with per-node-type tombstones; 38 synthetic tests + gated real-install integration test green, verified passed). Milestone v2.3 Hardening in progress (Phases 24–30); next: Phase 29 (TRE diff engine + FastAPI + sqlite cache) or Phase 27 (HARD-05 D3DCompile, deferred-to-x64). Prior: v2.2 Visual Parity SHIPPED + tagged `v2.2` (13/13 requirements). Archives: `milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`, `milestones/v2.2-MILESTONE-AUDIT.md`.*
+*Last updated: 2026-06-15 after **v2.3 Hardening milestone close**. v2.3 shipped + tagged `v2.3` (Phases 24–30; 10/12 requirements satisfied, HARD-02/HARD-05-clean-port/HARD-03-CORNERSNAP deferred to the x64 milestone — all root-caused 32-bit-bound). Delivered: DPVS config-gate, machine portability, Options-FATAL fix, D-15 instrumentation removal, and the repo's first web app (standalone TRE compare tool). Archives: `milestones/v2.3-ROADMAP.md`, `milestones/v2.3-REQUIREMENTS.md`, `milestones/v2.3-MILESTONE-AUDIT.md`. Next: x64 Port milestone (`/gsd-new-milestone`).*
