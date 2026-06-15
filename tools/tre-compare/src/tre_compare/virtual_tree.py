@@ -222,7 +222,12 @@ def _preflight_tre(node: SearchNode, node_errors: list[tuple[SearchNode, str]]) 
     if hdr.toc_offset + hdr.size_of_toc + hdr.size_of_name_block > file_size:
         node_errors.append((node, "bounds preflight failed: toc+name block past EOF"))
         return False
-    if hdr.number_of_files * stride > hdr.size_of_toc:
+    # `size_of_toc` is the COMPRESSED on-disk block size when `toc_compressor != 0`; the
+    # entry array (number_of_files * stride) is UNcompressed, so it legitimately exceeds the
+    # compressed size. This sanity bound is only meaningful for a stored (uncompressed) toc —
+    # applying it to a zlib-compressed toc falsely rejected every SWGEmu-style loose `.tre`
+    # (no master `.toc`). The EOF guard above already bounds the on-disk read either way.
+    if hdr.toc_compressor == 0 and hdr.number_of_files * stride > hdr.size_of_toc:
         node_errors.append((node, "bounds preflight failed: number_of_files * stride > size_of_toc"))
         return False
     if hdr.number_of_files > MAX_ENTRIES:

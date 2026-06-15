@@ -262,6 +262,50 @@ def test_toc_bounds_preflight_rejects_oversized_header(tmp_path) -> None:
     assert any(p.name in n.abspath and "bounds preflight" in msg for n, msg in vt.node_errors)
 
 
+# --------------------------------------------------------------------------------------
+# Regression: compressed-toc `.tre` preflight (SWGEmu loose-archive parse, no master .toc)
+# A `.tre` with a zlib-COMPRESSED toc has size_of_toc < number_of_files * stride because
+# size_of_toc is the COMPRESSED on-disk size. The old preflight rejected every such archive
+# (50/53 real SWGEmu patch_*.tre), making a pre-CU install undiffable. The guard now only
+# applies to a stored (toc_compressor == 0) toc.
+# --------------------------------------------------------------------------------------
+def test_preflight_tre_accepts_compressed_toc(tmp_path, monkeypatch) -> None:
+    import tre_compare.virtual_tree as vt_mod
+    from tre_compare.parser.tre_reader import TreHeader
+
+    # real SWGEmu patch_14_00.tre numbers: 1491*24 = 35784 (uncompressed) > 23272 (compressed)
+    real = tmp_path / "patchlike.tre"
+    real.write_bytes(b"\x00" * 200_000)  # big enough that the EOF guard passes
+    hdr = TreHeader(
+        path=real, token="TREE", version="0005", number_of_files=1491,
+        toc_offset=64, toc_compressor=2, size_of_toc=23272, block_compressor=2,
+        size_of_name_block=1000, uncomp_size_of_name_block=2000,
+    )
+    monkeypatch.setattr(vt_mod, "read_tre_header", lambda _p: hdr)
+    errs: list = []
+    assert vt_mod._preflight_tre(_node("tree", 9, real, 0), errs) is True
+    assert errs == []
+
+
+def test_preflight_tre_still_rejects_uncompressed_toc_overrun(tmp_path, monkeypatch) -> None:
+    """The nf*stride > size_of_toc guard is preserved for a STORED (uncompressed) toc —
+    a genuinely-too-small toc is still caught (threat T-28-03-04 unweakened)."""
+    import tre_compare.virtual_tree as vt_mod
+    from tre_compare.parser.tre_reader import TreHeader
+
+    real = tmp_path / "stored.tre"
+    real.write_bytes(b"\x00" * 200_000)
+    hdr = TreHeader(
+        path=real, token="TREE", version="0005", number_of_files=1491,
+        toc_offset=64, toc_compressor=0, size_of_toc=23272, block_compressor=2,
+        size_of_name_block=1000, uncomp_size_of_name_block=2000,
+    )
+    monkeypatch.setattr(vt_mod, "read_tre_header", lambda _p: hdr)
+    errs: list = []
+    assert vt_mod._preflight_tre(_node("tree", 9, real, 0), errs) is False
+    assert any("number_of_files * stride" in msg for _, msg in errs)
+
+
 # ======================================================================================
 # cfg-driven END-TO-END tombstone proof (USER DECISION 2026-06-14 — the literal SC#3)
 # ======================================================================================
