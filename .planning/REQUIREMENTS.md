@@ -26,7 +26,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **TRE-02**: User can see a set-level compare — which TRE archives are added/removed/changed between the two installations, with size/version deltas
 - [x] **TRE-03**: User can see a file-level compare of the merged virtual trees — first-match-wins precedence mirroring `TreeFile.cpp` semantics (incl. `fixUpFileName` normalization), per-file added/removed/changed status
 - [x] **TRE-04**: User can drill into any file — metadata, which archive wins, shadowed copies in other archives, and on-demand content comparison (TOC `crc` is a path CRC; content change detection uses length/compressedLength + real hashing on demand)
-- [ ] **TRE-05**: The UI is a modern web app — virtualized tree view with added/removed/changed badges, hide-identical filter, search, and summary stats
+- [x] **TRE-05**: The UI is a modern web app — virtualized tree view with added/removed/changed badges, hide-identical filter, search, and summary stats
 
 ## Future Requirements
 
@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRE-02 | Phase 29 | Complete |
 | TRE-03 | Phase 29 | Complete |
 | TRE-04 | Phase 29 | Complete |
-| TRE-05 | Phase 30 | Pending |
+| TRE-05 | Phase 30 | Complete |
 
 **Coverage:**
 - v2.3 requirements: 12 total

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-15T14:53:04.600Z"
+last_updated: "2026-06-15T15:10:56.693Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 19
-  completed_plans: 16
-  percent: 84
+  completed_plans: 17
+  percent: 89
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** Phase 29 — tre-compare-tool-diff-engine-api
+**Current focus:** Phase 30 — tre-compare-tool-frontend-spa
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,13 +69,14 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
-Plans: 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). 29-02 sqlite cache — DONE: c661c6aa3 (test RED) + 963a0ad0d (feat GREEN). 29-03 FastAPI surface — DONE: 7eb055cbf (config) + baf2e18b9 (test RED) + b0d5442b4 (feat GREEN) + 46eac9150 (integration test). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
+Phase: 30 (tre-compare-tool-frontend-spa) — EXECUTING
+Plan: 2 of 3
+Plans: 30-01 SPA scaffold + static mount — DONE: 544359067 (scaffold) + e8b5154b0 (vitest/shadcn/tanstack) + 626b9a073 (test RED) + dd4e1da2b (feat GREEN). TRE-05 ticked. | 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). 29-02 sqlite cache — DONE: c661c6aa3 (test RED) + 963a0ad0d (feat GREEN). 29-03 FastAPI surface — DONE: 7eb055cbf (config) + baf2e18b9 (test RED) + b0d5442b4 (feat GREEN) + 46eac9150 (integration test). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
 Outcome (29-01): pure `tre_compare.diff` engine (NO fastapi/sqlite3 — Phase-30/TREM headless import). `diff_archive_set` keyed by `(basename, kind)` (tree↔toc collision = two rows), fault-wrapped `stat_archive` (corrupt archive → `fault` row, never aborts). `diff_virtual_trees` lean `(length,compressed_length)` tri-state rows — never crc — + optional `qualifier` (tombstoned/rejected/error _left/_right; tombstoned-both never vanishes) + summary (per-side node_errors/rejected/tombstoned + status_counts). `drill_in` domain status ok/not_found/rejected + winner/shadowed/verdict; `hash_virtual_file` xxh3_64 of DECOMPRESSED bytes with SYMMETRIC TREE/TOC payload resolve (match `fix_up_file_name(e.path)==vpath`, read by RAW `e.path`) and `_HASH_FAULTS=(*_NODE_FAULTS,KeyError)` never-raise (Opus). Structured `DriveHashResult`. Deps: fastapi 0.137 / uvicorn 0.49 BARE (uv.lock grep-proven, no uvloop/httptools) / xxhash 3.7 + httpx dev. RED→GREEN; 14 diff tests + 52/52 synthetic suite green. Two deviations: posixpath.normpath rejected-key recovery (Rule 3), build_tre `payloads=` for deterministic false-identical bytes (Rule 2).
 Outcome (29-02): stdlib-sqlite3 `tre_compare.cache` (NO fastapi). `Cache.archive_entries(node, node_errors, *, no_cache)` parse-skip cache keyed `(abspath, mtime_ns, size)` — INTEGER `st_mtime_ns`, never float (P4 closes FAT32/network 1-2s + float-rounding false-HIT). HIT proven by a spy on `tre_compare.cache.iter_node_entries` (call-count==1 across two calls) — parse-skip, NOT row-equality (P5). `build_virtual_tree_cached(scan, cache)` re-expresses the Phase-28 merge VERBATIM sourcing tree/toc rows from sqlite + `path` nodes from the live walk, threading `node.kind` from the LIVE node (a row carries no kind — P2); parity-equivalent to `build_virtual_tree` across an EXPANDED 7-case matrix incl. shadowed-tuple ORDER + rejected LIST order. `tre_file` stored per toc row (Pitfall 7 — drill-in without re-parsing a 193k-entry `.toc`). `get_file_hash`/`put_file_hash` memo the Plan-01 hexdigest. Concurrency: `check_same_thread=False` + WAL + `busy_timeout=5000` + a write `Lock` guarding the MISS detect+INSERT with an under-lock re-check + `INSERT OR IGNORE` (no concurrent-MISS 500, Sonnet); `__file__`-relative default db under `tools/tre-compare/.cache/` (gitignored). RED→GREEN; 8 cache tests + 60/60 synthetic suite green. One deviation: parity_matrix fixture had `a/t.dds` real in the top tree (case-1 never exercised) → removed it so the tombstone wins first (Rule 1).
 Outcome (29-03): `tre_compare.api` — a `create_app(cache, installs_path)` FACTORY (NO module-level Cache leak, D-01/D-03) exposing four STATELESS routes composing the Plan-01 pure diff over the Plan-02 cached merge: `/compare/set` (corrupt archive → fault row, never 500), `/compare/files` (FULL `{rows,summary}`, no pagination D-08), `/file/detail` (`drill_in` not_found→404 / rejected→400 + content-indeterminate verdict), `/installs` (tomllib picker). API-layer `get_or_compute_hash` memoizes the drill-in hash keyed on the RESOLVED PAYLOAD `.tre` via a `replace(node, abspath=payload_tre)` synthetic SearchNode (P3 — sqlite stays OUT of diff.py; mutated payload .tre under an unchanged .toc → FRESH hash). `__main__` binds `127.0.0.1` ONLY (T-29-03-03). `config.py` tomllib `load_installs` (installs.toml gitignored, .example tracked, D-02). RED→GREEN; 12 api tests + env-gated real-pair integration test asserting a MEASURED second-compare cache HIT via an iter_node_entries spy (SC#4/P5); 72 passed, 2 deselected. Two Rule-3 deviations: cache get/put_file_hash take a SearchNode (payload-keyed via swapped abspath, no cache API change); removed a literal `0.0.0.0` from __main__ prose to satisfy the acceptance grep. create_app + diff importable for Phase 30 with zero backend refactor.
-Next: Phase 29 VERIFY, then Phase 30 — React+Vite+shadcn SPA (TRE-05) consuming the create_app four-route JSON unchanged (install picker from /installs, set-delta table, virtualized filterable tree-diff, per-file detail).
+Outcome (30-01): FIRST frontend in the repo — `tools/tre-compare/web/` Vite 8 + React 19 + TS 6 + Tailwind 4 + shadcn (zinc base, dark default), sibling of `src/`, ZERO coupling to the engine MSBuild graph (D-01 extractability preserved). `build.outDir=build` dodges the gitignored Python `dist/` collision; `web/build/` is built-on-demand + gitignored (D-02/A3). vite.config: react+tailwindcss plugins, `@` alias, dev proxy (`/compare` `/file` `/installs` -> 127.0.0.1:8765 — relative-fetch dev+prod single code path), Vitest test block (jsdom+globals). 8 shadcn primitives (button badge table sheet input scroll-area separator tooltip) + @tanstack/react-virtual + @tanstack/react-query pre-installed for Wave 2. The ONLY backend touch of the whole phase: `web_static.SpaStaticFiles` (404->index.html fallback) + `WEB_DIR` (3-level .parent walk mirroring config.py) mounted at `/` LAST in `create_app` (greedy `/` never shadows the 4 routes — T-30-01-03), guarded on `web_dir.is_dir()`; new `create_app(web_dir=...)` param makes it testable. TDD RED→GREEN; 6 web_static tests + 80 passed / 2 deselected (no regression to the 72 prior). Verified end-to-end vs the REAL built bundle (GET / -> 200 text/html "TRE Compare"). __main__ 127.0.0.1 bind untouched. Three Rule-3 deviations: shadcn CLI 'Nova' preset drift → rewrote components.json+index.css to the locked zinc/dark contract; TS 6 deprecated baseUrl removed (@/* still resolves); root .gitignore global package.json/lib/ ignores negated for the web project. App.tsx + placeholder.test.ts are intentional Wave-2 stubs (real layout/tests = plan 30-03).
+Next: Phase 30 Plan 02 (data layer: lib/api.ts typed client + lib/tree.ts buildFolderTree/flattenVisible), then 30-03 (UI: pickers, set-delta strip, virtualized tree, detail Sheet). Wave 2 builds on this green Vitest seam + the 4 frozen routes (consumed unchanged).
 Prior-phase backlog (28 foundation):
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
 Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
@@ -140,6 +141,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-15] Phase 29-01: tre_compare.diff pure engine (no fastapi/sqlite3) — (basename,kind) set keying, (len,clen) file tri-state never crc, tombstoned/rejected/error qualifier, symmetric TREE/TOC drill-in, never-raise xxhash; bare uvicorn proven
 - [Phase ?]: [2026-06-15] Phase 29-02: tre_compare.cache sqlite parse-skip cache keyed (abspath, mtime_ns INTEGER, size) — HIT proven by an iter_node_entries spy (call-count==1) not row-equality (P5); build_virtual_tree_cached parity with the builder across an expanded 7-case matrix incl. shadowed-tuple ORDER, kind threaded from the live node (P2); INSERT OR IGNORE + under-lock MISS re-check (concurrent-MISS-safe, Sonnet); busy_timeout + __file__-relative default db path; tre_file stored per toc row (Pitfall 7)
 - [Phase ?]: [2026-06-15] Phase 29-03: tre_compare.api create_app(cache,installs_path) FACTORY — four stateless routes, NO module-level Cache leak (D-01/D-03); /compare/files full {rows,summary} no pagination (D-08); /file/detail not_found->404 rejected->400 + content-indeterminate verdict; get_or_compute_hash API-layer memo keyed on the RESOLVED payload .tre via replace(node,abspath=payload_tre) (P3, sqlite stays out of diff.py); /installs tomllib picker (installs.toml gitignored, .example tracked); __main__ binds 127.0.0.1 only (T-29-03-03); env-gated real-pair integration test asserts a measured second-compare cache HIT via an iter_node_entries spy (SC#4/P5). RED baf2e18b9 -> GREEN b0d5442b4; 72 passed, 2 deselected
+- [Phase ?]: [2026-06-15] Phase 30-01: FIRST repo frontend at tools/tre-compare/web (Vite 8/React 19/TS 6/Tailwind 4/shadcn zinc-dark), sibling of src/, zero coupling to the engine MSBuild graph (D-01); build.outDir=build dodges the gitignored Python dist/ collision, web/build/ built-on-demand+gitignored (D-02/A3); vite dev proxy + relative-fetch single code path; Vitest+RTL+jsdom seam wired; 8 shadcn primitives + @tanstack/react-virtual+react-query pre-installed for Wave 2. ONLY backend touch: web_static.SpaStaticFiles 404->index.html + WEB_DIR (3-level .parent walk) mounted at / LAST in create_app (greedy / never shadows the 4 routes, T-30-01-03), guarded on web_dir.is_dir(); create_app(web_dir=) injectable. TDD RED 626b9a073 -> GREEN dd4e1da2b; 6 web_static tests + 80 passed/2 deselected (no regression); verified vs the REAL built bundle. 127.0.0.1 bind untouched. 3 Rule-3 deviations (shadcn Nova preset->zinc contract, TS6 baseUrl removed, root .gitignore package.json/lib/ negated for web/)
 
 ### Pending Todos
 
@@ -174,7 +176,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T14:31:38.744Z
+Last session: 2026-06-15T15:10:56.673Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**

@@ -182,7 +182,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   3. A user can select any file and see a detail panel with the winning archive, shadowed copies, sizes, and CRC display
   4. The tool runs end-to-end as a single localhost server and answers the SWGSource-vs-whitengold space-asset diff
 **Plans**: 3 plans (3 waves)
-  - [ ] 30-01-PLAN.md — Vite/React/Tailwind4/shadcn scaffold + Vitest harness + the only backend touch: SpaStaticFiles mount (web/build/, mounted last) + mount-order regression test
+  - [x] 30-01-PLAN.md — Vite/React/Tailwind4/shadcn scaffold + Vitest harness + the only backend touch: SpaStaticFiles mount (web/build/, mounted last) + mount-order regression test
   - [ ] 30-02-PLAN.md — pure data layer (TDD): frozen-contract types, relative-path fetch client, buildFolderTree/flattenVisible tree transforms, status/verdict badge maps with the honesty distinction
   - [ ] 30-03-PLAN.md — linked master-detail UI: pickers + set-delta strip (cross-filter) + virtualized FileTree + auto-verdict DetailPanel + SummaryStats, then SC#4 SWGSource-vs-whitengold end-to-end checkpoint
 **UI hint**: yes
@@ -218,4 +218,4 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete    | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete    | 2026-06-15 |
-| 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
+| 30. TRE Tool — Frontend SPA | v2.3 | 1/3 | In Progress|  |
