@@ -127,7 +127,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   3. IFF/TRE and network-message struct packing / hardcoded-`sizeof` / serialization-width assumptions are audited and corrected; the 32-bit build still loads assets, parses saved data, and exchanges network messages correctly (no data-layout regression)
   4. The 32-bit client still boots to character select under both `rasterMajor=5` and `=11` after the source changes (no regression while x64 is not yet building)
 **Plans**: 6 plans in 3 waves
-  - [ ] 31-01-PLAN.md — scratch Debug|x64 compile-only harness (D-01 worklist generator; gitignored; in-scope TU manifest)
+  - [x] 31-01-PLAN.md — scratch Debug|x64 compile-only harness (D-01 worklist generator; gitignored; in-scope TU manifest)
   - [ ] 31-02-PLAN.md — BITS-01 FPU + SSE math (FloatingPointUnit _control87, SseMath ×13 + Transform naked-SSE → _mm_*)
   - [ ] 31-03-PLAN.md — BITS-01 misc __asm sweep (CollisionUtils/Fatal/Clock/ProfilerTimer/VeCritsec + DebugHelp _M_X64 fork)
   - [ ] 31-04-PLAN.md — BITS-02 pointer/int truncation (StaticShader/MemoryManager/Os + Direct3d11 re-truncation; width-correct types)
@@ -225,7 +225,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
-| 31. 64-bit Correctness Foundation | v3.0 | 0/TBD | Not started | - |
+| 31. 64-bit Correctness Foundation | v3.0 | 1/6 | In Progress|  |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 0/TBD | Not started | - |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |

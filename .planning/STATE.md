@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: executing
-last_updated: "2026-06-15T23:03:50.015Z"
-last_activity: 2026-06-15 -- Phase 31 planning complete
+last_updated: "2026-06-15T23:35:20.415Z"
+last_activity: 2026-06-15
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15 after v2.3 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
-**Current focus:** **v3.0 x64 Port ROADMAP CREATED** (2026-06-15) — 6 phases (31–36), 13/13 requirements mapped 100%. Native 64-bit build keeping BOTH renderers (D3D9 + D3D11) bootable to character select; absorbs the v2.3 32-bit-bound deferrals (HARD-02 corner-snap → VERIFY-01, HARD-05 clean D3DCompile/D3DX-removal → SHADER-01, HARD-03 CORNERSNAP-probe removal → VERIFY-03). Next: `/gsd-plan-phase 31`.
+**Current focus:** Phase 31 — 64-bit-correctness-foundation
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -86,10 +86,10 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 
 ## Current Position
 
-Phase: 31 — 64-bit Correctness Foundation (Not started)
-Plan: —
+Phase: 31 (64-bit-correctness-foundation) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 31 planning complete
+Last activity: 2026-06-15
 
 ### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
 
@@ -176,6 +176,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-15] Phase 30-02: PURE Wave-2 data layer (lib/types.ts + tree.ts + status.ts + api.ts). Frozen-contract transcription — SetStatus/FileStatus TWO distinct unions (Pitfall 3), no path-checksum field (D-04 Option 1). tree.ts RESEARCH Pattern 1 (build-once/flatten-per-interaction) + empty-folder suppression via rollup (Pitfall 6; identical bucket counts identical-by-metadata + tombstoned). status.ts HONESTY DISTINCTION HARD RULE tested — solid green only for the post-xxhash content-confirmed-identical, metadata match neutral + contentVerified:false; two separate badge maps. api.ts relative-path client + ApiError {detail} envelope, no hardcoded host. TDD RED->GREEN; 23/23 Vitest, build exit 0. 9c32f5fd0/d52a6df78/3bb08b864/00e44fc04
 - [Phase ?]: [2026-06-15] Phase 30-03: linked master-detail SPA over the 30-02 data layer (App shell + InstallPicker/SetDeltaStrip/SummaryStats/StatusBadge + virtualized FileTree + auto-verdict DetailPanel). StatusBadge = the single semantic-variant->shadcn-Badge mapper so the honesty distinction (≈ metadata neutral vs = content green) cannot drift across the 5 consumers; committed-pair pattern (picker selection != committed compare pair); keyed-query stale-discard on [left_cfg,right_cfg,path] (Pitfall 4); set-delta cross-filter is a best-effort path-stem scope (frozen /compare/files rows carry no per-file archive field). SC#4 human-verify APPROVED 2026-06-15 — plan's literal SWGSource × whitengold pair NOT realizable (whitengold absent); SWGLegends was a degenerate identical stub; resolved by registering 4 real open-zlib distributions (SWGSource/SWG Infinity/SWGEmu/Stardust) via gitignored absolute-path verify-*.cfg wrappers and accepting against SWGSource × SWG Infinity (231,086 file rows: changed 126,542 / added 80,653 / identical-by-metadata 19,954 / removed 3,232 / tombstoned 705) — virtualized tree no hang, filter/search/hide-identical/cross-filter + detail honesty distinction confirmed. TRE-05 satisfied; Phase 30 + all v2.3 phases complete. 3754b2a73 + 362e2e576
 - [Phase ?]: [2026-06-15] Phase 30-01: FIRST repo frontend at tools/tre-compare/web (Vite 8/React 19/TS 6/Tailwind 4/shadcn zinc-dark), sibling of src/, zero coupling to the engine MSBuild graph (D-01); build.outDir=build dodges the gitignored Python dist/ collision, web/build/ built-on-demand+gitignored (D-02/A3); vite dev proxy + relative-fetch single code path; Vitest+RTL+jsdom seam wired; 8 shadcn primitives + @tanstack/react-virtual+react-query pre-installed for Wave 2. ONLY backend touch: web_static.SpaStaticFiles 404->index.html + WEB_DIR (3-level .parent walk) mounted at / LAST in create_app (greedy / never shadows the 4 routes, T-30-01-03), guarded on web_dir.is_dir(); create_app(web_dir=) injectable. TDD RED 626b9a073 -> GREEN dd4e1da2b; 6 web_static tests + 80 passed/2 deselected (no regression); verified vs the REAL built bundle. 127.0.0.1 bind untouched. 3 Rule-3 deviations (shadcn Nova preset->zinc contract, TS6 baseUrl removed, root .gitignore package.json/lib/ negated for web/)
+- [Phase ?]: [2026-06-15] Phase 31-01: scratch x64 harness manifest exhaustive (2216 TUs/57 libs, ClCompile-derived); _USE_32BIT_TIME_T DROPPED on x64 (UCRT hard-errors under _WIN64 -> time_t is 8 bytes, a BITS-03 residual); Misc.h:236 memmove C2668 is the dominant x64 blocker gating the whole in-scope tree
 
 ### Pending Todos
 
@@ -196,6 +197,7 @@ Last activity: 2026-06-15
 - **[v2.3 — CORNERSNAP removal sequencing]** Strip the CORNERSNAP `_DEBUG` probes (Phase 26 / HARD-03) ONLY after the corner-snap fix (Phase 25 / HARD-02) is verified against them — they are its acceptance harness.
 - **[v2.3 — machine portability]** `stage/miles/` redist is NOT in git and postbuild doesn't copy it — a fresh clone has half-dead audio + warning-flood lag if missing. PORT-01 must detect/handle this, not assume the dir is present.
 - **[boot invariant — /FORCE false-pass]** SwgClient links under `/FORCE` which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. Grep link output for `unresolved external symbol` (must be 0) — applies to the atomic instrumentation removal (Phase 26).
+- [Phase 31] Misc.h:236 memmove(void*,const void*,int) C2668 ambiguity blocks ~every in-scope TU on x64 -- earliest fix-wave (31-02/04) must fix it to unblock the sweep
 
 ## Deferred Items
 
