@@ -659,7 +659,12 @@ ASVS categories are N/A by posture; the relevant ones are input handling and the
 | A3 | Built-on-demand (gitignored `web/build/`) is preferable to committing the bundle, matching the repo's ignore-artifacts convention. | Pattern 2 | Planner may prefer committing for zero-Node fresh-clone runs; explicitly flagged as a planner decision, not silent. |
 | A4 | Vitest is the right frontend test runner (Vite-native). | Validation Architecture | Low — Vitest is the standard for Vite projects; Jest would also work but adds config friction. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved during the UI-SPEC → PATTERNS → plan pass; resolutions locked in the Phase 30 plans.
+> 1. **RESOLVED → Option 1** (labeled-absence note, no numeric path-CRC; no silent backend field add) — 30-02/30-03.
+> 2. **RESOLVED → build-on-demand (A3)**, `web/build/` gitignored — 30-01.
+> 3. **RESOLVED → TanStack Query** (keyed-detail dedup, Pitfall 4) — 30-03.
 
 1. **CRC display vs frozen contract (the field-gap).**
    - What we know: D-04/SC#3 ask for a "path-CRC — not content" display; the four routes expose **no `crc`
