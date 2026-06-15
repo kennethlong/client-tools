@@ -177,10 +177,11 @@ def _build_parity_matrix_install(tmp_path):
     loose.mkdir()
     (loose / "l.dds").write_bytes(b"loose-bytes")
 
-    # case 4 winner + two real shadows (descending priority 9 > 8 > 7)
+    # case 4 winner + two real shadows (descending priority 10 > 8 > 7).
+    # NOTE: a/t.dds is deliberately ABSENT here so the mid (p9) tombstone is reached FIRST.
     hi = _fixtures.build_tre(
         inst / "hi.tre",
-        [("hi/h.dds", 5, 5), ("a/t.dds", 3, 3)],  # also a winner for case-1 key? no, mid tombstones a/t
+        [("hi/h.dds", 5, 5)],
         version="0004",
     )
     # case 1: mid tombstones a/t.dds (tree length 0); case 4 first shadow of hi/h.dds
