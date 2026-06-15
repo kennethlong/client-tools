@@ -8,7 +8,8 @@ Supports per-.tre version tags 0004, 0005 (24-byte TOC) and 6000 (32-byte TOC).
 Master indexes: retail SearchTOC (TAG_TOC/0001) and SwgRestoration COT2000.
 
 Retail zlib payloads decompress via read_tre_payload(); Restoration/extended tags
-(6000, 0006, 5000) may remain obfuscated at rest (use TreeFileExtractor).
+(6000, 0006, 5000) are encrypted with a proprietary scheme — detected and flagged, NOT
+decrypted (decryption is intentionally unsupported; see tre_decrypt.py).
 """
 
 from __future__ import annotations
