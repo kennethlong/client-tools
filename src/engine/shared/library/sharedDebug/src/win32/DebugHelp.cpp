@@ -499,6 +499,43 @@ void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
 	//if (!GetThreadContext(GetCurrentThread(), &context))
 	//	return;
 
+	// BITS-01 (Phase 31): the register grab is the ONE inherently bitness-specific
+	// site in this phase (the x87/x64 register sets differ), so it carries the only
+	// justified `#if defined(_M_X64)` fork. Intrinsic ports elsewhere need no fork.
+	STACKFRAME64 stackFrame;
+	Zero(stackFrame);
+	stackFrame.AddrPC.Mode    = AddrModeFlat;
+	stackFrame.AddrStack.Mode = AddrModeFlat;
+	stackFrame.AddrFrame.Mode = AddrModeFlat;
+
+#if defined(_M_X64)
+	// ----- x64 branch -----------------------------------------------------------
+	// `__asm` is x64-illegal (C4235); RtlCaptureContext is the OS-API way to snapshot
+	// the current thread context. STACKFRAME64.Addr*.Offset is DWORD64, so assign the
+	// FULL 64-bit Rip/Rsp/Rbp (NO DWORD(...) cast — a DWORD cast truncates Rip and
+	// breaks the walk; review #6) and walk with IMAGE_FILE_MACHINE_AMD64.
+	EnterCriticalSection(&criticalSection);
+	RtlCaptureContext(&context);
+	LeaveCriticalSection(&criticalSection);
+
+	stackFrame.AddrPC.Offset    = context.Rip;
+	stackFrame.AddrStack.Offset = context.Rsp;
+	stackFrame.AddrFrame.Offset = context.Rbp;
+
+	const DWORD stackWalkMachineType = IMAGE_FILE_MACHINE_AMD64;
+
+	// PHASE-33 RUNTIME RESIDUAL (review #6): this branch is COMPILE-clean only.
+	// The x64 backtrace WALK is not runtime-validated here (the Phase-31 bar is
+	// compile-clean, Open-Q3). Two runtime items ride into Phase 33/36:
+	//   1. Confirm RtlCaptureContext + AMD64 unwind actually produces a correct
+	//      x64 call stack (32-bit used a frame-pointer walk; x64 unwinds via the
+	//      .pdata/RUNTIME_FUNCTION tables — different mechanism).
+	//   2. The `callStack` OUTPUT array is `uint32*`, so `*callStack = DWORD(Offset)`
+	//      below STILL narrows the 64-bit return address to 32 bits. Widening the
+	//      output array (and its callers/symbol-lookup) to 64-bit is the Phase-33
+	//      runtime fix; left as-is here to avoid a shared-signature cascade now.
+#else
+	// ----- 32-bit branch (UNCHANGED) -------------------------------------------
 	EnterCriticalSection(&criticalSection);
 	__asm
 	{
@@ -511,21 +548,19 @@ void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
 	}
 	LeaveCriticalSection(&criticalSection);
 
-	STACKFRAME64 stackFrame;
-	Zero(stackFrame);
-	stackFrame.AddrPC.Mode      = AddrModeFlat;
 	stackFrame.AddrPC.Offset    = context.Eip;
 	stackFrame.AddrStack.Offset = context.Esp;
-	stackFrame.AddrStack.Mode   = AddrModeFlat;
 	stackFrame.AddrFrame.Offset = context.Ebp;
-	stackFrame.AddrFrame.Mode   = AddrModeFlat;
+
+	const DWORD stackWalkMachineType = IMAGE_FILE_MACHINE_I386;
+#endif
 
 	for (int i = 0; i < sizeOfCallStack; ++i, ++callStack)
 	{
-		if (stackWalk64(IMAGE_FILE_MACHINE_I386, process, process, &stackFrame, &context, NULL, functionTableAccess, getModuleBase, NULL))
+		if (stackWalk64(stackWalkMachineType, process, process, &stackFrame, &context, NULL, functionTableAccess, getModuleBase, NULL))
 		{
 			const DWORD64 Offset = stackFrame.AddrPC.Offset;
-			*callStack = DWORD(Offset);
+			*callStack = DWORD(Offset);  // see PHASE-33 RUNTIME RESIDUAL #2 (x64): uint32 output narrows Rip
 		}
 	}
 }
