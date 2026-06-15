@@ -332,7 +332,9 @@ static_assert(offsetof(TargaHeader, m_width) == 12, "TargaHeader field drift");
 | A2 | The `Archive` `std::map` size_t path is the *only* raw-`size_t`-over-the-wire serializer in the in-scope build path | BITS-03 | Medium — the scratch x64 compile will surface any other `get(source, <size_t>)`/`put(target, <size_t>)` call as an overload-resolution failure (no 64-bit overload). The compile is the backstop; this audit found only the map path by reading Archive.h, but did not exhaustively grep every `Archive::get` caller. |
 | A3 | No third-party header in the in-scope link set forces a layout change that the scratch compile-only harness can't see (because compile-only skips link) | D-01 harness | Low-Medium — compile-only catches source-level width defects; anything that only manifests at link/runtime against an x64 third-party lib is by design deferred to Phase 33 (D-02 residual worklist). |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three questions below carry an inline `Recommendation:` that resolves them; the plans implement those resolutions (31-05 reads the live 32-bit `sizeof` rather than trusting doc literals; the scratch x64 compile is the authoritative serialization-width backstop; DebugHelp is scoped to compile-clean via a `#if defined(_M_X64)` branch with runtime x64-backtrace validation deferred to Phase 33/36). No open ambiguity remains for planning.
 
 1. **Exact `static_assert` baseline sizes for packed structs.**
    - What we know: TargaHeader/TargaFooter and AssetCustomizationManager's `IntRange`/etc. are fixed-width (no pointer/size_t members) → layout-stable across bitness.
