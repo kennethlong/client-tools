@@ -31,6 +31,7 @@ backend refactor.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -41,6 +42,9 @@ from pydantic import BaseModel
 from . import diff as _diff
 from .cache import Cache, build_virtual_tree_cached
 from .config import load_installs
+from .web_static import WEB_DIR, SpaStaticFiles
+
+_log = logging.getLogger(__name__)
 from .diff import (
     DriveHashResult,
     diff_archive_set,
@@ -149,15 +153,22 @@ def get_or_compute_hash(
 def create_app(
     cache: Cache | None = None,
     installs_path: str | Path | None = None,
+    web_dir: str | Path | None = None,
 ) -> FastAPI:
     """Build a stateless tre-compare FastAPI app over an INJECTED *cache* + *installs_path*.
 
-    Both args default to a real ``Cache()`` + the tool-local ``installs.toml`` when None, so
-    production runs need no args while tests inject an isolated ``tmp_cache`` (no
-    module-level Cache leak). Importable for Phase 30 reuse.
+    *cache* / *installs_path* default to a real ``Cache()`` + the tool-local
+    ``installs.toml`` when None, so production runs need no args while tests inject an
+    isolated ``tmp_cache`` (no module-level Cache leak). Importable for Phase 30 reuse.
+
+    *web_dir* (Phase-30 / D-02) defaults to :data:`web_static.WEB_DIR` (``web/build``); when
+    that directory exists the built Vite SPA is static-mounted at ``/`` (registered LAST so
+    the four API routes win — T-30-01-03). Tests inject a synthetic ``tmp_path/web/build``.
+    When the dir is absent the app runs API-only (dev mode / no ``npm run build`` yet).
     """
     if cache is None:
         cache = Cache()
+    web_dir = WEB_DIR if web_dir is None else Path(web_dir)
 
     app = FastAPI(title="tre-compare", version="0.2.0")
 
@@ -233,6 +244,14 @@ def create_app(
     @app.get("/installs")
     def installs() -> list[dict]:
         return [{"name": e.name, "cfg_path": e.cfg_path} for e in load_installs(installs_path)]
+
+    # Serve the built SPA LAST — the "/" mount is greedy and would shadow the four routes
+    # above if registered first (T-30-01-03 / Pitfall 2). Guarded on the build existing so a
+    # dev run (API-only, no `npm run build` yet) still works.
+    if web_dir.is_dir():
+        app.mount("/", SpaStaticFiles(directory=web_dir, html=True), name="spa")
+    else:
+        _log.info("no built SPA found at %s, run `npm run build` in web/", web_dir)
 
     return app
 
