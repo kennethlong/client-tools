@@ -1,0 +1,59 @@
+# Phase 31 Plan Review — 64-bit Correctness Foundation (lateral/blind-spot, fresh Sonnet)
+
+## Summary
+
+Phase 31 is a well-structured, methodical approach to x64 correctness pre-work: a throwaway compile-only harness drives a compiler-generated defect list, fixes land in shared source so the 32-bit build inherits them, and the gate is a dual-renderer boot smoke rather than a fabricated test suite that doesn't exist. The plan documents its own scope limitations honestly (residual-worklist hand-off to Phase 33, editor-app exclusion). That said, three concerns rise to HIGH: the `_control87` API semantics are fundamentally incompatible with the raw x87 bit-pattern constants the code uses; the SseMath routines use a shared `sseVariable` global staging buffer via `movaps` that requires 16-byte alignment from the Transform object — an assumption that may not hold, and which the intrinsic translation must resolve explicitly; and the `shaderTemplateSortKey` fix is under-scoped because the `Entry` struct that stores the sort key is typed `int`, so widening the return type without widening the struct field just moves the truncation. The remaining concerns are MEDIUM/LOW and well-managed by the plan's own risk machinery.
+
+## Strengths
+
+- The compile-only scratch harness (D-01) correctly avoids needing x64-linked third-party libs. Using `cl /c /we4311 /we4312 /we4244` per TU as the defect-worklist generator converts guesswork into compiler truth.
+- Decision D-06 (warnings-as-errors enforced only in the scratch harness; committed 32-bit project flags untouched) is the right call to avoid a warning flood in the shipped 32-bit build while still producing a real x64 error list.
+- Explicit `_USE_32BIT_TIME_T=1` parity in the scratch harness and the recognition that `long` stays 32-bit on LLP64 both prevent a class of false BITS-03 positives.
+- The phased wave structure (Wave 1 = harness, Wave 2 = parallel fixes, Wave 3 = gate) is the correct dependency ordering. Plans 02–05 can safely run in parallel given they touch disjoint files.
+- Documenting DebugHelp as the single justified bitness fork (`#if defined(_M_X64)`) rather than forking everywhere is disciplined.
+- The `Archive::std::map` hazard identification is correct: `size_t` on x64 is 8 bytes (it's `unsigned long long` on LLP64, not `unsigned long`), so `get(source, numKeys)` with a `size_t numKeys` has no matching 4-byte overload. Pinning to `uint32_t` is the right fix.
+- The `static_assert` guard convention (baseline from the live 32-bit sizeof, not from research literals) is the correct approach; the plan explicitly warns against trusting the 18/26 byte estimates.
+- The residual-worklist (D-02) hand-off is an explicit artifact, not a silent omission.
+- The boot-smoke as BITS-03 functional proof is pragmatic: TRE/IFF asset load + login handshake + skeletal skinning exercise the live serialization paths.
+- The `VeCritsec` analysis correctly scopes the fix to the `#ifdef _WIN32` MSVC branch only and leaves the GCC `__asm__` branch untouched.
+
+## Concerns
+
+- **[HIGH] `_control87(0,0)` is semantically incompatible with the raw x87 bit-pattern constants.** The plan says replace `__asm fnstcw` with `return static_cast<WORD>(_control87(0, 0))`. But `_control87()` returns a value in MSVC's own bit-position encoding (`_MCW_RC = 0x0300`, `_MCW_PC = 0x0003`, `_MCW_EM = 0x003F` — all different from the raw x87 control word layout). The code then does `currentStatus &= ~(PRECISION_MASK | ROUND_MASK | EXCEPTION_ALL)` using raw x87 bit positions (`PRECISION_MASK = 0x0300`, `ROUND_MASK = 0x0C00`, `EXCEPTION_ALL = 0x003F`). Masking the `_control87` return against x87-layout constants will silently corrupt `status`. The plan needs to (a) switch `getControlWord`/`setControlWord` fully to the `_MCW_*` bit system and update every constant, or (b) keep the x87 path on 32-bit and add an explicit bit-remapping layer on x64. Guarding `_MCW_PC` out on x64 is necessary but insufficient — the `ROUND_MASK` vs `_MCW_RC` position mismatch remains.
+
+- **[HIGH] SseMath's `movaps` loads the Transform matrix assuming 16-byte alignment — `_mm_load_ps` carries the same requirement, unverified for heap Transform objects.** The asm does `movaps xmm0, [ebx]` where `ebx = transform`. `movaps` faults on non-16-byte-aligned addresses. Transform has no `__declspec(align(16))`/`alignas(16)`. On 32-bit MSVC heap = 8-byte alignment, so the current code is an architecture assumption that has been "working". Translating to `_mm_load_ps` carries the fragility forward. Use `_mm_loadu_ps` (unaligned) for the Transform rows; `_mm_load_ps` only for the `__declspec(align(16)) sseVariable` staging buffer.
+
+- **[HIGH] `getShaderTemplateSortKey` return-type widening is under-scoped: the `Entry` struct in `ShaderPrimitiveSorter.cpp` stores `shaderTemplateSortKey` as `int`.** `ShaderPrimitiveSorter::Entry` (~line 62) declares `int shaderTemplateSortKey` and the `<`/`>` comparators compare it. Widening the return type to `uintptr_t` without widening the struct field just moves the truncation to the struct assignment. `ShaderPrimitiveSorter.cpp` is not in plan 04's `files_modified` — the scratch harness will still flag a C4244 at `entry.shaderTemplateSortKey = ...getShaderTemplateSortKey()` unless that file is also fixed.
+
+- **[MEDIUM] The `Archive::put(std::map)` fix has an implicit overflow truncation plan 05 does not validate.** `static_cast<uint32_t>(source.size())` is correct for wire-format freeze but truncates above UINT32_MAX (unlikely but unguarded). Also the vector path uses `signed int length = source.size()` (Archive.h ~line 370) — narrowing that will fire C4244 in the harness for in-scope TUs using `put(vector<...>)`. The plan should explicitly acknowledge these are pre-existing and excluded per D-07, or the sweep will confuse the executor.
+
+- **[MEDIUM] `_control87` per-thread vs per-process and MXCSR-vs-x87 comparison.** `update()` compares `getControlWord()` (now reading via `_control87`) against the stored `status` WORD built with x87 constants — the comparison fails on x64 because the encodings differ. Entangled with the HIGH FPU concern.
+
+- **[MEDIUM] `__rdtsc()` return-type detail in ProfilerTimer.** `readTimeStampCounter()` is `static __int64 __declspec(naked) __stdcall`. On x64 `__stdcall` is ignored. `__rdtsc()` returns `unsigned __int64` while the signature is `__int64`; the plan should be explicit that the return type stays `__int64` and the body is `return static_cast<__int64>(__rdtsc())` so all callers stay intact.
+
+- **[MEDIUM] `canDoSseMath()` try/catch around `__cpuid` is dead on x64.** `__cpuid` doesn't throw; CPUID/SSE2/FXSR are mandatory on x64, so the guard always returns true. The plan should preserve-with-comment or explicitly note the dead `catch(...)` rather than carry it silently.
+
+- **[MEDIUM] MemoryManager `%08x` logging fix may be incomplete.** Changing `reinterpret_cast<int>(memory)` to `uintptr_t` needs an MSVC-correct format specifier. `%zx` has inconsistent old-CRT support; prefer `%p` or MSVC's `%Ix`. The plan allows `%p` or `%zx` but doesn't flag the `%z` compatibility issue.
+
+- **[LOW] `compile-all.ps1` per-TU include-path extraction from each lib's `.vcxproj` is fragile.** Relative `AdditionalIncludeDirectories` are relative to the vcxproj location, not solution root. If unresolved, headers-not-found can make a TU skip rather than error → false-clean harness. Acceptance criteria don't verify include paths resolve for all in-scope libs (only the failure case is tested).
+
+- **[LOW] `TRY_FOR_SSE` is `WIN32`, which MSVC defines on x64 too** (not architecture-specific). The SSE path is active in both 32-bit and x64 scratch compile — the intent. The executor must know to rewrite `sse_xf_matrix_3x4` unconditionally (it is included under x64), not guard it out.
+
+- **[LOW] Plan 06's `files_modified` only lists the residual worklist .md**, but its escape-valve task may need to edit source files surfaced by the full sweep — a metadata inconsistency that could abort autonomous execution.
+
+- **[LOW] DebugHelp 32-bit `__asm` path** correctly won't compile under the x64 harness (so 0 C4235), but the platform-conditional interaction is worth noting.
+
+## Suggestions
+
+- For the FPU port, use a two-path model: on 32-bit preserve the x87 CW path exactly; on x64 use `_control87`/`_MCW_*` constants exclusively, completely replacing the x87-bit-position constants. Guard the raw-CW body with `#if !defined(_M_X64)` in `install()`, `update()`, `getControlWord()`, `setControlWord()` with a parallel MXCSR-aware x64 body.
+- Use `_mm_loadu_ps` (unaligned) for loading from the `transform` pointer; `_mm_load_ps` only for the aligned `sseVariable` buffer. Do not carry the alignment assumption forward silently.
+- Add `ShaderPrimitiveSorter.cpp` (Entry struct + comparators) to plan 04's `files_modified` if widening, OR commit to the pointer-hash approach (keeps return type `int`, no struct cascade — lower risk; collision probability at ~10k templates is negligible).
+- In plan 05, note that the vector/set/deque `signed int` count paths will fire C4244 in the harness and are excluded per D-07.
+- Plan 01's `compile-all.ps1` should add an acceptance criterion that at least one in-scope non-defect TU compiles successfully (verifies include-path extraction; currently only the failure case is tested).
+- In plan 03, state the ProfilerTimer return type stays `__int64` with `return static_cast<__int64>(__rdtsc())`.
+- For the SseMath rewrite, ensure stores into `sseVariable` are not reordered against subsequent C++ reads — prefer `_mm_store_ps` into a local stack buffer the compiler sees as a dependency, rather than the namespace-scoped non-volatile global.
+- For plan 06, note in-scope source files may be edited as escape-valve fixes though not pre-declared in `files_modified`.
+
+## Risk Assessment
+
+**MEDIUM.** The strategy (harness → fix → gate) is sound. But the three HIGH concerns — the `_control87` bit-position mismatch, the `_mm_load_ps` alignment assumption, and the under-scoped sort-key struct cascade — are correctness bugs that survive the acceptance criteria as written: the FPU mismatch produces a silently broken `update()` on x64 (not caught until Phase 33 boots x64); the alignment hazard may SIGSEGV on x64 if a Transform is heap-allocated at an 8-byte boundary; the sort-key truncation may survive into Phase 33 as a residual C4244. None break the 32-bit gate, so they slip through Phase 31 undetected. BITS-03 is correctly bounded and the Archive fix is sound. MEDIUM rather than HIGH because the 32-bit regression gate is robust and the deferred-residual mechanism exists — but an executor following the plans as written is likely to produce non-compliant x64 FPU behavior and a latent alignment hazard.

@@ -1,0 +1,176 @@
+﻿## Summary
+
+Phase 31 is thoughtfully structured: a scratch x64 compile-only harness as worklist generator, wave-based parallelism, explicit Phase 33 residual hand-off, and strong alignment with repo conventions (`/FORCE` link-grep, dual-renderer boot smoke, ABI cascade awareness). The plans correctly treat `Transform.cpp`'s naked SSE matrix path as first-class work, not a misc sweep item. Against the live tree, however, there are **material correctness gaps** — especially FPU control-word masking that can break 32-bit `P_24` behavior, an incomplete BITS-02 surface (D3D9 sort keys and header-inline truncations), and a scratch harness that can give false confidence if the TU manifest or warning set is incomplete. BITS-03 is sound for IFF/fixed-width paths but under-proves the Archive map fix (no known client instantiations) and leaves known x64 diagnostic truncations undocumented.
+
+---
+
+## Strengths
+
+- **Compiler-as-oracle (D-01/D-06)** is the right methodology for a 2010-era codebase; grep found ~169 `__asm` hits across 29 files — manual audit alone would miss truncation behind macros/templates.
+- **Phase boundary is crisp**: no committed x64 platform (Phase 33), no D3DX port (Phase 32), editors explicitly OUT — avoids scope creep.
+- **Research corrections are baked in**: `_MCW_PC` assertion on x64, Transform naked-SSE as peer to SseMath, no phantom `/wd4244` — shows the plans were grounded in code reads.
+- **Residual worklist (D-02)** is explicit in plan 06, not a silent deferral bucket — good adversarial hygiene.
+- **Intrinsics-on-both-bitness (D-05)** avoids `#ifdef` forks for SSE math; DebugHelp's `_M_X64` fork is correctly scoped as the one justified exception.
+- **Validation layering** is appropriate for a no-unit-test tree: per-TU scratch compile → wave build → phase gate boot smoke + `static_assert`.
+- **Threat models** on sort-key collisions, Archive wire format, and `/FORCE` false-clean are real and well-targeted.
+
+---
+
+## Concerns
+
+### HIGH
+
+**1. `FloatingPointUnit::setControlWord` may stop applying precision on 32-bit (regression risk)**
+
+Plan 31-02 Task 1 specifies:
+
+```text
+_control87(controlWord, _MCW_RC | _MCW_EM)   // NO _MCW_PC
+```
+
+But `install()` builds a full `status` word including `PRECISION_24` and calls `setControlWord(status)`:
+
+```115:128:src/engine/shared/library/sharedFoundation/src/win32/FloatingPointUnit.cpp
+WORD FloatingPointUnit::getControlWord(void)
+{
+	WORD controlWord = 0;
+
+	__asm fnstcw controlWord;
+	return controlWord;
+}
+
+void FloatingPointUnit::setControlWord(WORD controlWord)
+{
+	UNREF(controlWord);
+	__asm fldcw controlWord;
+}
+```
+
+Original behavior writes the **entire** x87 control word via `fldcw`. Masking to `_MCW_RC | _MCW_EM` only means `install()`'s `PRECISION_24` never reaches the FPU on **32-bit either**, unless `setPrecision()` separately calls `_control87(..., _MCW_PC)` on non-x64. The plan guards `setPrecision` on x64 but does not require `_MCW_PC` in `setControlWord` on 32-bit. That directly undermines the cantina door-snap theory (x87 24-bit precision) on the still-shipped 32-bit build and may change float behavior before x64 even exists.
+
+**2. BITS-02 scope leaves in-scope, boot-path truncations to "gate sweep" roulette**
+
+Plan 04 fixes five files but the harness will also hit (verified in tree):
+
+| Site | In D-03 scope? | In plan 04 `files_modified`? |
+|------|----------------|------------------------------|
+| `Direct3d9_StaticVertexBufferData.cpp:131` | Yes (gl05 plugin) | No |
+| `Direct3d9_DynamicVertexBufferData.cpp:262` | Yes | No |
+| `Direct3d9_StaticShaderData.cpp:388` | Yes | No |
+| `ShaderEffect.h:93` (inline, header) | Yes (clientGraphics) | No |
+
+Plan 04 Task 3 says "flag Direct3d9 for gate sweep" but plan 06 Task 1 is the escape valve. Parallel wave-2 execution means these may remain unfixed until the gate — or get deferred to Phase 33 as "residual" while still being pure source fixes. **Sort-key truncation in D3D9 is live boot-path code**, not link-time residue.
+
+**3. Sort-key widening has underestimated ABI blast radius**
+
+`getSortKey()` is `virtual int` in shared headers consumed by all four renderer plugins:
+
+```27:27:src/engine/client/library/clientGraphics/src/shared/StaticVertexBuffer.h
+	virtual int                            getSortKey() = 0;
+```
+
+Widening to pointer-width requires changing the virtual interface + every implementation (D3D9 and D3D11) + inline wrappers. Plan 04 leaves the choice to the executor but doesn't mandate a **repo-wide contract decision** upfront (hash-to-`int` vs interface widen). Hash-to-`int` is lower blast radius but needs an explicit collision note; widening is cleaner but is a cross-plugin ABI event the plan under-specifies relative to AGENTS.md's shared-header cascade rules.
+
+**4. Scratch harness completeness = phase acceptance integrity**
+
+Plan 31-01 allows a "first cut" manifest listing "lib roots + known defect TUs." Phase 31 success criterion #1 is **all in-scope libs** compile x64-clean. A partial manifest can produce a green gate with large latent defect populations in unlisted TUs (e.g. `ShaderEffect.h` consumers, D3D9 plugins, `sharedNetworkMessages` TUs). The harness is only as good as `in-scope-tus.txt` + per-lib include parity from `.vcxproj` parsing.
+
+### MEDIUM
+
+**5. FPU vs SSE float environment divergence on x64**
+
+Even with correct `_control87` for x87, MSVC x64 codegen uses SSE for most scalar float math. `FloatingPointUnit` manipulates the x87 CW; SSE operations use **MXCSR** (rounding, DAZ/FTZ, denormals). Plan 02 correctly flags VERIFY-01 but doesn't require documenting that `_control87` changes may not affect the SSE path that actually drives transforms/skinning on x64. Door-snap fix may come from SSE determinism + no x87 24-bit force, not from `_control87` parity.
+
+**6. `SseMath::canDoSseMath` exception-based CPUID → `__cpuid` semantic shift**
+
+Current code wraps inline `cpuid` in `try/catch` to detect missing CPUID. `__cpuid` does not throw; it always "succeeds" on targets that compile x64. Harmless on modern hardware, but the try/catch becomes dead code and the `#if 0` OS CR4 checks stay disabled — acceptable, but worth noting the feature probe is weaker than the original.
+
+**7. SSE intrinsic translation correctness risks (alignment + horizontal sum)**
+
+- `SseMath` uses `movaps` on `Transform` rows — assumes 16-byte aligned `Transform` layout; intrinsic port must preserve this or switch to `_mm_loadu_ps` where the original used unaligned loads (`movups` on `right` in `Transform.cpp`).
+- `Transform.cpp`'s naked function manually 16-byte-aligns a stack scratch buffer (`lea ebx, [esp+15]; and ebx, -16`); a naive intrinsic port that drops this can cause subtle stack corruption or misaligned `movaps` faults.
+- Horizontal-sum lane ordering in RESEARCH Pattern 2 must match each routine's w-lane semantics (rotateScale zeroes w; skin variants use w=1) — plan mentions this but provides no numeric regression check beyond boot smoke.
+
+**8. `DebugHelp` x64 port is compile-clean, not function-clean**
+
+Plan 31-03 correctly defers runtime validation, but the existing path already truncates PC to `DWORD`:
+
+```527:528:src/engine/shared/library/sharedDebug/src/win32/DebugHelp.cpp
+			const DWORD64 Offset = stackFrame.AddrPC.Offset;
+			*callStack = DWORD(Offset);
+```
+
+On x64, Rip upper bits are silently dropped. This belongs explicitly in `31-PHASE33-RESIDUAL-WORKLIST.md` (call stack storage width), not just "runtime backtrace validation."
+
+**9. BITS-03 Archive `std::map` fix may be un exercised**
+
+Grep shows **zero** `Archive::get/put(std::map<...>)` instantiations under `src/engine`. The hazard is real in the header template, but boot smoke won't prove the fix. Plan 05's `ArchiveMapTest` TU is essential — the plan should require a **minimal explicit instantiation TU** in the scratch harness, not an optional verify name.
+
+**10. Warning set is narrower than "x64-clean" implies**
+
+Only `/we4311 /we4312 /we4244`. Missing common LLP64 movers:
+
+- **C4267** (`size_t` → `int`) — pervasive in container indexing
+- **C5026/C5027** (move/copy elision with truncation)
+- Template instantiation errors (C2338) from `static_assert` — covered separately
+
+Treating phase 31 as "truncation class closed" while C4267 survives is a half-ported tree.
+
+**11. Wave-2 parallel plans + boot smoke only in 31-02 and 31-06**
+
+Plans 03–05 make behavioral changes (spinlock, Archive serializer, pointer math) without mid-wave boot validation. Plan 06 backstops this, but if 31-02 runs boot smoke early and 31-05 later breaks network parse, you lose bisection clarity. Sequencing asm → truncation → layout with a single boot checkpoint before 06 would reduce debug cost.
+
+**12. `PLATFORM_WIN32` in scratch props vs committed defines**
+
+Committed `sharedMath.vcxproj` defines `WIN32` but not `PLATFORM_WIN32`; the latter comes from `FoundationTypesWin32.h` via the `First*.h` chain. Scratch harness must compile through the same `FirstShared*.h` entrypoints, not rely on `-D PLATFORM_WIN32` alone — otherwise `#ifdef PLATFORM_WIN32` guards (Targa packing, platform glue) may diverge from real builds.
+
+### LOW
+
+**13. Plan 31-05 path typo**: Task 1 says edit `src/shared/Archive.h`; actual file is `src/external/ours/library/archive/src/shared/Archive.h` (forwarder at `include/Archive/Archive.h`).
+
+**14. `.gitignore` commits a line while scratch dir stays local** — correct, but the committed `.gitignore` change is a permanent footprint; acceptable.
+
+**15. `VeCritsec` `_interlockedbittestandset((long*)&m_iLock, 0)`** — type punning on `volatile unsigned int`; works on MSVC but strict-aliasing purists would use `std::atomic` — out of scope, fine for Phase 31.
+
+**16. TargaFormat `#pragma pack(push)` uses `PLATFORM_WIN32` but `pack(pop)` uses `_WIN32`** — pre-existing inconsistency; `static_assert` baselined to live 32-bit sizeof is the right mitigation (plan 05 handles this).
+
+**17. Plan 31-02 runs full 5-target build only in Task 3** — doesn't rebuild all plugins if only sharedMath changes (no shared-header layout change) — OK per ABI rules.
+
+---
+
+## Suggestions
+
+1. **Fix FPU port spec explicitly**: `setControlWord` should be `#if !defined(_M_X64) → _control87(cw, _MCW_RC | _MCW_EM | _MCW_PC) #else → _control87(cw, _MCW_RC | _MCW_EM) #endif`. Add acceptance: 32-bit `install()` still sets 24-bit precision (read back CW precision bits after install in a debug-only check, or document manual FPU CW probe).
+
+2. **Expand plan 04 `files_modified`** to include all in-scope sort-key sites: both D3D9 vertex buffer TUs + `Direct3d9_StaticShaderData.cpp` + evaluate `ShaderEffect.h` (or a single `clientGraphics` sort-key contract header change).
+
+3. **Mandate sort-key strategy in plan 04 Task 1** before coding: e.g. "all `getSortKey()` implementations use `static_cast<int>(std::hash<uintptr_t>{}(ptr))`" OR "widen virtual to `intptr_t` + rebuild all four plugins" — with explicit file list for either path.
+
+4. **Make `in-scope-tus.txt` exhaustive in plan 01**, not "first cut" — derive from MSBuild dependency graph or `_all_*.vcxproj` ClCompile lists for the five canonical targets. Gate plan 06 on manifest line count matching RESEARCH build-graph.
+
+5. **Add scratch-harness warning flags**: at minimum `/we4267` (or document deliberate omission + Phase 33 carry-forward). Consider `/we4244`'s friends: sign-conversion and `size_t` loops.
+
+6. **Require synthetic Archive map TU** in plan 01/05: a tiny scratch-only `.cpp` that instantiates `Archive::get/put(std::map<int,int>)` — otherwise BITS-03 fix is unverified.
+
+7. **Document DebugHelp `DWORD(Offset)` truncation** in Phase 33 residual worklist template in plan 06.
+
+8. **Transform intrinsic port**: require preserving stack alignment trick or document switch to `_mm_loadu_ps`/`_mm_storeu_ps` throughout; add note that boot smoke with skinned characters is necessary but not sufficient for matrix concat edge cases.
+
+9. **Clarify x64 scratch define parity**: harness should compile TUs through each lib's normal `First*.h` + `.vcxproj` defines (including per-config `DEBUG_LEVEL`), not a synthetic define superset that masks missing includes.
+
+10. **Plan 06 residual criteria**: distinguish "cannot compile without x64 third-party libs" (legitimate deferral) from "truncation in in-scope boot-path TU we didn't list" (phase escape — must fix in 31, not defer to 33).
+
+---
+
+## Risk Assessment
+
+**Overall: MEDIUM-HIGH**
+
+**Justification:** Architecture and phase boundaries are strong (would be LOW risk as a planning document alone). Execution risk is elevated because:
+
+- The FPU `_control87` mask specification, if implemented literally, can **regress the shipped 32-bit client** — the opposite of Phase 31's core invariant.
+- BITS-02 is **not closed** across the declared in-scope boot path (D3D9 sort keys, header-inline truncations); reliance on a possibly incomplete TU manifest and a late gate sweep creates a half-ported tree that passes Phase 31 on paper.
+- SSE/FPU ports lack numeric golden tests; boot-to-character-select is necessary but won't catch rare sort-key collisions or matrix edge cases.
+- Scratch compile-only is **sound for asm + obvious truncation** but **weak for header-only templates and uninstantiated serializers** unless the manifest and synthetic tests are mandatory.
+
+The plans are above average for a legacy C++ port and show genuine research depth. The highest-value fixes before execution: **correct the FPU mask spec**, **expand BITS-02 ownership to all in-scope truncation sites**, and **make the TU manifest exhaustive with explicit Archive map instantiation**. With those addressed, risk drops to **MEDIUM**; without them, Phase 31 could ship a "green" scratch sweep while leaving boot-path x64 defects and a subtle 32-bit FPU regression in place.
