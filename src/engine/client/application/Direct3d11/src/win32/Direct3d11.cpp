@@ -854,6 +854,40 @@ Gl_api const * GetApi()
 }
 
 // ======================================================================
+// GetHookPoints -- Utinni D3D11 hook-point advertisement (handoff
+// 2026-06-15). Hands the live DXGI swapchain + device + context to an
+// injected modding overlay (Utinni) as borrowed, opaque pointers so it
+// can cooperatively detour Present/ResizeBuffers off the REAL swapchain
+// instead of blind-harvesting a throwaway device vtable.
+//
+// Pure read-only getter -- no behavioral change, no Utinni dependency.
+// If Utinni is not injected nothing calls this; the export is inert.
+// swapChain is null until Direct3d11_Device::create() completes and null
+// again after destroy(); non-null + stable for the session (resize resets
+// only the RTV/DSV, not the swapchain object). Borrowed pointers: Utinni
+// never AddRef/Release for ownership. Exported __cdecl/extern "C" to match
+// GetApi() so GetProcAddress(hGl11, "GetHookPoints") resolves undecorated.
+// See .planning/handoff/2026-06-15-utinni-dx11-hookpoint-advertisement-spec.md.
+
+struct UtinniDx11HookPoints
+{
+	IDXGISwapChain1 *     swapChain;   // null until create() completes; non-null + stable for session
+	ID3D11Device *        device;
+	ID3D11DeviceContext * context;
+};
+
+extern "C" __declspec(dllexport) UtinniDx11HookPoints __cdecl GetHookPoints();
+
+UtinniDx11HookPoints GetHookPoints()
+{
+	UtinniDx11HookPoints hp = {};
+	hp.swapChain = Direct3d11_Device::getSwapChain();
+	hp.device    = Direct3d11_Device::getDevice();
+	hp.context   = Direct3d11_Device::getContext();
+	return hp;
+}
+
+// ======================================================================
 // Direct3d11::install -- populate the rest of the Gl_api table.
 
 bool Direct3d11::install(Gl_install * gl_install)

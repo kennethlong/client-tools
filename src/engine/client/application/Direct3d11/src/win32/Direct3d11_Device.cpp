@@ -700,6 +700,7 @@ void Direct3d11_Device::destroy()
 // Singleton accessors.
 
 ID3D11Device *        Direct3d11_Device::getDevice()  { return ms_device.Get(); }
+IDXGISwapChain1 *     Direct3d11_Device::getSwapChain() { return ms_swapChain.Get(); }   // Utinni hook-point advertisement (handoff 2026-06-15): live swapchain, null before create()/after destroy(), borrowed (not owned)
 ID3D11RenderTargetView * Direct3d11_Device::getBackBufferRTV() { return ms_backBufferRTV.Get(); }
 ID3D11DepthStencilView * Direct3d11_Device::getDepthStencilView() { return ms_depthStencilDSV.Get(); }   // Phase 19: shared screen depth (::46); RenderTarget binds it on the full-screen scene RT so the world depth-tests (D3D9 parity -- depth surface persists across SetRenderTarget for screen-sized RTs)
 ID3D11Buffer *        Direct3d11_Device::getPhantomZeroBuffer() { return ms_phantomZeroBuffer.Get(); }

@@ -89,6 +89,16 @@ namespace OsNamespace
 
 	bool                                          ms_focused;
 
+	// Phase 19 / Utinni handoff (2026-06-15): WM_SIZE client-rect resize
+	// tracking. Previously only WM_DISPLAYCHANGE (desktop resolution change)
+	// drove the renderer's resize path, so window drag-resize and the common
+	// Utinni embed-panel reparent resize (a WM_SIZE on the child window) left
+	// the backbuffer stale. ms_inSizeMove debounces interactive drag
+	// (WM_ENTERSIZEMOVE..WM_EXITSIZEMOVE) down to a single resize on drag-end;
+	// ms_sizeChangePending records that a size change arrived during the drag.
+	bool                                          ms_inSizeMove;
+	bool                                          ms_sizeChangePending;
+
 	int const                                     ms_hotKeyId = 0xBEEF;
 
 	extern "C" WINBASEAPI BOOL WINAPI IsDebuggerPresent(VOID);
@@ -1135,6 +1145,7 @@ LRESULT CALLBACK Os::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			break;
 
 		case WM_ENTERSIZEMOVE:
+			ms_inSizeMove = true;
 			if (ms_getOtherAdapterRectsHookFunction)
 			{
 				ms_otherAdapterRects.clear();
@@ -1143,6 +1154,7 @@ LRESULT CALLBACK Os::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			break;
 
 		case WM_EXITSIZEMOVE:
+			ms_inSizeMove = false;
 			ms_focused = true;
 			if (ms_acquiredFocusHookFunction)
 				ms_acquiredFocusHookFunction();
@@ -1151,6 +1163,13 @@ LRESULT CALLBACK Os::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			ms_wasFocusLost = true;
 			if (ms_windowPositionChangedHookFunction)
 				(*ms_windowPositionChangedHookFunction)();
+			// Phase 19 / Utinni handoff: flush a resize deferred during the drag.
+			if (ms_sizeChangePending)
+			{
+				ms_sizeChangePending = false;
+				if (ms_displayModeChangedHookFunction)
+					ms_displayModeChangedHookFunction();
+			}
 #if PRODUCTION == 0
 			DebugMonitor::setBehindWindow(ms_window);
 #endif
@@ -1245,6 +1264,26 @@ LRESULT CALLBACK Os::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 				ms_focused = false;
 				if (ms_lostFocusHookFunction)
 					ms_lostFocusHookFunction();
+			}
+			break;
+
+		case WM_SIZE:
+			// Phase 19 / Utinni handoff (2026-06-15): track HWND client-rect
+			// resizes so the renderer rebuilds its backbuffer to match. Reuses
+			// the displayModeChanged hook (the renderer's resize path already
+			// re-reads the client rect and self-guards on unchanged/zero size,
+			// so this is idempotent). SIZE_MINIMIZED (0x0) is skipped -- the
+			// renderer guard would no-op it anyway, but skipping avoids churn.
+			// During an interactive drag (between WM_ENTERSIZEMOVE and
+			// WM_EXITSIZEMOVE) we defer to a single resize on drag-end;
+			// programmatic / embedded-reparent / maximize / restore resizes
+			// arrive without that bracket and apply immediately.
+			if (hwnd == ms_window && wParam != SIZE_MINIMIZED)
+			{
+				if (ms_inSizeMove)
+					ms_sizeChangePending = true;
+				else if (ms_displayModeChangedHookFunction)
+					ms_displayModeChangedHookFunction();
 			}
 			break;
 

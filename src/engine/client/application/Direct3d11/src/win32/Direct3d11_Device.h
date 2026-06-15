@@ -38,6 +38,14 @@ public:
 	// Singleton accessors -- nullptr before create() and after destroy().
 	static ID3D11Device *        getDevice();
 	static ID3D11DeviceContext * getContext();
+
+	// Utinni hook-point advertisement (handoff 2026-06-15): the live DXGI
+	// flip-model swap chain. Exposed read-only so the GetHookPoints() export
+	// in Direct3d11.cpp can hand the real swapchain to an injected modding
+	// overlay. nullptr before create() / after destroy(); stable for the
+	// session (resize resets only the RTV/DSV, not ms_swapChain). Caller
+	// borrows the pointer -- does NOT own it.
+	static IDXGISwapChain1 *     getSwapChain();
 	static int                   getWidth();
 	static int                   getHeight();
 	static HWND                  getWindow();

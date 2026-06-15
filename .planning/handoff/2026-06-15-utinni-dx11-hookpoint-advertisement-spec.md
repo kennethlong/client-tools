@@ -1,6 +1,7 @@
 # SWG-Source D3D11 Hook-Point Advertisement — Instrumentation Spec
 
-**Status:** Handoff spec — ready for the `swg-client-v2` implementer
+**Status:** IMPLEMENTED in `swg-client-v2` (2026-06-15) — §3 contract + §6 Option 1 both shipped.
+See the "Implementer resolution" notes in §6 and §7 below.
 **Author:** Utinni Phase 19 (Dx11Backend + Config Detection + Resize)
 **Date:** 2026-06-15
 **Target repo:** `D:/Code/swg-client-v2` (the SWG-Source D3D11 client; `gl11_r.dll`)
@@ -200,6 +201,26 @@ This question does NOT block the §3 contract — implement `GetHookPoints()` re
 how complete the resize story is for v2.1. Default disposition if unsure: **Option 2 (defer)**, and
 Utinni tracks the gap.
 
+> **Implementer resolution (2026-06-15): Option 1 — DONE.** `WM_SIZE` now drives the resize path,
+> so Utinni's `ResizeBuffers` (vtbl idx 13) hook works for embed-panel drag-resize, not just
+> `WM_DISPLAYCHANGE`. Implementation chose to **reuse the existing `displayModeChanged` hook** rather
+> than add a new `Gl_api` slot (avoids the shared-header ABI cascade; the renderer's resize path
+> already re-reads the client rect and self-guards on unchanged/zero size, so it is idempotent):
+> - `sharedFoundation/.../Os.cpp` WndProc: added a `WM_SIZE` case → fires
+>   `ms_displayModeChangedHookFunction` (skips `SIZE_MINIMIZED`; guards `hwnd == ms_window`).
+> - Debounced via `ms_inSizeMove`/`ms_sizeChangePending`: interactive drag
+>   (`WM_ENTERSIZEMOVE`..`WM_EXITSIZEMOVE`) collapses the mid-drag `WM_SIZE` storm to a single resize
+>   on drag-end; programmatic / embedded-reparent / maximize / restore resizes (no sizemove bracket)
+>   apply immediately — which is exactly the Utinni embed case.
+> - **D3D9 unaffected:** the same hook reaches `Direct3d9Namespace::displayModeChanged`, whose
+>   `checkDisplayMode()` is guarded by `ms_windowed && ms_engineOwnsWindow` and reads the *adapter*
+>   mode — behaviour identical to the pre-existing `WM_DISPLAYCHANGE` path; no new `Gl_api` slot, no
+>   plugin rebuild required (only `SwgClient.exe` relinked, since it owns the WndProc).
+> - **Verified:** Release D3D11 client (`gl11_r.dll`, `rasterMajor=11`) booted to login; two
+>   programmatic resizes (1600×900→1024×768→1400×900 window) survived (`ResizeBuffers` is
+>   `FATAL_DX_HR` on failure) and the screenshot showed the scene filling the resized client rect
+>   edge-to-edge (backbuffer tracked the window).
+
 ---
 
 ## 7. Acceptance — how Utinni will consume this (so you know "done")
@@ -219,6 +240,14 @@ Utinni tracks the gap.
 **Your deliverable is complete when:** `gl11_r.dll` exports `GetHookPoints` (undecorated, `__cdecl`),
 returning the three live pointers (null before `create()`), with no other behavioral change — and a
 build of `gl11_r.dll` is staged. (Optionally, §6 Option 1 if you elect to do it.)
+
+> **Implementer resolution (2026-06-15): DONE.** `dumpbin /exports stage/gl11_r.dll` shows
+> `GetHookPoints` undecorated (alongside `GetApi`), same for `gl11_d.dll`. Added
+> `Direct3d11_Device::getSwapChain()` (returns `ms_swapChain.Get()`, null before create/after destroy)
+> + the `GetHookPoints()`/`UtinniDx11HookPoints` export in `Direct3d11.cpp` after `GetApi()`. No
+> behavioral change to device create / present / resize. Both `gl11_r.dll` and `gl11_d.dll` rebuilt
+> clean (0 unresolved externals) and staged. §6 Option 1 (WM_SIZE) also shipped — see §6 note.
+> Files: `Direct3d11.cpp`, `Direct3d11_Device.{h,cpp}`, `sharedFoundation/.../Os.cpp`.
 
 ---
 
