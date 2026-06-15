@@ -241,7 +241,7 @@ namespace
 
 			//-- rotateTranslateScale_l2p: w=1, 4 lanes (translate included, scaled).
 			{
-				const Vector got = rotateTranslateScale_l2p(xf, v, scale);
+				const Vector got = SseMath::rotateTranslateScale_l2p(xf, v, scale);
 				const Vector ref = xf.rotateTranslate_l2p(v) * scale;
 				DEBUG_FATAL(!nearlyEqual(got.x, ref.x) || !nearlyEqual(got.y, ref.y) || !nearlyEqual(got.z, ref.z),
 					("SseMath oracle: rotateTranslateScale_l2p mismatch (got %g,%g,%g ref %g,%g,%g)",
@@ -250,7 +250,7 @@ namespace
 
 			//-- rotateScale_l2p: w=0, 3 lanes (NO translate).
 			{
-				const Vector got = rotateScale_l2p(xf, v, scale);
+				const Vector got = SseMath::rotateScale_l2p(xf, v, scale);
 				const Vector ref = xf.rotate_l2p(v) * scale;
 				DEBUG_FATAL(!nearlyEqual(got.x, ref.x) || !nearlyEqual(got.y, ref.y) || !nearlyEqual(got.z, ref.z),
 					("SseMath oracle: rotateScale_l2p mismatch (got %g,%g,%g ref %g,%g,%g)",
@@ -260,7 +260,7 @@ namespace
 			//-- skinPositionNormal_l2p: position w=1 4-lane, normal w=1 3-lane.
 			{
 				Vector gotP, gotN;
-				skinPositionNormal_l2p(xf, v, n, scale, gotP, gotN);
+				SseMath::skinPositionNormal_l2p(xf, v, n, scale, gotP, gotN);
 				const Vector refP = xf.rotateTranslate_l2p(v) * scale;
 				const Vector refN = xf.rotate_l2p(n) * scale;
 				DEBUG_FATAL(!nearlyEqual(gotP.x, refP.x) || !nearlyEqual(gotP.y, refP.y) || !nearlyEqual(gotP.z, refP.z),
@@ -273,7 +273,7 @@ namespace
 			{
 				Vector gotP(10.0f, 20.0f, 30.0f);
 				Vector gotN(1.0f, 2.0f, 3.0f);
-				skinPositionNormalAdd_l2p(xf, v, n, scale, gotP, gotN);
+				SseMath::skinPositionNormalAdd_l2p(xf, v, n, scale, gotP, gotN);
 				const Vector refP = Vector(10.0f, 20.0f, 30.0f) + xf.rotateTranslate_l2p(v) * scale;
 				const Vector refN = Vector(1.0f, 2.0f, 3.0f) + xf.rotate_l2p(n) * scale;
 				DEBUG_FATAL(!nearlyEqual(gotP.x, refP.x) || !nearlyEqual(gotP.y, refP.y) || !nearlyEqual(gotP.z, refP.z),
