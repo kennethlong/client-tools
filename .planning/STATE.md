@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: phases-complete
+status: milestone_complete
 last_updated: "2026-06-15T16:30:00.000Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 7
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 19
   completed_plans: 19
-  percent: 100
+  percent: 114
 ---
 
 # Project State
@@ -69,8 +69,8 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 30 (tre-compare-tool-frontend-spa) — COMPLETE (all 3 plans done; TRE-tool stream + v2.3 phase work finished)
-Plan: 3 of 3 — DONE
+Phase: 30
+Plan: Not started
 Plans: 30-03 master-detail SPA — DONE: 3754b2a73 (app shell + InstallPicker + SetDeltaStrip + SummaryStats + StatusBadge) + 362e2e576 (virtualized FileTree + DetailPanel); SC#4 human-verify APPROVED 2026-06-15 (SWGSource × SWG Infinity, 231,086-row cross-distribution diff — whitengold unavailable, SWGLegends a degenerate identical stub; resolved via 4 real open-zlib installs via gitignored absolute-path verify-*.cfg). | 30-02 data layer — DONE: 9c32f5fd0 (tree test RED) + d52a6df78 (types+tree GREEN) + 3bb08b864 (status test RED) + 00e44fc04 (status+api GREEN). | 30-01 SPA scaffold + static mount — DONE: 544359067 (scaffold) + e8b5154b0 (vitest/shadcn/tanstack) + 626b9a073 (test RED) + dd4e1da2b (feat GREEN). TRE-05 satisfied. | 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). 29-02 sqlite cache — DONE: c661c6aa3 (test RED) + 963a0ad0d (feat GREEN). 29-03 FastAPI surface — DONE: 7eb055cbf (config) + baf2e18b9 (test RED) + b0d5442b4 (feat GREEN) + 46eac9150 (integration test). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
 Outcome (29-01): pure `tre_compare.diff` engine (NO fastapi/sqlite3 — Phase-30/TREM headless import). `diff_archive_set` keyed by `(basename, kind)` (tree↔toc collision = two rows), fault-wrapped `stat_archive` (corrupt archive → `fault` row, never aborts). `diff_virtual_trees` lean `(length,compressed_length)` tri-state rows — never crc — + optional `qualifier` (tombstoned/rejected/error _left/_right; tombstoned-both never vanishes) + summary (per-side node_errors/rejected/tombstoned + status_counts). `drill_in` domain status ok/not_found/rejected + winner/shadowed/verdict; `hash_virtual_file` xxh3_64 of DECOMPRESSED bytes with SYMMETRIC TREE/TOC payload resolve (match `fix_up_file_name(e.path)==vpath`, read by RAW `e.path`) and `_HASH_FAULTS=(*_NODE_FAULTS,KeyError)` never-raise (Opus). Structured `DriveHashResult`. Deps: fastapi 0.137 / uvicorn 0.49 BARE (uv.lock grep-proven, no uvloop/httptools) / xxhash 3.7 + httpx dev. RED→GREEN; 14 diff tests + 52/52 synthetic suite green. Two deviations: posixpath.normpath rejected-key recovery (Rule 3), build_tre `payloads=` for deterministic false-identical bytes (Rule 2).
 Outcome (29-02): stdlib-sqlite3 `tre_compare.cache` (NO fastapi). `Cache.archive_entries(node, node_errors, *, no_cache)` parse-skip cache keyed `(abspath, mtime_ns, size)` — INTEGER `st_mtime_ns`, never float (P4 closes FAT32/network 1-2s + float-rounding false-HIT). HIT proven by a spy on `tre_compare.cache.iter_node_entries` (call-count==1 across two calls) — parse-skip, NOT row-equality (P5). `build_virtual_tree_cached(scan, cache)` re-expresses the Phase-28 merge VERBATIM sourcing tree/toc rows from sqlite + `path` nodes from the live walk, threading `node.kind` from the LIVE node (a row carries no kind — P2); parity-equivalent to `build_virtual_tree` across an EXPANDED 7-case matrix incl. shadowed-tuple ORDER + rejected LIST order. `tre_file` stored per toc row (Pitfall 7 — drill-in without re-parsing a 193k-entry `.toc`). `get_file_hash`/`put_file_hash` memo the Plan-01 hexdigest. Concurrency: `check_same_thread=False` + WAL + `busy_timeout=5000` + a write `Lock` guarding the MISS detect+INSERT with an under-lock re-check + `INSERT OR IGNORE` (no concurrent-MISS 500, Sonnet); `__file__`-relative default db under `tools/tre-compare/.cache/` (gitignored). RED→GREEN; 8 cache tests + 60/60 synthetic suite green. One deviation: parity_matrix fixture had `a/t.dds` real in the top tree (case-1 never exercised) → removed it so the tombstone wins first (Rule 1).
@@ -91,7 +91,7 @@ Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Ready to execute
+Status: Milestone complete
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
