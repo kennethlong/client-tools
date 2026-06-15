@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: executing
-last_updated: "2026-06-15T23:35:20.415Z"
+last_updated: "2026-06-15T23:50:33.260Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -87,7 +87,7 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 ## Current Position
 
 Phase: 31 (64-bit-correctness-foundation) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-15
 
@@ -177,6 +177,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-15] Phase 30-03: linked master-detail SPA over the 30-02 data layer (App shell + InstallPicker/SetDeltaStrip/SummaryStats/StatusBadge + virtualized FileTree + auto-verdict DetailPanel). StatusBadge = the single semantic-variant->shadcn-Badge mapper so the honesty distinction (≈ metadata neutral vs = content green) cannot drift across the 5 consumers; committed-pair pattern (picker selection != committed compare pair); keyed-query stale-discard on [left_cfg,right_cfg,path] (Pitfall 4); set-delta cross-filter is a best-effort path-stem scope (frozen /compare/files rows carry no per-file archive field). SC#4 human-verify APPROVED 2026-06-15 — plan's literal SWGSource × whitengold pair NOT realizable (whitengold absent); SWGLegends was a degenerate identical stub; resolved by registering 4 real open-zlib distributions (SWGSource/SWG Infinity/SWGEmu/Stardust) via gitignored absolute-path verify-*.cfg wrappers and accepting against SWGSource × SWG Infinity (231,086 file rows: changed 126,542 / added 80,653 / identical-by-metadata 19,954 / removed 3,232 / tombstoned 705) — virtualized tree no hang, filter/search/hide-identical/cross-filter + detail honesty distinction confirmed. TRE-05 satisfied; Phase 30 + all v2.3 phases complete. 3754b2a73 + 362e2e576
 - [Phase ?]: [2026-06-15] Phase 30-01: FIRST repo frontend at tools/tre-compare/web (Vite 8/React 19/TS 6/Tailwind 4/shadcn zinc-dark), sibling of src/, zero coupling to the engine MSBuild graph (D-01); build.outDir=build dodges the gitignored Python dist/ collision, web/build/ built-on-demand+gitignored (D-02/A3); vite dev proxy + relative-fetch single code path; Vitest+RTL+jsdom seam wired; 8 shadcn primitives + @tanstack/react-virtual+react-query pre-installed for Wave 2. ONLY backend touch: web_static.SpaStaticFiles 404->index.html + WEB_DIR (3-level .parent walk) mounted at / LAST in create_app (greedy / never shadows the 4 routes, T-30-01-03), guarded on web_dir.is_dir(); create_app(web_dir=) injectable. TDD RED 626b9a073 -> GREEN dd4e1da2b; 6 web_static tests + 80 passed/2 deselected (no regression); verified vs the REAL built bundle. 127.0.0.1 bind untouched. 3 Rule-3 deviations (shadcn Nova preset->zinc contract, TS6 baseUrl removed, root .gitignore package.json/lib/ negated for web/)
 - [Phase ?]: [2026-06-15] Phase 31-01: scratch x64 harness manifest exhaustive (2216 TUs/57 libs, ClCompile-derived); _USE_32BIT_TIME_T DROPPED on x64 (UCRT hard-errors under _WIN64 -> time_t is 8 bytes, a BITS-03 residual); Misc.h:236 memmove C2668 is the dominant x64 blocker gating the whole in-scope tree
+- [Phase ?]: [2026-06-15] Phase 31-02: BITS-01 hard chunk DONE — FloatingPointUnit x87 fnstcw/fldcw -> _controlfp_s with x87<->_MCW_* boundary translation (strategy A: module stays x87-layout, translate only at get/set; update() compare preserved); P_24 RETAINED on 32-bit (named decision, VERIFY-01 door-snap), _MCW_PC omitted only on x64 (#if _M_X64; avoids invalid-param handler), never __control87_2; _DEBUG round-trip self-check. SseMath canDoSseMath cpuid->__cpuid + 4 *_l2p routines + prefetch -> _mm_*/_mm_prefetch register-faithful (verified lane semantics: rotateScale 3-lane/w=0 vs rotateTranslateScale 4-lane/w=1; skin position-4-lane vs normal-3-lane); _mm_loadu_ps unaligned (x64 movaps-fault avoided), global sseVariable retired; _DEBUG numeric oracle. Transform sse_xf_matrix_3x4 naked->normal _mm_* fn, shufps 0x15 = translate to LANE 3 only via _mm_set_ps (NOT _mm_set1_ps broadcast); _DEBUG equivalence oracle vs scalar. NO #ifdef _M_X64 fork for SSE (D-05). All 3 TUs 0 C4235 in scratch x64; sharedMath 32-bit ClCompile clean. Rule-1 fix: oracle *_l2p calls needed SseMath:: qualification (C3861 on 32-bit). Misc.h C2668 DEFERRED to 31-04 (deferred-items.md DEF-31-01). Commits e9edaeca8/673efdd28/6a1fd14b7/717a66689
 
 ### Pending Todos
 
@@ -197,7 +198,7 @@ Last activity: 2026-06-15
 - **[v2.3 — CORNERSNAP removal sequencing]** Strip the CORNERSNAP `_DEBUG` probes (Phase 26 / HARD-03) ONLY after the corner-snap fix (Phase 25 / HARD-02) is verified against them — they are its acceptance harness.
 - **[v2.3 — machine portability]** `stage/miles/` redist is NOT in git and postbuild doesn't copy it — a fresh clone has half-dead audio + warning-flood lag if missing. PORT-01 must detect/handle this, not assume the dir is present.
 - **[boot invariant — /FORCE false-pass]** SwgClient links under `/FORCE` which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. Grep link output for `unresolved external symbol` (must be 0) — applies to the atomic instrumentation removal (Phase 26).
-- [Phase 31] Misc.h:236 memmove(void*,const void*,int) C2668 ambiguity blocks ~every in-scope TU on x64 -- earliest fix-wave (31-02/04) must fix it to unblock the sweep
+- [Phase 31] Misc.h:236 memmove(void*,const void*,int) C2668 ambiguity blocks ~every in-scope TU on x64 -- NOT in 31-02 scope (FloatingPointUnit/SseMath/Transform only); NOW OWNED BY 31-04 (logged as DEF-31-01 in deferred-items.md). 31-02's per-TU acceptance grep (C4235/C4311/C4312/C4244==0) is robust to the residual C2668 (cl emits the worklist past it). Recommended fix: `::memmove(dst, src, static_cast<size_t>(length))` to bind the CRT overload.
 
 ## Deferred Items
 
@@ -212,7 +213,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T20:14:25.296Z
+Last session: 2026-06-15T23:50:33.245Z
 Prior session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. v2.3 milestone closed + tagged.)
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
