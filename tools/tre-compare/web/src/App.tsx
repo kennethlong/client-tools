@@ -1,0 +1,11 @@
+// Minimal Wave-0 placeholder. The real master-detail layout (install pickers, set-delta
+// strip, virtualized file-tree, detail Sheet) is Wave 2 (plan 30-03).
+function App() {
+  return (
+    <main className="flex min-h-svh items-center justify-center bg-background text-foreground">
+      <h1 className="text-2xl font-semibold tracking-tight">TRE Compare</h1>
+    </main>
+  );
+}
+
+export default App;

@@ -114,6 +114,12 @@ src/build/win32/_all_*.recipe
 node_modules/
 package.json
 package-lock.json
+# ...but the tre-compare frontend SPA (the one legitimate Node project in this repo) IS tracked
+!tools/tre-compare/web/package.json
+!tools/tre-compare/web/package-lock.json
+# The global `lib/` engine-artifact ignore (line ~31) also catches web/src/lib/ — un-ignore it.
+!tools/tre-compare/web/src/lib/
+!tools/tre-compare/web/src/lib/**
 
 # Planning subsystem runtime state (the .md docs under .planning/ stay tracked)
 .planning/config.json
