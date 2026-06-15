@@ -6,6 +6,8 @@
 
 **Phase 24 complete (2026-06-13, v2.3 Hardening):** DPVS occlusion is now config-gated (`[ClientGraphics/Dpvs] occlusionMode = auto|on|off`, auto-gated on POB-cell membership, F11 override preserved) — HARD-01; the Miles audio redist is machine-portable (vendored byte-set + postbuild repoint with codec-repair guard) and a tracked `client.cfg.template` + `setup-client.ps1` generator de-hardcodes stage paths and cleans the Phase-11+ test keys — PORT-01/02. Dual-renderer boot (D3D9/D3D11) user-verified.
 
+**Phase 30 complete (2026-06-15) — v2.3 phases all done (24–30):** The TRE compare tool's frontend SPA shipped — the repo's first frontend (`tools/tre-compare/web/`, Vite 8 / React 19 / TS 6 / Tailwind 4 / shadcn), a virtualized install-vs-install tree-diff over the proven Phase-29 API, served from FastAPI on a single 127.0.0.1 port (SpaStaticFiles mounted last). TRE-05 satisfied; verifier 4/4, code review 0 blockers. SC#4 was human-approved against a real cross-distribution diff — **SWGSource × SWG Infinity, 231,086 file rows** (the original whitengold target has no install on this machine, so four real open-zlib installs — SWGSource, SWG Infinity, SWGEmu, SWG Stardust — were registered as the acceptance fixtures). With Phase 30 closed, all seven v2.3 Hardening phases (24–30) are complete and the milestone is ready for close.
+
 ## Current Milestone: v2.3 Hardening
 
 **Goal:** Consolidate the v2.2 parity win — act on the DPVS verdict, strip the accumulated debug instrumentation, make the staged client machine-portable, fix the known runtime crashes/quirks, and ship a modern web-based TRE compare tool for cross-installation data diagnostics.
