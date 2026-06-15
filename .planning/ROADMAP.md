@@ -86,7 +86,8 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
 - [x] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
  (completed 2026-06-14)
-- [x] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache (completed 2026-06-15)
+- [x] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
+ (completed 2026-06-15)
 - [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
 
 ## Phase Details
@@ -180,7 +181,10 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   2. A user can filter by status (hide-identical), search by name/path, and read summary stats
   3. A user can select any file and see a detail panel with the winning archive, shadowed copies, sizes, and CRC display
   4. The tool runs end-to-end as a single localhost server and answers the SWGSource-vs-whitengold space-asset diff
-**Plans**: TBD
+**Plans**: 3 plans (3 waves)
+  - [ ] 30-01-PLAN.md — Vite/React/Tailwind4/shadcn scaffold + Vitest harness + the only backend touch: SpaStaticFiles mount (web/build/, mounted last) + mount-order regression test
+  - [ ] 30-02-PLAN.md — pure data layer (TDD): frozen-contract types, relative-path fetch client, buildFolderTree/flattenVisible tree transforms, status/verdict badge maps with the honesty distinction
+  - [ ] 30-03-PLAN.md — linked master-detail UI: pickers + set-delta strip (cross-filter) + virtualized FileTree + auto-verdict DetailPanel + SummaryStats, then SC#4 SWGSource-vs-whitengold end-to-end checkpoint
 **UI hint**: yes
 
 ## Progress
