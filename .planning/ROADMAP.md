@@ -183,7 +183,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   4. The tool runs end-to-end as a single localhost server and answers the SWGSource-vs-whitengold space-asset diff
 **Plans**: 3 plans (3 waves)
   - [x] 30-01-PLAN.md — Vite/React/Tailwind4/shadcn scaffold + Vitest harness + the only backend touch: SpaStaticFiles mount (web/build/, mounted last) + mount-order regression test
-  - [ ] 30-02-PLAN.md — pure data layer (TDD): frozen-contract types, relative-path fetch client, buildFolderTree/flattenVisible tree transforms, status/verdict badge maps with the honesty distinction
+  - [x] 30-02-PLAN.md — pure data layer (TDD): frozen-contract types, relative-path fetch client, buildFolderTree/flattenVisible tree transforms, status/verdict badge maps with the honesty distinction
   - [ ] 30-03-PLAN.md — linked master-detail UI: pickers + set-delta strip (cross-filter) + virtualized FileTree + auto-verdict DetailPanel + SummaryStats, then SC#4 SWGSource-vs-whitengold end-to-end checkpoint
 **UI hint**: yes
 
