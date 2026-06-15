@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
-status: executing
-last_updated: "2026-06-15T03:11:38.709Z"
+status: verifying
+last_updated: "2026-06-15T03:20:37.784Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 16
-  completed_plans: 15
-  percent: 94
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -69,12 +69,13 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 29 (tre-compare-tool-diff-engine-api) — EXECUTING
-Plan: 3 of 3
-Plans: 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). 29-02 sqlite cache — DONE: c661c6aa3 (test RED) + 963a0ad0d (feat GREEN). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
+Phase: 29 (tre-compare-tool-diff-engine-api) — ALL 3 PLANS EXECUTED (ready for verification)
+Plan: 3 of 3 — DONE
+Plans: 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). 29-02 sqlite cache — DONE: c661c6aa3 (test RED) + 963a0ad0d (feat GREEN). 29-03 FastAPI surface — DONE: 7eb055cbf (config) + baf2e18b9 (test RED) + b0d5442b4 (feat GREEN) + 46eac9150 (integration test). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
 Outcome (29-01): pure `tre_compare.diff` engine (NO fastapi/sqlite3 — Phase-30/TREM headless import). `diff_archive_set` keyed by `(basename, kind)` (tree↔toc collision = two rows), fault-wrapped `stat_archive` (corrupt archive → `fault` row, never aborts). `diff_virtual_trees` lean `(length,compressed_length)` tri-state rows — never crc — + optional `qualifier` (tombstoned/rejected/error _left/_right; tombstoned-both never vanishes) + summary (per-side node_errors/rejected/tombstoned + status_counts). `drill_in` domain status ok/not_found/rejected + winner/shadowed/verdict; `hash_virtual_file` xxh3_64 of DECOMPRESSED bytes with SYMMETRIC TREE/TOC payload resolve (match `fix_up_file_name(e.path)==vpath`, read by RAW `e.path`) and `_HASH_FAULTS=(*_NODE_FAULTS,KeyError)` never-raise (Opus). Structured `DriveHashResult`. Deps: fastapi 0.137 / uvicorn 0.49 BARE (uv.lock grep-proven, no uvloop/httptools) / xxhash 3.7 + httpx dev. RED→GREEN; 14 diff tests + 52/52 synthetic suite green. Two deviations: posixpath.normpath rejected-key recovery (Rule 3), build_tre `payloads=` for deterministic false-identical bytes (Rule 2).
 Outcome (29-02): stdlib-sqlite3 `tre_compare.cache` (NO fastapi). `Cache.archive_entries(node, node_errors, *, no_cache)` parse-skip cache keyed `(abspath, mtime_ns, size)` — INTEGER `st_mtime_ns`, never float (P4 closes FAT32/network 1-2s + float-rounding false-HIT). HIT proven by a spy on `tre_compare.cache.iter_node_entries` (call-count==1 across two calls) — parse-skip, NOT row-equality (P5). `build_virtual_tree_cached(scan, cache)` re-expresses the Phase-28 merge VERBATIM sourcing tree/toc rows from sqlite + `path` nodes from the live walk, threading `node.kind` from the LIVE node (a row carries no kind — P2); parity-equivalent to `build_virtual_tree` across an EXPANDED 7-case matrix incl. shadowed-tuple ORDER + rejected LIST order. `tre_file` stored per toc row (Pitfall 7 — drill-in without re-parsing a 193k-entry `.toc`). `get_file_hash`/`put_file_hash` memo the Plan-01 hexdigest. Concurrency: `check_same_thread=False` + WAL + `busy_timeout=5000` + a write `Lock` guarding the MISS detect+INSERT with an under-lock re-check + `INSERT OR IGNORE` (no concurrent-MISS 500, Sonnet); `__file__`-relative default db under `tools/tre-compare/.cache/` (gitignored). RED→GREEN; 8 cache tests + 60/60 synthetic suite green. One deviation: parity_matrix fixture had `a/t.dds` real in the top tree (case-1 never exercised) → removed it so the tombstone wins first (Rule 1).
-Next: Phase 29 Plan 03 — FastAPI routes (summary + paginated rows + lazy file-detail) over the diff engine + this cache; map drill_in rejected→400 / not_found→404.
+Outcome (29-03): `tre_compare.api` — a `create_app(cache, installs_path)` FACTORY (NO module-level Cache leak, D-01/D-03) exposing four STATELESS routes composing the Plan-01 pure diff over the Plan-02 cached merge: `/compare/set` (corrupt archive → fault row, never 500), `/compare/files` (FULL `{rows,summary}`, no pagination D-08), `/file/detail` (`drill_in` not_found→404 / rejected→400 + content-indeterminate verdict), `/installs` (tomllib picker). API-layer `get_or_compute_hash` memoizes the drill-in hash keyed on the RESOLVED PAYLOAD `.tre` via a `replace(node, abspath=payload_tre)` synthetic SearchNode (P3 — sqlite stays OUT of diff.py; mutated payload .tre under an unchanged .toc → FRESH hash). `__main__` binds `127.0.0.1` ONLY (T-29-03-03). `config.py` tomllib `load_installs` (installs.toml gitignored, .example tracked, D-02). RED→GREEN; 12 api tests + env-gated real-pair integration test asserting a MEASURED second-compare cache HIT via an iter_node_entries spy (SC#4/P5); 72 passed, 2 deselected. Two Rule-3 deviations: cache get/put_file_hash take a SearchNode (payload-keyed via swapped abspath, no cache API change); removed a literal `0.0.0.0` from __main__ prose to satisfy the acceptance grep. create_app + diff importable for Phase 30 with zero backend refactor.
+Next: Phase 29 VERIFY, then Phase 30 — React+Vite+shadcn SPA (TRE-05) consuming the create_app four-route JSON unchanged (install picker from /installs, set-delta table, virtualized filterable tree-diff, per-file detail).
 Prior-phase backlog (28 foundation):
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
 Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
@@ -88,7 +89,7 @@ Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Ready to execute
+Status: Phase complete — ready for verification
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
@@ -138,6 +139,7 @@ Last activity: 2026-06-15
 - [Phase ?]: Phase 28-03: scanner.py engine-faithful sort (-priority, KIND_RANK, cfg_seq) + both key grammars; virtual_tree.py first-hit-wins single-pass, per-node-type tombstone (tree=global, toc=skip), fix_up_file_name verbatim + separate safe_virtual_key hardening; eager searchPath walk (Open-Q1); .tre/.toc bounds preflight
 - [Phase ?]: [2026-06-15] Phase 29-01: tre_compare.diff pure engine (no fastapi/sqlite3) — (basename,kind) set keying, (len,clen) file tri-state never crc, tombstoned/rejected/error qualifier, symmetric TREE/TOC drill-in, never-raise xxhash; bare uvicorn proven
 - [Phase ?]: [2026-06-15] Phase 29-02: tre_compare.cache sqlite parse-skip cache keyed (abspath, mtime_ns INTEGER, size) — HIT proven by an iter_node_entries spy (call-count==1) not row-equality (P5); build_virtual_tree_cached parity with the builder across an expanded 7-case matrix incl. shadowed-tuple ORDER, kind threaded from the live node (P2); INSERT OR IGNORE + under-lock MISS re-check (concurrent-MISS-safe, Sonnet); busy_timeout + __file__-relative default db path; tre_file stored per toc row (Pitfall 7)
+- [Phase ?]: [2026-06-15] Phase 29-03: tre_compare.api create_app(cache,installs_path) FACTORY — four stateless routes, NO module-level Cache leak (D-01/D-03); /compare/files full {rows,summary} no pagination (D-08); /file/detail not_found->404 rejected->400 + content-indeterminate verdict; get_or_compute_hash API-layer memo keyed on the RESOLVED payload .tre via replace(node,abspath=payload_tre) (P3, sqlite stays out of diff.py); /installs tomllib picker (installs.toml gitignored, .example tracked); __main__ binds 127.0.0.1 only (T-29-03-03); env-gated real-pair integration test asserts a measured second-compare cache HIT via an iter_node_entries spy (SC#4/P5). RED baf2e18b9 -> GREEN b0d5442b4; 72 passed, 2 deselected
 
 ### Pending Todos
 

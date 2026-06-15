@@ -86,7 +86,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 - [x] **Phase 27: D3DCompile Port** - HARD-05 satisfied-by-Fix-A (2026-06-14): D3DCompile swap attempted, reverted, deferred to x64 (re-fights the full gl11 shader battle); Fix-A SEH guard retained; census + A/B baseline kept as x64 inputs
 - [x] **Phase 28: TRE Compare Tool — Foundation (Parser + Scanner + Virtual Tree)** - Headless, fully unit-tested backend: vendored parser + cfg search-path scanner + engine-faithful merged-virtual-tree builder
  (completed 2026-06-14)
-- [ ] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
+- [x] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache (completed 2026-06-15)
 - [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
 
 ## Phase Details
@@ -169,7 +169,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 **Plans**: 3 plans
 - [x] 29-01-PLAN.md — deps (FastAPI/uvicorn/xxhash) + pure diff.py (set/file tri-state/drill-in+xxhash) + Wave-0 test_diff.py
 - [x] 29-02-PLAN.md — stdlib-sqlite3 cache (archive_meta/archive_entry/file_hash) + build_virtual_tree_cached parity + test_cache.py
-- [ ] 29-03-PLAN.md — FastAPI api.py (4 stateless routes) + config.py (installs.toml) + localhost __main__ + test_api.py + env-gated real-pair integration (SC#4)
+- [x] 29-03-PLAN.md — FastAPI api.py (4 stateless routes) + config.py (installs.toml) + localhost __main__ + test_api.py + env-gated real-pair integration (SC#4)
 
 ### Phase 30: TRE Compare Tool — Frontend SPA
 **Goal**: Ship the modern web UI over the proven running API — a virtualized, filterable install-vs-install tree-diff that solves the space-asset diagnosis use case end-to-end.
@@ -213,5 +213,5 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete    | 2026-06-14 |
-| 29. TRE Tool — Diff Engine + API | v2.3 | 2/3 | In Progress|  |
+| 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete   | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
