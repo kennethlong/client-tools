@@ -1,13 +1,15 @@
 ---
 phase: 29-tre-compare-tool-diff-engine-api
 verified: 2026-06-14T22:45:00Z
-status: human_needed
+human_verified: 2026-06-15T03:55:00Z
+status: passed
 score: 4/4
 overrides_applied: 0
 human_verification:
-  - test: "With TRE_COMPARE_INTEGRATION=1 set plus TRE_COMPARE_LEFT_CFG and TRE_COMPARE_RIGHT_CFG pointing at two real client.cfg files (e.g. SWGSource vs whitengold), run: cd tools/tre-compare && uv run pytest -m integration -q"
+  - test: "With TRE_COMPARE_INTEGRATION=1 set plus TRE_COMPARE_LEFT_CFG and TRE_COMPARE_RIGHT_CFG pointing at two real client.cfg files, run: cd tools/tre-compare && uv run pytest -m integration -q"
     expected: "Both integration tests run (not skipped). The two-install real-pair test returns a non-empty set diff, a non-empty tri-state file diff with valid statuses, and the second build_virtual_tree_cached call proves a cache HIT via the iter_node_entries spy (second-compare call-count strictly less than first-compare count). This is the SC#4 north-star."
-    why_human: "SC#4 requires real SWG installation files (TRE/TOC archives). The machine running verification must have two installations available and supply their cfg paths via env vars. Cannot verify programmatically without those files."
+    why_human: "SC#4 requires real SWG installation files (TRE/TOC archives). The machine running verification must have two installations available and supply their cfg paths via env vars."
+    result: "PASSED 2026-06-15 — ran SWGSource (4 SKU TOCs, ~200k entries) vs SWG Restoration (SwgRestoration.toc). pytest -m integration => 2 passed. SET rows=5, FILE rows=219,109 (identical 99,749 / changed 102,711 / added 10,650 / removed 5,999), 0 errors/rejected/tombstoned; cache HIT measured ~3x (18.09s parse -> 5.99s). See 29-HUMAN-UAT.md."
 ---
 
 # Phase 29: TRE Compare Tool — Diff Engine + API Verification Report
