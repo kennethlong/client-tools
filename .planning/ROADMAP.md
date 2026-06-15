@@ -168,7 +168,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
   4. A sqlite index cache keyed by `(abspath, mtime, size)` makes re-runs instant, and the API returns correct diff JSON for the SWGSource-vs-whitengold install pair
 **Plans**: 3 plans
 - [x] 29-01-PLAN.md — deps (FastAPI/uvicorn/xxhash) + pure diff.py (set/file tri-state/drill-in+xxhash) + Wave-0 test_diff.py
-- [ ] 29-02-PLAN.md — stdlib-sqlite3 cache (archive_meta/archive_entry/file_hash) + build_virtual_tree_cached parity + test_cache.py
+- [x] 29-02-PLAN.md — stdlib-sqlite3 cache (archive_meta/archive_entry/file_hash) + build_virtual_tree_cached parity + test_cache.py
 - [ ] 29-03-PLAN.md — FastAPI api.py (4 stateless routes) + config.py (installs.toml) + localhost __main__ + test_api.py + env-gated real-pair integration (SC#4)
 
 ### Phase 30: TRE Compare Tool — Frontend SPA
@@ -213,5 +213,5 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 26. Instrumentation Removal + Options FATAL | v2.3 | 2/2 | Complete   | 2026-06-14 |
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete    | 2026-06-14 |
-| 29. TRE Tool — Diff Engine + API | v2.3 | 1/3 | In Progress|  |
+| 29. TRE Tool — Diff Engine + API | v2.3 | 2/3 | In Progress|  |
 | 30. TRE Tool — Frontend SPA | v2.3 | 0/TBD | Not started | - |
