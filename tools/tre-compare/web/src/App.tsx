@@ -22,6 +22,8 @@ import type { SetRow } from "@/lib/types";
 import { InstallPicker } from "@/components/InstallPicker";
 import { SetDeltaStrip } from "@/components/SetDeltaStrip";
 import { SummaryStats } from "@/components/SummaryStats";
+import { FileTree } from "@/components/FileTree";
+import { DetailPanel } from "@/components/DetailPanel";
 
 function App() {
   // ── shared compare state ──────────────────────────────────────────────────
@@ -31,12 +33,13 @@ function App() {
   // results don't churn while the user re-picks. null until the first Compare.
   const [pair, setPair] = useState<{ left: string; right: string } | null>(null);
   const [scopeArchive, setScopeArchive] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
-  // Reset the scope when picking a NEW comparison. (Selected-file state + the detail Sheet
-  // are wired in Task 2.)
+  // Reset the selection + scope when picking a NEW comparison.
   const onCompare = () => {
     if (!leftCfg || !rightCfg) return;
     setScopeArchive(null);
+    setSelectedPath(null);
     setPair({ left: leftCfg, right: rightCfg });
   };
 
@@ -108,14 +111,25 @@ function App() {
             body={(filesQuery.error as Error)?.message ?? "unknown error"}
           />
         )}
-        {/* FileTree (focal pane) + DetailPanel (Sheet) wired in Task 2. */}
-        {files && files.rows.length === 0 && (
-          <EmptyState
-            heading="No differing files."
-            body="Every file matched by metadata. Turn off 'Hide identical' to see all entries, or clear your search."
+        {files && (
+          <FileTree
+            rows={files.rows}
+            scopeArchive={scopeArchive}
+            setRows={setRows}
+            selectedPath={selectedPath}
+            onSelect={setSelectedPath}
           />
         )}
       </div>
+
+      {pair && (
+        <DetailPanel
+          leftCfg={pair.left}
+          rightCfg={pair.right}
+          path={selectedPath}
+          onClose={() => setSelectedPath(null)}
+        />
+      )}
     </div>
   );
 }
