@@ -21,6 +21,7 @@
 #include "sharedSynchronization/Mutex.h"
 
 #include <cstdio>
+#include <intrin.h>
 #include <string>
 
 // ======================================================================
@@ -171,7 +172,9 @@ static void InternalFatal(const char *format, va_list va)
 
 #ifdef _WIN32
 	{
-		__asm int 3;
+		// BITS-01 (Phase 31): the inline-asm int-3 trap is x64-illegal (C4235).
+		// __debugbreak() emits the same breakpoint trap on x86 and x64.
+		__debugbreak();
 	}
 #endif
 

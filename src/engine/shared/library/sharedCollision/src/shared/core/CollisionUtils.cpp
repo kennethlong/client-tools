@@ -41,6 +41,7 @@
 #include "sharedMath/Vector.h"
 #include "sharedMath/Ray3d.h"
 
+#include <cmath>
 #include <vector>
 #include <algorithm>
 
@@ -424,9 +425,10 @@ inline void faster_normalize( Vector & V )
 {
 	float t = (V.x * V.x) + (V.y * V.y) + (V.z * V.z);
 
-	__asm fld t;
-	__asm fsqrt;
-	__asm fstp t;
+	// BITS-01 (Phase 31): the x87 fld/fsqrt/fstp inline-asm block is x64-illegal
+	// (C4235). Replaced with the sqrtf intrinsic — same scalar single-precision
+	// square root, compiles on both bitnesses, no #ifdef fork.
+	t = sqrtf(t);
 
 	t = 1.0f / t;
 

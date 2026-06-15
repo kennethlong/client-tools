@@ -11,6 +11,8 @@
 #include "shareddebug/DebugFlags.h"
 #include "sharedFoundation/WindowsWrapper.h"
 
+#include <intrin.h>
+
 // ======================================================================
 
 namespace ProfilerTimerNamespace
@@ -26,13 +28,15 @@ using namespace ProfilerTimerNamespace;
 
 // ======================================================================
 
-static __int64 __declspec(naked) __stdcall readTimeStampCounter()
+// BITS-01 (Phase 31): the original function was a naked __stdcall wrapper whose
+// inline-asm body issued the rdtsc instruction — x64-illegal (C4235), and the
+// naked attribute is unsupported on x64.
+// Replaced with the __rdtsc() intrinsic. __rdtsc() returns `unsigned __int64`;
+// the `static_cast<__int64>` KEEPS this function's existing `__int64` return type
+// so every caller's signature is intact and no implicit C4244 narrowing fires.
+static __int64 readTimeStampCounter()
 {
-    __asm
-		{
-        rdtsc;
-        ret;
-    }
+	return static_cast<__int64>(__rdtsc());
 }
 
 // ======================================================================

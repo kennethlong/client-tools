@@ -24,6 +24,7 @@
 #include "sharedSynchronization/Semaphore.h"
 #include "sharedThread/RunThread.h"
 #include "sharedThread/ThreadHandle.h"
+#include <intrin.h>
 #include <string>
 
 #ifdef PLATFORM_WIN32 //@todo code reorg
@@ -267,7 +268,7 @@ void Clock::update(void)
 	static int bad = 0;
 
 	if (bad && ++bad > 64)
-		__asm int 3;
+		__debugbreak();  // BITS-01 (Phase 31): was an inline-asm int-3 trap (x64-illegal C4235)
 
 	if (ms_lastFrameTime > 3.0)
 		bad = 1;
