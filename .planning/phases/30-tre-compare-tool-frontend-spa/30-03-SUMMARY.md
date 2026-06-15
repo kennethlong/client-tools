@@ -48,22 +48,22 @@ key-decisions:
   - "Set-delta -> tree cross-filter implemented as a best-effort PATH-stem scope (archive basename minus .tre/.toc, substring-matched against row.path) because the frozen /compare/files rows carry NO per-file archive field (only drill-in exposes winning_archive). This is the only archive association derivable in-browser without a backend change the frozen scope forbids."
   - "Native <select> for the install/status pickers (not a shadcn Select primitive — not in the installed set) — keyboard/SR-accessible, dense, zero extra wiring"
 
-requirements-completed: []  # TRE-05 / SC#4 acceptance is the human-verify gate (Task 3) — NOT yet human-confirmed; see Checkpoint Status
+requirements-completed: [TRE-05]  # SC#4 human-verify (Task 3) APPROVED 2026-06-15 — see Checkpoint Status
 
 # Metrics
-duration: ~25min (autonomous tasks); SC#4 human gate pending
-completed: 2026-06-15 (Tasks 1-2; Task 3 checkpoint-pending)
+duration: ~25min (autonomous tasks) + SC#4 human-verify gate (approved)
+completed: 2026-06-15
 ---
 
 # Phase 30 Plan 03: Frontend Master-Detail SPA Summary
 
-**The deliverable UI: the D-01 linked master-detail SPA over the 30-02 data layer — install pickers -> collapsible set-delta strip (cross-filter) -> virtualized merged file-tree (28px fixed, roll-up badges, in-browser filter/search/hide-identical) -> auto-verdict detail Sheet with the honesty distinction + CRC labeled-absence — building clean and proven end-to-end against two REAL installs at the API level. The final human-eyes-on-browser SC#4 gate is pending.**
+**The deliverable UI: the D-01 linked master-detail SPA over the 30-02 data layer — install pickers -> collapsible set-delta strip (cross-filter) -> virtualized merged file-tree (28px fixed, roll-up badges, in-browser filter/search/hide-identical) -> auto-verdict detail Sheet with the honesty distinction + CRC labeled-absence — building clean and human-verified end-to-end against a real cross-distribution install pair (SWGSource × SWG Infinity, 231,086 file rows). TRE-05 satisfied; SC#4 acceptance approved.**
 
-> CHECKPOINT-PENDING: Tasks 1 and 2 are complete, committed, and build/test green. Task 3 is a `checkpoint:human-verify` gate (auto_advance=false) that requires a human to open the served SPA in a real browser and confirm the visual/interactive end-to-end. The backend is fully prepared and proven (all four routes return 200 on a real 26,513-row install diff); only the in-browser visual confirmation remains.
+> CHECKPOINT-APPROVED (2026-06-15): Task 3 (`checkpoint:human-verify`, auto_advance=false) is APPROVED. A human opened the served SPA in a real browser and confirmed the visual/interactive end-to-end against a genuine cross-distribution diff. See "Checkpoint Status (Task 3 — human-verify, APPROVED)" below for the data-setup correction (the plan's literal SWGSource × whitengold pair was not realizable on this machine) and the 231k-row acceptance evidence.
 
 ## Performance
 
-- **Tasks:** 3 (2 autonomous build tasks done; 1 human-verify checkpoint pending)
+- **Tasks:** 3 (2 autonomous build tasks done; 1 human-verify checkpoint APPROVED)
 - **Files created:** 6 components; **modified:** App.tsx, main.tsx, .gitignore
 - **Build:** `npm run build` exits 0; `npm run test -- --run` 23/23 green (no regression to the 30-02 suite)
 
@@ -78,7 +78,7 @@ completed: 2026-06-15 (Tasks 1-2; Task 3 checkpoint-pending)
 
 1. **Task 1: app shell + install picker + set-delta strip + summary stats** - `3754b2a73` (feat)
 2. **Task 2: virtualized file-tree + detail Sheet (auto-verdict, CRC labeled-absence)** - `362e2e576` (feat)
-3. **Task 3: SC#4 end-to-end human-verify** - CHECKPOINT PENDING (no code; verification gate)
+3. **Task 3: SC#4 end-to-end human-verify** - APPROVED 2026-06-15 (no code; verification gate — SWGSource × SWG Infinity, 231,086-row cross-distribution diff, human-confirmed)
 
 ## Files Created/Modified
 - `src/main.tsx` - QueryClientProvider (retry:false) + TooltipProvider wrap (keyed-detail dedup, Pitfall 4)
@@ -126,21 +126,48 @@ These do not block the SPA itself — the UI renders fault rows and error envelo
 ## Known Stubs
 None. All six components render live data from the 30-02 client over the frozen routes — no hardcoded/empty data paths, no placeholder text that flows to render. (The pre-existing `lib/placeholder.test.ts` from 30-01/02 is unrelated and out of this plan's scope.)
 
-## Checkpoint Status (Task 3 — human-verify, BLOCKING)
+## Checkpoint Status (Task 3 — human-verify, APPROVED)
 
-**Automated verification (executor-performed, all GREEN):**
+**Outcome: APPROVED by the user on 2026-06-15.** The shipped single-process localhost SPA renders a genuine cross-distribution install diff end-to-end with no hang; the honesty distinction, filter/search/hide-identical/cross-filter, and the auto-verdict detail Sheet were all visually confirmed.
+
+### Data-setup correction during the checkpoint (the plan's literal pair was not realizable)
+
+The plan's literal SC#4 example was **SWGSource × whitengold**, but **whitengold has no TRE install on this machine** — the pair could not be mounted as written.
+
+- **First attempt — SWGSource × SWGLegends — REJECTED as a non-test.** SWGLegends on disk is a **degenerate stub**: it only re-ships `swgsource_3.0.tre`, so the diff came back **100% identical ("no differing files")**. It produced a valid 26,513-row payload (the figure cited in the original checkpoint-pending banner) but did NOT exercise SC#4's *differing-file* rendering — the whole point of the acceptance.
+- **Resolution — four REAL open-zlib distributions registered.** The gitignored `installs.toml` was populated with four real installs, each full-mounted via a gitignored **absolute-path** `verify-*.cfg` wrapper (the wrappers are required because the shipped cfgs use bare *relative* `searchTree` names — the Phase-29 path-anchoring limitation noted in Deferred Issues below, out of scope here):
+  - **SWGSource** — `verify-swgsource.cfg` (209 archives)
+  - **SWG Infinity** — `verify-swginfinity.cfg` (27 archives)
+  - **SWGEmu** — `verify-swgemu.cfg` (53 archives)
+  - **SWG Stardust** — `verify-stardust.cfg` (23 archives)
+  - All four verified readable via `curl`; Stardust reads open-zlib too (Infinity × Stardust = 227,923 rows). These `verify-*.cfg` files + `installs.toml` are LOCAL gitignored scaffolding — confirmed `git check-ignore`-matched and NOT committed.
+
+### Human-approved acceptance pair: SWGSource (left) × SWG Infinity (right)
+
+A genuine cross-distribution diff — a ~9× larger virtualization stress test than the earlier degenerate run, rendered end-to-end with **no hang**:
+
+| Status | Rows |
+|--------|------|
+| changed | 126,542 |
+| added | 80,653 |
+| identical-by-metadata | 19,954 |
+| removed | 3,232 |
+| tombstoned | 705 |
+| **total file rows** | **231,086** |
+
+Plus a real **set-level archive delta** (removed + identical archives in the set-delta strip). The user confirmed, in the browser: the virtualized tree scrolls without hang on the 231k-row payload; filter / name-path search / hide-identical / set-delta cross-filter all behave; and the detail Sheet's content-verdict + the honesty distinction ("≈ metadata" neutral vs green "= content") render correctly.
+
+**Automated verification (executor-performed prior to the gate, all GREEN):**
 - `npm run build` exits 0; `npm run test -- --run` 23/23 green.
 - grep: no `dangerouslySetInnerHTML` anywhere (T-30-03-01).
 - grep: `estimateSize: () => 28` present in FileTree; `getItemKey` by path; `buildFolderTree` in `useMemo` keyed on rows.
 - grep: "Path-CRC — not a content signal." present in DetailPanel; no numeric crc read from the response.
-- Server: `python -m tre_compare` bound `127.0.0.1:8765`; GET / -> 200 text/html; /installs -> both installs; /compare/set, /compare/files (26,513 rows), /file/detail all -> 200 on the REAL SWGSource+SWGLegends pair; /file/detail returned a real xxhash + `content-confirmed-identical` verdict.
-
-**Remaining (genuine human gate — cannot be self-satisfied):** a human must open the served SPA in a real browser and visually confirm the virtualized tree scrolls without hang on the 26k-row data, the badge/honesty colors render, the Sheet slides over, and filter/search/hide-identical/cross-filter all behave. See the PLAN-COMPLETE checkpoint block for the exact step-by-step. Server is left running on 127.0.0.1:8765 for the human.
+- Server: `python -m tre_compare` bound `127.0.0.1:8765`; GET / -> 200 text/html; all four routes 200 on the real SWGSource × SWG Infinity pair (`/compare/files` -> 231,086 rows).
 
 ## Self-Check: PASSED
 
-All 6 created components + the 2 modified source files exist on disk; both task commits (`3754b2a73`, `362e2e576`) are present in git history; build + 23-test suite green; the served SPA + all four API routes verified 200 on a real install pair.
+All 6 created components + the 2 modified source files exist on disk; both task commits (`3754b2a73`, `362e2e576`) are present in git history; build + 23-test suite green; the served SPA + all four API routes verified 200 on a real install pair; SC#4 human-verify gate APPROVED against the SWGSource × SWG Infinity 231,086-row cross-distribution diff.
 
 ---
 *Phase: 30-tre-compare-tool-frontend-spa*
-*Tasks 1-2 completed 2026-06-15; Task 3 human-verify checkpoint pending.*
+*Tasks 1-3 completed 2026-06-15; Task 3 human-verify checkpoint APPROVED. TRE-05 satisfied — Phase 30 (and the TRE-tool stream) complete.*

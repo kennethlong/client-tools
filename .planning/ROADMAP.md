@@ -88,7 +88,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
  (completed 2026-06-14)
 - [x] **Phase 29: TRE Compare Tool — Diff Engine + API** - Set-level + file-level diff (length/compressedLength signal, on-demand hashing) + FastAPI routes + sqlite index cache
  (completed 2026-06-15)
-- [ ] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail
+- [x] **Phase 30: TRE Compare Tool — Frontend SPA** - React/Vite/shadcn virtualized tree-diff UI: install picker, set-delta table, badges, filter, search, per-file detail (completed 2026-06-15)
 
 ## Phase Details
 
@@ -184,7 +184,7 @@ Full detail + success criteria: `milestones/v2.2-ROADMAP.md`. Audit (also the de
 **Plans**: 3 plans (3 waves)
   - [x] 30-01-PLAN.md — Vite/React/Tailwind4/shadcn scaffold + Vitest harness + the only backend touch: SpaStaticFiles mount (web/build/, mounted last) + mount-order regression test
   - [x] 30-02-PLAN.md — pure data layer (TDD): frozen-contract types, relative-path fetch client, buildFolderTree/flattenVisible tree transforms, status/verdict badge maps with the honesty distinction
-  - [ ] 30-03-PLAN.md — linked master-detail UI: pickers + set-delta strip (cross-filter) + virtualized FileTree + auto-verdict DetailPanel + SummaryStats, then SC#4 SWGSource-vs-whitengold end-to-end checkpoint
+  - [x] 30-03-PLAN.md — linked master-detail UI: pickers + set-delta strip (cross-filter) + virtualized FileTree + auto-verdict DetailPanel + SummaryStats; SC#4 human-verify APPROVED 2026-06-15 (real acceptance pair = SWGSource × SWG Infinity, 231,086-row cross-distribution diff — whitengold unavailable on this machine, SWGLegends was a degenerate identical stub; resolved via 4 real open-zlib installs)
 **UI hint**: yes
 
 ## Progress
@@ -218,4 +218,4 @@ Client-hardening stream (24 → 25 → 26 → 27) and TRE-tool stream (28 → 29
 | 27. D3DCompile Port | v2.3 | 3/3 | Complete    | 2026-06-14 |
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete    | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete    | 2026-06-15 |
-| 30. TRE Tool — Frontend SPA | v2.3 | 1/3 | In Progress|  |
+| 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete   | 2026-06-15 |
