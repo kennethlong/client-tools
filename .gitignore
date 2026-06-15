@@ -121,6 +121,12 @@ package-lock.json
 !tools/tre-compare/web/src/lib/
 !tools/tre-compare/web/src/lib/**
 
+# Phase 31 (v3.0 x64) throwaway compile-only scratch harness -- the D-01
+# "signal generator, not a deliverable": props + PowerShell driver + TU
+# manifest + its .obj/worklist outputs. Uncommitted by design so the committed
+# swg.sln/.vcxproj (32-bit-only; x64 platform add is Phase 33) stays untouched.
+src/build/win32/x64-scratch/
+
 # Planning subsystem runtime state (the .md docs under .planning/ stay tracked)
 .planning/config.json
 .planning/debug/
