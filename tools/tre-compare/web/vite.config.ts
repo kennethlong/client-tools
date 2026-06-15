@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -24,5 +25,11 @@ export default defineConfig({
       "/file": "http://127.0.0.1:8765",
       "/installs": "http://127.0.0.1:8765",
     },
+  },
+  test: {
+    // Vitest reads this config (Wave 0 frontend seam). jsdom for the eventual RTL
+    // component tests; globals so `describe`/`it`/`expect` need no import.
+    environment: "jsdom",
+    globals: true,
   },
 });
