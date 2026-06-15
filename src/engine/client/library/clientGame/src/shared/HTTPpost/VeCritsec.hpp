@@ -5,6 +5,8 @@
 
 #pragma warning( disable : 4740 ) // disable warning C4740: flow in or out of inline asm code suppresses global optimization
 
+#include <intrin.h>   // BITS-01 (Phase 31): _interlockedbittestandset (replaces the x64-illegal locked-bit-test-and-set inline asm)
+
 // Explicit declaration to avoid having to #include <windows.h>
 extern "C"
 {
@@ -39,19 +41,26 @@ public:
             return( true );
         }
 
-        volatile unsigned int* p_i_lock = &m_iLock;
-        __asm 
-        {
-            mov esi,[p_i_lock]
-            lock bts dword ptr [esi], 0
-            jnc Locked
-        }
-        return( false );
-        
-        Locked:
+        // BITS-01 (Phase 31): the original test-and-set was an inline-asm
+        // locked bit-test-and-set on bit 0 (x64-illegal, C4235) with a
+        // jump-if-not-carry fall-through to the Locked body.
+        // _interlockedbittestandset performs the same atomic
+        // bit-test-and-set on bit 0 and returns the PREVIOUS bit value:
+        //   previous == 1 -> lock was already held -> acquire failed -> false
+        //   previous == 0 -> we set the bit -> acquired -> fall through to Locked
+        // m_iLock is a 32-bit word on both bitnesses, so the (long*) cast does
+        // not change width (mirrors the old `dword ptr` operand). A C-style cast
+        // is used deliberately: the intrinsic takes `long*`, so the cast must
+        // also strip m_iLock's `volatile` qualifier (reinterpret_cast cannot);
+        // _interlockedbittestandset is itself a full memory barrier, so the
+        // dropped `volatile` does not weaken the atomic acquire semantics.
+        if ( _interlockedbittestandset( (long*)&m_iLock, 0 ) )
+            return( false );
+
+        // Locked:
         m_uThreadID = uCallingThread;
         m_uLockCount = 1;
-        return( true );    
+        return( true );
 #else
         //
         // This looks like a race condition, but it isn't.  Yes the value of m_uThreadID
