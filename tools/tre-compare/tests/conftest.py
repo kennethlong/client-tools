@@ -22,6 +22,49 @@ def fixtures():
     return _fixtures
 
 
+# NOTE (Opus LOW / accepted): the scanner's ``Path(cfg_path).read_text()`` on a
+# request-controlled ``left_cfg``/``right_cfg`` has NO size cap — a huge cfg would be read
+# whole into memory. ACCEPTED for this localhost single-user diagnostic tool (the bind is
+# 127.0.0.1-only, T-29-03-03); it is documented here rather than handled as a 500 path.
+
+
+@pytest.fixture
+def tmp_cache(tmp_path: Path):
+    """A :class:`~tre_compare.cache.Cache` on a per-test tmp sqlite (isolated state).
+
+    Each test gets its OWN cache file so injecting different ``tmp_cache`` instances into
+    two ``create_app`` calls proves there is no module-level Cache leak.
+    """
+    from tre_compare.cache import Cache
+
+    cache = Cache(tmp_path / "cache" / "tre_compare.sqlite")
+    yield cache
+    cache.close()
+
+
+@pytest.fixture
+def tmp_installs(tmp_path: Path) -> Path:
+    """Write a tiny installs.toml under tmp_path and return its path."""
+    p = tmp_path / "installs.toml"
+    p.write_text(
+        '[[installs]]\nname = "synthetic"\ncfg_path = "C:/synthetic/client.cfg"\n',
+        encoding="utf-8",
+    )
+    return p
+
+
+@pytest.fixture
+def api_client(tmp_cache, tmp_installs):
+    """A FastAPI :class:`TestClient` over ``create_app`` with the injected tmp cache + installs."""
+    from fastapi.testclient import TestClient
+
+    from tre_compare.api import create_app
+
+    app = create_app(cache=tmp_cache, installs_path=tmp_installs)
+    with TestClient(app) as client:
+        yield client
+
+
 @pytest.fixture
 def synthetic_install(tmp_path: Path):
     """Lay out a portable synthetic install and return a dict of paths (incl. ``cfg``).
