@@ -1,7 +1,7 @@
 ---
 phase: 30
 slug: tre-compare-tool-frontend-spa
-status: draft
+status: approved
 shadcn_initialized: false
 preset: "shadcn CLI 4 — default init, base color zinc, dark mode"
 created: 2026-06-15
@@ -32,6 +32,23 @@ created: 2026-06-15
 
 ---
 
+## Visual Hierarchy
+
+The screen has one unambiguous focal point and a clear top-down scan order — important for a dense data tool where the user must not hunt for the primary object.
+
+| Order | Element | Why it commands attention |
+|-------|---------|---------------------------|
+| **Focal point (primary anchor)** | The **merged file-tree center pane** | It is the largest surface, the tool's primary information object, and where every diff status badge lives. The eye should land here first after a compare runs. |
+| 2 | Top **install-picker bar + "Compare Installations" button** | The entry action; commands attention *before* a compare via the accent-colored primary button, then recedes. |
+| 3 | The collapsible **set-delta summary strip** | A secondary lens that scopes the focal tree; collapsed by default so it does not compete with the tree. |
+| 4 | The **detail `Sheet`** (slide-over, right) | On-demand; only present after a file is selected, deliberately overlaying rather than sharing the focal plane. |
+
+**Status encoding carries the visual weight inside the focal pane** — colored status badges (semantic palette below) are the brightest elements in the otherwise-neutral zinc tree, drawing the eye to *what differs*. Folder rows and chevrons stay neutral so the badges pop.
+
+**Icon accessibility:** all `lucide-react` icons are either paired with a text label OR, where icon-only (e.g. expand/collapse chevrons, the hide-identical toggle, status-glyph affordances), wrapped in the shadcn **`tooltip`** component so the meaning is reachable. No icon-only control ships without a `tooltip` label. Status is never conveyed by **color or icon alone** — every status badge carries a text label (`added`, `≈ metadata`, `= content`, etc.) so color-blind users and screen readers get the same signal.
+
+---
+
 ## Spacing Scale
 
 Declared values (multiples of 4). This is a **dense** tool — default to the lower end of the scale; reserve `lg`+ for page-level structure only.
@@ -47,7 +64,7 @@ Declared values (multiples of 4). This is a **dense** tool — default to the lo
 | 3xl | 64px | Reserved — not expected in this dense layout |
 
 **Exceptions:**
-- **Virtualized tree row height is a FIXED 28px** (`estimateSize: () => 28` — 30-RESEARCH.md Pattern 1). This is a hard constraint of the TanStack Virtual fixed-height model, NOT a spacing token; it is intentionally off-scale (28 ≠ a multiple of 4 in the token sense) because it is a row-virtualization measurement, not padding. Do not "round" it to 24 or 32 — the value is locked by the virtualization pattern.
+- **Virtualized tree row height is a FIXED 28px** (`estimateSize: () => 28` — 30-RESEARCH.md Pattern 1). This is a hard constraint of the TanStack Virtual fixed-height model, NOT a spacing token; it is intentionally off-scale (28 ≠ a multiple of 4 in the token sense) because it is a row-virtualization measurement, not padding. Do not "round" it to 24 or 32 — the value is locked by the virtualization pattern. *(Checker: acknowledged FLAG — deliberate, justified, informational only.)*
 - **Tree indent step: 16px per depth level** (multiple of 4) — applied as left padding on the row content, not as a spacing gap.
 
 ---
@@ -56,12 +73,14 @@ Declared values (multiples of 4). This is a **dense** tool — default to the lo
 
 Three roles + a dedicated mono data role. Two weights only (400 regular, 600 semibold).
 
-| Role | Size | Weight | Line Height |
-|------|------|--------|-------------|
-| Body / data (default) | 14px | 400 | 1.5 |
-| Label / UI chrome | 13px | 400 | 1.4 |
-| Section heading (panel titles, set-delta strip header, detail-panel title) | 16px | 600 | 1.2 |
-| Display (app title / empty-state heading) | 20px | 600 | 1.2 |
+| Role | Size | Weight | Line Height | Color / Treatment |
+|------|------|--------|-------------|-------------------|
+| Body / data (default) | 14px | 400 | 1.5 | `--foreground` (zinc near-white), mixed-case |
+| Label / UI chrome | 13px | 400 | 1.4 | `--muted-foreground` (dimmed zinc), **UPPERCASE + letter-spacing** for picker/column/field labels |
+| Section heading (panel titles, set-delta strip header, detail-panel title) | 16px | 600 | 1.2 | `--foreground` |
+| Display (app title / empty-state heading) | 20px | 600 | 1.2 | `--foreground` |
+
+**Body vs Label legibility (REQUIRED secondary differentiator — addresses checker FLAG):** Body (14px) and Label (13px) are only 1px apart, so size alone does NOT separate them. The distinction is carried by **color + casing**: Label is `--muted-foreground`, UPPERCASE with letter-spacing; Body is `--foreground`, mixed-case. Never rely on the 1px size delta alone to tell the two roles apart.
 
 **Mono usage (not a separate size — same 14px/13px):** paths, `len`/`clen` sizes, hash hexdigests, archive basenames, priorities render in the monospace font so diagnostic columns align. This is a *font-family* distinction layered on the Body/Label roles, not a fifth type size.
 
@@ -82,14 +101,14 @@ Dark theme, shadcn `zinc` base. Values are the shadcn dark-mode `zinc` tokens. T
 
 **Accent reserved for (explicit — never "all interactive elements"):**
 - The **selected tree row** highlight (the file whose detail is open in the `Sheet`).
-- The **active install-picker** selection state and the primary "Compare" action button.
+- The **active install-picker** selection state and the primary "Compare Installations" action button.
 - The **cross-filter active** indicator when a set-delta archive row is scoping the tree.
 
 Everything else (default buttons, tree chevrons, folder rows, badges other than status) stays on neutral zinc surfaces. Status badges use the **semantic status palette below**, which is distinct from the single UI accent.
 
 ### Status / Verdict Badge Palette (the diagnostic core — Kenny's #1 pitfall lives here)
 
-Badge color is **semantic data encoding**, not decoration. These are reserved exclusively for diff status and content verdict and must be mutually distinguishable.
+Badge color is **semantic data encoding**, not decoration. These are reserved exclusively for diff status and content verdict and must be mutually distinguishable. **Every badge carries a text label** (never color-only) so the signal survives color-blindness and screen readers.
 
 | Concept | Source field | Badge style | Color intent |
 |---------|--------------|-------------|--------------|
@@ -117,7 +136,7 @@ Read-only diagnostic tool — the "primary action" is running a compare, not cre
 
 | Element | Copy |
 |---------|------|
-| Primary CTA | **"Compare"** (button enabled once both left + right installs are picked; verb-first, the single primary action) |
+| Primary CTA | **"Compare Installations"** (verb + noun object; button enabled once both left + right installs are picked — the single primary action). A compact **"Compare"** label is acceptable only inside the picker bar where the "installations" object is already visible above it. |
 | Empty state — no installs configured | Heading: **"No installations configured."** Body: **"Add installs to `installs.toml` (see `installs.toml.example`), then reload."** *(GET /installs returned `[]` — this is empty, NOT an error.)* |
 | Empty state — installs picked, not yet compared | Heading: **"Pick two installations and Compare."** Body: **"Choose a left and right install above, then Compare to diff their TRE sets."** |
 | Empty state — compare ran, zero differences after filters | Heading: **"No differing files."** Body: **"Every file matched by metadata. Turn off 'Hide identical' to see all entries, or clear your search."** |
@@ -169,11 +188,11 @@ No third-party registries were declared in CONTEXT.md, RESEARCH.md, or REQUIREME
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS *(CTA noun added — "Compare Installations")*
+- [x] Dimension 2 Visuals: PASS *(focal point + icon accessibility declared)*
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS *(13/14px secondary differentiator added — color + casing)*
+- [x] Dimension 5 Spacing: PASS *(28px row height = deliberate justified virtualization exception)*
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-06-15 (gsd-ui-checker: 0 blocking; 4 non-blocking FLAGs addressed in revision)
