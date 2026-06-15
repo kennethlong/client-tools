@@ -6,6 +6,8 @@ __pycache__/
 dist/
 .cache/
 installs.toml
+# local verification cfgs (30-03 SC#4 run — machine-specific absolute paths)
+verify-*.cfg
 
 # Vite frontend (web/) — built on demand per D-02/A3, never committed
 web/build/
