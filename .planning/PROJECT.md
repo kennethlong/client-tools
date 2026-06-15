@@ -22,9 +22,20 @@
 - The TRE tool's first real use case (SWGSource-vs-whitengold space-asset diff) is unblocked; the parser is vendored from `D:/Code/swg-blender-plugin/swg_pipeline/` (the stale `D:/Code/swg-tools` pointer is wrong)
 - Excluded: SWG-Source community-compat sync, gameplay-parity work, Nyquist validation backfill for phases 18/19–22 (milestone audit stands as the verification record)
 
-## Next Milestone: x64 Port (planned)
+## Current Milestone: v3.0 — x64 Port
 
-The v2.3 deferrals converge on one milestone. The cantina door-snap (HARD-02), the clean `D3DXCompileShader`→`D3DCompile` / D3DX-removal port (HARD-05), and the CORNERSNAP-probe removal (HARD-03 remainder) are all bound to the 32-bit toolchain — the x64 build is where the codegen environment changes, D3DX removal becomes unavoidable, and a working x64 reference exists (Restoration). The 64-bit port also addresses the chronic 32-bit OOM crash. Tracked in `todos/pending/2026-06-13-64bit-x64-port.md`. Run `/gsd-new-milestone` to scope it (questioning → research → requirements → roadmap).
+**Goal:** Port the modernized client to a native **x64** build — keeping **both** renderers (D3D9 gl05/06/07 + D3D11 gl11) bootable to character select — to eliminate the 32-bit-bound defects root-caused across v2.x (the cantina door-snap float-codegen transient, the chronic address-space OOM crash) and remove the x64-hostile legacy D3DX dependency. A proven reference exists: SWG Restoration ships a stable x64 D3D9 client (`D:\SWG Restoration\x64`) with no door-snap.
+
+**Target features:**
+- **x64 build platform** — add the `x64` platform to `src/build/win32/swg.sln` + every `.vcxproj`; client boots to character select in x64 under both `rasterMajor=5` (D3D9) and `=11` (D3D11)
+- **x87 → SSE/intrinsics** — replace the x64-illegal `__asm fnstcw/fldcw` in `FloatingPointUnit.cpp` with `_controlfp`/`_control87`; tree-wide `__asm` sweep
+- **64-bit correctness** — pointer/int truncation fixes (C4311/C4312/C4244 with warnings-as-errors), `#pragma pack` / hardcoded-`sizeof` / serialization-width audit (IFF/TRE/network message layout)
+- **Third-party x64 libs** — rebuild/relink against x64 variants (Restoration's `x64/` is the reference: dpvs, bink, pcre, libxml2, icu, jpeg, discord-rpc); rebuild gl05/06/07 + gl11 plugins as x64
+- **Miles 7.2e → 9.3b audio port** — vendor the 9.3b SDK (`D:/Code/milesss-v9.3b/`), port the `clientAudio` call sites (API verified ~source-compatible; the one signature edit is `AIL_room_type`), stage the x64 redist + `.asi`/`.flt` provider set
+- **D3DX → `d3dcompiler_47`** — the deferred HARD-05; D3DX is x64-hostile, so the D3DCompile port becomes mandatory (Restoration did this for x64)
+- **Verify + CORNERSNAP cleanup** — confirm the door-snap + OOM-crash class are resolved against the Restoration x64 reference; strip the CORNERSNAP `_DEBUG` probes once verified clean (completes the deferred half of HARD-03)
+
+**Scope notes:** Complementary to (not competing with) the D3D11 work — this is a platform port that keeps both renderers; the "complete" client is eventually **64-bit + D3D11**. Mechanical port of the *same* renderers (bounded, unlike the D3D11 rewrite). Tracked in `todos/pending/2026-06-13-64bit-x64-port.md`. Phases continue from 30 → start at **31**.
 
 ## Prior State: v2.1 Decruft SHIPPED (2026-05-27)
 
@@ -281,4 +292,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 after **v2.3 Hardening milestone close**. v2.3 shipped + tagged `v2.3` (Phases 24–30; 10/12 requirements satisfied, HARD-02/HARD-05-clean-port/HARD-03-CORNERSNAP deferred to the x64 milestone — all root-caused 32-bit-bound). Delivered: DPVS config-gate, machine portability, Options-FATAL fix, D-15 instrumentation removal, and the repo's first web app (standalone TRE compare tool). Archives: `milestones/v2.3-ROADMAP.md`, `milestones/v2.3-REQUIREMENTS.md`, `milestones/v2.3-MILESTONE-AUDIT.md`. Next: x64 Port milestone (`/gsd-new-milestone`).*
+*Last updated: 2026-06-15 — **v3.0 x64 Port milestone started**. v2.3 Hardening shipped + tagged `v2.3` (Phases 24–30; 10/12 requirements, the 3 root-caused 32-bit-bound deferrals now absorbed into v3.0). v3.0 scope: native x64 build keeping both D3D9 + D3D11 renderers; x87→intrinsics; 64-bit-correctness audit; x64 third-party libs; Miles 7.2e→9.3b audio port; D3DX→`d3dcompiler_47` (HARD-05); door-snap + OOM verification vs the Restoration x64 reference; CORNERSNAP-probe cleanup (HARD-03 remainder). Phases continue from 30 → start at 31. Next: define requirements → roadmap.*
