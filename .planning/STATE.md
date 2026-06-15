@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Hardening
 status: executing
-last_updated: "2026-06-15T02:52:27.313Z"
+last_updated: "2026-06-15T03:04:38.227Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 16
-  completed_plans: 13
-  percent: 81
+  completed_plans: 14
+  percent: 88
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12 after v2.2 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer. The v2.3 TRE compare tool is a standalone web app, outside that invariant but inside this milestone.
-**Current focus:** v2.3 client-hardening stream COMPLETE (Phases 24–28: 24/26/27/28 done, 25 closed-by-deferral → x64). Next: plan Phase 29 (TRE compare diff engine + FastAPI). Phases 29–30 are the remaining TRE web-tool stream.
+**Current focus:** Phase 29 — tre-compare-tool-diff-engine-api
 
 ## Deferred Items (acknowledged at v2.0 close)
 
@@ -69,9 +69,12 @@ Plus the v2.2 audit `tech_debt` list (see `milestones/v2.2-MILESTONE-AUDIT.md`):
 
 ## Current Position
 
-Phase: 29
-Plan: Not started
-Plans: 3/4 done (28-01 scaffold — DONE: ef582ae73 + 4f102935a + 959266632; 28-02 vendor parser — DONE: f222dc876 + de4f3f64d; 28-03 scanner + virtual-tree — DONE: d0a784c16 + 3a1d3df83).
+Phase: 29 (tre-compare-tool-diff-engine-api) — EXECUTING
+Plan: 2 of 3
+Plans: 29-01 diff engine + deps — DONE: 4741094f0 + af7cd45e5 + a9eaced54 (TRE-02/03/04 ticked). (Phase 28 foundation: 28-01 ef582ae73…; 28-02 f222dc876…; 28-03 d0a784c16…; 28-04 behavioral suite landed.)
+Outcome (29-01): pure `tre_compare.diff` engine (NO fastapi/sqlite3 — Phase-30/TREM headless import). `diff_archive_set` keyed by `(basename, kind)` (tree↔toc collision = two rows), fault-wrapped `stat_archive` (corrupt archive → `fault` row, never aborts). `diff_virtual_trees` lean `(length,compressed_length)` tri-state rows — never crc — + optional `qualifier` (tombstoned/rejected/error _left/_right; tombstoned-both never vanishes) + summary (per-side node_errors/rejected/tombstoned + status_counts). `drill_in` domain status ok/not_found/rejected + winner/shadowed/verdict; `hash_virtual_file` xxh3_64 of DECOMPRESSED bytes with SYMMETRIC TREE/TOC payload resolve (match `fix_up_file_name(e.path)==vpath`, read by RAW `e.path`) and `_HASH_FAULTS=(*_NODE_FAULTS,KeyError)` never-raise (Opus). Structured `DriveHashResult`. Deps: fastapi 0.137 / uvicorn 0.49 BARE (uv.lock grep-proven, no uvloop/httptools) / xxhash 3.7 + httpx dev. RED→GREEN; 14 diff tests + 52/52 synthetic suite green. Two deviations: posixpath.normpath rejected-key recovery (Rule 3), build_tre `payloads=` for deterministic false-identical bytes (Rule 2).
+Next: Phase 29 Plan 02 — `cache.py` sqlite index over the diff result shapes (hot-path tre_file serving for drill-in).
+Prior-phase backlog (28 foundation):
 Outcome (28-01): isolated `tools/tre-compare/` uv library — `uv init --lib` src layout, ZERO runtime deps (D-01), pytest 9.1.0 dev dep, committed `uv.lock` re-resolved under the 3.11 floor (`.python-version`=3.11, `requires-python>=3.11`), `[build-system].requires=uv_build>=0.11.7,<0.12` (no forward-pin, `uv build` exit 0 — review #11), registered `integration` marker (D-07 infra), package-local `.gitignore`, empty `parser/` subpackage (Plan 02 placeholder), pytest test root green (`uv run pytest -m "not integration"` → 1 passed, no marker warnings). TRE-01 ticked.
 Outcome (28-02): vendored `tre_reader.py` + `tre_decrypt.py` from swg-blender-plugin (commit `f803f587…`) into `src/tre_compare/parser/` per D-03 — provenance headers + the single import rewrite (`swg_pipeline.tre_decrypt` → `.tre_decrypt`); ZERO swg_pipeline/engine imports (D-01 extractable); public API re-exported from `parser/__init__.py`; stdlib-only; all five TREE variants (0004/0005/6000/0006/5000) + COT2000 + SearchTOC recognized; every entry dataclass exposes snake_case `length` + `compressed_length` (Phase-29 changed-detection contract); smoke test `tests/test_parser.py` green (7 passed). SC#1 delivered.
 Outcome (28-03): `scanner.py` hand-parses `[SharedFile]` repeated/indexed keys (NOT configparser; both `_NN_` and bare-priority grammars; cfg path a parameter, D-08) into an engine-faithful `(-priority, KIND_RANK[kind], cfg_seq)`-ordered `SearchNode` list (path<tree<toc within priority — review #1). `virtual_tree.py` ports `fix_up_file_name` VERBATIM (leading-`..` only) + a SEPARATE `safe_virtual_key` hardening wrapper (rejects interior-`..`/drive/UNC/empty — T-28-03-01), and merges first-hit-wins on canonical path in a SINGLE descending pass (guard BEFORE the tree-length-0 branch; no `claimed.pop` — review #1) with PER-NODE-TYPE tombstone (tree length-0 = global remove; toc length-0/offset-0 = skip-only, never shadows), `shadowed`=REAL-copies-only (review #4), eager deterministic `searchPath` `os.walk` (reparse-dir prune before descent; Open-Q1 RESOLVED), `.tre` AND `.toc` header bounds preflight + count×stride cap (T-28-03-04), and observable `node_errors`/`rejected` diagnostics (review #8). All behaviors smoke-verified; behavioral suite gated by Plan 04. Commits d0a784c16 + 3a1d3df83.
@@ -132,6 +135,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-14] Phase 28-02: vendored tre_reader.py + tre_decrypt.py from swg-blender-plugin (commit f803f587) per D-03 — provenance headers + the single import rewrite (swg_pipeline.tre_decrypt -> .tre_decrypt); zero swg_pipeline/engine imports (D-01 extractability)
 - [Phase ?]: [2026-06-14] Phase 28-02: all three entry dataclasses already expose snake_case length + compressed_length verbatim — no wrapper; Phase-29 changed-detection contract asserted via dataclasses.fields()
 - [Phase ?]: Phase 28-03: scanner.py engine-faithful sort (-priority, KIND_RANK, cfg_seq) + both key grammars; virtual_tree.py first-hit-wins single-pass, per-node-type tombstone (tree=global, toc=skip), fix_up_file_name verbatim + separate safe_virtual_key hardening; eager searchPath walk (Open-Q1); .tre/.toc bounds preflight
+- [Phase ?]: [2026-06-15] Phase 29-01: tre_compare.diff pure engine (no fastapi/sqlite3) — (basename,kind) set keying, (len,clen) file tri-state never crc, tombstoned/rejected/error qualifier, symmetric TREE/TOC drill-in, never-raise xxhash; bare uvicorn proven
 
 ### Pending Todos
 
@@ -166,7 +170,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T23:09:45.246Z
+Last session: 2026-06-15T03:04:32.440Z
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
 **v2.3 Hardening — the plan (7 phases, two independent streams):**
