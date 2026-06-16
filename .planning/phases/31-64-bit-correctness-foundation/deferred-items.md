@@ -182,3 +182,48 @@ paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unc
   COMPILE x64-clean") is STILL NOT MET after 31-07 — the AutoDelta* surface remains. 31-06 Task 2/3
   (full 32-bit build + dual-renderer boot smoke) can validate the 32-bit non-regression of the 31-07
   fixes NOW, but the x64-clean certification needs the AutoDelta* increment first.
+- **RESOLVED by plan 31-08 (2026-06-16):** the ~753 AutoDeltaMap/AutoDeltaPackedMap C2665/C2668 +
+  the AutoDeltaSet 8 + the ~125-error C2065/C2059/C2143/C2238 cascade tail are CLEARED. AutoDelta*
+  count-width pinned to uint32_t across all four families (commits 1b6a98ff4 / 5b5f08a2f), the
+  CreatureObject AutoDeltaVector callback fixed (846a2ded6). Authoritative -Scope all (2218 TUs)
+  shows 0 AutoDelta header errors. See §DEF-31-08-UNMASKED for the NEXT layer the fix exposed.
+
+---
+
+## DEF-31-08-UNMASKED: clearing the AutoDelta cascade UNMASKED a residual pre-existing class-(B) surface (STOP-and-report)
+
+- **Status:** REPORTED, NOT FIXED. Surfaced during plan 31-08 Task 3's authoritative post-fix
+  `-Scope all` sweep (snapshot: `.planning/research/scope-all-31-08-worklist.log` + `...-final.out`).
+- **Pre-existing + previously MASKED:** ALL confirmed pre-existing (0 Phase-31 commits touched any of
+  these TUs; e.g. the CuiCombatManager `pos = unsigned int` line dates to 2015). In the 31-07 baseline
+  every one of these TUs transitively included an AutoDelta* header, so cl aborted EARLY on the ~753
+  AutoDelta cascade and never reached these downstream errors. With the AutoDelta surface now cleared,
+  these previously-hidden defects become visible. This is the SAME unmask-the-next-layer dynamic that
+  31-06 → 31-07 → 31-08 each followed.
+- **Why STOP-and-report (Rule-4):** these are NOT the AutoDelta* family and NOT documented class-(A)
+  (Miles/Bink/WaterTest/D-07-N2). Per the gap-closure Rule-4 discipline they are surfaced for a USER
+  decision rather than silently fixed or deferred.
+- **The unmasked surface (16 in-scope TUs with a NON-C4244 fatal):**
+
+  | TU | Error | Root cause (pre-existing) | Disposition |
+  |----|-------|---------------------------|-------------|
+  | clientUserInterface/.../CuiCombatManager.cpp:1898 | C2665 | `getFirstToken(str, pos, pos, ...)`: `pos` is `unsigned int` but param 2 is `size_t&`; `unsigned int&` can't bind `size_t&` on x64 | class-(B), in-scope — recommend 31-09 |
+  | sharedTemplateDefinition/.../Filename.cpp:327/334/336/338/344 | C2440 + 4×C2664 | `wchar_t[]` / `u"..."` literal → `std::basic_string<char16_t>` (MSVC18 char16_t≠wchar_t) | class-(B) Unicode-type — recommend 31-09 |
+  | sharedTemplateDefinition/.../TemplateData.cpp:1751/1753 | 2×C2440 | same char16_t/wchar_t string-literal class | class-(B) — recommend 31-09 |
+  | sharedTemplateDefinition/.../TpfFile.cpp:302/310/313 | 2×C2677 + C2664 | `operator+` on `Unicode::String` (char16_t) | class-(B) — recommend 31-09 |
+  | clientSkeletalAnimation/.../MeshConstructionHelper.cpp:556/1405/1432/1454/1475 | 5×C2672 | no matching overload (size_t arg) | class-(B) — recommend 31-09 |
+  | sharedNetwork/.../TcpClient.cpp:544, TcpServer.cpp:123 | 2×C2664 | size_t-arg API mismatch | class-(B) — recommend 31-09 |
+  | sharedNetwork/.../Connection/NetworkHandler/Service/Sock/UdpSock.cpp | 5×C2371 | redefinition (winsock/platform header-order in the scratch harness) | VERIFY harness-config vs real before fixing |
+  | Direct3d9/.../Direct3d9.cpp:226, Direct3d9_StaticShaderData.cpp | C1189, C4716 | `#error must define FFP, VSPS, or both` — scratch-harness CONFIG artifact (real 5-target build sets the define per gl05/06/07 config) | NOT a defect — harness scope artifact, exclude |
+
+- **Recommended disposition (USER DECISION):**
+  1. A new Phase-31 increment (31-09) for the genuine class-(B) members: the Unicode `char16_t`/`wchar_t`
+     string-literal cluster (Filename/TemplateData/TpfFile/MeshConstructionHelper), CuiCombatManager
+     getFirstToken, and the network size_t-arg C2664 (TcpClient/TcpServer).
+  2. Direct3d9 C1189/C4716 → EXCLUDE (harness-config artifact, not a code defect).
+  3. Network C2371 → verify whether harness header-order or a real redefinition before deciding.
+  4. THEN resume 31-06 Task 2 (full 32-bit build) + Task 3 (dual-renderer boot smoke).
+- **Impact on the phase gate:** 31-06's D-02 x64-clean bar is NOT yet met — this residual class-(B)
+  surface remains. The 32-bit non-regression of all Phase-31 changes CAN be validated now (31-06 Task 2/3).
+- **Documented class-(A) residue (UNCHANGED, untouched):** the 75 `C4244` `__int64`→int D-07/N2
+  count/distance class, Miles Audio.cpp (→ P35), Bink (→ P33), WaterTestAppearance (→ P33).
