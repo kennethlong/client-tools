@@ -58,6 +58,10 @@
 #include <string>
 #include <vector>
 #include <malloc.h>
+#include <xmmintrin.h>   // Phase 31 (BITS-01, B-GAP-1): _mm_* SSE skinning intrinsics (x64-clean)
+#ifdef _DEBUG
+#include <cmath>         // fabsf for the _DEBUG numeric-equivalence oracle
+#endif
 
 //-----------------------------------
 #undef TRY_FOR_SSE
@@ -1732,510 +1736,205 @@ void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, 
 // ============================================================================
 #if TRY_FOR_SSE
 // ============================================================================
+//
+// Phase 31 (BITS-01, B-GAP-1): the SSE skinning hot path was two __declspec
+// inline-__asm blocks (illegal on x64, C4235). They are PEERS of the SseMath /
+// Transform _mm_* work in plan 31-02 and are ported here to _mm_* intrinsics.
+//
+// LAYOUT (resolved via CONSULT-44, codex+cursor concur): `transformArray` is a
+// `PoseModelTransform` array, NOT a `Transform` array. PoseModelTransform is a
+// SEPARATE __declspec(align(16)) class with `float matrix[4][4]` => 64 bytes
+// (matching the asm's `transformIndex << 6` = x64 stride) stored COLUMN-MAJOR
+// (the converting ctor transposes the row-major Transform). So `matrix[c]`
+// (floats c*4..c*4+3) is column c, and:
+//     rotateTranslate_l2p(v).lane = col0*v.x + col1*v.y + col2*v.z + col3
+//     rotate_l2p(v).lane          = col0*v.x + col1*v.y + col2*v.z   (no col3)
+// which is EXACTLY what the asm computed (its "column N" loads + broadcast +
+// mul/add). The scalar peers fill_vb_work::fillVertexBufferHard()/
+// fillDot3VertexBufferHard() call PoseModelTransform::rotate{Translate}_l2p on
+// the same array -- that is the ground-truth reference the _DEBUG oracle uses.
+//
+// ALIGNMENT (A1-SSE-ALIGN / D-05): the transform columns are loaded with
+// _mm_loadu_ps (UNALIGNED) -- never movaps an arbitrary pointer on x64. The
+// PaddedVector min/max/position accumulators ARE __declspec(align(16)) so their
+// loads/stores can be aligned. No #ifdef _M_X64 fork (intrinsics compile both
+// bitnesses).
+//
+// ----------------------------------------------------------------------------
+
+namespace
+{
+	// Skin one source 3-vector against a 64-byte column-major PoseModelTransform
+	// at byte offset (transformIndex<<6) within transformArray. translate==true
+	// adds column 3 (rotateTranslate_l2p); translate==false omits it (rotate_l2p).
+	// Returns {x,y,z,?} in lanes 0..2; lane 3 is don't-care. Faithful to the asm:
+	//   result = col0*x + col1*y + col2*z [+ col3]
+	inline __m128 sse_skin_l2p(const float *const transformColumns, const Vector &v, const bool translate)
+	{
+		const __m128 col0 = _mm_loadu_ps(transformColumns +  0);   // column 0
+		const __m128 col1 = _mm_loadu_ps(transformColumns +  4);   // column 1
+		const __m128 col2 = _mm_loadu_ps(transformColumns +  8);   // column 2
+
+		const __m128 bx = _mm_set1_ps(v.x);
+		const __m128 by = _mm_set1_ps(v.y);
+		const __m128 bz = _mm_set1_ps(v.z);
+
+		__m128 acc = _mm_mul_ps(col0, bx);
+		acc = _mm_add_ps(acc, _mm_mul_ps(col1, by));
+		if (translate)
+		{
+			// col2*z + col3, then + (col0*x + col1*y) -- same add order as the asm.
+			const __m128 col3 = _mm_loadu_ps(transformColumns + 12);   // column 3 (translate)
+			acc = _mm_add_ps(acc, _mm_add_ps(_mm_mul_ps(col2, bz), col3));
+		}
+		else
+		{
+			acc = _mm_add_ps(acc, _mm_mul_ps(col2, bz));
+		}
+		return acc;
+	}
+
+#ifdef _DEBUG
+	// Numeric-equivalence oracle (D-05 / review #2): the intrinsic skin result vs
+	// the scalar PoseModelTransform reference. A transposed lane or dropped
+	// translate is caught at first-skin rather than as silent visual corruption.
+	inline void sse_skin_oracle(const PoseModelTransform &xf, const Vector &src, const __m128 sseResult, const bool translate, const char *const what)
+	{
+		float lanes[4];
+		_mm_storeu_ps(lanes, sseResult);
+		const Vector ref = translate ? xf.rotateTranslate_l2p(src) : xf.rotate_l2p(src);
+		const float tol = 1e-3f;
+		DEBUG_FATAL(
+			fabsf(lanes[0] - ref.x) > tol || fabsf(lanes[1] - ref.y) > tol || fabsf(lanes[2] - ref.z) > tol,
+			("SSE skinning oracle: %s mismatch (sse %g,%g,%g ref %g,%g,%g)", what, lanes[0], lanes[1], lanes[2], ref.x, ref.y, ref.z));
+	}
+#endif
+}
+
+// ----------------------------------------------------------------------------
+// Skin position + normal + dot3 (the dot3 hard-skin fast path).
 void _fillDot3VertexBufferHard_sse(const fill_vb_work *const w)
 {
-	uint32 mxcsrSave, mxcsrTemp;
+	//-- Save MXCSR, enable flush-to-zero + mask all FP exceptions for the loop
+	//   (faithful to the asm's stmxcsr/ldmxcsr bracket), restore on exit.
+	const unsigned int mxcsrSave = _mm_getcsr();
+	_mm_setcsr(mxcsrSave | (MXCSR_FLUSH_TO_ZERO | MXCSR_PRECISION_MASK | MXCSR_UNDERFLOW_MASK | MXCSR_OVERFLOW_MASK | MXCSR_DENORMAL_MASK));
 
-	_asm {
-		mov	esi, w // "this" pointer
+	const char *const transformBytes = reinterpret_cast<const char *>(w->transformArray);
 
-		mov	eax, [esi]fill_vb_work.m_sourceVectors
-		mov	ebx, [esi]fill_vb_work.m_sourceVectorsEnd
-		mov	ecx, [esi]fill_vb_work.m_sourceDot3Vectors
-		mov	edx, [esi]fill_vb_work.m_sourceDot3VectorsEnd
+	__m128 maxVec = _mm_load_ps(reinterpret_cast<const float *>(&w->maxVector));
+	__m128 minVec = _mm_load_ps(reinterpret_cast<const float *>(&w->minVector));
 
-		sub	ebx, eax // length of sourceVectors array
-		sub	edx, ecx // length of sourceDot3Vectors array
+	const SourceVertex *src    = w->m_sourceVectors;
+	const Dot3Vector   *srcD3  = w->m_sourceDot3Vectors;
+	byte               *viter  = w->viter;
+	byte               *d3iter = w->dot3viter;
 
-		// ----------------------------------------------------
-		// check the length of sourceVectors array.  If it is
-		// greater than 256, pre-fetch all the cache lines
-		// for the first 256 bytes.
-		cmp	      ebx, 256
-		jl		      skip_vec_prefetch
-		prefetchnta [eax+  0]
-		prefetchnta [eax+ 32]
-		prefetchnta [eax+ 64]
-		prefetchnta [eax+ 96]
-		prefetchnta [eax+128]
-		prefetchnta [eax+160]
-		prefetchnta [eax+192]
-		prefetchnta [eax+224]
-	skip_vec_prefetch:		
-		// ----------------------------------------------------
+	for (; src != w->m_sourceVectorsEnd; ++src, ++srcD3, viter += w->vertexSize, d3iter += w->vertexSize)
+	{
+		_mm_prefetch(reinterpret_cast<const char *>(src)   + 256, _MM_HINT_NTA);
+		_mm_prefetch(reinterpret_cast<const char *>(srcD3) + 256, _MM_HINT_NTA);
 
-		// ----------------------------------------------------
-		// check the length of sourceDot3Vectors data array.  If it is
-		// greater than 256, pre-fetch all the cache lines
-		// for the first 256 bytes.
-		cmp	      edx, 256
-		jl		      skip_dot3_prefetch
-		prefetchnta [ecx+  0]
-		prefetchnta [ecx+ 32]
-		prefetchnta [ecx+ 64]
-		prefetchnta [ecx+ 96]
-		prefetchnta [ecx+128]
-		prefetchnta [ecx+160]
-		prefetchnta [ecx+192]
-		prefetchnta [ecx+224]
-	skip_dot3_prefetch:
-		// ----------------------------------------------------
+		const float *const cols = reinterpret_cast<const float *>(transformBytes + (static_cast<size_t>(src->m_firstTransformData.m_transformIndex) << 6));
 
-		// ----------------------------------------------------
-		// save the mxcsr register then mask exceptions and enable 
-		// "flush-to_zero" mode.
-		stmxcsr     mxcsrSave
-		mov         eax, mxcsrSave
-		or          eax, (MXCSR_FLUSH_TO_ZERO|MXCSR_PRECISION_MASK|MXCSR_UNDERFLOW_MASK|MXCSR_OVERFLOW_MASK|MXCSR_DENORMAL_MASK)
-		mov         mxcsrTemp, eax
-		ldmxcsr     mxcsrTemp
-		// ----------------------------------------------------
+		//-- rotateTranslate the source position.
+		const __m128 position = sse_skin_l2p(cols, src->m_position, true);
+#ifdef _DEBUG
+		sse_skin_oracle(w->transformArray[src->m_firstTransformData.m_transformIndex], src->m_position, position, true, "position");
+#endif
 
-		// ----------------------------------------------------
-		//-- Skin position, normal and dot3.
-		mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-		jmp	main_loop_test
-	main_loop_top:
-			// ----------------------------------------------------
-			// pre-fectch sourceVector data
+		//-- update bounding box.
+		maxVec = _mm_max_ps(maxVec, position);
+		minVec = _mm_min_ps(minVec, position);
 
-			// check to make sure the pre-fetcher is at least 32 bytes 
-			// from the end of the array.
-			mov	eax, [esi]fill_vb_work.m_sourceVectorPrefetch
-			mov	ebx, [esi]fill_vb_work.m_sourceVectorsEnd
-			sub	ebx, eax
-			cmp	ebx, 32
-			jl		skip_vec_prefetch2
-				// ----------------------------------------------
-				// while the pre-fetcher is less than 256 bytes away
-				// from the current source location, pre-fetch in
-				// 32 byte (cache line) increments
-				//
-				// eax contains m_sourceVectorPrefetch from above
-				mov	      ebx, [esi]fill_vb_work.m_sourceVectors
-				lea	      ebx, [ebx + 256]	// pointer 256 bytes ahead of current source
-				jmp	      vec_prefetch_loop
-			vec_prefetch2:
-				prefetchnta [eax]                 // pre-fetch
-				lea			eax, [eax + 32]       // advance pre-fetcher by cache line
-			vec_prefetch_loop:
-				cmp         eax, ebx              // compare pre-fetch to source+256
-				jl          vec_prefetch2         // if less, pre-fetch
-				mov         [esi]fill_vb_work.m_sourceVectorPrefetch, eax // update pre-fetcher var
-				// ----------------------------------------------
-		skip_vec_prefetch2:
-			// ----------------------------------------------------
+		//-- rotate the source normal (no translate).
+		const __m128 normal = sse_skin_l2p(cols, src->m_normal, false);
+#ifdef _DEBUG
+		sse_skin_oracle(w->transformArray[src->m_firstTransformData.m_transformIndex], src->m_normal, normal, false, "normal");
+#endif
 
-			// ----------------------------------------------------
-			// pre-fectch m_sourceVectorDot3 data
+		//-- rotate the source dot3 vector (no translate).
+		const __m128 dot3 = sse_skin_l2p(cols, srcD3->m_dot3Vector, false);
+#ifdef _DEBUG
+		sse_skin_oracle(w->transformArray[src->m_firstTransformData.m_transformIndex], srcD3->m_dot3Vector, dot3, false, "dot3");
+#endif
 
-			// check to make sure the pre-fetcher is at least 32 bytes 
-			// from the end of the array.
-			mov	eax, [esi]fill_vb_work.m_sourceVectorDot3Prefetch
-			mov	ebx, [esi]fill_vb_work.m_sourceDot3VectorsEnd
-			sub	ebx, eax
-			cmp	ebx, 32
-			jl		skip_dot3_prefetch2
+		//-- write out render geometry (position.xyz, normal.xyz to viter;
+		//   dot3.xyz + flipState to d3iter), matching the asm scalar stores.
+		float p[4], n[4], d[4];
+		_mm_storeu_ps(p, position);
+		_mm_storeu_ps(n, normal);
+		_mm_storeu_ps(d, dot3);
 
-				// ----------------------------------------------
-				// while the dot3 pre-fetcher is less than 256 bytes away
-				// from the current source location, pre-fetch in
-				// 32 byte (cache line) increments
-				//
-				// eax contains m_sourceVectorDot3Prefetch from above
-				mov	      ebx, [esi]fill_vb_work.m_sourceDot3Vectors
-				lea	      ebx, [ebx + 256]   	// pointer 256 bytes ahead of current source
-				jmp	      dot3_prefetch_loop
-			dot3_prefetch2:
-				prefetchnta [eax]                 // pre-fetch
-				lea			eax, [eax + 32]       // advance pre-fetcher by cache line
-			dot3_prefetch_loop:
-				cmp         eax, ebx              // compare pre-fetch to source+256
-				jl          dot3_prefetch2         // if less, pre-fetch
-				mov         [esi]fill_vb_work.m_sourceVectorDot3Prefetch, eax // update dot3 pre-fetcher var
-				// ----------------------------------------------
-		skip_dot3_prefetch2:
-			// ----------------------------------------------------
+		float *const vout = reinterpret_cast<float *>(viter);
+		vout[0] = p[0]; vout[1] = p[1]; vout[2] = p[2];
+		vout[3] = n[0]; vout[4] = n[1]; vout[5] = n[2];
 
-			mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-
-			// ----------------------------------------------------
-			// Initialize first position and normal.
-			mov         edi, [ebx]TransformData.m_transformIndex    // current vertex transform index
-			shl         edi, 6                                      // current vertex transform offset
-			mov         edx, [esi]fill_vb_work.transformArray       // transfrom array
-			lea         eax, [edx + edi]
-			// ----------------------------------------------------
-
-			///////////////////////////////////////////////////////////////
-			// rotateTranslate the source position
-			//----------------------------------------------------------
-			// rotateTranslate_l2p
-			// eax -> 4x4 column-major float transform (16 byte aligned).
-			// ebx -> source vertex
-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
-			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
-			movss  xmm5, [ebx +  4]SourceVertex.m_position   // source vector y
-			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
-			movss  xmm6, [ebx +  8]SourceVertex.m_position   // source vector z
-			movaps xmm3, [eax + 48]                          // column 3 (O_)
-
-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
-
-			mulps  xmm0, xmm4         // col0 * x.x.x.x
-			mulps  xmm1, xmm5         // col1 * y.y.y.y
-			mulps  xmm2, xmm6         // col2 * z.z.z.z
-
-			addps  xmm0, xmm1         // col0*x + col1*y
-			addps  xmm2, xmm3         // col2*z + col3
-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z + col3
-
-			movaps [esi]fill_vb_work.position, xmm0           // save result out
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////////////////////////
-			// update the bounding box with the position currently in xmm0
-			movaps	xmm1, xmm0      // save off a copy of the position for the "min" test
-			maxps		xmm0, [esi]fill_vb_work.maxVector
-			minps		xmm1, [esi]fill_vb_work.minVector
-			movaps	[esi]fill_vb_work.maxVector, xmm0
-			movaps	[esi]fill_vb_work.minVector, xmm1
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////
-			// rotate the source normal
-			//----------------------------------------------------------
-			// rotate_l2p
-			// eax -> 4x4 column-major float transform (16 byte aligned).
-			// ebx -> source vertex
-			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
-			movaps xmm1, [eax + 16]                        // column 1 (Cy_)
-			movss  xmm5, [ebx +  4]SourceVertex.m_normal   // source vector y
-			movaps xmm2, [eax + 32]                        // column 2 (Cz_)
-			movss  xmm6, [ebx +  8]SourceVertex.m_normal   // source vector z
-
-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
-
-			mulps  xmm0, xmm4         // col0 * x.x.x.x
-			mulps  xmm1, xmm5         // col1 * y.y.y.y
-			mulps  xmm2, xmm6         // col2 * z.z.z.z
-
-			addps  xmm0, xmm1         // col0*x + col1*y
-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
-
-			movaps [esi]fill_vb_work.normal, xmm0           // save result out
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////////////////////////
-			// rotate the source dot3 vector
-			mov	ebx, [esi]fill_vb_work.m_sourceDot3Vectors
-			//----------------------------------------------------------
-			// rotate_l2p
-			// eax -> 4x4 column-major float transform (16 byte aligned).
-			// ebx -> 3 float source vector
-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
-			movss  xmm4, [ebx +  0]Dot3Vector.m_dot3Vector   // source vector x
-			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
-			movss  xmm5, [ebx +  4]Dot3Vector.m_dot3Vector   // source vector y
-			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
-			movss  xmm6, [ebx +  8]Dot3Vector.m_dot3Vector   // source vector z
-
-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
-
-			mulps  xmm0, xmm4         // col0 * x.x.x.x
-			mulps  xmm1, xmm5         // col1 * y.y.y.y
-			mulps  xmm2, xmm6         // col2 * z.z.z.z
-
-			addps  xmm0, xmm1         // col0*x + col1*y
-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
-
-			movaps [esi]fill_vb_work.dot3, xmm0           // save result out
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////////////////////////
-			//-- Write out render geometry.
-			//*(Vector *)(w->viter +  0) = w->position;
-			//*(Vector *)(w->viter + 12) = w->normal;
-			//*(float *)(w->dot3viter + 0) = w->dot3.x;
-			//*(float *)(w->dot3viter + 4) = w->dot3.y;
-			//*(float *)(w->dot3viter + 8) = w->dot3.z;
-			//*(float *)(w->dot3viter +12) = w->m_sourceDot3Vectors->m_flipState;
-			//
-			// ebx contains m_sourceDot3Vectors from above
-
-			mov         eax, [esi]fill_vb_work.dot3viter    // destination dot3 pointer
-			mov         edi, [esi]fill_vb_work.viter        // destination pointer
-
-			// position and normal
-			mov         ecx, [esi + 0]fill_vb_work.position // xf'ed position.x
-			mov         edx, [esi + 4]fill_vb_work.position // xf'ed position.y
-			mov         [edi + 0], ecx
-			mov         [edi + 4], edx
-			mov         ecx, [esi + 8]fill_vb_work.position // xf'ed position.z
-			mov         edx, [esi + 0]fill_vb_work.normal   // xf'ed normal.x
-			mov         [edi + 8], ecx
-			mov         [edi +12], edx
-			mov         ecx, [esi + 4]fill_vb_work.normal   // xf'ed normal.y
-			mov         edx, [esi + 8]fill_vb_work.normal   // xf'ed normal.z
-			mov         [edi +16], ecx
-			mov         [edi +20], edx
-
-			// dot-3
-			mov         ecx, [esi + 0]fill_vb_work.dot3     // xf'ed dot3.x
-			mov         edx, [esi + 4]fill_vb_work.dot3     // xf'ed dot3.y
-			mov         [eax + 0], ecx
-			mov         [eax + 4], edx
-			mov         ecx, [esi + 8]fill_vb_work.dot3     // xf'ed dot3.z
-			mov         edx, [ebx]Dot3Vector.m_flipState    // source Dot3Vector flip-state
-			mov         [eax + 8], ecx
-			mov         [eax +12], edx
-			///////////////////////////////////////////////////////////////
-
-			// ------------------------------
-			//w->m_sourceVectors++;
-			//w->m_sourceDot3Vectors++;
-			//w->viter+=w->vertexSize;
-			//w->dot3viter+=w->vertexSize;
-			//
-			// eax contains dot3viter from above
-			// edi contains viter from above
-			add         eax, [esi]fill_vb_work.vertexSize
-			add         edi, [esi]fill_vb_work.vertexSize
-			mov         [esi]fill_vb_work.dot3viter, eax
-			mov         [esi]fill_vb_work.viter, edi
-
-			mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-			mov         ecx, [esi]fill_vb_work.m_sourceDot3Vectors  // current dot3 pointer
-
-			lea         ebx, BYTE PTR [ebx + SOURCE_VERTEX_SIZE]
-			add         ecx, SOURCE_DOT3_SIZE
-
-			mov         [esi]fill_vb_work.m_sourceVectors, ebx
-			mov         [esi]fill_vb_work.m_sourceDot3Vectors, ecx
-			// ------------------------------
-
-		// end of main loop body
-		// ------------------------------
-	main_loop_test:
-		//while (w->m_sourceVectors!=w->m_sourceVectorsEnd)
-		cmp            ebx, [esi]fill_vb_work.m_sourceVectorsEnd
-		jnz            main_loop_top
-
-		// -----------------------------------
-		// restore mxcsr
-		ldmxcsr mxcsrSave
-		// -----------------------------------
+		float *const dout = reinterpret_cast<float *>(d3iter);
+		dout[0] = d[0]; dout[1] = d[1]; dout[2] = d[2];
+		dout[3] = srcD3->m_flipState;
 	}
-	//--------------------------------------------------------------------------------------------
+
+	_mm_store_ps(reinterpret_cast<float *>(&w->maxVector), maxVec);
+	_mm_store_ps(reinterpret_cast<float *>(&w->minVector), minVec);
+
+	_mm_setcsr(mxcsrSave);
 }
+
+
 // ============================================================================
+// Skin position + normal (the no-dot3 hard-skin fast path).
 void _fillVertexBufferHard_sse(const fill_vb_work *const w)
 {
-	uint32 mxcsrSave, mxcsrTemp;
+	const unsigned int mxcsrSave = _mm_getcsr();
+	_mm_setcsr(mxcsrSave | (MXCSR_FLUSH_TO_ZERO | MXCSR_PRECISION_MASK | MXCSR_UNDERFLOW_MASK | MXCSR_OVERFLOW_MASK | MXCSR_DENORMAL_MASK));
 
-	_asm {
-		mov	esi, w // "this" pointer
+	const char *const transformBytes = reinterpret_cast<const char *>(w->transformArray);
 
-		mov	eax, [esi]fill_vb_work.m_sourceVectors
-		mov	ebx, [esi]fill_vb_work.m_sourceVectorsEnd
+	__m128 maxVec = _mm_load_ps(reinterpret_cast<const float *>(&w->maxVector));
+	__m128 minVec = _mm_load_ps(reinterpret_cast<const float *>(&w->minVector));
 
-		sub	ebx, eax // length of sourceVectors array
+	const SourceVertex *src   = w->m_sourceVectors;
+	byte               *viter = w->viter;
 
-		// ----------------------------------------------------
-		// check the length of sourceVectors array.  If it is
-		// greater than 256, pre-fetch all the cache lines
-		// for the first 256 bytes.
-		cmp	      ebx, 256
-		jl		      skip_vec_prefetch
-		prefetchnta [eax+  0]
-		prefetchnta [eax+ 32]
-		prefetchnta [eax+ 64]
-		prefetchnta [eax+ 96]
-		prefetchnta [eax+128]
-		prefetchnta [eax+160]
-		prefetchnta [eax+192]
-		prefetchnta [eax+224]
-	skip_vec_prefetch:		
-		// ----------------------------------------------------
+	for (; src != w->m_sourceVectorsEnd; ++src, viter += w->vertexSize)
+	{
+		_mm_prefetch(reinterpret_cast<const char *>(src) + 256, _MM_HINT_NTA);
 
-		// ----------------------------------------------------
-		// save the mxcsr register then mask exceptions and enable 
-		// "flush-to_zero" mode.
-		stmxcsr     mxcsrSave
-		mov         eax, mxcsrSave
-		or          eax, (MXCSR_FLUSH_TO_ZERO|MXCSR_PRECISION_MASK|MXCSR_UNDERFLOW_MASK|MXCSR_OVERFLOW_MASK|MXCSR_DENORMAL_MASK)
-		mov         mxcsrTemp, eax
-		ldmxcsr     mxcsrTemp
-		// ----------------------------------------------------
+		const float *const cols = reinterpret_cast<const float *>(transformBytes + (static_cast<size_t>(src->m_firstTransformData.m_transformIndex) << 6));
 
-		// ----------------------------------------------------
-		//-- Skin position, normal and dot3.
-		mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-		jmp	      main_loop_test
-	main_loop_top:
-			// ----------------------------------------------------
-			// pre-fectch sourceVector data
-
-			// check to make sure the pre-fetcher is at least 32 bytes 
-			// from the end of the array.
-			mov	eax, [esi]fill_vb_work.m_sourceVectorPrefetch
-			mov	ebx, [esi]fill_vb_work.m_sourceVectorsEnd
-			sub	ebx, eax
-			cmp	ebx, 32
-			jl		skip_vec_prefetch2
-				// ----------------------------------------------
-				// while the pre-fetcher is less than 256 bytes away
-				// from the current source location, pre-fetch in
-				// 32 byte (cache line) increments
-				//
-				// eax contains m_sourceVectorPrefetch from above
-				mov	      ebx, [esi]fill_vb_work.m_sourceVectors
-				lea	      ebx, [ebx + 256]	// pointer 256 bytes ahead of current source
-				jmp	      vec_prefetch_loop
-			vec_prefetch2:
-				prefetchnta [eax]                 // pre-fetch
-				lea			eax, [eax + 32]       // advance pre-fetcher by cache line
-			vec_prefetch_loop:
-				cmp         eax, ebx              // compare pre-fetch to source+256
-				jl          vec_prefetch2         // if less, pre-fetch
-				mov         [esi]fill_vb_work.m_sourceVectorPrefetch, eax // update pre-fetcher var
-				// ----------------------------------------------
-		skip_vec_prefetch2:
-			// ----------------------------------------------------
-
-			mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-
-			// ----------------------------------------------------
-			// Initialize first position and normal.
-			mov         edi, [ebx]TransformData.m_transformIndex    // current vertex transform index
-			shl         edi, 6                                      // current vertex transform offset
-			mov         edx, [esi]fill_vb_work.transformArray       // transfrom array
-			lea         eax, [edx + edi]
-			// ----------------------------------------------------
-
-			///////////////////////////////////////////////////////////////
-			// rotateTranslate the source position
-			//----------------------------------------------------------
-			// rotateTranslate_l2p
-			// eax -> 4x4 column-major float transform (16 byte aligned).
-			// ebx -> source vertex
-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
-			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
-			movss  xmm5, [ebx +  4]SourceVertex.m_position   // source vector y
-			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
-			movss  xmm6, [ebx +  8]SourceVertex.m_position   // source vector z
-			movaps xmm3, [eax + 48]                          // column 3 (O_)
-
-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
-
-			mulps  xmm0, xmm4         // col0 * x.x.x.x
-			mulps  xmm1, xmm5         // col1 * y.y.y.y
-			mulps  xmm2, xmm6         // col2 * z.z.z.z
-
-			addps  xmm0, xmm1         // col0*x + col1*y
-			addps  xmm2, xmm3         // col2*z + col3
-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z + col3
-
-			movaps [esi]fill_vb_work.position, xmm0           // save result out
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////////////////////////
-			// update the bounding box with the position currently in xmm0
-			movaps	xmm1, xmm0      // save off a copy of the position for the "min" test
-			maxps		xmm0, [esi]fill_vb_work.maxVector
-			minps		xmm1, [esi]fill_vb_work.minVector
-			movaps	[esi]fill_vb_work.maxVector, xmm0
-			movaps	[esi]fill_vb_work.minVector, xmm1
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////
-			// rotate the source normal
-			//----------------------------------------------------------
-			// rotate_l2p
-			// eax -> 4x4 column-major float transform (16 byte aligned).
-			// ebx -> source vertex
-			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
-			movaps xmm1, [eax + 16]                        // column 1 (Cy_)
-			movss  xmm5, [ebx +  4]SourceVertex.m_normal   // source vector y
-			movaps xmm2, [eax + 32]                        // column 2 (Cz_)
-			movss  xmm6, [ebx +  8]SourceVertex.m_normal   // source vector z
-
-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
-
-			mulps  xmm0, xmm4         // col0 * x.x.x.x
-			mulps  xmm1, xmm5         // col1 * y.y.y.y
-			mulps  xmm2, xmm6         // col2 * z.z.z.z
-
-			addps  xmm0, xmm1         // col0*x + col1*y
-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
-
-			movaps [esi]fill_vb_work.normal, xmm0           // save result out
-			///////////////////////////////////////////////////////////////
-
-			///////////////////////////////////////////////////////////////
-			//-- Write out render geometry.
-			//*(Vector *)(w->viter +  0) = w->position;
-			//*(Vector *)(w->viter + 12) = w->normal;
-			mov         edi, [esi]fill_vb_work.viter        // destination pointer
-
-			// position and normal
-			mov         ecx, [esi + 0]fill_vb_work.position // xf'ed position.x
-			mov         edx, [esi + 4]fill_vb_work.position // xf'ed position.y
-			mov         [edi + 0], ecx
-			mov         [edi + 4], edx
-			mov         ecx, [esi + 8]fill_vb_work.position // xf'ed position.z
-			mov         edx, [esi + 0]fill_vb_work.normal   // xf'ed normal.x
-			mov         [edi + 8], ecx
-			mov         [edi +12], edx
-			mov         ecx, [esi + 4]fill_vb_work.normal   // xf'ed normal.y
-			mov         edx, [esi + 8]fill_vb_work.normal   // xf'ed normal.z
-			mov         [edi +16], ecx
-			mov         [edi +20], edx
-			///////////////////////////////////////////////////////////////
-
-			// ------------------------------
-			//w->m_sourceVectors++;
-			//w->viter+=w->vertexSize;
-			//
-			// edi contains viter from above
-			add         edi, [esi]fill_vb_work.vertexSize
-			mov         [esi]fill_vb_work.viter, edi
-
-			mov         ebx, [esi]fill_vb_work.m_sourceVectors      // current vertex pointer
-			lea         ebx, BYTE PTR [ebx + SOURCE_VERTEX_SIZE]
-			mov         [esi]fill_vb_work.m_sourceVectors, ebx
-			// ------------------------------
-
-		// end of main loop body
-		// ------------------------------
-	main_loop_test:
-		//while (w->m_sourceVectors!=w->m_sourceVectorsEnd)
-		cmp            ebx, [esi]fill_vb_work.m_sourceVectorsEnd
-		jnz            main_loop_top
-
-		// -----------------------------------
-		// restore mxcsr
-		ldmxcsr mxcsrSave
-		// -----------------------------------
-	}
-	//--------------------------------------------------------------------------------------------
-}
-// ============================================================================
+		//-- rotateTranslate the source position.
+		const __m128 position = sse_skin_l2p(cols, src->m_position, true);
+#ifdef _DEBUG
+		sse_skin_oracle(w->transformArray[src->m_firstTransformData.m_transformIndex], src->m_position, position, true, "position");
 #endif
+
+		maxVec = _mm_max_ps(maxVec, position);
+		minVec = _mm_min_ps(minVec, position);
+
+		//-- rotate the source normal (no translate).
+		const __m128 normal = sse_skin_l2p(cols, src->m_normal, false);
+#ifdef _DEBUG
+		sse_skin_oracle(w->transformArray[src->m_firstTransformData.m_transformIndex], src->m_normal, normal, false, "normal");
+#endif
+
+		float p[4], n[4];
+		_mm_storeu_ps(p, position);
+		_mm_storeu_ps(n, normal);
+
+		float *const vout = reinterpret_cast<float *>(viter);
+		vout[0] = p[0]; vout[1] = p[1]; vout[2] = p[2];
+		vout[3] = n[0]; vout[4] = n[1]; vout[5] = n[2];
+	}
+
+	_mm_store_ps(reinterpret_cast<float *>(&w->maxVector), maxVec);
+	_mm_store_ps(reinterpret_cast<float *>(&w->minVector), minVec);
+
+	_mm_setcsr(mxcsrSave);
+}
+
+// ============================================================================
+#endif  // TRY_FOR_SSE
 
 void fill_vb_work::fillDot3VertexBufferHard() const
 {
