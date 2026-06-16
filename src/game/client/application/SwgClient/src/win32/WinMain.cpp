@@ -83,11 +83,11 @@ void externalCommandHandler(const char* command)
 	{
 		Unicode::NarrowString url8 = Unicode::wideToNarrow( url );
 
-		HINSTANCE result = ShellExecute(NULL, "open", url8.c_str(), NULL, NULL, SW_SHOWNORMAL);
+		INT_PTR const result = reinterpret_cast<INT_PTR>(ShellExecute(NULL, "open", url8.c_str(), NULL, NULL, SW_SHOWNORMAL));
 
-		if (reinterpret_cast<int>(result) < 32) //Pulled straight from MSDN -ARH
+		if (result <= 32) //Pulled straight from MSDN -ARH
 		{
-			WARNING(true, ("could not launch external application (%d)", reinterpret_cast<int>(result)));
+			WARNING(true, ("could not launch external application (%Id)", result));
 		}
 		else
 		{

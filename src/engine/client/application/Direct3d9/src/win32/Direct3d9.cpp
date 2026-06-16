@@ -134,7 +134,7 @@ namespace UtinniProbe
 		char d3d9Path[MAX_PATH] = { 0 };
 		if (hD3d9) GetModuleFileNameA(hD3d9, d3d9Path, MAX_PATH);
 		fprintf(f, "d3d9_path: %s\n", d3d9Path);
-		fprintf(f, "d3d9_base: 0x%08X\n", (DWORD)(uintptr_t)hD3d9);
+		fprintf(f, "d3d9_base: %p\n", static_cast<void const*>(hD3d9));
 
 		DWORD vsLen = GetFileVersionInfoSizeA(d3d9Path, nullptr);
 		if (vsLen)
@@ -180,9 +180,9 @@ namespace UtinniProbe
 			}
 		}
 
-		fprintf(f, "device_ptr: 0x%08X\n", (DWORD)(uintptr_t)pDevice);
+		fprintf(f, "device_ptr: %p\n", static_cast<void const*>(pDevice));
 		void **vtbl = *(void ***)pDevice;
-		fprintf(f, "vtable_addr: 0x%08X\n", (DWORD)(uintptr_t)vtbl);
+		fprintf(f, "vtable_addr: %p\n", static_cast<void const*>(vtbl));
 		if (hD3d9)
 			fprintf(f, "vtable_rva_in_d3d9: 0x%08X\n", (DWORD)((BYTE *)vtbl - (BYTE *)hD3d9));
 
@@ -200,7 +200,7 @@ namespace UtinniProbe
 		{
 			void *entry = vtbl[i];
 			DWORD rva = hD3d9 ? (DWORD)((BYTE *)entry - (BYTE *)hD3d9) : 0;
-			fprintf(f, "%3d | 0x%08X | 0x%08X\n", i, (DWORD)(uintptr_t)entry, rva);
+			fprintf(f, "%3d | %p | 0x%08X\n", i, static_cast<void const*>(entry), rva);
 			if (hD3d9 && rva < imgSize) ++insideImage;
 		}
 		fprintf(f, "\nentries_inside_d3d9: %d/119\n", insideImage);

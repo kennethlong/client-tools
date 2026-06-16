@@ -344,7 +344,10 @@ ByteStream::Data *ByteStream::Data::getNewData()
 
 void ByteStream::Data::releaseOldData(ByteStream::Data *oldData)
 {
-	assert(reinterpret_cast<unsigned int>(oldData) != 0xefefefefu);
+	// Freed-memory poison sentinel: compare the FULL pointer width so the check is
+	// correct on LLP64 x64 (a 64-bit poisoned pointer is 0xefefefefefefefef, not 0xefefefef).
+	// reinterpret_cast<unsigned int> truncated to the low 32 bits on x64 (C4311). (BITS-02 / D-06)
+	assert(reinterpret_cast<uintptr_t>(oldData) != static_cast<uintptr_t>(0xefefefefefefefefULL));
 
 	if (oldData->size > 4096)
 		delete oldData;

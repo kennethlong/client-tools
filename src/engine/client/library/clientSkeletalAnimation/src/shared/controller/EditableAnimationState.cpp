@@ -433,7 +433,7 @@ void EditableAnimationState::removeChildState(EditableAnimationState *child)
 	const EditableAnimationStateVector::iterator findIt = std::find(m_childStates.begin(), m_childStates.end(), child);
 	if (findIt == m_childStates.end())
 	{
-		WARNING(true, ("removeChildState(): specified child [0x%08x] is not a child.", reinterpret_cast<int>(child)));
+		WARNING(true, ("removeChildState(): specified child [%p] is not a child.", static_cast<void const*>(child)));
 		return;
 	}
 
@@ -486,7 +486,7 @@ void EditableAnimationState::removeLink(EditableAnimationStateLink *link)
 	if (findIt != m_stateLinks.end())
 		UNREF(m_stateLinks.erase(findIt));
 	else
-		WARNING(true, ("tried to remove EditableAnimationStateLink (0x%08x) but state doesn't know about link.", reinterpret_cast<int>(link)));
+		WARNING(true, ("tried to remove EditableAnimationStateLink (%p) but state doesn't know about link.", static_cast<void const*>(link)));
 }
 
 // ----------------------------------------------------------------------
