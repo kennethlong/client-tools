@@ -86,9 +86,9 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 
 ## Current Position
 
-Phase: 31 (64-bit-correctness-foundation) — EXECUTING
+Phase: 31 (64-bit-correctness-foundation) — EXECUTING (plan 06 BLOCKED on gap closure)
 Plan: 6 of 6
-Status: Ready to execute (31-05 BITS-03 complete; only the phase-gate plan 06 remains)
+Status: Plan 06 PARTIAL — Task 1 (full sweep + residual worklist + 8 enumerated escape-valve fixes, ba66d6657) DONE; full `-Scope all` sweep surfaced NEW class-(B) escapes (13 __asm + ~8 ptr-trunc + 2-3 time_t) the wave-2 scoped sweeps never compiled. Per review #4 these are NOT deferrable to Phase 33 → a Phase-31 GAP-CLOSURE plan is required before Task 2 (full 32-bit build) + Task 3 (dual-renderer boot smoke). See RESIDUAL-31-06 blocker + 31-PHASE33-RESIDUAL-WORKLIST.md §(B-GAP).
 Last activity: 2026-06-16
 
 ### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
@@ -203,7 +203,14 @@ Last activity: 2026-06-15
 - **[boot invariant — /FORCE false-pass]** SwgClient links under `/FORCE` which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. Grep link output for `unresolved external symbol` (must be 0) — applies to the atomic instrumentation removal (Phase 26).
 - [Phase 31] ~~Misc.h:236 memmove C2668~~ — RESOLVED 2026-06-16 by plan 31-04 (commit 359214d2b): `::memmove(dst, src, static_cast<size_t>(length))` binds the CRT overload, engine wrapper int-length signature unchanged. The dominant cross-plan x64 blocker is cleared — full in-scope TUs (e.g. StaticShader.obj) now compile exit 0 in the scratch harness.
 - [Phase 31 — RESIDUAL-31-04 -> plan 06] 7 NON-owned BITS-02 truncation sites recorded + classified by 31-04 Task 3 (deferred-items.md): must-fix-in-Phase-31 (RenderWorld.cpp:1127, Direct3d9.cpp:137/183/185/203 (DWORD)(uintptr_t) log casts that evade /we4311, EditableAnimationState.cpp, CuiMediator.cpp, LeakFinder.cpp, WinMain.cpp ShellExecute) vs deferrable (WaterTestAppearance test code). Plan 06 (phase gate) owns the fixes.
-- [Phase 31 — RESIDUAL-31-05 -> plan 06] 1 NON-owned BITS-02 ptr-truncation surfaced by 31-05's bits03 backstop sweep (deferred-items.md): ByteStream.cpp:347 reinterpret_cast<unsigned int>(Data*) C4311 in the freed-memory-poison sentinel assert (archive lib, in-scope boot path, NOT in 31-05 files_modified). Class (a) MUST-FIX; fix = compare full-width uintptr_t vs a uintptr_t sentinel. The vector signed-int C4244 (Archive.h:348/360/370) is the D-07 EXCLUSION (NOT a defect) — do not "fix" it.
+- [Phase 31 — RESIDUAL-31-05 -> plan 06] 1 NON-owned BITS-02 ptr-truncation surfaced by 31-05's bits03 backstop sweep (deferred-items.md): ByteStream.cpp:347 reinterpret_cast<unsigned int>(Data*) C4311 in the freed-memory-poison sentinel assert (archive lib, in-scope boot path, NOT in 31-05 files_modified). Class (a) MUST-FIX; fix = compare full-width uintptr_t vs a uintptr_t sentinel. The vector signed-int C4244 (Archive.h:348/360/370) is the D-07 EXCLUSION (NOT a defect) — do not "fix" it. ✅ FIXED in 31-06 (ba66d6657) alongside the 7 RESIDUAL-31-04 sites.
+
+- **[Phase 31 — RESIDUAL-31-06 BLOCKING — gap-closure required, NOT deferrable]** The FIRST full `-Scope all` scratch x64 sweep (plan 06, all 2217 in-scope TUs) surfaced NEW class-(B) in-scope boot-path escapes that the wave-2 substring-filtered sweeps (`-Scope bits01/02/03`) NEVER compiled. Per review #4 these CANNOT be deferred to Phase 33; per the plan-06 Task 1 acceptance they STOP for a Phase-31 gap-closure plan (Rule 4 — asm rewrites + a functional int-mark pointer-store + a shared-header C4312 exceed the gate escape-valve). The 8 enumerated RESIDUAL-31-04/05 escapes ARE fixed (ba66d6657). The NEW survivors:
+  - **13 `__asm` C4235 (BITS-01)**: `ByteOrder.cpp` (4 — `__declspec(naked)` `bswap` ntohl/htonl/ntohs/htons → `_byteswap_*`), `RegexServices.cpp:21` (naked MemoryManager alloc trampoline), `Direct3d11`+`Direct3d9` `MemoryManagerHook.cpp` (4), `RenderWorldServices.cpp:48`, `SoftwareBlendSkeletalShaderPrimitive.cpp:1739/2044` (SSE skinning blocks — PEER of the 31-02 SseMath/Transform work, needs a `_DEBUG` numeric oracle).
+  - **~8 genuine `C4311`/`C4312` (BITS-02)**: `PathSearch.cpp:189/196/215/500` (FUNCTIONAL — stores a `PathSearchNode*` in an `int` mark field, round-trips back → x64 corruption/UAF; widening `getMark/setMark` is structural), `StatusWindow.cpp:144` (`SetWindowLong(GWL_USERDATA, reinterpret_cast<LONG>(this))` → must be `SetWindowLongPtr`/`GWLP_USERDATA`/`LONG_PTR`), `VoidBindSecond.h:48` (C4312 in a SHARED template header — ABI-cascade caution), `LfgDataTable.cpp:108` (`reinterpret_cast<unsigned long>(void*)` level compare → `uintptr_t`), `AlterScheduler.cpp:316` (`%x` WARNING `reinterpret_cast<unsigned int>` → `%p`).
+  - **2-3 `time_t` width-movers (BITS-03, codex-validated in-scope)**: `GroupObject.cpp:413/424` (AUDIT — object state vs display), `SwgCuiGroup.cpp:269/272` (likely UI display, verify).
+  - The **80 C4244** are dominated by D-07-EXCLUDED `__int64`→`int` container-count narrowings (same semantic class as the excluded C4267 count paths — codex-confirmed) + STL-header `/we4244` instantiation noise; these are class (A) carry-forward (N2), NOT defects.
+  - Full classification + fix shapes: `.planning/phases/31-64-bit-correctness-foundation/31-PHASE33-RESIDUAL-WORKLIST.md` §(B-GAP). plan-06 Task 2 (full 32-bit build) + Task 3 (boot smoke) BLOCKED on the gap-closure plan; D-02 acceptance bar not yet met.
 
 ## Deferred Items
 
