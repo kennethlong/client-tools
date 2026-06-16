@@ -141,12 +141,30 @@ namespace
 	//   | #pragma def absent                             | INERT  |
 	//   | present AND D3DCompile@vs_2_0 ACCEPTS it       | OFF    |
 	//   | present AND D3DCompile@vs_2_0 REJECTS it (X#)  | ON     |
-	// The corpus probe shows #pragma def PRESENT (so not INERT). We start
-	// with Rule E OFF (default-first: do NOT strip a possibly-native
-	// pragma) and let the Task-2(G) constant-layout audit decide: if
-	// D3DCompile@vs_2_0 rejects #pragma def, flip this to true and confirm
-	// c95 is uploaded at runtime (the bottom row). Recorded in 32-02-SUMMARY.
-	constexpr bool kRuleEStripPragmaDef = false;
+	//
+	// RESOLVED (Phase 32 Task-3 recovery, 2026-06-16) -> BOTTOM ROW = ON.
+	// The non-probed shader vertex_program/2d_texture.vsh FATAL'd in-game
+	// at character-select with `error X4016: overlapping register semantics
+	// not yet implemented 'c0'` (Graphics.cpp:1200, ui_planet_sel). Ground-
+	// truth fxc_47 (d3dcompiler_47) repro at vs_2_0 /Gec against the FULLY-
+	// REWRITTEN include tree (vertex_shader_constants.inc:122 carries
+	// `#pragma def(vs, c95, 0.0, 0.5f, 1.0f, 1.4426950408889634f)`):
+	//   Rule E OFF -> EXACT X4016 'c0' (FXC reports its first-register slot,
+	//                 NOT the literal c95) + the same benign X3206 noise.
+	//   Rule E ON  -> compiles CLEAN (vs_2_0 code emitted).
+	// So at vs_2_0 d3dcompiler_47 REJECTS the legacy `def` (it collides with
+	// its own constant auto-allocator) -- the bottom-row condition holds.
+	//
+	// Runtime-safety confirmed (bottom-row REQUIREMENT): the c95 prefill is
+	// NOT lost by stripping the pragma. Direct3d9_StateCache::setConstants()
+	// (Direct3d9_StateCache.cpp:235-237, #ifdef VSPS) uploads
+	//   c95 = { 0.0, 0.5, 1.0, 1.0/log(2.0) }  via setVertexShaderConstants(95,..)
+	// UNCONDITIONALLY every frame -- the same quadruple the pragma encoded
+	// (registers.inc aliases it as c0_0/c0_5/c1_0/cLog2e). The pragma was a
+	// redundant compile-time literal; the runtime index-push covers it.
+	// (For 2d_texture itself fxc folds the 0.5/1.0 literals into an inline
+	// `def c0` anyway -- it does not even read c95.) Recorded in 32-02-SUMMARY.
+	constexpr bool kRuleEStripPragmaDef = true;
 
 	// ------------------------------------------------------------------
 	// Rule A: SM4+ reserved keywords renamed to `<keyword>_id`.

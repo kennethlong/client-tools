@@ -51,3 +51,99 @@ AUDIT (iii): FLAG SET (from source -- Direct3d9_VertexShaderData.cpp call site)
   flags = D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY  (relaxes D3D9-era HLSL)
   PACK_MATRIX_ROW_MAJOR: ABSENT (review fix #4 -- D3D9 uses explicit transposed uploads)
   matrix packing: default (column-major) -- matches the engine's transposed constant uploads
+
+================================================================================
+TASK-3 RECOVERY APPEND (2026-06-16) -- X4016 'c0' in-game FATAL diagnosis + fix
+================================================================================
+In-game crash: SwgClient_d.exe-unknown.0-20260616212320.txt
+  FATAL 536bf21f: Could not compile shader vertex_program/2d_texture.vsh 16385
+  error X4016: overlapping register semantics not yet implemented 'c0'
+  (Graphics.cpp:1200 -> PostProcessingEffectsManager.cpp:250 -> CuiIoWin.cpp:213;
+   ui_planet_sel_ordmantel_as8.sht at planet/char select; ShaderCapability 2.0)
+
+This shader was NOT in Task-2's probed corpus (Task 2 probed
+vertex_shader_constants.inc as a main-source standalone + a 6-shader probe set;
+2d_texture.vsh -- the planet-select 2D UI VS -- was the first REAL D3DCompile of
+a //hlsl shader that #includes vertex_shader_constants.inc through the live
+IncludeHandler path). It is the documented "non-probed shader fails -> diagnose"
+recovery path from 32-01-SUMMARY.
+
+--- TOOL: fxc.exe (d3dcompiler_47) 10.0.22621.0 x64, vs_2_0 /E main /Gec /I .
+--- SOURCE: real bytes from live searchPath TREs (highest-priority patch per
+    logical name) run through a faithful Python port of Rules A/B/C (+ Rule E
+    toggle). Override .vsh from live stage/override. See vsh-probe/rewrite.py.
+
+ROOT CAUSE (definitively reproduced -- NOT guessed):
+  vertex_shader_constants.inc:122  #pragma def(vs, c95, 0.0,0.5f,1.0f,1.4426950408889634f)
+  d3dcompiler_47 at vs_2_0 REJECTS this legacy D3D9 float-register prefill: it
+  collides with the compiler's own constant auto-allocator -> X4016. The 'c0' is
+  FXC's FIRST-register report, NOT the literal c95 slot.
+  Case = "#pragma def colliding" (Rule E decision-table BOTTOM ROW -> ON).
+  NOT manual register(c0) aliasing of two globals (exactly ONE register(c0)
+  global exists -- objectWorldCameraProjectionMatrix, vsc.inc:81, a legal single
+  first-colon binding the Rules-B/C context guard correctly preserves).
+  NOT over-strip (constant-layout audit above + below shows flat globals intact).
+
+  REPRO (fully-rewritten include tree, vs_2_0 /Gec):
+    Rule E OFF (kRuleEStripPragmaDef=false, the crashing build):
+        ...same benign X3206 noise from functions.inc + 2d_texture(27): transform2d
+        error X4016: overlapping register semantics not yet implemented 'c0'
+        EXIT=1   <-- EXACT match to FATAL 536bf21f
+    Rule E ON  (kRuleEStripPragmaDef=true, the fix):
+        ...only the benign X3206 warnings
+        compilation code save succeeded; EXIT=0
+
+SCOPE PROBE (required <scope_signal>): scanned 311 unique vertex_program/
+shared_program .vsh/.inc across all searchPath TREs (0 read errors):
+    #pragma def present in : EXACTLY ONE file (vertex_shader_constants.inc)
+    explicit register(c95) refs : NONE
+  => NARROW. The single shared constants include carries the only pragma; every
+     //hlsl vs_2_0 shader pulls it in, so the SINGLE Rule E gate flip fixes the
+     X4016 corpus-wide. NOT a shader-by-shader grind; no scope escalation.
+
+RUNTIME-SAFETY of stripping #pragma def (bottom-row REQUIREMENT, confirmed):
+  c95 is NOT lost. Direct3d9_StateCache::setConstants() (StateCache.cpp:235-237,
+  #ifdef VSPS = the gl05/gl07 VS/PS path) uploads EVERY FRAME, unconditionally:
+    const float c95[4] = { 0.0f, 0.5f, 1.0f, 1.0f/log(2.0f) };  // == 1/ln2
+    setVertexShaderConstants(95, c95, 1);
+  i.e. the EXACT quadruple {0.0,0.5,1.0,1/ln2} the pragma encoded (aliased as
+  c0_0/c0_5/c1_0/cLog2e). The pragma was a redundant compile-time literal; the
+  runtime index push covers it. (2d_texture folds 0.5/1.0 into an inline def c0
+  and never reads c95; c_simple folds 1/ln2 into an inline def c7.)
+
+RE-CONFIRM AUDIT (i) CONSTANT-LAYOUT under the FIX (Rule E ON), override c_simple
+disasm Registers section (vs_2_0 /Gec):
+    objectWorldCameraProjectionMatrix c0   4   <- flat global at c0 (no cbuffer)
+    objectWorldMatrix                 c4   3
+    cameraPosition_w                  c8   1
+    fog                               c10  1
+    material                          c11  4
+    lightData                         c16  24  <- flat global at c16 (multi-reg)
+  NO cbuffer / NO packoffset / NO register(b0). Rule D still confirmed disabled;
+  the strip did NOT disturb flat-global layout. PASS (no regression vs Task 2).
+
+RE-CONFIRM AUDIT (ii) v# INPUT-SIGNATURE under the FIX, override c_simple dcls:
+    dcl_position v0 / dcl_normal v1 / dcl_color v2 / dcl_texcoord v3
+  Sequential v# numbers (not the gapped VSVR 0/3/5/7) -- IDENTICAL behavior to
+  the Task-2 audit above and to the D3DX baseline (both strip register(vN) the
+  same way). Per the Task-2 finding (VertexDeclarationMap.cpp:128-223), D3D9
+  binds by D3DDECLUSAGE+UsageIndex, NOT raw v# -- the USAGES (POSITION/NORMAL/
+  COLOR/TEXCOORD) survive, so binding is usage-correct. This crash-fix does NOT
+  alter v# behavior; it only unblocks the compile so the Task-3 render-verify can
+  finally observe it in-game. If geometry renders garbled (attrs crossed), the
+  fallback lever remains the D3D9-specific Rule-C narrowing (Cursor C6).
+
+NO-REGRESSION (required step D): override shaders at vs_2_0 /Gec:
+    Rule E ON : c_simple EXIT=0 ; tfcl EXIT=0
+    Rule E OFF: c_simple EXIT=0 ; tfcl EXIT=0  (do not trip the allocator the way
+                2d_texture does, but Rule E ON does not regress them)
+    2d_texture: Rule E OFF EXIT=1 (X4016) -> Rule E ON EXIT=0 (FIXED)
+  Rule E ON strips ONLY `#pragma def` lines, which live in exactly one file; it
+  cannot affect any shader lacking the pragma. The 9 overrides + probe corpus are
+  NOT regressed.
+
+FIX APPLIED: Direct3d9_HlslRewrite.cpp -- flip the existing Rule E gate
+  constexpr bool kRuleEStripPragmaDef = false  ->  true
+  (minimal; uses the rewriter's documented decision-table mechanism; no new rule;
+   no blanket register strip). Rule D stays disabled; Rules A/B/C unchanged.
+================================================================================
