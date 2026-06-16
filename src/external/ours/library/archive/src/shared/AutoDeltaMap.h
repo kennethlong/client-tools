@@ -5,6 +5,8 @@
 //-----------------------------------------------------------------------
 
 #include "AutoDeltaByteStream.h"
+#include <cassert>
+#include <cstdint>
 #include <map>
 
 //-----------------------------------------------------------------------
@@ -88,7 +90,13 @@ private:
 	void onSet(const KeyType &, const ValueType &, const ValueType &);
 
 	MapType                      container;
-	size_t                       baselineCommandCount;
+	// BITS-03 / D-07: the command count is serialized as a 4-byte wire field
+	// (the shipped 32-bit contract) and must bind the 4-byte Archive put/get
+	// overload on BOTH x86 and LLP64 x64. A raw size_t is 8 bytes on x64 and has
+	// no Archive overload -> overload-resolution FAILURE (a compile error, not a
+	// silent wire widen). Pinning the member to uint32_t keeps the count
+	// arithmetic in unpackDelta type-consistent and the bytes identical.
+	uint32_t                     baselineCommandCount;
 	mutable std::vector<Command> changes;
 	std::pair<ObjectType *, void (ObjectType::*)(const KeyType &, const ValueType &)> *onEraseCallback;
 	std::pair<ObjectType *, void (ObjectType::*)(const KeyType &, const ValueType &)> *onInsertCallback;
@@ -350,8 +358,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::pack(ByteStream & targ
 {
 	using Archive::put;
 	typename std::map<KeyType, ValueType>::const_iterator i;
-	put(target, container.size());
-	put(target, baselineCommandCount);
+	assert(container.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(container.size()));
+	put(target, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 	unsigned char cmd;
 	for(i = container.begin(); i != container.end(); ++i)
 	{
@@ -377,8 +386,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::pack(ByteStream & targ
 {
 	using Archive::put;
 
-	put(target, data.size());
-	put(target, static_cast<size_t>(0)); // baselineCommandCount
+	assert(data.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(data.size()));
+	put(target, static_cast<uint32_t>(0)); // baselineCommandCount
 	for(typename std::vector<Command>::const_iterator c(data.begin()); c != data.end(); ++c)
 	{
 		assert(c->cmd == Command::ADD); // only add is valid in packing the whole container
@@ -408,8 +418,9 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::packDelta(ByteStream &
 {
 	using Archive::put;
 
-	put(target, changes.size());
-	put(target, baselineCommandCount);
+	assert(changes.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(changes.size()));
+	put(target, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 	for (typename std::vector<Command>::iterator i = changes.begin(); i != changes.end(); ++i)
 	{
 		const Command & c = (*i);
@@ -521,12 +532,12 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::unpack(ReadIterator & 
 	clearDelta();
 
 	Command c;
-	size_t commandCount;
+	uint32_t commandCount;
 
 	get(source, commandCount);
-	get(source, baselineCommandCount);
+	get(source, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 
-	for (size_t i = 0; i < commandCount; ++i)
+	for (uint32_t i = 0; i < commandCount; ++i)
 	{
 		get(source, c.cmd);
 		assert(c.cmd == Command::ADD); // only add is valid in unpack
@@ -556,13 +567,13 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::unpack(ReadIterator & 
 	using Archive::get;
 
 	Command c;
-	size_t commandCount;
-	size_t baselineCommandCount;
+	uint32_t commandCount;
+	uint32_t baselineCommandCount;
 
 	get(source, commandCount);
 	get(source, baselineCommandCount);
 
-	for (size_t i = 0; i < commandCount; ++i)
+	for (uint32_t i = 0; i < commandCount; ++i)
 	{
 		get(source, c.cmd);
 		assert(c.cmd == Command::ADD); // only add is valid in unpack
@@ -580,7 +591,7 @@ template<class KeyType, typename ValueType, typename ObjectType>
 inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::unpackDelta(ReadIterator & source)
 {
 	Command c;
-	size_t skipCount, commandCount, targetBaselineCommandCount;
+	uint32_t skipCount, commandCount, targetBaselineCommandCount;
 
 	using Archive::get;
 
@@ -603,7 +614,7 @@ inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::unpackDelta(ReadIterat
 	if (skipCount > commandCount)
 		skipCount = commandCount;
 
-	size_t i;
+	uint32_t i;
 	for (i = 0; i < skipCount; ++i)
 	{
 		get(source, c.cmd);
@@ -657,14 +668,14 @@ template<class KeyType, typename ValueType, typename ObjectType>
 inline void AutoDeltaMap<KeyType, ValueType, ObjectType>::unpackDelta(ReadIterator & source, std::vector<Command> & data)
 {
 	Command c;
-	size_t commandCount, targetBaselineCommandCount;
+	uint32_t commandCount, targetBaselineCommandCount;
 
 	using Archive::get;
 
 	get(source, commandCount);
 	get(source, targetBaselineCommandCount);
 
-	for (size_t i=0 ; i < commandCount; ++i)
+	for (uint32_t i=0 ; i < commandCount; ++i)
 	{
 		get(source, c.cmd);
 		switch(c.cmd)
