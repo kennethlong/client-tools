@@ -1,10 +1,11 @@
 ---
 phase: 31
 slug: 64-bit-correctness-foundation
-status: ready
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-06-15
+validated: 2026-06-16
 ---
 
 # Phase 31 — Validation Strategy
@@ -39,11 +40,16 @@ created: 2026-06-15
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (populated during planning/execution) | — | — | BITS-01/02/03 | — | N/A (source-correctness) | compile / smoke / static_assert | see Phase Requirements → Test Map below | ⬜ pending | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Secure Behavior | Test Type | Automated Command | Committed? | Status |
+|---------|------|------|-------------|-----------------|-----------|-------------------|------------|--------|
+| BITS-03 packed-struct guards | 05 | 2 | BITS-03 | on-disk TGA/customization layout unchanged | `static_assert(sizeof)` | runs on every 32-bit build | ✅ committed (`TargaFormat.cpp`, `AssetCustomizationManager.cpp`) | ✅ green |
+| BITS-03 Archive uint32_t pin | 05/08 | 2 | BITS-03 | wire count byte-identical to 32-bit server | `static_assert` + `assert(<=UINT32_MAX)` | runs on every build (Archive.h / AutoDelta*.h) | ✅ committed | ✅ green |
+| BITS-01 FPU/SSE numeric oracle | 02/07 | 2 | BITS-01 | FPU/SSE port numerically equivalent to scalar | `_DEBUG` round-trip + numeric oracle | fires at Debug startup (no DEBUG_FATAL) | ✅ committed (`#if _DEBUG` self-tests) | ✅ green |
+| SC#4 link-clean | 06 | 3 | SC#4 | 32-bit links with 0 unresolved | log grep | `grep -c "unresolved external symbol" build-32bit.log` == 0 | ✅ committed (build log) | ✅ green |
+| BITS-01/02/03 boot smoke | 06 | 3 | BITS-01/02/03, SC#4 | dual-renderer boot to char-select, no regression | manual smoke | `rasterMajor=5` then `=11`, boot `SwgClient_d.exe` | ⚠️ manual-only (no game-boot harness) | ✅ green (human-approved 2026-06-16) |
+| BITS-02 x64 compile guardrail | 01 | 0 | BITS-02 | no x64 truncation/asm survivors | `cl /c /we4311 /we4312 /we4244` | scratch x64 harness (per-TU) | ❌ gitignored throwaway (N1) | ⏸ deferred → Phase 33 |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky · ⏸ deferred*
 
 ### Phase Requirements → Test Map (from RESEARCH.md)
 
@@ -76,6 +82,7 @@ created: 2026-06-15
 |----------|-------------|------------|-------------------|
 | Dual-renderer boot to character select | BITS-01/02/03, SC#4 | No automated game-boot harness; rendering/asset-load correctness is visual | Set `rasterMajor=5` in `stage/client_d.cfg`, launch `SwgClient_d.exe`, confirm boot to character select (no startup DEBUG_FATAL from the plan-02 _DEBUG self-tests); repeat with `rasterMajor=11`. (Wave 3 / plan 06 Task 3.) |
 | Door-snap watch-item (VERIFY-01, D-04) | BITS-01 | x87 precision-control no-op is an x64-build observation, not validatable in 32-bit | Note only — informational watch-item for Phase 33+ x64 build; no Phase 31 gate. (P_24 is RETAINED on 32-bit per D-04 review refinement #1b.) |
+| x64 compile-cleanness guardrail (`/we4311 /we4312 /we4244`) + archive-map instantiation TU | BITS-02/03 | Validated only via the **gitignored** `x64-scratch/` throwaway harness — structurally un-committable as a standing test until an x64 `.vcxproj` platform exists (you cannot x64-compile-check with no x64 target) | **Deferred to Phase 33 (N1 coverage hole).** Re-establish `/we4311 /we4312` on the committed x64 `.vcxproj`s and re-add the instantiation TU once the x64 platform lands. Tracked in `31-PHASE33-RESIDUAL-WORKLIST.md` N1. |
 
 ---
 
@@ -89,3 +96,19 @@ created: 2026-06-15
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** signed off 2026-06-15 — the Wave 0 scratch harness is fully designed in plan 01 (props + driver w/ all three verify-modes + exhaustive ClCompile-derived manifest); every code-producing task carries an `<automated>` command; the plan-02 `_DEBUG` numeric/round-trip oracles + plan-05 instantiation TU close the semantic-correctness gaps the reviews flagged. Sampling continuity holds across all six plans.
+
+---
+
+## Validation Audit 2026-06-16
+
+Post-execution State-A audit (phase complete: 9 plans, 31-VERIFICATION.md 4/4 must-haves PASSED).
+
+| Metric | Count |
+|--------|-------|
+| Requirements audited | 4 (BITS-01, BITS-02, BITS-03, SC#4) |
+| Covered by committed automated tests | 3 (BITS-01 `_DEBUG` oracles, BITS-03 `static_assert`s, SC#4 link-grep) |
+| Manual-only | 1 (dual-renderer boot smoke — human-approved 2026-06-16) |
+| Deferred (un-fillable pre-x64) | 1 (BITS-02 x64 compile guardrail → Phase 33 N1) |
+| New test files generated | 0 |
+
+**Findings:** The committed automated surface is verified present and green — `static_assert(sizeof)` packed-struct guards (`TargaFormat.cpp`, `AssetCustomizationManager.cpp`) and Archive `uint32_t` count guards run on every 32-bit build; `_DEBUG` FPU/SSE numeric oracles fire at Debug startup; 32-bit link is clean (0 unresolved). No xUnit framework exists in this C++ tree (by design — the compiler + `static_assert` + `_DEBUG` oracles + boot smoke ARE the validation surface, per RESEARCH.md §Validation Architecture). The single non-committed validation — the x64 `/we4311` compile guardrail + archive-map instantiation TU — lived in the gitignored `x64-scratch/` harness and is **structurally un-committable until Phase 33 adds the x64 `.vcxproj` platform**; documented as deferred (N1). **Verdict: nyquist-compliant for achievable scope; no fillable gaps.**
