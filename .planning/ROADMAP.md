@@ -146,12 +146,12 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   1. The `D3DXCompileShader` call sites are ported to `D3DCompile` (`d3dcompiler_47`); an asm-shader census is done first so the assembly path is explicitly handled and no VS is silently nulled (no skipped draws)
   2. D3DX (`d3dx9*`) is removed from the build's link/include path - `dumpbin`/grep shows no D3DX dependency in the shader-compile path
   3. Both renderers still compile and load their shaders correctly in the 32-bit build; the client boots to character select and renders under both `rasterMajor=5` and `=11` (the Fix-A SEH guard retained until the asm path is also off D3DX)
-**Plans**: 5 plans in 4 de-risk waves (Wave 0 census GATE → Wave 1 HLSL port → Wave 2 asm port OR fallback → Wave 3 D3DX-removal verify + Fix-A retirement + dual-renderer validation)
-  - [ ] 32-01-PLAN.md — Wave 0: D-06 census + D3DAssemble dialect probe GATE (PASS→asm port / FAIL→fallback; gates Wave 2)
-  - [ ] 32-02-PLAN.md — Wave 1: HLSL full gl11-ruleset lift + D3DXCompileShader→D3DCompile + render-correctness (Tatooine bump/dot3)
-  - [ ] 32-03-PLAN.md — Wave 2 (IF GATE PASS): asm path D3DXAssembleShader→D3DAssemble (GetProcAddress)
-  - [ ] 32-04-PLAN.md — Wave 2 (IF GATE FAIL): sanctioned D-03 fallback — asm stays on D3DXAssembleShader+Fix-A, split to a follow-up phase
-  - [ ] 32-05-PLAN.md — Wave 3: dumpbin/grep compile-path D3DX-removal proof (non-compile D3DX retained, D-05) + Fix-A retirement per branch + dual-renderer (rasterMajor 5 AND 11) validation
+**Plans**: 5 plans in 3 execution waves (Wave 0: census GATE + HLSL port in parallel → Wave 1: asm port OR fallback (XOR on the GATE verdict) → Wave 2: D3DX-removal verify + Fix-A disposition + dual-renderer validation). Tri-state GATE verdict: PASS / FAIL-WITH-FOLLOWUP.
+  - [x] 32-01-PLAN.md — Wave 0: D-06 census + D3DAssemble dialect probe GATE with a bytecode size+hash diff vs D3DXAssembleShader (tri-state: PASS→asm port / FAIL-WITH-FOLLOWUP→fallback; gates Wave 1)
+  - [ ] 32-02-PLAN.md — Wave 0 (parallel): HLSL gl11-ruleset lift (Rules A/B/C verbatim, Rule D DISABLED for D3D9, Rule E conditional — no Rule F exists) + D3DXCompileShader→D3DCompile (BACKWARDS_COMPATIBILITY only, NO PACK_MATRIX_ROW_MAJOR) + vs_1_1 handled + 9 override macros fixed + constant-layout/flag audit + render-correctness (Tatooine bump/dot3)
+  - [ ] 32-03-PLAN.md — Wave 1 (IF GATE PASS): asm path D3DXAssembleShader→D3DAssemble (GetProcAddress)
+  - [ ] 32-04-PLAN.md — Wave 1 (IF GATE FAIL-WITH-FOLLOWUP): sanctioned D-03 fallback — asm stays on UNGUARDED D3DXAssembleShader (NOT Fix-A-guarded; Fix-A wraps the HLSL path only), asm port scheduled as a HARD must-land-before-Phase-33 follow-up
+  - [ ] 32-05-PLAN.md — Wave 2: dumpbin/grep compile-path D3DX-removal proof (non-compile D3DX retained, D-05 — 13 reproducible call sites) + Fix-A disposition per branch + dual-renderer (rasterMajor 5 AND 11) validation; PARTIAL SHADER-01 (compile-path + Win32 only; does NOT by itself unblock the Phase-33 x64 link)
 **UI hint**: yes
 
 #### Phase 33: x64 Build Platform + D3D9 Renderers
@@ -235,7 +235,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
-| 32. D3DX → d3dcompiler_47 | v3.0 | 0/TBD | Not started | - |
+| 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
 | 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
