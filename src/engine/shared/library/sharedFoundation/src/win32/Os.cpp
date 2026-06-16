@@ -848,7 +848,9 @@ bool Os::handleDebugMenu()
 							;
 
 						HMENU newMenu = CreatePopupMenu();
-						static_cast<void>(InsertMenu(lastSubmenu, insertLocation, MF_BYPOSITION | MF_POPUP, reinterpret_cast<UINT>(newMenu), start));
+						// InsertMenu's uIDNewItem is UINT_PTR (pointer-width on x64); an
+						// HMENU passed here as a sub-menu handle must not be truncated.
+						static_cast<void>(InsertMenu(lastSubmenu, insertLocation, MF_BYPOSITION | MF_POPUP, reinterpret_cast<UINT_PTR>(newMenu), start));
 						lastSubmenu = newMenu;
 						map.insert(Map::value_type(DuplicateString(buffer), lastSubmenu));
 					}
@@ -865,7 +867,8 @@ bool Os::handleDebugMenu()
 					;
 
 				HMENU newMenu = CreatePopupMenu();
-				static_cast<void>(InsertMenu(lastSubmenu, insertLocation, MF_BYPOSITION | MF_POPUP, reinterpret_cast<UINT>(newMenu), start));
+				// InsertMenu's uIDNewItem is UINT_PTR (pointer-width on x64).
+				static_cast<void>(InsertMenu(lastSubmenu, insertLocation, MF_BYPOSITION | MF_POPUP, reinterpret_cast<UINT_PTR>(newMenu), start));
 				lastSubmenu = newMenu;
 				map.insert(Map::value_type(DuplicateString(buffer), lastSubmenu));
 			}
@@ -881,7 +884,8 @@ bool Os::handleDebugMenu()
 			DEBUG_FATAL(entry == map.end(), ("Could not find SharedDebug section"));
 
 			HMENU newMenu = CreatePopupMenu();
-			static_cast<void>(AppendMenu(entry->second, MF_POPUP, reinterpret_cast<UINT>(newMenu), "DebugKey"));
+			// AppendMenu's uIDNewItem is UINT_PTR (pointer-width on x64).
+			static_cast<void>(AppendMenu(entry->second, MF_POPUP, reinterpret_cast<UINT_PTR>(newMenu), "DebugKey"));
 			lastSubmenu = newMenu;
 
 			DebugKey::FlagVector::const_iterator end = DebugKey::ms_flags.end();
@@ -1068,7 +1072,10 @@ LRESULT CALLBACK Os::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	
 				if (!extended)
 				{
-					int keyCode = (lParam << 8) >> 24;  // key code is in bits 16-23
+					// key code is in bits 16-23; mask the single byte explicitly so
+					// the 64-bit LPARAM on x64 narrows cleanly (the old
+					// (lParam<<8)>>24 relied on LPARAM being exactly 32 bits).
+					int keyCode = static_cast<int>((lParam >> 16) & 0xFF);
 					// cp* == ASCII until 0x80, for which you then need to call the following to get the Unicode value
 					// from the cp* value.  WM_CHAR always returns the values from the windows codepage (cp) used.  For US/Europe
 					// it is cp1252 and for Japan it is cp932.
@@ -1392,8 +1399,11 @@ void Os::setThreadName(ThreadId threadID, const char* threadName)
 
 	__try
 	{
-		// use the magic exception number MS picked for this purpose
-		RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), reinterpret_cast<DWORD *>(&info));
+		// use the magic exception number MS picked for this purpose.
+		// RaiseException's lpArguments is const ULONG_PTR* and the count is in
+		// ULONG_PTR units (8 bytes on x64); pass it that way so x64 compiles
+		// clean -- the old DWORD* cast + DWORD-unit count is C2664 on x64.
+		RaiseException(0x406D1388, 0, sizeof(info) / sizeof(ULONG_PTR), reinterpret_cast<const ULONG_PTR *>(&info));
 	}
 	__except (EXCEPTION_CONTINUE_EXECUTION)
 	{
@@ -1576,7 +1586,10 @@ bool Os::launchBrowser(std::string const & website)
 {
 	std::string URL("http://");
 	URL=website;
-	int result = reinterpret_cast<int>(ShellExecute(NULL, "open", URL.c_str(), NULL, NULL, SW_SHOWNORMAL));
+	// ShellExecute returns an HINSTANCE (pointer-width on x64); hold it in an
+	// INT_PTR for the documented ">32 == success" threshold check. Truncating to
+	// int would drop the high 32 bits and mis-evaluate the threshold on x64.
+	INT_PTR result = reinterpret_cast<INT_PTR>(ShellExecute(NULL, "open", URL.c_str(), NULL, NULL, SW_SHOWNORMAL));
 	return (result > 32);
 }
 

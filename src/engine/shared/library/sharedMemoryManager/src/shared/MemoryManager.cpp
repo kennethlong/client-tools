@@ -402,7 +402,9 @@ inline Block const * Block::getNext() const
 
 inline void Block::setNext(Block *next)
 {
-	DEBUG_FATAL(next && reinterpret_cast<int>(next) - reinterpret_cast<int>(this) < cms_blockSize, ("too small"));
+	// Real pointer subtraction yields a ptrdiff_t -- never truncate the operands
+	// to int (the high 32 bits matter on x64).
+	DEBUG_FATAL(next && (reinterpret_cast<byte const *>(next) - reinterpret_cast<byte const *>(this)) < cms_blockSize, ("too small"));
 	m_next = next;
 }
 
@@ -424,7 +426,12 @@ inline void Block::setFree(bool free)
 
 inline int Block::getSize() const
 {
-	return reinterpret_cast<byte const *>(m_next) - reinterpret_cast<byte const *>(this);
+	// The pointer difference is a ptrdiff_t (__int64 on x64). A single block is
+	// bounded well under 2GB by the allocator design, so the value fits the int
+	// API contract (kept int to avoid cascading the return type into ~15
+	// callers). Cast explicitly so the bounded narrowing is intentional, not a
+	// silent x64 C4244.
+	return static_cast<int>(reinterpret_cast<byte const *>(m_next) - reinterpret_cast<byte const *>(this));
 }
 
 // ======================================================================
@@ -1326,7 +1333,7 @@ void * MemoryManager::allocate(size_t size, uint32 owner, bool array, bool leakT
 
 	ms_criticalSection->leave();
 
-	DEBUG_REPORT_LOG_PRINT(ms_debugReportLogMemoryAllocFreePointers, ("MM::alloc %08x\n", reinterpret_cast<int>(memory)));
+	DEBUG_REPORT_LOG_PRINT(ms_debugReportLogMemoryAllocFreePointers, ("MM::alloc %p\n", static_cast<void const *>(memory)));
 
 #ifdef _DEBUG
 	if (ms_debugProfileAllocate)
@@ -1423,7 +1430,7 @@ void MemoryManager::free(void * userPointer, bool array)
 		verify(ms_debugVerifyGuardPatterns, ms_debugVerifyFreePatterns);
 #endif
 
-	DEBUG_REPORT_LOG_PRINT(ms_debugReportLogMemoryAllocFreePointers, ("MM::free %08x\n", reinterpret_cast<int>(userPointer)));
+	DEBUG_REPORT_LOG_PRINT(ms_debugReportLogMemoryAllocFreePointers, ("MM::free %p\n", static_cast<void const *>(userPointer)));
 
 	UNREF(array);
 
@@ -1750,15 +1757,16 @@ void MemoryManagerNamespace::report(AllocatedBlock const * block, bool leak)
 	char      libName[256];
 	char      fileName[256];
 	int       line = 0;
-	int const memory = reinterpret_cast<int>(reinterpret_cast<byte const *>(block) + cms_allocatedBlockSize + cms_guardBandSize);
+	// Keep the full pointer width on x64; print with %p (never truncate to int).
+	void const * const memory = reinterpret_cast<byte const *>(block) + cms_allocatedBlockSize + cms_guardBandSize;
 
 	if (ms_allowNameLookup && DebugHelp::lookupAddress(owner, libName, fileName, sizeof(fileName), line))
 	{
-		sprintf(buffer, "%s(%d) : %08X memory %s, %d bytes\n", fileName, line, memory, leak ? "leak" : "allocation", static_cast<int>(requestedSize));
+		sprintf(buffer, "%s(%d) : %p memory %s, %d bytes\n", fileName, line, memory, leak ? "leak" : "allocation", static_cast<int>(requestedSize));
 	}
 	else
 	{
-		sprintf(buffer, "unknown(0x%08X) : %08X memory %s, %d bytes\n", static_cast<unsigned int>(owner), memory, leak ? "leak" : "allocation", static_cast<int>(requestedSize));
+		sprintf(buffer, "unknown(0x%08X) : %p memory %s, %d bytes\n", static_cast<unsigned int>(owner), memory, leak ? "leak" : "allocation", static_cast<int>(requestedSize));
 	}
 
 	(*LogMessage)(buffer);
