@@ -259,3 +259,54 @@ paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unc
 - **If the editors are ever revived (future, out of v3.0 scope):** the fix is the genuine char16_t/wchar_t
   literal-prefix/conversion correction at each site (matching the target `Unicode::String` char type) — a
   real type fix, behavior- and wire-safe — but it belongs to an editor-tool x64 cleanup effort, not Phase 31.
+
+---
+
+## DEF-31-09-HARNESS-ARTIFACTS: the two harness-only NON-defects CONFIRMED + EXCLUDED (no source edit)
+
+Plan 31-09 Task 3 confirmed both against the real build config; neither is a code defect.
+
+- **Direct3d9.cpp:226 (C1189) + Direct3d9_StaticShaderData.cpp (C4716) — `#error must define FFP, VSPS, or both`:**
+  CONFIRMED a scratch-harness CONFIG artifact, EXCLUDED (no source edit). The real renderer `.vcxproj`s set
+  the per-config define: `Direct3d9.vcxproj` = `FFP;VSPS`, `Direct3d9_ffp.vcxproj` = `FFP`,
+  `Direct3d9_vsps.vcxproj` = `VSPS` (verified in their `<PreprocessorDefinitions>`). The scratch harness
+  compiles the raw TU via `cl /c` reading only `x64-compile.props` (which deliberately omits FFP/VSPS), so the
+  `#if !defined(FFP) && !defined(VSPS)` guard fires. The real 5-target build proves it clean (31-06 Task 2).
+- **UdpSock.cpp + NetworkHandler.cpp + Service.cpp + Sock.cpp + Connection.cpp (5× C2371 `'SOCKET': redefinition`):**
+  CONFIRMED a winsock/winsock2 header-order artifact of the isolated single-TU scratch compile, EXCLUDED
+  (no source edit, Phase-33 real-build re-check). Root cause proof: the engine's `WindowsWrapper.h` (pulled
+  via `FirstSharedFoundation.h` → `FirstPlatform.h`) defines **`WIN32_LEAN_AND_MEAN` before `#include <windows.h>`**,
+  which suppresses winsock from windows.h — a minimal probe (`#define WIN32_LEAN_AND_MEAN` / `#include <windows.h>`
+  / `#include <winsock.h>`) compiles **EXIT 0** on this exact SDK (10.0.26100), printing
+  `WINDOWS_H_DID_NOT_PULL_WINSOCK`. sharedNetwork is in the shipped, bootable 32-bit client (it links into
+  SwgClient), proving the real build compiles these clean. The harness C2371 is an include-precedence
+  artifact of compiling each TU in isolation, NOT a real source redefinition.
+
+---
+
+## DEF-31-09-CONVERGENCE: CAPPED `-Scope all` convergence test — Phase-31 class-(B) source work COMPLETE (HARD CAP honored, NO 31-10)
+
+- **Status:** Plan 31-09 Task 3 ran the authoritative `compile-all.ps1 -Scope all` (2218 TUs). Snapshot:
+  `.planning/research/scope-all-31-09-final.out` (UTF-16LE Tee worklist) + the full per-TU
+  `src/build/win32/x64-scratch/worklist.log`.
+- **Before/after (failing-TU count):** **31-08 baseline = 55 → 31-09 = 51** (the 4 Task-1 width members
+  cleared: CuiCombatManager, MeshConstructionHelper, TcpClient, TcpServer). The worklist filter
+  (C4235/C4311/C4312/C4244) is byte-identical to 31-08: **75 C4244 + 4 C4311 + 4 C4312, 0 C4235** — the 4
+  Task-1 fixes were C2665/C2664/C2672 (overload-resolution), which the C42xx worklist filter never showed.
+- **EXHAUSTIVE classification of all 51 remaining failing TUs (no unaccounted TU):**
+  | Category | Count | TUs / signature |
+  |----------|-------|-----------------|
+  | (i) documented class-(A) residue — UNTOUCHED | 41 | 38 C4244-only (`__int64`/`size_t`→narrower D-07/N2 count/distance + STL `_Elem`/`_Ty` header noise), Bink `BinkVideo.cpp` + `BinkTreeFileIO.cpp` (→P33 X64-04), `WaterTestAppearance.cpp` (→P33), Miles `Audio.cpp` (→P35) |
+  | (ii) confirmed harness artifact — EXCLUDED | 7 | 5× C2371 `SOCKET` winsock header-order (`UdpSock`/`NetworkHandler`/`Service`/`Sock`/`Connection`); 2× Direct3d9 `#error` FFP/VSPS (`Direct3d9.cpp` C1189 + `Direct3d9_StaticShaderData.cpp` C4716) |
+  | (reclassified) tool-only Unicode cluster | 3 | `Filename.cpp`/`TemplateData.cpp`/`TpfFile.cpp` — DEF-31-09-UNICODE-TOOLONLY |
+  | (iii) NEW genuine class-(B) | **0** | — |
+- **HARD CAP RESULT (user-set, NON-NEGOTIABLE):** category (iii) is **EMPTY**. No new genuine class-(B)
+  layer was unmasked. Every remaining failing TU is documented class-(A) residue, a confirmed harness
+  artifact, or the reclassified tool-only Unicode cluster. Therefore **Phase-31's class-(B) source work is
+  COMPLETE** — the D-02 x64-clean bar is met for all in-scope class-(B) **source**, and **31-06 Task 2
+  (full 32-bit build) + Task 3 (dual-renderer boot smoke) can resume**. There is **NO 31-10** authored or
+  recommended (none is needed; the cap held with margin).
+- **What remains for later phases (NOT class-(B), NOT Phase 31):** the class-(A) C4244 count/distance +
+  STL-noise tail and `WaterTestAppearance` (→ Phase 33), Bink (→ Phase 33 X64-04), Miles `Audio.cpp`
+  (→ Phase 35), and the two harness-only artifacts (re-verified by the real 5-target build / x64 platform
+  add in Phase 33). The tool-tier Unicode cluster is an editor-revival concern only (out of v3.0 scope).
