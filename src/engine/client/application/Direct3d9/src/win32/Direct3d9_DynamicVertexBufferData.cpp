@@ -17,6 +17,9 @@
 #include "clientGraphics/VertexBuffer.h"
 #include "sharedFoundation/MemoryBlockManager.h"
 
+#include <cstdint>
+#include <functional>
+
 // ======================================================================
 
 bool                     Direct3d9_DynamicVertexBufferData::ms_newFrame;
@@ -259,7 +262,10 @@ int Direct3d9_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool w
 
 int Direct3d9_DynamicVertexBufferData::getSortKey()
 {
-	return reinterpret_cast<int>(ms_d3dVertexBuffer);
+	// Stable hash-to-int of the shared D3D vertex-buffer pointer (D-06 review #3):
+	// int return preserved (no virtual-interface widening), full pointer entropy
+	// kept on x64.
+	return static_cast<int>(std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>(ms_d3dVertexBuffer)));
 }
 
 // ----------------------------------------------------------------------

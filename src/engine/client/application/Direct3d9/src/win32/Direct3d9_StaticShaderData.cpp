@@ -31,6 +31,8 @@
 #include <stdio.h>
 
 #ifdef _DEBUG
+#include <cstdint>
+#include <functional>
 #include <string>
 #endif
 
@@ -385,7 +387,9 @@ bool Direct3d9_StaticShaderData::Stage::getTextureSortKey(int &value) const
 {
 	if (m_texture)
 	{
-		value = reinterpret_cast<int>((*m_texture)->getBaseTexture());
+		// Stable hash-to-int of the base-texture pointer (D-06 review #3): the
+		// out-param stays int, full 64-bit pointer entropy preserved on x64.
+		value = static_cast<int>(std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>((*m_texture)->getBaseTexture())));
 		return true;
 	}
 

@@ -27,8 +27,10 @@
 #include "sharedFoundation/MemoryBlockManager.h"
 #include "sharedFoundation/Os.h"
 
+#include <cstdint>
 #include <d3d11.h>
 #include <dxgi.h>
+#include <functional>
 #include <wrl/client.h>
 
 // Phase 19 world-corruption DIAGNOSTIC (CODEX+Cursor ROUND-2 consult). Both
@@ -369,7 +371,10 @@ int Direct3d11_DynamicVertexBufferData::getNumberOfLockableDynamicVertices(bool 
 
 int Direct3d11_DynamicVertexBufferData::getSortKey()
 {
-	return static_cast<int>(reinterpret_cast<uintptr_t>(ms_d3dRingBuffer.Get()));
+	// Stable hash-to-int of the D3D11 ring-buffer pointer (D-06 review #3).
+	// Replaces the prior cast-to-uintptr-then-truncate-to-int; int return
+	// preserved, same contract as every other sort key.
+	return static_cast<int>(std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>(ms_d3dRingBuffer.Get())));
 }
 
 // ======================================================================

@@ -24,7 +24,9 @@
 
 #include "sharedFoundation/MemoryBlockManager.h"
 
+#include <cstdint>
 #include <d3d11.h>
+#include <functional>
 #include <wrl/client.h>
 
 // ======================================================================
@@ -164,7 +166,11 @@ void Direct3d11_StaticVertexBufferData::unlock()
 
 int Direct3d11_StaticVertexBufferData::getSortKey()
 {
-	return static_cast<int>(reinterpret_cast<uintptr_t>(m_d3dBuffer.Get()));
+	// Stable hash-to-int of the D3D11 buffer pointer (D-06 review #3). Replaces
+	// the prior cast-to-uintptr-then-truncate-to-int, which still dropped the
+	// high 32 bits on x64. int return preserved (no virtual-interface widening);
+	// same contract as the D3D9 + StaticShader keys.
+	return static_cast<int>(std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>(m_d3dBuffer.Get())));
 }
 
 // ======================================================================
