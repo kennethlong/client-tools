@@ -5,6 +5,8 @@
 //-----------------------------------------------------------------------
 
 #include "AutoDeltaByteStream.h"
+#include <cassert>
+#include <cstdint>
 
 //-----------------------------------------------------------------------
 
@@ -92,7 +94,12 @@ private:
 
 private:
 	std::vector<ValueType>	v;
-	size_t baselineCommandCount;
+	// BITS-03 / D-07: 4-byte wire count -> uint32_t binds the 4-byte Archive
+	// overload on x86 + LLP64 x64 (raw size_t is 8 bytes on x64, no overload =
+	// compile error). Keeps unpackDelta count arithmetic type-consistent + wire
+	// bytes identical to the 32-bit server. (Command::index stays unsigned short
+	// by design -- a separate 16-bit net-traffic optimization, NOT a count.)
+	uint32_t baselineCommandCount;
 	mutable std::vector<Command>    commands;
 	std::pair<ObjectType *, void (ObjectType::*)()> * onChangedCallback;
 	std::pair<ObjectType *, void (ObjectType::*)(const unsigned int, const ValueType &)> * onEraseCallback;
@@ -369,8 +376,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target) co
 {
 	using Archive::put;
 
-	put(target, v.size());
-	put(target, baselineCommandCount);
+	assert(v.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(v.size()));
+	put(target, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 	typename std::vector<ValueType>::const_iterator i;
 	for (i = v.begin(); i != v.end(); ++i)
 	{
@@ -385,13 +393,14 @@ inline void AutoDeltaVector<ValueType, ObjectType>::pack(ByteStream & target, co
 {
 	using Archive::put;
 
-	put(target, data.size());
-	put(target, static_cast<size_t>(0)); // baselineCommandCount
+	assert(data.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(data.size()));
+	put(target, static_cast<uint32_t>(0)); // baselineCommandCount
 	typename std::vector<ValueType>::const_iterator i;
 	for (i = data.begin(); i != data.end(); ++i)
 	{
 		put(target, *i);
-	}	
+	}
 }
 
 //-----------------------------------------------------------------------
@@ -401,8 +410,9 @@ inline void AutoDeltaVector<ValueType, ObjectType>::packDelta(ByteStream & targe
 {
 	using Archive::put;
 
-	put(target, commands.size());
-	put(target, baselineCommandCount);
+	assert(commands.size() <= static_cast<size_t>(UINT32_MAX));
+	put(target, static_cast<uint32_t>(commands.size()));
+	put(target, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 	typename std::vector<Command>::iterator i;
 
 	for (i = commands.begin(); i != commands.end(); ++i)
@@ -628,15 +638,15 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpack(ReadIterator & source
 	v.clear();
 	clearDelta();
 
-	size_t commandCount;
+	uint32_t commandCount;
 	ValueType value;
 
 	using Archive::get;
 
 	get(source, commandCount);
-	get(source, baselineCommandCount);
+	get(source, baselineCommandCount); // uint32_t member -> binds 4-byte overload
 
-	for (size_t i = 0; i < commandCount; ++i)
+	for (uint32_t i = 0; i < commandCount; ++i)
 	{
 		get(source, value);
 		v.push_back(value);
@@ -651,8 +661,8 @@ template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::unpack(ReadIterator & source, std::vector<Command> & data)
 {
 	// unpacking the whole kazaba
-	size_t commandCount;
-	size_t bcc;
+	uint32_t commandCount;
+	uint32_t bcc;
 	Command c;
 
 	using Archive::get;
@@ -660,7 +670,7 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpack(ReadIterator & source
 	get(source, commandCount);
 	get(source, bcc);
 
-	for (size_t i = 0; i < commandCount; ++i)
+	for (uint32_t i = 0; i < commandCount; ++i)
 	{
 		get(source,c.value);
 		c.index = static_cast<unsigned short int>(i);
@@ -676,14 +686,14 @@ template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & source, std::vector<Command> & data)
 {
 	Command c;
-	size_t commandCount, targetBaselineCommandCount;
+	uint32_t commandCount, targetBaselineCommandCount;
 
 	using Archive::get;
 
 	get(source, commandCount);
 	get(source, targetBaselineCommandCount);
 
-	for (size_t i=0 ; i < commandCount; ++i)
+	for (uint32_t i=0 ; i < commandCount; ++i)
 	{
 		get(source, c.cmd);
 		switch (c.cmd)
@@ -717,7 +727,7 @@ template<typename ValueType, typename ObjectType>
 inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & source)
 {
 	Command c;
-	size_t skipCount, commandCount, targetBaselineCommandCount;
+	uint32_t skipCount, commandCount, targetBaselineCommandCount;
 
 	using Archive::get;
 
@@ -730,7 +740,7 @@ inline void AutoDeltaVector<ValueType, ObjectType>::unpackDelta(ReadIterator & s
 	if (skipCount > commandCount)
 		skipCount = commandCount;
 
-	size_t i;
+	uint32_t i;
 	for (i = 0; i < skipCount; ++i)
 	{
 		get(source, c.cmd);
