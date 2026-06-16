@@ -144,13 +144,20 @@ public:
 	NetworkId                   findShipByIndex (int index) const;
 	int                         getIndexForMember (NetworkId const & id) const;
 
+	// BITS-02/03 B-GAP (Rule 3 blocking fix): the index parameter is
+	// `unsigned int` to match Archive::AutoDeltaVector's deliberately wire-stable
+	// `const unsigned int` onInsert/onErase callback contract. These were
+	// `const size_t`, which equals `unsigned int` only on 32-bit; on x64
+	// size_t != unsigned int -> the pointer-to-member type mismatched the
+	// template signature (C2664), blocking the TU from compiling x64-clean.
+	// These functions are used ONLY as AutoDeltaVector callbacks.
 	void                        membersOnChanged   ();
-	void                        membersOnErase     (const size_t n, const GroupMember & member);
-	void                        membersOnInsert    (const size_t n, const GroupMember & member);
+	void                        membersOnErase     (const unsigned int n, const GroupMember & member);
+	void                        membersOnInsert    (const unsigned int n, const GroupMember & member);
 
 	void memberShipsOnChanged();
-	void memberShipsOnErase(const size_t n, const GroupShipFormationMember & member);
-	void memberShipsOnInsert(const size_t n, const GroupShipFormationMember & member);
+	void memberShipsOnErase(const unsigned int n, const GroupShipFormationMember & member);
+	void memberShipsOnInsert(const unsigned int n, const GroupShipFormationMember & member);
 
 	int16                       getGroupLevel      () const;
 

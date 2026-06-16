@@ -240,8 +240,15 @@ void SwgCuiGroup::update(float deltaTimeSecs)
 
 	if (s_groupPickupTimerActive)
 	{
-		time_t timerEnd = 0;
-		time_t timerTotal = 0;
+		// BITS-03 B-GAP-3 verdict: DISPLAY. These are seconds-DURATION values
+		// (group pickup countdown), not epoch timestamps -- getSecondsLeftOn-
+		// GroupPickup()/getGroupPickupDurationSeconds() both already return
+		// unsigned int. Declaring them unsigned int (not time_t) matches the
+		// source contract and removes the time_t->long/unsigned int narrowings
+		// at the width (pixel-width math + CalendarTime::convertSecondsToMS,
+		// which takes unsigned int) -- x64 C4244-clean at the root.
+		unsigned int timerEnd = 0;
+		unsigned int timerTotal = 0;
 
 		CreatureObject const * const player = Game::getPlayerCreature();
 		if (player) 

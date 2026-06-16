@@ -102,3 +102,40 @@ paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unc
   (review #5) and the N2 `C4267` Phase-33 carry-forward. They are NOT pointer-truncation defects, NOT
   in this plan's files_modified, and per the plan scope boundary + D-07 must NOT be "fixed" here.
   Phase 33 decides the C4267/count-narrowing policy once the x64 platform + serialization audit exist.
+
+---
+
+## DEF-31-07-AUTODELTAMAP: NEW class-(B) escape — `AutoDeltaMap.h` Archive put/get(size_t) C2668/C2665 (STOP-and-report, NOT fixed)
+
+- **Status:** NOT FIXED — flagged per the plan 31-07 gap-closure Rule-4 discipline
+  ("If a NEW class-(B) escape appears that is NOT in the worklist and exceeds this plan's scope,
+  STOP and report it -- do not silently defer"). Surfaced while verifying Task 4 (GroupObject's
+  -SingleTu substring also pulls the Group*ObjectTemplate TUs).
+- **Pre-existing:** YES — confirmed by stashing all 31-07 edits and recompiling on the clean tree;
+  the AutoDeltaMap.h errors are present without any 31-07 change. NOT introduced by this plan.
+- **Site:** `src/external/ours/library/archive/src/shared/AutoDeltaMap.h`
+  - put: `:353 put(target, container.size())`, `:354/:412 put(target, baselineCommandCount)`,
+    `:411 put(target, changes.size())` (and `:381 put(target, static_cast<size_t>(0))`)
+  - get: `:526/:562/:587 get(source, commandCount)`, `:527/:563/:588 get(source, baselineCommandCount)`
+- **Defect class:** the SAME std::map/size_t-in-Archive width defect 31-05 fixed for plain
+  `Archive::get/put(std::map<...>)` (review #5 / D-07: on x64 `size_t` = `unsigned __int64`, and
+  there is no 8-byte `Archive::get/put` overload, so the call FAILS overload resolution = a
+  COMPILE error the harness catches, NOT a silent wire widen). But this is a DIFFERENT
+  serialization path: `AutoDeltaMap`'s pack/packDelta/unpack/unpackDelta, plus its `size_t
+  baselineCommandCount` MEMBER (`:91`) which is itself serialized as a count.
+- **Why NOT fixed here (exceeds 31-07 scope):** (a) it is NOT in the 31-PHASE33-RESIDUAL-WORKLIST
+  §(B-GAP) (the authoritative worklist for this gap-closure plan); (b) the correct fix is the
+  31-05 uint32_t wire-stable pin applied across ~8 put/get sites AND a width change to the
+  `baselineCommandCount` member -- a multi-site serialization-width change in a broadly-consumed
+  shared template header under `external/ours/`, with the same exercise-it caveat 31-05 hit (zero
+  AutoDeltaMap instantiations may compile under the scoped sweeps; needs an instantiation TU to
+  prove the round-trip). That is a coherent unit of work, not a one-liner, and exceeds 31-07's
+  4-task (asm / enumerated-ptr-trunc / time_t) scope.
+- **Affected in-scope TUs (manifest):** `sharedTemplate/.../ServerGroupObjectTemplate.cpp`,
+  `sharedTemplate/.../SharedGroupObjectTemplate.cpp` (both C2668/C2665). The CLIENT GroupObject.cpp
+  + ClientGroupObjectTemplate.cpp + sharedGame/SharedGroupObjectTemplate.cpp compile exit 0.
+- **Recommended disposition:** a follow-up gap-closure increment (31-08) OR fold into the resumed
+  plan 31-06, applying the 31-05 pattern: pin every AutoDeltaMap count put/get to `uint32_t`
+  (binds the existing 4-byte overload, wire byte-identical to the 32-bit server), widen/pin
+  `baselineCommandCount` consistently, overflow-guard the puts, and exercise via a scratch
+  AutoDeltaMap-instantiation TU. This is class (B) — NOT eligible for Phase-33 deferral (review #4).

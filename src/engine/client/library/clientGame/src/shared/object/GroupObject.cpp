@@ -125,7 +125,7 @@ void GroupObject::membersOnChanged   ()
 
 //----------------------------------------------------------------------
 
-void GroupObject::membersOnInsert   (const size_t, const GroupMember & member)
+void GroupObject::membersOnInsert   (const unsigned int, const GroupMember & member)
 {
 	Transceivers::memberAdded.emitMessage (Messages::MemberAdded::Payload (this, &member));
 
@@ -140,7 +140,7 @@ void GroupObject::membersOnInsert   (const size_t, const GroupMember & member)
 
 //----------------------------------------------------------------------
 
-void GroupObject::membersOnErase  (const size_t, const GroupMember & member)
+void GroupObject::membersOnErase  (const unsigned int, const GroupMember & member)
 {
 	Transceivers::memberRemoved.emitMessage (Messages::MemberRemoved::Payload (this, &member));
 
@@ -162,14 +162,14 @@ void GroupObject::memberShipsOnChanged()
 
 //----------------------------------------------------------------------
 
-void GroupObject::memberShipsOnInsert(const size_t, const GroupShipFormationMember & member)
+void GroupObject::memberShipsOnInsert(const unsigned int, const GroupShipFormationMember & member)
 {
 	Transceivers::memberShipAdded.emitMessage (Messages::MemberShipAdded::Payload (this, &member));
 }
 
 //----------------------------------------------------------------------
 
-void GroupObject::memberShipsOnErase(const size_t, const GroupShipFormationMember & member)
+void GroupObject::memberShipsOnErase(const unsigned int, const GroupShipFormationMember & member)
 {
 	Transceivers::memberShipRemoved.emitMessage (Messages::MemberShipRemoved::Payload (this, &member));
 }
@@ -410,7 +410,13 @@ unsigned int GroupObject::getSecondsLeftOnGroupPickup() const
 	{
 		time_t const timeNow = ::time(NULL);
 		if (m_groupPickupTimerClientEpoch.second > timeNow)
-			return (m_groupPickupTimerClientEpoch.second - timeNow);
+			// BITS-03 B-GAP-3 verdict: DISPLAY. The epoch pair member stays
+			// full-width time_t (live client-epoch state, never serialized raw);
+			// this returns a seconds-remaining DURATION for a UI countdown label
+			// (SwgCuiGroup/SwgCuiStatusGround). The value is small (a group
+			// pickup timer) and fits unsigned int on both bitnesses -- explicit
+			// static_cast makes the narrowing intentional (silences x64 C4244).
+			return static_cast<unsigned int>(m_groupPickupTimerClientEpoch.second - timeNow);
 	}
 
 	return 0;
@@ -421,7 +427,9 @@ unsigned int GroupObject::getSecondsLeftOnGroupPickup() const
 unsigned int GroupObject::getGroupPickupDurationSeconds() const
 {
 	if ((m_groupPickupTimerClientEpoch.first > 0) && (m_groupPickupTimerClientEpoch.second > 0) && (m_groupPickupTimerClientEpoch.second > m_groupPickupTimerClientEpoch.first))
-		return (m_groupPickupTimerClientEpoch.second - m_groupPickupTimerClientEpoch.first);
+		// BITS-03 B-GAP-3 verdict: DISPLAY. Total-duration seconds for the same
+		// UI countdown; small value, explicit static_cast (x64 C4244-clean).
+		return static_cast<unsigned int>(m_groupPickupTimerClientEpoch.second - m_groupPickupTimerClientEpoch.first);
 
 	return 0;
 }
