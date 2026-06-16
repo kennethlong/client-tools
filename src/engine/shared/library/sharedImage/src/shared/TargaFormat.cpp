@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <malloc.h>
+#include <stddef.h>
 
 #if defined(PLATFORM_LINUX)
 #include <alloca.h>
@@ -87,6 +88,18 @@ namespace TargaFormatNamespace
 #ifdef _WIN32
 #pragma pack(pop)
 #endif
+
+	// BITS-03 / D-08: compile-time on-disk-layout guards. These packed structs are
+	// read directly off the .tga byte stream, so any accidental field/packing drift
+	// would corrupt asset reads. Sizes are baselined to the LIVE 32-bit sizeof
+	// (confirmed via the compiler, not the TGA-spec literals): TargaHeader = 18,
+	// TargaFooter = 26. uint8/uint16/uint32 are fixed-width and uint32 = unsigned
+	// long stays 4 bytes on Windows LLP64, so these N values also hold on x64.
+	// (Adding static_assert/offsetof does NOT change layout -- ABI-safe, no plugin
+	// rebuild.) Follows the Direct3d11_ConstantBuffer.h house convention.
+	static_assert(sizeof(TargaHeader) == 18, "TargaFormat: TargaHeader must stay 18 bytes on disk");
+	static_assert(sizeof(TargaFooter) == 26, "TargaFormat: TargaFooter must stay 26 bytes on disk");
+	static_assert(offsetof(TargaFooter, m_signature) == 8, "TargaFormat: TargaFooter signature must follow the two uint32 offsets at byte 8");
 
 	const uint ms_attributeMask       = BINARY2(0000,1111);
 	const uint ms_xOriginLocationMask = BINARY2(0001,0000);

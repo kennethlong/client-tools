@@ -21,6 +21,7 @@
 #include "sharedObject/PaletteColorCustomizationVariable.h"
 
 #include <stdlib.h>
+#include <stddef.h>
 
 // ======================================================================
 
@@ -96,6 +97,23 @@ namespace AssetCustomizationManagerNamespace
 #ifdef PLATFORM_WIN32
 #pragma pack(pop)
 #endif
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// BITS-03 / D-08: compile-time on-disk-layout guards. These packed structs are
+	// read directly off the customization IFF byte stream, so any accidental
+	// field/packing drift would corrupt customization-data reads. Sizes are
+	// baselined to the LIVE 32-bit sizeof (confirmed via the compiler): IntRange = 8,
+	// VariableUsage = 6, UsageIndexEntry = 5, LinkIndexEntry = 5, CrcLookupEntry = 6.
+	// int32/uint32 = (un)signed long stay 4 bytes on Windows LLP64, and uint16/uint8
+	// are fixed-width, so these N values also hold on x64. Adding static_assert/
+	// offsetof does NOT change layout (ABI-safe, no plugin rebuild). Follows the
+	// Direct3d11_ConstantBuffer.h house convention.
+	static_assert(sizeof(IntRange)        == 8, "AssetCustomizationManager: IntRange must stay 8 bytes on disk");
+	static_assert(sizeof(VariableUsage)   == 6, "AssetCustomizationManager: VariableUsage must stay 6 bytes on disk");
+	static_assert(sizeof(UsageIndexEntry) == 5, "AssetCustomizationManager: UsageIndexEntry must stay 5 bytes on disk");
+	static_assert(sizeof(LinkIndexEntry)  == 5, "AssetCustomizationManager: LinkIndexEntry must stay 5 bytes on disk");
+	static_assert(sizeof(CrcLookupEntry)  == 6, "AssetCustomizationManager: CrcLookupEntry must stay 6 bytes on disk");
+	static_assert(offsetof(CrcLookupEntry, assetId) == 4, "AssetCustomizationManager: CrcLookupEntry assetId must follow the uint32 crc at byte 4");
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
