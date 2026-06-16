@@ -12,6 +12,8 @@
 #include "sharedFoundation/ExitChain.h"
 #include "sharedSynchronization/Mutex.h"
 
+#include <intrin.h>
+
 // ======================================================================
 
 RenderWorldServices::RenderWorldServices()
@@ -43,35 +45,16 @@ static void * __cdecl localAllocate(size_t size, uint32 owner, bool array, bool 
 	return MemoryManager::allocate(size, owner, array, leakTest);
 }
 
-static __declspec(naked) void * dpvsAllocate(size_t)
-{
-	_asm
-	{
-		// setup local call stack
-		push    ebp
-		mov     ebp, esp
-
-		// MemoryManager::alloc(size, [return address], false, true)
-		push    1
-		push    0
-		mov     eax, dword ptr [ebp+4]
-		push    eax
-		mov     eax, dword ptr [ebp+8]
-		push    eax
-		call    localAllocate
-		add     esp, 12
-
-		mov     esp, ebp
-		pop     ebp
-		ret
-	}
-}
-
 // ----------------------------------------------------------------------
+// Phase 31 (BITS-01, B-GAP-1): dpvsAllocate was a __declspec(naked) x86
+// trampoline (illegal on x64, C4235) forwarding to MemoryManager with the
+// CALLER's return address as the leak `owner`. Replaced by a normal function
+// that captures the same owner via _ReturnAddress() at the public entry point.
 
 void *RenderWorldServices::allocateMemory(size_t bytes)
 {
-	return dpvsAllocate(bytes);
+	uint32 const owner = static_cast<uint32>(reinterpret_cast<uintptr_t>(_ReturnAddress()));
+	return localAllocate(bytes, owner, false, true);
 }
 
 // ----------------------------------------------------------------------

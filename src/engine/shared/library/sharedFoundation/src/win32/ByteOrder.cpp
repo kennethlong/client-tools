@@ -8,51 +8,35 @@
 #include "sharedFoundation/FirstSharedFoundation.h"
 #include "sharedFoundation/ByteOrder.h"
 
+#include <intrin.h>
+
 // ======================================================================
 
-// I'm using the arguments, but the compiler can't tell that
-#pragma warning(disable: 4100)
+// Phase 31 (BITS-01, B-GAP-1): the original implementations were
+// __declspec(naked) x86 inline-asm `bswap` trampolines, which are illegal
+// targeting x64 (C4235). Ported to the _byteswap_* compiler intrinsics, which
+// compile on BOTH x86 and x64 (no #ifdef fork) and emit the same `bswap` /
+// `rol r,8` the asm did. The 16-bit ntohs/htons originally did a 32-bit bswap
+// + shr 16, which is exactly a 16-bit byte swap of the low word -- _byteswap_ushort.
 
-__declspec(naked) ulong ntohl(ulong netLong)
+ulong ntohl(ulong netLong)
 {
-	_asm
-	{
-		mov     eax, [esp+4]
-		bswap   eax
-		ret
-	}
-} //lint !e533 !e715 // function should return a value, argument not referenced
+	return _byteswap_ulong(netLong);
+}
 
-__declspec(naked) ulong htonl(ulong hostLong)
+ulong htonl(ulong hostLong)
 {
-	_asm
-	{
-		mov     eax, [esp+4]
-		bswap   eax
-		ret
-	}
-} //lint !e533 !e715 // function should return a value, argument not referenced
+	return _byteswap_ulong(hostLong);
+}
 
-__declspec(naked) ushort ntohs(ushort netShort)
+ushort ntohs(ushort netShort)
 {
-	_asm
-	{
-		mov     eax, [esp+4]
-		bswap   eax
-		shr     eax, 16
-		ret
-	}
-} //lint !e533 !e715 // function should return a value, argument not referenced
+	return _byteswap_ushort(netShort);
+}
 
-__declspec(naked) ushort htons(ushort hostShort)
+ushort htons(ushort hostShort)
 {
-	_asm
-	{
-		mov     eax, [esp+4]
-		bswap   eax
-		shr     eax, 16
-		ret
-	}
-} //lint !e533 !e715 // function should return a value, argument not referenced
+	return _byteswap_ushort(hostShort);
+}
 
 // ======================================================================

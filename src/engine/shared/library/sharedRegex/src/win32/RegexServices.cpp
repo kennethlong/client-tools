@@ -9,6 +9,8 @@
 #include "sharedRegex/FirstSharedRegex.h"
 #include "sharedRegex/RegexServices.h"
 
+#include <intrin.h>
+
 // ======================================================================
 
 static void * __cdecl localAllocate(size_t size, uint32 owner, bool array, bool leakTest)
@@ -16,35 +18,21 @@ static void * __cdecl localAllocate(size_t size, uint32 owner, bool array, bool 
 	return MemoryManager::allocate(size, owner, array, leakTest);
 }
 
-static __declspec(naked) void * regexAllocate(size_t)
-{
-	_asm
-	{
-		// setup local call stack
-		push    ebp
-		mov     ebp, esp
-
-		// MemoryManager::alloc(size, [return address], false, true)
-		push    1
-		push    0
-		mov     eax, dword ptr [ebp+4]
-		push    eax
-		mov     eax, dword ptr [ebp+8]
-		push    eax
-		call    localAllocate
-		add     esp, 12
-
-		mov     esp, ebp
-		pop     ebp
-		ret
-	}
-}
-
 // ----------------------------------------------------------------------
+// Phase 31 (BITS-01, B-GAP-1): the original regexAllocate was a
+// __declspec(naked) x86 trampoline (illegal on x64, C4235). It forwarded the
+// allocation to MemoryManager via localAllocate, passing the CALLER's return
+// address as the leak-tracking `owner` (the original read `[ebp+4]` -- the
+// return address into allocateMemory's caller). The naked frame is replaced by
+// a normal function that reads the same owner via the _ReturnAddress() intrinsic
+// at the public entry point, so the leak owner remains the real call site rather
+// than this library's internals. (owner is the existing 32-bit MemoryManager
+// owner contract -- the A1-DBGHELP-RIP-class output-width residue is Phase 33.)
 
 void *RegexServices::allocateMemory(size_t byteCount)
 {
-	return regexAllocate(byteCount);
+	uint32 const owner = static_cast<uint32>(reinterpret_cast<uintptr_t>(_ReturnAddress()));
+	return localAllocate(byteCount, owner, false, true);
 }
 
 // ----------------------------------------------------------------------
