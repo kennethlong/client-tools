@@ -142,3 +142,8 @@ No on-the-wire / serialized field width was changed. Task-1 touched only: a pars
 ---
 *Phase: 31-64-bit-correctness-foundation*
 *Completed: 2026-06-16*
+
+## Self-Check: PASSED
+
+- Files verified present: 31-09-SUMMARY.md + the 4 modified source TUs (CuiCombatManager, MeshConstructionHelper, TcpClient, TcpServer).
+- Commits verified in git log: feaddc08e (Task 1), 81b19c345 (Task 2), 79f5bc84a (Task 3), 80c3f71e2 (SUMMARY).
