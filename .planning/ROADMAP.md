@@ -126,13 +126,16 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   2. The touched code compiles with truncation warnings (C4311 / C4312 / C4244) treated as errors - no `(int)pointer` / `DWORD`-holds-pointer survivors
   3. IFF/TRE and network-message struct packing / hardcoded-`sizeof` / serialization-width assumptions are audited and corrected; the 32-bit build still loads assets, parses saved data, and exchanges network messages correctly (no data-layout regression)
   4. The 32-bit client still boots to character select under both `rasterMajor=5` and `=11` after the source changes (no regression while x64 is not yet building)
-**Plans**: 6 plans in 3 waves
+**Plans**: 6 base plans in 3 waves + 3 gap-closure increments (31-07/08/09, authored mid-execution as the scratch-x64 sweep unmasked successive pre-existing class-(B) layers)
   - [x] 31-01-PLAN.md — scratch Debug|x64 compile-only harness (D-01 worklist generator; gitignored; in-scope TU manifest)
   - [x] 31-02-PLAN.md — BITS-01 FPU + SSE math (FloatingPointUnit _control87, SseMath ×13 + Transform naked-SSE → _mm_*)
   - [x] 31-03-PLAN.md — BITS-01 misc __asm sweep (CollisionUtils/Fatal/Clock/ProfilerTimer/VeCritsec + DebugHelp _M_X64 fork)
   - [x] 31-04-PLAN.md — BITS-02 pointer/int truncation (StaticShader/MemoryManager/Os + Direct3d11 re-truncation; width-correct types)
   - [x] 31-05-PLAN.md — BITS-03 serialization/layout (Archive map uint32_t pin + TargaFormat/AssetCustomization static_asserts)
-  - [ ] 31-06-PLAN.md — phase gate: full scratch-x64 sweep + Phase 33 residual worklist (D-02) + 32-bit link-grep + dual-renderer boot smoke (D-08/SC#4)
+  - [x] 31-07-PLAN.md — gap-closure 1: the 11 enumerated NEW class-(B) survivors (ByteOrder/RegexServices/MemoryManagerHook __asm, SSE skinning, PathSearch/StatusWindow functional fixes, time_t display audits)
+  - [x] 31-08-PLAN.md — gap-closure 2: the ~753 AutoDeltaMap/PackedMap/Set C2665/C2668 cascade (uint32_t wire-stable count pin across all four AutoDelta* families); failing TUs 154→55
+  - [x] 31-09-PLAN.md — gap-closure 3 (CAPPED convergence): 4 genuine width members (CuiCombatManager/MeshConstructionHelper/TcpClient/TcpServer) + Unicode cluster reclassified tool-only + harness artifacts confirmed; 55→51, 0 NEW class-(B) → class-(B) source COMPLETE, NO 31-10
+  - [ ] 31-06-PLAN.md — phase gate: full scratch-x64 sweep + Phase 33 residual worklist (D-02) + 32-bit link-grep + dual-renderer boot smoke (D-08/SC#4) — RESUMABLE (class-(B) source complete per 31-09)
 
 #### Phase 32: D3DX to d3dcompiler_47
 **Goal**: The legacy D3DX shader-compile path is ported to `d3dcompiler_47` (`D3DCompile`) and D3DX is removed from the build, eliminating the x64-hostile dependency that blocks a clean x64 link - landing the v2.3-deferred HARD-05 as a true prerequisite for the first x64 client.
