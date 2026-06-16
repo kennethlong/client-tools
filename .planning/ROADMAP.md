@@ -110,7 +110,7 @@ x64 client (Phase 33). The two renderers are separately-verifiable boot gates (D
 (OOM) can only be checked once the x64 build runs in-world, and VERIFY-03 (strip the CORNERSNAP probes)
 must come AFTER VERIFY-01 confirms the door-snap clean against them - they are its acceptance harness.
 
-- [ ] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03)
+- [x] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03) (completed 2026-06-16)
 - [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
 - [ ] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02)
 - [ ] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03)
@@ -135,7 +135,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   - [x] 31-07-PLAN.md — gap-closure 1: the 11 enumerated NEW class-(B) survivors (ByteOrder/RegexServices/MemoryManagerHook __asm, SSE skinning, PathSearch/StatusWindow functional fixes, time_t display audits)
   - [x] 31-08-PLAN.md — gap-closure 2: the ~753 AutoDeltaMap/PackedMap/Set C2665/C2668 cascade (uint32_t wire-stable count pin across all four AutoDelta* families); failing TUs 154→55
   - [x] 31-09-PLAN.md — gap-closure 3 (CAPPED convergence): 4 genuine width members (CuiCombatManager/MeshConstructionHelper/TcpClient/TcpServer) + Unicode cluster reclassified tool-only + harness artifacts confirmed; 55→51, 0 NEW class-(B) → class-(B) source COMPLETE, NO 31-10
-  - [ ] 31-06-PLAN.md — phase gate: full scratch-x64 sweep + Phase 33 residual worklist (D-02) + 32-bit link-grep + dual-renderer boot smoke (D-08/SC#4) — RESUMABLE (class-(B) source complete per 31-09)
+  - [x] 31-06-PLAN.md — phase gate: full scratch-x64 sweep + Phase 33 residual worklist (D-02) + 32-bit link-grep (0 unresolved external) + dual-renderer boot smoke (D-08/SC#4) — CERTIFIED 2026-06-16: BITS-01/02/03 complete; boot smoke APPROVED (both renderers zoned into Tatooine, no regression); residual class-(A) tail handed to P33/P35/P36
 
 #### Phase 32: D3DX to d3dcompiler_47
 **Goal**: The legacy D3DX shader-compile path is ported to `d3dcompiler_47` (`D3DCompile`) and D3DX is removed from the build, eliminating the x64-hostile dependency that blocks a clean x64 link - landing the v2.3-deferred HARD-05 as a true prerequisite for the first x64 client.
@@ -228,7 +228,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
-| 31. 64-bit Correctness Foundation | v3.0 | 7/8 | In Progress|  |
+| 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 0/TBD | Not started | - |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
