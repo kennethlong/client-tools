@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: verifying
-last_updated: "2026-06-16T12:35:22.626Z"
+last_updated: "2026-06-16T13:38:32.110Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 6
@@ -228,7 +228,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-16 (FINALIZED 31-06-PLAN.md — the PHASE 31 GATE: Task 1 full scratch-x64 sweep + the classified Phase 33 residual worklist [D-02] + the 8 enumerated wave-2 escape-valve fixes [ba66d6657], Task 2 the SINGLE full canonical 5-target 32-bit build links clean [0 unresolved external; 7b2be2b0d], Task 3 dual-renderer boot smoke APPROVED ["approved, both zoned into Tatooine, no regression" — both rasterMajor=5/gl05 AND =11/gl11 booted + zoned in-world, no _DEBUG DEBUG_FATAL, no regression]. BITS-01/02/03 CERTIFIED complete. SUMMARY 001511b0c; self-check PASSED. Phase 31 COMPLETE — all 9 plans done [6 core + 3 gap-closure 31-07/08/09]. NEXT: Phase 32 SHADER-01.)
+Last session: 2026-06-16T13:38:32.096Z
 Prior session: 2026-06-16 (completed 31-09-PLAN.md — gap-closure increment 3, CAPPED convergence: FIXED the 4 genuine class-(B) width members unmasked by 31-08 [CuiCombatManager pos→size_t, MeshConstructionHelper 5× 0U→size_t literal, TcpClient/TcpServer completionKey→ULONG_PTR; feaddc08e; 0 C2665/C2664/C2672, no wire change]; RECLASSIFIED the sharedTemplateDefinition Unicode cluster tool-only out-of-scope by link evidence [81b19c345, files unedited]; CONFIRMED+EXCLUDED both harness-only non-defects [Direct3d9 #error + 5× winsock C2371; 79f5bc84a]. CAPPED -Scope all [2218 TUs]: 55→51 failing TUs, exhaustively classified = 41 class-(A) + 7 harness artifacts + 3 reclassified tool-only + 0 NEW class-(B). HARD CAP HELD → Phase-31 class-(B) source work COMPLETE; 31-06 Task 2/3 resumable; NO 31-10. SUMMARY self-check PASSED.)
 Prior session: 2026-06-16T04:45:00.000Z (completed 31-08-PLAN.md — gap-closure increment 2: the ~753 AutoDeltaMap/AutoDeltaPackedMap C2665/C2668 + the 8 AutoDeltaSet + the ~125-error cascade tail CLEARED via the 31-05 uint32_t count pin across all four AutoDelta* families [1b6a98ff4/5b5f08a2f] + the CreatureObject AutoDeltaVector callback Rule-3 fix [846a2ded6]. Exercised by a gitignored scratch instantiation TU; authoritative -Scope all [2218 TUs] = 0 AutoDelta header errors. SUMMARY self-check PASSED. STOP-and-report: clearing the cascade UNMASKED a residual pre-existing class-(B) surface [16 TUs — getFirstToken C2665, char16_t/wchar_t Unicode cluster, network size_t C2664; + harness-only Direct3d9 #error/network C2371], DEF-31-08-UNMASKED; recommend a 31-09 increment before 31-06 certifies x64-clean.)
 Prior session: 2026-06-16T03:10:00.000Z (completed 31-07-PLAN.md — the gap-closure plan: the 11 enumerated NEW class-(B) survivors from the 31-06 full sweep are CLEARED — 13 __asm ports incl. lane-faithful _mm_* SSE skinning w/ a _DEBUG oracle [CONSULT-44 resolved PoseModelTransform!=Transform], the TWO FUNCTIONAL fixes [PathSearch UAF, StatusWindow this], VoidBindSecond shared-header, LfgDataTable, AlterScheduler, and the time_t DISPLAY audits. 4 task commits + docs; SUMMARY self-check PASSED. The post-31-07 -Scope all then exposed a LARGE undercounted AutoDelta* C2665/C2668 surface [~154 TUs] — flagged STOP-and-report DEF-31-07-FULLSWEEP. RESIDUAL-31-06's gap-closure satisfied; recommend a 31-08 increment before 31-06 Task 2/3 certifies x64-clean.)
