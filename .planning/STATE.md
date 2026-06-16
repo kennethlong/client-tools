@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: executing
-last_updated: "2026-06-15T23:50:33.260Z"
-last_activity: 2026-06-15
+last_updated: "2026-06-16T00:01:39.084Z"
+last_activity: 2026-06-16
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -87,9 +87,9 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 ## Current Position
 
 Phase: 31 (64-bit-correctness-foundation) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-06-15
+Last activity: 2026-06-16
 
 ### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
 
@@ -178,6 +178,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-15] Phase 30-01: FIRST repo frontend at tools/tre-compare/web (Vite 8/React 19/TS 6/Tailwind 4/shadcn zinc-dark), sibling of src/, zero coupling to the engine MSBuild graph (D-01); build.outDir=build dodges the gitignored Python dist/ collision, web/build/ built-on-demand+gitignored (D-02/A3); vite dev proxy + relative-fetch single code path; Vitest+RTL+jsdom seam wired; 8 shadcn primitives + @tanstack/react-virtual+react-query pre-installed for Wave 2. ONLY backend touch: web_static.SpaStaticFiles 404->index.html + WEB_DIR (3-level .parent walk) mounted at / LAST in create_app (greedy / never shadows the 4 routes, T-30-01-03), guarded on web_dir.is_dir(); create_app(web_dir=) injectable. TDD RED 626b9a073 -> GREEN dd4e1da2b; 6 web_static tests + 80 passed/2 deselected (no regression); verified vs the REAL built bundle. 127.0.0.1 bind untouched. 3 Rule-3 deviations (shadcn Nova preset->zinc contract, TS6 baseUrl removed, root .gitignore package.json/lib/ negated for web/)
 - [Phase ?]: [2026-06-15] Phase 31-01: scratch x64 harness manifest exhaustive (2216 TUs/57 libs, ClCompile-derived); _USE_32BIT_TIME_T DROPPED on x64 (UCRT hard-errors under _WIN64 -> time_t is 8 bytes, a BITS-03 residual); Misc.h:236 memmove C2668 is the dominant x64 blocker gating the whole in-scope tree
 - [Phase ?]: [2026-06-15] Phase 31-02: BITS-01 hard chunk DONE — FloatingPointUnit x87 fnstcw/fldcw -> _controlfp_s with x87<->_MCW_* boundary translation (strategy A: module stays x87-layout, translate only at get/set; update() compare preserved); P_24 RETAINED on 32-bit (named decision, VERIFY-01 door-snap), _MCW_PC omitted only on x64 (#if _M_X64; avoids invalid-param handler), never __control87_2; _DEBUG round-trip self-check. SseMath canDoSseMath cpuid->__cpuid + 4 *_l2p routines + prefetch -> _mm_*/_mm_prefetch register-faithful (verified lane semantics: rotateScale 3-lane/w=0 vs rotateTranslateScale 4-lane/w=1; skin position-4-lane vs normal-3-lane); _mm_loadu_ps unaligned (x64 movaps-fault avoided), global sseVariable retired; _DEBUG numeric oracle. Transform sse_xf_matrix_3x4 naked->normal _mm_* fn, shufps 0x15 = translate to LANE 3 only via _mm_set_ps (NOT _mm_set1_ps broadcast); _DEBUG equivalence oracle vs scalar. NO #ifdef _M_X64 fork for SSE (D-05). All 3 TUs 0 C4235 in scratch x64; sharedMath 32-bit ClCompile clean. Rule-1 fix: oracle *_l2p calls needed SseMath:: qualification (C3861 on 32-bit). Misc.h C2668 DEFERRED to 31-04 (deferred-items.md DEF-31-01). Commits e9edaeca8/673efdd28/6a1fd14b7/717a66689
+- [Phase ?]: [2026-06-15] Phase 31-03: BITS-01 misc __asm sweep DONE — CollisionUtils x87 fld/fsqrt/fstp->sqrtf; Fatal/Clock __asm int 3->__debugbreak; ProfilerTimer naked rdtsc->static_cast<__int64>(__rdtsc()) (__int64 return KEPT so no caller break + no C4244); VeCritsec MSVC lock-bts spinlock->_interlockedbittestandset (C-style (long*) cast deliberately strips m_iLock volatile, intrinsic is a full barrier; GCC __asm__ branch byte-untouched); DebugHelp the phase's ONE justified #if defined(_M_X64) RtlCaptureContext fork with FULL 64-bit Rip/Rsp/Rbp .Offset (NO DWORD trunc, review #6), 32-bit asm path unchanged. All 6 TUs 0 C4235/C4311/C4312/C4244 in scratch x64. Rule-1 fix: reinterpret_cast couldn't drop volatile (C2440)->C-style cast. Two PHASE-33 RUNTIME residuals handed to plan 06: (1) x64 unwind WALK compile-clean-only, (2) uint32* callStack output still narrows Rip. DEF-31-01 Misc.h:236 memmove C2668 remains the only residual error (owned by plan 31-04). Commits a4f711419/379920283/5a8924b8c.
 
 ### Pending Todos
 
@@ -213,7 +214,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T23:50:33.245Z
+Last session: 2026-06-16T00:01:39.073Z
 Prior session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. v2.3 milestone closed + tagged.)
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
