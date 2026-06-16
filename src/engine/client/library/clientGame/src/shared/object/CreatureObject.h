@@ -575,7 +575,12 @@ private:
 	
 	void maxAttributesOnChanged   ();
 
-	void attributesOnSet          (const size_t elem, const Attributes::Value & oldValue, const Attributes::Value & newValue);
+	// BITS-03 (plan 31-08): `unsigned int` (not `size_t`) to match
+	// Archive::AutoDeltaVector's deliberately wire-stable `const unsigned int`
+	// onSet callback contract. This was `const size_t`, which equals `unsigned
+	// int` only on 32-bit; on x64 size_t != unsigned int -> the pointer-to-member
+	// type mismatched setOnSet (C2664). Mirrors the 31-07 GroupObject callback fix.
+	void attributesOnSet          (const unsigned int elem, const Attributes::Value & oldValue, const Attributes::Value & newValue);
 
 	void setAppearanceTransformModifiers ();
 
