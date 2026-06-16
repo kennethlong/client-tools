@@ -12,6 +12,8 @@
 #include "sharedMath/Vector.h"
 #include "sharedPathfinding/PathfindingEnums.h"
 
+#include <cstdint>   // BITS-02 B-GAP-2: intptr_t mark storage (pointer-width)
+
 class Iff;
 class PathGraph;
 
@@ -67,8 +69,14 @@ public:
 	int               getUserId     ( void ) const;
 	void              setUserId     ( int newId ) const;
 
-	int               getMark       ( int whichMark ) const;
-	void              setMark       ( int whichMark, int newValue ) const;
+	// Phase 31 (BITS-02, B-GAP-2): the mark slots are widened from int to
+	// intptr_t. Mark slot 3 stores a live PathSearchNode* round-tripped through
+	// this field (PathSearch.cpp); on x64 an int slot truncates that pointer ->
+	// use-after-free. intptr_t holds both the small int marks (0/1/-1) and a
+	// full-width pointer. (m_marks is runtime-only, "not persisted" -- no
+	// serialization width concern.)
+	intptr_t          getMark       ( int whichMark ) const;
+	void              setMark       ( int whichMark, intptr_t newValue ) const;
 	void              clearMarks    ( void ) const;
 
 	// ----------
@@ -95,8 +103,8 @@ protected:
 	// These are used to speed up some algorithms. They're not persisted.
 	// Code that uses the marks MUST clear them after use.
 
-	mutable int  m_userId;
-	mutable int  m_marks[4];
+	mutable int      m_userId;
+	mutable intptr_t m_marks[4];   // BITS-02 B-GAP-2: pointer-width (slot 3 holds a PathSearchNode*)
 };
 
 // ----------------------------------------------------------------------
@@ -214,12 +222,12 @@ inline void PathNode::setUserId ( int newId ) const
 
 // ----------
 
-inline int PathNode::getMark ( int whichMark ) const
+inline intptr_t PathNode::getMark ( int whichMark ) const
 {
 	return m_marks[whichMark];
 }
 
-inline void PathNode::setMark ( int whichMark, int newMark ) const
+inline void PathNode::setMark ( int whichMark, intptr_t newMark ) const
 {
 	m_marks[whichMark] = newMark;
 }

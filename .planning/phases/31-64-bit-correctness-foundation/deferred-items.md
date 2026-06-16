@@ -84,3 +84,21 @@ It did NOT surface in this bits03 sweep (the only serialization instantiation ex
 `std::vector<...>` Archive template is actually instantiated with the size mismatch). Recorded here so
 the plan-06 gate executor does not mistake it for a survivor (review #5). The SAFE-by-design fixed-width
 paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unchanged by 31-05.
+
+---
+
+## DEF-31-07: `std::distance` → `int index` C4244 (D-07-EXCLUDED count/distance class, N2 carry-forward)
+
+- **Status:** NOT FIXED — out of (B-GAP) scope. Documented class-(A) residue (N2 / C4267 carry-forward).
+- **Discovered during:** plan 31-07 Task 3 verification (compiling EditableAnimationState.cpp to
+  exercise the VoidBindSecond.h C4312 fix; the C4312 IS fixed — these are unrelated pre-existing C4244).
+- **Sites:**
+  - `clientSkeletalAnimation/.../controller/EditableAnimationState.cpp:275` —
+    `index = std::distance(m_childStates.begin(), result.first);` (`__int64`→`int`)
+  - `clientSkeletalAnimation/.../controller/EditableAnimationStateHierarchyTemplate.cpp:257` —
+    `index = std::distance(m_logicalAnimationNames->begin(), result.first);` (`__int64`→`int`)
+- **Why deferred:** these are `std::distance` iterator-difference (`ptrdiff_t`/`__int64`) → `int`
+  narrowings — the SAME semantic class as the D-07-EXCLUDED `.size()`/distance container-count paths
+  (review #5) and the N2 `C4267` Phase-33 carry-forward. They are NOT pointer-truncation defects, NOT
+  in this plan's files_modified, and per the plan scope boundary + D-07 must NOT be "fixed" here.
+  Phase 33 decides the C4267/count-narrowing policy once the x64 platform + serialization audit exist.

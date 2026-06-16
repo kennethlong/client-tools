@@ -93,7 +93,11 @@ LRESULT CALLBACK StatusWindow::globalWindowProc(
 	LPARAM lParam
 	)
 {
-	StatusWindow *statusWindow = reinterpret_cast<StatusWindow*>(GetWindowLong(hwnd, GWL_USERDATA));
+	// BITS-02 B-GAP-2: read the `this` pointer back through the pointer-width
+	// window userdata slot (GetWindowLongPtr/GWLP_USERDATA/LONG_PTR). The old
+	// GetWindowLong(GWL_USERDATA) returned a 32-bit LONG -> truncated `this` on
+	// x64 -> message dispatch to a corrupt pointer.
+	StatusWindow *statusWindow = reinterpret_cast<StatusWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	if (!statusWindow)
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	else
@@ -140,8 +144,11 @@ StatusWindow::StatusWindow(bool closeSendsQuit, const char *title, bool disableC
 	FATAL(!m_hwndStatus, ("failed to create status window"));
 
 	// save object (this) in window's user data area
+	// BITS-02 B-GAP-2: store the full-width `this` pointer via
+	// SetWindowLongPtr/GWLP_USERDATA/LONG_PTR (SetWindowLong(GWL_USERDATA) +
+	// reinterpret_cast<LONG> truncated `this` to 32 bits on x64).
 	SetLastError(0);
-	const LONG swlResult = SetWindowLong(m_hwndStatus, GWL_USERDATA, reinterpret_cast<LONG>(this));
+	const LONG_PTR swlResult = SetWindowLongPtr(m_hwndStatus, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 	FATAL (!swlResult && GetLastError(), ("failed to set user data for StatusWindow"));
 
 

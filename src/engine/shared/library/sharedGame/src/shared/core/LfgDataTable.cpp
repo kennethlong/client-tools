@@ -105,7 +105,12 @@ namespace LfgDataTableNamespace
 
 	bool matchLevel(LfgCharacterData const & lfgCharacterData, void const * lowLevel, void const * highLevel, void const *, void const *, void const *)
 	{
-		return ((static_cast<unsigned long>(lfgCharacterData.level) >= reinterpret_cast<unsigned long>(lowLevel)) && (static_cast<unsigned long>(lfgCharacterData.level) <= reinterpret_cast<unsigned long>(highLevel)));
+		// BITS-02 B-GAP-2: the level bounds are integers PACKED into the void*
+		// search-attribute slots. Unpack them at full pointer width (uintptr_t);
+		// `unsigned long` is 32-bit under LLP64 and truncated the 64-bit pointer
+		// slot on x64 (C4311). Character levels are small, so the value compare
+		// is identical on both bitnesses.
+		return ((static_cast<uintptr_t>(lfgCharacterData.level) >= reinterpret_cast<uintptr_t>(lowLevel)) && (static_cast<uintptr_t>(lfgCharacterData.level) <= reinterpret_cast<uintptr_t>(highLevel)));
 	}
 
 	bool matchFriend(LfgCharacterData const & lfgCharacterData, void const * pFriendList, void const *, void const *, void const *, void const *)
