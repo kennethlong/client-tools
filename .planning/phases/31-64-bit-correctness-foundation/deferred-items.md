@@ -60,3 +60,27 @@ is a stale plan-01 snapshot.
 **Note:** No genuine third-party (vendored SDK) truncation surfaced in the bits02 scope — every (a)
 site is our own engine/app source and must be fixed in Phase 31 (no in-scope boot-path source escapes
 via the residual valve, review #3/#4). The only (b) item is in-tree test code, not vendored.
+
+---
+
+## RESIDUAL-31-05: BITS-02 pointer truncation in ByteStream.cpp (NON-owned by 31-05; handed to plan 06)
+
+Discovered during plan 31-05 Task 3 (`-Scope bits03` backstop sweep, 61 TUs). This is the ONLY
+residual the bits03 sweep surfaced. It is a **BITS-02 pointer-truncation** defect, NOT a
+serialization-width hazard — the bits03 *serialization* mandate (C2664/C2665 overload-resolution
+survivors) came back **0** in this plan's `files_modified`, and the Archive `std::map` map-count fix
+compiles x64-clean and is exercised by `archive-map-instantiation.cpp` (review #5). ByteStream.cpp is
+in the archive lib but is **NOT** in 31-05's `files_modified` (which is Archive.h only), so per the
+executor scope boundary it is recorded here, not fixed cross-plan.
+
+| Site | Cast | Class | Disposition |
+|------|------|-------|-------------|
+| `archive/.../ByteStream.cpp:347` | `reinterpret_cast<unsigned int>(oldData)` (a `Data*` pointer) for an `assert(... != 0xefefefefu)` freed-memory-poison sentinel check | (a) in-scope (archive lib links into the boot path) | **MUST-FIX (Phase 31, plan 06).** Fires C4311 (pointer→`unsigned int` truncation) on x64; the `0xefefefef` debug-poison sentinel only meaningfully compares the low 32 bits, so on x64 a 64-bit poisoned pointer `0x????????efefefef` would still match but `0xefefefef????????` would not. Fix: compare the full-width `reinterpret_cast<uintptr_t>(oldData)` against a `uintptr_t` sentinel (e.g. mirror the engine's existing freed-memory poison-pattern width), or drop the low-32 assumption. Width-correct, not cast-to-silence (D-06). |
+
+**Note (D-07 exclusion):** the pre-existing vector/set/deque `signed int length = source.size()` C4244
+(Archive.h:348/360/370) is the documented D-07 exclusion — it is NOT a defect and must NOT be "fixed".
+It did NOT surface in this bits03 sweep (the only serialization instantiation exercised was
+`std::map<int,int>` via the instantiation TU; the vector signed-int narrowing only fires where a
+`std::vector<...>` Archive template is actually instantiated with the size mismatch). Recorded here so
+the plan-06 gate executor does not mistake it for a survivor (review #5). The SAFE-by-design fixed-width
+paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unchanged by 31-05.
