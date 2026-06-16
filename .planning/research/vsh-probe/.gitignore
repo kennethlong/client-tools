@@ -1,0 +1,5 @@
+# Probe build artifacts (reproducible from d3dassemble_probe.cpp via vcvars32 + cl)
+*.exe
+*.obj
+*.pdb
+*.ilk
