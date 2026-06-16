@@ -227,3 +227,35 @@ paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unc
   surface remains. The 32-bit non-regression of all Phase-31 changes CAN be validated now (31-06 Task 2/3).
 - **Documented class-(A) residue (UNCHANGED, untouched):** the 75 `C4244` `__int64`→int D-07/N2
   count/distance class, Miles Audio.cpp (→ P35), Bink (→ P33), WaterTestAppearance (→ P33).
+
+---
+
+## DEF-31-09-UNICODE-TOOLONLY: the sharedTemplateDefinition char16_t/wchar_t Unicode cluster is TOOL-TIER residue, RECLASSIFIED out-of-scope (link-evidence-based)
+
+- **Status:** RECLASSIFIED out-of-scope (NOT a runtime boot-path class-(B) defect). Resolved by plan
+  31-09 Task 2 via the link-closure triage the plan mandated. The three files are UNEDITED.
+- **Files (left unedited):** `sharedTemplateDefinition/src/shared/core/Filename.cpp` (:327/334/336/338/344,
+  C2440 + 4×C2664), `TemplateData.cpp` (:1751/1753, 2×C2440), `TpfFile.cpp` (:302/310/313, 2×C2677 + C2664)
+  — the `char16_t`/`wchar_t` string-literal / `Unicode::String` `operator+` cluster.
+- **Triage evidence (link closure — the decision criterion the plan set):**
+  - `sharedTemplateDefinition.vcxproj` (which compiles Filename/TemplateData/TpfFile into
+    `sharedTemplateDefinition.lib`) is referenced as a **ProjectReference (link dependency) by EXACTLY
+    THREE targets**, ALL pre-broken tools per AGENTS.md's editor/tool tier:
+    `ShipComponentEditor.vcxproj`, `TemplateCompiler.vcxproj`, `TemplateDefinitionCompiler.vcxproj`.
+  - `SwgClient.vcxproj`: **0** ProjectReferences and `sharedTemplateDefinition.lib` is **NOT** in its
+    `<AdditionalDependencies>` .lib link closure (neither is `sharedTemplate.lib`). `clientGame.vcxproj`:
+    **0** references. `git grep -l sharedTemplateDefinition -- '**/SwgClient/**/*.vcxproj'
+    '**/clientGame/**/*.vcxproj'` returns **empty**.
+  - `sharedTemplate.vcxproj` mentions `sharedTemplateDefinition` ONLY as an `AdditionalIncludeDirectories`
+    **header-include path** (not a `ProjectReference`/link dep), and `sharedTemplate.lib` is itself NOT
+    in SwgClient's link closure. So no transitive runtime link exists either.
+- **Verdict:** the `sharedTemplateDefinition.lib` (the only thing that links Filename/TemplateData/TpfFile)
+  is consumed solely by the pre-broken TemplateCompiler / TemplateDefinitionCompiler / ShipComponentEditor
+  tools — never by the runtime SwgClient boot path. Per AGENTS.md ("Editor tools ... are pre-broken ...
+  Validation bar = /t:SwgClient clean + dual-renderer boot, NOT a green full-solution build"), this Unicode
+  cluster is **pre-broken-tool-tier residue, not a runtime boot-path class-(B) defect**. It is therefore
+  REMOVED from plan 31-09's effective `files_modified` and NOT force-fixed (the wchar_t harness config is
+  confirmed-matching, so it is NOT a harness artifact either — it is simply out-of-scope by link evidence).
+- **If the editors are ever revived (future, out of v3.0 scope):** the fix is the genuine char16_t/wchar_t
+  literal-prefix/conversion correction at each site (matching the target `Unicode::String` char type) — a
+  real type fix, behavior- and wire-safe — but it belongs to an editor-tool x64 cleanup effort, not Phase 31.
