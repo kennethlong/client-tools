@@ -4,6 +4,8 @@
 //---------------------------------------------------------------------
 
 #include "ByteStream.h"
+#include <cassert>
+#include <cstdint>
 #include <string>
 #include <map>
 #include <deque>
@@ -190,10 +192,15 @@ template<typename A> inline void get_ptr(ReadIterator & source, std::vector<cons
 
 template<typename Key, typename Value> inline void get(ReadIterator & source, std::map<Key, Value> & target)
 {
-	size_t numKeys;
+	// BITS-03 / D-07: pin the wire count to uint32_t so it binds the existing
+	// 4-byte unsigned-int get() overload on BOTH x86 and LLP64 x64. A raw size_t
+	// here is 8 bytes on x64 and FAILS overload resolution (no 8-byte Archive
+	// overload exists) -- a compile error, not a silent wire-format widen
+	// (review #5). Keeping it uint32_t leaves the bytes identical to the shipped
+	// 32-bit server.
+	uint32_t numKeys;
 	get(source, numKeys);
-	size_t i;
-	for(i = 0; i < numKeys; ++i)
+	for(uint32_t i = 0; i < numKeys; ++i)
 	{
 		Key k;
 		get(source, k);
@@ -379,7 +386,16 @@ template<typename A> inline void put(ByteStream & target, const std::deque<A> & 
 
 template<typename Key, typename Value> inline void put(ByteStream & target, const std::map<Key, Value> & source)
 {
-	size_t numKeys = source.size();
+	// BITS-03 / D-07: the wire count is a 4-byte field (the shipped 32-bit
+	// contract). Pin to uint32_t so it binds the existing 4-byte unsigned-int
+	// put() overload on both bitnesses (a raw size_t is 8 bytes on x64 and would
+	// fail overload resolution -- review #5). A map with > UINT32_MAX entries is
+	// not representable in the existing on-the-wire format; assert before the
+	// narrowing cast so it can never silently truncate. (assert is the archive
+	// lib's house guard -- DEBUG_FATAL lives in sharedFoundation, which sits
+	// ABOVE this external/ours layer, so it is intentionally not used here.)
+	assert(source.size() <= static_cast<size_t>(UINT32_MAX));
+	const uint32_t numKeys = static_cast<uint32_t>(source.size());
 	put(target, numKeys);
 	for (typename std::map<Key, Value>::const_iterator i = source.begin(); i != source.end(); ++i)
 	{
