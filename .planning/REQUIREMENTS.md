@@ -17,8 +17,8 @@ Requirements for this milestone. Each maps to roadmap phases (continuing from Ph
 ### 64-bit Correctness
 
 - [x] **BITS-01**: The x87 FPU-control inline asm (`FloatingPointUnit.cpp` `__asm fnstcw/fldcw`) is replaced with `_controlfp` / `_control87` intrinsics, and the whole tree is swept for `__asm` and made x64-clean (x64 forbids inline asm)
-- [ ] **BITS-02**: Pointer/integer truncation defects are resolved — the touched code compiles x64-clean with truncation warnings (C4311 / C4312 / C4244) treated as errors; no `(int)pointer` / `DWORD`-holds-pointer survivors in the build path
-- [ ] **BITS-03**: Struct packing / hardcoded `sizeof` / serialization-width assumptions are audited and corrected for IFF/TRE and network-message layouts — no x64 data-layout regressions (assets load, saved data and network messages parse correctly)
+- [x] **BITS-02**: Pointer/integer truncation defects are resolved — the touched code compiles x64-clean with truncation warnings (C4311 / C4312 / C4244) treated as errors; no `(int)pointer` / `DWORD`-holds-pointer survivors in the build path
+- [x] **BITS-03**: Struct packing / hardcoded `sizeof` / serialization-width assumptions are audited and corrected for IFF/TRE and network-message layouts — no x64 data-layout regressions (assets load, saved data and network messages parse correctly)
 
 ### Audio Port (Miles 7.2e → 9.3b)
 
@@ -74,8 +74,8 @@ Which phases cover which requirements. Filled during roadmap creation.
 | X64-03 | Phase 34 | Pending |
 | X64-04 | Phase 33 | Pending |
 | BITS-01 | Phase 31 | Complete |
-| BITS-02 | Phase 31 | Pending |
-| BITS-03 | Phase 31 | Pending |
+| BITS-02 | Phase 31 | Complete |
+| BITS-03 | Phase 31 | Complete |
 | AUDIO-01 | Phase 35 | Pending |
 | AUDIO-02 | Phase 35 | Pending |
 | SHADER-01 | Phase 32 | Pending |

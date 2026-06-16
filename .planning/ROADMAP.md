@@ -225,7 +225,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 28. TRE Tool — Foundation | v2.3 | 4/4 | Complete | 2026-06-14 |
 | 29. TRE Tool — Diff Engine + API | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
-| 31. 64-bit Correctness Foundation | v3.0 | 5/6 | In Progress|  |
+| 31. 64-bit Correctness Foundation | v3.0 | 6/7 | In Progress|  |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 0/TBD | Not started | - |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
