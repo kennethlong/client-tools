@@ -110,7 +110,8 @@ x64 client (Phase 33). The two renderers are separately-verifiable boot gates (D
 (OOM) can only be checked once the x64 build runs in-world, and VERIFY-03 (strip the CORNERSNAP probes)
 must come AFTER VERIFY-01 confirms the door-snap clean against them - they are its acceptance harness.
 
-- [x] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03) (completed 2026-06-16)
+- [x] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03)
+ (completed 2026-06-16)
 - [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
 - [ ] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02)
 - [ ] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03)
@@ -145,7 +146,12 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   1. The `D3DXCompileShader` call sites are ported to `D3DCompile` (`d3dcompiler_47`); an asm-shader census is done first so the assembly path is explicitly handled and no VS is silently nulled (no skipped draws)
   2. D3DX (`d3dx9*`) is removed from the build's link/include path - `dumpbin`/grep shows no D3DX dependency in the shader-compile path
   3. Both renderers still compile and load their shaders correctly in the 32-bit build; the client boots to character select and renders under both `rasterMajor=5` and `=11` (the Fix-A SEH guard retained until the asm path is also off D3DX)
-**Plans**: TBD
+**Plans**: 5 plans in 4 de-risk waves (Wave 0 census GATE → Wave 1 HLSL port → Wave 2 asm port OR fallback → Wave 3 D3DX-removal verify + Fix-A retirement + dual-renderer validation)
+  - [ ] 32-01-PLAN.md — Wave 0: D-06 census + D3DAssemble dialect probe GATE (PASS→asm port / FAIL→fallback; gates Wave 2)
+  - [ ] 32-02-PLAN.md — Wave 1: HLSL full gl11-ruleset lift + D3DXCompileShader→D3DCompile + render-correctness (Tatooine bump/dot3)
+  - [ ] 32-03-PLAN.md — Wave 2 (IF GATE PASS): asm path D3DXAssembleShader→D3DAssemble (GetProcAddress)
+  - [ ] 32-04-PLAN.md — Wave 2 (IF GATE FAIL): sanctioned D-03 fallback — asm stays on D3DXAssembleShader+Fix-A, split to a follow-up phase
+  - [ ] 32-05-PLAN.md — Wave 3: dumpbin/grep compile-path D3DX-removal proof (non-compile D3DX retained, D-05) + Fix-A retirement per branch + dual-renderer (rasterMajor 5 AND 11) validation
 **UI hint**: yes
 
 #### Phase 33: x64 Build Platform + D3D9 Renderers
