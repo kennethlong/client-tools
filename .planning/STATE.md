@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: executing
-last_updated: "2026-06-16T00:01:39.084Z"
+last_updated: "2026-06-16T00:17:19.138Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -87,8 +87,8 @@ Plus the v2.3 audit `tech_debt` (see `milestones/v2.3-MILESTONE-AUDIT.md`): HARD
 ## Current Position
 
 Phase: 31 (64-bit-correctness-foundation) — EXECUTING
-Plan: 4 of 6
-Status: Ready to execute
+Plan: 5 of 6
+Status: Ready to execute (31-04 BITS-02 complete; DEF-31-01 cleared)
 Last activity: 2026-06-16
 
 ### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
@@ -179,6 +179,7 @@ Last activity: 2026-06-15
 - [Phase ?]: [2026-06-15] Phase 31-01: scratch x64 harness manifest exhaustive (2216 TUs/57 libs, ClCompile-derived); _USE_32BIT_TIME_T DROPPED on x64 (UCRT hard-errors under _WIN64 -> time_t is 8 bytes, a BITS-03 residual); Misc.h:236 memmove C2668 is the dominant x64 blocker gating the whole in-scope tree
 - [Phase ?]: [2026-06-15] Phase 31-02: BITS-01 hard chunk DONE — FloatingPointUnit x87 fnstcw/fldcw -> _controlfp_s with x87<->_MCW_* boundary translation (strategy A: module stays x87-layout, translate only at get/set; update() compare preserved); P_24 RETAINED on 32-bit (named decision, VERIFY-01 door-snap), _MCW_PC omitted only on x64 (#if _M_X64; avoids invalid-param handler), never __control87_2; _DEBUG round-trip self-check. SseMath canDoSseMath cpuid->__cpuid + 4 *_l2p routines + prefetch -> _mm_*/_mm_prefetch register-faithful (verified lane semantics: rotateScale 3-lane/w=0 vs rotateTranslateScale 4-lane/w=1; skin position-4-lane vs normal-3-lane); _mm_loadu_ps unaligned (x64 movaps-fault avoided), global sseVariable retired; _DEBUG numeric oracle. Transform sse_xf_matrix_3x4 naked->normal _mm_* fn, shufps 0x15 = translate to LANE 3 only via _mm_set_ps (NOT _mm_set1_ps broadcast); _DEBUG equivalence oracle vs scalar. NO #ifdef _M_X64 fork for SSE (D-05). All 3 TUs 0 C4235 in scratch x64; sharedMath 32-bit ClCompile clean. Rule-1 fix: oracle *_l2p calls needed SseMath:: qualification (C3861 on 32-bit). Misc.h C2668 DEFERRED to 31-04 (deferred-items.md DEF-31-01). Commits e9edaeca8/673efdd28/6a1fd14b7/717a66689
 - [Phase ?]: [2026-06-15] Phase 31-03: BITS-01 misc __asm sweep DONE — CollisionUtils x87 fld/fsqrt/fstp->sqrtf; Fatal/Clock __asm int 3->__debugbreak; ProfilerTimer naked rdtsc->static_cast<__int64>(__rdtsc()) (__int64 return KEPT so no caller break + no C4244); VeCritsec MSVC lock-bts spinlock->_interlockedbittestandset (C-style (long*) cast deliberately strips m_iLock volatile, intrinsic is a full barrier; GCC __asm__ branch byte-untouched); DebugHelp the phase's ONE justified #if defined(_M_X64) RtlCaptureContext fork with FULL 64-bit Rip/Rsp/Rbp .Offset (NO DWORD trunc, review #6), 32-bit asm path unchanged. All 6 TUs 0 C4235/C4311/C4312/C4244 in scratch x64. Rule-1 fix: reinterpret_cast couldn't drop volatile (C2440)->C-style cast. Two PHASE-33 RUNTIME residuals handed to plan 06: (1) x64 unwind WALK compile-clean-only, (2) uint32* callStack output still narrows Rip. DEF-31-01 Misc.h:236 memmove C2668 remains the only residual error (owned by plan 31-04). Commits a4f711419/379920283/5a8924b8c.
+- [Phase ?]: [2026-06-16] Phase 31-04: BITS-02 truncation DONE — DEF-31-01 Misc.h memmove C2668 RESOLVED (::memmove + size_t; 359214d2b unblocks ~every in-scope TU). 7 pointer sort keys -> stable hash-to-int (int return kept, ShaderPrimitiveSorter byte-unchanged, NO ABI cascade; D-06 review #3). MemoryManager ptr-diff->ptrdiff_t + %p logging; Os ShellExecute->INT_PTR, menu HMENU->UINT_PTR, RaiseException->const ULONG_PTR*. All 10 owned TUs 0 C4311/C4312/C4244 x64-clean; no #pragma disable. RESIDUAL-31-04 classified for plan 06. Commits 359214d2b/02edecf2b/0fd4a74a8/9cf9c49ee
 
 ### Pending Todos
 
@@ -199,7 +200,8 @@ Last activity: 2026-06-15
 - **[v2.3 — CORNERSNAP removal sequencing]** Strip the CORNERSNAP `_DEBUG` probes (Phase 26 / HARD-03) ONLY after the corner-snap fix (Phase 25 / HARD-02) is verified against them — they are its acceptance harness.
 - **[v2.3 — machine portability]** `stage/miles/` redist is NOT in git and postbuild doesn't copy it — a fresh clone has half-dead audio + warning-flood lag if missing. PORT-01 must detect/handle this, not assume the dir is present.
 - **[boot invariant — /FORCE false-pass]** SwgClient links under `/FORCE` which downgrades unresolved externals to WARNINGS and still emits a binary with exit 0. Grep link output for `unresolved external symbol` (must be 0) — applies to the atomic instrumentation removal (Phase 26).
-- [Phase 31] Misc.h:236 memmove(void*,const void*,int) C2668 ambiguity blocks ~every in-scope TU on x64 -- NOT in 31-02 scope (FloatingPointUnit/SseMath/Transform only); NOW OWNED BY 31-04 (logged as DEF-31-01 in deferred-items.md). 31-02's per-TU acceptance grep (C4235/C4311/C4312/C4244==0) is robust to the residual C2668 (cl emits the worklist past it). Recommended fix: `::memmove(dst, src, static_cast<size_t>(length))` to bind the CRT overload.
+- [Phase 31] ~~Misc.h:236 memmove C2668~~ — RESOLVED 2026-06-16 by plan 31-04 (commit 359214d2b): `::memmove(dst, src, static_cast<size_t>(length))` binds the CRT overload, engine wrapper int-length signature unchanged. The dominant cross-plan x64 blocker is cleared — full in-scope TUs (e.g. StaticShader.obj) now compile exit 0 in the scratch harness.
+- [Phase 31 — RESIDUAL-31-04 -> plan 06] 7 NON-owned BITS-02 truncation sites recorded + classified by 31-04 Task 3 (deferred-items.md): must-fix-in-Phase-31 (RenderWorld.cpp:1127, Direct3d9.cpp:137/183/185/203 (DWORD)(uintptr_t) log casts that evade /we4311, EditableAnimationState.cpp, CuiMediator.cpp, LeakFinder.cpp, WinMain.cpp ShellExecute) vs deferrable (WaterTestAppearance test code). Plan 06 (phase gate) owns the fixes.
 
 ## Deferred Items
 
@@ -214,7 +216,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-16T00:01:39.073Z
+Last session: 2026-06-16T00:17:19.126Z
 Prior session: 2026-06-15T16:30:00.000Z (completed 30-03-PLAN.md — master-detail SPA; SC#4 human-verify APPROVED; Phase 30 + all v2.3 phases done, 19/19 plans. v2.3 milestone closed + tagged.)
 Resume (2026-06-12): **v2.3 Hardening ROADMAP CREATED** (Phases 24–30; 12/12 requirements mapped 100%). v2.2 Visual Parity shipped + tagged `v2.2`. Repo: swg-client-v2 (MSBuild/Koogie) is the single source of truth.
 
