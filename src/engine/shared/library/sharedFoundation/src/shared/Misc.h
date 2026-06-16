@@ -233,7 +233,13 @@ inline void *memmove(void *destination, const void *source, int length)
 {
 	DEBUG_FATAL(!destination, ("null destination arg"));
 	DEBUG_FATAL(!source, ("null source arg"));
-	return memmove(destination, source, static_cast<uint>(length));
+	// Qualify the recursive call to the global CRT memmove and pass a size_t
+	// length. Without the ::-qualification + size_t this engine overload is
+	// itself a candidate, making the call ambiguous on x64 (LLP64: size_t is
+	// 8 bytes) between memmove(void*,const void*,int) and the CRT
+	// memmove(void*,const void*,size_t) -> error C2668 (DEF-31-01). The
+	// engine wrapper's int-length signature is unchanged for its callers.
+	return ::memmove(destination, source, static_cast<size_t>(length));
 }
 
 // ----------------------------------------------------------------------
