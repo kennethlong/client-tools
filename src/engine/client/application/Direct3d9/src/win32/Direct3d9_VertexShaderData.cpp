@@ -16,6 +16,7 @@
 #include "Direct3d9_PixelShaderConstantRegisters.h"
 #include "Direct3d9_VertexShaderConstantRegisters.h"
 #include "Direct3d9_VertexShaderVertexRegisters.h"
+#include "Direct3d9_HlslRewrite.h"   // Fix B (Phase 32): shared HLSL textual rewrite (Rules A/B/C) for the D3DCompile path
 #include "clientGraphics/ShaderCapability.h"
 #include "fileInterface/AbstractFile.h"
 #include "sharedFile/TreeFile.h"
@@ -25,9 +26,10 @@
 
 #include <map>
 #include <vector>
-#include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded D3DX compile (FP-fault fix)
+#include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded compile (FP-fault fix)
 #include <d3dx9.h>
 #include <d3dx9shader.h>
+#include <d3dcompiler.h>   // Fix B (Phase 32): D3DCompile replaces D3DXCompileShader on the HLSL compile path
 
 // ======================================================================
 
@@ -73,17 +75,28 @@ namespace Direct3d9_VertexShaderDataNamespace
 	IncludeCache * ms_includeCache;
 
 	// ------------------------------------------------------------------
-	// Phase 19 fix (2026-05-31): the D3DX library is statically compiled FROM SOURCE into the
-	// D3D9 plugin (gl05/gl07). Built with the modern MSVC toolchain its shader compiler unmasks
-	// FP exceptions and trips an invalid-op / divide-by-zero during its post-compile FP cleanup
-	// (the FWAIT inside _control87, observed as 0xC0000090) on certain vertex shaders -- the
-	// retail VS2003-built D3DX did not. Confirmed by control test: the pristine SWG Source
-	// VS2003 client renders the same shader/asset/spot without faulting; ours crashes. The shader
-	// bytecode is fully produced BEFORE the cleanup fault, so wrap the call in SEH, reset the FPU,
-	// and keep the compiled result. Extracted to a helper because __try/__except cannot live in a
-	// function that needs C++ object unwinding (C2712). One fix covers all VSPS plugins (gl05/07).
-	// TODO (Fix B, deferred): port D3D9 shader compile to D3DCompile, which is immune to this
-	// D3DX-era FPU bug (the D3D11 path already uses it). See .planning todo.
+	// Phase 32 Fix B (2026-06-16): the HLSL `//hlsl` .vsh compile path now runs through
+	// D3DCompile (d3dcompiler_47), NOT D3DXCompileShader. D3DX was statically compiled FROM
+	// SOURCE into the D3D9 plugin (gl05/gl07); built with the modern MSVC toolchain its shader
+	// compiler unmasked FP exceptions and faulted (0xC0000090) during its post-compile FP
+	// cleanup on certain bump/dot3 vertex shaders -- the retail VS2003-built D3DX did not.
+	// D3DCompile does not have that bug (the D3D11 path has used it since Phase 11). The
+	// textual modernization needed by the strict modern compiler (SM4+ reserved keywords,
+	// stacked struct-member register bindings) is handled by Direct3d9_HlslRewrite (Rules
+	// A/B/C; Rule D disabled for D3D9; Rule E gated OFF) applied to the main source and every
+	// #include before this call.
+	//
+	// ABI: D3DXMACRO / ID3DXInclude / ID3DXBuffer are binary-layout-identical to the
+	// d3dcompiler types (D3D_SHADER_MACRO / ID3DInclude / ID3DBlob), so the surrounding
+	// D3DX-typed code AND the separate D3DXAssembleShader asm path stay untouched; we
+	// reinterpret-cast only at this single call boundary (RESEARCH Pattern 1).
+	//
+	// Fix-A SEH guard RETAINED (D-04 / review fix #E): this plan keeps __try/__except around
+	// the compile until Wave 2 (32-05) confirms BOTH the HLSL and asm paths render clean off
+	// D3DX. D3DCompile is immune to the D3DX FP fault, so the guard is now belt-and-suspenders
+	// -- it stays so the Fix-A removal is a single isolated Wave-2 change, not bundled here.
+	// __try/__except cannot live in a function needing C++ object unwinding (C2712), hence the
+	// helper. One guard covers all VSPS plugins (gl05/07).
 	inline int direct3d9CompileFpExceptionFilter(unsigned long code)
 	{
 		// STATUS_FLOAT_* SEH codes occupy 0xC000008D..0xC0000093 (denormal..underflow).
@@ -98,14 +111,26 @@ namespace Direct3d9_VertexShaderDataNamespace
 		HRESULT hr = E_FAIL;
 		__try
 		{
-			hr = D3DXCompileShader(src, srcLen, defines, includeHandler, functionName, profile, flags, outShader, outErrors, NULL);
+			// Fix B: D3DCompile via the ABI-identical reinterpret-cast at the call boundary.
+			// `flags` carries D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY ONLY -- explicitly NOT
+			// D3DCOMPILE_PACK_MATRIX_ROW_MAJOR (review fix #4): the D3D9 path uses explicit
+			// transposed constant uploads, not a row-major cbuffer contract; copying gl11's
+			// row-major flag would silently change matrix packing -> wrong transforms.
+			hr = D3DCompile(
+				src, srcLen, NULL,
+				reinterpret_cast<D3D_SHADER_MACRO const *>(defines),
+				reinterpret_cast<ID3DInclude *>(includeHandler),
+				functionName, profile, flags, 0,
+				reinterpret_cast<ID3DBlob **>(outShader),
+				reinterpret_cast<ID3DBlob **>(outErrors));
 			_clearfp();
 		}
 		__except (direct3d9CompileFpExceptionFilter(GetExceptionCode()))
 		{
-			// D3DX faulted during its post-compile FP cleanup; *outShader already holds the
-			// compiled bytecode. Reset the FPU to a sane masked state and report success when
-			// we have bytecode (mirrors the no-fault path's result on the old toolchain).
+			// Belt-and-suspenders: D3DCompile is immune to the D3DX FP fault, but keep the
+			// recovery path until Fix-A is formally retired in Wave 2. If a fault somehow
+			// occurs, the bytecode is fully produced before any post-compile FP cleanup;
+			// reset the FPU and report success when we have bytecode.
 			_fpreset();
 			_clearfp();
 			hr = (outShader && *outShader) ? S_OK : E_FAIL;
@@ -127,9 +152,25 @@ using namespace Direct3d9_VertexShaderDataNamespace;
 Direct3d9_VertexShaderDataNamespace::Include::Include(CrcString const &fileName, AbstractFile * file)
 :
 	m_fileName(fileName),
-	m_length(file->length()),
-	m_data(file->readEntireFileAndClose())
+	m_length(0),
+	m_data(0)
 {
+	// Fix B (Phase 32) -- include-cache rewrite-BEFORE-insert (review fix Cursor C2):
+	// Unlike gl11 (which rewrites on EVERY Open and never caches), the D3D9 IncludeHandler
+	// caches the include bytes. Apply Direct3d9_HlslRewrite to the resolved .inc text HERE,
+	// in the Include ctor, so the REWRITTEN bytes are what get stored in ms_includeCache
+	// (the ctor runs before the cache insert in IncludeHandler::Open). This guarantees the
+	// 2nd #include of the same module (e.g. vertex_shader_constants.inc) returns rewritten
+	// text on the cache-hit path too -- never the raw stacked `: register()` D3DCompile rejects.
+	// applyToIncludeBuffer takes ownership of the readEntireFileAndClose() buffer (delete[]s it
+	// on rewrite) and returns a buffer we own + free in ~Include via delete[]. Capture the raw
+	// length BEFORE the read closes the file.
+	int const rawLength = file->length();
+	std::size_t outLength = 0;
+	m_data = reinterpret_cast<byte *>(Direct3d9_HlslRewrite::applyToIncludeBuffer(
+		reinterpret_cast<unsigned char *>(file->readEntireFileAndClose()),
+		static_cast<std::size_t>(rawLength), outLength, m_fileName.getString()));
+	m_length = static_cast<int>(outLength);
 }
 
 // ----------------------------------------------------------------------
@@ -178,9 +219,15 @@ HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3DXINCLUDE_TY
 			return STG_E_FILENOTFOUND;
 		}
 
-		*pBytes = file->length();
-		*ppData = file->readEntireFileAndClose();
+		// Fix B (Phase 32): non-engine-owns (viewer/tool) path -- rewrite the resolved include
+		// too, so D3DCompile sees the same modernized text as the cached engine path. The matching
+		// Close() delete[]s whatever pointer we return; applyToIncludeBuffer owns the read buffer.
+		int const rawLength = file->length();
+		unsigned char *raw = reinterpret_cast<unsigned char *>(file->readEntireFileAndClose());
 		delete file;
+		std::size_t outLength = 0;
+		*ppData = Direct3d9_HlslRewrite::applyToIncludeBuffer(raw, static_cast<std::size_t>(rawLength), outLength, pFileName);
+		*pBytes = static_cast<UINT>(outLength);
 	}
 
 	return S_OK;
@@ -390,9 +437,21 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 	ms_defines.clear();
 	char const * target = NULL;
 	if (Direct3d9::getShaderCapability() >= ShaderCapability(2,0))
+	{
 		target = "vs_2_0";
+	}
 	else
-		target = "vs_1_1";
+	{
+		// Fix B (Phase 32 / review fix #5 / D-06): D3DCompile (d3dcompiler_47) DROPPED vs_1_1
+		// support. The legacy `target = "vs_1_1"` here would hand D3DCompile a profile it rejects
+		// -> a compile FATAL or (worse) a silently-nulled VS / skipped draw on a <SM2.0 machine.
+		// Promote unconditionally to vs_2_0 so the path can never compile-FATAL on the profile and
+		// never silently null a VS. A genuine <2.0 GPU is unsupported on this modern toolchain; the
+		// DEBUG_FATAL makes that assumption loud in the Debug build (the HLSL path only ever runs
+		// on shader-capable hardware; getShaderCapability() < 2.0 is not a configuration we ship).
+		DEBUG_FATAL(true, ("Direct3d9_VertexShaderData: getShaderCapability() < 2.0 -- D3DCompile dropped vs_1_1; promoting to vs_2_0 (unsupported config)"));
+		target = "vs_2_0";
+	}
 
 	const int numberOfTextureCoordinateSets = 8;
 	if (m_hlsl)
@@ -452,9 +511,16 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 						SCRATCH_INT(i);
 						SCRATCH_STRING(" : TEXCOORD", 11);
 						SCRATCH_INT(i);
-						SCRATCH_STRING(" : register(v", 13);
- 						SCRATCH_INT(VSVR_textureCoordinateSet0 + i);
-						SCRATCH_STRING(");", 2);
+						// Fix B (Phase 32 / review fix #7 / Pitfall 3): OMIT the D3D9-era
+						// ": register(vN)" on this struct member. Modern fxc (d3dcompiler_47)
+						// rejects a register binding on a struct member (X3202) even at vs_2_0.
+						// This macro expands INSIDE D3DCompile AFTER applyToMainSource ran on the
+						// raw source -- the pre-preprocessor Rules B/C never see this post-expansion
+						// text, so the omission must be made HERE. The TEXCOORD<i> semantic alone
+						// drives input binding; the gapped VSVR v# slot (v7..v14) is honored by the
+						// D3DVERTEXELEMENT9 stream decl, NOT by this inline register hint (Task-2(G)
+						// input-signature audit proves the dcl signature still matches VSVR).
+						SCRATCH_STRING(";", 1);
 					}
 
 				SCRATCH_DONE();
@@ -472,9 +538,14 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 
 		IncludeHandler includeHandler;
 		ID3DXBuffer *error = NULL;
-		// Phase 19: SEH-guarded to survive the modern-toolchain D3DX post-compile FP fault
-		// (0xC0000090) -- see compileVertexShaderFpGuarded above.
-		HRESULT result = compileVertexShaderFpGuarded(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, "main", target, 0, &compiledShader, &error);
+		// Fix B (Phase 32): apply Rule A (and the conditional rules) to the MAIN shader source
+		// before compiling -- the #includes are rewritten in IncludeHandler::Open / the Include
+		// ctor. Then compile via D3DCompile (inside the retained Fix-A SEH guard --
+		// compileVertexShaderFpGuarded now wraps D3DCompile). Flags =
+		// D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY ONLY (NO PACK_MATRIX_ROW_MAJOR -- review fix #4).
+		std::vector<char> rewrittenSource;
+		Direct3d9_HlslRewrite::applyToMainSource(m_compileText, static_cast<std::size_t>(m_compileTextLength), rewrittenSource, m_vertexShader->m_fileName.getString());
+		HRESULT result = compileVertexShaderFpGuarded(rewrittenSource.data(), static_cast<UINT>(rewrittenSource.size()), &(ms_defines.front()), &includeHandler, "main", target, D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY, &compiledShader, &error);
 
 		//-----------------------------------------------------------------------------------
 		// DBE - I was getting strange Float Invalid Operation Exceptions (0xC0000090) in the

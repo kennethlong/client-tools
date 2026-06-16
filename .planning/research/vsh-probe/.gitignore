@@ -3,3 +3,13 @@
 *.obj
 *.pdb
 *.ilk
+
+# Phase 32-02 Task-2(G) HLSL-audit probe scratch (reproducible via build-hlsl-audit.ps1):
+#   the rewriter copy + stub headers exist only so Direct3d9_HlslRewrite.cpp links standalone.
+_rew_copy.cpp
+_build_hlsl_audit.bat
+FirstDirect3d9.h
+Direct3d9_HlslRewrite.h
+sharedDebug/
+stubinc/
+build-32-02.log

@@ -10,7 +10,7 @@
 
 #define textureCoordinateSetMAIN	textureCoordinateSet0
 #define DECLARE_textureCoordinateSets	\
-	float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
+	float2 textureCoordinateSet0 : TEXCOORD0;
 
 #include "vertex_program/include/vertex_shader_constants.inc"
 #include "vertex_program/include/functions.inc"

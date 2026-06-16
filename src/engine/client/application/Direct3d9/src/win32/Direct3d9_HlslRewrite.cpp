@@ -774,6 +774,9 @@ namespace
 			 " expected=%zu (Pass1/Pass2 divergence)",
 			 outPos, dstCapacity));
 	}
+
+}  // anonymous namespace (Rule-A/B/C/E matchers + two-pass core)
+
 // ======================================================================
 
 unsigned char *Direct3d9_HlslRewrite::applyToIncludeBuffer(

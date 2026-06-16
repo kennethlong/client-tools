@@ -1,0 +1,53 @@
+
+D:\Code\swg-client-v2>call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars32.bat" 
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.0
+** Copyright (c) 2026 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x86'
+hlsl_audit_probe.cpp
+_rew_copy.cpp
+Generating Code...
+BUILD EXITCODE=0
+hlsl_audit_probe -- Phase 32 plan 32-02 Task 2(G)
+======================================================================
+AUDIT (i): CONSTANT-LAYOUT (Rule D disabled) on D:\Code\swg-client-v2\.planning\research\vsh-extract\vertex_shader_constants.inc
+Direct3d9_HlslRewrite: main-source 'vertex_shader_constants.inc' rewritten (1 rewrite; input=3028 bytes -> output=3031 bytes; delta=+3)
+  flat register(cN) survivors POST-rewrite  : 15  (expect MANY -- flat globals preserved)
+  native bool register(bN) survivors        : 8  (expect >0 -- D3D9 boolean regs, NOT a Rule-D wrap)
+  cbuffer keyword present                   : no  (expect NO -- Rule D disabled)
+  packoffset present                        : no  (expect NO -- Rule D disabled)
+  Rule-D cbuffer:register(b) wrap present    : no  (expect NO)
+  >>> AUDIT (i): PASS -- Rule D disabled, flat register(cN)+native register(bN) preserved
+  #pragma def survives rewrite (Rule E OFF) : YES  (expect YES -- Rule E gated OFF)
+======================================================================
+AUDIT (ii): v# INPUT-SIGNATURE (gapped VSVR v0/v3/v5/v7) -- the WIP stall point
+Direct3d9_HlslRewrite: main-source 'gappedVS' rewritten (4 rewrites; input=537 bytes -> output=537 bytes; delta=+0)
+  rewriter stripped struct-member register(vN): YES (Rules B/C fired)
+  D3DCompile @ vs_2_0 HRESULT=0x00000000
+  D3DXCompileShader @ vs_2_0 HRESULT=0x00000000 (baseline)
+  --- D3DCompile(rewritten) input signature (dcl_* lines) ---
+    dcl_position v0
+    dcl_color v1
+    dcl_texcoord v2
+  --- D3DXCompileShader(baseline) input signature (dcl_* lines) ---
+    dcl_position v0
+    dcl_color v5
+    dcl_texcoord v7
+  >>> AUDIT (ii): compare the dcl_* USAGE SEMANTICS above (not the raw v# number).
+      KEY FACT (Direct3d9_VertexDeclarationMap.cpp:128-223): the D3D9 vertex declaration binds
+      by D3DDECLUSAGE + UsageIndex (POSITION/NORMAL/COLOR/TEXCOORD), NOT by the raw v# register.
+      In D3D9 SM2.0 the runtime matches the shader's dcl_<usage><index> to the vertex-decl element
+      with the SAME usage+index; the v# register NUMBER in the bytecode is cosmetic for binding.
+      Therefore: if D3DCompile preserves the dcl_position / dcl_color / dcl_texcoord USAGES (it does,
+      because the POSITION0/COLOR0/TEXCOORD0 HLSL semantics survive Rules B/C -- only register(vN) is
+      stripped), the input binding is CORRECT even though the v# numbers differ from the D3DX baseline.
+      => The Cursor C1 'sequential v0/v1/v2 != VSVR renders garbage' hypothesis is REFUTED for the
+         usage-driven D3D9 binding model. (Confirm in the Task-3 render smoke.)
+======================================================================
+AUDIT (iii): FLAG SET (from source -- Direct3d9_VertexShaderData.cpp call site)
+  flags = D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY  (relaxes D3D9-era HLSL)
+  PACK_MATRIX_ROW_MAJOR: ABSENT (review fix #4 -- D3D9 uses explicit transposed uploads)
+  matrix packing: default (column-major) -- matches the engine's transposed constant uploads

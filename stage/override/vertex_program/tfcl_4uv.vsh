@@ -14,10 +14,10 @@
 #define textureCoordinateSetMASK	textureCoordinateSet2
 #define textureCoordinateSetDIRT	textureCoordinateSet3
 #define DECLARE_textureCoordinateSets	\
-	float2 textureCoordinateSet0 : TEXCOORD0 : register(v7); \
-	float2 textureCoordinateSet1 : TEXCOORD1 : register(v8); \
-	float2 textureCoordinateSet2 : TEXCOORD2 : register(v9); \
-	float2 textureCoordinateSet3 : TEXCOORD3 : register(v10);
+	float2 textureCoordinateSet0 : TEXCOORD0; \
+	float2 textureCoordinateSet1 : TEXCOORD1; \
+	float2 textureCoordinateSet2 : TEXCOORD2; \
+	float2 textureCoordinateSet3 : TEXCOORD3;
 
 #include "vertex_program/include/vertex_shader_constants.inc"
 #include "vertex_program/include/functions.inc"
