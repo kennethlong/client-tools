@@ -139,3 +139,46 @@ paths (IFF, vector/set/deque counts, `int32`/`uint32` = `long` = 32-bit) are unc
   (binds the existing 4-byte overload, wire byte-identical to the 32-bit server), widen/pin
   `baselineCommandCount` consistently, overflow-guard the puts, and exercise via a scratch
   AutoDeltaMap-instantiation TU. This is class (B) — NOT eligible for Phase-33 deferral (review #4).
+
+---
+
+## DEF-31-07-FULLSWEEP: post-31-07 `-Scope all` reveals a LARGE pre-existing class-(B) surface the 31-06 worklist undercounted (STOP-and-report)
+
+- **Status:** REPORTED, NOT FIXED. The 11 enumerated (B-GAP) survivors ARE cleared (this plan's job).
+  But the authoritative post-31-07 `-Scope all` sweep (snapshot:
+  `.planning/research/scope-all-31-07-final.out` + `...-worklist.log`) shows the 31-06 "(B-GAP)
+  survivor set" was INCOMPLETE: ~154 in-scope TUs still fail x64 compile. ALL confirmed pre-existing
+  (independent of every 31-07 edit; none of the 154 are this plan's 11 target TUs).
+- **The (B-GAP) survivor set IS cleared:** 0 C4235 anywhere; the only C4311/C4312 left are
+  `WaterTestAppearance.cpp:97` (documented A2-WATERTEST, class-A test code) + `Bink/BinkTreeFileIO.cpp`
+  (7, see below); the 75 C4244 are the D-07-EXCLUDED `__int64`→int count/distance + STL-header noise (N2).
+- **The undercounted surface (~154 failing TUs):**
+  - **~753 C2665/C2668 (DOMINANT) — `AutoDeltaMap`/`AutoDeltaPackedMap` + the Tpf/Template object-template
+    family.** `Archive::put(target, container.size())` / `get(source, size_t)` fail overload resolution
+    on x64 (`size_t`=8 bytes, no 8-byte Archive overload) — the SAME defect class 31-05 fixed for plain
+    `Archive::get/put(std::map)`, but across the AutoDelta* templates + their `size_t baselineCommandCount`
+    member. Fix = the 31-05 uint32_t wire-stable pin applied across the AutoDelta* count put/get sites +
+    member, exercised by an instantiation TU. A coherent unit of work; class (B), NOT Phase-33 deferrable.
+    The C2065/C2059/C2143/C2238 parse-error tail is largely CASCADE from these template failures.
+  - **Miles audio callbacks (`clientAudio/Audio.cpp` C2664):** `AIL_set_file_callbacks` signature
+    mismatch — this is **Phase 35 (AUDIO-01)** Miles 7.2e→9.x scope, explicitly OUT of Phase 31.
+  - **Bink third-party glue (`Bink/BinkTreeFileIO.cpp` C4311/C4312, `BinkVideo.cpp` C4244):** OUR shim
+    round-trips `AbstractFile*` through Bink's 32-bit `U32` file-handle callback API (radopen/radread/…).
+    FUNCTIONAL on x64 (handle truncation) BUT the fix is constrained by the x64 Bink SDK callback
+    signature (`U32` vs a wider handle) — **Phase 33 (X64-04) third-party** territory (A2-3RDPARTY-adjacent).
+  - Remaining D-07/N2 C4244 (`BitStream.cpp`, `BoxTree.cpp`, …): the excluded count/distance class.
+- **Why this is STOP-and-report (not fixed here):** it is NOT in `31-PHASE33-RESIDUAL-WORKLIST.md`
+  §(B-GAP) (the authoritative worklist for THIS gap-closure plan), and it MASSIVELY exceeds 31-07's
+  4-task scope (asm / enumerated-ptr-trunc / time_t). Per the plan's own Rule-4 discipline ("a NEW
+  class-(B) escape NOT in the worklist that exceeds this plan's scope -> STOP and report, do not
+  silently defer"), it is surfaced here for a USER decision, exactly as the 31-06 finding spawned 31-07.
+- **Recommended disposition (user decision):**
+  1. A new Phase-31 gap-closure increment (31-08) for the AutoDelta* C2665/C2668 family (the 31-05
+     uint32_t pattern; the big, in-Phase-31 class-(B) item) — then resume 31-06 Task 2/3.
+  2. Miles `Audio.cpp` → Phase 35 (AUDIO-01) — already scoped there.
+  3. Bink `BinkTreeFileIO`/`BinkVideo` → Phase 33 (X64-04) third-party (U32 handle is Bink-API-bound).
+  4. `WaterTestAppearance` + D-07/N2 C4244 → unchanged class-(A) residue (Phase 33).
+- **Impact on the phase gate:** plan 31-06's D-02 acceptance bar ("all in-scope build-path engine libs
+  COMPILE x64-clean") is STILL NOT MET after 31-07 — the AutoDelta* surface remains. 31-06 Task 2/3
+  (full 32-bit build + dual-renderer boot smoke) can validate the 32-bit non-regression of the 31-07
+  fixes NOW, but the x64-clean certification needs the AutoDelta* increment first.
