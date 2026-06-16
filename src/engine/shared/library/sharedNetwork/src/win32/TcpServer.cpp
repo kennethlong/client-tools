@@ -114,7 +114,7 @@ void TcpServer::update()
 	OVERLAPPED * overlapped = 0;
 	OverlappedTcp * op = 0;
 	unsigned long int bytesTransferred = 0;
-	unsigned long int completionKey = 0;
+	ULONG_PTR completionKey = 0; // IOCP completion key: PULONG_PTR arg (64-bit on x64); local only, not serialized (BITS-02 width)
 	bool success = false;
 
 	do
