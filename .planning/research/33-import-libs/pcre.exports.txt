@@ -1,0 +1,60 @@
+Microsoft (R) COFF/PE Dumper Version 14.50.35729.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file D:\SWG Restoration\x64\pcre.dll
+
+File Type: DLL
+
+  Section contains the following exports for pcre.dll
+
+    00000000 characteristics
+    FFFFFFFF time date stamp
+        0.00 version
+           1 ordinal base
+          30 number of functions
+          30 number of names
+
+    ordinal hint RVA      name
+
+          1    0 00001118 pcre_assign_jit_stack
+          2    1 00024170 pcre_callout
+          3    2 00001073 pcre_compile
+          4    3 00001203 pcre_compile2
+          5    4 000010A0 pcre_config
+          6    5 0000121C pcre_copy_named_substring
+          7    6 000010F5 pcre_copy_substring
+          8    7 0000116D pcre_dfa_exec
+          9    8 00001140 pcre_exec
+         10    9 00024010 pcre_free
+         11    A 000010F0 pcre_free_study
+         12    B 000011D6 pcre_free_substring
+         13    C 00001113 pcre_free_substring_list
+         14    D 000010E1 pcre_fullinfo
+         15    E 00001087 pcre_get_named_substring
+         16    F 000010AF pcre_get_stringnumber
+         17   10 000010B9 pcre_get_stringtable_entries
+         18   11 0000119A pcre_get_substring
+         19   12 00001069 pcre_get_substring_list
+         20   13 0000104B pcre_jit_free_unused_memory
+         21   14 00001005 pcre_jit_stack_alloc
+         22   15 0000120D pcre_jit_stack_free
+         23   16 0000106E pcre_maketables
+         24   17 00024008 pcre_malloc
+         25   18 00001212 pcre_pattern_to_host_byte_order
+         26   19 000010DC pcre_refcount
+         27   1A 00024020 pcre_stack_free
+         28   1B 00024018 pcre_stack_malloc
+         29   1C 000011BD pcre_study
+         30   1D 00001078 pcre_version
+
+  Summary
+
+        1000 .00cfg
+        1000 .data
+        1000 .idata
+        1000 .pdata
+        5000 .rdata
+        1000 .reloc
+        1000 .rsrc
+       1E000 .text

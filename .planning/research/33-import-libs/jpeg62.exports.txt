@@ -1,0 +1,136 @@
+Microsoft (R) COFF/PE Dumper Version 14.50.35729.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file D:\SWG Restoration\x64\jpeg62.dll
+
+File Type: DLL
+
+  Section contains the following exports for jpeg62.dll
+
+    00000000 characteristics
+    621946E0 time date stamp Fri Feb 25 15:15:12 2022
+        0.00 version
+           1 ordinal base
+         107 number of functions
+         107 number of names
+
+    ordinal hint RVA      name
+
+          1    0 00049020 jcopy_block_row
+          2    1 00049040 jcopy_sample_rows
+          3    2 000490B0 jdiv_round_up
+          4    3 00046BC0 jinit_1pass_quantizer
+          5    4 00047EF0 jinit_2pass_quantizer
+          6    5 00015F70 jinit_c_coef_controller
+          7    6 00028C20 jinit_c_main_controller
+          8    7 0002A5A0 jinit_c_master_control
+          9    8 0002D540 jinit_c_prep_controller
+         10    9 000163F0 jinit_color_converter
+         11    A 00032EA0 jinit_color_deconverter
+         12    B 00028B60 jinit_compress_master
+         13    C 00032110 jinit_d_coef_controller
+         14    D 00037C60 jinit_d_main_controller
+         15    E 0003EC00 jinit_d_post_controller
+         16    F 0002E420 jinit_downsampler
+         17   10 00018310 jinit_forward_dct
+         18   11 00036800 jinit_huff_decoder
+         19   12 00028190 jinit_huff_encoder
+         20   13 00037790 jinit_input_controller
+         21   14 00035020 jinit_inverse_dct
+         22   15 00039A60 jinit_marker_reader
+         23   16 00029DB0 jinit_marker_writer
+         24   17 0003A620 jinit_master_decompress
+         25   18 00049BE0 jinit_memory_mgr
+         26   19 0003D960 jinit_merged_upsampler
+         27   1A 0003E750 jinit_phuff_decoder
+         28   1B 0002D160 jinit_phuff_encoder
+         29   1C 0003F5A0 jinit_upsampler
+         30   1D 00015060 jpeg_CreateCompress
+         31   1E 0002F100 jpeg_CreateDecompress
+         32   1F 0002AFF0 jpeg_abort
+         33   20 0002F250 jpeg_abort_compress
+         34   21 0002F250 jpeg_abort_decompress
+         35   22 0002B240 jpeg_add_quant_table
+         36   23 0002B040 jpeg_alloc_huff_table
+         37   24 0002B060 jpeg_alloc_quant_table
+         38   25 0003A650 jpeg_calc_output_dimensions
+         39   26 0002F260 jpeg_consume_input
+         40   27 0002EA00 jpeg_copy_critical_parameters
+        105   28 0002F5A0 jpeg_crop_scanline
+         41   29 0002B350 jpeg_default_colorspace
+         42   2A 0002B080 jpeg_destroy
+         43   2B 00015180 jpeg_destroy_compress
+         44   2C 00015180 jpeg_destroy_decompress
+         45   2D 0003FEE0 jpeg_fdct_float
+         46   2E 00041270 jpeg_fdct_ifast
+         47   2F 000414E0 jpeg_fdct_islow
+         48   30 00036870 jpeg_fill_bit_buffer
+         49   31 00015190 jpeg_finish_compress
+         50   32 0002F350 jpeg_finish_decompress
+         51   33 0002F7E0 jpeg_finish_output
+         52   34 0004A370 jpeg_free_large
+         53   35 0004A370 jpeg_free_small
+         54   36 00028220 jpeg_gen_optimal_table
+         55   37 0004A380 jpeg_get_large
+         56   38 0004A380 jpeg_get_small
+         57   39 0002F420 jpeg_has_multiple_scans
+         58   3A 000369C0 jpeg_huff_decode
+         59   3B 00045FA0 jpeg_idct_1x1
+         60   3C 00045FE0 jpeg_idct_2x2
+         61   3D 00046200 jpeg_idct_4x4
+         62   3E 000417E0 jpeg_idct_float
+         63   3F 00041D10 jpeg_idct_ifast
+         64   40 00045A30 jpeg_idct_islow
+         65   41 0002F470 jpeg_input_complete
+         66   42 00028550 jpeg_make_c_derived_tbl
+         67   43 00036AE0 jpeg_make_d_derived_tbl
+         68   44 0004A390 jpeg_mem_available
+        102   45 000303C0 jpeg_mem_dest
+         69   46 0004DEB0 jpeg_mem_init
+        103   47 000306F0 jpeg_mem_src
+         70   48 000303B0 jpeg_mem_term
+         71   49 0003AC10 jpeg_new_colormap
+         72   4A 0004A3B0 jpeg_open_backing_store
+         73   4B 0002B6C0 jpeg_quality_scaling
+         74   4C 0003FA10 jpeg_read_coefficients
+         75   4D 0002F4C0 jpeg_read_header
+        106   4E 00037120 jpeg_read_icc_profile
+         76   4F 0002F890 jpeg_read_raw_data
+         77   50 0002F980 jpeg_read_scanlines
+         78   51 00039B30 jpeg_resync_to_restart
+         79   52 00039C50 jpeg_save_markers
+         80   53 0002B6F0 jpeg_set_colorspace
+         81   54 0002BA90 jpeg_set_defaults
+         82   55 0002BB80 jpeg_set_linear_quality
+         83   56 00039D10 jpeg_set_marker_processor
+         84   57 0002BD20 jpeg_set_quality
+         85   58 0002BD70 jpeg_simple_progression
+        104   59 0002FA50 jpeg_skip_scanlines
+         86   5A 000154B0 jpeg_start_compress
+         87   5B 0002FE60 jpeg_start_decompress
+         88   5C 0002FF60 jpeg_start_output
+         89   5D 0003FD90 jpeg_std_error
+         90   5E 000304E0 jpeg_stdio_dest
+         91   5F 000307C0 jpeg_stdio_src
+         92   60 000152B0 jpeg_suppress_tables
+         93   61 0002ECB0 jpeg_write_coefficients
+        107   62 000289C0 jpeg_write_icc_profile
+         94   63 00015330 jpeg_write_m_byte
+         95   64 00015340 jpeg_write_m_header
+         96   65 000153B0 jpeg_write_marker
+         97   66 00015540 jpeg_write_raw_data
+         98   67 00015640 jpeg_write_scanlines
+         99   68 00015450 jpeg_write_tables
+        100   69 000490C0 jround_up
+        101   6A 000490E0 jzero_far
+
+  Summary
+
+        1000 .data
+        1000 .gfids
+        3000 .pdata
+       44000 .rdata
+        1000 .reloc
+        1000 .rsrc
+       4D000 .text
