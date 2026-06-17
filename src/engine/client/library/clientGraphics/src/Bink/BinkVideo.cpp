@@ -52,7 +52,11 @@ namespace BinkVideoNamespace
 	// ----------------------------------------------------------------
 
 	static bool            s_installed;
+#if defined(_M_X64)
+	static const char     *s_dllName = "binkw64.dll";   // Phase 33 (X64-02): x64 Bink redist. Bink is dynamically loaded (bindBink -> LoadLibrary/GetProcAddress), no static import lib; this string is the whole x64 Bink port. binkw64.dll staged to stage-x64/ by Plan 06.
+#else
 	static const char     *s_dllName = "binkw32.dll";
+#endif
 	static bool            s_dynamicTextures;
 
 	// ----------------------------------------------------------------
