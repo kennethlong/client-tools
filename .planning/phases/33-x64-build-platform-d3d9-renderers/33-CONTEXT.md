@@ -41,24 +41,40 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 ## Implementation Decisions
 
 ### Third-party x64 sourcing (X64-04)
-- **D-01 (HYBRID sourcing):** Build x64 from in-tree source where source exists
-  (zlib / pcre / libxml2 / jpeg / tinyxml and similar buildable libs); for genuinely binary-only
-  middleware with no obtainable source (dpvs / bink / icu / discord-rpc), **lift Restoration's
-  prebuilt x64 DLLs** (`D:\SWG Restoration\x64\`) + generate matching import `.lib`s + obtain
-  compatible headers. Rationale: the "Restoration took shortcuts I don't want to take" value
-  applies **where a clean build is actually possible**; binary-only proprietary middleware has no
-  clean-build option, so lifting the vetted x64 binary is the correct (not shortcut) choice there.
-  `d3d9.lib` x64 comes from the Windows SDK (not the legacy DXSDK); `d3dx9` is being removed (D-04),
-  so it is NOT a sourcing target.
+- **D-01 (HYBRID sourcing):** Build x64 from in-tree source where source exists — this is the
+  **majority** of deps: zlib / pcre / libxml2 / jpeg / tinyxml **and dpvs** (full source + a
+  `dpvs.vcxproj` are in-tree — see D-02). For the genuinely binary-only proprietary middleware with
+  no source anywhere — **bink** (`binkw32.lib`, RAD; no source) and **miles** (RAD; Phase 35 scope) —
+  lift the vetted x64 binary (`D:\SWG Restoration\x64\binkw64.dll` / `mss64.dll`) + generate matching
+  import `.lib`s. For **icu / discord-rpc** (open-source but not vendored as source here), prefer an
+  official/Restoration prebuilt x64 over building. Rationale: the "Restoration took shortcuts I don't
+  want to take" value applies **wherever a clean build is actually possible**; lifting is reserved
+  for libs that genuinely cannot be built (RAD-proprietary). `d3d9.lib` x64 comes from the Windows
+  SDK (not the legacy DXSDK); `d3dx9` is being removed (D-04), so it is NOT a sourcing target.
+  - **Universal fallback (applies to EVERY dep, including the build-from-source ones):** if building
+    a lib x64 from source proves troublesome or time-consuming, **grab its prebuilt x64 DLL from
+    `D:\SWG Restoration\x64\`** + generate an import `.lib`. The from-source build is the preferred
+    path (clean, no blob); the Restoration binary is the always-available escape hatch so no single
+    lib can block the x64 link. (dpvs included — build it from source per D-02, but `dpvs.dll` is
+    right there if the port stalls.)
 
-### dpvs on x64 (the highest-risk dep — no x64 anywhere in our tree)
-- **D-02:** **Lift Restoration's x64 `dpvs.dll`** + generate an import `.lib` + reuse the existing
-  (ABI-compatible) dpvs headers to get x64 occlusion **linking and booting now**. dPVS is Umbra
-  proprietary, binary-only; this is the only route to working x64 occlusion.
+### dpvs on x64 (CORRECTED — buildable from in-tree source, NOT a binary lift)
+- **D-02:** **Build dPVS x64 from the in-tree source.** We have the **full dPVS source**
+  (`src/external/3rd/library/dpvs/implementation/sources/` — 70 `.cpp`, 83 headers, `interface/`)
+  plus an existing `implementation/msvc8/dpvs.vcxproj`. The `lib/win32-x86` dir holds only a stray
+  `.pdb` — the 32-bit build compiles dPVS from source, it is NOT a prebuilt blob. Restoration's x64
+  `dpvs.dll` was almost certainly built from this same SOE-licensed source. The x64 port is
+  **low-risk**: every `__asm` block (in `dpvsBitMath.hpp`, `dpvsFiller.hpp`, `dpvsPrivateDefs.hpp`)
+  is gated behind `#if defined(DPVS_X86_ASSEMBLY)` and **already has a portable C `#else` fallback**
+  (e.g. `getHighestSetBit`/`getNextPowerOfTwo` `bsr` → LUT fallback). So the port ≈ add an x64 config
+  to `dpvs.vcxproj` + leave `DPVS_X86_ASSEMBLY` undefined on x64 (C fallbacks compile automatically;
+  optionally swap `bsr` → `_BitScanReverse` intrinsics for parity) + a small pointer-truncation pass
+  (the C4311/C4312 class Phase 31 handled, but dPVS was OUT of Phase 31 scope so it gets its own
+  mini-pass). **No binary lift, no import-lib generation for dpvs.**
   - **Flagged follow-up (NOT this phase):** evaluate **dropping DPVS entirely** after the x64
     migration — only marginal culling benefit was observed even on the D3D9 path, and Phase 23's
     D3D11 verdict already flips indoor occlusion off. See Deferred + ties to the Phase-23 DPVS
-    config-gate. "Start by lifting it; decide whether to keep it after x64 lands."
+    config-gate. "Build it x64 from source for now; decide whether to keep it after x64 lands."
 
 ### Project scope of the platform-add (X64-01)
 - **D-03:** Add `x64` to the **boot-path subset ONLY** — Phase 31's ~57 in-scope engine libs
@@ -97,7 +113,8 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 ### Claude's Discretion
 - Exact per-lib sourcing disposition (which deps build-from-source vs lift) — research enumerates
   against `D:\SWG Restoration\x64\` and the in-tree source availability.
-- dpvs import-`.lib` generation mechanics (from the x64 `dpvs.dll` export table) and header reuse.
+- dpvs x64-port mechanics: x64 config on `dpvs.vcxproj`, `DPVS_X86_ASSEMBLY`-undefined-on-x64 vs
+  `_BitScanReverse` intrinsic swap, and its self-contained pointer-truncation pass.
 - Which build configurations get x64 — must cover Debug + Release **and all three D3D9 plugin
   flavors** (the `Direct3d9` / `Direct3d9_ffp` / `Direct3d9_vsps` configs that produce gl05/06/07);
   the Optimized variant is planner's call.
@@ -139,7 +156,9 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 ### x64 availability reference (binaries only — NOT a source diff)
 - `D:\SWG Restoration\x64\` — the third-party x64 **availability map**: ships gl05/06/07_r.dll,
   `dpvs.dll`, `binkw64.dll`, `mss64.dll`, `icudt62.dll`/`libicuuc.dll`, `libxml2.dll`, `pcre.dll`,
-  `jpeg62.dll`, `discord-rpc.dll` — **D3D9-only (no gl11)**. Lift binary-only middleware from here.
+  `jpeg62.dll`, `discord-rpc.dll` — **D3D9-only (no gl11)**. Lift the RAD-proprietary binaries
+  (bink/miles) from here; the rest (incl. dpvs) we build from in-tree source. Restoration's
+  `dpvs.dll` is itself a from-source build of our same SOE dPVS source.
 - Memory `reference_restoration_binaries_intel` — Restoration's compile model + the x64 D3DX-redist
   reality (an x64 d3dx9 redist DLL exists; we are NOT using it — D-05 fallback rejected)
 
@@ -152,7 +171,10 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 - `src/engine/client/application/Direct3d11/src/win32/Direct3d11_VertexShaderData.cpp:158-275,:375`
   — gl11's `[P19VSFALLBACK]` generic fallback VS = WHY the D3D11 asm handling does NOT transfer to
   D3D9 (D-05 finding)
-- `src/external/3rd/library/` — in-tree third-party source/libs (dpvs/lib = `win32-x86` ONLY;
+- `src/external/3rd/library/dpvs/implementation/` — **full in-tree dPVS source** + `msvc8/dpvs.vcxproj`
+  (build x64 from here, D-02); `__asm` is `DPVS_X86_ASSEMBLY`-gated with C `#else` fallbacks
+- `src/external/3rd/library/` — in-tree third-party source/libs (dpvs/lib = `win32-x86` stray .pdb only,
+  no prebuilt binary;
   directx9/lib = x86 only; bink = `binkw32.lib` only) — the sourcing gap this phase closes
 
 ### Build/convention constraints
@@ -172,7 +194,9 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
   the few link/runtime items that only surface once the platform actually links.
 - **`x64-scratch/x64-compile.props`** — the Phase-31 compile-only harness; a known-good x64 compile
   flag set to grow into the committed platform props.
-- **`D:\SWG Restoration\x64\`** — vetted x64 DLLs for every binary-only dep (the D-01/D-02 lift source).
+- **`D:\SWG Restoration\x64\`** — vetted x64 DLLs. Primary source for the RAD-proprietary binaries
+  (bink/miles); **universal fallback for EVERY other dep** (incl. dpvs) if its from-source x64 build
+  stalls (D-01). Preferred path is still build-from-source where we have it.
 - **gl11's full D3D11 x64 readiness is NOT here yet** — gl11 stays Win32 until Phase 34; do not pull
   it into the x64 boot subset.
 
@@ -202,10 +226,13 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 
 - "Restoration took shortcuts I don't want to take" — the guiding value, **scoped precisely**:
   prefer the clean build/port where one is genuinely possible (own-impl D3DX, D3DAssemble), accept
-  lifting vetted x64 binaries only for proprietary binary-only middleware that *cannot* be built.
-- "Start by lifting dpvs, then decide if we want to keep it at all after the x64 migration — we were
-  finding only marginal advantages even in the D3D9 use case." — the directive behind D-02 + the
-  Deferred DPVS-removal evaluation.
+  lifting vetted x64 binaries only for RAD-proprietary middleware (bink/miles) that *cannot* be built.
+- "I thought we had the source to dpvs" — confirmed: we do (full source + `dpvs.vcxproj` in-tree).
+  This CORRECTED the initial framing — dpvs is build-from-source, not a binary lift. Restoration's
+  x64 `dpvs.dll` is a from-source build of this same SOE source.
+- "Decide if we want to keep DPVS at all after the x64 migration — we were finding only marginal
+  advantages even in the D3D9 use case." — the directive behind the Deferred DPVS-removal evaluation
+  (build it x64 from source now; revisit keeping it after x64 lands).
 - The D3D11 asm-fallback question was explicitly raised and resolved: gl11's `[P19VSFALLBACK]`
   substitution is NOT reusable for D3D9 — gl05/06/07 must truly assemble the asm (D-05 finding).
 
@@ -216,8 +243,8 @@ to character select under `rasterMajor=5`, `=6`, and `=7` — without regressing
 
 - **Evaluate dropping DPVS entirely (post-x64).** Occlusion shows only marginal benefit even on
   D3D9; Phase 23's D3D11 verdict flips indoor occlusion off; a config gate already exists. After the
-  x64 client lands, decide whether to keep dPVS at all or rip it out (removing the binary-only x64
-  dependency). → its own evaluation/decision, likely a later v3.x item. NOT this phase.
+  x64 client lands, decide whether to keep dPVS at all or rip it out (deleting a whole third-party
+  middleware + its x64 build). → its own evaluation/decision, likely a later v3.x item. NOT this phase.
 - **gl11 / D3D11 as x64** — Phase 34 (X64-03). Second, separate boot gate.
 - **Miles 9.3b audio x64 port** (`mss64.dll`, 7.2e→9.x, the `AIL_room_type(dig, 0)` edit) — Phase 35
   (AUDIO-01/02). Already roadmapped.
