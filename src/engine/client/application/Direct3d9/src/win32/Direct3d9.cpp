@@ -2750,7 +2750,7 @@ bool Direct3d9Namespace::applyGammaCorrectionToXRGBSurface( IDirect3DSurface9 *s
 	for( unsigned nLine = 0; nLine != desc.Height; nLine++ )
 	{
 		// get the start of the line
-		PackedArgb * pBuffer = (PackedArgb *)((unsigned int)lockedRect.pBits + lockedRect.Pitch * nLine);
+		PackedArgb * pBuffer = (PackedArgb *)((size_t)lockedRect.pBits + lockedRect.Pitch * nLine);   // Phase 33 (BITS-02): pointer-width arithmetic (was (unsigned int), x64-truncating under /we4311/4312)
 
 		// color correct the line
 		PackedArgb * pBufferEol = pBuffer + desc.Width;

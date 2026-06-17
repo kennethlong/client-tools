@@ -13,6 +13,14 @@
       <Configuration>Release</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{78041480-C2C5-42A1-A566-C57BC3100BBF}</ProjectGuid>
@@ -37,6 +45,18 @@
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
@@ -51,6 +71,14 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\build\win32\x64-platform.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\build\win32\x64-platform.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
@@ -70,6 +98,16 @@
     <OutDir>.\..\..\..\..\..\..\compile\win32\DllExport\Debug\</OutDir>
     <IntDir>.\..\..\..\..\..\..\compile\win32\DllExport\Debug\</IntDir>
     <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>.\..\..\..\..\..\..\compile\win32\DllExport\x64\Debug\</OutDir>
+    <IntDir>.\..\..\..\..\..\..\compile\win32\DllExport\x64\Debug\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>.\..\..\..\..\..\..\compile\win32\DllExport\x64\Release\</OutDir>
+    <IntDir>.\..\..\..\..\..\..\compile\win32\DllExport\x64\Release\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
     <Midl>
@@ -212,6 +250,50 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\..\..\..\..\..\..\compile\win32\DllExport\Debug/DllExport.bsc</OutputFile>
     </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\shared\library\sharedDebug\include\public;..\..\..\..\..\shared\library\sharedFile\include\public;..\..\..\..\..\shared\library\sharedFoundation\include\public;..\..\..\..\..\shared\library\sharedFoundationTypes\include\public;..\..\..\..\..\shared\library\sharedImage\include\public;..\..\..\..\..\shared\library\sharedMath\include\public;..\..\..\..\..\shared\library\sharedMemoryManager\include\public;..\..\..\..\..\shared\library\sharedObject\include\public;..\..\..\..\..\shared\library\sharedSynchronization\include\public;..\..\..\..\library\clientGraphics\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;DIRECT3D8_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <ObjectFileName>$(OutDir)</ObjectFileName>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)DllExport.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <IgnoreSpecificDefaultLibraries>libc; libcp;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)DllExport.pdb</ProgramDatabaseFile>
+      <ImportLibrary>$(OutDir)DllExport.lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\shared\library\sharedDebug\include\public;..\..\..\..\..\shared\library\sharedFile\include\public;..\..\..\..\..\shared\library\sharedFoundation\include\public;..\..\..\..\..\shared\library\sharedFoundationTypes\include\public;..\..\..\..\..\shared\library\sharedImage\include\public;..\..\..\..\..\shared\library\sharedMath\include\public;..\..\..\..\..\shared\library\sharedMemoryManager\include\public;..\..\..\..\..\shared\library\sharedObject\include\public;..\..\..\..\..\shared\library\sharedSynchronization\include\public;..\..\..\..\library\clientGraphics\include\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;DIRECT3D8_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <ObjectFileName>$(OutDir)</ObjectFileName>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)DllExport.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)DllExport.pdb</ProgramDatabaseFile>
+      <ImportLibrary>$(OutDir)DllExport.lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\win32\DllExport.cpp" />

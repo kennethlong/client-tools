@@ -71,44 +71,56 @@
 #include "sharedSynchronization/Mutex.h"
 
 // ======================================================================
+// Phase 33 (X64-02): DllExport is the plugin<->host engine-symbol bridge. Every body here is an
+// unreachable EXPORT STUB -- it exists only to emit an import library (DllExport.lib) so the gl05/06/07
+// plugins can resolve their engine `dllimport` references at link; at RUNTIME the loader binds those
+// imports to the real engine inside SwgClient.exe, so these stub bodies are never executed. The x86
+// `__asm int 3` breakpoint trap is x64-illegal; DLLEXPORT_UNREACHABLE_TRAP maps to the portable
+// __debugbreak() intrinsic on x64 (identical int-3 semantics) and keeps the byte-identical `__asm int 3`
+// on x86. This is a mechanical port of a never-called trap, NOT a behavior change.
+#if defined(_M_X64)
+#  define DLLEXPORT_UNREACHABLE_TRAP() __debugbreak()
+#else
+#  define DLLEXPORT_UNREACHABLE_TRAP() __asm int 3
+#endif
 
 void Fatal(const char *, ...)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void DebugFatal(const char *, ...)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Warning(const char *, ...)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 void Report::setFlags(int)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Report::vprintf(const char *, va_list)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Report::printf(const char *, ...)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 bool ExitChain::isFataling()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -116,7 +128,7 @@ bool ExitChain::isFataling()
 
 bool ConfigSharedFoundation::getVerboseHardwareLogging()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -124,51 +136,51 @@ bool ConfigSharedFoundation::getVerboseHardwareLogging()
 
 Mutex::Mutex()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 Mutex::~Mutex()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 const TextureFormatInfo &TextureFormatInfo::getInfo(TextureFormat)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	static TextureFormatInfo dummy;
 	return dummy;
 }
 
 void TextureFormatInfo::setSupported(TextureFormat, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 void *MemoryManager::allocate(size_t, uint32, bool, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return NULL;
 }
 
 void  MemoryManager::free(void *, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void  MemoryManager::own(void *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 bool DataLint::isEnabled()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -176,31 +188,31 @@ bool DataLint::isEnabled()
 
 void DebugFlags::registerFlag(bool &, const char *, const char *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void DebugFlags::registerFlag(bool &, const char *, const char *, ReportRoutine1, int)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void DebugFlags::unregisterFlag(bool &)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 void DebugKey::registerFlag(bool &, const char *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ----------------------------------------------------------------------
 
 bool DebugKey::isPressed(int)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -208,7 +220,7 @@ bool DebugKey::isPressed(int)
 
 bool DebugKey::isDown(int)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -216,54 +228,54 @@ bool DebugKey::isDown(int)
 
 Material::Material()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 Material::~Material()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 MemoryBlockManager::MemoryBlockManager(const char *, bool, int, int, int, int)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 MemoryBlockManager::~MemoryBlockManager()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 int MemoryBlockManager::getElementSize() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
 void *MemoryBlockManager::allocate(bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
 void MemoryBlockManager::free(void *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 bool Os::isMainThread(void)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 Os::ThreadId Os::getThreadId()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
@@ -273,68 +285,68 @@ Transform const Transform::identity;
 
 void Transform::multiply(const Transform &, const Transform &)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 const char *Shader::getName() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return NULL;
 }
 
 bool StaticShader::getMaterial(Tag, Material &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getTextureData(Tag, StaticShaderTemplate::TextureData &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getTexture(Tag, const Texture *&) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getTextureCoordinateSet(Tag, uint8 &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getTextureFactor(Tag, uint32 &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getTextureScroll(Tag, StaticShaderTemplate::TextureScroll &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getAlphaTestReferenceValue(Tag, uint8 &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::getStencilReferenceValue(Tag, uint32 &) const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
 bool StaticShader::containsPrecalculatedVertexLighting() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -342,97 +354,97 @@ bool StaticShader::containsPrecalculatedVertexLighting() const
 
 void Texture::fetch() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Texture::release() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 DynamicIndexBufferGraphicsData::~DynamicIndexBufferGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 DynamicVertexBufferGraphicsData::~DynamicVertexBufferGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 HardwareIndexBuffer::~HardwareIndexBuffer()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 StaticIndexBuffer::StaticIndexBuffer(int)
 : HardwareIndexBuffer(T_static)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 StaticIndexBuffer::~StaticIndexBuffer()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 StaticIndexBufferGraphicsData::~StaticIndexBufferGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 StaticShaderGraphicsData::~StaticShaderGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 ShaderImplementationGraphicsData::~ShaderImplementationGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 StaticVertexBufferGraphicsData::~StaticVertexBufferGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 TextureGraphicsData::~TextureGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 VertexBufferVectorGraphicsData::~VertexBufferVectorGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 ShaderImplementationPassVertexShaderGraphicsData::~ShaderImplementationPassVertexShaderGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 ShaderImplementationPassPixelShaderProgramGraphicsData::~ShaderImplementationPassPixelShaderProgramGraphicsData()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 char const * ShaderImplementationPassPixelShaderProgram::getFileName() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
 int ShaderImplementationPassPixelShaderProgram::getVersionMajor() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
 int ShaderImplementationPassPixelShaderProgram::getVersionMinor() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
@@ -440,13 +452,13 @@ int ShaderImplementationPassPixelShaderProgram::getVersionMinor() const
 
 int ConfigFile::getKeyInt(const char *, const char *, int, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0;
 }
 
 bool  ConfigFile::getKeyBool  (const char *, const char *, bool, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return false;
 }
 
@@ -454,7 +466,7 @@ bool  ConfigFile::getKeyBool  (const char *, const char *, bool, bool)
 
 real Clock::frameTime()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0.0f;
 }
 
@@ -462,24 +474,24 @@ real Clock::frameTime()
 
 void Profiler::enter(char const *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Profiler::leave(char const *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void Profiler::transfer(char const *, char const *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 AbstractFile *TreeFile::open(const char *, AbstractFile::PriorityType, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return NULL;
 }
 
@@ -487,12 +499,12 @@ AbstractFile *TreeFile::open(const char *, AbstractFile::PriorityType, bool)
 
 CrcString::CrcString()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 CrcString::~CrcString()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 bool CrcString::operator < (CrcString const &) const
@@ -504,81 +516,81 @@ bool CrcString::operator < (CrcString const &) const
 
 PersistentCrcString::PersistentCrcString(CrcString const &)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 PersistentCrcString::~PersistentCrcString()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 
 char const * PersistentCrcString::getString() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return NULL;
 }
 
 void PersistentCrcString::clear()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void PersistentCrcString::set(char const *, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void PersistentCrcString::set(char const *, uint32)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 TemporaryCrcString::TemporaryCrcString(char const *, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 TemporaryCrcString::~TemporaryCrcString()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 char const * TemporaryCrcString::getString() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return NULL;
 }
 
 void TemporaryCrcString::clear()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void TemporaryCrcString::set(char const *, bool)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void TemporaryCrcString::set(char const *, uint32)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 void Graphics::setLastError(char const *, char const *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 // ======================================================================
 
 bool Graphics::writeImage(char const *, int const, int const, int const, int const *, bool const, Gl_imageFormat const, Rectangle2d const *)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return true;
 }
 
@@ -586,7 +598,7 @@ bool Graphics::writeImage(char const *, int const, int const, int const, int con
 
 void CrashReportInformation::addStaticText(char const *, ...)
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 
@@ -594,32 +606,32 @@ void CrashReportInformation::addStaticText(char const *, ...)
 
 PerformanceTimer::PerformanceTimer()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 PerformanceTimer::~PerformanceTimer()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void PerformanceTimer::start()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void PerformanceTimer::resume()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 void PerformanceTimer::stop()
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 }
 
 float PerformanceTimer::getElapsedTime() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return 0.0f;
 }
 
@@ -627,7 +639,7 @@ float PerformanceTimer::getElapsedTime() const
 
 Transform const & Object::getTransform_o2w() const
 {
-	__asm int 3;
+	DLLEXPORT_UNREACHABLE_TRAP();
 	return Transform::identity;
 }
 

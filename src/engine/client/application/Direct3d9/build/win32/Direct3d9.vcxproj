@@ -72,6 +72,14 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\build\win32\x64-platform.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\build\win32\x64-platform.props" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>12.0.30501.0</_ProjectFileVersion>
@@ -93,6 +101,19 @@
     <OutDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\Optimized\</OutDir>
     <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\Optimized\</IntDir>
     <LinkIncremental>true</LinkIncremental>
+    <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\x64\Debug\</OutDir>
+    <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\x64\Debug\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+    <PreBuildEventUseInBuild>false</PreBuildEventUseInBuild>
+    <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\x64\Release\</OutDir>
+    <IntDir>.\..\..\..\..\..\..\compile\win32\Direct3d9\x64\Release\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
     <PostBuildEventUseInBuild>true</PostBuildEventUseInBuild>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -275,6 +296,85 @@ copy /Y "$(OutDir)gl05_o.pdb" "..\..\..\..\..\..\..\stage\"
 copy /Y "..\..\..\..\..\..\external\3rd\library\directx9\lib\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
+  <!-- Phase 33 (X64-02): Debug|x64 + Release|x64 link blocks for gl05. D3DX dropped (D-04: no x64 d3dx9 lib;
+       Plans 02/03/Phase-32 removed the live D3DX surface). d3d9.lib + d3dcompiler.lib come from the Windows SDK
+       on x64 (toolset-supplied); the legacy DXSDK directx9\lib (x86) is OFF the lib path. libjpeg to jpeg62-x64.lib
+       (Plan 01). MachineX64, isolated x64 OutDir, no x86 BaseAddress. PostBuild to stage-x64\ + the x64 System32
+       d3dcompiler_47.dll (Sysnative dodges the WoW64 redirector from the x86 MSBuild host). -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\3rd\library\directx9\include;..\..\..\..\..\..\external\3rd\library\libjpeg\include;..\..\..\..\..\client\library\clientGraphics\include\public;..\..\..\..\..\shared\library\sharedDebug\include\public;..\..\..\..\..\shared\library\sharedFile\include\public;..\..\..\..\..\shared\library\sharedFoundation\include\public;..\..\..\..\..\shared\library\sharedFoundationTypes\include\public;..\..\..\..\..\shared\library\sharedMath\include\public;..\..\..\..\..\shared\library\sharedMemoryManager\include\public;..\..\..\..\..\shared\library\sharedObject\include\public;..\..\..\..\..\shared\library\sharedSynchronization\include\public;..\..\src\shared;..\..\src\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;DIRECT3D9_EXPORTS;FFP;VSPS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>FirstDirect3d9.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(OutDir)Direct3d9.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>$(OutDir)</AssemblerListingLocation>
+      <ObjectFileName>$(OutDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(OutDir)</ProgramDataBaseFileName>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>jpeg62-x64.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dcompiler.lib;ddraw.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)gl05_d.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\libjpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>libc; libcp;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <DelayLoadDLLs>DllExport.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)gl05_d.pdb</ProgramDatabaseFile>
+      <ImportLibrary>$(OutDir)gl05_d.lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+    <PostBuildEvent>
+      <Message>Stage Debug x64 gl05_d.dll + pdb + d3dcompiler_47.dll</Message>
+      <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "$(OutDir)gl05_d.dll" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "$(OutDir)gl05_d.pdb" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "%SystemRoot%\Sysnative\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage-x64\"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\..\..\..\external\ours\library\fileInterface\include\public;..\..\..\..\..\..\external\3rd\library\directx9\include;..\..\..\..\..\..\external\3rd\library\libjpeg\include;..\..\..\..\..\client\library\clientGraphics\include\public;..\..\..\..\..\shared\library\sharedDebug\include\public;..\..\..\..\..\shared\library\sharedFile\include\public;..\..\..\..\..\shared\library\sharedFoundation\include\public;..\..\..\..\..\shared\library\sharedFoundationTypes\include\public;..\..\..\..\..\shared\library\sharedMath\include\public;..\..\..\..\..\shared\library\sharedMemoryManager\include\public;..\..\..\..\..\shared\library\sharedObject\include\public;..\..\..\..\..\shared\library\sharedSynchronization\include\public;..\..\src\shared;..\..\src\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;DIRECT3D9_EXPORTS;FFP;VSPS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>FirstDirect3d9.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(OutDir)Direct3d9.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>$(OutDir)</AssemblerListingLocation>
+      <ObjectFileName>$(OutDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(OutDir)</ProgramDataBaseFileName>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>jpeg62-x64.lib;odbc32.lib;odbccp32.lib;winmm.lib;delayimp.lib;dxguid.lib;d3d9.lib;d3dcompiler.lib;ddraw.lib;legacy_stdio_definitions.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)gl05_r.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\..\..\..\external\3rd\library\libjpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>libc; libcp;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <DelayLoadDLLs>DllExport.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)gl05_r.pdb</ProgramDatabaseFile>
+      <ImportLibrary>$(OutDir)gl05_r.lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+    <PostBuildEvent>
+      <Message>Stage Release x64 gl05_r.dll + pdb + d3dcompiler_47.dll</Message>
+      <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "$(OutDir)gl05_r.dll" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "$(OutDir)gl05_r.pdb" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "%SystemRoot%\Sysnative\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage-x64\"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\shared\MemoryManagerHook.cpp" />
     <ClCompile Include="..\..\src\shared\SetupDll.cpp" />
@@ -302,6 +402,8 @@ copy /Y "..\..\..\..\..\..\external\3rd\library\directx9\lib\d3dcompiler_47.dll"
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
