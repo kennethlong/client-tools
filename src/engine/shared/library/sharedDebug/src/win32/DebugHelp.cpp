@@ -59,7 +59,14 @@ namespace DebugHelpNamespace
    static SymEnumerateModules64FP    symEnumerateModules64;
    static EnumerateLoadedModules64FP enumerateLoadedModules64;
    static MiniDumpWriteDumpFP        miniDumpWriteDump;
-   static CRITICAL_SECTION           criticalSection; 
+   static CRITICAL_SECTION           criticalSection;
+
+   // Emergency address-space reserve. Reserved (not committed) at install() and released in
+   // writeMiniDump() BEFORE MiniDumpWriteDump runs, so the dump can still be serialized when the
+   // crash is an out-of-memory condition. MiniDumpWriteDump allocates from the Win32 heap to build
+   // the dump; under OOM that fails and the .mdmp is created-but-0-bytes. Releasing this reservation
+   // hands ~32 MB of address space back to the OS for those allocations. Single-use (crashes exit).
+   static void *                     s_miniDumpReserve = 0;
 
    // ----------------------------------------------------------------------
 
@@ -414,6 +421,10 @@ void DebugHelp::install()
 		UNREF(result1);
 		DEBUG_FATAL(!result1, ("SymInitialize failed"));
 
+		// Reserve (do not commit) address space so writeMiniDump() can release it under an
+		// out-of-memory crash and still serialize a minidump (see s_miniDumpReserve note above).
+		s_miniDumpReserve = VirtualAlloc(0, 32u * 1024u * 1024u, MEM_RESERVE, PAGE_NOACCESS);
+
       // -----------------------------------------------------------------------
 
       s_baseAddressCache = (BaseAddressLookup *)VirtualAlloc(0, _baseAddressCacheSize(), MEM_COMMIT, PAGE_READWRITE);
@@ -650,6 +661,15 @@ bool DebugHelp::writeMiniDump(char const *miniDumpFileName, PEXCEPTION_POINTERS 
 {
 	if (!miniDumpWriteDump)
 		return false;
+
+	// Release the emergency address-space reserve BEFORE serializing, so MiniDumpWriteDump's
+	// Win32-heap allocations succeed even when this crash is an out-of-memory condition (without
+	// this the .mdmp is created but written 0 bytes). Single-use: the process exits after a crash.
+	if (s_miniDumpReserve)
+	{
+		IGNORE_RETURN(VirtualFree(s_miniDumpReserve, 0, MEM_RELEASE));
+		s_miniDumpReserve = 0;
+	}
 
 	char buffer[256];
 	if (!miniDumpFileName)
