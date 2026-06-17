@@ -17,7 +17,6 @@
 #include "sharedFoundation/Os.h"
 #include "clientGraphics/TextureFormatInfo.h"
 
-#include <d3dx9tex.h>
 #include <map>
 
 // ======================================================================

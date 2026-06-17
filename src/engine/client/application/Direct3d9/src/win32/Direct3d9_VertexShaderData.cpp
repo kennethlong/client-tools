@@ -29,8 +29,6 @@
 #include <vector>
 #include <cstdio>    // Phase 32 (2026-06-16): _snprintf for buildByteCodeCacheKey
 #include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded compile (FP-fault fix)
-#include <d3dx9.h>
-#include <d3dx9shader.h>
 #include <d3dcompiler.h>   // Fix B (Phase 32): D3DCompile replaces D3DXCompileShader on the HLSL compile path
 
 // ======================================================================
@@ -56,14 +54,14 @@ namespace Direct3d9_VertexShaderDataNamespace
 		Include & operator =(Include const &);
 	};
 
-	class IncludeHandler : public ID3DXInclude
+	class IncludeHandler : public ID3DInclude
 	{
 	public:
-		virtual HRESULT STDMETHODCALLTYPE Open(D3DXINCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
+		virtual HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes);
 		virtual HRESULT STDMETHODCALLTYPE Close(LPCVOID pData);
 	};
 
-	typedef std::vector<D3DXMACRO>  Defines;
+	typedef std::vector<D3D_SHADER_MACRO>  Defines;
 	typedef std::map<CrcString const *, Include *, LessPointerComparator> IncludeCache;
 
 	// ------------------------------------------------------------------
@@ -201,25 +199,27 @@ namespace Direct3d9_VertexShaderDataNamespace
 	}
 
 	HRESULT compileVertexShaderFpGuarded(
-		LPCSTR src, UINT srcLen, D3DXMACRO const *defines, LPD3DXINCLUDE includeHandler,
+		LPCSTR src, UINT srcLen, D3D_SHADER_MACRO const *defines, ID3DInclude *includeHandler,
 		LPCSTR functionName, LPCSTR profile, DWORD flags,
-		LPD3DXBUFFER *outShader, LPD3DXBUFFER *outErrors)
+		ID3DBlob **outShader, ID3DBlob **outErrors)
 	{
 		HRESULT hr = E_FAIL;
 		__try
 		{
-			// Fix B: D3DCompile via the ABI-identical reinterpret-cast at the call boundary.
+			// Fix B: D3DCompile on the now-native D3D_SHADER_MACRO/ID3DInclude/ID3DBlob
+			// types (Phase 33-03 swapped the residual D3DX typedefs to their ABI-identical
+			// native counterparts so d3dx9.h could be dropped).
 			// `flags` carries D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY ONLY -- explicitly NOT
 			// D3DCOMPILE_PACK_MATRIX_ROW_MAJOR (review fix #4): the D3D9 path uses explicit
 			// transposed constant uploads, not a row-major cbuffer contract; copying gl11's
 			// row-major flag would silently change matrix packing -> wrong transforms.
 			hr = D3DCompile(
 				src, srcLen, NULL,
-				reinterpret_cast<D3D_SHADER_MACRO const *>(defines),
-				reinterpret_cast<ID3DInclude *>(includeHandler),
+				defines,
+				includeHandler,
 				functionName, profile, flags, 0,
-				reinterpret_cast<ID3DBlob **>(outShader),
-				reinterpret_cast<ID3DBlob **>(outErrors));
+				outShader,
+				outErrors);
 			_clearfp();
 		}
 		__except (direct3d9CompileFpExceptionFilter(GetExceptionCode()))
@@ -279,7 +279,7 @@ Direct3d9_VertexShaderDataNamespace::Include::~Include()
 
 // ======================================================================
 
-HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3DXINCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
+HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Open(D3D_INCLUDE_TYPE, LPCSTR pFileName, LPCVOID, LPCVOID *ppData, UINT *pBytes)
 {
 	// hack to support relative path includes when using the command line compiler
 	if (strncmp(pFileName, "../../", 6) == 0)
@@ -538,7 +538,7 @@ Direct3d9_VertexShaderData::~Direct3d9_VertexShaderData()
 
 IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 textureCoordinateSetKey) const
 {
-	ID3DXBuffer *compiledShader = NULL;
+	ID3DBlob *compiledShader = NULL;
 
 	ms_defines.clear();
 	char const * target = NULL;
@@ -606,7 +606,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 					DEBUG_FATAL(textureCoordinateSetDimension[textureCoordinateSet] != 0 && textureCoordinateSetDimension[textureCoordinateSet] != dimension, ("Competing dimensions (existing %d, new %d) for texture coordinate %d", textureCoordinateSetDimension[textureCoordinateSet], dimension, textureCoordinateSet));
 					textureCoordinateSetDimension[textureCoordinateSet] = dimension;
 
-					D3DXMACRO macro;
+					D3D_SHADER_MACRO macro;
 
 					// here's an example of what we are defining:
 					// #define textureCoordinateSetMAIN textureCoordinateSet0
@@ -629,7 +629,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				// here's an example of what we are defining:
 				// #define DECLARE_textureCoordinateSets  float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
 
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				macro.Name = scratchBuffer;
 				SCRATCH_STRING("DECLARE_textureCoordinateSets", 29);
@@ -668,12 +668,12 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3DXMACRO empty = { NULL, NULL };
+			D3D_SHADER_MACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
 		IncludeHandler includeHandler;
-		ID3DXBuffer *error = NULL;
+		ID3DBlob *error = NULL;
 		// Fix B (Phase 32): apply Rule A (and the conditional rules) to the MAIN shader source
 		// before compiling -- the #includes are rewritten in IncludeHandler::Open / the Include
 		// ctor. Then compile via D3DCompile (inside the retained Fix-A SEH guard --
@@ -744,7 +744,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 				if (textureCoordinateSet > maxTextureCoordinateSet)
 					maxTextureCoordinateSet = textureCoordinateSet;
 
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				// here's an example of what we are defining:
 				// #define vTextureCoordinateSetDTLA vTextureCoordinateSet0
@@ -765,7 +765,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 			{
 				// here's an example of what we are defining:
 				// #define maxTextureCoordinate 2
-				D3DXMACRO macro;
+				D3D_SHADER_MACRO macro;
 
 				macro.Name = "maxTextureCoordinate";
 
@@ -780,12 +780,12 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		{
-			D3DXMACRO d = { "TARGET", target };
+			D3D_SHADER_MACRO d = { "TARGET", target };
 			ms_defines.push_back(d);
 		}
 
 		{
-			D3DXMACRO empty = { NULL, NULL };
+			D3D_SHADER_MACRO empty = { NULL, NULL };
 			ms_defines.push_back(empty);
 		}
 
@@ -808,7 +808,7 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		// ABI-identical reinterpret-cast at the call boundary (D3DXMACRO -> D3D_SHADER_MACRO,
 		// ID3DXInclude -> ID3DInclude, ID3DXBuffer -> ID3DBlob). Same defines array, same
 		// TreeFile-routed IncludeHandler, Flags=0 -- the exact dialect the 32-01 gate validated.
-		ID3DXBuffer *assembleErrors = NULL;
+		ID3DBlob *assembleErrors = NULL;
 		HRESULT result = s_d3dAssemble(
 			m_compileText, static_cast<SIZE_T>(m_compileTextLength), NULL,
 			reinterpret_cast<const D3D_SHADER_MACRO *>(&(ms_defines.front())),

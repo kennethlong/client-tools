@@ -66,7 +66,6 @@
 #include "sharedMath/VectorRgba.h"
 
 #include <ddraw.h>
-#include <d3dx9.h>
 #include <DirectXMath.h>
 #include <stdio.h>
 
@@ -2885,22 +2884,26 @@ bool Direct3d9Namespace::screenShot(GlScreenShotFormat format, int quality, cons
 
 		case GSSF_bmp:
 		{
-			char buffer[Os::MAX_PATH_LENGTH];
-			sprintf(buffer, "%s.bmp", fileName);
-
-			RECT r;
-			r.left   = (clientTopLeft.x - monitorCoordinates.left);
-			r.top    = (clientTopLeft.y - monitorCoordinates.top);
-			r.right  = r.left + ms_width;
-			r.bottom = r.top + ms_height;
-
-			hresult = D3DXSaveSurfaceToFile(buffer, D3DXIFF_BMP, surface, NULL, &r);
+			// Phase 33-03 / D-04a: own-impl via the existing WriteTGA path
+			// (reviews fix #10d) -- d3dx9 has no x64 static lib, so the
+			// D3DXSaveSurfaceToFile(D3DXIFF_BMP) call is replaced. The output is
+			// a TGA, so the filename must end .tga, NOT .bmp (otherwise a TGA
+			// would be written under a .bmp name). Mirrors the GSSF_tga case.
+			D3DLOCKED_RECT lockedRect;
+			hresult = surface->LockRect(&lockedRect, NULL, D3DLOCK_READONLY);
 			if (FAILED(hresult))
 			{
 				Graphics::setLastError("engine", "screenshot_failed_write_problem");
 				surface->Release();
 				return false;
 			}
+
+			char buffer[Os::MAX_PATH_LENGTH];
+			sprintf(buffer, "%s.tga", fileName);
+			WriteTGA::write(buffer, ms_width, ms_height, reinterpret_cast<const byte *>(lockedRect.pBits) + offset, true, lockedRect.Pitch);
+
+			hresult = surface->UnlockRect();
+			FATAL_DX_HR("Unlock failed %s", hresult);
 			break;
 		}
 
@@ -4632,67 +4635,26 @@ float Direct3d9::stopPerformanceTimer()
 
 void Direct3d9Namespace::optimizeIndexBuffer(WORD *indices, int numIndices)
 {
-	ID3DXMesh* pD3DXMesh;
-	HRESULT hRslt;
-	WORD* indexData = NULL;
-
-	if(numIndices == 0 || !indices)
-		return;
-
-	DEBUG_FATAL(numIndices % 3 != 0, ("Fatal: can't optimize a buffer that doesn't contain triangle face data"));
-	hRslt = D3DXCreateMeshFVF(numIndices / 3,
-							  numIndices,
-							  D3DXMESH_SYSTEMMEM,
-							  D3DFVF_XYZ,
-							  ms_device,
-							  &pD3DXMesh);
-
-	if(hRslt != D3D_OK)
-	{
-		WARNING_DEBUG_FATAL(true, ("Could not optimize index buffer"));
-		return;
-	}
-
-	hRslt = pD3DXMesh->LockIndexBuffer(0, (void**)&indexData);
-
-	if(hRslt != D3D_OK)
-	{
-		WARNING_DEBUG_FATAL(true, ("Could not optimize index buffer"));
-		return;
-	}
-
-	memcpy(indexData, indices, sizeof(WORD) * numIndices);
-
-	pD3DXMesh->UnlockIndexBuffer();
-
-	if(hRslt != D3D_OK)
-	{
-		WARNING_DEBUG_FATAL(true, ("Could not optimize index buffer"));
-		return;
-	}
-
-	DWORD* adjacencyTable = new DWORD[numIndices];
-	pD3DXMesh->GenerateAdjacency(0.0f, adjacencyTable);
-	for(int j = 0; j < numIndices; j++)
-	{
-		adjacencyTable[j] = 0xFFFFFFFF;
-	}
-
-	pD3DXMesh->OptimizeInplace(D3DXMESHOPT_IGNOREVERTS | D3DXMESHOPT_VERTEXCACHE,
-		adjacencyTable, NULL, NULL, NULL);
-
-	hRslt = pD3DXMesh->LockIndexBuffer(0, (void**)&indexData);
-
-	if(hRslt != D3D_OK)
-	{
-		WARNING_DEBUG_FATAL(true, ("Could not optimize index buffer"));
-		return;
-	}
-
-	memcpy(indices, indexData, sizeof(WORD) * numIndices);
-	pD3DXMesh->UnlockIndexBuffer();
-	delete [] adjacencyTable;
-	pD3DXMesh->Release();
+	// Phase 33-03 / D-04a: callable empty-body STUB (mirrors the D3D11
+	// STUB(optimizeIndexBuffer) at Direct3d11.cpp:1185). This is a real GL-API
+	// function-pointer slot (Gl_dll.def:220, registered Direct3d9.cpp:1258,
+	// exposed Graphics.cpp:3379, called from the 32-bit skeletal path at
+	// SoftwareBlendSkeletalShaderPrimitive.cpp:1421). The slot MUST stay
+	// callable -- leaving it null would null-ptr crash the skeletal path on
+	// boot (reviews fix #1, SC#4).
+	//
+	// The original body used D3DXCreateMeshFVF/ID3DXMesh::OptimizeInplace to
+	// reorder the index buffer for GPU vertex-cache locality -- a pure
+	// performance nicety: it is a same-length WORD-index REORDER, not a
+	// geometry/topology/LOD/collision change, so the un-reordered indices are
+	// still fully correct (verified: the body only memcpy'd indices in/out and
+	// reordered for cache, output triangle set unchanged). d3dx9 has no x64
+	// static lib (D-04a), so the D3DX mesh path is dropped; the empty
+	// pass-through leaves `indices` untouched (= the identity, no-reorder
+	// optimization). NvTriStrip is a phantom -- GenerateStrips/PrimitiveGroup
+	// are not in this plugin's source; do not chase it.
+	UNREF(indices);
+	UNREF(numIndices);
 }
 
 // ----------------------------------------------------------------------
@@ -4811,9 +4773,20 @@ bool Direct3d9Namespace::writeImage(char const * file, int const width, int cons
 			}
 		}
 
-		texturePointer->UnlockRect(0);
+		// Phase 33-03 / D-04a: own-impl via WriteTGA (reviews fix #10d) -- d3dx9
+		// has no x64 static lib, so D3DXSaveTextureToFile is replaced. This is a
+		// debug-only image-dump path (SwgCuiCommandParserUI); TGA is the single
+		// own-impl writer, so the output is a .tga regardless of the requested
+		// imageFormat. Write the logical (textureWidth x textureHeight) region
+		// from the still-locked ARGB_8888 buffer, then unlock.
+		UNREF(imageFormat);
+		{
+			char tgaFile[Os::MAX_PATH_LENGTH];
+			sprintf(tgaFile, "%s.tga", file);
+			WriteTGA::write(tgaFile, textureWidth, textureHeight, reinterpret_cast<uint8 const *>(lockedRect.pBits), true, lockedRect.Pitch);
+		}
 
-		D3DXSaveTextureToFile(file, static_cast<D3DXIMAGE_FILEFORMAT>(imageFormat), texturePointer, NULL);
+		texturePointer->UnlockRect(0);
 
 		texturePointer->Release();
 

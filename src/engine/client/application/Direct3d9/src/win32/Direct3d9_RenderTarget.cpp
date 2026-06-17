@@ -14,7 +14,6 @@
 #include "sharedFoundation/PointerDeleter.h"
 #include "clientGraphics/Texture.h"
 
-#include <d3dx9.h>
 #include <algorithm>
 #include <map>
 
