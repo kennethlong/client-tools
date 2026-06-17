@@ -127,8 +127,12 @@ namespace DPVS
 #endif
 
 #if defined (DPVS_OS_WIN32)
-#	define DPVS_CPU_X86										// x86 series CPU
-#	define DPVS_LITTLE_ENDIAN								// x86 processors are little-endian
+#	if !defined(_M_X64)
+#		define DPVS_CPU_X86									// x86 inline asm only on 32-bit (Phase 33 X64-01: undef on x64 -> portable-C LUT fallbacks compile)
+#	else
+#		define DPVS_CPU_NAME		"X64"					// x64 has no x86 inline asm; portable-C fallbacks compile (Phase 33 X64-01)
+#	endif
+#	define DPVS_LITTLE_ENDIAN								// x86/x64 processors are little-endian
 #elif defined (DPVS_OS_MAC)									// Apple Macintosh
 #	define DPVS_CPU_PPC
 #	define DPVS_CPU_NAME		"PowerPC"
@@ -429,7 +433,11 @@ namespace DPVS
 typedef unsigned char			UINT8;					// 8-bit unsigned integer
 typedef short int				INT16;                  // 16-bit signed integer
 typedef unsigned short int		UINT16;                 // 16-bit unsigned integer
+#if defined(_M_X64)
+typedef unsigned __int64		UPTR;					// 64-bit: unsigned integer large enough to hold a void* (Phase 33 X64-01)
+#else
 typedef unsigned int			UPTR;					// unsigned integer large enough to hold a void*
+#endif
 
 //------------------------------------------------------------------------
 // Make sure that certain typedefs really do have the intended sizes
