@@ -66,6 +66,31 @@ namespace Direct3d9_VertexShaderDataNamespace
 	typedef std::vector<D3DXMACRO>  Defines;
 	typedef std::map<CrcString const *, Include *, LessPointerComparator> IncludeCache;
 
+	// ------------------------------------------------------------------
+	// Phase 33 Plan 02 (2026-06-17 / SHADER-01 / D-04 / D-05): the //asm .vsh
+	// compile path now assembles through D3DAssemble (d3dcompiler_47), NOT
+	// D3DXAssembleShader -- taking the LAST D3DX compile dependency off the D3D9
+	// path (the //hlsl path already migrated to D3DCompile in Phase 32). d3dx9 has
+	// no x64 static lib, so this is a precondition for the x64 link (Plan 05).
+	//
+	// D3DAssemble is NOT in the public d3dcompiler.h header, so it is resolved via
+	// GetProcAddress on the UNDECORATED export (the .lib symbol is C++-mangled;
+	// GetProcAddress sidesteps the mismatch). The HMODULE + fn pointer are cached
+	// in a STATIC-LOCAL resolve-once at the call site (validated against the
+	// Phase 32-01 probe shape) -- never LoadLibrary/GetProcAddress per compile.
+	//
+	// x64-export confirmed (reviews fix #7a, 2026-06-17): dumpbin /exports on the
+	// x64 C:\Windows\System32\d3dcompiler_47.dll (machine 8664) lists D3DAssemble,
+	// so s_d3dAssemble is non-null on x64 -- it will NOT FATAL on every asm shader.
+	//
+	// ABI: D3DXMACRO == D3D_SHADER_MACRO, ID3DXInclude == ID3DInclude, ID3DXBuffer
+	// == ID3DBlob (binary-layout-identical), so we reinterpret-cast only at the
+	// single call boundary -- the same technique the 32-02 HLSL path uses (:178-189).
+	typedef HRESULT (WINAPI *PFN_D3DAssemble)(
+		LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName,
+		const D3D_SHADER_MACRO *pDefines, ID3DInclude *pInclude, UINT Flags,
+		ID3DBlob **ppCode, ID3DBlob **ppErrorMsgs);
+
 	void getToken(char const *& s, char * d);
 	void skipRestOfTheLine(char const *& s);
 
@@ -757,8 +782,38 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		}
 
 		IncludeHandler includeHandler;
-		HRESULT result = D3DXAssembleShader(m_compileText, m_compileTextLength, &(ms_defines.front()), &includeHandler, 0, &compiledShader, NULL);
-		FATAL(FAILED(result), ("Could not compile shader %s %d", m_vertexShader->m_fileName.getString(), HRESULT_CODE(result)));
+
+		// Phase 33 Plan 02 (D-04/D-05): assemble through D3DAssemble (d3dcompiler_47)
+		// instead of D3DXAssembleShader -- the last D3DX compile dependency off the D3D9
+		// path. Resolve-once via a static-local-cached GetProcAddress on the undecorated
+		// export (D3DAssemble is not in the public d3dcompiler.h). Do NOT LoadLibrary /
+		// GetProcAddress per compile (refcount/reload leak).
+		static const HMODULE          s_d3dCompilerModule = LoadLibraryA("d3dcompiler_47.dll");
+		static const PFN_D3DAssemble  s_d3dAssemble       =
+			s_d3dCompilerModule ? reinterpret_cast<PFN_D3DAssemble>(GetProcAddress(s_d3dCompilerModule, "D3DAssemble")) : NULL;
+
+		// D-06: a missing fn pointer (d3dcompiler_47.dll absent or no D3DAssemble export)
+		// is LOUD (FATAL), never a silently-nulled VS / skipped draw. gl11's
+		// [P19VSFALLBACK] does NOT transfer -- D3D9 natively executes the assembled bytecode.
+		FATAL(!s_d3dAssemble, ("Direct3d9_VertexShaderData: D3DAssemble unavailable (d3dcompiler_47.dll missing or no D3DAssemble export) while assembling //asm shader %s", m_vertexShader->m_fileName.getString()));
+
+		// ABI-identical reinterpret-cast at the call boundary (D3DXMACRO -> D3D_SHADER_MACRO,
+		// ID3DXInclude -> ID3DInclude, ID3DXBuffer -> ID3DBlob). Same defines array, same
+		// TreeFile-routed IncludeHandler, Flags=0 -- the exact dialect the 32-01 gate validated.
+		ID3DXBuffer *assembleErrors = NULL;
+		HRESULT result = s_d3dAssemble(
+			m_compileText, static_cast<SIZE_T>(m_compileTextLength), NULL,
+			reinterpret_cast<const D3D_SHADER_MACRO *>(&(ms_defines.front())),
+			reinterpret_cast<ID3DInclude *>(&includeHandler), 0,
+			reinterpret_cast<ID3DBlob **>(&compiledShader),
+			reinterpret_cast<ID3DBlob **>(&assembleErrors));
+		// Loud failure path: surface the assembler error-blob text (D-06).
+		FATAL(FAILED(result), ("Could not assemble shader %s %d (%s)", m_vertexShader->m_fileName.getString(), HRESULT_CODE(result), assembleErrors ? static_cast<char const *>(assembleErrors->GetBufferPointer()) : "none"));
+		if (assembleErrors)
+		{
+			DEBUG_REPORT_LOG_PRINT(true, ("%s", assembleErrors->GetBufferPointer()));
+			assembleErrors->Release();
+		}
 	}
 
 	// create the vertex shader	from the binary token stream
