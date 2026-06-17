@@ -9,10 +9,10 @@ Requirements for this milestone. Each maps to roadmap phases (continuing from Ph
 
 ### x64 Build Platform
 
-- [ ] **X64-01**: A native 64-bit client builds — the `x64` platform is added to `src/build/win32/swg.sln` and every dependent `.vcxproj`; `SwgClient_d.exe` / `SwgClient_r.exe` are produced as x64 binaries (dumpbin-confirmed `machine (x64)`)
+- [x] **X64-01**: A native 64-bit client builds — the `x64` platform is added to `src/build/win32/swg.sln` and every dependent `.vcxproj`; `SwgClient_d.exe` / `SwgClient_r.exe` are produced as x64 binaries (dumpbin-confirmed `machine (x64)`)
 - [ ] **X64-02**: The D3D9 renderer plugins (gl05 / gl06 / gl07) build as x64 and the x64 client boots to character select under `rasterMajor=5`, `=6`, and `=7`
 - [ ] **X64-03**: The D3D11 renderer plugin (gl11) builds as x64 and the x64 client boots to character select under `rasterMajor=11`
-- [ ] **X64-04**: All third-party dependencies resolve as x64 (dpvs, bink, pcre, libxml2, icu, jpeg, zlib, discord-rpc, …) — the x64 client launches with no missing-DLL popup or load failure at boot (Restoration's `D:\SWG Restoration\x64\` is the availability reference)
+- [x] **X64-04**: All third-party dependencies resolve as x64 (dpvs, bink, pcre, libxml2, icu, jpeg, zlib, discord-rpc, …) — the x64 client launches with no missing-DLL popup or load failure at boot (Restoration's `D:\SWG Restoration\x64\` is the availability reference)
 
 ### 64-bit Correctness
 
@@ -69,10 +69,10 @@ Which phases cover which requirements. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| X64-01 | Phase 33 | Pending |
+| X64-01 | Phase 33 | Complete |
 | X64-02 | Phase 33 | Pending |
 | X64-03 | Phase 34 | Pending |
-| X64-04 | Phase 33 | Pending |
+| X64-04 | Phase 33 | Complete |
 | BITS-01 | Phase 31 | Complete |
 | BITS-02 | Phase 31 | Complete |
 | BITS-03 | Phase 31 | Complete |

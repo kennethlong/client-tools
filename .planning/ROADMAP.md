@@ -164,7 +164,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   3. The gl05 / gl06 / gl07 plugins build as x64 and the x64 client boots to character select under `rasterMajor=5`, `=6`, and `=7`
   4. The 32-bit build still boots to character select under both renderers (the x64 add does not regress Win32)
 **Plans**: 6 plans in 5 waves (Wave 1: x64 foundations + asm-D3DAssemble port parallel -> Wave 2: non-compile D3DX -> DirectXMath -> Wave 3: dpvs + engine-lib platform-add -> Wave 4: plugin/exe link + Miles stub + first x64 link -> Wave 5: stage + boot validation)
-  - [ ] 33-01-PLAN.md - x64 foundations: committed x64-platform.props (N1 guardrail) + libxml2/pcre/jpeg x64 import-libs + tinyxml x64 build + staged-DLL provenance checklist
+  - [x] 33-01-PLAN.md - x64 foundations: committed x64-platform.props (N1 guardrail) + libxml2/pcre/jpeg x64 import-libs + tinyxml x64 build + staged-DLL provenance checklist
   - [ ] 33-02-PLAN.md - D3DX-removal precondition (asm): port D3DXAssembleShader -> D3DAssemble (32-01 gate PASSED byte-identical) + Fix-A disposition; 32-bit gl05 //asm render smoke
   - [ ] 33-03-PLAN.md - D3DX-removal precondition (non-compile): D3DXMATRIX/Multiply/Transpose -> DirectXMath (preserve the :4031 transpose), own-impl surface-copy/mesh/save, drop d3dx9 includes; gl05 Tatooine A/B
   - [ ] 33-04-PLAN.md - platform-add: dpvs !_M_X64 CPU-detect guard + x64 config; swg.sln x64 configs + the ~57 boot-path engine/3rd-party StaticLibrary x64 configs (import x64-platform.props, isolated x64 OutDirs)
@@ -242,7 +242,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
-| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 0/TBD | Not started | - |
+| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 1/6 | In Progress|  |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
 | 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
