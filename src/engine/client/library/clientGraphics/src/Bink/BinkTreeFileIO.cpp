@@ -22,23 +22,26 @@
 namespace BinkTreeFileIONamespace
 {
 	static const U32 s_u32neg1 = U32(-1);
+	static const UINTa s_uintaNeg1 = UINTa(-1);	// x64: pointer-width error sentinel for radopen()'s handle (Phase 33 X64-01)
 
 	// ----------------------------------------------------------------------
 
 
-	U32 radopen(const char *name)
+	// x64: a file handle stores an AbstractFile* (8 bytes on x64) -> must be
+	// pointer-width (UINTa), not U32, or the pointer truncates (Phase 33 X64-01, BITS-02).
+	UINTa radopen(const char *name)
 	{
 		AbstractFile *result = TreeFile::open(name, AbstractFile::PriorityAudioVideo, true);
-		return (result) ? U32(result) : U32(-1);
+		return (result) ? UINTa(result) : UINTa(-1);
 	}
 
-	void radseekbegin(U32 fileHandle, int offset)
+	void radseekbegin(UINTa fileHandle, int offset)
 	{
 		AbstractFile *f = (AbstractFile *)fileHandle;
 		f->seek(AbstractFile::SeekBegin, offset);
 	}
 
-	U32 radseekcur(U32 fileHandle, int offset)
+	U32 radseekcur(UINTa fileHandle, int offset)
 	{
 		AbstractFile *f = (AbstractFile *)fileHandle;
 		if (f->seek(AbstractFile::SeekCurrent, offset))
@@ -51,7 +54,7 @@ namespace BinkTreeFileIONamespace
 		}
 	}
 
-	void radread(U32 fileHandle, void *dest, size_t size, unsigned *numRead)
+	void radread(UINTa fileHandle, void *dest, size_t size, unsigned *numRead)
 	{
 		AbstractFile *f = (AbstractFile *)fileHandle;
 		int count = f->read(dest, size);
@@ -61,7 +64,7 @@ namespace BinkTreeFileIONamespace
 		}
 	}
 
-	void radclose(U32 fileHandle)
+	void radclose(UINTa fileHandle)
 	{
 		AbstractFile *f = (AbstractFile *)fileHandle;
 		f->close();
@@ -97,7 +100,7 @@ using namespace Bink::RAD;
 // defined variables that are accessed from the Bink IO structure
 typedef struct BINKFILE
 {
-  U32 FileHandle;
+  UINTa FileHandle;	// x64: holds an AbstractFile* / const char* -> pointer-width (Phase 33 X64-01, BITS-02)
   U32 FileIOPos;
   U32 FileBufPos;
   U8* BufPos;
@@ -492,9 +495,9 @@ RADDEFFUNC S32 RADLINK BinkFileOpen( BINKIO PTR4* bio, const char PTR4* name, U3
 
   if ( flags & BINKFILEHANDLE )
   {
-    BF->FileHandle = (U32) name;
+    BF->FileHandle = (UINTa) name;
     BF->DontClose = 1;
-    BF->StartFile = radseekcur( (U32) name, 0 );
+    BF->StartFile = radseekcur( (UINTa) name, 0 );
 	 if (BF->StartFile == U32(-1))
 	 {
 		 return 0;
@@ -507,7 +510,7 @@ RADDEFFUNC S32 RADLINK BinkFileOpen( BINKIO PTR4* bio, const char PTR4* name, U3
     //if ( BF->FileHandle == s_u32neg1 )
     //  BF->FileHandle = radopenwithwrite( name, RADREAD );
 
-    if ( BF->FileHandle == s_u32neg1 )
+    if ( BF->FileHandle == s_uintaNeg1 )
       return( 0 );
   }
 

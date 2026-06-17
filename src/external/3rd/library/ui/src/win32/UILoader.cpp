@@ -190,7 +190,7 @@ bool UILoader::LoadFromString( const UINarrowString &data, UIObjectList &TopLeve
 				continue;
 			else
 			{
-				*GetUIOutputStream() << " :: Bad data at position " << std::distance (data.begin (), p) << "\n";
+				*GetUIOutputStream() << " :: Bad data at position " << static_cast<int>(std::distance (data.begin (), p)) << "\n";	// x64: ptrdiff_t is 64-bit -> narrow for the UI stream's int overload (Phase 33 X64-01)
 				*GetUIOutputStream() << " :: " << ParseError << '\n';
 				return false;
 			}

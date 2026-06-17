@@ -7,7 +7,18 @@
 #include "hashtable.hpp"
 
 #if defined(WIN32)
-	typedef unsigned int SOCKET;	// avoids us having to include winsock.h just for this
+	// SOCKET must match the Windows SDK width (UINT_PTR): unsigned int on Win32,
+	// unsigned __int64 on x64. A plain `unsigned int` shadows the SDK SOCKET and
+	// hard-errors C2371 'different basic types' when a winsock header is also
+	// present under x64 (Phase 33 X64-01, BITS-02). Defer to the SDK's SOCKET if
+	// a winsock header already defined it; otherwise use the pointer-width type.
+	#if !defined(_WINSOCKAPI_) && !defined(_WINSOCK2API_)
+		#if defined(_WIN64)
+			typedef unsigned __int64 SOCKET;	// x64: pointer-width, matches SDK UINT_PTR
+		#else
+			typedef unsigned int SOCKET;		// Win32: matches SDK UINT_PTR (== unsigned int)
+		#endif
+	#endif
 	typedef __int64 udp_int64;
 #else
 	typedef int SOCKET;

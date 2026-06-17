@@ -957,9 +957,9 @@ void UITabbedPane::SetSize(const UISize &NewSize)
 
 long UITabbedPane::GetTabFromPoint(const UIPoint & point) const
 {
-	if (mTabObject) 
+	if (mTabObject)
 	{
-		_asm nop;
+		__noop;	// x64: inline `_asm nop` is x86-only; portable no-op (Phase 33 X64-01)
 	}
 
 	UIWidget * const widget = GetWidgetFromPoint(point, false);

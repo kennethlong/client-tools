@@ -13,10 +13,16 @@
 
 #include "sharedNetwork/Address.h"
 
+// SOCKET must match the Windows SDK width (UINT_PTR): unsigned int on Win32,
+// unsigned __int64 on x64. The legacy `typedef unsigned int SOCKET` shadows the
+// SDK SOCKET and hard-errors C2371 'different basic types' under x64. Pull the
+// canonical winsock2.h SOCKET so this abstraction always matches the SDK width
+// regardless of include order (Phase 33 X64-01, BITS-02).
+#include <winsock2.h>
+
 // ======================================================================
 
 const unsigned int SOCK_ERROR = 0xFFFFFFFF;
-typedef unsigned int SOCKET;
 
 /**
 	@brief a BSD socket abstraction

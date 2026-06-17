@@ -389,7 +389,7 @@ bool UITableModel::GetSortKeyAtInteger (int row, int col, UITableTypes::CellType
 		{
 			UIImageStyle * style = 0;
 			if (GetValueAtImage (row, col, style))
-				integerValue = reinterpret_cast<int>(style);
+				integerValue = static_cast<int>(reinterpret_cast<intptr_t>(style));	// x64: store low-32 of the pointer-handle (Phase 33 X64-01, BITS-02)
 			else
 				integerValue = 0;
 			return true;
@@ -412,7 +412,7 @@ bool UITableModel::GetSortKeyAtInteger (int row, int col, UITableTypes::CellType
 			if (GetValueAtWidget (row, col, widget) && widget)
 			{
 				if (!widget->GetPropertyInteger (DataProperties::WidgetValue, integerValue))
-					integerValue = reinterpret_cast<int>(widget);
+					integerValue = static_cast<int>(reinterpret_cast<intptr_t>(widget));	// x64: store low-32 of the pointer-handle (Phase 33 X64-01, BITS-02)
 			}
 			else
 				integerValue = -1;

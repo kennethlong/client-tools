@@ -226,10 +226,14 @@ using namespace AudioNamespace;
 
 // Callbacks for Miles to the TreeFile system
 
-static U32 __stdcall fileOpenCallBack(char const *fileName, U32 *fileHandle);
-static void __stdcall fileCloseCallBack(U32 fileHandle);
-static S32 __stdcall fileSeekCallBack(U32 fileHandle, S32 offset, U32 type);
-static U32 __stdcall fileReadCallBack(U32 fileHandle, void *buffer, U32 bytes);
+// x64: the Miles AIL_file_*_callback ABI uses UINTa (pointer-width) for the file
+// handle (== U32 on x86, __int64 on x64). The handle itself is a synthetic small
+// counter (see s_nextFileHandle), so it fits a U32 map key; only the callback
+// signature must be UINTa to match the Miles typedef (Phase 33 X64-01, BITS-02).
+static U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle);
+static void __stdcall fileCloseCallBack(UINTa fileHandle);
+static S32 __stdcall fileSeekCallBack(UINTa fileHandle, S32 offset, U32 type);
+static U32 __stdcall fileReadCallBack(UINTa fileHandle, void *buffer, U32 bytes);
 
 static SoundId attachSound(SoundTemplate const *soundTemplate, Object const *object, char const *hardPointName=0);
 static bool cacheSound(SoundTemplate const *soundTemplate);
@@ -3962,7 +3966,7 @@ float Audio::getSampleEffectsLevel(SampleId const &sampleId)
 static int once = true;
 
 //-----------------------------------------------------------------------------
-U32 __stdcall fileOpenCallBack(char const *fileName, U32 *fileHandle)
+U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle)
 {
 	if (once && !Os::isMainThread())
 	{
@@ -3984,14 +3988,14 @@ U32 __stdcall fileOpenCallBack(char const *fileName, U32 *fileHandle)
 	}
 	else
 	{
-		*fileHandle = NULL;
+		*fileHandle = 0;
 	}
 
 	return (abstractFile != NULL);
 }
 
 //-----------------------------------------------------------------------------
-void __stdcall fileCloseCallBack(U32 const fileHandle)
+void __stdcall fileCloseCallBack(UINTa const fileHandle)
 {
 	if (once && !Os::isMainThread())
 	{
@@ -4030,7 +4034,7 @@ void __stdcall fileCloseCallBack(U32 const fileHandle)
 }
 
 //-----------------------------------------------------------------------------
-S32 __stdcall fileSeekCallBack(U32 const fileHandle, S32 const offset, U32 const type)
+S32 __stdcall fileSeekCallBack(UINTa const fileHandle, S32 const offset, U32 const type)
 {
 	if (once && !Os::isMainThread())
 	{
@@ -4086,7 +4090,7 @@ S32 __stdcall fileSeekCallBack(U32 const fileHandle, S32 const offset, U32 const
 }
 
 //-----------------------------------------------------------------------------
-U32 __stdcall fileReadCallBack(U32 const fileHandle, void *buffer, U32 const bytes)
+U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const bytes)
 {
 // miles crasher hack
 #if 0
