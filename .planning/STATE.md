@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
 status: executing
-last_updated: "2026-06-17T14:34:39.277Z"
-last_activity: 2026-06-16 -- Phase 32 execution started
+last_updated: "2026-06-17T16:13:42.571Z"
+last_activity: 2026-06-17 -- Phase 33 planning complete
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 14
+  total_plans: 20
   completed_plans: 10
-  percent: 71
+  percent: 50
 ---
 
 # Project State
@@ -91,7 +91,7 @@ Plan: 1 of 5
 RESUME (2026-06-16, context reset): See **.planning/handoff/phase-32-d3dcompile-port.md**. 32-01 GATE = PASS committed (9b71aef9b + 0228783c8); D3DAssemble ≡ D3DXAssembleShader byte-identical → Wave 1 = 32-03 (asm port), 32-04 SKIPPED. 32-02 Task 1 (rewriter Direct3d9_HlslRewrite.{h,cpp} lifted from WIP + Rule D removed + Rule E INERT[0/190 //hlsl use #pragma def] + both vcxprojs wired; ffp untouched; d3dx9 retained) is DONE but **UNCOMMITTED in working tree** (?? the 2 rewriter files, M the 2 vcxprojs) — do NOT redo. Resume at 32-02 Task 2: port VertexShaderData.cpp (KEEP Fix-A SEH wrapping D3DCompile, add vs_1_1 ≥2.0 guard, NO PACK_MATRIX_ROW_MAJOR, keep master postbuild d3dcompiler_47 copy) + strip `: register(vN)` from the 9 override DECLARE macros (incl tfcl_4uv 4×) + 5-target build + 3 audits (constant-layout / v#-input-signature / flag) → then user gl05 Tatooine smoke. Commit 32-02 only after build is green.
 Status (31-06 phase gate CERTIFIED, 2026-06-16): Phase 31 is COMPLETE — BITS-01/02/03 satisfied. Task 3 dual-renderer boot smoke APPROVED by the user (verbatim: "approved, both zoned into Tatooine, no regression"): BOTH rasterMajor=5 (gl05/D3D9) AND =11 (gl11/D3D11) booted to character select AND zoned in-world into Tatooine, with NO startup DEBUG_FATAL (the plan-02 _DEBUG FPU control-word + SseMath/Transform numeric-equivalence self-tests passed) and NO render/asset/skinning regression vs the shipped v2.3 baseline — EXCEEDS the char-select bar (full in-world load verified). The D-02 residual hand-off (31-PHASE33-RESIDUAL-WORKLIST.md) classifies all remaining residue class-(A): runtime residuals (DebugHelp x64 walk/Rip, SSE alignment re-confirm, FPU door-snap VERIFY-01→P36), third-party (Bink→P33, Miles→P35), test (WaterTest→P33), the D-07/N2 C4244 count/distance tail, the harness-deletion coverage hole (N1) + C4267 carry-forward (N2) for Phase 33. The phase spawned 3 user-authorized gap-closure plans (31-07/08/09) that drove the in-scope class-(B) x64 surface to 0 before the gate could certify.
 Status (31-06 Task 2, 2026-06-16): The SINGLE full canonical 5-target 32-bit Debug build of the phase links CLEAN. Deleted SwgClient_d.exe to force a real relink, killed stale MSBuild/cl/link nodes, then built `Direct3d11;Direct3d9;Direct3d9_ffp;Direct3d9_vsps;SwgClient` /p:Configuration=Debug /p:Platform=Win32 /nodeReuse:false from PowerShell, teed to build-32bit.log (gitignored). RESULT: Build succeeded, 0 Error(s); link-gate grep `unresolved external symbol`=0 (the /FORCE false-clean trap cleared), LNK1181=0, LNK2019/2001=0, error C=0, fatal error=0 (257 benign warnings: MSB8012 TargetName cosmetic, LNK4075 /INCREMENTAL-due-to-/FORCE, LNK4217 libxml2 import — all pre-existing). All 5 targets linked + auto-staged THIS run (Jun 16 00:45–00:54): gl05/06/07/11_d.dll (00:45) + SwgClient_d.exe (00:54); exe newest = correct dependency order (links last), NOT a stale-plugin cascade — every plugin DLL recompiled against the current shared headers (VoidBindSecond.h/31-07, AutoDelta*/31-08) in the same build, so NO ABI mismatch. The whole Phase-31 source diff (31-02..31-09, incl. the Task-1 ba66d6657/f7e3fed44 escape-valve fixes) links clean on the shipped 32-bit tree (boot-gate / non-regression proof). NO source touch-ups were needed to link, so Task 2 produced 0 committable source changes (the clean-linking stage/ binaries + the gitignored build-32bit.log are the deliverable/evidence). NEXT: Task 3 checkpoint:human-verify (dual-renderer boot smoke) — orchestrator awaits the user's boot confirmation under rasterMajor=5 then =11 before finalizing the SUMMARY + advancing the plan. Prior: 31-09 DONE — the 4 genuine in-scope class-(B) width members unmasked by 31-08 are FIXED x64-clean: CuiCombatManager::fillSpamOrder pos unsigned int→size_t (getFirstToken size_t& endpos bind), MeshConstructionHelper 5× VALIDATE_RANGE 0U→static_cast<size_t>(0) (single-type template deduce against size_t), TcpClient/TcpServer IOCP completionKey unsigned long int→ULONG_PTR (GetQueuedCompletionStatus PULONG_PTR); each TU exit 0, 0 C2665/C2664/C2672 (commit feaddc08e; no on-the-wire field changed). The sharedTemplateDefinition char16_t/wchar_t Unicode cluster (Filename/TemplateData/TpfFile) RECLASSIFIED tool-only out-of-scope by link evidence (sharedTemplateDefinition.lib ProjectReferenced ONLY by pre-broken ShipComponentEditor/TemplateCompiler/TemplateDefinitionCompiler; SwgClient.vcxproj 0 refs + lib absent from AdditionalDependencies; files UNEDITED — commit 81b19c345). Both harness-only non-defects CONFIRMED + EXCLUDED: Direct3d9 #error (real vcxprojs define FFP/VSPS) + 5× winsock C2371 (WindowsWrapper.h WIN32_LEAN_AND_MEAN suppresses winsock — probe EXIT 0; commit 79f5bc84a). CAPPED -Scope all (2218 TUs): failing TUs 55→51, EXHAUSTIVELY classified = 41 class-(A) residue + 7 harness artifacts + 3 reclassified tool-only + 0 NEW class-(B). HARD CAP HELD: Phase-31 class-(B) source work COMPLETE, D-02 x64-clean bar met for all in-scope class-(B) source, 31-06 Task 2/3 RESUMABLE; NO 31-10 authored/recommended. SUMMARY self-check PASSED.
-Last activity: 2026-06-16 -- Phase 32 execution started
+Last activity: 2026-06-17 -- Phase 33 planning complete
 
 ### v3.0 x64 Port — the plan (6 phases, strict numeric order, dependency-chained)
 
@@ -113,7 +113,7 @@ Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Executing Phase 32
+Status: Ready to execute
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
