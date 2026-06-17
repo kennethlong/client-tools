@@ -25,7 +25,9 @@
 #include "sharedFoundation/PersistentCrcString.h"
 
 #include <map>
+#include <string>    // Phase 32 (2026-06-16): process-global bytecode-cache key string
 #include <vector>
+#include <cstdio>    // Phase 32 (2026-06-16): _snprintf for buildByteCodeCacheKey
 #include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded compile (FP-fault fix)
 #include <d3dx9.h>
 #include <d3dx9shader.h>
@@ -73,6 +75,68 @@ namespace Direct3d9_VertexShaderDataNamespace
 	Defines        ms_defines;
 	char           ms_scratchBuffer[2 * 1024];
 	IncludeCache * ms_includeCache;
+
+	// ------------------------------------------------------------------
+	// Phase 32 (2026-06-16): PROCESS-GLOBAL compiled-bytecode cache for the
+	// D3DCompile (//hlsl) path. RUNTIME-CONFIRMED leak fix.
+	//
+	// The compiled-shader caches (m_container / m_nonPatchedVertexShader) live
+	// INSIDE Direct3d9_VertexShaderData, which is refcounted and `delete`d when a
+	// cantina cell unloads (ShaderImplementation.cpp:2301 release() -> delete this
+	// at refcount 0 -> ~Direct3d9_VertexShaderData destroys those caches). Re-entry
+	// -> fresh object -> empty cache -> D3DCompile RECOMPILES every cell cycle.
+	// Each recompile pays a large per-compile transient (the HlslRewrite + the
+	// D3DCompile working set) that fragments the 32-bit heap -> linear private-byte
+	// growth (+144 MB / 2 min in the cantina A/B). The old D3DXCompileShader path
+	// was FLAT because a single compile is harmless.
+	//
+	// This cache stores BYTECODE (the post-compile token stream) at FILE scope, so
+	// it SURVIVES Direct3d9_VertexShaderData destruction (created in install(),
+	// freed in remove() -- plugin shutdown only). A cache HIT needs neither the
+	// rewrite NOR D3DCompile: we CreateVertexShader directly from the cached bytes.
+	// Compile-once-per-session, reuse across all cell cycles. This mirrors the
+	// D3D11 Direct3d11_ShaderCache (hashSource/tryLoad/store) -- adapted to an
+	// in-memory map of owned byte vectors (no on-disk .cso; the D3D9 transient cost
+	// is process-heap fragmentation, which an in-memory cache fully eliminates).
+	//
+	// KEY = (.vsh identity, textureCoordinateSetKey, target profile). These are the
+	// EXACT inputs that determine the emitted bytecode AND are knowable BEFORE the
+	// rewrite, so a hit skips both the rewrite and D3DCompile. The generated defines
+	// (texcoord-set remap macros + DECLARE_textureCoordinateSets) are a deterministic
+	// function of (m_textureCoordinateSetTags, textureCoordinateSetKey), and the tag
+	// list is itself fixed by the .vsh -- so keying on (file, key, target) is both
+	// sound and complete. The non-patched site calls createVertexShader(0) with
+	// m_textureCoordinateSetTags==NULL, so it naturally keys on texcoordKey=0 with no
+	// special-casing (the patched site supplies the real per-key value).
+	//
+	// THREAD-SAFETY: shader compilation runs on the render/main thread, same as the
+	// surrounding createVertexShader / ms_defines / ms_scratchBuffer (all unguarded
+	// process-wide statics). We MATCH that (no locking added) -- ASSUMPTION: single
+	// compile thread, identical to the pre-existing code's contract.
+	//
+	// MEMORY: bounded by the unique (.vsh x texcoordKey) set for the session (a few
+	// hundred entries x a few KB bytecode each = trivial); freed in remove().
+	typedef std::vector<unsigned char>             VsByteCode;
+	typedef std::map<std::string, VsByteCode>      VsByteCodeCache;
+	VsByteCodeCache * ms_byteCodeCache;
+
+	// Build the bytecode-cache key. Mirrors Direct3d11_ShaderCache::hashSource's
+	// "inputs that determine the bytecode" contract, but as a readable composite
+	// string (the D3D9 set is small; a string map is simpler than FNV and avoids
+	// any collision concern). '\x1f' (unit separator) delimits the three fields so
+	// no field-boundary ambiguity is possible.
+	std::string buildByteCodeCacheKey(char const *fileName, uint32 textureCoordinateSetKey, char const *target)
+	{
+		char keyBuf[32];
+		std::string key(fileName ? fileName : "");
+		key += '\x1f';
+		_snprintf(keyBuf, sizeof(keyBuf), "%08x", static_cast<unsigned>(textureCoordinateSetKey));
+		keyBuf[sizeof(keyBuf) - 1] = '\0';
+		key += keyBuf;
+		key += '\x1f';
+		key += (target ? target : "");
+		return key;
+	}
 
 	// ------------------------------------------------------------------
 	// Phase 32 Fix B (2026-06-16): the HLSL `//hlsl` .vsh compile path now runs through
@@ -298,6 +362,9 @@ void Direct3d9_VertexShaderData::install()
 {
 	ms_defines.reserve(32);
 	ms_includeCache = new IncludeCache;
+	// Phase 32 (2026-06-16): process-global compiled-bytecode cache (survives
+	// per-object destruction; freed in remove() at plugin shutdown only).
+	ms_byteCodeCache = new VsByteCodeCache;
 }
 
 // ----------------------------------------------------------------------
@@ -314,7 +381,13 @@ void Direct3d9_VertexShaderData::remove()
 			delete include;
 		}
 		delete ms_includeCache;
+		ms_includeCache = NULL;
 	}
+
+	// Phase 32 (2026-06-16): free the process-global bytecode cache. The owned
+	// std::vector<unsigned char> entries free their bytes via the map dtor.
+	delete ms_byteCodeCache;
+	ms_byteCodeCache = NULL;
 }
 
 // ----------------------------------------------------------------------
@@ -453,6 +526,36 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		target = "vs_2_0";
 	}
 
+	// ------------------------------------------------------------------
+	// Phase 32 (2026-06-16): PROCESS-GLOBAL bytecode-cache lookup. ONLY the
+	// //hlsl (D3DCompile) path leaks -- it recompiles on every cell cycle because
+	// the per-object caches die with the object. The //asm (D3DXAssembleShader)
+	// path is unaffected (flat in the A/B), so it stays out of this cache.
+	//
+	// HIT: CreateVertexShader directly from the cached bytecode and RETURN early --
+	// skipping applyToMainSource AND D3DCompile entirely (the whole point: no
+	// rewrite, no compile, no per-compile heap transient on re-entry). The cache key
+	// is computed from (.vsh identity, texcoordKey, target) -- all known here,
+	// BEFORE the rewrite -- so the hit short-circuits the expensive work.
+	std::string byteCodeCacheKey;
+	if (m_hlsl && ms_byteCodeCache)
+	{
+		byteCodeCacheKey = buildByteCodeCacheKey(
+			m_vertexShader->m_fileName.getString(), textureCoordinateSetKey, target);
+
+		VsByteCodeCache::const_iterator hit = ms_byteCodeCache->find(byteCodeCacheKey);
+		if (hit != ms_byteCodeCache->end())
+		{
+			VsByteCode const & bytes = hit->second;
+			IDirect3DVertexShader9 *cachedVertexShader = NULL;
+			HRESULT const cachedHr = Direct3d9::getDevice()->CreateVertexShader(
+				reinterpret_cast<DWORD const *>(bytes.empty() ? NULL : &bytes.front()), &cachedVertexShader);
+			FATAL_DX_HR("CreateVertexShader (bytecode-cache hit) failed %s", cachedHr);
+			NOT_NULL(cachedVertexShader);
+			return cachedVertexShader;
+		}
+	}
+
 	const int numberOfTextureCoordinateSets = 8;
 	if (m_hlsl)
 	{
@@ -558,10 +661,29 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 		//-----------------------------------------------------------------------------------
 
 		FATAL(FAILED(result), ("Could not compile shader %s %d (%s)", m_vertexShader->m_fileName.getString(), HRESULT_CODE(result), error ? error->GetBufferPointer() : "none"));
+
 		if (error)
 		{
 			DEBUG_REPORT_LOG_PRINT(true, ("%s", error->GetBufferPointer()));
 			error->Release();
+		}
+
+		// Phase 32 (2026-06-16): cache MISS just compiled -- copy the bytecode bytes
+		// into the process-global cache so the NEXT cell cycle (a fresh
+		// Direct3d9_VertexShaderData with an empty per-object cache) hits and skips
+		// both the rewrite and D3DCompile. We copy into an OWNED std::vector because
+		// compiledShader->Release() (below, shared with the asm path) frees the blob
+		// right after. The engine blob releases (error->Release above,
+		// compiledShader->Release below) are correct and left untouched.
+		if (ms_byteCodeCache && compiledShader)
+		{
+			SIZE_T const blobSize = compiledShader->GetBufferSize();
+			if (blobSize > 0)
+			{
+				unsigned char const * const blobBytes =
+					static_cast<unsigned char const *>(compiledShader->GetBufferPointer());
+				(*ms_byteCodeCache)[byteCodeCacheKey].assign(blobBytes, blobBytes + blobSize);
+			}
 		}
 	}
 	else
