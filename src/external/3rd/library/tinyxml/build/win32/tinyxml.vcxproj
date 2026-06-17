@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tinyxml.vcxproj : x64 from-source StaticLibrary build of tinyxml (Phase 33,
+  X64-01). tinyxml is the ONE third-party dep with NO Restoration x64 DLL
+  fallback (it ships as a static lib, never a DLL), so the x64 build MUST be
+  from source. Authored from the four tinyxml .cpp (the test xmltest.cpp is
+  excluded), mirroring the sharedMath StaticLibrary shape.
+
+  OUTPUT-NAME CONTRACT (reviews fix #5, VERIFIED against SwgClient.vcxproj:103
+  + :216 AdditionalDependencies): SwgClient links BOTH `tinyxmld.lib` and
+  `tinyxmld_STL.lib` (the `d` debug suffix is used in BOTH Debug AND Release
+  link lines in the shipped tree). The `_STL` flavor is the TIXML_USE_STL build.
+  This project builds the STL flavor as $(OutDir)tinyxmld_STL.lib and copies it
+  to tinyxmld.lib in a post-build step so BOTH names that SwgClient lists resolve
+  at Plan 05's link (a bare `tinyxml.lib` output would LNK1181/2019). No
+  SwgClient-closure source actually #includes tinyxml's STL API, so emitting one
+  build under both names is correct; the legacy two-.dsp split (tinyxml_lib.dsp
+  non-STL + tinyxmlSTL.dsp STL) collapses to one x64 project for swg.sln.
+
+  MACRO NAME (corrected vs the plan text): tinyxml's STL switch is `TIXML_USE_STL`
+  (tinyxml.h:46), NOT `TINYXML_USE_STL`. Defining the wrong token leaves the STL
+  std::string overloads out -> the `_STL` flavor would be identical to non-STL.
+
+  OutDir DEPTH (reviews fix #5): from this file at
+  src/external/3rd/library/tinyxml/build/win32/ it is SEVEN `..\` up to the repo
+  root (win32->build->tinyxml->library->3rd->external->src->root), then
+  src\compile\win32\tinyxml\x64\$(Configuration)\ (the \x64\ isolation). Peers
+  disagree on depth (udplibrary=4, dpvs=6); this was counted + filesystem-verified,
+  NOT assumed 5.
+
+  Imports x64-platform.props (also 7 `..\` up, under src\build\win32\) for the
+  shared x64 ClCompile block (warnings/std/RTTI/EH + the N1 /we4311/4312 guardrail).
+  Headers live in ..\..\include\ (tinyxml.h / tinystr.h); the 4 .cpp are in ..\..\src\.
+-->
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{7D0E4A3C-9B21-4E5F-8A6D-1C2B3D4E5F60}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\..\src\build\win32\x64-platform.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\..\..\..\src\build\win32\x64-platform.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>12.0.30501.0</_ProjectFileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>..\..\..\..\..\..\..\src\compile\win32\tinyxml\x64\$(Configuration)\</OutDir>
+    <IntDir>..\..\..\..\..\..\..\src\compile\win32\tinyxml\x64\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>..\..\..\..\..\..\..\src\compile\win32\tinyxml\x64\$(Configuration)\</OutDir>
+    <IntDir>..\..\..\..\..\..\..\src\compile\win32\tinyxml\x64\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TIXML_USE_STL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ProgramDataBaseFileName>$(OutDir)tinyxml_d.pdb</ProgramDataBaseFileName>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)tinyxmld_STL.lib</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutDir)tinyxmld_STL.lib" "$(OutDir)tinyxmld.lib"</Command>
+      <Message>tinyxml x64: emit tinyxmld.lib alias for SwgClient AdditionalDependencies</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TIXML_USE_STL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ProgramDataBaseFileName>$(OutDir)tinyxml_r.pdb</ProgramDataBaseFileName>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <UseFullPaths>true</UseFullPaths>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)tinyxmld_STL.lib</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+    <PostBuildEvent>
+      <Command>copy /Y "$(OutDir)tinyxmld_STL.lib" "$(OutDir)tinyxmld.lib"</Command>
+      <Message>tinyxml x64: emit tinyxmld.lib alias for SwgClient AdditionalDependencies</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\tinystr.cpp" />
+    <ClCompile Include="..\..\src\tinyxml.cpp" />
+    <ClCompile Include="..\..\src\tinyxmlerror.cpp" />
+    <ClCompile Include="..\..\src\tinyxmlparser.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\tinystr.h" />
+    <ClInclude Include="..\..\include\tinyxml.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
