@@ -163,8 +163,14 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   2. All third-party dependencies resolve as x64 (dpvs, bink, pcre, libxml2, icu, jpeg, zlib, discord-rpc, ...) - the x64 client launches with no missing-DLL popup or load failure at boot (Restoration's `D:\SWG Restoration\x64\` is the availability reference)
   3. The gl05 / gl06 / gl07 plugins build as x64 and the x64 client boots to character select under `rasterMajor=5`, `=6`, and `=7`
   4. The 32-bit build still boots to character select under both renderers (the x64 add does not regress Win32)
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 6 plans in 5 waves (Wave 1: x64 foundations + asm-D3DAssemble port parallel -> Wave 2: non-compile D3DX -> DirectXMath -> Wave 3: dpvs + engine-lib platform-add -> Wave 4: plugin/exe link + Miles stub + first x64 link -> Wave 5: stage + boot validation)
+  - [ ] 33-01-PLAN.md - x64 foundations: committed x64-platform.props (N1 guardrail) + libxml2/pcre/jpeg x64 import-libs + tinyxml x64 build + staged-DLL provenance checklist
+  - [ ] 33-02-PLAN.md - D3DX-removal precondition (asm): port D3DXAssembleShader -> D3DAssemble (32-01 gate PASSED byte-identical) + Fix-A disposition; 32-bit gl05 //asm render smoke
+  - [ ] 33-03-PLAN.md - D3DX-removal precondition (non-compile): D3DXMATRIX/Multiply/Transpose -> DirectXMath (preserve the :4031 transpose), own-impl surface-copy/mesh/save, drop d3dx9 includes; gl05 Tatooine A/B
+  - [ ] 33-04-PLAN.md - platform-add: dpvs !_M_X64 CPU-detect guard + x64 config; swg.sln x64 configs + the ~57 boot-path engine/3rd-party StaticLibrary x64 configs (import x64-platform.props, isolated x64 OutDirs)
+  - [ ] 33-05-PLAN.md - link: gl05/06/07 + SwgClient x64 link blocks (D3DX/bink/Miles dropped, LIFT libs wired) + Miles #if _M_X64 stub + Bink binkw64.dll swap + the first full x64 link (0 unresolved external symbol)
+  - [ ] 33-06-PLAN.md - boot validation: stage-x64/ + dumpbin-x64 every binary + x64 boot to char-select under rasterMajor 5/6/7 + A1-DBGHELP/SSE-ALIGN runtime confirm + 32-bit non-regression (rasterMajor 5 + 11)
+**UI hint**: yes (N/A - build-platform phase, no frontend surface; the "UI" substring was a roadmapper false-positive)
 
 #### Phase 34: x64 D3D11 Renderer
 **Goal**: The D3D11 renderer plugin (gl11) builds as x64 and carries the x64 client to character select under `rasterMajor=11`, bringing the second renderer to x64 parity.
