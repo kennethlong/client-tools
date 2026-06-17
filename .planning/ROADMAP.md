@@ -166,7 +166,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
 **Plans**: 6 plans in 5 waves (Wave 1: x64 foundations + asm-D3DAssemble port parallel -> Wave 2: non-compile D3DX -> DirectXMath -> Wave 3: dpvs + engine-lib platform-add -> Wave 4: plugin/exe link + Miles stub + first x64 link -> Wave 5: stage + boot validation)
   - [x] 33-01-PLAN.md - x64 foundations: committed x64-platform.props (N1 guardrail) + libxml2/pcre/jpeg x64 import-libs + tinyxml x64 build + staged-DLL provenance checklist
   - [x] 33-02-PLAN.md - D3DX-removal precondition (asm): ported D3DXAssembleShader -> D3DAssemble (static-local-cached GetProcAddress, 0 unresolved external; x64 d3dcompiler_47.dll exports D3DAssemble per reviews #7a) + Fix-A RETAIN (D-05); gl05 //asm Tatooine render smoke APPROVED 2026-06-17 — D3D9 compile surface now FULLY off D3DX (436189d8a/e057b6d3a)
-  - [ ] 33-03-PLAN.md - D3DX-removal precondition (non-compile): D3DXMATRIX/Multiply/Transpose -> DirectXMath (preserve the :4031 transpose), own-impl surface-copy/mesh/save, drop d3dx9 includes; gl05 Tatooine A/B
+  - [x] 33-03-PLAN.md - D3DX-removal precondition (non-compile): D3DXMATRIX/Multiply/Transpose -> DirectXMath (preserve the :4031 transpose), own-impl surface-copy/mesh/save, drop d3dx9 includes; gl05 Tatooine A/B
   - [ ] 33-04-PLAN.md - platform-add: dpvs !_M_X64 CPU-detect guard + x64 config; swg.sln x64 configs + the ~57 boot-path engine/3rd-party StaticLibrary x64 configs (import x64-platform.props, isolated x64 OutDirs)
   - [ ] 33-05-PLAN.md - link: gl05/06/07 + SwgClient x64 link blocks (D3DX/bink/Miles dropped, LIFT libs wired) + Miles #if _M_X64 stub + Bink binkw64.dll swap + the first full x64 link (0 unresolved external symbol)
   - [ ] 33-06-PLAN.md - boot validation: stage-x64/ + dumpbin-x64 every binary + x64 boot to char-select under rasterMajor 5/6/7 + A1-DBGHELP/SSE-ALIGN runtime confirm + 32-bit non-regression (rasterMajor 5 + 11)
@@ -242,7 +242,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
-| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 2/6 | In Progress|  |
+| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 3/6 | In Progress|  |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
 | 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
