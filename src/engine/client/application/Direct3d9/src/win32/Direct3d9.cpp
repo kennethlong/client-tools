@@ -67,6 +67,7 @@
 
 #include <ddraw.h>
 #include <d3dx9.h>
+#include <DirectXMath.h>
 #include <stdio.h>
 
 #pragma warning (disable: 4201)
@@ -559,10 +560,16 @@ namespace Direct3d9Namespace
 	bool                                ms_usingVertexShader;
 #endif
 
-	D3DXMATRIX                          ms_cachedObjectToWorldMatrix;
-	D3DXMATRIX                          ms_cachedWorldToCameraMatrix;
-	D3DXMATRIX                          ms_cachedProjectionMatrix;
-	D3DXMATRIX                          ms_cachedWorldToProjectionMatrix;
+	// Plan 33-03: matrix cache off D3DX onto DirectXMath (header-only, x64-native).
+	// XMFLOAT4X4 is binary-layout-identical to D3DMATRIX / the old D3DX matrix type (16 contiguous
+	// row-major floats with the same _11.._44 named members), so the per-element
+	// member writes below keep working unchanged, and a reinterpret_cast bridges the
+	// D3DMATRIX* boundaries (convertTransformToMatrix / SetTransform). File-static,
+	// NOT in a shared header -> no shared-header ABI cascade.
+	DirectX::XMFLOAT4X4                 ms_cachedObjectToWorldMatrix;
+	DirectX::XMFLOAT4X4                 ms_cachedWorldToCameraMatrix;
+	DirectX::XMFLOAT4X4                 ms_cachedProjectionMatrix;
+	DirectX::XMFLOAT4X4                 ms_cachedWorldToProjectionMatrix;
 
 #if DEBUG_LEVEL == DEBUG_LEVEL_DEBUG
 	int                                 ms_drawCall = 0;
@@ -3277,18 +3284,19 @@ void Direct3d9Namespace::setWorldToCameraTransform(const Transform &transform, c
 
 	Direct3d9_LightManager::setCameraPosition(cameraPosition);
 
-	Direct3d9::convertTransformToMatrix(transform, ms_cachedWorldToCameraMatrix);
+	Direct3d9::convertTransformToMatrix(transform, *reinterpret_cast<D3DMATRIX *>(&ms_cachedWorldToCameraMatrix));
 
 #ifdef FFP
 	// setup the world-to-camera transform
-	const HRESULT hresult = ms_device->SetTransform(D3DTS_VIEW, &ms_cachedWorldToCameraMatrix);
+	const HRESULT hresult = ms_device->SetTransform(D3DTS_VIEW, reinterpret_cast<const D3DMATRIX *>(&ms_cachedWorldToCameraMatrix));
 	FATAL_DX_HR("SetTransform(view) failed %s", hresult);
 #endif
 
 #ifdef VSPS
 	PaddedVector paddedPosition(cameraPosition);
 	Direct3d9_StateCache::setVertexShaderConstants(VSCR_cameraPosition, &paddedPosition, 1);
-	D3DXMatrixMultiply(&ms_cachedWorldToProjectionMatrix, &ms_cachedProjectionMatrix, &ms_cachedWorldToCameraMatrix);
+	// Plan 33-03: matrix-multiply(out, A, B) -> XMMatrixMultiply(XMLoad(A), XMLoad(B)); exact A,B order preserved.
+	DirectX::XMStoreFloat4x4(&ms_cachedWorldToProjectionMatrix, DirectX::XMMatrixMultiply(DirectX::XMLoadFloat4x4(&ms_cachedProjectionMatrix), DirectX::XMLoadFloat4x4(&ms_cachedWorldToCameraMatrix)));
 #endif
 
 #ifdef _DEBUG
@@ -3349,14 +3357,17 @@ void Direct3d9Namespace::setProjectionMatrix(const GlMatrix4x4 &projectionMatrix
 #endif
 
 #ifdef FFP
-	const HRESULT hresult = ms_device->SetTransform(D3DTS_PROJECTION, &ms_cachedProjectionMatrix);
+	const HRESULT hresult = ms_device->SetTransform(D3DTS_PROJECTION, reinterpret_cast<const D3DMATRIX *>(&ms_cachedProjectionMatrix));
 	FATAL_DX_HR("SetTransform(projection) failed %s", hresult);
 #endif
 
+	// Plan 33-03: each branch keeps its EXACT A,B operand order (note: this FFP+VSPS
+	// branch uses worldToCamera * projection; the VSPS-only branch reverses to
+	// projection * worldToCamera -- copied verbatim, not normalized).
 #if defined(FFP) && defined(VSPS)
-	D3DXMatrixMultiply(&ms_cachedWorldToProjectionMatrix, &ms_cachedWorldToCameraMatrix, &ms_cachedProjectionMatrix);
+	DirectX::XMStoreFloat4x4(&ms_cachedWorldToProjectionMatrix, DirectX::XMMatrixMultiply(DirectX::XMLoadFloat4x4(&ms_cachedWorldToCameraMatrix), DirectX::XMLoadFloat4x4(&ms_cachedProjectionMatrix)));
 #elif defined(VSPS)
-	D3DXMatrixMultiply(&ms_cachedWorldToProjectionMatrix, &ms_cachedProjectionMatrix, &ms_cachedWorldToCameraMatrix);
+	DirectX::XMStoreFloat4x4(&ms_cachedWorldToProjectionMatrix, DirectX::XMMatrixMultiply(DirectX::XMLoadFloat4x4(&ms_cachedProjectionMatrix), DirectX::XMLoadFloat4x4(&ms_cachedWorldToCameraMatrix)));
 #endif
 
 #ifdef _DEBUG
@@ -3407,10 +3418,10 @@ void Direct3d9Namespace::setObjectToWorldTransformAndScale(const Transform &tran
 #endif
 
 	ms_transformDirty = true;
-	Direct3d9::convertScaleAndTransformToMatrix(scale, transform, ms_cachedObjectToWorldMatrix);
+	Direct3d9::convertScaleAndTransformToMatrix(scale, transform, *reinterpret_cast<D3DMATRIX *>(&ms_cachedObjectToWorldMatrix));
 
 #ifdef FFP
-	const HRESULT hresult = ms_device->SetTransform(D3DTS_WORLD, &ms_cachedObjectToWorldMatrix);
+	const HRESULT hresult = ms_device->SetTransform(D3DTS_WORLD, reinterpret_cast<const D3DMATRIX *>(&ms_cachedObjectToWorldMatrix));
 	FATAL_DX_HR("SetTransform failed %s", hresult);
 #endif
 
@@ -4025,13 +4036,18 @@ inline bool Direct3d9::drawPrimitive()
 
 		if (ms_transformDirty)
 		{
-			D3DXMATRIX matrices[2];
+			// Plan 33-03: local matrix pair feeding the VS constant upload (8 float4
+			// rows). XMFLOAT4X4 keeps the exact 16-float row-major layout, so the
+			// setVertexShaderConstants(matrices, 8) raw-bytes contract is unchanged.
+			DirectX::XMFLOAT4X4 matrices[2];
 
 #ifdef FFP
-			D3DXMatrixMultiplyTranspose(matrices+0, &ms_cachedObjectToWorldMatrix, &ms_cachedWorldToProjectionMatrix);
-			D3DXMatrixTranspose(matrices+1, &ms_cachedObjectToWorldMatrix);
+			// PRESERVE THE TRANSPOSE EXACTLY (Pitfall 1, the #1 render risk):
+			// the old MatrixMultiplyTranspose(out, A, B) == transpose(A*B).
+			DirectX::XMStoreFloat4x4(matrices+0, DirectX::XMMatrixTranspose(DirectX::XMMatrixMultiply(DirectX::XMLoadFloat4x4(&ms_cachedObjectToWorldMatrix), DirectX::XMLoadFloat4x4(&ms_cachedWorldToProjectionMatrix))));
+			DirectX::XMStoreFloat4x4(matrices+1, DirectX::XMMatrixTranspose(DirectX::XMLoadFloat4x4(&ms_cachedObjectToWorldMatrix)));
 #else
-			D3DXMatrixMultiply(matrices+0, &ms_cachedWorldToProjectionMatrix, &ms_cachedObjectToWorldMatrix);
+			DirectX::XMStoreFloat4x4(matrices+0, DirectX::XMMatrixMultiply(DirectX::XMLoadFloat4x4(&ms_cachedWorldToProjectionMatrix), DirectX::XMLoadFloat4x4(&ms_cachedObjectToWorldMatrix)));
 			matrices[1] = ms_cachedObjectToWorldMatrix;
 #endif
 
