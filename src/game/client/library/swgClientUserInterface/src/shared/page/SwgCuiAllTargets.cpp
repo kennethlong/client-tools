@@ -826,6 +826,10 @@ void SwgCuiAllTargets::removeUnusedStatusPages(bool const forceUpdate)
 		}
 
 		m_statii->clear();
+
+		//-- reclaim the now-deactivated, unreferenced status mediators (CuiMediator
+		//-- dtor is protected; garbageCollect() is the only sanctioned reaper)
+		CuiMediator::garbageCollect(false);
 	}
 	else
 	{
@@ -855,6 +859,10 @@ void SwgCuiAllTargets::removeUnusedStatusPages(bool const forceUpdate)
 					it++;
 				}
 			}
+			
+			//-- reclaim the stale, now-deactivated status mediators erased above
+			//-- (CuiMediator dtor is protected; garbageCollect() is the only sanctioned reaper)
+			CuiMediator::garbageCollect(false);
 		}
 		else
 		{
