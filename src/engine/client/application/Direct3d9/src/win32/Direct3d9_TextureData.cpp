@@ -72,16 +72,27 @@ void Direct3d9_ownImplCopySurface(
 		 static_cast<long>(dstRight - dstLeft), static_cast<long>(dstBottom - dstTop)));
 
 	bool const sameFormat = (srcDesc.Format == dstDesc.Format);
-	// the one runtime non-native expansion: 24bpp R8G8B8 -> 32bpp X/A8R8G8B8.
-	// Byte order is identical (BGR in memory on little-endian) -- a straight
-	// 3->4 expansion with 0xFF in the high byte, no channel swap. Mirrors the
-	// D3D11 bridge (Direct3d11_TextureData.cpp:633-639,839-842).
-	bool const expand24to32 =
+	// Any pair within the uncompressed B8G8R8(+X8/A8) family is a byte-order-
+	// identical repack: in memory all three are B,G,R[,X|A] on little-endian, so
+	// only bytes-per-pixel and the high (X/alpha) byte differ -- never a channel
+	// swap. This covers every lock readback/writeback translationTable pair that
+	// fires at runtime in either direction: R8G8B8 <-> X8R8G8B8 <-> A8R8G8B8
+	// (24<->32 expand/contract, X8<->A8 repack). Mirrors the D3D11 bridge
+	// (Direct3d11_TextureData.cpp:633-639,839-842). Genuinely-encoded formats
+	// (DXT*, 16-bit packed, float) still FATAL -- the engine pre-decompresses
+	// those to a native format before the lock, so they must not reach here.
+	bool const srcBGRFamily =
 		   srcDesc.Format == D3DFMT_R8G8B8
-		&& (dstDesc.Format == D3DFMT_X8R8G8B8 || dstDesc.Format == D3DFMT_A8R8G8B8);
+		|| srcDesc.Format == D3DFMT_X8R8G8B8
+		|| srcDesc.Format == D3DFMT_A8R8G8B8;
+	bool const dstBGRFamily =
+		   dstDesc.Format == D3DFMT_R8G8B8
+		|| dstDesc.Format == D3DFMT_X8R8G8B8
+		|| dstDesc.Format == D3DFMT_A8R8G8B8;
+	bool const bgrRepack = !sameFormat && srcBGRFamily && dstBGRFamily;
 
-	FATAL(!sameFormat && !expand24to32,
-		("Direct3d9_ownImplCopySurface: unsupported format pair src=0x%08x dst=0x%08x -- own-impl bridge handles only same-format and TF_RGB_888->XRGB/ARGB_8888 (D-06 loud-fail; an unproven runtime pair surfaced -- extend the bridge, do NOT silently corrupt)",
+	FATAL(!sameFormat && !bgrRepack,
+		("Direct3d9_ownImplCopySurface: unsupported format pair src=0x%08x dst=0x%08x -- own-impl bridge handles same-format and the uncompressed B8G8R8/X8R8G8B8/A8R8G8B8 repack family only (D-06 loud-fail; DXT/16-bit/float must be pre-decompressed before lock -- extend the bridge, do NOT silently corrupt)",
 		 static_cast<unsigned>(srcDesc.Format), static_cast<unsigned>(dstDesc.Format)));
 
 	RECT srcLockRect = { srcLeft, srcTop, srcRight, srcBottom };
@@ -117,18 +128,22 @@ void Direct3d9_ownImplCopySurface(
 			       rowBytes);
 		}
 	}
-	else // expand24to32
+	else // bgrRepack: B8G8R8(+X8/A8) family -- byte order identical, only bpp/alpha differ
 	{
+		int const srcBpp = (srcDesc.Format == D3DFMT_R8G8B8) ? 3 : 4;
+		int const dstBpp = (dstDesc.Format == D3DFMT_R8G8B8) ? 3 : 4;
+		bool const srcHasAlpha = (srcDesc.Format == D3DFMT_A8R8G8B8);
 		for (LONG y = 0; y < copyHeight; ++y)
 		{
 			uint8 const * srcRow = srcBase + static_cast<size_t>(y) * static_cast<size_t>(srcLocked.Pitch);
 			uint8       * dstRow = dstBase + static_cast<size_t>(y) * static_cast<size_t>(dstLocked.Pitch);
 			for (LONG x = 0; x < copyWidth; ++x)
 			{
-				dstRow[x * 4 + 0] = srcRow[x * 3 + 0];  // B
-				dstRow[x * 4 + 1] = srcRow[x * 3 + 1];  // G
-				dstRow[x * 4 + 2] = srcRow[x * 3 + 2];  // R
-				dstRow[x * 4 + 3] = 0xFF;               // X (XRGB) or A (ARGB) opaque
+				dstRow[x * dstBpp + 0] = srcRow[x * srcBpp + 0];  // B
+				dstRow[x * dstBpp + 1] = srcRow[x * srcBpp + 1];  // G
+				dstRow[x * dstBpp + 2] = srcRow[x * srcBpp + 2];  // R
+				if (dstBpp == 4)                                   // dst is X8/A8R8G8B8:
+					dstRow[x * dstBpp + 3] = srcHasAlpha ? srcRow[x * srcBpp + 3] : 0xFF;  // preserve src A, else opaque
 			}
 		}
 	}
