@@ -180,10 +180,18 @@ namespace Direct3d9_VertexShaderDataNamespace
 	// D3DX-typed code AND the separate D3DXAssembleShader asm path stay untouched; we
 	// reinterpret-cast only at this single call boundary (RESEARCH Pattern 1).
 	//
-	// Fix-A SEH guard RETAINED (D-04 / review fix #E): this plan keeps __try/__except around
-	// the compile until Wave 2 (32-05) confirms BOTH the HLSL and asm paths render clean off
-	// D3DX. D3DCompile is immune to the D3DX FP fault, so the guard is now belt-and-suspenders
-	// -- it stays so the Fix-A removal is a single isolated Wave-2 change, not bundled here.
+	// Fix-A SEH guard RETAINED -- FINAL DISPOSITION (Phase 33 Plan 02, D-05 / reviews fix #8):
+	// BOTH compile paths are now off D3DX (the //hlsl path -> D3DCompile in Phase 32-02, and the
+	// //asm path -> D3DAssemble in this plan's Task 1). Per D-05 the default disposition is
+	// RETAIN-with-comment, and that is the decision taken here. Rationale (reviews fix #8 / Opus,
+	// MEDIUM): Fix-A's __try/__except guards a REAL observed crash -- the D3DX FP fault 0xC0000090.
+	// D3DCompile / D3DAssemble are believed immune to that fault, but the guard is cheap insurance
+	// against the FP-crash class resurfacing on an unexercised .vsh; retiring it on a code path the
+	// Phase 32-01 6/96-//asm sample never covered carries render risk that the build link-grep does
+	// NOT retire. So the guard STAYS as belt-and-suspenders -- the no-render-risk path. (Note: the
+	// guard wraps only the HLSL D3DCompile call; the asm D3DAssemble call is, and always was, a
+	// direct FATAL-on-failure -- it does not need the SEH wrapper because the D3DX FP fault was
+	// specific to the D3DX HLSL compiler's post-compile FP cleanup, which D3DAssemble does not run.)
 	// __try/__except cannot live in a function needing C++ object unwinding (C2712), hence the
 	// helper. One guard covers all VSPS plugins (gl05/07).
 	inline int direct3d9CompileFpExceptionFilter(unsigned long code)
