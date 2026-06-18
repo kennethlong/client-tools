@@ -42,6 +42,18 @@ the shared x64 client). The second renderer (D3D11) has reached x64 parity. **X6
   (semantic draw matching + ≤1 ULP tolerance, reviews #1/#2) remains as the deferred objective probe.
   This is an honest scope note — the A/B method was the *plan's* rigor mechanism, accepted-by-visual
   this phase with the objective diff pending the leak fix.
+- **Lead for the deferred audit (user, 2026-06-18): run the RenderDoc A/B under the RELEASE stack** — the
+  Release build's far-lower memory overhead sidesteps the 32-bit Debug memory pressure that blocked the
+  capture (the same Release-stack trick used for prior parity captures, [[project_d3d9_charselect_capture_via_release_stack]]).
+  Two forms:
+  - **Cleanest — 32-bit Release `gl11_r` vs x64 Release `gl11_r`** (identical Release codegen, pure
+    arch-only diff, both dodge the Debug OOM). **Caveat:** x64 Release (`gl11_r.dll`) is **not linked yet**
+    (D-04 deferred `Release|x64` to the all-plugin consolidation phase); the `Release|x64` vcxproj block is
+    already authored, so it's a one-build add when that phase lands. Prefer this form once x64 Release exists.
+  - **Available now — 32-bit Release vs x64 Debug** (32-bit `gl11_r.dll` in `stage/`, x64 `gl11_d.dll` in
+    `stage-x64/`): dodges the memory pressure but mixes Release-vs-Debug codegen, so it is NOT a pure
+    arch-only diff (optimization deltas would confound a strict ≤1 ULP read). Usable as a coarse sanity
+    pass, not the rigorous probe.
 
 ## Success criteria
 - **SC#1** (gl11 builds x64): ✅ Plan 01 — gl11_d.dll machine 8664, clean link, exports GetApi, staged (Debug|x64 scope; Release|x64 deferred per D-04).

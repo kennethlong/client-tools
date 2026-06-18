@@ -114,7 +114,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
  (completed 2026-06-16)
 - [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
 - [x] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02) (completed 2026-06-18)
-- [ ] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03)
+- [x] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03) (completed 2026-06-18)
 - [ ] **Phase 35: Miles 9.3b Audio Port** - vendor + port clientAudio from the 7.2e to the 9.3b API and stage the x64 redist/provider set; in-game audio works on the x64 client (AUDIO-01/02)
 - [ ] **Phase 36: Verification & CORNERSNAP Cleanup** - confirm the door-snap + OOM-crash classes resolved against the Restoration x64 reference, then strip the CORNERSNAP `_DEBUG` probes (VERIFY-01/02/03)
 
@@ -182,7 +182,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   3. The 32-bit gl11 build still boots to character select under `rasterMajor=11` (no Win32 regression)
 **Plans**: 2 plans in 2 waves
   - [x] 34-01-PLAN.md — mirror gl05 x64 .vcxproj blocks into Direct3d11.vcxproj + register gl11 GUID x64 lines in swg.sln + link Debug|x64 clean (machine x64, 0 unresolved) → stage-x64/
-  - [ ] 34-02-PLAN.md — boot x64 client rasterMajor=11 to dressed char-select + RenderDoc arch-only A/B (gl11 32-bit vs Debug|x64) on the triad + 32-bit gl11 & gl05 x64 non-regression boots
+  - [x] 34-02-PLAN.md — boot x64 client rasterMajor=11 to dressed char-select + RenderDoc arch-only A/B (gl11 32-bit vs Debug|x64) on the triad + 32-bit gl11 & gl05 x64 non-regression boots
 **UI hint**: yes
 
 #### Phase 35: Miles 9.3b Audio Port
@@ -245,6 +245,6 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 6/6 | Complete    | 2026-06-18 |
-| 34. x64 D3D11 Renderer | v3.0 | 1/2 | In Progress|  |
+| 34. x64 D3D11 Renderer | v3.0 | 2/2 | Complete   | 2026-06-18 |
 | 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
