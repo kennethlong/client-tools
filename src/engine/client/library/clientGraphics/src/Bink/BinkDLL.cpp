@@ -65,6 +65,23 @@ namespace Bink
 	static const void *_bind(const char * i_funcname)
 	{
 		if (!s_hModule) return 0;
+#if defined(_M_X64) || defined(_WIN64)
+		// Phase 33 (X64-02): the bind table uses x86 __stdcall-decorated names (_Name@N), but the
+		// x64 binkw64.dll exports UNDECORATED names (no leading '_', no '@N' -- x64 has a single
+		// calling convention). Strip the decoration before GetProcAddress, else every bind returns
+		// NULL and a later call (e.g. BinkSetMemory) jumps to 0x0. isBinkReady() only checks that the
+		// module loaded, so it cannot catch this.
+		char undecorated[128];
+		if (i_funcname[0] == '_')
+		{
+			size_t n = 0;
+			const char *src = i_funcname + 1;                       // drop leading '_'
+			while (*src && *src != '@' && n < sizeof(undecorated) - 1)
+				undecorated[n++] = *src++;                          // copy up to the '@'
+			undecorated[n] = '\0';
+			i_funcname = undecorated;
+		}
+#endif
 		const void *const returnValue = GetProcAddress(s_hModule, i_funcname);
 		DEBUG_FATAL(!returnValue, ("Failed to get %s procedure address from Bink DLL.", i_funcname));
 		return returnValue;
