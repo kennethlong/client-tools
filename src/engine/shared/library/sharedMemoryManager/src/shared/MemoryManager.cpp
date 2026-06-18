@@ -1218,6 +1218,17 @@ void * MemoryManager::allocate(size_t size, uint32 owner, bool array, bool leakT
 		// get the size of the allocation
 		int allocSize = (cms_allocatedBlockSize + cms_guardBandSize + (size ? static_cast<int>(size) : 1) + cms_guardBandSize + 15) & ~15;
 
+		// Every allocated block must be at least cms_freeBlockSize: when it is later freed it is added
+		// to the free list, and addToFreeList writes a FreeBlock node (the 4-pointer tree) into the
+		// block -- which needs cms_freeBlockSize bytes. On x86 the minimum (size=1) already rounds to
+		// 32 == cms_freeBlockSize, so this was implicit. On x64 the minimum rounds to 48 < 64, so a
+		// min-size block, once freed, lets addToFreeList write its m_parentFreeBlock (offset 48) 8 bytes
+		// past the block into the NEXT block's m_previous (offset 0), zeroing it -> a later
+		// getPrevious()->isFree() dereferences NULL -> boot AV. (Paired with the split-threshold fix
+		// at the subdivision test, which guarantees split-off REMAINDERS are also >= cms_freeBlockSize.)
+		if (allocSize < cms_freeBlockSize)
+			allocSize = cms_freeBlockSize;
+
 		FreeBlock * bestFreeBlock = NULL;
 		for (int tries = 0; !bestFreeBlock && tries < 2; ++tries)
 		{
@@ -1248,7 +1259,15 @@ void * MemoryManager::allocate(size_t size, uint32 owner, bool array, bool leakT
 		bestFreeBlock->setFree(false);
 
 		// check to see if we should subdivide this block
-		if (bestFreeBlock->getSize() > (allocSize + cms_allocatedBlockSize + cms_guardBandSize + 1 + cms_guardBandSize))
+		// The split-off REMAINDER is added back to the free list, so it must be large enough to hold a
+		// FreeBlock (the 4-pointer free-list tree node), i.e. >= cms_freeBlockSize -- NOT merely
+		// cms_allocatedBlockSize. On x86 these coincide under 16-byte alignment (smallest passing
+		// remainder rounds to 32 == cms_freeBlockSize), so the bug was masked. On x64 the four
+		// FreeBlock pointers cost 32 bytes (cms_freeBlockSize 64 vs cms_allocatedBlockSize 32): a 48-byte
+		// remainder passes the old threshold, then addToFreeList writes the tree node (m_smaller...
+		// @offset 48) 8 bytes past the remainder into the NEXT block's m_previous (offset 0), zeroing it
+		// -> later getPrevious()->isFree() dereferences NULL -> boot AV. Reserve cms_freeBlockSize.
+		if (bestFreeBlock->getSize() > (allocSize + cms_freeBlockSize + cms_guardBandSize + 1 + cms_guardBandSize))
 		{
 			Block *block = reinterpret_cast<Block *>(reinterpret_cast<byte *>(bestFreeBlock) + allocSize);
 			block->setPrevious(bestFreeBlock);
