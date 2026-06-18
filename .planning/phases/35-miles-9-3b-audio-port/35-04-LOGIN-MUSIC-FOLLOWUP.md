@@ -25,6 +25,42 @@ This is a regression from the 7.2e→9.3b Miles swap (engine code otherwise unch
   performs during open. So the stream starves → silent. (Heavy zone-load file I/O is unrelated; zone
   music plays via the buffered path.)
 
+## SESSION 2 UPDATE (2026-06-18) — fix #1 and fix #3 both attempted, both failed, both reverted
+
+**Fix #1 (subfile descriptor) — IMPLEMENTED, did not produce audio.**
+- Added `TreeFile::getArchiveSubfile()` (+ a `SearchNode`/`SearchTree` virtual) to expose the backing
+  `.tre` OS path + offset + length for uncompressed entries; built the Miles descriptor
+  `*<archive>*<size>*<offset>.mp3` in `playSound`. Verified at runtime (cdb): the descriptor WAS built
+  (AIL_open_stream received `*...`), AIL_open_stream returned a valid HSTREAM and AIL_start_stream
+  fired — so Miles parsed the descriptor, opened the archive at the offset, and read the header. Still
+  SILENT. Combined with a per-frame main-thread `AIL_service_stream` pump: still silent. Conclusion:
+  with `AIL_set_file_callbacks` set, Miles routes the descriptor's archive I/O back through OUR
+  callbacks anyway; the stream opens/starts/full-volume but never produces audio, and the manual
+  service calls don't even trigger reads (buffers stay full → stream isn't consuming/outputting).
+  Root remains in Miles 9.3b's opaque stream→mixer path. REVERTED.
+
+**Fix #3 (route music to in-memory cached path) — IMPLEMENTED, CRASHED.**
+- Forced `isNonBufferedMusic` categories down the cached branch in `playSound` (skip streaming).
+- Result: `FATAL: sampleRawData pointer is null` at `Audio.cpp` ~2906. Cause: the cached serve path
+  needs the file bytes in `SampleCache::m_sampleRawData`, which are loaded only when the SOUND TEMPLATE
+  caches them (`SoundTemplate::addSample`, gated by `forceCacheSample || size<=maxCached2dSampleSize`).
+  For large music that is false, so the bytes are never loaded. Worse, the load order blocks an easy
+  fix: `Sound2dTemplate::load_0000` calls `addSample` (~737) BEFORE it reads `m_soundCategory` (~757),
+  so the category isn't known when the cache decision is made; and `Sample2d::setPath` hardcodes
+  `cacheSample=false`. Re-caching post-load would double the reference count (leak). REVERTED.
+
+**Remaining viable directions for a future attempt (both deeper engine work):**
+- (a) Make music templates cache their sample DATA: pass `forceCacheSample=true` for music either by
+  reading `m_soundCategory` BEFORE `addSample` in each `load_000X`, or by adding a post-load
+  cache-only pass that loads `m_sampleRawData` WITHOUT bumping the ref count (needs a new
+  "ensure-cached" helper). Then the cached path plays music in-memory (proven mechanism). Watch the
+  `MemoryManager::getLimit()` gate in `addSample` and looping behavior of cached music.
+- (b) Route screen/title music through the dedicated buffered-music player (`s_bufferedMusicSample` /
+  `AIL_set_named_sample_file`, Audio.cpp ~5464) instead of the generic sound system.
+- (c) Drop `AIL_set_file_callbacks` for the stream path and rely purely on the subfile descriptor +
+  Miles's own file I/O (requires the callbacks not to shadow descriptor I/O — needs investigation of
+  whether MSS lets you opt a single stream out of the global callbacks).
+
 ## What was already tried (all failed — do NOT repeat)
 1. `AIL_auto_service_stream(stream, 1)` — inert (probe: read cb still fired once).
 2. Per-frame `AIL_serve()` in `Audio::alter()` — `AIL_serve()` doesn't pump the HSTREAM file path.
@@ -47,9 +83,32 @@ This is a regression from the 7.2e→9.3b Miles swap (engine code otherwise unch
    music, or send title music through the `s_bufferedMusicSample` API). Simplest, but loads whole
    tracks into memory and may change behavior for all 2D music.
 
-## Start here
-Begin with fix #1. First verify storage: check whether `music/mus_title_lp.mp3` is stored
-uncompressed in its TRE (use `D:/Code/swg-blender-plugin/swg_pipeline/tre_reader.py` or the engine's
-TreeFile metadata). If uncompressed, wire the subfile descriptor in the stream branch of
-`AudioNamespace::playSound`. Tools: `tools/setup/audio-stream-probe.ps1` (cdb probe) confirms the fix
-when `SYNC_READ`/file reads continue after `START_STREAM` and audio plays at the idle login screen.
+## Start here — fix #1, feasibility CONFIRMED (2026-06-18)
+
+**Storage verified (gating fact):** `music/mus_title_lp.mp3` is **STORED UNCOMPRESSED**.
+- archive: `data_music_00.tre` (resolves under `D:/Code/SWGSource Client v3.0/`)
+- offset: `64835379`  length: `1853359`  compressor: `0`
+- Verified the offset is the absolute raw-data offset: bytes at that offset == the decoded payload,
+  start with `FF FB` (MP3 frame sync), offset+size within the file. So the Miles descriptor
+  `*<full_path>/data_music_00.tre*1853359*64835379.mp3` will work.
+
+**Engine already has (archive, offset, length).** `FileStreamerFile` (sharedFile) backs a TRE-resolved
+`TreeFile::open`. It stores `m_baseOffset` (entry offset in the archive) + `m_file` (the archive,
+which knows its OS path) + length (`FileStreamerFile.cpp:151` reads `m_file->read(m_baseOffset + m_offset, ...)`).
+
+**Implementation plan:**
+1. Add **non-virtual accessors** to `FileStreamerFile` (and a thin passthrough where needed) to expose:
+   OS archive path, `m_baseOffset`, and length. Non-virtual methods reading existing members do NOT
+   change object layout → NO plugin ABI cascade (safe; no need to rebuild gl0x).
+2. In `AudioNamespace::playSound` stream branch (Audio.cpp ~604), before `AIL_open_stream`:
+   - `TreeFile::open` the logical name; if it's a TRE-backed `FileStreamerFile` AND uncompressed,
+     read (archivePath, baseOffset, length), close it, build `*archivePath*length*baseOffset.ext`,
+     and pass THAT to `AIL_open_stream`. Leave auto-service at its default (ON) — Miles does its own
+     thread-safe I/O on the archive, so the secondary-thread + sync-callback problem disappears.
+   - Fallback to the plain logical name (current behavior) for loose files / compressed entries.
+3. Keep the engine's `AIL_set_file_callbacks` for non-stream uses; the descriptor path bypasses them
+   for streams.
+
+**Verify:** boot to login → title music plays; `tools/setup/audio-stream-probe.ps1` shows the stream
+fed continuously (Miles reads the archive itself; our SYNC_READ callback no longer needed for it).
+Also re-run the D-06 in-game UAT to confirm no regression to zone music / 3D / reverb.
