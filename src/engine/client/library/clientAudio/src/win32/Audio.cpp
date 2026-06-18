@@ -224,97 +224,12 @@ namespace AudioNamespace
 
 using namespace AudioNamespace;
 
-// ============================================================================
-// Phase 33 (X64-02): Miles AIL_* subsystem DISABLED on x64 (reviews fix #3).
-//
-// The Miles 7.2e Mss32.lib is x86-only and cannot link x64. The subsystem is
-// disabled at its root: Audio::install() early-returns false on x64 BEFORE any
-// Miles state is created (s_digitalDevice2d stays NULL, s_installed stays
-// false), so every public play/alter/query/room-type entry point -- all gated
-// on `if (s_installed)` / valid-handle checks -- becomes a no-op shell and no
-// AIL-driven loop ever runs. NO null/garbage HSAMPLE/HSTREAM/HDIGDRIVER handle
-// is produced or reaches any consumer at runtime.
-//
-// The no-op macros below exist ONLY so the now-UNREACHABLE Miles code in the
-// rest of this translation unit still COMPILES to ZERO external AIL_* symbols
-// (proven at the symbol level: `dumpbin /symbols <clientAudio x64 obj> | grep
-// AIL_` == 0 -> no Mss32.lib needed). They are inert compile-time scaffolding,
-// not a runtime code path -- the actual disable is the install() shell above.
-// The MSS constants (AIL_NO_ERROR, AIL_FILE_SEEK_*, ENVIRONMENT_*, MSS_MC_*,
-// DIG_*) are plain enum values from <mss.h> and compile fine on x64, so they are
-// left untouched. The 32-bit (!_M_X64) path is byte-unchanged.
-//
-// Phase 35 owns the REAL Miles 9.3b port (SDK at D:\Code\milesss-v9.3b\win\sdk\)
-// -- NOT a Restoration mss64.dll lift.
-// ============================================================================
-#if defined(_M_X64)
-#  ifdef AIL_MSS_version
-#    undef AIL_MSS_version
-#  endif
-#  define AIL_MSS_version(str,len)                          ((void)0)
-#  define AIL_open_stream(dig,fn,mem)                       (0)
-#  define AIL_allocate_sample_handle(dig)                   (0)
-#  define AIL_stream_sample_handle(s)                       (0)
-#  define AIL_active_sample_count(dig)                      (0)
-#  define AIL_digital_CPU_percent(dig)                      (0)
-#  define AIL_digital_latency(dig)                          (0)
-#  define AIL_sample_status(s)                              (0)
-#  define AIL_stream_status(s)                              (0)
-#  define AIL_sample_playback_rate(s)                       (0)
-#  define AIL_sample_position(s)                            (0)
-#  define AIL_set_named_sample_file(s,e,p,n,b)              (0)
-#  define AIL_set_sample_file(s,p,b)                        (0)
-#  define AIL_file_type(p,n)                                (0)
-#  define AIL_room_type(dig)                                (0)
-#  define AIL_get_timer_highest_delay()                     (0)
-#  define AIL_WAV_info(p,info)                              (0)
-#  define AIL_file_error()                                  (0)
-#  define AIL_last_error()                                  ("")
-#  define AIL_close_stream(s)                               ((void)0)
-#  define AIL_pause_stream(s,p)                             ((void)0)
-#  define AIL_end_sample(s)                                 ((void)0)
-#  define AIL_stop_sample(s)                                ((void)0)
-#  define AIL_start_sample(s)                               ((void)0)
-#  define AIL_start_stream(s)                               ((void)0)
-#  define AIL_release_sample_handle(s)                      ((void)0)
-#  define AIL_register_EOS_callback(s,cb)                   ((void)0)
-#  define AIL_register_stream_callback(s,cb)                ((void)0)
-#  define AIL_serve()                                       ((void)0)
-#  define AIL_lock()                                        ((void)0)
-#  define AIL_unlock()                                      ((void)0)
-#  define AIL_shutdown()                                    ((void)0)
-#  define AIL_set_preference(n,v)                           ((void)0)
-#  define AIL_set_room_type(dig,rt)                         ((void)0)
-#  define AIL_set_digital_master_volume_level(dig,v)        ((void)0)
-#  define AIL_set_digital_master_reverb_levels(dig,d,w)     ((void)0)
-#  define AIL_set_named_sample_file3D(...)                  ((void)0)
-#  define AIL_set_sample_3D_position(s,x,y,z)               ((void)0)
-#  define AIL_set_sample_3D_velocity_vector(s,x,y,z)        ((void)0)
-#  define AIL_set_sample_3D_distances(s,mx,mn,c)            ((void)0)
-#  define AIL_set_sample_occlusion(s,o)                     ((void)0)
-#  define AIL_set_sample_obstruction(s,o)                   ((void)0)
-#  define AIL_set_sample_volume_levels(s,l,r)               ((void)0)
-#  define AIL_set_sample_reverb_levels(s,d,w)               ((void)0)
-#  define AIL_set_sample_playback_rate(s,r)                 ((void)0)
-#  define AIL_set_sample_ms_position(s,ms)                  ((void)0)
-#  define AIL_set_sample_position(s,p)                      ((void)0)
-#  define AIL_set_sample_loop_block(s,b,e)                  ((void)0)
-#  define AIL_set_sample_loop_count(s,c)                    ((void)0)
-#  define AIL_set_stream_loop_block(s,b,e)                  ((void)0)
-#  define AIL_set_stream_loop_count(s,c)                    ((void)0)
-#  define AIL_set_stream_ms_position(s,ms)                  ((void)0)
-#  define AIL_sample_ms_position(s,t,c)                     ((void)0)
-#  define AIL_stream_ms_position(s,t,c)                     ((void)0)
-#  define AIL_sample_volume_levels(s,l,r)                   ((void)0)
-#  define AIL_sample_reverb_levels(s,d,w)                   ((void)0)
-#endif // _M_X64 (Phase 33: Miles disabled)
-
 // Callbacks for Miles to the TreeFile system
 
 // x64: the Miles AIL_file_*_callback ABI uses UINTa (pointer-width) for the file
 // handle (== U32 on x86, __int64 on x64). The handle itself is a synthetic small
 // counter (see s_nextFileHandle), so it fits a U32 map key; only the callback
-// signature must be UINTa to match the Miles typedef (Phase 33 X64-01, BITS-02).
+// signature must be UINTa to match the Miles typedef (x64 ABI, BITS-02).
 static U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle);
 static void __stdcall fileCloseCallBack(UINTa fileHandle);
 static S32 __stdcall fileSeekCallBack(UINTa fileHandle, S32 offset, U32 type);
@@ -1303,21 +1218,6 @@ bool Audio::install()
 		return false;
 	}
 
-#if defined(_M_X64)
-	// Phase 33 (X64-02): the Miles clientAudio subsystem is DISABLED on x64 (reviews fix #3 --
-	// subsystem-disable, NOT per-call return-success). The x86-only Miles 7.2e Mss32.lib cannot
-	// link x64, so every AIL_* call site in this translation unit is gated out under !_M_X64 and the
-	// public entry points become no-op shells (see the gates throughout this file + SoundObject3d.cpp).
-	// install() returns false WITHOUT touching any AIL_* code, so s_installed stays false and every
-	// downstream play/alter/query consumer (all gated on `if (s_installed)`) early-outs -- NO null/garbage
-	// HSAMPLE/HSTREAM/HDIGDRIVER handle (s_digitalDevice2d remains NULL) ever flows into a consumer.
-	// The client boots SILENT. Phase 35 owns the real Miles 9.3b port (D:\Code\milesss-v9.3b\win\sdk\).
-	s_disableMiles = true;
-	setEnabled(false);
-	REPORT_LOG(true, ("Audio: Miles disabled on x64 build (Phase 33). Audio is silent until the Phase 35 Miles 9.3b port.\n"));
-	return false;
-#else
-
 #ifdef _DEBUG
 	DebugFlags::registerFlag(s_debugTimerDelay, "ClientAudio", "debugView_TimerDelay");
 	DebugFlags::registerFlag(s_debugVisuals, "ClientAudio", "debugVisuals");
@@ -1537,7 +1437,6 @@ bool Audio::install()
 	s_installed = true;
 
 	return true;
-#endif // !_M_X64 (Phase 33: Miles subsystem disabled on x64)
 }
 
 //-----------------------------------------------------------------------------
@@ -2632,7 +2531,7 @@ void Audio::setSamplePosition_w(SampleId const &sampleId, Vector const &position
 //-----------------------------------------------------------------------------
 std::string Audio::getMilesVersion()
 {
-	char version[256] = { 0 };   // Phase 33: zero-init so x64 (Miles disabled, AIL_MSS_version is a no-op) returns an empty string, not uninitialized memory.
+	char version[256] = { 0 };   // zero-init so a no-fill AIL_MSS_version returns an empty string, not uninitialized memory.
 	AIL_MSS_version(version, sizeof(version));
 
 	return version;
