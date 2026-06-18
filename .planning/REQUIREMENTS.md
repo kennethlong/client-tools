@@ -23,7 +23,7 @@ Requirements for this milestone. Each maps to roadmap phases (continuing from Ph
 ### Audio Port (Miles 7.2e → 9.3b)
 
 - [x] **AUDIO-01**: The client links the vendored x64 **Miles 9.3b** SDK — the `clientAudio` call sites (`Audio.cpp`, `SoundObject3d.cpp`, `FirstClientAudio.h`) are ported from the 7.2e API to 9.x (incl. the `AIL_room_type` signature edit); SDK vendored into `src/external/3rd/library/miles-9.3b/`
-- [ ] **AUDIO-02**: The x64 Miles redist + provider set (`mss64.dll` + `.asi`/`.flt` providers) is staged next to the x64 exe; in-game audio works — music, 2D UI, 3D positional, and reverb/room-type — without the half-dead-audio / warning-flood failure mode
+- [x] **AUDIO-02**: The x64 Miles redist + provider set (`mss64.dll` + `.asi`/`.flt` providers) is staged next to the x64 exe; in-game audio works — music, 2D UI, 3D positional, and reverb/room-type — without the half-dead-audio / warning-flood failure mode
 
 ### Shader Pipeline (HARD-05 carry-forward)
 
@@ -77,7 +77,7 @@ Which phases cover which requirements. Filled during roadmap creation.
 | BITS-02 | Phase 31 | Complete |
 | BITS-03 | Phase 31 | Complete |
 | AUDIO-01 | Phase 35 | Complete |
-| AUDIO-02 | Phase 35 | Pending |
+| AUDIO-02 | Phase 35 | Complete |
 | SHADER-01 | Phase 32 | Pending |
 | VERIFY-01 | Phase 36 | Pending |
 | VERIFY-02 | Phase 36 | Pending |
