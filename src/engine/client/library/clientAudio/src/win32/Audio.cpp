@@ -1396,25 +1396,55 @@ bool Audio::install()
 	// system DirectSound). Emit EXACTLY ONE clear startup warning here and set s_milesCodecRedistAvailable
 	// so the per-sample flood site below stays quiet (REVIEW/Codex HIGH: loud-once-then-quiet).
 	{
-		static char const * const s_requiredMilesCodecs[] = { "mssmp3.asi", "mssogg.asi", "Msseax.m3d", "msssoft.m3d" };
-		bool allCodecsPresent = true;
-		for (size_t i = 0; i < sizeof(s_requiredMilesCodecs) / sizeof(s_requiredMilesCodecs[0]); ++i)
+		// 35-02 (Pitfall 1 / concern 11): the 7.2e hardcode probed the legacy software-codec provider
+		// filenames -- which 9.3b does NOT ship -- so the probe ALWAYS false-reported "redist missing"
+		// and gated audio off.
+		// Probe the platform-correct 9.3b provider set instead, split into two tiers:
+		//   REQUIRED-CORE: runtime DLL + the decoders the music/UI path needs. A miss => suppress audio.
+		//   OPTIONAL-EFFECT: the 3D (DS3D) + reverb (EAX) filters. A miss => warn-by-name only; music + UI
+		//                    + decode still work, only 3D-positioning / reverb degrade (D-06), NOT a mute.
+		// The WARNING names the SPECIFIC missing filename so the boot log says WHICH file suppressed audio.
+		//
+		// codec-probe platform split -- intentional _M_X64 (NOT Phase-33 scaffolding); keep.
+#if defined(_M_X64)
+		static char const * const s_requiredCoreMilesCodecs[]   = { "mss64.dll", "mss64mp3.asi", "mss64ogg.asi" };
+		static char const * const s_optionalEffectMilesCodecs[] = { "mss64ds3d.flt", "mss64eax.flt" };
+#else
+		static char const * const s_requiredCoreMilesCodecs[]   = { "mss32.dll", "mssmp3.asi", "mssogg.asi" };
+		static char const * const s_optionalEffectMilesCodecs[] = { "mssds3d.flt", "msseax.flt" };
+#endif
+
+		// REQUIRED-CORE: a miss flips s_milesCodecRedistAvailable=false (audio suppressed) + names the file.
+		bool coreCodecsPresent = true;
+		for (size_t i = 0; i < sizeof(s_requiredCoreMilesCodecs) / sizeof(s_requiredCoreMilesCodecs[0]); ++i)
 		{
-			std::string const codecPath(redistDirectory + "\\" + s_requiredMilesCodecs[i]);
+			std::string const codecPath(redistDirectory + "\\" + s_requiredCoreMilesCodecs[i]);
 			FILE * const codecFile = fopen(codecPath.c_str(), "rb");
 			if (codecFile)
 				fclose(codecFile);
 			else
 			{
-				allCodecsPresent = false;
+				coreCodecsPresent = false;
+				s_milesCodecRedistAvailable = false;
+				WARNING(true, ("Audio: REQUIRED Miles codec/provider '%s' missing in '%s' -- music and world audio will be silent. Run tools/setup/setup-client.ps1 or rebuild to stage stage/miles.", s_requiredCoreMilesCodecs[i], redistDirectory.c_str()));
 				break;
 			}
 		}
 
-		if (!allCodecsPresent)
+		// OPTIONAL-EFFECT: a miss warns by name only -- 3D / reverb degrade but audio is NOT suppressed.
+		if (coreCodecsPresent)
 		{
-			s_milesCodecRedistAvailable = false;
-			WARNING(true, ("Audio: Miles codec/provider redist missing in '%s' -- music and world audio will be silent. Run tools/setup/setup-client.ps1 or rebuild to stage stage/miles.", redistDirectory.c_str()));
+			for (size_t i = 0; i < sizeof(s_optionalEffectMilesCodecs) / sizeof(s_optionalEffectMilesCodecs[0]); ++i)
+			{
+				std::string const codecPath(redistDirectory + "\\" + s_optionalEffectMilesCodecs[i]);
+				FILE * const codecFile = fopen(codecPath.c_str(), "rb");
+				if (codecFile)
+					fclose(codecFile);
+				else
+				{
+					WARNING(true, ("Audio: OPTIONAL Miles effect filter '%s' missing in '%s' -- 3D-positioning / reverb will degrade, but music + UI audio still play.", s_optionalEffectMilesCodecs[i], redistDirectory.c_str()));
+				}
+			}
 		}
 	}
 
