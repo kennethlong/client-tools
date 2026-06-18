@@ -9,6 +9,8 @@
 #include "clientGraphics/FirstClientGraphics.h"
 #include "clientGraphics/RenderWorld.h"
 
+#include <cstdint>   // PHASE-33 (A1-DBGHELP-RIP): uintptr_t call-stack entry width (DO_OBJECT_TRACKING)
+
 #include "clientGraphics/ConfigClientGraphics.h"
 #include "clientGraphics/DebugPrimitive.h"
 #include "clientGraphics/Graphics.h"
@@ -144,7 +146,8 @@ namespace RenderWorldNamespace
 	const int CALL_STACK_SIZE = 16;
 	struct CallStack
 	{
-		uint32 callers[CALL_STACK_SIZE];
+		// PHASE-33 (A1-DBGHELP-RIP): uintptr_t entries (DebugHelp::getCallStack writes uintptr_t).
+		uintptr_t callers[CALL_STACK_SIZE];
 	};
 	typedef std::map<DPVS::Object*, CallStack> CallStacks;
 	CallStacks            ms_callStacks;
@@ -1149,7 +1152,7 @@ void RenderWorld::leakedObject(DPVS::Object *object)
 				if (DebugHelp::lookupAddress(callStack.callers[i], libName, fileName, sizeof(fileName), line))
 					DEBUG_REPORT_LOG_PRINT(true, ("  %s(%d) : caller %d\n", fileName, line, i));
 				else
-					DEBUG_REPORT_LOG_PRINT(true, ("  0x%08X : caller %d\n", static_cast<int>(callStack.callers[i]), i));
+					DEBUG_REPORT_LOG_PRINT(true, ("  0x%p : caller %d\n", reinterpret_cast<void const *>(callStack.callers[i]), i));
 			}
 	}
 	else

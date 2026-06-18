@@ -11,6 +11,8 @@
 #ifndef INCLUDED_CallStack_H
 #define INCLUDED_CallStack_H
 
+#include <cstdint>   // PHASE-33 (A1-DBGHELP-RIP): uintptr_t for the call-stack entry type
+
 // ======================================================================
 
 class CallStack
@@ -40,7 +42,10 @@ private:
 
 private:
 
-	uint32 m_callStack[S_callStack];
+	// PHASE-33 (A1-DBGHELP-RIP): uintptr_t entries so the full 64-bit Rip survives
+	// on x64 (DebugHelp::getCallStack now writes uintptr_t). operator< memcmp uses
+	// sizeof(m_callStack), so it scales with the wider element automatically.
+	uintptr_t m_callStack[S_callStack];
 };
 
 // ======================================================================

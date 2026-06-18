@@ -63,7 +63,9 @@ static void formatMessage(char *buffer, int bufferLength, int stackDepth, const 
 
 	// look up the call stack information
 	const int callStackSize = callStackOffset + stackDepth;
-	uint32 callStack[callStackOffset + maxStackDepth];
+	// PHASE-33 (A1-DBGHELP-RIP): uintptr_t entries so the crash-handler call stack
+	// carries the full 64-bit Rip on x64 (DebugHelp::getCallStack now writes uintptr_t).
+	uintptr_t callStack[callStackOffset + maxStackDepth];
 
 	// allow complete disable of the call stack lookup
 	if (stackDepth < 0)
@@ -83,7 +85,7 @@ static void formatMessage(char *buffer, int bufferLength, int stackDepth, const 
 		if (ConfigSharedFoundation::getLookUpCallStackNames() && DebugHelp::lookupAddress(callStack[callStackOffset], lib, file, sizeof(file), line))
 			snprintf(buffer, bufferLength, "%s(%d) : %s %08x: ", file, line, type, static_cast<int>(Crc::calculate(format)));
 		else
-			snprintf(buffer, bufferLength, "unknown(0x%08X) : %s %08x: ", static_cast<int>(callStack[callStackOffset]), type, static_cast<int>(Crc::calculate(format)));
+			snprintf(buffer, bufferLength, "unknown(0x%p) : %s %08x: ", reinterpret_cast<void const *>(callStack[callStackOffset]), type, static_cast<int>(Crc::calculate(format)));
 	}
 	else
 	{
@@ -127,7 +129,7 @@ static void formatMessage(char *buffer, int bufferLength, int stackDepth, const 
 				if (ConfigSharedFoundation::getLookUpCallStackNames() && DebugHelp::lookupAddress(callStack[i], lib, file, sizeof(file), line))
 					snprintf(buffer, bufferLength, "  %s(%d) : caller %d\n", file, line, i-callStackOffset);
 				else
-					snprintf(buffer, bufferLength, "  unknown(0x%08X) : caller %d\n", static_cast<int>(callStack[i]), i-callStackOffset);
+					snprintf(buffer, bufferLength, "  unknown(0x%p) : caller %d\n", reinterpret_cast<void const *>(callStack[i]), i-callStackOffset);
 
 				const int length = strlen(buffer);
 				buffer += length;

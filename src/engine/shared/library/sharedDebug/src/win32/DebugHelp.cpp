@@ -492,7 +492,7 @@ bool DebugHelp::loadSymbolsForDll(const char *name)
 
 // ----------------------------------------------------------------------
 #pragma warning (disable: 4740 4748)
-void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
+void DebugHelp::getCallStack(uintptr_t *callStack, int sizeOfCallStack)
 {
 	{
 		for (int i = 0; i < sizeOfCallStack; ++i)
@@ -535,16 +535,15 @@ void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
 
 	const DWORD stackWalkMachineType = IMAGE_FILE_MACHINE_AMD64;
 
-	// PHASE-33 RUNTIME RESIDUAL (review #6): this branch is COMPILE-clean only.
-	// The x64 backtrace WALK is not runtime-validated here (the Phase-31 bar is
-	// compile-clean, Open-Q3). Two runtime items ride into Phase 33/36:
+	// PHASE-33 (A1-DBGHELP-WALK + A1-DBGHELP-RIP, reviews fix #10a): A1-DBGHELP-RIP
+	// is RESOLVED -- the `callStack` OUTPUT array was widened to `uintptr_t*` (the
+	// shared `DebugHelp.h` signature + every caller buffer), so the store below carries
+	// the FULL 64-bit Rip with no DWORD truncation. A1-DBGHELP-WALK is runtime-validated
+	// in plan 33-06 (the controlled assert/fault stack-walk gate):
 	//   1. Confirm RtlCaptureContext + AMD64 unwind actually produces a correct
 	//      x64 call stack (32-bit used a frame-pointer walk; x64 unwinds via the
 	//      .pdata/RUNTIME_FUNCTION tables — different mechanism).
-	//   2. The `callStack` OUTPUT array is `uint32*`, so `*callStack = DWORD(Offset)`
-	//      below STILL narrows the 64-bit return address to 32 bits. Widening the
-	//      output array (and its callers/symbol-lookup) to 64-bit is the Phase-33
-	//      runtime fix; left as-is here to avoid a shared-signature cascade now.
+	//   2. (RESOLVED) The output narrowing is gone -- see the uintptr_t store below.
 #else
 	// ----- 32-bit branch (UNCHANGED) -------------------------------------------
 	EnterCriticalSection(&criticalSection);
@@ -571,7 +570,10 @@ void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
 		if (stackWalk64(stackWalkMachineType, process, process, &stackFrame, &context, NULL, functionTableAccess, getModuleBase, NULL))
 		{
 			const DWORD64 Offset = stackFrame.AddrPC.Offset;
-			*callStack = DWORD(Offset);  // see PHASE-33 RUNTIME RESIDUAL #2 (x64): uint32 output narrows Rip
+			// PHASE-33 (A1-DBGHELP-RIP, reviews fix #10a): the output entry is now
+			// `uintptr_t`, so store the FULL 64-bit Rip on x64 (no DWORD narrowing).
+			// On 32-bit `uintptr_t` is 4 bytes == the old `uint32` store (unchanged).
+			*callStack = static_cast<uintptr_t>(Offset);
 		}
 	}
 }
@@ -583,7 +585,8 @@ void DebugHelp::reportCallStack(int const maxStackDepth)
 	// look up the call stack information
 	int const callStackOffset = 2;
 	int const callStackSize = callStackOffset + maxStackDepth;
-	uint32 * callStack = static_cast<uint32 *>(_alloca((callStackOffset + maxStackDepth) * sizeof(uint32)));
+	// PHASE-33 (A1-DBGHELP-RIP): uintptr_t entries so the full 64-bit Rip survives on x64.
+	uintptr_t * callStack = static_cast<uintptr_t *>(_alloca((callStackOffset + maxStackDepth) * sizeof(uintptr_t)));
 	getCallStack(callStack, callStackOffset + maxStackDepth);
 
 	// look up the caller's file and line
@@ -599,7 +602,7 @@ void DebugHelp::reportCallStack(int const maxStackDepth)
 				if (lookupAddress(callStack[i], lib, file, sizeof(file), line))
 					REPORT_LOG(true, ("\t%s(%d) : caller %d\n", file, line, i-callStackOffset));
 				else
-					REPORT_LOG(true, ("\tunknown(0x%08X) : caller %d\n", static_cast<int>(callStack[i]), i-callStackOffset));
+					REPORT_LOG(true, ("\tunknown(0x%p) : caller %d\n", reinterpret_cast<void const *>(callStack[i]), i-callStackOffset));
 			}
 		}
 	}
@@ -607,7 +610,7 @@ void DebugHelp::reportCallStack(int const maxStackDepth)
 
 // ----------------------------------------------------------------------
 
-bool DebugHelp::lookupAddress(uint32 address, char *libName, char *fileName, int fileNameLength, int &line)
+bool DebugHelp::lookupAddress(uintptr_t address, char *libName, char *fileName, int fileNameLength, int &line)
 {
 	UNREF(libName);
 
