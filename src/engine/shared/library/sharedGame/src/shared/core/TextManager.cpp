@@ -120,7 +120,12 @@ void TextManagerNamespace::getAppropriateWord(Unicode::String &text)
 			// Sub-string search time for words that are listed for sub-string searches
 
 			Unicode::String lowerText(Unicode::toLower(text));
-			unsigned int findStartPosition = 0;
+			// size_type (size_t), NOT unsigned int: on x64 find() returns a 64-bit size_t and npos is
+			// 0xFFFFFFFFFFFFFFFF. Truncating the result to 32-bit unsigned int made the "not found"
+			// guard below (index != npos) never match npos (0x00000000FFFFFFFF != 0xFFFFFFFFFFFFFFFF),
+			// so a no-match was treated as a hit at index 0xFFFFFFFF -> text[0xFFFFFFFF + i] wild write
+			// (Debug: "string subscript out of range" assert; Release: heap-corrupting OOB store).
+			Unicode::String::size_type findStartPosition = 0;
 
 			for (;;)
 			{
@@ -137,7 +142,7 @@ void TextManagerNamespace::getAppropriateWord(Unicode::String &text)
 						continue;
 					}
 
-					unsigned int index = lowerText.find(cussWord, findStartPosition);
+					Unicode::String::size_type index = lowerText.find(cussWord, findStartPosition);
 
 					if (index != Unicode::String::npos)
 					{
@@ -296,7 +301,11 @@ Unicode::String TextManager::filterText(Unicode::String const &text)
 {
 	Unicode::String result(text);
 	Unicode::String::const_iterator iterText = text.begin();
-	int startIndex = Unicode::String::npos;
+	// size_type, NOT int: this holds the Unicode::String::npos sentinel (0xFFFFFFFFFFFFFFFF on x64).
+	// An int truncates npos to -1 and the old `static_cast<unsigned>(startIndex) == npos` test then
+	// compared a 32-bit value to the 64-bit npos and never matched on x64 -> word-boundary tracking
+	// broke and checkText() was invoked with startIndex == -1 -> substr(huge)/OOB store.
+	Unicode::String::size_type startIndex = Unicode::String::npos;
 	int currentIndex = 0;
 
 	{
@@ -308,15 +317,15 @@ Unicode::String TextManager::filterText(Unicode::String const &text)
 		{
 			Unicode::unicode_char_t const character = (*iterText);
 
-			if (   (static_cast<unsigned>(startIndex) == Unicode::String::npos)
+			if (   (startIndex == Unicode::String::npos)
 			    && isAlpha(character))
 			{
 				startIndex = currentIndex;
 			}
-			else if (   (static_cast<unsigned>(startIndex) != Unicode::String::npos)
+			else if (   (startIndex != Unicode::String::npos)
 				     && !isAlpha(character))
 			{
-				checkText(result, startIndex, currentIndex);
+				checkText(result, static_cast<int>(startIndex), currentIndex);
 
 				startIndex = Unicode::String::npos;
 			}
@@ -326,9 +335,9 @@ Unicode::String TextManager::filterText(Unicode::String const &text)
 
 		// Possibly check the last word
 
-		if (static_cast<unsigned>(startIndex) != Unicode::String::npos)
+		if (startIndex != Unicode::String::npos)
 		{
-			checkText(result, startIndex, currentIndex);
+			checkText(result, static_cast<int>(startIndex), currentIndex);
 		}
 	}
 
@@ -345,15 +354,15 @@ Unicode::String TextManager::filterText(Unicode::String const &text)
 		{
 			Unicode::unicode_char_t const character = (*iterText);
 
-			if (   (static_cast<unsigned>(startIndex) == Unicode::String::npos)
+			if (   (startIndex == Unicode::String::npos)
 			    && character != static_cast<Unicode::unicode_char_t>(' '))
 			{
 				startIndex = currentIndex;
 			}
-			else if (   (static_cast<unsigned>(startIndex) != Unicode::String::npos)
+			else if (   (startIndex != Unicode::String::npos)
 			         && character == static_cast<Unicode::unicode_char_t>(' '))
 			{
-				checkText(result, startIndex, currentIndex);
+				checkText(result, static_cast<int>(startIndex), currentIndex);
 
 				startIndex = Unicode::String::npos;
 			}
@@ -363,9 +372,9 @@ Unicode::String TextManager::filterText(Unicode::String const &text)
 
 		// Possibly check the last word
 
-		if (static_cast<unsigned>(startIndex) != Unicode::String::npos)
+		if (startIndex != Unicode::String::npos)
 		{
-			checkText(result, startIndex, currentIndex);
+			checkText(result, static_cast<int>(startIndex), currentIndex);
 		}
 	}
 
