@@ -377,7 +377,7 @@ a gl11 concern.
 | A2 | The DllExport x64 bridge resolves gl11's `DelayLoadDLLs DllExport.dll` at link with zero new port work | Don't Hand-Roll | LOW — gl11 uses the identical DelayLoadDLLs + ProjectReference to DllExport that gl05/06/07 use; DllExport.vcxproj has x64 configs. Confirm at link (CONTEXT explicitly says "confirm, don't re-port"). |
 | A3 | The v2.2 parity fixes (dot3/bump/face/terrain/mini-map/gamma/cantina-FFP) are all deterministic-codegen-stable across x86→x64 (no float-transient parity divergence) | Validation | LOW-MEDIUM — x64's deterministic SSE float is generally MORE stable than x86 x87 (it's the door-snap fix theory), so a parity divergence is unlikely; the arch-only A/B is precisely the probe that would catch it if it occurs. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Will any benign C4267 in a Direct3d11 TU need a real width fix?**
    - What we know: `[VERIFIED: grep]` The only `size_t`→`int` narrowing sites in Direct3d11 TUs are
