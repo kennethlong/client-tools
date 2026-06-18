@@ -166,6 +166,11 @@
       <Message>Stage Debug exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage\"
 copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"
+rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll. The exe IMPORTS mss32.dll and Windows
+rem resolves it from the exe's OWN dir -- a stale next-to-exe core (an older build than the vendored providers)
+rem makes AIL_startup crash in mss!RIB_register_interface (provider/core RIB ABI mismatch). Copy the core from
+rem the SAME vendored set the providers come from. Unconditional copy /Y = always the matching build, every build.
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist\mss32.dll" "..\..\..\..\..\..\..\stage\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b codec redist from the IN-REPO vendored set.
 rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set),
 rem NOT a machine-specific external install -- a fresh clone stages working audio with no external dependency.
@@ -227,6 +232,9 @@ if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\.
       <Message>Stage Optimized exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_o.exe" "..\..\..\..\..\..\..\stage\"
 copy /Y "$(OutDir)$(ProjectName)_o.pdb" "..\..\..\..\..\..\..\stage\"
+rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll (see Debug|Win32 block) -- stale core => AIL_startup
+rem crash in mss!RIB_register_interface (provider/core RIB ABI mismatch). Copy from the same vendored set, every build.
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist\mss32.dll" "..\..\..\..\..\..\..\stage\"
 rem 35-03 (AUDIO-02, Cursor MEDIUM): Optimized|Win32 was previously uncovered -- add the same 9.3b Miles staging.
 rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set), gated on a 9.3b-only
 rem provider (mssds3d.flt). 9.3b ships NO .m3d; the stale-7.2e repair is the explicit Remove-Item before the build.
@@ -284,6 +292,9 @@ if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\.
       <Message>Stage Release exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage\"
 copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage\"
+rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll (see Debug|Win32 block) -- stale core => AIL_startup
+rem crash in mss!RIB_register_interface (provider/core RIB ABI mismatch). Copy from the same vendored set, every build.
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist\mss32.dll" "..\..\..\..\..\..\..\stage\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b codec redist from the IN-REPO vendored set.
 rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set),
 rem NOT a machine-specific external install -- a fresh clone stages working audio with no external dependency.
@@ -350,6 +361,11 @@ if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\.
       <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage-x64\"
+rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll. The exe IMPORTS mss64.dll and Windows resolves
+rem it from the exe's OWN dir -- a stale next-to-exe core (older build than the vendored providers) makes AIL_startup
+rem crash in mss64!RIB_register_interface (provider/core RIB ABI mismatch; root-caused via cdb in 35-04). Copy the
+rem core from the SAME redist64 set the providers come from. Unconditional copy /Y = always the matching build.
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
 rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
 rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
@@ -410,6 +426,9 @@ if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y
       <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage-x64\"
+rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll (see Debug|x64 block) -- stale core => AIL_startup
+rem crash in mss64!RIB_register_interface (provider/core RIB ABI mismatch). Copy from the same redist64 set, every build.
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
 rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
 rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
