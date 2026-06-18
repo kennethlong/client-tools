@@ -295,7 +295,15 @@ SystemAllocation::SystemAllocation(int size)
 	m_pad1(0),
 	m_pad2(0)
 {
-	DEBUG_FATAL(sizeof(*this) != cms_blockSize, ("SystemAllocation size is not %d bytes", cms_blockSize));
+	// The SystemAllocation header must FIT within the cms_blockSize prefix -- the first memory
+	// block always starts at (this + cms_blockSize) regardless of this header's exact size.
+	// On x86 sizeof(SystemAllocation)==cms_blockSize (both 16). On x64 the 8-byte m_next plus
+	// alignment make sizeof==24, while cms_blockSize (=roundup16(sizeof(Block))) is 32 -- 24 can
+	// never equal a multiple of 16, so the original `!=` assert was structurally unsatisfiable on
+	// x64 and fired DEBUG_FATAL on the very first allocation (during C++ static init, before the
+	// Fatal mutex exists -> null-critsec AV). The genuine invariant is "header fits"; the 8-byte
+	// slack stays in the unused header prefix and is never handed out as a block.
+	DEBUG_FATAL(static_cast<int>(sizeof(*this)) > cms_blockSize, ("SystemAllocation size %d exceeds block size %d bytes", static_cast<int>(sizeof(*this)), cms_blockSize));
 
 #if DO_FREE_FILLS
 	// fill the newly allocated user memory with the free pattern
