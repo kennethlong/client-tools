@@ -113,7 +113,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
 - [x] **Phase 31: 64-bit Correctness Foundation** - x87 inline asm to intrinsics + pointer/int truncation + struct-packing/serialization-width audit; the tree compiles x64-clean (BITS-01/02/03)
  (completed 2026-06-16)
 - [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
-- [ ] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02)
+- [x] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02) (completed 2026-06-18)
 - [ ] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03)
 - [ ] **Phase 35: Miles 9.3b Audio Port** - vendor + port clientAudio from the 7.2e to the 9.3b API and stage the x64 redist/provider set; in-game audio works on the x64 client (AUDIO-01/02)
 - [ ] **Phase 36: Verification & CORNERSNAP Cleanup** - confirm the door-snap + OOM-crash classes resolved against the Restoration x64 reference, then strip the CORNERSNAP `_DEBUG` probes (VERIFY-01/02/03)
@@ -169,7 +169,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   - [x] 33-03-PLAN.md - D3DX-removal precondition (non-compile): D3DXMATRIX/Multiply/Transpose -> DirectXMath (preserve the :4031 transpose), own-impl surface-copy/mesh/save, drop d3dx9 includes; gl05 Tatooine A/B
   - [x] 33-04-PLAN.md - platform-add: dpvs !_M_X64 CPU-detect guard + x64 config; swg.sln x64 configs + the ~57 boot-path engine/3rd-party StaticLibrary x64 configs (import x64-platform.props, isolated x64 OutDirs)
   - [x] 33-05-PLAN.md - link: gl05/06/07 + SwgClient x64 link blocks (D3DX/bink/Miles dropped, LIFT libs wired) + Miles #if _M_X64 stub + Bink binkw64.dll swap + the first full x64 link (0 unresolved external symbol)
-  - [ ] 33-06-PLAN.md - boot validation: stage-x64/ + dumpbin-x64 every binary + x64 boot to char-select under rasterMajor 5/6/7 + A1-DBGHELP/SSE-ALIGN runtime confirm + 32-bit non-regression (rasterMajor 5 + 11)
+  - [x] 33-06-PLAN.md - boot validation: stage-x64/ + dumpbin-x64 every binary + x64 boot to char-select under rasterMajor 5/6/7 + A1-DBGHELP/SSE-ALIGN runtime confirm + 32-bit non-regression (rasterMajor 5 + 11)
 **UI hint**: yes (N/A - build-platform phase, no frontend surface; the "UI" substring was a roadmapper false-positive)
 
 #### Phase 34: x64 D3D11 Renderer
@@ -242,7 +242,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 30. TRE Tool — Frontend SPA | v2.3 | 3/3 | Complete | 2026-06-15 |
 | 31. 64-bit Correctness Foundation | v3.0 | 9/9 | Complete   | 2026-06-16 |
 | 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
-| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 5/6 | In Progress|  |
+| 33. x64 Build Platform + D3D9 Renderers | v3.0 | 6/6 | Complete    | 2026-06-18 |
 | 34. x64 D3D11 Renderer | v3.0 | 0/TBD | Not started | - |
 | 35. Miles 9.3b Audio Port | v3.0 | 0/TBD | Not started | - |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
