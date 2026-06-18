@@ -115,7 +115,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
 - [ ] **Phase 32: D3DX to d3dcompiler_47** - port the legacy D3DX shader-compile path to `D3DCompile` and remove x64-hostile D3DX from the build; both renderers still compile/load shaders (SHADER-01)
 - [x] **Phase 33: x64 Build Platform + D3D9 Renderers** - add the `x64` platform to the solution + every `.vcxproj`, resolve all third-party x64 libs, ship the first linking x64 client; D3D9 (gl05/06/07) boots to character select under rasterMajor=5/6/7 (X64-01/04/02) (completed 2026-06-18)
 - [x] **Phase 34: x64 D3D11 Renderer** - rebuild gl11 as x64; the x64 client boots to character select under rasterMajor=11 (X64-03) (completed 2026-06-18)
-- [ ] **Phase 35: Miles 9.3b Audio Port** - vendor + port clientAudio from the 7.2e to the 9.3b API and stage the x64 redist/provider set; in-game audio works on the x64 client (AUDIO-01/02)
+- [x] **Phase 35: Miles 9.3b Audio Port** - vendor + port clientAudio from the 7.2e to the 9.3b API and stage the x64 redist/provider set; in-game audio works on the x64 client (AUDIO-01/02) (completed 2026-06-18)
 - [ ] **Phase 36: Verification & CORNERSNAP Cleanup** - confirm the door-snap + OOM-crash classes resolved against the Restoration x64 reference, then strip the CORNERSNAP `_DEBUG` probes (VERIFY-01/02/03)
 
 #### Phase 31: 64-bit Correctness Foundation
@@ -198,7 +198,7 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   - [x] 35-01-PLAN.md - vendor miles-9.3b SDK (mss.h + rrcore.h + mss32/mss64.lib force-added + both redist sets) + repoint clientAudio.vcxproj include (5 configs) + compile-only header-compat smoke (A4)
   - [x] 35-02-PLAN.md - source port: room_type bus_index edit (getter +0 trailing, 26 setters +0 middle) + codec-probe .m3d->9.3b .flt/.asi/.dll (platform-aware) + remove the 3 Phase-33 x64 disables (KEEP legacy disableMiles cfg, D-04)
   - [x] 35-03-PLAN.md - link+stage: SwgClient lib dir -> miles-9.3b + ADD mss64.lib (x64) + Win32/x64 PostBuild redist staging (9.3b-only sentinel) + clear stale stages + dual-platform link gate (unresolved==0, LNK1181==0) + provider-set file-exists
-  - [ ] 35-04-PLAN.md - boot smoke (codec probe present, no warning-flood) + D-06 four-dimension UAT on x64 (music/2D UI/3D positional/reverb) + Win32 audio smoke (D-01 regression) [checkpoint]
+  - [x] 35-04-PLAN.md - boot smoke (codec probe present, no warning-flood) + D-06 four-dimension UAT on x64 (music/2D UI/3D positional/reverb) + Win32 audio smoke (D-01 regression) [checkpoint]
 
 #### Phase 36: Verification & CORNERSNAP Cleanup
 **Goal**: Confirm the two headline 32-bit-bound defect classes are resolved by the x64 build - the cantina door-snap (against the kept CORNERSNAP probes and the clean Restoration x64 reference) and the address-space OOM crash - then strip the CORNERSNAP `_DEBUG` instrumentation now that it has served as the door-snap acceptance harness, completing the deferred half of HARD-03.
@@ -250,5 +250,5 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 32. D3DX → d3dcompiler_47 | v3.0 | 1/5 | In Progress|  |
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 6/6 | Complete    | 2026-06-18 |
 | 34. x64 D3D11 Renderer | v3.0 | 2/2 | Complete   | 2026-06-18 |
-| 35. Miles 9.3b Audio Port | v3.0 | 3/4 | In Progress|  |
+| 35. Miles 9.3b Audio Port | v3.0 | 4/4 | Complete    | 2026-06-18 |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
