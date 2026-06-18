@@ -166,18 +166,16 @@
       <Message>Stage Debug exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage\"
 copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage\"
-rem 2026-06-12 / 24-02 (PORT-01, D-11): stage the Miles codec redist from the IN-REPO vendored set.
-rem Source is now the repo-relative src\external\3rd\library\miles-7.2e\redist (the proven stage/miles bytes + 2 .m3d providers),
-rem NOT a machine-specific external install -- a fresh clone now stages working audio with no external dependency.
+rem 35-03 (AUDIO-02): stage the Miles 9.3b codec redist from the IN-REPO vendored set.
+rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set),
+rem NOT a machine-specific external install -- a fresh clone stages working audio with no external dependency.
 rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
-rem REVIEW (Cursor HIGH / Codex MEDIUM): guard on the .m3d 3D providers (the files most likely absent from a stale/partial
-rem pre-reconciliation stage that has mssmp3.asi but lacks the reconciled bytes/.m3d), so a stale stage is REPAIRED, not skipped.
-rem 24 WR-01: also guard on mssmp3.asi -- Audio::install probes for the mp3 decoder too, so a stale stage with both .m3d
-rem providers but a missing/outdated mssmp3.asi must ALSO be repaired (its absence = silent music, the bug this phase fixes).
+rem 9.3b ships NO .m3d providers; the legacy 7.2e .m3d sentinels NEVER exist on a 9.3b stage so they would force a
+rem copy every build. Gate on a 9.3b-only provider (mssds3d.flt) to skip redundant copies on a CLEAN stage.
+rem NOTE (concern 3): this sentinel CANNOT detect a stale 7.2e stage (7.2e ships mssds3d.flt under the SAME name).
+rem The stale-7.2e repair is the explicit Remove-Item stage\miles done before the 35-03 build, NOT this sentinel.
 rem xcopy /Y overwrites, so re-running on a populated stage is a safe refresh.
-if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
-if not exist "..\..\..\..\..\..\..\stage\miles\Msseax.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
-if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
+if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
@@ -225,6 +223,15 @@ if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\.
     <Manifest>
       <EnableDpiAwareness>true</EnableDpiAwareness>
     </Manifest>
+    <PostBuildEvent>
+      <Message>Stage Optimized exe + pdb</Message>
+      <Command>copy /Y "$(OutDir)$(ProjectName)_o.exe" "..\..\..\..\..\..\..\stage\"
+copy /Y "$(OutDir)$(ProjectName)_o.pdb" "..\..\..\..\..\..\..\stage\"
+rem 35-03 (AUDIO-02, Cursor MEDIUM): Optimized|Win32 was previously uncovered -- add the same 9.3b Miles staging.
+rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set), gated on a 9.3b-only
+rem provider (mssds3d.flt). 9.3b ships NO .m3d; the stale-7.2e repair is the explicit Remove-Item before the build.
+if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -277,18 +284,16 @@ if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\.
       <Message>Stage Release exe + pdb</Message>
       <Command>copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage\"
 copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage\"
-rem 2026-06-12 / 24-02 (PORT-01, D-11): stage the Miles codec redist from the IN-REPO vendored set.
-rem Source is now the repo-relative src\external\3rd\library\miles-7.2e\redist (the proven stage/miles bytes + 2 .m3d providers),
-rem NOT a machine-specific external install -- a fresh clone now stages working audio with no external dependency.
+rem 35-03 (AUDIO-02): stage the Miles 9.3b codec redist from the IN-REPO vendored set.
+rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist (Win32 provider set),
+rem NOT a machine-specific external install -- a fresh clone stages working audio with no external dependency.
 rem Missing miles/ = silent music + in-world-audio loss AND a warning-flood perf drag (UI 2D wavs still play).
-rem REVIEW (Cursor HIGH / Codex MEDIUM): guard on the .m3d 3D providers (the files most likely absent from a stale/partial
-rem pre-reconciliation stage that has mssmp3.asi but lacks the reconciled bytes/.m3d), so a stale stage is REPAIRED, not skipped.
-rem 24 WR-01: also guard on mssmp3.asi -- Audio::install probes for the mp3 decoder too, so a stale stage with both .m3d
-rem providers but a missing/outdated mssmp3.asi must ALSO be repaired (its absence = silent music, the bug this phase fixes).
+rem 9.3b ships NO .m3d providers; the legacy 7.2e .m3d sentinels NEVER exist on a 9.3b stage so they would force a
+rem copy every build. Gate on a 9.3b-only provider (mssds3d.flt) to skip redundant copies on a CLEAN stage.
+rem NOTE (concern 3): this sentinel CANNOT detect a stale 7.2e stage (7.2e ships mssds3d.flt under the SAME name).
+rem The stale-7.2e repair is the explicit Remove-Item stage\miles done before the 35-03 build, NOT this sentinel.
 rem xcopy /Y overwrites, so re-running on a populated stage is a safe refresh.
-if not exist "..\..\..\..\..\..\..\stage\miles\mssmp3.asi" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
-if not exist "..\..\..\..\..\..\..\stage\miles\Msseax.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"
-if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-7.2e\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
+if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist" "..\..\..\..\..\..\..\stage\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <!-- Phase 33 (X64-01/04): SwgClient Debug|x64 + Release|x64 Application link blocks. D3DX (d3dx/d3dx9/d3dx9dt) + binkw32.lib + Mss32/mss32 DROPPED; the LIFT import libs libxml2-x64/pcre-x64/jpeg62-x64 swapped in; tinyxml kept as tinyxmld_STL.lib + tinyxmld.lib (Plan 01 x64 output names) from tinyxml x64 OutDir; every engine/3rd lib dir repointed to compile\win32\<lib>\x64\<cfg>; the legacy DXSDK directx9\lib dropped (SDK supplies x64 d3d9/d3dcompiler); MachineX64; /FORCE flags retained; PostBuild to stage-x64\ (NO Miles redist; Phase 35). -->
@@ -344,7 +349,12 @@ if not exist "..\..\..\..\..\..\..\stage\miles\msssoft.m3d" xcopy /E /I /Y "..\.
       <Message>Stage Debug x64 exe + pdb</Message>
       <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_d.exe" "..\..\..\..\..\..\..\stage-x64\"
-copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage-x64\"</Command>
+copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage-x64\"
+rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
+rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
+rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
+rem stage -- but 35-03 still Remove-Item's stage-x64\miles before the build for certainty.
+if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -399,7 +409,12 @@ copy /Y "$(OutDir)$(ProjectName)_d.pdb" "..\..\..\..\..\..\..\stage-x64\"</Comma
       <Message>Stage Release x64 exe + pdb</Message>
       <Command>if not exist "..\..\..\..\..\..\..\stage-x64\" mkdir "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage-x64\"
-copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage-x64\"</Command>
+copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage-x64\"
+rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
+rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
+rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
+rem stage -- but 35-03 still Remove-Item's stage-x64\miles before the build for certainty.
+if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
 
