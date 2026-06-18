@@ -1459,6 +1459,12 @@ bool Audio::install()
 
 	// This disables any reberb from a previous product
 
+	// 35-02 (concern 7 / A1): the 9.3b AIL_set_room_type / AIL_room_type take a S32 bus_index arg
+	// (absent in 7.2e). We route reverb on bus_index=0 (the master mixer bus). Log it ONCE at install
+	// so the boot log positively proves the reverb edit used bus 0 -- making A1 observable without
+	// relying solely on the cell-transition UAT ear.
+	REPORT_LOG(true, ("Audio: room_type bus_index=0 (master bus) -- 9.3b reverb API port (35-02).\n"));
+
 	setRoomType(RT_generic);
 
 	s_obstruction = ConfigClientAudio::getObstruction();
@@ -3916,32 +3922,32 @@ void Audio::setRoomType(RoomType const roomType)
 	{
 		switch (roomType)
 		{
-			case RT_alley:           { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_ALLEY); } break;
-			case RT_arena:           { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_ARENA); } break;
-			case RT_auditorium:      { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_AUDITORIUM); } break;
-			case RT_bathRoom:        { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_BATHROOM); } break;
-			case RT_carpetedHallway: { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_HALLWAY); } break;
-			case RT_cave:            { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_CAVE); } break;
-			case RT_city:            { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_CITY); } break;
-			case RT_concertHall:     { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_CONCERTHALL); } break;
-			case RT_dizzy:           { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_DIZZY); } break;
-			case RT_drugged:         { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_DRUGGED); } break;
-			case RT_forest:          { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_FOREST); } break;
-			case RT_generic:         { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_GENERIC); } break;
-			case RT_hallway:         { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_HALLWAY); } break;
-			case RT_hangar:          { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_HANGAR); } break;
-			case RT_livingRoom:      { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_LIVINGROOM); } break;
-			case RT_mountains:       { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_MOUNTAINS); } break;
-			case RT_paddedCell:      { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_PADDEDCELL); } break;
-			case RT_parkingLot:      { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_PARKINGLOT); } break;
-			case RT_plain:           { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_PLAIN); } break;
-			case RT_psychotic:       { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_PSYCHOTIC); } break;
-			case RT_quarry:          { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_QUARRY); } break;
-			case RT_room:            { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_ROOM); } break;
-			case RT_sewerPipe:       { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_SEWERPIPE); } break;
-			case RT_stoneCorridor:   { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_STONECORRIDOR); } break;
-			case RT_stoneRoom:       { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_STONEROOM); } break;
-			case RT_underWater:      { AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT_UNDERWATER); } break;
+			case RT_alley:           { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_ALLEY); } break;
+			case RT_arena:           { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_ARENA); } break;
+			case RT_auditorium:      { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_AUDITORIUM); } break;
+			case RT_bathRoom:        { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_BATHROOM); } break;
+			case RT_carpetedHallway: { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_HALLWAY); } break;
+			case RT_cave:            { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_CAVE); } break;
+			case RT_city:            { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_CITY); } break;
+			case RT_concertHall:     { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_CONCERTHALL); } break;
+			case RT_dizzy:           { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_DIZZY); } break;
+			case RT_drugged:         { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_DRUGGED); } break;
+			case RT_forest:          { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_FOREST); } break;
+			case RT_generic:         { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_GENERIC); } break;
+			case RT_hallway:         { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_HALLWAY); } break;
+			case RT_hangar:          { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_HANGAR); } break;
+			case RT_livingRoom:      { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_LIVINGROOM); } break;
+			case RT_mountains:       { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_MOUNTAINS); } break;
+			case RT_paddedCell:      { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_PADDEDCELL); } break;
+			case RT_parkingLot:      { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_PARKINGLOT); } break;
+			case RT_plain:           { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_PLAIN); } break;
+			case RT_psychotic:       { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_PSYCHOTIC); } break;
+			case RT_quarry:          { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_QUARRY); } break;
+			case RT_room:            { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_ROOM); } break;
+			case RT_sewerPipe:       { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_SEWERPIPE); } break;
+			case RT_stoneCorridor:   { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_STONECORRIDOR); } break;
+			case RT_stoneRoom:       { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_STONEROOM); } break;
+			case RT_underWater:      { AIL_set_room_type(s_digitalDevice2d, 0, ENVIRONMENT_UNDERWATER); } break;
 			default:                 { DEBUG_FATAL(true, ("Trying to set an unknown room type.")); } break;
 		}
 	}
@@ -3954,7 +3960,7 @@ Audio::RoomType Audio::getRoomType()
 
 	if (s_digitalDevice2d != NULL)
 	{
-		switch (AIL_room_type(s_digitalDevice2d))
+		switch (AIL_room_type(s_digitalDevice2d, 0))
 		{
 			case ENVIRONMENT_ALLEY:           { result = RT_alley; } break;
 			case ENVIRONMENT_ARENA:           { result = RT_arena; } break;
