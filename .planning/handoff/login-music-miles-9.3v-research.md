@@ -1,7 +1,48 @@
 # Handoff: login-screen music — Miles 9.3v (Restoration) research lead
 
+> **✅ RESOLVED 2026-06-18 — commit `5a894d327`.** Login/character-select music plays.
+> The 9.3v lead below was a **red herring**; the fix was engine-side (Miles' background IO thread
+> re-opens the stream via our `AIL_set_file_callbacks` hook with an EMPTY filename →
+> `TreeFile::open("")` → NULL → starved buffers). Fix in `clientAudio/Audio.cpp` gated
+> `s_titleMusicStreamFix`: serve the empty-name re-open from the remembered stream name, track/seek
+> the read offset across re-opens, close prior handles (leak guard). Verified: plays start-to-finish,
+> transitions to zone music, handles bounded. 9.3v was later adopted for x64 (`984afc073`) for a
+> **separate** in-game 3D-audio mixer bug — NOT for this. **Everything below is historical record only.**
+
 **Date:** 2026-06-18 · **Status:** Phase 35 COMPLETE/committed; this is the open follow-up.
 **Read first:** `.planning/phases/35-miles-9-3b-audio-port/35-04-LOGIN-MUSIC-FOLLOWUP.md` (full root cause + every fix already tried/reverted).
+
+---
+## 2026-06-18 CONCLUSION — 9.3v LEAD CLOSED (red herring). Fix is engine-side. (crew + isolation test)
+Full write-up: `.planning/research/CONSULT-35v-SYNTHESIS.md` (+ `-AXIOMS`, `-FORENSICS`, `-cursor.out`).
+The 9.3v hypothesis is dead; do NOT source a 9.3v import lib, do NOT re-vendor 9.3v.
+
+**Why the original premise was wrong (measured by dumpbin):** both `mss64.dll` builds export by NAME
+(9.3v 395, 9.3b 393), and BOTH our exe and Restoration's import mss64 **by name** — all 61 of our
+imports exist in 9.3v. So a 9.3v swap needs NO relink/import lib (the "ordinal-only → relink" framing
+was false). The earlier `RIB_register_interface` crash was a staging artifact (mixed 9.3b provider —
+e.g. same-size/different-MD5 `binkawin64.asi` — under a 9.3v core), not an ABI mismatch.
+
+**Why 9.3v wouldn't fix the music anyway:** Cursor found NO doc/binary/string difference in how 9.3b vs
+9.3v feeds a stream at idle (identical streaming API + IO/thread strings; no 9.3v changelog). Both use
+the same secondary-thread async stream I/O.
+
+**EMPIRICAL PROOF (isolation test, PASSED):** RAD's own prebuilt SDK `streamer.exe` + the byte-identical
+9.3b `mss64.dll` streamed a 1.36 MB MP3 at idle — **audio confirmed by Kenny**. The canonical pattern
+opens with a plain file path, installs **NO `AIL_set_file_callbacks`**, and services on the main thread.
+→ The 9.3b DLL + servicing are GOOD; the login-music bug is 100% in our integration: the global
+`AIL_set_file_callbacks` (TreeFile-backed) shadows the stream's I/O. (35-04 fix #1 added the subfile
+descriptor but LEFT the callbacks installed → still silent. Sonnet H2 also flags the zone-load "kick in"
+may just be ZONE music starting, not the title stream unblocking.)
+
+**THE FIX (direction (c) in 35-04, now validated by RAD's sample):** stream the title music so Miles
+does its OWN file I/O (subfile `*archive*size*offset.mp3` descriptor — storage already confirmed
+uncompressed at `data_music_00.tre` offset 64835379) **without the global sync file callbacks shadowing
+it**. Either opt the title stream out of the global callbacks, or don't install them on the stream path.
+First cheap confirm (Sonnet Probe A, no rebuild): break on `CuiManager::restartMusic` + check
+`Audio::isSoundPlaying(s_musicId)` at idle login to prove the title stream is the silent one.
+**Everything below this line is the SUPERSEDED 9.3v investigation — kept for the record only.**
+---
 
 ## Where Phase 35 landed
 - x64 Miles 9.3b audio port COMPLETE and committed (HEAD `83cfd9889`). In-game audio fully works

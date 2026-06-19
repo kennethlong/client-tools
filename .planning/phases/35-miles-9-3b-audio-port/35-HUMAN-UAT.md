@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 35-miles-9-3b-audio-port
 source: [35-04-PLAN.md]
 started: 2026-06-18
@@ -8,7 +8,7 @@ updated: 2026-06-18
 
 ## Current Test
 
-[complete — D-06 four-dimension UAT run on x64; one deferred gap]
+[complete — D-06 four-dimension UAT run on x64; all 6 dimensions pass (login music fixed 5a894d327)]
 
 ## Tests
 
@@ -34,20 +34,22 @@ result: pass
 
 ### 6. Login/character-select SCREEN music
 expected: title music plays at the login/character-select screen
-result: issue — silent (pre-game). Root-caused (MSS 9.3b async stream I/O vs sync TRE callbacks).
-        Deferred to follow-up; does not affect in-game audio.
+result: pass — FIXED 2026-06-18 (commit 5a894d327). Root cause was engine-side, not a Miles version
+        difference (9.3v lead was a red herring): Miles' background IO thread re-opens the stream via
+        our AIL_set_file_callbacks hook with an EMPTY filename → TreeFile::open("") → NULL → starved
+        buffers. Fix (Audio.cpp, gated s_titleMusicStreamFix): serve the empty-name re-open from the
+        remembered stream name + track/seek read offset across re-opens + close prior handles. Plays
+        start-to-finish, transitions to zone music, handles bounded.
 
 ## Summary
 
 total: 6
-passed: 5
-issues: 1
+passed: 6
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-- login-screen-music-silent — streamed title music starves under MSS 9.3b (async stream I/O path does
-  not use the engine's synchronous TRE file callbacks). See 35-04-LOGIN-MUSIC-FOLLOWUP.md. Narrow,
-  pre-game; in-game audio (AUDIO-02) is fully working.
+- (none) — all six dimensions pass. Login-screen music was the lone gap; FIXED 2026-06-18 (5a894d327).
