@@ -44,116 +44,27 @@
 #include <cstdio>
 
 // ============================================================================
-// 35-05 login-music diagnostic probe (ADDITIVE logging only -- remove after root cause).
-//
-// Why this exists: in-game/zone music and the login title music take the SAME streaming
-// path (playSound -> createSampleId -> AIL_open_stream; size > getMaxCached2dSampleSize()).
-// In-game streaming WORKS, login-screen streaming is SILENT, so the stream+callback mechanism
-// is fine -- the bug is that Miles' background auto-service thread does not feed the stream at
-// the idle login screen (it "kicks in" only when zone-load I/O makes the main thread yield CPU).
-// This probe writes stream lifecycle + per-frame stream status + the file callbacks (with the
-// calling thread) to stage(-x64)/login-music-probe.log so a SINGLE run distinguishes:
-//   (a) stream never reaches SSD_PLAYING,
-//   (b) PLAYING but ms-position FROZEN at idle + read callback never fires from BKGD  -> thread starved,
-//   (c) read callback fires but returns 0 bytes / HANDLE-MISSING                       -> s_fileMap race,
-//   (d) read callback fires, returns bytes, position advances, yet silent              -> mixer/volume.
-// MSVC stdio locks per-FILE, so the main thread and Miles' background callback thread can
-// safely share one FILE* (each fprintf call is atomic).
+// 35-05 Miles audio integration state: login-title-music stream fix + 3D-mute setting.
 // ============================================================================
 
 namespace
 {
-	// DIAGNOSTIC TOGGLE: when true, logs stream lifecycle to login-music-probe.log. This does a
-	// synchronous fflush per callback, which throttles Miles' background IO thread when many streams
-	// are active in-game (stutter) -- keep it FALSE except for focused single-stream diagnosis.
-	bool   s_loginMusicProbe = false;
-	FILE * s_loginMusicProbeFp = NULL;
+	// Login-title-music stream fix. Miles 9.3x fills a stream's buffers from its own background IO
+	// thread, which re-opens the stream file through our AIL_set_file_callbacks open hook -- but passes
+	// an EMPTY filename (the async/IO-thread context doesn't carry it), so TreeFile::open of " fails and
+	// the stream goes silent. Only the STREAM path hits these callbacks (cached samples are in-memory).
+	// We remember the most-recent real stream filename and serve the empty-name re-open from it; track
+	// the sequential read offset so each re-open continues instead of restarting at 0; and close the
+	// prior re-opened handle so the per-chunk re-opens don't leak. (Default on.)
+	bool s_titleMusicStreamFix = true;
 
-	// 35-05 FIX: Miles 9.3b fills a stream's buffers from its own background IO thread, which
-	// re-opens the stream file through our AIL_set_file_callbacks open hook -- but it passes an
-	// EMPTY filename (the async/IO-thread context doesn't carry the name through the sync-callback
-	// path). TreeFile::open("") fails, the buffers never fill, and the stream errors out (status -1)
-	// while still "playing" -> silent at the idle login screen. Only the STREAM path reaches these
-	// callbacks (cached/buffered samples are handed to Miles in-memory via AIL_set_named_sample_file),
-	// so the most-recent non-empty filename is unambiguously the file Miles wants to re-open.
-	// We remember it and serve the empty-name re-open from it. Fixed-size buffer (no realloc) so the
-	// main-thread store and background-thread read can't tear a heap pointer.
-	char s_lastAudioOpenName[1024] = { 0 };
-
-	// 35-05 FIX (part 2): Miles re-opens the stream file for EACH ~36KB buffer chunk and expects to
-	// read SEQUENTIALLY, but each empty-name re-open got a fresh handle at offset 0 -> it re-read the
-	// first chunk forever (music looped its first ~3s while the ms counter climbed). Track the
-	// streaming read position across these re-opens and seek each substituted handle to it so reads
-	// advance through the file. The map is touched only by Miles' single IO thread (the main-thread
-	// open of the real name is never a "substituted" handle), so no cross-thread guard is needed.
+	char                     s_lastAudioOpenName[1024] = { 0 };
 	int                      s_streamResumeOffset = 0;
 	std::map<unsigned, bool> s_substitutedHandleMap;
 
-	// In-game audio-resource HEALTH probe (once/sec from Audio::alter; main thread; one fflush/sec so
-	// NO callback stutter). Watches for a sample-handle / sound-object / file-handle LEAK or 32-handle
-	// exhaustion that would explain late/dropped transient & 3D sounds (ship flybys, door) and feed the
-	// 32-bit OOM crash. If alloc2d/alloc3d/sounds/fileMap ratchet up over a cantina session -> leak.
-	// Diagnostic measurement scaffolding — ON for the in-game audio investigation. Writes
-	// audio-health.log once/sec (fps, frame-ms, activeSamples, alloc2d/3d, map sizes, fileMap, latency).
-	bool   s_audioHealthProbe = false;
-	FILE * s_audioHealthFp = NULL;
-
-	// EXPERIMENT (Sonnet H1): Miles 9.3b defaults DIG_3D_MUTE_AT_MAX=YES (mss.h:800), which hard-mutes a
-	// 3D sample at its max distance -> "door fires late/not at all, ship flybys inaudible". 7.2e may not
-	// have. Flip true to set it NO before AIL_open_digital_driver and A/B. Default OFF (baseline run).
+	// Turn OFF Miles' DIG_3D_MUTE_AT_MAX (default YES in 9.3x) so distant 3D sounds attenuate smoothly
+	// instead of hard-muting at their max distance. Applied before AIL_open_digital_driver.
 	bool s_disable3dMuteAtMax = true;
-
-	// 3D-trigger probe: logs why a near 3D sound (door/footsteps) drops -- consolidation DROP (bucket
-	// kept a same-template sound) / REPLACE (stopped the previous to play this one) / whether it reaches
-	// AIL_start_sample. Confirmed regression: Restoration + SWGEmu fire door/footsteps every time.
-	bool   s_audio3dProbe = false;
-	FILE * s_audio3dFp = NULL;
-	void audio3dLog(char const * const format, ...)
-	{
-		if (!s_audio3dProbe) return;
-		if (s_audio3dFp == NULL) { fopen_s(&s_audio3dFp, "audio-3d.log", "w"); if (s_audio3dFp == NULL) { s_audio3dProbe = false; return; } }
-		char msg[512];
-		va_list args; va_start(args, format);
-		_vsnprintf_s(msg, sizeof(msg), _TRUNCATE, format, args);
-		va_end(args);
-		// NO per-event fflush -- a synchronous disk write on the main thread here perturbs the very
-		// timing we measure (it made audio drops WORSE). CRT-buffered fprintf only; flushed once/sec
-		// from the health-probe tick (and on clean exit). Heisenbug-safe.
-		fprintf(s_audio3dFp, "%s\n", msg);
-	}
-
-	// MASTER TOGGLE for the 35-05 login-title-music stream fix. When false, ALL the callback
-	// changes below are bypassed and the file callbacks behave EXACTLY as the original engine
-	// (TreeFile::open(fileName) verbatim) -- used to A/B whether this change affects in-game audio.
-	// The login title stream is an anomaly (only IT triggers Miles' empty-name re-open); the plan is
-	// to move its handling into its own isolated path rather than special-casing the shared callbacks.
-	bool s_titleMusicStreamFix = true;
-
-	void loginMusicProbeLog(char const * const format, ...)
-	{
-		if (!s_loginMusicProbe)
-			return;
-
-		if (s_loginMusicProbeFp == NULL)
-		{
-			fopen_s(&s_loginMusicProbeFp, "login-music-probe.log", "w");
-			if (s_loginMusicProbeFp == NULL)
-			{
-				s_loginMusicProbe = false;   // give up quietly if the file can't be opened
-				return;
-			}
-		}
-
-		char message[1024];
-		va_list args;
-		va_start(args, format);
-		_vsnprintf_s(message, sizeof(message), _TRUNCATE, format, args);
-		va_end(args);
-
-		// thread tag is the key signal: file reads SHOULD arrive on BKGD (Miles' service thread)
-		fprintf(s_loginMusicProbeFp, "[%s] %s\n", Os::isMainThread() ? "MAIN" : "BKGD", message);
-		fflush(s_loginMusicProbeFp);
-	}
 }
 
 // ============================================================================
@@ -732,17 +643,6 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 					// Add it to the stream sample map
 
 					s_sampleIdToSampleStreamMap.insert(std::make_pair(sampleId, sampleStream));
-
-					// 35-05 probe
-					loginMusicProbeLog("OPEN  ok   path='%s' sampleSize=%d threshold=%d hstream=%p sampleId=%d",
-						sound.getSamplePath()->getString(), sampleSize, Audio::getMaxCached2dSampleSize(),
-						static_cast<void *>(sampleStream.m_stream), sampleId.getId());
-				}
-				else
-				{
-					// 35-05 probe
-					loginMusicProbeLog("OPEN  FAIL path='%s' sampleSize=%d AIL_last_error='%s'",
-						sound.getSamplePath()->getString(), sampleSize, AIL_last_error());
 				}
 			}
 			else if (sampleSize > 0)
@@ -971,12 +871,6 @@ bool AudioNamespace::queueSample(SoundBucketList & soundBucketList, Sound2 & sou
 			AudioNamespace::stopSound(iterSoundBucketList->second.m_sound->getSoundId(), fadeOutTime, keepAlive);
 			//DEBUG_REPORT_LOG(true, ("Audio::queueSample() iterSoundBucketList->second.m_sound->endOfSample(%s)\n", iterSoundBucketList->second.m_sound->getTemplate()->getName()));
 
-			// >>> AUDIO-3D PROBE (portable: paste verbatim into 7.2e baseline Audio.cpp) >>>
-			audio3dLog("REPLACE t=%s 3d=%d already=%d distNew=%.0f distOld=%.0f",
-				sound.getTemplate()->getName(), sound.is3d() ? 1 : 0, soundIsAlreadyPlaying ? 1 : 0,
-				distanceSquared, existingSound.m_distanceSquared);
-			// <<< AUDIO-3D PROBE <<<
-
 			// Insert the new sound
 
 			iterSoundBucketList->second.m_sound = &sound;
@@ -989,12 +883,6 @@ bool AudioNamespace::queueSample(SoundBucketList & soundBucketList, Sound2 & sou
 
 			result = false;
 			//DEBUG_REPORT_LOG(true, ("Audio::queueSample() sound.endOfSample(%s)\n", sound.getTemplate()->getName()));
-
-			// >>> AUDIO-3D PROBE (portable: paste verbatim into 7.2e baseline Audio.cpp) >>>
-			audio3dLog("DROP t=%s 3d=%d already=%d distNew=%.0f distOld=%.0f",
-				sound.getTemplate()->getName(), sound.is3d() ? 1 : 0, soundIsAlreadyPlaying ? 1 : 0,
-				distanceSquared, existingSound.m_distanceSquared);
-			// <<< AUDIO-3D PROBE <<<
 		}
 	}
 	else
@@ -1491,16 +1379,12 @@ bool Audio::install()
 
 	AIL_set_file_callbacks(fileOpenCallBack, fileCloseCallBack, fileSeekCallBack, fileReadCallBack);
 
-	// 35-05 probe: header marker. Records Miles build + the stream/cache cutoff so the log is self-describing.
-	loginMusicProbeLog("===== login-music probe =====  Miles='%s'  maxCached2dSampleSize=%d bytes (sounds bigger than this STREAM)  file callbacks installed",
-		Audio::getMilesVersion().c_str(), Audio::getMaxCached2dSampleSize());
-
 	// Initialize the audio driver
 
 	s_maxDigitalMixerChannels = AIL_get_preference(DIG_MIXER_CHANNELS);
 
-	// EXPERIMENT (Sonnet H1): 9.3b defaults DIG_3D_MUTE_AT_MAX=YES; turn it off to A/B whether the
-	// hard-mute-at-max-distance is what drops/late-fires 3D SFX (door, ship flybys). Must precede open.
+	// 35-05: turn OFF Miles' DIG_3D_MUTE_AT_MAX (default YES in 9.3x) so distant 3D sounds attenuate
+	// smoothly instead of hard-muting at their max distance. Must precede AIL_open_digital_driver.
 	if (s_disable3dMuteAtMax)
 		AIL_set_preference(DIG_3D_MUTE_AT_MAX, 0);   // 0 == NO
 
@@ -2664,86 +2548,6 @@ void Audio::alter(float const deltaTime, Object const *listener)
 		serve();
 	}
 
-	// 35-05 leak probe: once/sec audio-resource health snapshot. Watch alloc2d/alloc3d/sounds/fileMap
-	// for unbounded growth (leak) or activeSamples pinning at the 32-handle cap (exhaustion) -- either
-	// explains dropped/late transient & 3D SFX and feeds the 32-bit OOM. Main-thread, one fflush/sec.
-	if (s_audioHealthProbe)
-	{
-		// Frame-time accumulation EVERY frame. deltaTime = main-loop frame delta (seconds). fps + the
-		// MAX frame-ms spike test the "system lag manifests as audio" hypothesis: sound triggering is
-		// main-thread / per-frame, so low fps or a long-frame stall delays/drops SFX while Miles'
-		// background mixer stays fine.
-		static int   s_healthFrame = 0;
-		static float s_ftMax = 0.0f;
-		static float s_ftSum = 0.0f;
-		++s_healthFrame;
-		if (deltaTime > s_ftMax) s_ftMax = deltaTime;
-		s_ftSum += deltaTime;
-
-		if ((s_healthFrame % 60) == 0)
-		{
-			float const fps = (s_ftSum > 0.0f) ? (60.0f / s_ftSum) : 0.0f;
-
-			if (s_audioHealthFp == NULL)
-				fopen_s(&s_audioHealthFp, "audio-health.log", "w");
-
-			if (s_audioHealthFp != NULL)
-			{
-				fprintf(s_audioHealthFp,
-					"frame=%d fps=%.1f frameMs_avg=%.1f frameMs_max=%.1f activeSamples=%d alloc2d=%d alloc3d=%d sample2dMap=%u sample3dMap=%u streamMap=%u soundMap=%u playing=%u fileMap=%u cacheBytes=%d latency=%d\n",
-					s_healthFrame, fps, (s_ftSum / 60.0f) * 1000.0f, s_ftMax * 1000.0f,
-					(s_digitalDevice2d ? AIL_active_sample_count(s_digitalDevice2d) : -1),
-					s_allocated2dSampleHandles, s_allocated3dSampleHandles,
-					static_cast<unsigned>(s_sampleIdToSample2dMap.size()),
-					static_cast<unsigned>(s_sampleIdToSample3dMap.size()),
-					static_cast<unsigned>(s_sampleIdToSampleStreamMap.size()),
-					static_cast<unsigned>(s_soundIdToSoundMap.size()),
-					static_cast<unsigned>(s_prioritizedPlayingSounds.size()),
-					static_cast<unsigned>(s_fileMap.size()),
-					s_currentCacheSize, s_digitalLatency);
-				fflush(s_audioHealthFp);
-			}
-
-			// Heisenbug-safe: flush the 3D consolidation probe once/sec instead of per-event.
-			if (s_audio3dFp != NULL)
-				fflush(s_audio3dFp);
-
-			s_ftMax = 0.0f;
-			s_ftSum = 0.0f;
-		}
-	}
-
-	// 35-05 probe: per-frame stream-servicing snapshot, rate-limited to ~once/second so the log
-	// stays readable. `listener==NULL` is the login/character-select proxy (no GroundScene yet).
-	// Watch `ms cur/total`: if it stays frozen while status==4 (SSD_PLAYING) the stream is starved;
-	// if `cur` climbs the stream IS being fed (look elsewhere -- volume/mixer).
-	{
-		static int s_probeFrameCounter = 0;
-		++s_probeFrameCounter;
-
-		if (s_loginMusicProbe && !s_sampleIdToSampleStreamMap.empty() && ((s_probeFrameCounter % 60) == 0))
-		{
-			for (SampleIdToSampleStreamMap::iterator it = s_sampleIdToSampleStreamMap.begin(); it != s_sampleIdToSampleStreamMap.end(); ++it)
-			{
-				HSTREAM const stream = it->second.m_stream;
-				if (stream == NULL)
-					continue;
-
-				S32 msTotal = 0;
-				S32 msCurrent = 0;
-				AIL_stream_ms_position(stream, &msTotal, &msCurrent);
-
-				loginMusicProbeLog("ALTER frame=%d listener=%s sampleId=%d path='%s' status=%d ms=%d/%d timerDelay=%d(latency=%d) playingSounds=%u",
-					s_probeFrameCounter,
-					(listener != NULL) ? "yes(in-game)" : "NULL(login)",
-					it->first.getId(),
-					it->second.getPath() ? it->second.getPath()->getString() : "<null>",
-					AIL_stream_status(stream), msCurrent, msTotal,
-					s_timerCurrentDelay, s_digitalLatency,
-					static_cast<unsigned>(s_prioritizedPlayingSounds.size()));
-			}
-		}
-	}
 }
 
 //-----------------------------------------------------------------------------
@@ -3295,21 +3099,6 @@ void Audio::startSample(Sound2 &sound)
 
 				AIL_start_sample(hSample3d);
 
-				// >>> AUDIO-3D PROBE (portable) >>> post-start state: is footstep #2..N actually
-				// playing, at audible volume, near the listener? (status SMP_PLAYING==4)
-				{
-					float lv = 0.0f, rv = 0.0f;
-					AIL_sample_volume_levels(hSample3d, &lv, &rv);
-					Sound2 * const dbgSnd = iterSampleIdToSample3dMap->second.m_sound;
-					audio3dLog("START3D t=%s setfile=%d status=%d L=%.2f R=%.2f dist=%.0f vol=%.2f distMin=%.0f distMax=%.0f active=%d",
-						dbgSnd->getTemplate()->getName(), resultSet3dSampleFile,
-						AIL_sample_status(hSample3d), lv, rv,
-						sqrtf(dbgSnd->getDistanceSquaredFromListener()), dbgSnd->getVolume(),
-						distanceMin, distanceMax,
-						(s_digitalDevice2d ? AIL_active_sample_count(s_digitalDevice2d) : -1));
-				}
-				// <<< AUDIO-3D PROBE <<<
-
 //#ifdef _DEBUG
 //				DEBUG_REPORT_LOG(true, ("AIL_start_sample() <id> %s <vol> %.2f\n", iterSample->first->getString(), AIL_sample_volume_levels(hSample3d)));
 //#endif // _DEBUG
@@ -3400,17 +3189,6 @@ void Audio::startSample(Sound2 &sound)
 //#endif // _DEBUG
 
 			AIL_start_stream(sampleStream);
-
-			// 35-05 probe: status right after start (SSD_PLAYING == 4 in MSS)
-			{
-				S32 msTotal = 0;
-				S32 msCurrent = 0;
-				AIL_stream_ms_position(sampleStream, &msTotal, &msCurrent);
-				loginMusicProbeLog("START sampleId=%d hstream=%p status=%d ms=%d/%d autoServiceDefault(ON) playingSounds=%u",
-					iterSampleIdToSampleStreamMap->first.getId(), static_cast<void *>(sampleStream),
-					AIL_stream_status(sampleStream), msCurrent, msTotal,
-					static_cast<unsigned>(s_prioritizedPlayingSounds.size()));
-			}
 
 			sound.setSampleId(sampleId);
 
@@ -4338,20 +4116,10 @@ U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle)
 
 			s_substitutedHandleMap[static_cast<unsigned>(*fileHandle)] = true;
 		}
-
-		// 35-05 probe: which thread opens, what it resolves to, file length, resume offset
-		loginMusicProbeLog("fileOpenCallBack name='%s'%s -> handle=%u length=%d seekTo=%d",
-			effectiveName, substituted ? " (SUBSTITUTED, sequential re-open)" : "",
-			static_cast<unsigned>(*fileHandle), abstractFile->length(),
-			substituted ? s_streamResumeOffset : 0);
 	}
 	else
 	{
 		*fileHandle = 0;
-
-		// 35-05 probe
-		loginMusicProbeLog("fileOpenCallBack name='%s' (in='%s') -> FAILED (TreeFile::open returned NULL)",
-			(effectiveName != NULL) ? effectiveName : "<null>", (fileName != NULL) ? fileName : "<null>");
 	}
 
 	return (abstractFile != NULL);
@@ -4384,11 +4152,9 @@ void __stdcall fileCloseCallBack(UINTa const fileHandle)
 
 		s_fileMap.erase(fileMapIter);
 
-		// 35-05: stop tracking a closed substituted handle (also leak-check: confirm Miles closes them)
+		// 35-05: stop tracking a closed substituted handle so the per-chunk re-opens don't leak.
 		if (s_titleMusicStreamFix)
 			s_substitutedHandleMap.erase(static_cast<unsigned>(fileHandle));
-		loginMusicProbeLog("fileCloseCallBack handle=%u (openHandles=%u)", static_cast<unsigned>(fileHandle),
-			static_cast<unsigned>(s_fileMap.size()));
 
 #ifdef _DEBUG
 		ms_fileCloseHandleSet.insert(fileHandle);
@@ -4455,17 +4221,6 @@ S32 __stdcall fileSeekCallBack(UINTa const fileHandle, S32 const offset, U32 con
 
 	// Return the new absolute position of the file pointer (relative to the beginning of the file)
 
-	// 35-05 probe: does Miles seek these handles? (rate-limited). type 0=BEGIN 1=CURRENT 2=END.
-	{
-		static int s_seekCallbackCounter = 0;
-		++s_seekCallbackCounter;
-		if (s_loginMusicProbe && ((s_seekCallbackCounter <= 60) || ((s_seekCallbackCounter % 100) == 0)))
-		{
-			loginMusicProbeLog("fileSeekCallBack #%d handle=%u type=%u offset=%d -> pos=%d",
-				s_seekCallbackCounter, static_cast<unsigned>(fileHandle), type, offset, result);
-		}
-	}
-
 	return result;
 }
 
@@ -4492,15 +4247,12 @@ U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const b
 
 	FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
 
-	bool handleFound = false;
-	bool substitutedHandle = false;
 	int  filePos = -1;
 	if (fileMapIter != s_fileMap.end())
 	{
 		AbstractFile *abstractFile = fileMapIter->second;
 
 		bytesRead = abstractFile->read(buffer, bytes);
-		handleFound = true;
 		filePos = abstractFile->tell();
 
 		// 35-05 FIX (part 2): advance the shared streaming position so the NEXT re-open continues
@@ -4508,7 +4260,6 @@ U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const b
 		// handle (e.g. when it loops back), so this naturally follows Miles' own positioning.
 		if (s_titleMusicStreamFix && (s_substitutedHandleMap.find(static_cast<unsigned>(fileHandle)) != s_substitutedHandleMap.end()))
 		{
-			substitutedHandle = true;
 			s_streamResumeOffset = filePos;
 		}
 	}
@@ -4517,22 +4268,6 @@ U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const b
 #ifdef _DEBUG
 		determineCallbackError("read", fileHandle);
 #endif
-	}
-
-	// 35-05 probe: THE key signal. At login this should fire from BKGD (Miles' service thread).
-	// If it never fires at idle -> background thread starved. If it returns 0 / HANDLE-MISSING
-	// -> s_fileMap race. Rate-limited: first 100 reads, then every 100th, so a healthy stream
-	// doesn't flood while we still capture the startup behaviour.
-	{
-		static int s_readCallbackCounter = 0;
-		++s_readCallbackCounter;
-		if (s_loginMusicProbe && ((s_readCallbackCounter <= 100) || ((s_readCallbackCounter % 100) == 0)))
-		{
-			loginMusicProbeLog("fileReadCallBack #%d handle=%u bytesReq=%u bytesRead=%d newPos=%d resume=%d%s%s",
-				s_readCallbackCounter, static_cast<unsigned>(fileHandle), bytes, bytesRead, filePos,
-				s_streamResumeOffset, substitutedHandle ? " [stream]" : "",
-				handleFound ? "" : " HANDLE-MISSING");
-		}
 	}
 
 	return static_cast<U32>(bytesRead);
