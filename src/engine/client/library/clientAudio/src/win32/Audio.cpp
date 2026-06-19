@@ -89,6 +89,39 @@ namespace
 	int                      s_streamResumeOffset = 0;
 	std::map<unsigned, bool> s_substitutedHandleMap;
 
+	// In-game audio-resource HEALTH probe (once/sec from Audio::alter; main thread; one fflush/sec so
+	// NO callback stutter). Watches for a sample-handle / sound-object / file-handle LEAK or 32-handle
+	// exhaustion that would explain late/dropped transient & 3D sounds (ship flybys, door) and feed the
+	// 32-bit OOM crash. If alloc2d/alloc3d/sounds/fileMap ratchet up over a cantina session -> leak.
+	// Diagnostic measurement scaffolding — ON for the in-game audio investigation. Writes
+	// audio-health.log once/sec (fps, frame-ms, activeSamples, alloc2d/3d, map sizes, fileMap, latency).
+	bool   s_audioHealthProbe = false;
+	FILE * s_audioHealthFp = NULL;
+
+	// EXPERIMENT (Sonnet H1): Miles 9.3b defaults DIG_3D_MUTE_AT_MAX=YES (mss.h:800), which hard-mutes a
+	// 3D sample at its max distance -> "door fires late/not at all, ship flybys inaudible". 7.2e may not
+	// have. Flip true to set it NO before AIL_open_digital_driver and A/B. Default OFF (baseline run).
+	bool s_disable3dMuteAtMax = true;
+
+	// 3D-trigger probe: logs why a near 3D sound (door/footsteps) drops -- consolidation DROP (bucket
+	// kept a same-template sound) / REPLACE (stopped the previous to play this one) / whether it reaches
+	// AIL_start_sample. Confirmed regression: Restoration + SWGEmu fire door/footsteps every time.
+	bool   s_audio3dProbe = false;
+	FILE * s_audio3dFp = NULL;
+	void audio3dLog(char const * const format, ...)
+	{
+		if (!s_audio3dProbe) return;
+		if (s_audio3dFp == NULL) { fopen_s(&s_audio3dFp, "audio-3d.log", "w"); if (s_audio3dFp == NULL) { s_audio3dProbe = false; return; } }
+		char msg[512];
+		va_list args; va_start(args, format);
+		_vsnprintf_s(msg, sizeof(msg), _TRUNCATE, format, args);
+		va_end(args);
+		// NO per-event fflush -- a synchronous disk write on the main thread here perturbs the very
+		// timing we measure (it made audio drops WORSE). CRT-buffered fprintf only; flushed once/sec
+		// from the health-probe tick (and on clean exit). Heisenbug-safe.
+		fprintf(s_audio3dFp, "%s\n", msg);
+	}
+
 	// MASTER TOGGLE for the 35-05 login-title-music stream fix. When false, ALL the callback
 	// changes below are bypassed and the file callbacks behave EXACTLY as the original engine
 	// (TreeFile::open(fileName) verbatim) -- used to A/B whether this change affects in-game audio.
@@ -938,6 +971,12 @@ bool AudioNamespace::queueSample(SoundBucketList & soundBucketList, Sound2 & sou
 			AudioNamespace::stopSound(iterSoundBucketList->second.m_sound->getSoundId(), fadeOutTime, keepAlive);
 			//DEBUG_REPORT_LOG(true, ("Audio::queueSample() iterSoundBucketList->second.m_sound->endOfSample(%s)\n", iterSoundBucketList->second.m_sound->getTemplate()->getName()));
 
+			// >>> AUDIO-3D PROBE (portable: paste verbatim into 7.2e baseline Audio.cpp) >>>
+			audio3dLog("REPLACE t=%s 3d=%d already=%d distNew=%.0f distOld=%.0f",
+				sound.getTemplate()->getName(), sound.is3d() ? 1 : 0, soundIsAlreadyPlaying ? 1 : 0,
+				distanceSquared, existingSound.m_distanceSquared);
+			// <<< AUDIO-3D PROBE <<<
+
 			// Insert the new sound
 
 			iterSoundBucketList->second.m_sound = &sound;
@@ -950,6 +989,12 @@ bool AudioNamespace::queueSample(SoundBucketList & soundBucketList, Sound2 & sou
 
 			result = false;
 			//DEBUG_REPORT_LOG(true, ("Audio::queueSample() sound.endOfSample(%s)\n", sound.getTemplate()->getName()));
+
+			// >>> AUDIO-3D PROBE (portable: paste verbatim into 7.2e baseline Audio.cpp) >>>
+			audio3dLog("DROP t=%s 3d=%d already=%d distNew=%.0f distOld=%.0f",
+				sound.getTemplate()->getName(), sound.is3d() ? 1 : 0, soundIsAlreadyPlaying ? 1 : 0,
+				distanceSquared, existingSound.m_distanceSquared);
+			// <<< AUDIO-3D PROBE <<<
 		}
 	}
 	else
@@ -1453,6 +1498,11 @@ bool Audio::install()
 	// Initialize the audio driver
 
 	s_maxDigitalMixerChannels = AIL_get_preference(DIG_MIXER_CHANNELS);
+
+	// EXPERIMENT (Sonnet H1): 9.3b defaults DIG_3D_MUTE_AT_MAX=YES; turn it off to A/B whether the
+	// hard-mute-at-max-distance is what drops/late-fires 3D SFX (door, ship flybys). Must precede open.
+	if (s_disable3dMuteAtMax)
+		AIL_set_preference(DIG_3D_MUTE_AT_MAX, 0);   // 0 == NO
 
 	s_digitalDevice2d = AIL_open_digital_driver(getFrequency(), getBits(), getProviderSpec(getCurrent3dProvider()), 0);
 
@@ -2614,6 +2664,55 @@ void Audio::alter(float const deltaTime, Object const *listener)
 		serve();
 	}
 
+	// 35-05 leak probe: once/sec audio-resource health snapshot. Watch alloc2d/alloc3d/sounds/fileMap
+	// for unbounded growth (leak) or activeSamples pinning at the 32-handle cap (exhaustion) -- either
+	// explains dropped/late transient & 3D SFX and feeds the 32-bit OOM. Main-thread, one fflush/sec.
+	if (s_audioHealthProbe)
+	{
+		// Frame-time accumulation EVERY frame. deltaTime = main-loop frame delta (seconds). fps + the
+		// MAX frame-ms spike test the "system lag manifests as audio" hypothesis: sound triggering is
+		// main-thread / per-frame, so low fps or a long-frame stall delays/drops SFX while Miles'
+		// background mixer stays fine.
+		static int   s_healthFrame = 0;
+		static float s_ftMax = 0.0f;
+		static float s_ftSum = 0.0f;
+		++s_healthFrame;
+		if (deltaTime > s_ftMax) s_ftMax = deltaTime;
+		s_ftSum += deltaTime;
+
+		if ((s_healthFrame % 60) == 0)
+		{
+			float const fps = (s_ftSum > 0.0f) ? (60.0f / s_ftSum) : 0.0f;
+
+			if (s_audioHealthFp == NULL)
+				fopen_s(&s_audioHealthFp, "audio-health.log", "w");
+
+			if (s_audioHealthFp != NULL)
+			{
+				fprintf(s_audioHealthFp,
+					"frame=%d fps=%.1f frameMs_avg=%.1f frameMs_max=%.1f activeSamples=%d alloc2d=%d alloc3d=%d sample2dMap=%u sample3dMap=%u streamMap=%u soundMap=%u playing=%u fileMap=%u cacheBytes=%d latency=%d\n",
+					s_healthFrame, fps, (s_ftSum / 60.0f) * 1000.0f, s_ftMax * 1000.0f,
+					(s_digitalDevice2d ? AIL_active_sample_count(s_digitalDevice2d) : -1),
+					s_allocated2dSampleHandles, s_allocated3dSampleHandles,
+					static_cast<unsigned>(s_sampleIdToSample2dMap.size()),
+					static_cast<unsigned>(s_sampleIdToSample3dMap.size()),
+					static_cast<unsigned>(s_sampleIdToSampleStreamMap.size()),
+					static_cast<unsigned>(s_soundIdToSoundMap.size()),
+					static_cast<unsigned>(s_prioritizedPlayingSounds.size()),
+					static_cast<unsigned>(s_fileMap.size()),
+					s_currentCacheSize, s_digitalLatency);
+				fflush(s_audioHealthFp);
+			}
+
+			// Heisenbug-safe: flush the 3D consolidation probe once/sec instead of per-event.
+			if (s_audio3dFp != NULL)
+				fflush(s_audio3dFp);
+
+			s_ftMax = 0.0f;
+			s_ftSum = 0.0f;
+		}
+	}
+
 	// 35-05 probe: per-frame stream-servicing snapshot, rate-limited to ~once/second so the log
 	// stays readable. `listener==NULL` is the login/character-select proxy (no GroundScene yet).
 	// Watch `ms cur/total`: if it stays frozen while status==4 (SSD_PLAYING) the stream is starved;
@@ -3118,7 +3217,16 @@ void Audio::startSample(Sound2 &sound)
 			void *sampleRawData = iterSample->second.m_sampleRawData;
 			HSAMPLE hSample3d = iterSampleIdToSample3dMap->second.m_sample;
 
-			S32 resultSet3dSampleFile = AIL_set_sample_file(hSample3d, sampleRawData, 0);
+			// 35-05: load the 3D sample with the NAMED call (format suffix + length), matching the 2D
+			// path (~3071) and RAD's own examples (examms.cpp:1320, demo.c:708 — both use the named
+			// call even for the 3D sample). The old extensionless AIL_set_sample_file relied on Miles
+			// auto-detecting the format from the header; 9.3b's stricter detection failed for some 3D
+			// assets -> resultSet3dSampleFile==0 -> the sound was silently dropped (spotty door /
+			// footsteps / glitchy ship). Giving Miles the suffix + size removes the guesswork.
+			char const *extension = iterSample->second.getExtension();
+			U32 const fileSize = iterSample->second.m_fileSize;
+
+			S32 resultSet3dSampleFile = AIL_set_named_sample_file(hSample3d, extension, sampleRawData, fileSize, 0);
 
 			if (resultSet3dSampleFile != 0)
 			{
@@ -3186,6 +3294,21 @@ void Audio::startSample(Sound2 &sound)
 				// Play the sample
 
 				AIL_start_sample(hSample3d);
+
+				// >>> AUDIO-3D PROBE (portable) >>> post-start state: is footstep #2..N actually
+				// playing, at audible volume, near the listener? (status SMP_PLAYING==4)
+				{
+					float lv = 0.0f, rv = 0.0f;
+					AIL_sample_volume_levels(hSample3d, &lv, &rv);
+					Sound2 * const dbgSnd = iterSampleIdToSample3dMap->second.m_sound;
+					audio3dLog("START3D t=%s setfile=%d status=%d L=%.2f R=%.2f dist=%.0f vol=%.2f distMin=%.0f distMax=%.0f active=%d",
+						dbgSnd->getTemplate()->getName(), resultSet3dSampleFile,
+						AIL_sample_status(hSample3d), lv, rv,
+						sqrtf(dbgSnd->getDistanceSquaredFromListener()), dbgSnd->getVolume(),
+						distanceMin, distanceMax,
+						(s_digitalDevice2d ? AIL_active_sample_count(s_digitalDevice2d) : -1));
+				}
+				// <<< AUDIO-3D PROBE <<<
 
 //#ifdef _DEBUG
 //				DEBUG_REPORT_LOG(true, ("AIL_start_sample() <id> %s <vol> %.2f\n", iterSample->first->getString(), AIL_sample_volume_levels(hSample3d)));

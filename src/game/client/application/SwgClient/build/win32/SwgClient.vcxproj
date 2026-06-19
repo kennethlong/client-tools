@@ -365,12 +365,12 @@ rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll. The exe IMPORT
 rem it from the exe's OWN dir -- a stale next-to-exe core (older build than the vendored providers) makes AIL_startup
 rem crash in mss64!RIB_register_interface (provider/core RIB ABI mismatch; root-caused via cdb in 35-04). Copy the
 rem core from the SAME redist64 set the providers come from. Unconditional copy /Y = always the matching build.
-copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3v\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
-rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
+rem Source is the repo-relative src\external\3rd\library\miles-9.3v\redist64 (x64 provider set).
 rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
 rem stage -- but 35-03 still Remove-Item's stage-x64\miles before the build for certainty.
-if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
+if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3v\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -428,12 +428,12 @@ copy /Y "$(OutDir)$(ProjectName)_r.exe" "..\..\..\..\..\..\..\stage-x64\"
 copy /Y "$(OutDir)$(ProjectName)_r.pdb" "..\..\..\..\..\..\..\stage-x64\"
 rem 35-04 (AUDIO-02 gap): refresh the next-to-exe Miles CORE dll (see Debug|x64 block) -- stale core => AIL_startup
 rem crash in mss64!RIB_register_interface (provider/core RIB ABI mismatch). Copy from the same redist64 set, every build.
-copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
+copy /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3v\redist64\mss64.dll" "..\..\..\..\..\..\..\stage-x64\"
 rem 35-03 (AUDIO-02): stage the Miles 9.3b x64 codec redist next to the x64 exe.
-rem Source is the repo-relative src\external\3rd\library\miles-9.3b\redist64 (x64 provider set).
+rem Source is the repo-relative src\external\3rd\library\miles-9.3v\redist64 (x64 provider set).
 rem The mss64*.flt sentinels ARE genuinely 9.3b-only (7.2e had no x64 redist), so the sentinel repairs a stale x64
 rem stage -- but 35-03 still Remove-Item's stage-x64\miles before the build for certainty.
-if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3b\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
+if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y "..\..\..\..\..\..\..\src\external\3rd\library\miles-9.3v\redist64" "..\..\..\..\..\..\..\stage-x64\miles\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
 
