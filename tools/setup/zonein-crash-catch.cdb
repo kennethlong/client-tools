@@ -1,0 +1,11 @@
+$$ Catch the gl11 x64 Tatooine zone-in crash (c0000005) and dump the REAL faulting module + stack.
+$$ First-chance AVs are let through as handled (gh) so client SEH runs normally; only the FATAL
+$$ second-chance AV triggers the dump+quit. Symbols come from stage-x64 (SwgClient_r.pdb, gl11_r.pdb).
+.lines
+.sympath D:\Code\swg-client-v2\stage-x64
+$$ first-chance AV -> go handled (let the app's SEH deal with it); second-chance -> dump everything + quit
+sxe -c "gh" -c2 ".echo ====FATAL CRASH (2nd chance)====; .ecxr; .echo ====FAULTING INSTRUCTION====; lm a @rip; .echo ====STACK (kb)====; kb 60; .echo ====STACK (kP)====; kP 40; .echo ====LOADED MODULES====; lmv; .echo ====WRITING FULL DUMP====; .dump /ma D:\Code\swg-client-v2\stage-x64\zonein-crash.dmp; .echo ====DONE====; q" av
+g
+$$ if the client exits normally (no crash), g returns here:
+.echo ====CLIENT EXITED WITHOUT THE AV CRASH====
+q

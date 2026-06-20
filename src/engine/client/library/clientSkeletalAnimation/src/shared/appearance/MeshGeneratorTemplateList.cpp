@@ -421,6 +421,25 @@ const MeshGeneratorTemplate *MeshGeneratorTemplateList::fetch(const CrcString &f
 					asyncBindData = asyncFindIt->second;
 			}
 
+#if PRODUCTION == 0
+			// [MGN-PROBE] DIAGNOSTIC (dev-only): log whether .mgn takes the ASYNC stub path or loads
+			// SYNCHRONOUSLY, and WHY (the 3 gating conditions). Rate-limited to the first few cache-miss
+			// fetches. Fires on normal operation, so it is compiled out of PRODUCTION builds.
+			{
+				static int s_probeFetchLogged = 0;
+				if (s_probeFetchLogged < 8)
+				{
+					++s_probeFetchLogged;
+					bool const eAsync = AsynchronousLoader::isEnabled();
+					bool const eBind  = (asyncBindData != 0);
+					bool const eSup   = (asyncBindData && asyncBindData->supportsAsynchronousLoading());
+					REPORT_LOG(true, ("[MGN-PROBE] FETCH [%s] isEnabled=%d bind=%d supportsAsync=%d -> %s\n",
+						filename.getString(), eAsync ? 1 : 0, eBind ? 1 : 0, eSup ? 1 : 0,
+						(eAsync && eBind && eSup) ? "ASYNC" : "SYNC"));
+				}
+			}
+#endif
+
 			if (AsynchronousLoader::isEnabled() && asyncBindData && asyncBindData->supportsAsynchronousLoading())
 			{
 				// Handle async loading.

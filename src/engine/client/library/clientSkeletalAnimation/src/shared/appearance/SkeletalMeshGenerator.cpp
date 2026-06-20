@@ -77,7 +77,11 @@ void SkeletalMeshGenerator::operator delete(void *data)
 
 int SkeletalMeshGenerator::getOcclusionLayer() const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getOcclusionLayer() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	if (!m_isCreated)   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getOcclusionLayer on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		return -1;   // CONSULT-39 (Cursor): template default is -1; 0 mis-orders composite layers
+	}
 	return getSkeletalMeshGeneratorTemplate().getOcclusionLayer();
 }
 
@@ -85,7 +89,14 @@ int SkeletalMeshGenerator::getOcclusionLayer() const
 
 void SkeletalMeshGenerator::applySkeletonModifications(Skeleton &skeleton) const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("applySkeletonModifications() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	// HARDEN I3 (CONSULT-37): in Release the old DEBUG_FATAL was compiled out, so a call on an unloaded
+	// template fell straight through to deref m_blendValues (NULL) / empty template internals = AV. Guard
+	// release-safe: log the would-have-fired condition and skip (the appearance re-renders once loaded).
+	if (!m_isCreated)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED applySkeletonModifications on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		return;
+	}
 	getSkeletalMeshGeneratorTemplate().applySkeletonModifications(m_blendValues, skeleton);
 }
 
@@ -93,7 +104,14 @@ void SkeletalMeshGenerator::applySkeletonModifications(Skeleton &skeleton) const
 
 void SkeletalMeshGenerator::addShaderPrimitives(Appearance &appearance, int lodIndex, CustomizationData *customizationData, const TransformNameMap &transformNameMap, const OcclusionZoneSet &zonesCurrentlyOccluded, OcclusionZoneSet &zonesOccludedByThisLayer, ShaderPrimitiveVector &shaderPrimitives) const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("addShaderPrimitives() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	// HARDEN I3 (CONSULT-37): prime AV site during the early zone-in shader-primitive build. In Release the
+	// DEBUG_FATAL was compiled out -> deref of an unloaded template. Guard release-safe: log + skip (no
+	// shader primitives contributed until the template finishes loading; the appearance rebuilds then).
+	if (!m_isCreated)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED addShaderPrimitives on UNCREATED [%s] lod=%d\n", getSkeletalMeshGeneratorTemplate().getName().getString(), lodIndex));
+		return;
+	}
 	getSkeletalMeshGeneratorTemplate().addShaderPrimitives(appearance, lodIndex, customizationData, m_blendValues, transformNameMap, zonesCurrentlyOccluded, zonesOccludedByThisLayer, shaderPrimitives);
 }
 
@@ -132,7 +150,11 @@ void SkeletalMeshGenerator::setCustomizationData(CustomizationData *customizatio
 
 Appearance *SkeletalMeshGenerator::createAppearance() const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("createAppearance() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	if (!m_isCreated)   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED createAppearance on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		return 0;
+	}
 	return getSkeletalMeshGeneratorTemplate().createAppearance();
 }
 
@@ -140,7 +162,11 @@ Appearance *SkeletalMeshGenerator::createAppearance() const
 
 void SkeletalMeshGenerator::addCustomizationVariables(CustomizationData &customizationData) const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("addCustomizationVariables() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	if (!m_isCreated)   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED addCustomizationVariables on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		return;
+	}
 	getSkeletalMeshGeneratorTemplate().addCustomizationVariables(customizationData);
 }
 
@@ -148,15 +174,29 @@ void SkeletalMeshGenerator::addCustomizationVariables(CustomizationData &customi
 
 bool SkeletalMeshGenerator::isReadyForUse() const
 {
-	//-- We're ready for use if our template is loaded.
-	return getSkeletalMeshGeneratorTemplate().isLoaded();
+	//-- CONSULT-39: ready iff THIS instance has been created (not merely the template loaded -- the I6
+	//   fixup window has isLoaded()==true while a queued instance is not yet created).
+	if (m_isCreated)
+		return true;
+
+	//-- Permanent-failure escape (CONSULT-40): if the template gave up loading, report ready so the
+	//   readiness gate stops the not-ready MRU-pin LIVELOCK in unloadUnusedResources (which would reset the
+	//   timer every frame on a never-ready generator). The deref guards still skip on !m_isCreated, so we
+	//   render nothing rather than crash. This does NOT force eviction (that's gated on a non-empty shader-
+	//   primitive vector); the generator simply persists, invisible, until the NPC despawns -- the correct
+	//   outcome for a genuinely missing/corrupt asset after the bounded retries are exhausted.
+	return getSkeletalMeshGeneratorTemplate().isLoadPermanentlyFailed();
 }
 
 // ----------------------------------------------------------------------
 
 int SkeletalMeshGenerator::getReferencedSkeletonTemplateCount() const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getReferencedSkeletonTemplateCount() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	if (!m_isCreated)   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getReferencedSkeletonTemplateCount on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		return 0;   // no referenced skeletons until loaded -> callers won't index getReferencedSkeletonTemplateName
+	}
 	return getSkeletalMeshGeneratorTemplate().getReferencedSkeletonTemplateCount();
 }
 
@@ -164,7 +204,12 @@ int SkeletalMeshGenerator::getReferencedSkeletonTemplateCount() const
 
 const CrcLowerString &SkeletalMeshGenerator::getReferencedSkeletonTemplateName(int index) const
 {
-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getReferencedSkeletonTemplateName() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
+	if (!m_isCreated)   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getReferencedSkeletonTemplateName on UNCREATED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
+		static CrcLowerString const s_empty("");   // safe sentinel; count-guard above means this is normally unreachable
+		return s_empty;
+	}
 	return getSkeletalMeshGeneratorTemplate().getReferencedSkeletonTemplateName(index);
 }
 
@@ -204,7 +249,8 @@ void SkeletalMeshGenerator::handleCustomizationModificationStatic(const Customiz
 SkeletalMeshGenerator::SkeletalMeshGenerator(const SkeletalMeshGeneratorTemplate *meshGeneratorTemplate) :
 	MeshGenerator(meshGeneratorTemplate),
 	m_customizationData(0),
-	m_blendValues(0)
+	m_blendValues(0),
+	m_isCreated(false)
 {
 	//-- get the number of blend shape variables from the template
 	NOT_NULL(meshGeneratorTemplate);
@@ -217,8 +263,15 @@ SkeletalMeshGenerator::SkeletalMeshGenerator(const SkeletalMeshGeneratorTemplate
 SkeletalMeshGenerator::~SkeletalMeshGenerator()
 {
 	SkeletalMeshGeneratorTemplate const &mgTemplate = getSkeletalMeshGeneratorTemplate();
-	if (!mgTemplate.isLoaded())
+	if (!m_isCreated)
+	{
+		// CONSULT-39: a not-yet-created instance is exactly one still queued in the template's
+		// m_uninitializedMeshGenerators (key on m_isCreated, not isLoaded() -- isLoaded() can be true mid
+		// fixup while this instance is still queued). Self-remove so the fixup loop never touches us.
+		// (Template can't be freed first: SMG holds a refcount on it.) NULL-list case is guarded inside.
+		REPORT_LOG(true, ("[MGN-PROBE] RANK1-DESTROY-PENDING ~SkeletalMeshGenerator while uncreated [%s]\n", mgTemplate.getName().getString()));
 		mgTemplate.removeAsynchronouslyLoadedMeshGenerator(this);
+	}
 
 	delete m_blendValues;
 
@@ -258,6 +311,17 @@ void SkeletalMeshGenerator::create()
 		// Update customization data now that we're setup.
 		handleCustomizationModification(*m_customizationData);
 	}
+
+	//-- CONSULT-39: mark this instance created (LAST, after all state is set) -> the readiness predicate
+	//   for isReadyForUse()/the deref guards flips true exactly here.
+	m_isCreated = true;
+
+	//-- CONSULT-39 (heal A3b): an already-spawned appearance that requested this generator while the
+	//   template was still async-loading cleared/skipped its build (not ready). Now that we're created,
+	//   nudge the owning appearance dirty (via the registered meshGeneratorModifiedCallback) so its next
+	//   render rebuilds with our contribution. signalModified() only marks dirty -- rebuild is deferred to
+	//   render, so this is not a reentrant rebuild.
+	signalModified();
 }
 
 // ----------------------------------------------------------------------

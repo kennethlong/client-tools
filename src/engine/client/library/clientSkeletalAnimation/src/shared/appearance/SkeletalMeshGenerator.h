@@ -90,6 +90,11 @@ private:
 	CustomizationData *m_customizationData;
 	IntVector         *m_blendValues;
 
+	// CONSULT-39: per-instance "create() has run" flag. The correct readiness predicate for the deref
+	// guards and isReadyForUse() -- NOT template.isLoaded() (true during the async fixup window before this
+	// instance is created) and NOT m_blendValues!=NULL (legitimately NULL for a zero-blend template).
+	bool               m_isCreated;
+
 };
 
 // ======================================================================

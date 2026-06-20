@@ -86,6 +86,7 @@ public:
 	void                           addCustomizationVariables(CustomizationData &customizationData) const;
 
 	bool                           isLoaded() const;
+	bool                           isLoadPermanentlyFailed() const;   // CONSULT-39: async load gave up after N attempts
 
 	void                           fillIndexedTriangleList(IndexedTriangleList &list) const;
 
@@ -166,6 +167,13 @@ private:
 	bool                         m_isLoaded;
 	mutable bool                 m_asynchronousLoadInProgress;
 	mutable MeshGeneratorVector *m_uninitializedMeshGenerators;
+
+	// CONSULT-39: bounded async-load retry so a transient cold-disk open-failure heals but a permanently
+	// missing/corrupt asset neither disk-hammers nor wedges invisibly. Counts failed attempts; once the
+	// limit is hit, m_loadPermanentlyFailed stops further auto-retries (and isReadyForUse() reports ready
+	// so the LOD can evict instead of pinning forever).
+	mutable int                  m_loadAttemptCount;
+	mutable bool                 m_loadPermanentlyFailed;
 
 	int                        m_maxTransformsPerVertex;
 	int                        m_maxTransformsPerShader;

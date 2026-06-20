@@ -1953,7 +1953,7 @@ void SkeletalMeshGeneratorTemplate::asynchronousLoadCallback(void *data)
 MeshGenerator *SkeletalMeshGeneratorTemplate::createMeshGenerator() const
 {
 	//-- Check if we should start async loading.
-	if (!m_isLoaded)
+	if (!m_isLoaded && !m_loadPermanentlyFailed)   // CONSULT-39: don't re-kick a template that gave up
 	{
 		// Kick-off load if not already in progress.
 		if (!m_asynchronousLoadInProgress)
@@ -1980,8 +1980,12 @@ MeshGenerator *SkeletalMeshGeneratorTemplate::createMeshGenerator() const
 	meshGenerator->fetch();
 
 	
-	//-- Enqueue the new mesh generator for fixup if we're not loaded.
-	if (!m_isLoaded)
+	//-- Enqueue the new mesh generator for fixup if we're not loaded. CONSULT-40 (Sonnet C2): also skip
+	//   enqueue when the load permanently failed -- no load will ever fire to drain the queue, so enqueuing
+	//   would strand the generator uncreated forever and regrow the just-freed list. Left unqueued, it stays
+	//   uncreated (guards render nothing) and isReadyForUse() reports ready (via permanent-fail) so it never
+	//   pins the LOD; on destruction the dtor's removeAsynchronouslyLoadedMeshGenerator hits the NULL-list guard.
+	if (!m_isLoaded && !m_loadPermanentlyFailed)
 	{
 		// Create container as needed.
 		if (!m_uninitializedMeshGenerators)
@@ -2080,6 +2084,8 @@ SkeletalMeshGeneratorTemplate::SkeletalMeshGeneratorTemplate(Iff *iff, CrcString
 	m_isLoaded(false),
 	m_asynchronousLoadInProgress(false),
 	m_uninitializedMeshGenerators(0),
+	m_loadAttemptCount(0),
+	m_loadPermanentlyFailed(false),
 	m_maxTransformsPerVertex(0),
 	m_maxTransformsPerShader(0),
 	m_skeletonTemplateNames(),
@@ -3273,23 +3279,67 @@ void SkeletalMeshGeneratorTemplate::asynchronousLoadCallback()
 		delete s_asynchronousLoadIff;
 		s_asynchronousLoadIff = NULL;
 
-		//-- Exit if we failed to load the Iff.
+		//-- HARDEN I4 (CONSULT-37/39): clear the in-progress flag on EITHER outcome. Previously cleared only
+		//   on the success path, so a failed cold-load (openSuccess==false, likeliest right after a build
+		//   flushes the disk cache) left the template WEDGED (inProgress stuck TRUE -> never retried).
+		m_asynchronousLoadInProgress = false;
+
+		//-- Handle a failed open: bounded retry for a transient cold-disk miss, then give up for a
+		//   permanently missing/corrupt asset (CONSULT-39).
 		if (!openSuccess)
 		{
+			++m_loadAttemptCount;
+
+			if (m_loadAttemptCount >= 3)   // 1 initial attempt + 2 retries
+			{
+				//-- Permanent failure: stop retrying (no disk-hammer). Queued generators stay uninitialized
+				//   and render nothing via the deref guards; isReadyForUse() now reports ready for them so
+				//   unloadUnusedResources can EVICT the LOD instead of pinning it forever (the silent-invisible
+				//   livelock). NOTE: this template stays in MeshGeneratorTemplateList's cache as long as any
+				//   live generator references it, so a fresh load attempt only happens once it is fully released
+				//   and re-fetched. For a genuinely missing/corrupt asset that's the correct outcome (invisible);
+				//   a transient that heals only after 3 strikes stays invisible until the template is uncached.
+				m_loadPermanentlyFailed = true;
+				REPORT_LOG(true, ("[MGN-PROBE] I4-PERMANENT-FAIL async load gave up after %d attempts name=[%s]\n", m_loadAttemptCount, getName().getString()));
+			}
+			else if (m_uninitializedMeshGenerators && !m_uninitializedMeshGenerators->empty() && AsynchronousLoader::isEnabled())
+			{
+				//-- Transient: re-issue the load while generators are still queued. createMeshGenerator()'s
+				//   re-kick does NOT fire for an already-spawned consumer (its generator is cached), so the
+				//   template itself must retry to heal an existing NPC (CONSULT-39, Codex).
+				REPORT_LOG(true, ("[MGN-PROBE] I4-RETRY async openSuccess=false attempt=%d name=[%s] re-issuing load\n", m_loadAttemptCount, getName().getString()));
+				m_asynchronousLoadInProgress = true;
+				AsynchronousLoader::add(getName().getString(), asynchronousLoadCallback, this);
+			}
+			else
+			{
+				REPORT_LOG(true, ("[MGN-PROBE] I4-WEDGE-AVERTED async openSuccess=false name=[%s] inProgress-cleared uninitCount=%d\n", getName().getString(), m_uninitializedMeshGenerators ? static_cast<int>(m_uninitializedMeshGenerators->size()) : -1));
+			}
+
 			DEBUG_WARNING(true, ("Asynchronous loader called SkeletalMeshGeneratorTemplate callback but the async loaded file [%s] failed to load via iff.  How does that happen?  Leaving in unloaded state.", getName().getString()));
 			return;
-		} 
+		}
+
+		//-- Success: reset the failure budget so a later transient doesn't inherit a stale count.
+		m_loadAttemptCount = 0;
 	}
 
-	//-- Remember there's no async load in progress.
-	m_asynchronousLoadInProgress = false;
-
-	//-- Fixup uninitialized mesh generators.
+	//-- Fixup uninitialized mesh generators. CONSULT-39: DETACH the list (swap into a local + NULL the
+	//   member) BEFORE iterating, so a reentrant ~SkeletalMeshGenerator -> removeAsynchronouslyLoadedMeshGenerator
+	//   hits the NULL-list guard and never mutates the vector being iterated (no erase-during-iteration UB).
+	//   fetch()/release() BOOKEND keeps every queued generator alive across its create() so a mid-loop
+	//   appearance teardown (via create() -> handleCustomizationModification listeners) cannot free a
+	//   not-yet-created generator out from under the loop (the stale-pointer UAF a plain snapshot leaves).
 	if (m_uninitializedMeshGenerators)
 	{
-		std::for_each(m_uninitializedMeshGenerators->begin(), m_uninitializedMeshGenerators->end(), VoidMemberFunction(&SkeletalMeshGenerator::create));
+		MeshGeneratorVector pending;
+		pending.swap(*m_uninitializedMeshGenerators);
 		delete m_uninitializedMeshGenerators;
 		m_uninitializedMeshGenerators = 0;
+
+		{ for (MeshGeneratorVector::iterator it = pending.begin(); it != pending.end(); ++it) (*it)->fetch(); }
+		std::for_each(pending.begin(), pending.end(), VoidMemberFunction(&SkeletalMeshGenerator::create));
+		{ for (MeshGeneratorVector::iterator it = pending.begin(); it != pending.end(); ++it) (*it)->release(); }
 	}
 }
 
@@ -3675,6 +3725,13 @@ bool SkeletalMeshGeneratorTemplate::isLoaded() const
 
 // ----------------------------------------------------------------------
 
+bool SkeletalMeshGeneratorTemplate::isLoadPermanentlyFailed() const
+{
+	return m_loadPermanentlyFailed;
+}
+
+// ----------------------------------------------------------------------
+
 void SkeletalMeshGeneratorTemplate::fillIndexedTriangleList(IndexedTriangleList &list) const
 {
 	list.clear();
@@ -3966,7 +4023,16 @@ const SkeletalMeshGeneratorTemplate::Dot3VectorVector *SkeletalMeshGeneratorTemp
 void SkeletalMeshGeneratorTemplate::removeAsynchronouslyLoadedMeshGenerator(SkeletalMeshGenerator *meshGenerator) const
 {
 	NOT_NULL(meshGenerator);
-	NOT_NULL(m_uninitializedMeshGenerators);
+
+	//-- HARDEN RANK-1 (CONSULT-37, Sonnet): a generator destroyed while its template's async load is still
+	//   pending lands here. If the uninitialized list was already resolved/freed (load completed, or the I4
+	//   failure path), m_uninitializedMeshGenerators is NULL and the NOT_NULL below would deref NULL in
+	//   Release (compiled-out assert) -> AV. Guard release-safe: nothing to remove, just return.
+	if (!m_uninitializedMeshGenerators)
+	{
+		REPORT_LOG(true, ("[MGN-PROBE] RANK1-REMOVE-NULL-LIST removeAsynchronouslyLoadedMeshGenerator on [%s] with no pending list (averted NULL deref)\n", getName().getString()));
+		return;
+	}
 
 	MeshGeneratorVector::iterator findIt = std::find(m_uninitializedMeshGenerators->begin(), m_uninitializedMeshGenerators->end(), meshGenerator);
 	if (findIt != m_uninitializedMeshGenerators->end())

@@ -1,0 +1,10 @@
+$$ Catch the FIRST access violation (the real zone-in / shutdown-teardown fault) and dump it.
+$$ NO "gh" this time: clean runs produce ZERO first-chance AVs, so the first AV IS the bug.
+$$ On that AV: dump context + stack + faulting module + full minidump, then quit.
+.lines
+.sympath D:\Code\swg-client-v2\stage-x64
+sxe -c ".echo ====ZONEIN/SHUTDOWN CRASH====; .ecxr; .echo ====FAULTING INSTR====; lm a @rip; .echo ====STACK====; kb 60; .echo ====WRITING DUMP====; .dump /ma D:\Code\swg-client-v2\stage-x64\crashdumps\zonein-real.dmp; .echo ====DONE====; q" av
+g
+$$ client exited on its own (clean quit, or hard-killed by the loop) -> g returns here:
+.echo ====CLIENT EXITED, NO AV====
+q
