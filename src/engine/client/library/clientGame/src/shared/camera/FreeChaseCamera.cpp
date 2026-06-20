@@ -104,6 +104,7 @@ namespace
 	}
 
 	static const float cs_cameraSnapBackSpeedModifier = 6.5f; // <-- this is arbitrary
+	static const float cs_cameraPullInSpeed = 8.0f; // door-snap fix: max inward camera velocity (m/s) — eases the instant wall pull-IN + shoulder-offset collapse (brief near-plane wall peek accepted)
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
@@ -601,6 +602,10 @@ float FreeChaseCamera::alter (float elapsedTime)
 
 	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
 
+	// door-snap fix: baseline for the inward pull-in rate limit — captured AFTER the recovery lerp so
+	// ONLY the wall-collision pull-in is rate-limited, NOT manual zoom-in (which rides the lerp above).
+	float const zoomBeforeCollision = m_currentZoom;
+
 	//-- move camera to the avatar's cell and position
 	{
 		const CellProperty* const targetCell = m_target->getParentCell ();
@@ -663,8 +668,13 @@ float FreeChaseCamera::alter (float elapsedTime)
 		Vector endPos_w = startPos_w + (creatureObject->rotate_o2w(Vector::unitX) * (m_desiredOffset.x + 0.25f));
 		if(ClientWorld::collide(getParentCell(),startPos_w,endPos_w,CollideParameters::cms_default,result,ClientWorld::CF_allCamera))
 		{
-			move_o(Vector(-m_offset.x * elapsedTime, 0.0f, 0.0f));
-			m_offset.x = 0.0f;
+			// Door-snap fix: ease the shoulder offset to zero instead of an INSTANT snap. This block used
+			// to zero m_offset.x in one frame when the side-ray hit the doorframe -> the camera jumped
+			// sideways by the full shoulder offset (~0.4 m) nearly every crossing. Ease it instead (same
+			// rate as the zoom pull-in). The eased m_offset.x is applied to the transform next frame at
+			// the offset move_o above; the old instant per-frame correction here is dropped (it now
+			// double-applied during the ease). Brief shoulder-cam wall clip during the ease is accepted.
+			m_offset.x = linearInterpolate (m_offset.x, 0.0f, clamp (0.f, elapsedTime * cs_cameraPullInSpeed, 1.f));
 		}
 	}
 			
@@ -738,6 +748,18 @@ float FreeChaseCamera::alter (float elapsedTime)
 				if (hit)
 					m_currentZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
 			}
+		}
+
+		// ---- Door-snap fix: rate-limit the inward PULL-IN ----
+		// The measured door snap is the camera yanking IN by up to ~2 m in a single frame when the
+		// doorframe collision ray hits. Cap how fast m_currentZoom may DECREASE per frame so it eases
+		// inward instead of snapping. Pop-OUT (recovery toward m_zoom) is untouched. Trade-off: the
+		// camera may briefly show the near plane through a wall while easing in — accepted (the chase
+		// camera is expected to pass through walls when above/behind the avatar).
+		{
+			float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
+			if (m_currentZoom < zoomBeforeCollision - maxPullIn)
+				m_currentZoom = zoomBeforeCollision - maxPullIn;
 		}
 
 		if (m_currentZoom < scaledFirstPersonDistance)

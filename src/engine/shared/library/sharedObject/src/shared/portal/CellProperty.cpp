@@ -18,7 +18,6 @@
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Crc.h"
 #include "sharedFoundation/ExitChain.h"
-#include "sharedFoundation/Os.h"
 #include "sharedMath/DebugShapeRenderer.h"
 #include "sharedMath/Sphere.h"
 #include "sharedObject/Appearance.h"
@@ -132,14 +131,6 @@ bool CellPropertyNamespace::Notification::positionChanged(Object &object, bool c
 	if (start == end)
 		return true;
 
-#ifdef _DEBUG
-	// CORNERSNAP instrumentation (cantina corner-snap todo) — capture the
-	// unmodified world-space segment before the up-shift and portal walk
-	// mutate it, so transition logs show the true movement that crossed.
-	Vector const cornersnapStart_w = start;
-	Vector const cornersnapEnd_w = end;
-#endif
-
 	// Move the old and new position up by half a meter so that our line-portal intersection test
 	// doesn't miss the bottom of the portal.
 
@@ -186,20 +177,6 @@ bool CellPropertyNamespace::Notification::positionChanged(Object &object, bool c
 
 	if (targetCell)
 	{
-#ifdef _DEBUG
-		CellProperty const * const cornersnapFromCell = object.getParentCell();
-		DEBUG_REPORT_LOG(true, ("CORNERSNAP-PORTAL: frame %d obj %s [%s] cell '%s'(%d) -> '%s'(%d) seg_w (%.3f,%.3f,%.3f)->(%.3f,%.3f,%.3f) len %.4f\n",
-			Os::getNumberOfUpdates(),
-			object.getNetworkId().getValueString().c_str(),
-			object.getDebugName() ? object.getDebugName() : "?",
-			(cornersnapFromCell && cornersnapFromCell->getCellName()) ? cornersnapFromCell->getCellName() : "<world>",
-			cornersnapFromCell ? cornersnapFromCell->getCellIndex() : -1,
-			targetCell->getCellName() ? targetCell->getCellName() : "<world>",
-			targetCell->getCellIndex(),
-			cornersnapStart_w.x, cornersnapStart_w.y, cornersnapStart_w.z,
-			cornersnapEnd_w.x, cornersnapEnd_w.y, cornersnapEnd_w.z,
-			cornersnapStart_w.magnitudeBetween(cornersnapEnd_w)));
-#endif
 		// object changed portals, don't continue with this position change because the cell change will handle all that as well
 		object.setParentCell(targetCell);
 		return false;
