@@ -79,9 +79,9 @@ Which phases cover which requirements. Filled during roadmap creation.
 | AUDIO-01 | Phase 35 | Complete |
 | AUDIO-02 | Phase 35 | Complete |
 | SHADER-01 | Phase 32 | Pending |
-| VERIFY-01 | Phase 36 | Pending |
-| VERIFY-02 | Phase 36 | Pending |
-| VERIFY-03 | Phase 36 | Pending |
+| VERIFY-01 | Phase 36 | Parked — door-snap real in x64, root-caused as a pre-existing bitness/renderer-independent floor-mesh/portal-seam engine quirk; out-of-scope for v3.0, carried forward |
+| VERIFY-02 | Phase 36 | Met (no x64 MemoryManager OOM in extended session) |
+| VERIFY-03 | Phase 36 | Deferred — gated on VERIFY-01 sign-off; CORNERSNAP probes kept as the acceptance harness for the future fix |
 
 **Coverage:**
 - v3.0 requirements: 13 total

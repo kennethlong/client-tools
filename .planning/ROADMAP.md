@@ -210,8 +210,8 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   3. The CORNERSNAP `_DEBUG` instrumentation (`CollisionResolve.cpp` + `CellProperty.cpp`) is removed from shipped code paths **after** the door-snap is verified clean - link-grep shows 0 unresolved on removal
   4. After cleanup, the x64 client still boots to character select and traverses the cantina door cleanly under both `rasterMajor=5` and `=11`
 **Plans**: 2 plans in 2 waves (Wave 1: VERIFY-01 + VERIFY-02 human-verify gates together -> Wave 2: VERIFY-03 CORNERSNAP probe removal, gated behind VERIFY-01 sign-off)
-  - [ ] 36-01-PLAN.md - VERIFY-01 (cantina door-snap resolved in x64, observed under rasterMajor=5 AND =11 + corroborated by the kept CORNERSNAP `_DEBUG` probe log) + VERIFY-02 (extended x64 session, no MemoryManager OOM FATAL `b0780503` class) - both checkpoint:human-verify gates
-  - [ ] 36-02-PLAN.md - VERIFY-03: strip the CORNERSNAP `_DEBUG` instrumentation from CollisionResolve.cpp + CellProperty.cpp atomically + canonical 5-target x64 build /FORCE link-grep (`unresolved external symbol` == 0) + dual-renderer (rasterMajor 5 AND 11) x64 boot + cantina-door non-regression
+  - [~] 36-01-PLAN.md - CONCLUDED 2026-06-20 (36-01-SUMMARY.md): **VERIFY-02 PASS** (extended x64 session, no MemoryManager OOM); **VERIFY-01 FAIL → PARKED** — door-snap persists in x64 gl05/D3D9, falsifying the x64-fixes-it hypothesis; root-caused as a pre-existing, bitness/renderer-INDEPENDENT floor-mesh/portal-seam engine quirk (footprint circle clips an uncrossable seam edge → PWR_HitEdge → collision rewind). Orthogonal to x64; reclassified out-of-scope-for-v3.0 and carried forward as a documented known issue.
+  - [ ] 36-02-PLAN.md - **DEFERRED** (VERIFY-03): blocked on VERIFY-01 sign-off (never given). CORNERSNAP `_DEBUG` probes KEPT as the door-snap acceptance harness for the future fix effort; do NOT strip while the snap is unfixed.
 
 
 ## Progress
@@ -253,4 +253,4 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 33. x64 Build Platform + D3D9 Renderers | v3.0 | 6/6 | Complete    | 2026-06-18 |
 | 34. x64 D3D11 Renderer | v3.0 | 2/2 | Complete   | 2026-06-18 |
 | 35. Miles 9.3b Audio Port | v3.0 | 4/4 | Complete    | 2026-06-18 |
-| 36. Verification & CORNERSNAP Cleanup | v3.0 | 0/TBD | Not started | - |
+| 36. Verification & CORNERSNAP Cleanup | v3.0 | 1/2 | Concluded (VERIFY-02 pass; VERIFY-01 parked as pre-existing engine quirk; VERIFY-03/36-02 deferred) | 2026-06-20 |
