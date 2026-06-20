@@ -1,0 +1,79 @@
+diff --git a/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp b/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+index 01ec23501..0f127f022 100644
+--- a/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
++++ b/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+@@ -44,6 +44,9 @@
+ 
+ #include "sharedFoundation/Tag.h"
+ #include "sharedFoundation/DataResourceList.h"
++#ifdef _DEBUG
++#include "sharedFoundation/Os.h"   // CORNERSNAP-CIRCLE probe: per-frame id for the cantina door-snap face-B capture
++#endif
+ 
+ #include "sharedFile/Iff.h"
+ 
+@@ -2854,6 +2857,19 @@ PathWalkResult FloorMesh::pathWalkCircleGetIds ( FloorLocator const & inStartLoc
+ 			}
+ 			else
+ 			{
++				// ---- Spike-003 face-B fix (cantina door-snap) ----
++				// The circle-CENTER walked this triangle cleanly (PWR_WalkOk), which proves this
++				// uncrossable boundary edge is WALKABLE floor (a doorway / floor-mesh seam, not a real
++				// wall — a real wall blocks the center too, centerWalk != WalkOk). Measured in spike
++				// 002: recording this footprint-circle graze pins the avatar's cross-axis to the seam
++				// line (errXZ up to 0.30 m = the rubberband) while the tangential slide is otherwise
++				// correct. Suppress the spurious contact so the footprint isn't held against a seam its
++				// center freely crosses. Real walls (centerWalk != WalkOk) are unaffected.
++				if(centerWalkResult == PWR_WalkOk)
++				{
++					continue;
++				}
++
+ 				// If the circle is moving away from its contact point with the segment, there's no contact
+ 
+ 				Vector endPoint = begin + V * hitRange.getMin();
+@@ -2880,12 +2896,23 @@ PathWalkResult FloorMesh::pathWalkCircleGetIds ( FloorLocator const & inStartLoc
+ 
+ 					float contactDistance = stepDistance * -hitRange.getMin();
+ 
+-					if(contactDistance < wallEpsilon) 
++					if(contactDistance < wallEpsilon)
+ 					{
+ 						circleHitTime = hitRange.getMin();
+ 						circleHitTriId = currentTriId;
+ 						circleHitEdge = i;
+ 						hitAnything = true;
++#ifdef _DEBUG
++						// CORNERSNAP-CIRCLE (cantina door-snap face-B keystone probe): this PEN branch
++						// already gates on wallEpsilon. Logged for contrast with the unguarded FWD branch.
++						DEBUG_REPORT_LOG(true, ("CORNERSNAP-CIRCLE: frame %d branch PEN tri %d edge %d portalId %d edgeType %d neighbor %d centerWalk %d min %.5f max %.5f step %.5f contactDist %.5f wallEps %.5f radius %.4f\n",
++							Os::getNumberOfUpdates(), currentTriId, i,
++							getFloorTri(currentTriId).getPortalId(i),
++							static_cast<int>(getFloorTri(currentTriId).getEdgeType(i)),
++							getFloorTri(currentTriId).getNeighborIndex(i),
++							static_cast<int>(centerWalkResult),
++							hitRange.getMin(), hitRange.getMax(), stepDistance, contactDistance, wallEpsilon, startLoc.getRadius()));
++#endif
+ 					}
+ 					else
+ 					{
+@@ -2900,6 +2927,19 @@ PathWalkResult FloorMesh::pathWalkCircleGetIds ( FloorLocator const & inStartLoc
+ 					circleHitTriId = currentTriId;
+ 					circleHitEdge = i;
+ 					hitAnything = true;
++#ifdef _DEBUG
++					// CORNERSNAP-CIRCLE (cantina door-snap face-B keystone probe): the FWD forward-graze
++					// branch — records a HARD blocking contact with NO wallEpsilon guard (unlike PEN).
++					// Suspected face-B source: center clears (centerWalk==PWR_WalkOk[4]) but circle grazes a
++					// non-portal boundary edge (portalId==-1). step = per-frame delta magnitude.
++					DEBUG_REPORT_LOG(true, ("CORNERSNAP-CIRCLE: frame %d branch FWD tri %d edge %d portalId %d edgeType %d neighbor %d centerWalk %d min %.5f max %.5f step %.5f radius %.4f\n",
++						Os::getNumberOfUpdates(), currentTriId, i,
++						getFloorTri(currentTriId).getPortalId(i),
++						static_cast<int>(getFloorTri(currentTriId).getEdgeType(i)),
++						getFloorTri(currentTriId).getNeighborIndex(i),
++						static_cast<int>(centerWalkResult),
++						hitRange.getMin(), hitRange.getMax(), delta.magnitude(), startLoc.getRadius()));
++#endif
+ 				}
+ 			}
+ 		}

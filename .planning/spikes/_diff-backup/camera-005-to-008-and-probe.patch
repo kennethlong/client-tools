@@ -1,0 +1,186 @@
+diff --git a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+index b415c6b96..690d1bddd 100644
+--- a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
++++ b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+@@ -9,6 +9,9 @@
+ 
+ #include "clientGame/FirstClientGame.h"
+ #include "clientGame/FreeChaseCamera.h"
++#ifdef _DEBUG
++#include "sharedFoundation/Os.h"   // CORNERSNAP-CAM probe: per-frame id for the door-snap camera capture
++#endif
+ 
+ #include "UnicodeUtils.h"
+ #include "clientGame/ConfigClientGame.h"
+@@ -104,6 +107,8 @@ namespace
+ 	}
+ 
+ 	static const float cs_cameraSnapBackSpeedModifier = 6.5f; // <-- this is arbitrary
++	static const float cs_wallCollisionHoldSeconds = 0.05f;
++	static const float cs_cameraPullInSpeed = 8.0f; // spike-007: max inward zoom velocity (m/s) — eases the instant door pull-IN snap (brief near-plane wall peek accepted) // spike-006: hold the wall-collision zoom clamp this long after the last ray hit (kills hit/miss flicker pop-out)
+ 
+ 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ }
+@@ -146,7 +151,9 @@ FreeChaseCamera::FreeChaseCamera () :
+ 	m_context (0),
+ 	m_currentMode (false),
+ 	m_spinning (false),
+-	m_colliding (false)
++	m_colliding (false),
++	m_wallClampZoom (-1.f),
++	m_wallCollisionHoldTimer (0.f)
+ {
+ #ifdef _DEBUG
+ 	DebugFlags::registerFlag (ms_debugReport, "ClientGame/FreeChaseCamera", "debugReport");
+@@ -599,7 +606,17 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 		m_zoom *= zoomMultiplier;
+ 	}
+ 
+-	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
++	float const zoomAtFrameStart = m_currentZoom; // spike-007: last frame's rendered zoom, for the inward pull-in rate limit below
++
++	// ---- Spike-005 framerate fix (cantina door "snap" residual / bug 2) ----
++	// This zoom recovery used a FIXED per-frame fraction (ms_cameraZoomSpeed), NOT scaled by
++	// elapsedTime — so at modern high FPS it converged N x faster in wall-clock than the original
++	// ~30 FPS design point (recovery tau ~ 1/FPS), turning the chase-camera wall-avoidance pop-OUT
++	// into a sharp snap when the collision rays flicker hit/miss at the doorframe. Time-scale it by
++	// elapsedTime (mirrors the already-correct CockpitCamera.cpp:815). The *30 preserves the tuned
++	// 30 FPS feel: at 30 FPS elapsedTime ~= 1/30 so the weight == ms_cameraZoomSpeed as before.
++	// (Protective pull-IN at 691/739 stays instant — easing it would clip the near plane through walls.)
++	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, clamp (0.f, elapsedTime * ms_cameraZoomSpeed * 30.0f, 1.f));
+ 
+ 	//-- move camera to the avatar's cell and position
+ 	{
+@@ -653,7 +670,8 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 	//-- don't show the m_target if zoom distance is less than first person distance
+ 	const float scaledFirstPersonDistance = m_firstPersonDistance * (creatureObject ? creatureObject->getScaleFactor () : 1.f);
+ 	m_colliding = false;
+-	
++	bool hit = false; // spike-006 hysteresis: did a wall-collision ray hit this frame?
++
+ 	// prevent shoulder cam from clipping geometry (due to near plane)
+ 	if (creatureObject && m_currentZoom >= scaledFirstPersonDistance)
+ 	{
+@@ -663,8 +681,13 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 		Vector endPos_w = startPos_w + (creatureObject->rotate_o2w(Vector::unitX) * (m_desiredOffset.x + 0.25f));
+ 		if(ClientWorld::collide(getParentCell(),startPos_w,endPos_w,CollideParameters::cms_default,result,ClientWorld::CF_allCamera))
+ 		{
++			// ---- Spike-008: ease the shoulder offset to zero instead of an INSTANT snap ----
++			// The residual door snap (after the zoom fix) is this block zeroing m_offset.x in one frame
++			// when the side-ray hits the doorframe -> the camera jumps sideways by the full shoulder
++			// offset (~0.4 m) nearly every crossing. Ease it instead (same rate as the zoom pull-in).
++			// Brief shoulder-cam wall clip during the ease is accepted (camera may pass through walls).
+ 			move_o(Vector(-m_offset.x * elapsedTime, 0.0f, 0.0f));
+-			m_offset.x = 0.0f;
++			m_offset.x = linearInterpolate (m_offset.x, 0.0f, clamp (0.f, elapsedTime * cs_cameraPullInSpeed, 1.f));
+ 		}
+ 	}
+ 			
+@@ -688,7 +711,11 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			{
+ 				const float lineDistance = start_w.magnitudeBetween (end_w);
+ 				const float t = clamp (0.f, (start_w.magnitudeBetween (result.getPoint ()) / lineDistance) - (0.25f / lineDistance), 1.f);
+-				m_currentZoom = Vector::linearInterpolate (start_w, end_w, t).magnitudeBetween (start_w);
++				const float collisionZoom = Vector::linearInterpolate (start_w, end_w, t).magnitudeBetween (start_w);
++				m_currentZoom = std::min (m_currentZoom, collisionZoom); // spike-006: instant pull-IN (wall-safe)
++				m_wallClampZoom = collisionZoom;                         // spike-006: arm the hysteresis hold
++				m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++				hit = true;
+ 				m_colliding = true;
+ 			}
+ 		}
+@@ -707,7 +734,6 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			const Vector start_w   = getPosition_w ();
+ 			const Vector end_w     = start_w + rotate_o2w (cameraZ_p);
+ 
+-			bool hit = false;
+ 			CollisionInfo result;
+ 			float minimumT = 1.f;
+ 
+@@ -736,10 +762,45 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			if(!shipObject)
+ 			{
+ 				if (hit)
+-					m_currentZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
++				{
++					const float collisionZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
++					m_currentZoom = std::min (m_currentZoom, collisionZoom); // spike-006: instant pull-IN (wall-safe)
++					m_wallClampZoom = collisionZoom;                         // spike-006: arm the hysteresis hold
++					m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++				}
++			}
++		}
++
++		// ---- Spike-006 hysteresis hold ----
++		// Hold the wall-collision zoom clamp for cs_wallCollisionHoldSeconds after the LAST ray hit, so a
++		// single-frame ray MISS (the doorframe hit/miss flicker) can't let the zoom pop back out. The
++		// time-scaled recovery lerp (earlier in alter) keeps running, but this min() pins it until the
++		// hold expires — turning the rapid in/out flicker into a steady pulled-in camera.
++		if (m_wallClampZoom >= 0.f)
++		{
++			m_currentZoom = std::min (m_currentZoom, m_wallClampZoom);
++			if (hit)
++				m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++			else
++			{
++				m_wallCollisionHoldTimer -= elapsedTime;
++				if (m_wallCollisionHoldTimer <= 0.f)
++					m_wallClampZoom = -1.f;
+ 			}
+ 		}
+ 
++		// ---- Spike-007: rate-limit the inward PULL-IN ----
++		// The measured door SNAP is the camera yanking IN by up to ~2 m in a single frame when the
++		// doorframe ray hits (dZoom <= -2.1, colliding=1). Cap how fast m_currentZoom may DECREASE per
++		// frame so it eases inward instead of snapping. Pop-OUT (recovery toward m_zoom) is untouched.
++		// Trade-off: the camera may briefly show the near plane through a wall while easing in — accepted
++		// per design (the chase camera is expected to pass through walls when above/behind the avatar).
++		{
++			float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
++			if (m_currentZoom < zoomAtFrameStart - maxPullIn)
++				m_currentZoom = zoomAtFrameStart - maxPullIn;
++		}
++
+ 		if (m_currentZoom < scaledFirstPersonDistance)
+ 			setFirstPerson (true);
+ 		else
+@@ -770,6 +831,26 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 	DEBUG_REPORT_PRINT (ms_debugReport, ("far         = %1.2f\n", getFarPlane ()));
+ #endif
+ 
++#ifdef _DEBUG
++	// CORNERSNAP-CAM (door-snap bug-2 probe): catch per-frame JUMPS in the rendered camera state so we
++	// can see WHICH variable actually snaps at the door — zoom DEPTH (m_currentZoom, wall pull-in) vs
++	// shoulder OFFSET.x (zeroed instantly by the shoulder-clip block) vs the offset YAW.
++	{
++		static float s_prevZoom = 0.f;
++		static float s_prevOffX = 0.f;
++		float const dZoom = m_currentZoom - s_prevZoom;
++		float const dOffX = m_offset.x - s_prevOffX;
++		if (!isFirstPerson () && (dZoom > 0.08f || dZoom < -0.08f || dOffX > 0.08f || dOffX < -0.08f))
++		{
++			DEBUG_REPORT_LOG (true, ("CORNERSNAP-CAM: frame %d zoom %.3f dZoom %.3f offX %.3f dOffX %.3f desOffX %.3f colliding %d wallClamp %.3f\n",
++				Os::getNumberOfUpdates (), m_currentZoom, dZoom, m_offset.x, dOffX, m_desiredOffset.x,
++				m_colliding ? 1 : 0, m_wallClampZoom));
++		}
++		s_prevZoom = m_currentZoom;
++		s_prevOffX = m_offset.x;
++	}
++#endif
++
+ 	IGNORE_RETURN (GameCamera::alter (elapsedTime));
+ 	return AlterResult::cms_alterNextFrame;
+ }
+diff --git a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.h b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.h
+index cab852c39..e58cebeaa 100644
+--- a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.h
++++ b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.h
+@@ -123,6 +123,8 @@ private:
+ 
+ 	bool                   m_spinning;
+ 	bool                   m_colliding;
++	float                  m_wallClampZoom;            // spike-006 hysteresis: wall-collision zoom clamp; < 0 = inactive
++	float                  m_wallCollisionHoldTimer;   // spike-006 hysteresis: seconds left to hold the clamp after the last ray hit
+ 
+ 	float				   m_reticleOffsetCenter;
+ 	float				   m_reticleOffsetShoulder;

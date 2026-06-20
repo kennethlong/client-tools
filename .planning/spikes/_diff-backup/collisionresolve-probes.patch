@@ -1,0 +1,49 @@
+diff --git a/src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp b/src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+index 53769501c..c4e1f64ea 100644
+--- a/src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
++++ b/src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+@@ -339,6 +339,22 @@ ResolutionResult CollisionResolve::resolveCollisions(CollisionProperty * collide
+ 		moveObjectAlong(objectA,positions);
+ 
+ #ifdef _DEBUG
++		// CORNERSNAP-NET (cantina door-snap face-B): the FELT stutter = intended frame endpoint vs the
++		// ACTUAL final position after the full rewind + slide replay. This is the net visible error
++		// (NOT the rewind magnitude, which is ~full step by design). For a correct wall-slide errXZ
++		// should be only the into-wall component; a large errXZ == the slide failed to recover tangent.
++		{
++			Vector const cornersnapIntended = moveSeg.getEnd(moveSeg.m_cellB);
++			Vector const cornersnapFinal = objectA->getPosition_p();
++			Vector const cornersnapErr(cornersnapFinal.x - cornersnapIntended.x, 0.0f, cornersnapFinal.z - cornersnapIntended.z);
++			DEBUG_REPORT_LOG(true, ("CORNERSNAP-NET: frame %d obj %s intended (%.3f,%.3f,%.3f) final (%.3f,%.3f,%.3f) errXZ %.4f waypoints %d\n",
++				Os::getNumberOfUpdates(),
++				objectA->getNetworkId().getValueString().c_str(),
++				cornersnapIntended.x, cornersnapIntended.y, cornersnapIntended.z,
++				cornersnapFinal.x, cornersnapFinal.y, cornersnapFinal.z,
++				cornersnapErr.magnitude(), static_cast<int>(positions.size())));
++		}
++
+ 		CellProperty const * const cornersnapCellAfter = objectA->getParentCell();
+ 		if (cornersnapCellAfter != cornersnapCellBefore)
+ 		{
+@@ -449,6 +465,21 @@ ResolutionResult CollisionResolve::resolveCollisions ( CellProperty const * cell
+ 
+ 			Vector localStartDelta = CollisionUtils::rotateToCell(startCell,startDelta,contactCell);
+ 
++#ifdef _DEBUG
++			// CORNERSNAP-SLIDE (cantina door-snap face-B resolution probe): does the dot-test below
++			// DISCARD the tangential slide for a (center-OK) floor circle graze? isFloor=1 when the
++			// contact is a floor surface (vs obstacle/extent). bail=1 means the slide is thrown away
++			// and the move ends at the truncated contact point.
++			{
++				float const cornersnapDot = slidDelta.dot(localStartDelta);
++				DEBUG_REPORT_LOG(true, ("CORNERSNAP-SLIDE: frame %d isFloor %d time %.4f slidMag %.4f remMag %.4f startMag %.4f dot %.5f bail %d\n",
++					Os::getNumberOfUpdates(),
++					(contact.m_surface != NULL) ? 1 : 0,
++					contact.m_time, slidDelta.magnitude(), delta.magnitude(), localStartDelta.magnitude(),
++					cornersnapDot, (cornersnapDot <= 0.0f) ? 1 : 0));
++			}
++#endif
++
+ 			if(slidDelta.dot(localStartDelta) <= 0.0f)
+ 			{
+ 				return RR_Resolved;
