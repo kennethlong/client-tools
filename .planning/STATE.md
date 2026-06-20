@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
-status: executing
-last_updated: "2026-06-20T03:36:31.589Z"
-last_activity: 2026-06-20 -- Phase 36 verification concluded: VERIFY-02 PASS (no x64 OOM); VERIFY-01 FAIL (door-snap real in x64) root-caused as a pre-existing floor-mesh/portal-seam engine quirk + PARKED by user; 36-02 probe-strip DEFERRED. x64 milestone deliverables stand.
+status: milestone_complete
+last_updated: "2026-06-20T14:00:00.000Z"
+last_activity: 2026-06-20 -- v3.0 x64 Port SHIPPED + tagged. Audit passed_with_carryforwards (12/13 reqs); milestone archived (ROADMAP/REQUIREMENTS/MILESTONES/PROJECT). Carry-forwards: VERIFY-01 door-snap (pre-existing engine quirk, parked) + VERIFY-03 probe-strip (deferred). Next: /gsd:new-milestone.
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 28
+  completed_phases: 6
+  total_plans: 23
   completed_plans: 22
-  percent: 79
+  percent: 100
 ---
 
 # Project State
@@ -21,6 +21,22 @@ See: .planning/PROJECT.md (updated 2026-06-15 after v2.3 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
 **Current focus:** v3.0 x64 deliverables complete (build, dual renderers, Miles 9.3v audio, no-OOM). Phase 36 verification: VERIFY-02 PASS; VERIFY-01 (cantina door-snap) FAIL → root-caused as a pre-existing, bitness/renderer-independent floor-mesh/portal-seam engine quirk (footprint circle clips an uncrossable seam edge → PWR_HitEdge → collision rewind), **PARKED** as a documented known issue (orthogonal to x64; fix = future dedicated effort, see `phases/36-.../36-01-SUMMARY.md` + `research/CONSULT-36-doorsnap-SYNTHESIS.md`). Plan 36-02 (strip CORNERSNAP probes) DEFERRED — probes kept as the acceptance harness.
+
+## Deferred Items (acknowledged at v3.0 close — 2026-06-20)
+
+7 open artifacts acknowledged at v3.0 x64 Port close. None are v3.0 regressions; all are pre-existing/known.
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | cantina-corner-snap | parked — v3.0 root-caused the door-snap as a pre-existing, bitness/renderer-independent floor-mesh/portal-seam engine quirk (VERIFY-01); carried forward (spike-first → fix phase) |
+| debug | safecast-null-cast | closed (resolved 2026-05-15) |
+| todo | 2026-05-15-cantina-corner-snap-engine-improvement | low — superseded by the v3.0 CONSULT-36 root cause; fix carried forward |
+| todo | 2026-06-13-64bit-x64-port | **DELIVERED by v3.0** — close/retire (this milestone) |
+| todo | 2026-05-31-port-d3d9-shader-compile-to-d3dcompile | low — superseded on x64 (D3DX removed from the x64 build; Fix-A retained on 32-bit) |
+| todo | 2026-05-15-swgsource-vs-whitengold-tre-asset-diff | low — informational |
+| todo | 2026-06-13-test-jtl-space-rendering-post-v2.2 | low — informational |
+
+**Verification:** VERIFY-03 (CORNERSNAP probe strip / plan 36-02) deferred — gated on the VERIFY-01 door-snap fix; probes kept as its acceptance harness.
 
 ## Deferred Items (acknowledged at v2.0 close)
 

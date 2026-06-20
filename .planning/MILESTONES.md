@@ -1,5 +1,26 @@
 # Milestones
 
+## v3.0 x64 Port (Shipped: 2026-06-20)
+
+**Scope:** Phases 31–36 (6 phases, 23 plans). Audit: `passed_with_carryforwards` — 12/13 requirements met; VERIFY-01 (door-snap) parked as a pre-existing engine quirk + VERIFY-03 deferred (its dependent cleanup); definition of done met and user-verified in-world (`milestones/v3.0-MILESTONE-AUDIT.md`). Timeline: 2026-06-15 → 2026-06-20. (`master` is a live upstream-integration branch — milestone-scoped phase/plan counts are authoritative, not the upstream-inflated diffstat.)
+
+**Delivered:** The first native **64-bit** SWG client that keeps **both** renderer families (D3D9 gl05/06/07 + D3D11 gl11) bootable to character select and playable in-world — eliminating the chronic 32-bit address-space OOM, removing the x64-hostile legacy D3DX dependency, and porting audio to x64 Miles. The 32-bit build remains unregressed under both renderers.
+
+**Key accomplishments:**
+
+1. **64-bit correctness foundation (Phase 31, BITS-01/02/03)** — x87 FPU-control inline asm → `_control87`/`_controlfp`, a tree-wide `__asm` sweep to x64-clean, pointer/integer truncation fixed (C4311/4312/4244 as errors), and an IFF/TRE + network-message data-layout audit (the ~753-error AutoDeltaMap/PackedMap/Set cascade resolved via a uint32_t wire-stable count pin). 9 plans (6 base + 3 gap-closure increments as the scratch-x64 sweep unmasked successive class-(B) layers); has a formal `31-VERIFICATION.md`.
+2. **D3DX removed from the x64 build (Phases 32–33, SHADER-01)** — the legacy D3DX shader path is off D3DX on x64: `D3DXAssembleShader`→`D3DAssemble` (GetProcAddress) + `D3DXMATRIX`→DirectXMath, D3DX dropped from the x64 link block, 0 `D3DXCompileShader/D3DXAssembleShader` calls left in `src/engine/`. (32-bit retains the Fix-A SEH guard.)
+3. **x64 build platform + D3D9 renderers (Phase 33, X64-01/02/04)** — the `x64` platform added to `swg.sln` + every `.vcxproj`, ~57 boot-path engine/3rd-party StaticLibrary x64 configs, all third-party deps resolved x64 (LIFT import-libs for libxml2/pcre/jpeg; binkw64 swap), and the first fully-linking x64 client (0 unresolved external symbol) booting to character select under rasterMajor 5/6/7.
+4. **x64 D3D11 renderer (Phase 34, X64-03)** — gl11 rebuilt x64 (`dumpbin` machine x64, 0 unresolved); the x64 client boots rasterMajor=11 to dressed char-select at the v2.2 visual-parity bar.
+5. **Miles 9.3b/9.3v audio port (Phase 35, AUDIO-01/02)** — `clientAudio` ported from the 7.2e to the 9.x API, x64 SDK vendored, per-platform redist/provider set staged; in-game audio (music, 2D UI, 3D positional, reverb) works on x64 (9.3v adopted for x64 to dodge a 9.3b x64 mixer bug), and login/char-select streamed music fixed engine-side.
+6. **Verification (Phase 36, VERIFY-02 + door-snap root cause)** — the 32-bit address-space OOM (`MemoryManager` `b0780503` class) confirmed eliminated on x64 (decelerating memory floor, flat handles). The cantina door-snap was found to PERSIST in x64 (falsifying the long-held "x64 fixes it" premise) and was root-caused via a live non-debugger DBWIN capture + a 4-AI crew as a **pre-existing, bitness/renderer-independent floor-mesh/portal-seam collision quirk** (footprint circle clips an uncrossable seam edge → `PWR_HitEdge` → rewind) — orthogonal to the port, parked and fully documented (`research/CONSULT-36-doorsnap-SYNTHESIS.md`; reusable `tools/setup/dbwin-cornersnap-capture.ps1`).
+
+**Known deferred at close (carry-forwards — documented + tracked):** **VERIFY-01** cantina door-snap fix (pre-existing engine quirk; recommended path = spike-first → single fix phase; high blast radius, 3 prior reverted attempts) and **VERIFY-03 / plan 36-02** CORNERSNAP `_DEBUG` probe strip (gated on the door-snap fix; probes kept as its acceptance harness). **Open artifacts acknowledged at close: 7** (2 debug sessions — cantina-corner-snap parked, safecast-null-cast closed; 5 low/deferred todos incl. the now-delivered x64-port todo) — see STATE.md Deferred Items.
+
+**Archives:** `milestones/v3.0-ROADMAP.md`, `milestones/v3.0-REQUIREMENTS.md`, `milestones/v3.0-MILESTONE-AUDIT.md`. Tag: `v3.0`.
+
+---
+
 ## v2.3 Hardening (Shipped: 2026-06-15)
 
 **Scope:** Phases 24–30 (7 phases, 19 plans, 35 tasks). Audit: `gaps_found` — 10/12 requirements fully satisfied, +1 partial-by-design (HARD-03 D-15), +1 documented x64 deferral (HARD-02); 7/7 phases executed (6 verified + 1 closed-by-deferral), 12/12 integration links WIRED, 2/2 E2E flows complete, 0 silent gaps (`milestones/v2.3-MILESTONE-AUDIT.md`). Two independent streams: (A) in-client C++ hardening (Phases 24–27), (B) a new standalone web-based TRE compare tool (Phases 28–30). Timeline: 2026-06-12 → 2026-06-15. (`master` is a live upstream-integration branch — milestone-scoped phase/plan counts are authoritative, not the upstream-inflated diffstat.)
