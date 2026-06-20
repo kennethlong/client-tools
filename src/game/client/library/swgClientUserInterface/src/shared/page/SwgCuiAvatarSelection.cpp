@@ -161,6 +161,7 @@ m_waitingLogin           (false),
 m_waitingLoginForSelect  (false),
 m_waitingLoginForCreate  (false),
 m_autoConnected          (false),
+m_avatarListReceived     (false),
 m_proceed                (false),
 m_callback               (new MessageDispatch::Callback),
 m_selectedAvatar         (new CuiLoginManagerAvatarInfo),
@@ -428,8 +429,16 @@ void SwgCuiAvatarSelection::refreshList (bool updateSelection)
 	//-- if no avatars exist, try to create one
 	if (aiv.empty () && !m_autoConnected && GameNetwork::isConnectedToLoginServer ())
 	{
-		m_autoConnected = true;
-		m_createButton->Press ();
+		// 2026-06-19: in auto-connect (headless/launcher) mode the avatar screen can activate BEFORE the
+		// character-enumerate reply arrives, so an empty list here is "not loaded yet", not "no chars".
+		// Don't race into creation -- wait for the enumerate (onAvatarListChanged re-refreshes). Manual
+		// login (autoConnecting == false) keeps the original immediate-create behavior.
+		const bool autoConnecting = ConfigClientGame::getAutoConnectToGameServer () || !ConfigClientGame::getLauncherAvatarName ().empty ();
+		if (!(autoConnecting && !m_avatarListReceived))
+		{
+			m_autoConnected = true;
+			m_createButton->Press ();
+		}
 	}
 
 	else if (m_table->GetLastSelectedRow () < 0)
@@ -950,6 +959,10 @@ void SwgCuiAvatarSelection::onSceneChanged (bool)
 
 void SwgCuiAvatarSelection::onAvatarListChanged (bool)
 {
+	// 2026-06-19: the character-enumerate reply has now arrived -- from here on an empty list really
+	// means "no characters", not "not loaded yet" (see refreshList auto-create gate).
+	m_avatarListReceived = true;
+
 	if (m_waitingLogin)
 	{
 		if (m_messageBoxLoginWait)
@@ -981,6 +994,13 @@ void SwgCuiAvatarSelection::onAvatarListChanged (bool)
 		m_waitingLoginForDelete = false;
 		m_waitingLoginForCreate = false;
 		handleCreate ();
+	}
+	else
+	{
+		// 2026-06-19: list arrived with no pending login-gated action (e.g. headless/launcher
+		// auto-connect activated the avatar screen before the enumerate came back). Repopulate so the
+		// late list shows up and the per-row auto-select matcher can pick the configured avatar.
+		refreshList (true);
 	}
 }
 

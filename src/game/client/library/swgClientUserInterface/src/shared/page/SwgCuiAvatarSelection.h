@@ -110,6 +110,11 @@ private:
 
 	bool                       m_autoConnected;
 
+	// 2026-06-19: set once the character-enumerate reply has actually arrived (onAvatarListChanged).
+	// Lets auto-connect distinguish "list not loaded yet" from "account has no characters", so headless
+	// /launcher auto-connect doesn't race past an existing character into the creation screen.
+	bool                       m_avatarListReceived;
+
 	bool                       m_proceed;
 
 	MessageDispatch::Callback *       m_callback;
