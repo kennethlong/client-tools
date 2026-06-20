@@ -209,7 +209,9 @@ must come AFTER VERIFY-01 confirms the door-snap clean against them - they are i
   2. An extended world-load / play session on the x64 build no longer hits the `MemoryManager` OOM FATAL (`b0780503` class) that 32-bit address-space exhaustion produced
   3. The CORNERSNAP `_DEBUG` instrumentation (`CollisionResolve.cpp` + `CellProperty.cpp`) is removed from shipped code paths **after** the door-snap is verified clean - link-grep shows 0 unresolved on removal
   4. After cleanup, the x64 client still boots to character select and traverses the cantina door cleanly under both `rasterMajor=5` and `=11`
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (Wave 1: VERIFY-01 + VERIFY-02 human-verify gates together -> Wave 2: VERIFY-03 CORNERSNAP probe removal, gated behind VERIFY-01 sign-off)
+  - [ ] 36-01-PLAN.md - VERIFY-01 (cantina door-snap resolved in x64, observed under rasterMajor=5 AND =11 + corroborated by the kept CORNERSNAP `_DEBUG` probe log) + VERIFY-02 (extended x64 session, no MemoryManager OOM FATAL `b0780503` class) - both checkpoint:human-verify gates
+  - [ ] 36-02-PLAN.md - VERIFY-03: strip the CORNERSNAP `_DEBUG` instrumentation from CollisionResolve.cpp + CellProperty.cpp atomically + canonical 5-target x64 build /FORCE link-grep (`unresolved external symbol` == 0) + dual-renderer (rasterMajor 5 AND 11) x64 boot + cantina-door non-regression
 
 
 ## Progress
