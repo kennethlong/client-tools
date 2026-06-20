@@ -92,6 +92,12 @@ src/build/win32/.vs/*
 stage/*
 !stage/override/
 
+# x64 runtime staging dir -- the 64-bit analogue of stage/ (exe, gl0x dlls, .cso
+# shader cache, crash dumps, Miles redist, generated cfgs, profiling). Build
+# output, not a source of truth. No stage-x64/override exists, so a plain ignore
+# is safe (unlike stage/, which needs the override negation above).
+stage-x64/
+
 # ============================================================
 # Phase 11+ runtime / harness / tooling cruft (added 2026-05-21)
 # ============================================================
@@ -99,9 +105,19 @@ stage/*
 # Per-iteration build logs (the .txt convention; .log already globally ignored)
 build-log-*.txt
 
+# Loose build/debug scratch at repo root: object files, build logs/txt, cdb
+# session dumps, crash minidumps, python cache, editor backups -- never source.
+*.obj
+*.bak
+*.dmp
+__pycache__/
+/build-*.txt
+/build-*.log*
+/cdb*.txt
+
 # Automated crash dump pairs (.mdmp binary + .txt symbol dump) -- generated
 # by the engine's fatal handler; can land at repo root or inside stage/.
-SwgClient_d.exe-unknown.*
+SwgClient_*.exe-unknown.*
 
 # MSBuild incremental tracker state for the build/win32 solution-level targets
 src/build/win32/_all_*.tlog/
