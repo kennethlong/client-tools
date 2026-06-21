@@ -17,6 +17,7 @@
 #include "Direct3d9_VertexShaderConstantRegisters.h"
 #include "Direct3d9_VertexShaderVertexRegisters.h"
 #include "Direct3d9_HlslRewrite.h"   // Fix B (Phase 32): shared HLSL textual rewrite (Rules A/B/C) for the D3DCompile path
+#include "Direct3d9_ShaderCache.h"   // CONSULT-45 fix #1: disk-persisted VS bytecode cache (L2; survives launches)
 #include "clientGraphics/ShaderCapability.h"
 #include "fileInterface/AbstractFile.h"
 #include "sharedFile/TreeFile.h"
@@ -27,6 +28,7 @@
 #include <map>
 #include <string>    // Phase 32 (2026-06-16): process-global bytecode-cache key string
 #include <vector>
+#include <cstdint>   // CONSULT-45: uint64_t disk shader-cache content hash
 #include <cstdio>    // Phase 32 (2026-06-16): _snprintf for buildByteCodeCacheKey
 #include <float.h>   // Phase 19: _clearfp / _fpreset for the SEH-guarded compile (FP-fault fix)
 #include <d3dcompiler.h>   // Fix B (Phase 32): D3DCompile replaces D3DXCompileShader on the HLSL compile path
@@ -142,6 +144,14 @@ namespace Direct3d9_VertexShaderDataNamespace
 	typedef std::vector<unsigned char>             VsByteCode;
 	typedef std::map<std::string, VsByteCode>      VsByteCodeCache;
 	VsByteCodeCache * ms_byteCodeCache;
+
+	// CONSULT-45 fix #1: rewrite-version baked into the DISK shader-cache content hash.
+	// BUMP THIS when Direct3d9_HlslRewrite rules/gates change OR the texcoord macro
+	// generation below changes -- it invalidates stale on-disk .cso bytecode (the source
+	// text + defines are also hashed, but the rewrite transforms the source AFTER hashing
+	// the raw text, and rewritten #includes never appear in m_compileText, so this version
+	// is the catch-all for rewrite/include changes). See Direct3d9_ShaderCache::hashSource.
+	const uint32 cs_shaderCacheRewriteVersion = 1;
 
 	// Build the bytecode-cache key. Mirrors Direct3d11_ShaderCache::hashSource's
 	// "inputs that determine the bytecode" contract, but as a readable composite
@@ -398,6 +408,14 @@ void Direct3d9_VertexShaderData::install()
 	// Phase 32 (2026-06-16): process-global compiled-bytecode cache (survives
 	// per-object destruction; freed in remove() at plugin shutdown only).
 	ms_byteCodeCache = new VsByteCodeCache;
+
+	// CONSULT-45 fix #1: install the DISK bytecode cache (L2 -- survives launches so the
+	// FIRST-ever zone-in is a hit after one warm run). The client's CWD at runtime IS the
+	// staging dir (stage/ for Win32, stage-x64/ for x64 -- verified: gl11's "stage/shader-cache/"
+	// landed double-nested at stage/stage/shader-cache/). So use a BARE relative dir: it lands
+	// cleanly per-platform at stage/shader-cache-d3d9/ resp. stage-x64/shader-cache-d3d9/.
+	// Gitignored under stage/* . VS bytecode is GPU-arch-independent, so the two are interchangeable.
+	Direct3d9_ShaderCache::install("shader-cache-d3d9/");
 }
 
 // ----------------------------------------------------------------------
@@ -421,6 +439,10 @@ void Direct3d9_VertexShaderData::remove()
 	// std::vector<unsigned char> entries free their bytes via the map dtor.
 	delete ms_byteCodeCache;
 	ms_byteCodeCache = NULL;
+
+	// CONSULT-45 fix #1: tear down the disk cache (logs hit/miss/store stats; leaves
+	// the .cso files on disk for the next launch).
+	Direct3d9_ShaderCache::remove();
 }
 
 // ----------------------------------------------------------------------
@@ -672,6 +694,31 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 			ms_defines.push_back(empty);
 		}
 
+		// CONSULT-45 fix #1: DISK bytecode cache (L2) lookup. Content-hashed over the FULL
+		// compile inputs (source bytes + the just-built defines + target + rewrite version +
+		// compiler tag), so a .vsh / HlslRewrite edit can never load stale bytecode. The
+		// in-memory L1 (above) already returned on a session re-hit; reaching here means L1
+		// missed, so a disk HIT skips the rewrite AND D3DCompile -- this makes the FIRST-ever
+		// zone-in fast after one warm run (retail ships precompiled bytecode).
+		uint64_t const diskCacheHash = Direct3d9_ShaderCache::hashSource(
+			m_compileText, static_cast<std::size_t>(m_compileTextLength),
+			ms_defines.empty() ? NULL : &ms_defines.front(), target, cs_shaderCacheRewriteVersion);
+		{
+			std::vector<unsigned char> diskBytes;
+			if (Direct3d9_ShaderCache::tryLoad(diskCacheHash, diskBytes) && !diskBytes.empty())
+			{
+				IDirect3DVertexShader9 *diskVertexShader = NULL;
+				HRESULT const diskHr = Direct3d9::getDevice()->CreateVertexShader(
+					reinterpret_cast<DWORD const *>(&diskBytes.front()), &diskVertexShader);
+				FATAL_DX_HR("CreateVertexShader (disk shader-cache hit) failed %s", diskHr);
+				NOT_NULL(diskVertexShader);
+				// Populate the in-memory L1 so re-entry this session skips disk I/O.
+				if (ms_byteCodeCache)
+					(*ms_byteCodeCache)[byteCodeCacheKey].assign(diskBytes.begin(), diskBytes.end());
+				return diskVertexShader;
+			}
+		}
+
 		IncludeHandler includeHandler;
 		ID3DBlob *error = NULL;
 		// Fix B (Phase 32): apply Rule A (and the conditional rules) to the MAIN shader source
@@ -717,6 +764,16 @@ IDirect3DVertexShader9 * Direct3d9_VertexShaderData::createVertexShader(uint32 t
 					static_cast<unsigned char const *>(compiledShader->GetBufferPointer());
 				(*ms_byteCodeCache)[byteCodeCacheKey].assign(blobBytes, blobBytes + blobSize);
 			}
+		}
+
+		// CONSULT-45 fix #1: persist the freshly compiled bytecode to the DISK cache so the
+		// NEXT launch's first zone-in is a hit (store is non-fatal / opportunistic).
+		if (compiledShader)
+		{
+			SIZE_T const diskBlobSize = compiledShader->GetBufferSize();
+			if (diskBlobSize > 0)
+				Direct3d9_ShaderCache::store(diskCacheHash, compiledShader->GetBufferPointer(),
+					static_cast<std::size_t>(diskBlobSize));
 		}
 	}
 	else
