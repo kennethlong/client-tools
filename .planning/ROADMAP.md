@@ -145,7 +145,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 34. x64 D3D11 Renderer | v3.0 | 2/2 | Complete   | 2026-06-18 |
 | 35. Miles 9.3b Audio Port | v3.0 | 4/4 | Complete    | 2026-06-18 |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 1/2 | Concluded (VERIFY-02 pass; VERIFY-01 parked as pre-existing engine quirk; VERIFY-03/36-02 deferred) | 2026-06-20 |
-| 37. Utinni Engine Entry-Point Advertisement | post-v3.0 | 0/3 | Planned | — |
+| 37. Utinni Engine Entry-Point Advertisement | post-v3.0 | 1/3 | In Progress|  |
 
 ### Phase 37: Utinni Engine Entry-Point Advertisement (GetEngineHookPoints)
 
@@ -157,6 +157,6 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 **Depends on:** Phase 36 (none functionally — the shipped `gl11_r.dll!GetHookPoints` graphics twin is its only related prior art).
 
 **Plans (full scope — P0/P1/P2):**
-- [ ] 37-01 **P0 — Contract spike.** Lock the shared header (`utinni_engine_hookpoints.h` + `.inc` X-macro, `UTINNI_HOOKPOINTS_VERSION`), the PMF→`void*` extractor (union helper guarded by `static_assert(sizeof(PMF)==sizeof(void*))`), and the undecorated exe export (`extern "C" __cdecl __declspec(dllexport)` ALONE — no `.def`/`/EXPORT`, mirroring `Direct3d11.cpp:856-888`; `dumpbin`-verified). See `37-01-PLAN.md`. Prove end-to-end with ~5 representative rows: a static fn, a member fn via the helper, a global, and `config::loadOverrideConfig` (the row that fixes Utinni's first-detour crash).
+- [x] 37-01 **P0 — Contract spike.** Lock the shared header (`utinni_engine_hookpoints.h` + `.inc` X-macro, `UTINNI_HOOKPOINTS_VERSION`), the PMF→`void*` extractor (union helper guarded by `static_assert(sizeof(PMF)==sizeof(void*))`), and the undecorated exe export (`extern "C" __cdecl __declspec(dllexport)` ALONE — no `.def`/`/EXPORT`, mirroring `Direct3d11.cpp:856-888`; `dumpbin`-verified). See `37-01-PLAN.md`. Prove end-to-end with ~5 representative rows: a static fn, a member fn via the helper, a global, and `config::loadOverrideConfig` (the row that fixes Utinni's first-detour crash).
 - [ ] 37-02 **P1 — MVP catalog (~70 endpoints).** config/client/graphics/game/scene/cui/command_parser, each mapped to a confirmed engine symbol and signature-checked against `D:/Code/Utinni/UtinniCore` typedefs; `.inc` shared with Utinni; coverage gate green for the MVP required set. Unblocks Utinni's Phase 18/19 live-smokes. See `37-02-PLAN.md`.
 - [ ] 37-03 **P2 — Full catalog (~160 more) + globals + open-items triage.** object/template/appearance/terrain/worldSnapshot/camera/collision/hud/ui-ctors/misc; read-only globals as `&g` (or accessor where file-static, per §8 #3); §8 #1 mid-function-patch endpoints get function-entry equivalents or are deferred as SWGEmu-only; virtual/vtable endpoints (e.g. `cui::io::processEvent`, virtual `Object::addToWorld`) skipped — Utinni resolves those off the live vtable. See `37-03-PLAN.md`.
