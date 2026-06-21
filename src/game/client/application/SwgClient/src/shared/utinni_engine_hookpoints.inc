@@ -175,3 +175,10 @@ UTINNI_HOOKPOINT(audio,         setMasterVolume)
 UTINNI_HOOKPOINT(audio,         getMasterVolume)
 UTINNI_HOOKPOINT(treeFile,      open)
 UTINNI_HOOKPOINT(report,        print)
+
+// -- commandParser ctors (free-function __thiscall thunks) ------------------
+UTINNI_HOOKPOINT(commandParser, ctor1)
+UTINNI_HOOKPOINT(commandParser, ctor2)
+
+// -- globals (§8 #3) -- accessor-style; raw &g where genuinely accessible ----
+UTINNI_HOOKPOINT(graphics,      g_frameNumber)

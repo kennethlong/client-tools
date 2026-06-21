@@ -84,6 +84,41 @@ static int __cdecl utinni_loadOverrideConfig()
 }
 
 // ----------------------------------------------------------------------
+// Constructor thunks (37-03). You cannot take &Class::Class in C++. Each
+// ctor row is a free-function thunk that placement-constructs on the
+// caller-supplied `this` and returns it -- matching UtinniCore's ctor
+// typedef EXACTLY (D:/Code/Utinni/UtinniCore/swg/ui/command_parser.cpp:29-30:
+// `CommandParser*(__thiscall*)(pThis, args...)`).
+//
+// CALLING CONVENTION (the landmine): MSVC v145 forbids __thiscall on a free
+// function (C3865). The ABI-correct emulation of __thiscall(pThis, a, b, ...)
+// is __fastcall(pThis /*ECX*/, dummy /*EDX*/, a, b, ...): __thiscall passes
+// `this` in ECX and pushes the rest; __fastcall passes arg1 in ECX, arg2 in
+// EDX, and the rest on the stack -- so a dummy EDX param makes the two ABIs
+// byte-identical. Utinni's existing __thiscall typedef therefore calls this
+// thunk correctly with NO Utinni-side change. (A plain __cdecl/__stdcall thunk
+// would mismatch -- this/ECX vs stack -- and crash at the first detour.)
+//
+// CommandParser is a standalone single-inheritance class (no bases) so the
+// `this` pointer needs no most-derived adjustment.
+//
+// MI-class UI ctors (chatWindow/loginScreen/gameMenu) are DEFERRED -- see the
+// OMIT/DEFER block below and 37-03-SUMMARY (same MI-inflation rationale that
+// deferred them in 37-02; they also require a live UIPage& arg).
+// ----------------------------------------------------------------------
+static CommandParser * __fastcall utinni_commandParserCtor1(CommandParser * pThis, int /*edx*/,
+	const char * command, size_t argCount, const char * args, const char * helpInfo, CommandParser * delegate)
+{
+	return ::new (static_cast<void *>(pThis)) CommandParser(command, argCount, args, helpInfo, delegate);
+}
+
+static CommandParser * __fastcall utinni_commandParserCtor2(CommandParser * pThis, int /*edx*/,
+	const CommandParser::CmdInfo & commandData, CommandParser * delegate)
+{
+	return ::new (static_cast<void *>(pThis)) CommandParser(commandData, delegate);
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -218,6 +253,37 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "audio::getMasterVolume",       (void *)&Audio::getMasterVolume },           // static float getMasterVolume() [Audio.h:166]
 	{ "treeFile::open",               (void *)&TreeFile::open },                   // static AbstractFile* open(const char*,PriorityType,bool) DLLEXPORT [TreeFile.h:85]
 	{ "report::print",                (void *)&Report::puts },                     // static void puts(const char*) [Report.h:41] (spec "Report::print" -> ours puts; printf is variadic)
+
+	// -- commandParser ctors (free-function __thiscall thunks; NEVER &Class::Class) --
+	{ "commandParser::ctor1",         (void *)&utinni_commandParserCtor1 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const char*,size_t,const char*,const char*,CommandParser*) [CommandParser.h:130] (matches UtinniCore pCtor1)
+	{ "commandParser::ctor2",         (void *)&utinni_commandParserCtor2 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const CmdInfo&,CommandParser*) [CommandParser.h:128] (matches UtinniCore pCtor2)
+
+	// ======================================================================
+	// VIRTUAL SKIPS (37-03) -- advertised as NOTHING. &fn on a virtual yields a
+	// vtable-dispatch thunk, not the impl; Utinni resolves these off the live
+	// vtable (spec §6). They are intentionally NOT in the .inc required set
+	// (a skipped virtual is vtable-resolved, NOT a "missing" required row).
+	//   SKIP: virtual -- Object::addToWorld          [Object.h:120]
+	//   SKIP: virtual -- Object::removeFromWorld      [Object.h:121]
+	//   SKIP: virtual -- Object::setParentCell        [Object.h:165]
+	//   SKIP: virtual -- Appearance::render           (Appearance.h, pure/virtual)
+	//   SKIP: virtual -- Appearance::collide          (Appearance.h, virtual)
+	//   SKIP: virtual -- GroundScene::draw            (Scene/IoWin override; deferred from 37-02)
+	//   SKIP: virtual -- RenderWorld::render          (RenderWorld.h, static-or-virtual; vtable path)
+	//   SKIP: virtual -- CuiIoWin::processEvent       [CuiIoWin.h:62] (from 37-02)
+	//   SKIP: virtual -- BaseExtent::realIntersect    [BaseExtent.h:69] protected-virtual (the §8 #2 non-virtual BaseExtent::intersect IS advertised above)
+	// (getObjectType/move_p/getParentCell are NON-virtual -> advertised in Task 1, NOT skipped.)
+
+	// -- globals (§8 #3): advertised via accessor (call-not-read) where the data
+	//    is private/file-static; raw &g only where genuinely accessible. ---------
+	// The MVP already advertises the canonical accessors (game::g_runningFlags ->
+	// Game::isOver; graphics RT W/H -> getCurrentRenderTarget*; cui singletons ->
+	// CuiManager::getIoWin). The remaining spec globals (player health/stats, hud
+	// view-distance, terrain singleton/weather/filename, static-shader) are
+	// private members with NO non-inline ODR-emitted accessor confirmable this
+	// wave -> OMITTED (see OMIT/DEFER block + 37-03-SUMMARY). A genuinely
+	// accessible engine singleton accessor advertised raw as &g:
+	{ "graphics::g_frameNumber",     (void *)&Graphics::getFrameNumber },          // ACCESSOR (§8 #3): the frame counter behind a genuinely-accessible non-private static getter [Graphics.h:83] -- call-not-read, &g-style global row
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
 
