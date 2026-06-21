@@ -65,6 +65,13 @@
 	skipSplash=@SKIP_SPLASH@
 	disableCutScenes=true
 
+[ClientGame/ClientInteriorLayoutManager]
+	# CONSULT-46 fix #2: cap interior-layout object creates per frame so a cell's burst (the Mos
+	# Eisley cantina main room = ~84 objects) spreads across frames instead of stalling one frame.
+	# 0 = unlimited (original behavior). 10 = spreads the cantina cell over ~8-9 frames (Cursor: 5-15).
+	# Resume cursor lives on CellProperty (reset on unload) -> safe across fast enter/exit, no dup/miss.
+	maxInteriorCreatesPerFrame=10
+
 [SharedDebug/InstallTimer]
 	# D-09: per-phase install timing. Logs each Setup*::install duration via REPORT_LOG_PRINT.
 	enabled=true
@@ -79,6 +86,11 @@
 	# Disable DbgHelp symbol lookups on WARNING calls -- symGetSymFromAddr64 stalls for
 	# minutes on first call in a large debug build while it loads all PDB symbol tables.
 	lookUpCallStackNames=false
+	# CONSULT-45 fix #4: clamp the per-frame time step (Clock::setMinFrameRate) so a zone-in
+	# load stall can't integrate the camera/movement past geometry in one giant frame -- turns a
+	# camera SNAP into a few gently-paced frames. 10 = cap at 0.1s of simulated advance (client
+	# default was 1.0 = effectively off for load hitches). Does NOT shorten the slow frame.
+	minFrameRate=10
 
 [ClientGraphics/Dpvs]
 	# Phase 24 D-01: DPVS occlusion-culling config gate. auto = occlusion ON outdoors / OFF inside POB
