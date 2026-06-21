@@ -461,24 +461,42 @@ dumpbin /exports stage/SwgClient_r.exe | grep GetEngineHookPoints
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | `__declspec(dllexport)` alone gives an undecorated EXE export (not just DLL) for `extern "C" __cdecl` | Finding 1 | LOW — same PE export mechanism for exe/dll; `/EXPORT` pragma is the documented fallback. Verify with dumpbin in 37-01 (the spike's first probe). |
-| A2 | `installConfigFileOverride()` is the function Utinni's zero-arg `loadOverrideConfig` hooks | MVP table / §8 | MEDIUM-HIGH — Utinni's typedef is zero-arg + its hook loads an override cfg, matching this function exactly; but the contract semantics should be confirmed with Utinni in discuss-phase. Getting this wrong = EPA-02 not fixed. |
+| A2 | `installConfigFileOverride()` is the function Utinni's zero-arg `loadOverrideConfig` hooks | MVP table / §8 | **RESOLVED (Open Q1)** → LOW. Utinni's typedef `int(__cdecl*)()` is zero-arg, matching `installConfigFileOverride()` exactly; `loadFromBuffer(char*,int)` is two-arg (the inner call, not the hook). Advertised via the `utinni_loadOverrideConfig` thunk in 37-01. Live first-detour confirmation is a Utinni-side acceptance check (out of repo); only this one row would change if ever wrong (additive). |
 | A3 | `game::g_runningFlags`, `scene::groundScene::g_instance`, `cui::manager::g_instance` map to private statics / accessors (not exported globals) | MVP table | MEDIUM — needs a grep pass per global; advertise accessor where private. |
 | A4 | The MVP `cui::io`/`chatWindow`/`consoleHelper` rows resolve cleanly (not yet opened) | MVP secondary | MEDIUM — headers exist; resolve in 37-02 execution. |
 | A5 | No plugin includes the new header, so no ABI cascade | Pitfall 3 | LOW — header is exe-local by design; planner must keep it so. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolved 2026-06-21 during plan-phase (no separate discuss-phase; user chose "lean on the spec"). The
+> resolutions below are the locked decisions the 37-01/02/03 plans build on. Q1's live-confirmation
+> remains a Utinni-side acceptance check (out of this repo), documented in Validation Architecture.
 
 1. **Does Utinni hook the zero-arg override orchestrator or the buffer loader for `config::loadOverrideConfig`?**
-   - Known: Utinni typedef is `int(__cdecl*)()` (zero-arg); its hook loads an extra cfg after calling the original.
-   - Unclear: whether a thunk wrapping `installConfigFileOverride()` satisfies the detour, or Utinni expects the exact original entry.
-   - Recommendation: lock in discuss-phase with the Utinni maintainer; advertise the thunk as the working hypothesis for 37-01.
+   — **RESOLVED: the zero-arg orchestrator (`installConfigFileOverride`), advertised via a `int __cdecl` thunk.**
+   - Evidence (sufficient to proceed): Utinni's typedef is `int(__cdecl*)()` — zero-arg, `__cdecl` — at
+     `D:/Code/Utinni/UtinniCore/swg/misc/config.cpp:39`. `ConfigFile::loadFromBuffer(char*,int)` (the spec's
+     best-guess) is two-arg and is the INNER call, so it cannot be the hooked symbol. Our zero-arg
+     `installConfigFileOverride()` (ClientMain.cpp:98) matches the typedef exactly and performs the same
+     "load an override cfg" behavior the Utinni hook wraps.
+   - Decision: 37-01 advertises `config::loadOverrideConfig` → `&utinni_loadOverrideConfig` (a `static int __cdecl`
+     thunk wrapping the exposed `installConfigFileOverride()`). The spike (37-01) empirically validates link +
+     undecorated export + non-null row; the LIVE "first-detour crash gone" check is Utinni-side (EPA-02 manual
+     verification — see Validation Architecture). Risk if wrong is now LOW given the signature match; if Utinni
+     ever expects the exact inner loader, only this one row changes (additive, version-tolerant).
 
 2. **How should virtual-member rows (Object::addToWorld, GroundScene::draw, Appearance::render) be advertised?**
-   - Known: `&fn` gives a vtable thunk, not the impl.
-   - Recommendation: skip in our table (Utinni resolves off the live vtable, as it already does for `cui::io::processEvent`), OR provide instance-bound thunks. Decide per-row in 37-03; default = skip + document.
+   — **RESOLVED: SKIP + document.** `&Class::virtualFn` under MSVC yields a vtable thunk, not the impl address,
+     so advertising it would detour the wrong target (worse than missing, spec §0). Utinni resolves virtuals off
+     the live vtable already (as it does for `cui::io::processEvent`). 37-03 skips every confirmed-virtual row with
+     a `// SKIP: virtual` comment and does NOT put it in the `.inc` required-set (skipped ≠ missing). Per-row
+     virtual-ness is confirmed before skip-vs-advertise.
 
-3. **Coverage gate: build-time static_assert vs runtime self-check?**
-   - Recommendation: both — `static_assert` on count (compile fail) + a `#if !PRODUCTION` boot self-check for null/dup (logs). Lightest gate that can't silently drift.
+3. **Coverage gate: build-time `static_assert` vs runtime self-check?**
+   — **RESOLVED: BOTH.** Compile-time `static_assert` (table row count == `.inc` required-set count — hard compile
+     fail on drift, mirroring the Direct3d11_ConstantBuffer.h idiom) PLUS a runtime `utinni_verifyNoNullNoDup()`
+     null/duplicate scan (graceful — logs/returns false, never crashes). Seeded in 37-01, extended per-tier in
+     37-02/37-03. Lightest gate that cannot silently drift (EPA-04).
 
 ## Environment Availability
 
