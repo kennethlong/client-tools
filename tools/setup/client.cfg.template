@@ -64,6 +64,11 @@
 	skipIntro=true
 	skipSplash=@SKIP_SPLASH@
 	disableCutScenes=true
+	# Back-room camera fix: cap chase-cam zoom-out (meters) while inside a cell (retail/SWGEmu parity).
+	# Holds the camera off interior back walls -> no gl05/32-bit portal see-through, no prop occlusion,
+	# matched to SWGEmu's indoor framing. Compiled default is 3.0 (this line only documents/overrides it);
+	# <=0 disables. Tunable live (relaunch, no rebuild).
+	freeChaseCameraInteriorMaximumZoom=3.0
 
 [ClientGame/ClientInteriorLayoutManager]
 	# CONSULT-46 fix #2: cap interior-layout object creates per frame so a cell's burst (the Mos

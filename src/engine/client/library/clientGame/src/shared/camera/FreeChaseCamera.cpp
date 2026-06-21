@@ -77,6 +77,7 @@ namespace
 	int   ms_currentSetting = -1;
 	float ms_pitch;
 	float ms_cameraZoomSpeed;
+	float ms_interiorMaximumZoom = 3.0f; // retail/SWGEmu parity: cap chase-cam zoom-out (meters) while inside a cell so it never reaches interior back walls (portal see-through) or lets props occlude the avatar; matched to SWGEmu's indoor framing. <=0 disables. cfg override: [ClientGame] freeChaseCameraInteriorMaximumZoom
 	bool  ms_cameraSimpleCollision;
 	bool  ms_useCameraOffset;
 	bool  ms_cameraOffsetChanged = false;
@@ -158,6 +159,7 @@ FreeChaseCamera::FreeChaseCamera () :
 	{
 		ms_spinYawPerSecond = convertDegreesToRadians (ConfigFile::getKeyFloat ("ClientGame", "spinYawDegreesPerSecond", convertRadiansToDegrees (ms_spinYawPerSecond)));
 		ms_cameraZoomSpeed = ConfigClientGame::getFreeChaseCameraZoomSpeed ();
+		ms_interiorMaximumZoom = ConfigFile::getKeyFloat ("ClientGame", "freeChaseCameraInteriorMaximumZoom", ms_interiorMaximumZoom);
 
 		const char * const section = "ClientGame/FreeChaseCamera";
 		LocalMachineOptionManager::registerOption (ms_cameraMode,      section, "cameraMode", 1);
@@ -600,11 +602,30 @@ float FreeChaseCamera::alter (float elapsedTime)
 		m_zoom *= zoomMultiplier;
 	}
 
-	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
+	// Interior zoom cap (retail / SWGEmu parity): hold the chase camera close to the avatar while inside
+	// a cell so it never reaches far interior walls. Pressed against a back wall, gl05/32-bit re-triggers
+	// the borderline portal cell-cull flip (exterior shows through the wall, clears on look up/down -- the
+	// same artifact the D3DCREATE_FPU_PRESERVE fix addresses) AND interior props end up between the camera
+	// and the avatar. SWGEmu/retail avoid all of this by simply not letting the indoor camera zoom out to
+	// the walls. Caps the desired zoom only (the persistent zoom SETTING is untouched, so the camera
+	// restores to the player's chosen distance on leaving the building). <=0 disables. Tunable live via
+	// [ClientGame] freeChaseCameraInteriorMaximumZoom.
+	if (ms_interiorMaximumZoom > 0.f)
+	{
+		CellProperty const * const cameraTargetCell = m_target ? m_target->getParentCell () : 0;
+		if (cameraTargetCell && cameraTargetCell != CellProperty::getWorldCellProperty ())
+			m_zoom = std::min (m_zoom, ms_interiorMaximumZoom);
+	}
 
-	// door-snap fix: baseline for the inward pull-in rate limit — captured AFTER the recovery lerp so
-	// ONLY the wall-collision pull-in is rate-limited, NOT manual zoom-in (which rides the lerp above).
-	float const zoomBeforeCollision = m_currentZoom;
+	// door-snap / back-room fix: baseline for the inward pull-in rate limit is LAST frame's final zoom,
+	// captured BEFORE the recovery lerp below. The original captured it AFTER the lerp; against a
+	// SUSTAINED wall (tight/tall interior) the outward recovery push then out-paced the rate-limited
+	// pull-in, so the camera never reached the wall-safe distance and sat permanently OUTSIDE the wall
+	// (the cantina back-room clip-through, screenShot0394). The rate-limit below is gated on m_colliding,
+	// so manual zoom-in (which rides this lerp with no collision) is still NOT rate-limited.
+	float const zoomAtFrameStart = m_currentZoom;
+
+	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
 
 	//-- move camera to the avatar's cell and position
 	{
@@ -750,16 +771,19 @@ float FreeChaseCamera::alter (float elapsedTime)
 			}
 		}
 
-		// ---- Door-snap fix: rate-limit the inward PULL-IN ----
-		// The measured door snap is the camera yanking IN by up to ~2 m in a single frame when the
-		// doorframe collision ray hits. Cap how fast m_currentZoom may DECREASE per frame so it eases
-		// inward instead of snapping. Pop-OUT (recovery toward m_zoom) is untouched. Trade-off: the
-		// camera may briefly show the near plane through a wall while easing in — accepted (the chase
-		// camera is expected to pass through walls when above/behind the avatar).
+		// ---- Door-snap / back-room fix: rate-limit the inward collision PULL-IN ----
+		// Ease the camera inward at cs_cameraPullInSpeed instead of snapping (kills the doorframe yank).
+		// Baseline is LAST frame's zoom (zoomAtFrameStart) and this is gated on an ACTUAL collision, so
+		// the camera CONVERGES onto the wall-safe distance and stays there. The earlier version baselined
+		// off the post-recovery zoom and ran every frame, so the recovery lerp out-paced the limit and the
+		// camera sat permanently OUTSIDE the wall in tight/tall interiors (cantina back-room clip-through):
+		// occluders ended up between the camera and the avatar and were never corrected. Pop-OUT (recovery
+		// toward m_zoom, no collision) is untouched, so manual zoom-in is not rate-limited.
+		if (m_colliding)
 		{
 			float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
-			if (m_currentZoom < zoomBeforeCollision - maxPullIn)
-				m_currentZoom = zoomBeforeCollision - maxPullIn;
+			if (m_currentZoom < zoomAtFrameStart - maxPullIn)
+				m_currentZoom = zoomAtFrameStart - maxPullIn;
 		}
 
 		if (m_currentZoom < scaledFirstPersonDistance)
