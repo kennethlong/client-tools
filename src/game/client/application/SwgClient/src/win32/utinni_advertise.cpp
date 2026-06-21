@@ -36,6 +36,17 @@
 #include "clientUserInterface/CuiConsoleHelper.h"  // CuiConsoleHelper::processInput (member PMF)
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
 
+// -- 37-03 full-catalog includes --------------------------------------------
+#include "sharedCollision/BaseExtent.h"            // BaseExtent::intersect (non-virtual overload, §8 #2)
+#include "sharedObject/Object.h"                   // Object non-virtual getters/setters (PMF)
+#include "sharedGame/SharedObjectTemplate.h"       // SharedObjectTemplate filename getters (PMF) + ObjectTemplate::createObject
+#include "clientGame/WorldSnapshot.h"              // WorldSnapshot::* (all static in this tree)
+#include "clientGraphics/Camera.h"                 // Camera non-virtual setters (PMF)
+#include "sharedMemoryManager/MemoryManager.h"     // MemoryManager::allocate/free (static)
+#include "clientAudio/Audio.h"                     // Audio::set/getMasterVolume (static)
+#include "sharedFile/TreeFile.h"                   // TreeFile::open (static)
+#include "sharedDebug/Report.h"                    // Report::puts (static)
+
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
 // conditions the ClCompile item to Platform=Win32; this guard is the source-
 // side belt-and-suspenders so an x64 config can never export GetEngineHookPoints.
@@ -148,6 +159,65 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 
 	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
 	{ "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
+
+	// ======================================================================
+	// 37-03 FULL CATALOG. Per-row symbol kind in the comment. Every & resolved
+	// against the cited header this wave. Symbols the plan named but that do
+	// NOT exist / are virtual / inline are OMITTED (see the OMIT block below).
+	// ======================================================================
+
+	// -- extent (sharedCollision; BaseExtent.h) §8 #2 --------------------------
+	// The NON-virtual BaseExtent::intersect(begin,end) const overload via PMF +
+	// explicit overload static_cast. Single-inheritance base -> PMF not inflated.
+	// Collapses the UtinniCore retail(0x0126AF70)/SWGEmu(0x0125FA10) RVA split.
+	{ "extent::intersect",            pmfToVoid(static_cast<bool (BaseExtent::*)(Vector const &, Vector const &) const>(&BaseExtent::intersect)) }, // OVERLOADED non-virtual [BaseExtent.h:47]
+
+	// -- object (sharedObject; Object.h) -- NON-VIRTUAL only -------------------
+	// VIRTUAL skips (NOT advertised; Utinni resolves off the live vtable, spec §6):
+	//   Object::addToWorld / removeFromWorld [Object.h:120-121], setParentCell [:165].
+	// move_o is INLINE [Object.h:1216] -> OMITTED (no ODR-emitted address, Pitfall 2).
+	{ "object::getObjectType",        pmfToVoid(&Object::getObjectType) },         // Tag getObjectType() const NON-virtual [Object.h:152]
+	{ "object::getObjectTemplate",    pmfToVoid(&Object::getObjectTemplate) },     // const ObjectTemplate* getObjectTemplate() const [Object.h:150]
+	{ "object::getObjectTemplateName",pmfToVoid(&Object::getObjectTemplateName) }, // const char* getObjectTemplateName() const [Object.h:151]
+	{ "object::getNetworkId",         pmfToVoid(&Object::getNetworkId) },          // const NetworkId& getNetworkId() const [Object.h:162]
+	{ "object::getParentCell",        pmfToVoid(&Object::getParentCell) },         // CellProperty* getParentCell() const NON-virtual [Object.h:166]
+	{ "object::getTransform_o2w",     pmfToVoid(&Object::getTransform_o2w) },      // Transform const& getTransform_o2w() const DLLEXPORT [Object.h:243]
+	{ "object::setTransform_o2w",     pmfToVoid(&Object::setTransform_o2w) },      // void setTransform_o2w(const Transform&) [Object.h:248]
+	{ "object::getPosition_w",        pmfToVoid(&Object::getPosition_w) },         // const Vector getPosition_w() const [Object.h:245]
+	{ "object::setPosition_w",        pmfToVoid(&Object::setPosition_w) },         // void setPosition_w(const Vector&) [Object.h:247]
+	{ "object::getAppearance",        pmfToVoid(static_cast<Appearance * (Object::*)()>(&Object::getAppearance)) }, // OVERLOADED (const/non-const) [Object.h:170-171]
+	{ "object::setAppearance",        pmfToVoid(&Object::setAppearance) },         // void setAppearance(Appearance*) [Object.h:174]
+	{ "object::move_p",               pmfToVoid(&Object::move_p) },                // void move_p(const Vector&) NON-virtual non-inline [Object.h:251]
+
+	// -- objectTemplate (sharedObject base static + sharedGame SharedObjectTemplate) --
+	{ "objectTemplate::createObject", (void *)static_cast<Object * (*)(const char *)>(&ObjectTemplate::createObject) }, // OVERLOADED: static createObject(const char*) [ObjectTemplate.h:32] vs virtual createObject() const [:50]
+	{ "objectTemplate::getAppearanceFilename",   pmfToVoid(&SharedObjectTemplate::getAppearanceFilename) },   // const std::string& (bool=false) const NON-virtual [SharedObjectTemplate.h:353]
+	{ "objectTemplate::getPortalLayoutFilename", pmfToVoid(&SharedObjectTemplate::getPortalLayoutFilename) }, // [SharedObjectTemplate.h:354]
+	{ "objectTemplate::getClientDataFile",       pmfToVoid(&SharedObjectTemplate::getClientDataFile) },       // [SharedObjectTemplate.h:355]
+
+	// -- worldSnapshot (clientGame; WorldSnapshot.h) -- ALL STATIC in this tree -
+	{ "worldSnapshot::load",          (void *)&WorldSnapshot::load },              // static void load(char const*) [WorldSnapshot.h:44]
+	{ "worldSnapshot::addObject",     (void *)&WorldSnapshot::addObject },         // static Object* addObject(...) [WorldSnapshot.h:33]
+	{ "worldSnapshot::removeObject",  (void *)&WorldSnapshot::removeObject },      // static void removeObject(int64) [WorldSnapshot.h:49]
+	{ "worldSnapshot::moveObject",    (void *)&WorldSnapshot::moveObject },        // static void moveObject(int64,Transform const&) [WorldSnapshot.h:48]
+	{ "worldSnapshot::getLoadingPercent",   (void *)&WorldSnapshot::getLoadingPercent },   // static int getLoadingPercent() [WorldSnapshot.h:52]
+	{ "worldSnapshot::detailLevelChanged",  (void *)&WorldSnapshot::detailLevelChanged },  // static void detailLevelChanged() [WorldSnapshot.h:56]
+
+	// -- camera (clientGraphics; Camera.h) -- NON-VIRTUAL non-inline setters ----
+	// (getViewport*/getViewportWidth etc. are INLINE [Camera.h:210-258] -> OMITTED.)
+	{ "camera::setViewport",          pmfToVoid(static_cast<void (Camera::*)(int, int, int, int)>(&Camera::setViewport)) }, // OVERLOADED [Camera.h:172]
+	{ "camera::setNearPlane",         pmfToVoid(&Camera::setNearPlane) },          // void setNearPlane(real) [Camera.h:174]
+	{ "camera::setFarPlane",          pmfToVoid(&Camera::setFarPlane) },           // void setFarPlane(real) [Camera.h:175]
+	{ "camera::setHorizontalFieldOfView", pmfToVoid(&Camera::setHorizontalFieldOfView) }, // void(real) [Camera.h:178]
+	{ "camera::reverseProjectInViewportSpace", pmfToVoid(static_cast<const Vector (Camera::*)(int, int) const>(&Camera::reverseProjectInViewportSpace)) }, // OVERLOADED non-inline [Camera.h:160]
+
+	// -- misc statics (memory/audio/file/report) -------------------------------
+	{ "memory::allocate",             (void *)&MemoryManager::allocate },          // static void* allocate(size_t,uint32,bool,bool) DLLEXPORT [MemoryManager.h:58]
+	{ "memory::free",                 (void *)&MemoryManager::free },              // static void free(void*,bool) DLLEXPORT [MemoryManager.h:59] (spec "deallocate" -> ours free)
+	{ "audio::setMasterVolume",       (void *)&Audio::setMasterVolume },           // static void setMasterVolume(float) [Audio.h:165]
+	{ "audio::getMasterVolume",       (void *)&Audio::getMasterVolume },           // static float getMasterVolume() [Audio.h:166]
+	{ "treeFile::open",               (void *)&TreeFile::open },                   // static AbstractFile* open(const char*,PriorityType,bool) DLLEXPORT [TreeFile.h:85]
+	{ "report::print",                (void *)&Report::puts },                     // static void puts(const char*) [Report.h:41] (spec "Report::print" -> ours puts; printf is variadic)
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
 
