@@ -38,8 +38,10 @@
 //   (only an INLINE accessor Game::getLoopCount -> no ODR-emitted address, Pitfall 2),
 //   client::{wndProc,writeMiniDump,writeCrashLog,setupStartDataInstall} (file-local
 //   exe statics -> each needs an external-linkage shim, deferred), cui::manager::
-//   findObjectUnderCursor (not on CuiManager), groundScene::{ctor,init,update,
-//   handleInputMap*,draw(virtual)} (landmine cluster, 37-03), cui::io::processEvent
+//   findObjectUnderCursor (not on CuiManager), ALL groundScene::* rows (the class
+//   is MULTIPLE-INHERITANCE via NetworkScene -> inflated PMFs fail the sizeof guard;
+//   even reloadTerrain/getCurrentCamera/setView need a __thiscall thunk, 37-03),
+//   cui::io::processEvent
 //   (VIRTUAL -> Utinni resolves off the live vtable), cui::chatWindow::* +
 //   chatWindow::ctor (MULTIPLE-INHERITANCE class -> inflated PMF fails the
 //   sizeof(PMF)==sizeof(void*) guard -> needs __thiscall thunks, 37-03),
@@ -85,10 +87,11 @@ UTINNI_HOOKPOINT(graphics,      setStaticShader)
 UTINNI_HOOKPOINT(graphics,      g_renderTargetWidth)
 UTINNI_HOOKPOINT(graphics,      g_renderTargetHeight)
 
-// -- scene::groundScene (clientGame; ONLY clean public non-virtual rows) -----
-UTINNI_HOOKPOINT(groundScene,   reloadTerrain)
-UTINNI_HOOKPOINT(groundScene,   getCurrentCamera)
-UTINNI_HOOKPOINT(groundScene,   changeCamera)
+// -- scene::groundScene -- ALL DEFERRED to 37-03: GroundScene is a MULTIPLE-
+//    INHERITANCE class (via NetworkScene : public Scene, public MessageDispatch::
+//    Receiver) -> inflated member PMFs fail the pmfToVoid sizeof guard. Even the
+//    "clean" reloadTerrain/getCurrentCamera/setView rows need a __thiscall thunk
+//    (37-03 tier). Not advertised this wave (kept out of the required set).
 
 // -- cui::manager (clientUserInterface, all static; CuiManager.h) ------------
 UTINNI_HOOKPOINT(cuiManager,    render)

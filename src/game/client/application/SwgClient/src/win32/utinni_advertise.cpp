@@ -30,7 +30,6 @@
 #include "ClientMain.h"                            // utinni_installConfigFileOverride() + ClientMain()
 #include "sharedFoundation/ConfigFile.h"           // ConfigFile::loadFile / loadFromBuffer (static)
 #include "clientGame/Game.h"                       // Game::* (static) + isOver accessor
-#include "clientGame/GroundScene.h"                // GroundScene::* (member PMFs)
 #include "clientGraphics/Graphics.h"               // Graphics::* (static)
 #include "clientUserInterface/CuiManager.h"        // CuiManager::* (static) + getIoWin accessor
 #include "clientUserInterface/CuiIoWin.h"          // CuiIoWin::* (member PMFs)
@@ -119,10 +118,15 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "graphics::g_renderTargetWidth",  (void *)&Graphics::getCurrentRenderTargetWidth },  // ACCESSOR (sec 8 #3): RT width behind a static getter [Graphics.h:103] -- call-not-read
 	{ "graphics::g_renderTargetHeight", (void *)&Graphics::getCurrentRenderTargetHeight }, // ACCESSOR (sec 8 #3): RT height behind a static getter [Graphics.h:104] -- call-not-read
 
-	// -- scene::groundScene (clientGame; CLEAN public non-virtual member PMFs) --
-	{ "groundScene::reloadTerrain",   pmfToVoid(&GroundScene::reloadTerrain) },    // member PMF __thiscall, single-inheritance [GroundScene.h:215]
-	{ "groundScene::getCurrentCamera",pmfToVoid(static_cast<GameCamera *(GroundScene::*)()>(&GroundScene::getCurrentCamera)) }, // OVERLOADED const [GroundScene.h:212/213] -> non-const variant; member PMF __thiscall
-	{ "groundScene::changeCamera",    pmfToVoid(&GroundScene::setView) },          // member PMF __thiscall [GroundScene.h:207] (MISMATCH: spec "changeCamera" -> ours setView)
+	// -- scene::groundScene -- DEFERRED to 37-03 (Rule 3 landmine discovered at build):
+	// GroundScene derives (via NetworkScene) from MULTIPLE bases -- NetworkScene.h:28-30
+	// `class NetworkScene : public Scene, public MessageDispatch::Receiver`. A
+	// multiple-inheritance class has INFLATED member-function pointers (>sizeof(void*)),
+	// so &GroundScene::{reloadTerrain,getCurrentCamera,setView} trip the pmfToVoid
+	// sizeof(PMF)==sizeof(void*) guard (C2338). Even the "clean" public non-virtual rows
+	// need a __thiscall free-function thunk (the MI-class thunk pattern is 37-03's tier).
+	// OMITTED here (NOT weakened) -- a wrong/inflated & is worse than a missing row (spec sec 0).
+	// Names also removed from the .inc so the coverage gate stays in lockstep.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
 	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
