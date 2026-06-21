@@ -27,8 +27,14 @@
 #include <bit>   // std::bit_cast (C++20, stdcpp20 enabled)
 
 #include "utinni_engine_hookpoints.h"
-#include "ClientMain.h"                            // utinni_installConfigFileOverride()
-#include "clientGame/Game.h"                       // Game::install (static)
+#include "ClientMain.h"                            // utinni_installConfigFileOverride() + ClientMain()
+#include "sharedFoundation/ConfigFile.h"           // ConfigFile::loadFile / loadFromBuffer (static)
+#include "clientGame/Game.h"                       // Game::* (static) + isOver accessor
+#include "clientGame/GroundScene.h"                // GroundScene::* (member PMFs)
+#include "clientGraphics/Graphics.h"               // Graphics::* (static)
+#include "clientUserInterface/CuiManager.h"        // CuiManager::* (static) + getIoWin accessor
+#include "clientUserInterface/CuiIoWin.h"          // CuiIoWin::* (member PMFs)
+#include "clientUserInterface/CuiConsoleHelper.h"  // CuiConsoleHelper::processInput (member PMF)
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -74,8 +80,69 @@ static int __cdecl utinni_loadOverrideConfig()
 // ----------------------------------------------------------------------
 static const UtinniEngineHookPoint s_engineHookPoints[] =
 {
+	// -- config (sharedFoundation, all static; ConfigFile.h) -------------------
 	{ "config::loadOverrideConfig",   (void *)&utinni_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
-	{ "game::install",                (void *)&Game::install },                    // static fn ptr [Game.h:94]
+	{ "config::loadConfigFileBuffer", (void *)&ConfigFile::loadFromBuffer },       // static bool loadFromBuffer(char const*,int) [ConfigFile.h:136]
+	{ "config::loadConfigFileString", (void *)&ConfigFile::loadFile },             // static bool loadFile(char const*) [ConfigFile.h:135] (MISMATCH: spec "loadFromString" -> ours is loadFile)
+
+	// -- client (exe entry; ClientMain.h) --------------------------------------
+	{ "client::clientMain",           (void *)&ClientMain },                       // int ClientMain(HINSTANCE,HINSTANCE,LPSTR,int) __cdecl [ClientMain.h:13]
+
+	// -- game (clientGame, all static; Game.h) ---------------------------------
+	{ "game::install",                (void *)&Game::install },                    // static void install(Application) [Game.h:94]
+	{ "game::quit",                   (void *)&Game::quit },                       // static void quit() [Game.h:98]
+	{ "game::mainLoop",               (void *)&Game::run },                        // static void run() [Game.h:96] (MISMATCH: spec "runGame" -> ours run)
+	{ "game::setupScene",             (void *)static_cast<void(*)(bool, const char *, const char *, CreatureObject *)>(&Game::setScene) }, // OVERLOADED [Game.h:108] -> cast to the (terrain,player,customized) overload
+	{ "game::cleanupScene",           (void *)&Game::cleanupScene },               // static void cleanupScene() [Game.h:101]
+	{ "game::getPlayer",              (void *)&Game::getPlayer },                  // static Object* getPlayer() [Game.h:150]
+	{ "game::getPlayerCreatureObject",(void *)&Game::getPlayerCreature },          // static CreatureObject* getPlayerCreature() [Game.h:157] (MISMATCH name)
+	{ "game::getCamera",              (void *)&Game::getCamera },                  // static Camera* getCamera() [Game.h:173] -- NOT overloaded (const sibling is getConstCamera); NO cast
+	{ "game::getConstCamera",         (void *)&Game::getConstCamera },             // static Camera const* getConstCamera() [Game.h:174]
+	{ "game::isViewFirstPerson",      (void *)&Game::isViewFirstPerson },          // static bool isViewFirstPerson() [Game.h:185]
+	{ "game::isHudSceneTypeSpace",    (void *)&Game::isHudSceneTypeSpace },        // static bool isHudSceneTypeSpace() [Game.h:215]
+	{ "game::g_runningFlags",         (void *)&Game::isOver },                     // ACCESSOR (sec 8 #3): ms_done is private; isOver() is the NON-inline accessor [Game.h:134 / Game.cpp:1021] -- call-not-read
+
+	// -- graphics (clientGraphics facade, all static; Graphics.h) [EPA-03] -----
+	{ "graphics::install",            (void *)&Graphics::install },                // static bool install() [Graphics.h:70] -- EPA-03 DX11 overlay kickoff row
+	{ "graphics::update",             (void *)&Graphics::update },                 // static void update(float) [Graphics.h:153]
+	{ "graphics::beginScene",         (void *)&Graphics::beginScene },             // static void beginScene() [Graphics.h:155]
+	{ "graphics::endScene",           (void *)&Graphics::endScene },               // static void endScene() [Graphics.h:156]
+	{ "graphics::present",            (void *)static_cast<bool(*)()>(&Graphics::present) },              // OVERLOADED [Graphics.h:161] -> no-arg present()
+	{ "graphics::presentWindow",      (void *)static_cast<bool(*)(HWND, int, int)>(&Graphics::present) },// OVERLOADED [Graphics.h:162] -> present(HWND,int,int)
+	{ "graphics::resize",             (void *)&Graphics::resize },                 // static void resize(int,int) [Graphics.h:130]
+	{ "graphics::flushResources",     (void *)&Graphics::flushResources },         // static void flushResources(bool) [Graphics.h:81]
+	{ "graphics::screenshot",         (void *)&Graphics::screenShot },             // static bool screenShot(const char*) [Graphics.h:170] (MISMATCH name)
+	{ "graphics::useHardwareCursor",  (void *)&Graphics::setHardwareMouseCursorEnabled }, // static void setHardwareMouseCursorEnabled(bool) [Graphics.h:177] (MISMATCH name)
+	{ "graphics::showMouseCursor",    (void *)&Graphics::showMouseCursor },        // static bool showMouseCursor(bool) [Graphics.h:180]
+	{ "graphics::setSystemMouseCursorPosition", (void *)&Graphics::setSystemMouseCursorPosition }, // static void(int,int) [Graphics.h:181]
+	{ "graphics::setStaticShader",    (void *)&Graphics::setStaticShader },        // static void setStaticShader(const StaticShader&,int) [Graphics.h:175]
+	{ "graphics::g_renderTargetWidth",  (void *)&Graphics::getCurrentRenderTargetWidth },  // ACCESSOR (sec 8 #3): RT width behind a static getter [Graphics.h:103] -- call-not-read
+	{ "graphics::g_renderTargetHeight", (void *)&Graphics::getCurrentRenderTargetHeight }, // ACCESSOR (sec 8 #3): RT height behind a static getter [Graphics.h:104] -- call-not-read
+
+	// -- scene::groundScene (clientGame; CLEAN public non-virtual member PMFs) --
+	{ "groundScene::reloadTerrain",   pmfToVoid(&GroundScene::reloadTerrain) },    // member PMF __thiscall, single-inheritance [GroundScene.h:215]
+	{ "groundScene::getCurrentCamera",pmfToVoid(static_cast<GameCamera *(GroundScene::*)()>(&GroundScene::getCurrentCamera)) }, // OVERLOADED const [GroundScene.h:212/213] -> non-const variant; member PMF __thiscall
+	{ "groundScene::changeCamera",    pmfToVoid(&GroundScene::setView) },          // member PMF __thiscall [GroundScene.h:207] (MISMATCH: spec "changeCamera" -> ours setView)
+
+	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
+	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
+	{ "cuiManager::setSize",          (void *)&CuiManager::setSize },              // static void setSize(int,int) [CuiManager.h:129]
+	{ "cuiManager::togglePointer",    (void *)&CuiManager::setPointerToggledOn },  // static void setPointerToggledOn(bool) [CuiManager.h:107] (MISMATCH name)
+	{ "cuiManager::restartMusic",     (void *)&CuiManager::restartMusic },         // static void restartMusic(bool) [CuiManager.h:97]
+	{ "cuiManager::g_instance",       (void *)&CuiManager::getIoWin },             // ACCESSOR: CuiManager is all-static (no instance); getIoWin() returns the CuiIoWin singleton [CuiManager.h:100]
+
+	// -- cui::io (clientUserInterface; CuiIoWin.h) ------------------------------
+	// NOTE: cui::io::processEvent (CuiIoWin.h:62) and ::draw (:61) are VIRTUAL overrides of
+	// IoWin -- SKIP: Utinni resolves off the live vtable (spec sec 6). Not advertised as &fn
+	// (a &CuiIoWin::processEvent would be a vtable-dispatch thunk, not the impl).
+	{ "cuiIo::setKeyboardInputActive",pmfToVoid(&CuiIoWin::setKeyboardInputActive) }, // member PMF __thiscall, single-inheritance [CuiIoWin.h:66]
+	{ "cuiIo::requestKeyboard",       pmfToVoid(&CuiIoWin::requestKeyboard) },     // member PMF __thiscall [CuiIoWin.h:102]
+	{ "cuiIo::g_instance",            (void *)&CuiManager::getIoWin },             // ACCESSOR: the CuiIoWin singleton accessor (CuiManager owns ms_theIoWin) [CuiManager.h:100]
+
+	// -- consoleHelper (clientUserInterface; CuiConsoleHelper.h) ----------------
+	{ "consoleHelper::sendInput",     pmfToVoid(&CuiConsoleHelper::processInput) },// member PMF __thiscall, single-inheritance [CuiConsoleHelper.h:76] (MISMATCH: spec "sendInput" -> ours processInput)
+
+	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
 	{ "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
