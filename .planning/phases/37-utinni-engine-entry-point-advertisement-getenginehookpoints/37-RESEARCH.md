@@ -12,9 +12,9 @@ This phase adds one undecorated `extern "C" __cdecl GetEngineHookPoints()` expor
 
 **Finding 2 (the SWG engine is static-method-heavy — the PMF problem is SMALL):** The crash-fixer `config::loadOverrideConfig` and the entire MVP `config`/`game`/`graphics`/`cui` groups are **`static` class methods** (`ConfigFile::loadFromBuffer`, `Game::install`, `Graphics::install`, `CuiManager::render`, …). `&ClassName::staticMethod` is an **ordinary function pointer** that casts to `void*` cleanly — NO pointer-to-member-function machinery needed for ~60% of the catalog. The PMF helper is only needed for true non-static members (the `scene::groundScene::*`, `object::*`, `worldSnapshot::*`, `commandParser::*` instance methods).
 
-**Finding 3 (the real landmines, all in 37-03's instance-method tier):** (a) **Constructors cannot have their address taken in C++** — `&GroundScene::GroundScene`, `&CommandParser::CommandParser`, every `*::ctor` row is a hard compile error and needs a thunk wrapper. (b) **`&Class::virtualMethod` under MSVC yields a vtable-dispatch thunk, NOT the real code address** — `Object::addToWorld/removeFromWorld/getType`, `GroundScene::draw/processEvent` are `virtual`; a `&fn` pointer for these will NOT be the function Utinni wants to detour. (c) **Private members** (`GroundScene::init/update/handleInputMap*`) can't be addressed from outside the class — needs `friend` or an in-class thunk. (d) **Overloaded methods** (`Graphics::present`, `Game::getCamera`, `Game::setScene`) need an explicit cast to disambiguate `&fn`.
+**Finding 3 (the real landmines, all in 37-03's instance-method tier):** (a) **Constructors cannot have their address taken in C++** — `&GroundScene::GroundScene`, `&CommandParser::CommandParser`, every `*::ctor` row is a hard compile error and needs a thunk wrapper. (b) **`&Class::virtualMethod` under MSVC yields a vtable-dispatch thunk, NOT the real code address** — `Object::addToWorld/removeFromWorld`, `GroundScene::draw/processEvent`, `Appearance::render/collide`, `RenderWorld::render`, `CuiIoWin::processEvent` are `virtual`; a `&fn` pointer for these will NOT be the function Utinni wants to detour. (CORRECTION: `Object::getObjectType` (Object.h:152) and `move_p`/`move_o` (Object.h:251-252) are NON-virtual — NOT in this set; the prior "getType/move virtual at Object.h:120-121" citation was wrong.) (c) **Private members** (`GroundScene::init/update/handleInputMap*`) can't be addressed from outside the class — needs `friend` or an in-class thunk. (d) **Overloaded methods** (`Graphics::present`, `Game::setScene`, `BaseExtent::intersect`) need an explicit cast to disambiguate `&fn`. (`Game::getCamera` is NOT overloaded — its const sibling is the separately-named `getConstCamera` (Game.h:174); no cast.)
 
-**Primary recommendation:** Land 37-01 as a pure mirror of the gl11 pattern (`__declspec(dllexport)` only, no def/pragma), proving 5 rows: a static fn (`Game::install`), a global (`&Game::ms_loops` or a real exported global), the crash-fixer (`config::loadOverrideConfig` — see signature-mismatch caveat below), one non-virtual non-static PMF (`CommandParser::addSubCommand` via the union helper), and a thunk for one ctor. Build the catalog static-first (free win), and treat ctors/virtuals/privates as a per-row thunk-wrapper decision in 37-03, not a bulk `&fn`.
+**Primary recommendation:** Land 37-01 as a pure mirror of the gl11 pattern (`__declspec(dllexport)` only, no def/pragma), proving 5 rows: a static fn (`Game::install`), a global (`&Game::ms_loops` or a real exported global), the crash-fixer (`config::loadOverrideConfig` — see signature-mismatch caveat below), one non-virtual non-static PMF (`CommandParser::addSubCommand` via the `std::bit_cast` helper), and a thunk for one ctor. Build the catalog static-first (free win), and treat ctors/virtuals/privates as a per-row thunk-wrapper decision in 37-03, not a bulk `&fn`.
 
 ## Architectural Responsibility Map
 
@@ -55,7 +55,7 @@ No CONTEXT.md exists for this phase (research spawned ahead of /gsd-discuss-phas
 |----|-------------|------------------|
 | EPA-02 | Advertised-path discovery / first-detour crash fixed | The `config::loadOverrideConfig` row resolves the `0xC0000005 target=0x00401000` crash. Self-verifiable on our side: export present (dumpbin) + non-null pointer in table for that name. Live first-detour-gone verification requires Utinni injection (out-of-repo). |
 | EPA-03 | DX11 overlay kickoff off the contract | `graphics::install` etc. rows + the shipped gl11 `GetHookPoints`. Self-verifiable: rows present + non-null. Live overlay render requires Utinni. |
-| EPA-04 | Graceful degradation / coverage gate | Coverage test asserting zero-missing + no-duplicate on the required name set (spec §7 #3). Fully self-verifiable in this repo (build-time or runtime self-check against the shared `.inc`). |
+| EPA-04 | Graceful degradation / coverage gate | Coverage gate = count-parity (drift smoke) + no-null + no-dup + **name-set equality** vs the X-macro `s_requiredNames[]` (the actual zero-missing proof) on the trimmed required set. Self-verifiable in this repo (build static_assert + Debug-boot self-check). EPA-04 "done" is scoped to **count-parity + no-null + no-dup + name-set-equality**; correct-`&` is by-construction/human-reviewed and live-verified Utinni-side (out of repo). Skipped virtuals are intentionally NOT in the required set (they are vtable-resolved, not "missing"); the trimmed set is honestly narrower than Utinni's full ~230-name hook list — an explicit Utinni-side coordination item. |
 
 ## Standard Stack
 
@@ -72,7 +72,7 @@ This is pure in-tree C++ against the existing MSBuild graph — no new libraries
 | Mechanism | Purpose | When to Use |
 |-----------|---------|-------------|
 | `__declspec(dllexport)` on `extern "C" __cdecl` | Force undecorated export from the exe | The one and only export mechanism needed — see Finding 1 |
-| `union { PMF pmf; void* p; }` extractor | Convert non-static, non-virtual member fn pointers to `void*` | Only for true instance methods (groundScene/object/commandParser/worldSnapshot) |
+| `std::bit_cast<void*>(pmf)` (C++20) | Convert non-static, non-virtual member fn pointers to `void*` | Only for true instance methods (groundScene/object/commandParser/worldSnapshot) — standard, well-defined; NOT a union type-pun |
 | `static_assert(sizeof(PMF)==sizeof(void*))` | Guard against multiple/virtual-inheritance PMF inflation | At the top of the PMF helper; fails the build if a class has inflated PMFs |
 | Free-function thunk `static T classCtorThunk(...)` | Wrap a constructor (whose address can't be taken) | Every `*::ctor` row |
 
@@ -97,7 +97,7 @@ This is pure in-tree C++ against the existing MSBuild graph — no new libraries
                                                                         ▼
    utinni_advertise.cpp ──&Game::install (static → fn ptr)──────► s_engineHookPoints[]
    (NEW, linked into exe)  &CommandParser::addSubCommand ──union──►  { "name", void* }
-                           ctorThunk(GroundScene) ────────────────►  (NUL-terminated)
+                           ctorThunk(GroundScene) ────────────────►  (NO sentinel; count=sizeof/sizeof)
                            &g_someGlobal ──────────────────────────►
                                                                         │
                            coverage_check() ◄──(asserts 0-missing,──────┘
@@ -135,7 +135,7 @@ src/game/client/application/SwgClient/
 **Component Responsibilities:**
 | File | Responsibility |
 |------|----------------|
-| `utinni_advertise.cpp` | Defines `s_engineHookPoints[]`, the PMF union helper, ctor thunks, `GetEngineHookPoints()`, the coverage self-check |
+| `utinni_advertise.cpp` | Defines `s_engineHookPoints[]`, the PMF `bit_cast` helper, ctor thunks, `GetEngineHookPoints()`, the coverage self-check |
 | `utinni_engine_hookpoints.h` | `UtinniEngineHookPoint`/`UtinniEngineHookPoints` structs + `UTINNI_HOOKPOINTS_VERSION`; pulls in `.inc` |
 | `utinni_engine_hookpoints.inc` | The canonical X-macro name list + required-set marker; the single artifact shared verbatim with D:/Code/Utinni |
 | `SwgClient.vcxproj` | Adds the new `.cpp` to all 3 Win32 configs (Debug/Optimized/Release); header is include-only |
@@ -172,13 +172,15 @@ Note: overloads need a cast — `(void*)static_cast<bool(*)(HWND,int,int)>(&Grap
 **What:** PMF→void* via a union under the size guard.
 **When to use:** `CommandParser::addSubCommand`, `CommandParser::createDelegateCommands`, `WorldSnapshot::*`, non-virtual `GroundScene` members.
 ```cpp
+#include <bit>   // std::bit_cast (C++20, stdcpp20 already enabled)
 template <class PMF>
 inline void* pmfToVoid(PMF pmf) {
     static_assert(sizeof(PMF) == sizeof(void*), "inflated PMF (multiple/virtual inheritance) — needs a thunk");
-    union { PMF m; void* p; } u; u.p = nullptr; u.m = pmf; return u.p;
+    return std::bit_cast<void*>(pmf);   // standard, well-defined — NOT a union type-pun (ill-formed)
 }
 // row: { "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) }
 ```
+**Per-row symbol-kind checklist (decide per row BEFORE writing it):** `{ static | pmf-nonvirtual | thunk | accessor | skip-virtual | omit }`.
 **CAVEAT (virtual):** `&Class::virtualMethod` yields a vtable-thunk address under MSVC, not the implementation. The `static_assert` does NOT catch this (single-inheritance virtual PMF is still pointer-sized). For virtual rows, advertise via a thunk that calls the method on a known instance, OR skip and let Utinni resolve off the vtable (spec already does this for `cui::io::processEvent`).
 
 ### Pattern 4: Constructor → free-function thunk (mandatory for every `*::ctor` row)
@@ -192,7 +194,7 @@ static void* groundSceneCtorThunk = /* address of an explicit wrapper, NOT &Grou
 ```
 
 ### Anti-Patterns to Avoid
-- **`reinterpret_cast<void*>(&Class::member)`** — ill-formed for PMFs; use the union helper.
+- **`reinterpret_cast<void*>(&Class::member)`** — ill-formed for PMFs; use `std::bit_cast<void*>` under the size guard.
 - **Advertising `&Class::Class` directly** — does not compile; thunk required.
 - **Advertising `&Class::virtualMethod` and assuming it's the impl address** — it's a thunk; wrong detour target. Worse than a missing row (spec §0).
 - **Adding a `.def` / ModuleDefinitionFile** — unnecessary; the gl11 twin proves dllexport-only works; extra surface to maintain across `_r/_d/_o`.
@@ -203,7 +205,7 @@ static void* groundSceneCtorThunk = /* address of an explicit wrapper, NOT &Grou
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
 | Undecorated exe export | Custom .def + name-mangling logic | `__declspec(dllexport)` on `extern "C" __cdecl` | Proven by gl11 twin; dumpbin-confirmed undecorated |
-| PMF → void* | Hand-rolled byte copy / cast chain | `union` helper + `static_assert(sizeof==)` | Portable, catches inflated PMFs at compile time |
+| PMF → void* | Hand-rolled byte copy / cast chain | `std::bit_cast<void*>` (C++20) + `static_assert(sizeof==)` | Standard/well-defined; catches inflated PMFs at compile time (NOT virtual stubs — skip those) |
 | Drift between repos | Two hand-typed name lists | One shared `.inc` X-macro | Spec §4; the only safe single-source-of-truth |
 | Coverage check | Manual eyeball of the table | Build-time `static_assert` over the .inc count, or a runtime self-check | Spec §7 #3 gate; deterministic |
 
@@ -237,11 +239,11 @@ Resolution method: each contract name → our fully-qualified C++ symbol, with f
 | `game::cleanupScene` | `Game::cleanupScene()` | Game.h:101 | `static void` | CONFIRM |
 | `game::getPlayer` | `Game::getPlayer()` | Game.h:150 | `static Object*` | CONFIRM |
 | `game::getPlayerCreatureObject` | `Game::getPlayerCreature()` | Game.h:157 | `static CreatureObject*` | CHECK (name differs: `getPlayerCreature`) |
-| `game::getCamera` | `Game::getCamera()` | Game.h:173 | `static Camera*`, OVERLOADED w/ const | CHECK — cast needed |
+| `game::getCamera` | `Game::getCamera()` | Game.h:173 | `static Camera*` — NOT overloaded | CORRECTED — the const variant is the separately-named `getConstCamera` (Game.h:174); NO cast. Use plain `(void*)&Game::getCamera`. |
 | `game::getConstCamera` | `Game::getConstCamera()` | Game.h:174 | `static Camera const*` | CONFIRM |
 | `game::isViewFirstPerson` | `Game::isViewFirstPerson()` | Game.h:185 | `static bool` | CONFIRM |
 | `game::isHudSceneTypeSpace` | `Game::isHudSceneTypeSpace()` | Game.h:215 | `static bool` | CONFIRM |
-| `game::g_mainLoopCounter` (global) | `Game::ms_loops` (private static) | Game.h:276 | private static int | LANDMINE — private; advertise via `&Game::getLoopCount` accessor address OR friend. Prefer accessor (spec §8 #3). |
+| `game::g_mainLoopCounter` (global) | `Game::ms_loops` (private static) | Game.h:276 | private static int | LANDMINE — private; the `Game::getLoopCount` accessor is INLINE (Game.h:398) → Pitfall 2 (no ODR-emitted address). Force a non-inline shim to take its address, or OMIT. Do NOT take `&ms_loops`. |
 | `game::g_runningFlags` (globals) | `Game::ms_done` + ? | Game.h:277 | private static | CHECK — two globals in spec; map to ms_done + another |
 
 ### graphics (clientGraphics facade — all `static`)
@@ -267,7 +269,7 @@ Resolution method: each contract name → our fully-qualified C++ symbol, with f
 |---|---|---|---|---|
 | `scene::groundScene::ctor` | `GroundScene::GroundScene(const char*,const char*,CreatureObject*)` | GroundScene.h:199 | **CTOR** | LANDMINE — can't take address; thunk required. (Matches Utinni's offline-scene `__thiscall` ctor typedef, ground_scene.cpp:46.) |
 | `scene::groundScene::init` | `GroundScene::init(const char*,CreatureObject*,float)` | GroundScene.h:173 | **PRIVATE** member | LANDMINE — private; friend or in-class thunk |
-| `scene::groundScene::reloadTerrain` | `GroundScene::reloadTerrain()` | GroundScene.h:215 | public non-virtual member | PMF via union helper — CONFIRM |
+| `scene::groundScene::reloadTerrain` | `GroundScene::reloadTerrain()` | GroundScene.h:215 | public non-virtual member | PMF via `bit_cast` helper — CONFIRM |
 | `scene::groundScene::changeCamera` | `GroundScene::setView(int,float)` (spec `changeCamera`) | GroundScene.h:207 | public member | CHECK (name differs; `setView` is the closest) |
 | `scene::groundScene::getCurrentCamera` | `GroundScene::getCurrentCamera()` | GroundScene.h:212 | public member, OVERLOADED (const) | CHECK — cast |
 | `scene::groundScene::draw` | `GroundScene::draw() const` | GroundScene.h:204 | **VIRTUAL** member | LANDMINE — `&GroundScene::draw` is a vtable thunk; thunk-wrap or skip |
@@ -293,11 +295,11 @@ Resolution method: each contract name → our fully-qualified C++ symbol, with f
 |---|---|---|---|---|
 | `commandParser::ctor1` | `CommandParser::CommandParser(const CmdInfo&, CommandParser*)` | CommandParser.h:128 | **CTOR** | LANDMINE — thunk |
 | `commandParser::ctor2` | `CommandParser::CommandParser(const char*,size_t,...)` | CommandParser.h:130 | **CTOR** | LANDMINE — thunk |
-| `commandParser::createDelegateCommands` | `CommandParser::createDelegateCommands(const CmdInfo[])` | CommandParser.h:180 | non-virtual member | PMF via union — but it is PROTECTED/private (line 180 below the public block) — CHECK access |
+| `commandParser::createDelegateCommands` | `CommandParser::createDelegateCommands(const CmdInfo[])` | CommandParser.h:180 | non-virtual member, **PROTECTED** | LANDMINE — protected (CommandParser.h:180); needs a friend/derived-subclass thunk, else OMIT. NOT addressable as a plain `&CommandParser::createDelegateCommands`. |
 | `commandParser::addSubCommand` | `CommandParser::addSubCommand(CommandParser*)` | CommandParser.h:149 | public non-virtual member | PMF via union — CONFIRM (good spike candidate) |
 
 ### cui::io / cui::chatWindow / cui::consoleHelper (37-02 secondary — CHECK tier)
-Not yet opened this session. Headers exist: CuiIoWin.h (`./client/library/clientUserInterface/src/shared/core/CuiIoWin.h`), SwgCuiChatWindow.h (`../game/client/library/swgClientUserInterface/src/shared/page/SwgCuiChatWindow.h`). Spec marks `cui::io::processEvent` as "from vtable" → virtual → skip (Utinni resolves off vtable). `cui::chatWindow::ctor` → ctor thunk. `consoleHelper::sendInput` → member PMF. Resolve in 37-02 execution.
+Not yet opened this session. Headers exist: CuiIoWin.h (`./client/library/clientUserInterface/src/shared/core/CuiIoWin.h`), SwgCuiChatWindow.h (`../game/client/library/swgClientUserInterface/src/shared/page/SwgCuiChatWindow.h`). Spec marks `cui::io::processEvent` as "from vtable" → virtual → skip (Utinni resolves off vtable; grep-guard `&CuiIoWin::processEvent` == 0). `cui::chatWindow::ctor` → `__thiscall` ctor thunk. **Corrected SwgCuiChatWindow names:** `enableTextInput`→`acceptTextInput`; `writeToAllTabs`→`appendToAllTabs` (:172); `writeToCurrentTab`→`appendTextToCurrentTab` (:174); `chatEnterHandler`→`performEnterKey` (:214). `consoleHelper::sendInput`→`processInput` (member PMF). Resolve against the cited lines in 37-02 execution.
 
 ## Full-Set Resolution Method (37-03 scoping)
 
@@ -318,8 +320,8 @@ The planner should scope 37-03 by **taxonomy bucket**, not by count, because the
 
 **Bucket-by-difficulty (drives 37-03 task structure):**
 1. **Static methods** (easiest, do first): much of misc (MemoryManager::allocate, Audio::setMasterVolume), Graphics extras. Plain `&fn`.
-2. **Non-virtual instance methods** (union helper): WorldSnapshot::*, ObjectTemplate getters, most object getters/setters.
-3. **Virtual instance methods** (thunk or skip): Object::addToWorld/removeFromWorld/getType/move (all `virtual` — VERIFIED Object.h:120-121), Appearance::render/collide, GroundScene::draw. `&fn` gives a vtable thunk — DO NOT advertise raw; either skip (Utinni resolves off vtable) or wrap.
+2. **Non-virtual instance methods** (`bit_cast` helper): WorldSnapshot::*, ObjectTemplate getters, most object getters/setters.
+3. **Virtual instance methods** (thunk or skip): `Object::addToWorld`/`removeFromWorld` (VERIFIED virtual, Object.h:120-121), `Appearance::render`/`collide`, `GroundScene::draw`, `RenderWorld::render`, `CuiIoWin::processEvent`. `&fn` gives a vtable thunk — DO NOT advertise raw; skip (Utinni resolves off vtable). **NOTE (corrected): `getObjectType` (Object.h:152) and `move_p`/`move_o` (Object.h:251-252) are NON-virtual — they are NOT in this skip bucket.** Broaden virtual-skip greps in 37-03 to: `&Appearance::render`, `&Appearance::collide`, `&GroundScene::draw`, `&RenderWorld::render`, `&CuiIoWin::processEvent`, `&Object::addToWorld`, `&Object::removeFromWorld`.
 4. **Constructors** (mandatory thunk): every `*::ctor` and all ~20 `UI*::ctor` rows.
 5. **Globals** (§8 #3): advertise `&g` if it's a real exported static; if file-static behind an accessor, advertise the accessor.
 6. **Mid-function patches** (§8 #1): OUT — cannot be `&fn`; deferred.
@@ -332,15 +334,22 @@ The planner should scope 37-03 by **taxonomy bucket**, not by count, because the
 - `graphics::screenshot/useHardwareCursor` → ours are `screenShot`/`setHardwareMouseCursorEnabled`.
 - `cui::manager::g_instance` → CuiManager is all-static, no instance; map to `getIoWin()` accessor or `ms_theIoWin`.
 - `scene::groundScene::changeCamera` → ours is `setView`.
+- `object::getType` → does NOT exist; use NON-virtual `Object::getObjectType()` (Object.h:152). `object::move` → does NOT exist; NON-virtual `move_p`/`move_o` (Object.h:251-252; `move_o` is INLINE at Object.h:1216 — force emission or OMIT). The "virtual at Object.h:120-121" citation was wrong — those lines are `addToWorld`/`removeFromWorld` only.
+- `extent::intersect` → `Extent::intersect` does NOT exist. Target the NON-virtual `BaseExtent::intersect` overloads (BaseExtent.h:45-47) with an explicit overload `static_cast`; `Extent::realIntersect` is protected-virtual (skip).
+- `commandParser::createDelegateCommands` → PROTECTED (CommandParser.h:180) — needs a friend/derived-subclass strategy, or OMIT; not addressable as a plain `&`.
+- UI/chat names: `enableTextInput`→`acceptTextInput`; `writeToAllTabs`→`appendToAllTabs` (SwgCuiChatWindow.h:172); `writeToCurrentTab`→`appendTextToCurrentTab` (SwgCuiChatWindow.h:174); `chatEnterHandler`→`performEnterKey` (SwgCuiChatWindow.h:214); `consoleHelper::sendInput`→`processInput`.
+- `game::getCamera` is NOT overloaded — the const variant is the separately-named `getConstCamera` (Game.h:174). Remove any `static_cast`; use plain `(void*)&Game::getCamera`.
+- `game::g_mainLoopCounter` accessor `Game::getLoopCount` is INLINE (Game.h:398) — Pitfall 2 applies: force a non-inline shim or OMIT.
 
 ## §8 Open-Items Decisions
 
 | § | Item | Decision from research |
 |---|------|------------------------|
 | §8 #1 | Mid-function patches | OUT for 37-02; 37-03 triage. Cannot be `&fn` (depend on Pre-CU instruction offsets). The MVP boot/render/scene path needs none. |
-| §8 #2 | `extent::intersect` build split | `&Extent::intersect` collapses the retail/SWGEmu RVA split to one symbol — confirmed advantage of advertisement. Extent lives in `shared/library/sharedCollision/`. CHECK virtual-ness before advertising. |
+| §8 #2 | `extent::intersect` build split | CORRECTED: `Extent::intersect` does NOT exist. Target the NON-virtual `BaseExtent::intersect` overloads (BaseExtent.h:45-47) via `pmfToVoid` + an explicit overload `static_cast` — that one symbol collapses the retail/SWGEmu RVA split. `Extent::realIntersect` is protected-virtual → skip. Extent/BaseExtent live in `shared/library/sharedCollision/`. |
 | §8 #3 | Globals as `&g` | Most "globals" in our build are PRIVATE static members behind accessors (Game::ms_loops, Graphics RT W/H via getCurrentRenderTargetWidth, CuiManager::ms_theIoWin). Advertise the **accessor address**, not the data address (Utinni calls vs reads). Only advertise `&g` where the global is genuinely accessible (non-private, ODR-emitted). |
 | §8 #4 | Contract shape | Keep the name→pointer table (spec recommendation). It survives partial population (graceful degradation = EPA-04). |
+| §0/§4 | `UTINNI_HOOKPOINTS_VERSION` bump | **DECISION (pinned): lockstep-by-shared-header makes a per-wave version bump COSMETIC** — the `.h` and `.inc` are copied verbatim into D:/Code/Utinni at each wave, so the consumer always has the matching version. Keep `UTINNI_HOOKPOINTS_VERSION = 1` (no per-wave bump). The one required task is the **explicit `.inc` + `.h` re-copy into `D:/Code/Utinni`** at the end of each catalog wave (37-02/37-03) so the two repos cannot silently diverge. |
 
 ## Validation Architecture
 
@@ -351,7 +360,7 @@ The planner should scope 37-03 by **taxonomy bucket**, not by count, because the
 |---|---|---|
 | §7 #1 Export present + undecorated | `dumpbin /exports stage/SwgClient_r.exe \| grep GetEngineHookPoints` shows `GetEngineHookPoints = _GetEngineHookPoints` (undecorated public name) | Per build of each flavor `_r/_d/_o` |
 | §7 #1 (all flavors) | Same dumpbin on `_d.exe` and `_o.exe` | Phase gate |
-| §7 #3 Coverage = zero-missing + no-duplicate | Build-time: `static_assert(s_count == UTINNI_REQUIRED_COUNT)` over the shared `.inc`; AND a runtime self-check `verifyNoNullNoDup(s_engineHookPoints)` (returns false / logs on any null addr or duplicate name) callable in a `#if !PRODUCTION` boot path | Build (static_assert) + boot (self-check) |
+| §7 #3 Coverage = zero-missing + no-duplicate | **Count `static_assert` is a cheap drift smoke ONLY — it does NOT prove zero-missing/correctness** (a missing name + a typo'd/dup name passes). The real gate: emit `s_requiredNames[]` from the SAME X-macro (`#define UTINNI_HOOKPOINT(g,n) #g "::" #n`), then `utinni_verifyNoNullNoDup()` asserts (a) no null addr, (b) no duplicate name, AND (c) the table's name set == `s_requiredNames` (every required name present exactly once, no extras). Wire it into Debug boot (`#if !defined(_PRODUCTION)`) before EPA-04 is declared green. | Build (count static_assert smoke) + boot (name-set-equality self-check) |
 | Build links clean | Grep build log for `unresolved external symbol` = 0 (AGENTS.md: `/FORCE` masks LNK2019/2001) | Every build |
 | `config::loadOverrideConfig` non-null | The crash-fixer row resolves to a non-null thunk address in the table | Coverage self-check covers it |
 | No SWGEmu regression | N/A in this repo — the SWGEmu hardcoded path is Utinni-side; our export is purely additive and inert when not injected. Verify by: client still boots to char-select (boot gate, AGENTS.md) under rasterMajor=5 and =11 | Boot smoke |
@@ -370,7 +379,7 @@ The planner should scope 37-03 by **taxonomy bucket**, not by count, because the
 
 ### Wave 0 gaps
 - [ ] `utinni_engine_hookpoints.h` + `.inc` — must exist (shared with D:/Code/Utinni) before any row references a name.
-- [ ] PMF union helper + ctor-thunk pattern — establish in 37-01 spike before catalog.
+- [ ] PMF `bit_cast` helper + ctor-thunk pattern — establish in 37-01 spike before catalog.
 - [ ] Decision on `installConfigFileOverride` linkability (currently file-local in ClientMain.cpp) — must be exposed or thunked for the crash-fixer row.
 - [ ] Coverage self-check harness (`verifyNoNullNoDup`) — build it in 37-01 so 37-02/37-03 inherit the gate.
 - No external test-framework install needed.
@@ -379,7 +388,9 @@ The planner should scope 37-03 by **taxonomy bucket**, not by count, because the
 
 D:/Code/Utinni exists locally (`D:/Code/Utinni/UtinniCore/swg/...`) — the name list CAN be coordinated against it directly. The Utinni consumer side uses per-subsystem typedefs + RVA literals (e.g. config.cpp:30-42); it does NOT yet consume a `.inc`. So Phase 37 must **author** `utinni_engine_hookpoints.inc` and hand a copy to Utinni (same dual-placement as the spec doc).
 
-**Recommendation:** X-macro for the **name list + required-set** only (uniform, shareable verbatim); hand-written table **body** on our side (rows are heterogeneous: static fn / union PMF / ctor thunk / accessor — they cannot share one macro expansion). The coverage self-check bridges name-list ↔ table-body so they cannot drift. Put the header at `src/game/client/application/SwgClient/src/shared/utinni_engine_hookpoints.h` (already on the SwgClient include path: `..\..\src\shared` per vcxproj:122).
+**Recommendation:** X-macro for the **name list + required-set** only (uniform, shareable verbatim); hand-written table **body** on our side (rows are heterogeneous: static fn / bit_cast PMF / ctor thunk / accessor — they cannot share one macro expansion). The coverage self-check bridges name-list ↔ table-body so they cannot drift. Put the header at `src/game/client/application/SwgClient/src/shared/utinni_engine_hookpoints.h` (already on the SwgClient include path: `..\..\src\shared` per vcxproj:122).
+
+**Provider-export split (Codex HIGH):** the shared `.h`/`.inc` carry ONLY structs + `UTINNI_HOOKPOINTS_VERSION` + the X-macro name list — they MUST NOT carry the provider-side `extern "C" __declspec(dllexport)` declaration into the Utinni consumer repo. Put the `GetEngineHookPoints` `__declspec(dllexport)` declaration+definition in the SwgClient-only TU (`utinni_advertise.cpp`), not in the shared header. (Either keep the export decl out of the shared header entirely, or macro-gate it behind a `UTINNI_PROVIDER` define that only SwgClient sets.)
 
 ## Common Pitfalls
 
@@ -417,9 +428,9 @@ D:/Code/Utinni exists locally (`D:/Code/Utinni/UtinniCore/swg/...`) — the name
 #include "clientGame/Game.h"
 #include "sharedCommandParser/CommandParser.h"
 
-template <class PMF> inline void* pmfToVoid(PMF pmf) {
-    static_assert(sizeof(PMF) == sizeof(void*), "inflated PMF — needs a thunk");
-    union { PMF m; void* p; } u; u.p = nullptr; u.m = pmf; return u.p;
+template <class PMF> inline void* pmfToVoid(PMF pmf) {   // #include <bit> for std::bit_cast (C++20)
+    static_assert(sizeof(PMF) == sizeof(void*), "inflated PMF — needs a thunk");  // catches MI/VI inflation ONLY, not virtual stubs
+    return std::bit_cast<void*>(pmf);
 }
 
 // crash-fixer thunk (installConfigFileOverride must be made linkable)
@@ -429,12 +440,12 @@ static int __cdecl utinni_loadOverrideConfig() { installConfigFileOverride(); re
 static const UtinniEngineHookPoint s_engineHookPoints[] = {
     { "config::loadOverrideConfig", (void*)&utinni_loadOverrideConfig },   // thunk, NOT loadFromBuffer
     { "game::install",              (void*)&Game::install },               // static fn ptr [Game.h:94]
-    { "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) }, // union PMF [CommandParser.h:149]
-    { nullptr, nullptr }
+    { "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) }, // bit_cast PMF [CommandParser.h:149]
+    // CANONICAL FORM (pinned 2026-06-21): NO {nullptr,nullptr} sentinel row.
 };
 static const UtinniEngineHookPoints s_table = {
     UTINNI_HOOKPOINTS_VERSION,
-    (unsigned)(sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) - 1,
+    (unsigned)(sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]),   // NO -1 (no sentinel)
     s_engineHookPoints
 };
 extern "C" __declspec(dllexport) const UtinniEngineHookPoints* __cdecl GetEngineHookPoints();
@@ -493,10 +504,13 @@ dumpbin /exports stage/SwgClient_r.exe | grep GetEngineHookPoints
      virtual-ness is confirmed before skip-vs-advertise.
 
 3. **Coverage gate: build-time `static_assert` vs runtime self-check?**
-   — **RESOLVED: BOTH.** Compile-time `static_assert` (table row count == `.inc` required-set count — hard compile
-     fail on drift, mirroring the Direct3d11_ConstantBuffer.h idiom) PLUS a runtime `utinni_verifyNoNullNoDup()`
-     null/duplicate scan (graceful — logs/returns false, never crashes). Seeded in 37-01, extended per-tier in
-     37-02/37-03. Lightest gate that cannot silently drift (EPA-04).
+   — **RESOLVED: BOTH + name-set equality.** Compile-time `static_assert` (table row count == `.inc` required-set
+     count, NO sentinel/NO `-1`) is a cheap **drift smoke** (count parity ≠ zero-missing). The real coverage gate is a
+     runtime `utinni_verifyNoNullNoDup()` that scans for null addr, duplicate name, AND asserts the table's name set
+     equals `s_requiredNames[]` (emitted from the SAME X-macro via `#define UTINNI_HOOKPOINT(g,n) #g "::" #n`). It logs/
+     returns false, never crashes (graceful), and is wired into Debug boot (`#if !defined(_PRODUCTION)`) before EPA-04 is
+     green. Seeded in 37-01, extended per-tier in 37-02/37-03. EPA-04 "done" = count-parity + no-null + no-dup +
+     name-set-equality proven; **correct-`&` is by-construction/human-reviewed, live-verified Utinni-side** (out of repo).
 
 ## Environment Availability
 

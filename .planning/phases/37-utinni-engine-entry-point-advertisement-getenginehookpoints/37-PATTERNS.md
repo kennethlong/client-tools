@@ -97,18 +97,28 @@ UTINNI_HOOKPOINT(graphics, install)
 
 **Analog:** NONE — grep for an existing member-function-pointer / `union`+`reinterpret_cast<void*>` helper in `src/engine` returned nothing. Net-new. Cite RESEARCH Pattern 3 / Code Examples.
 
-**Pattern to author** (RESEARCH:420-423):
+**Pattern to author** (RESEARCH:420-423) — use `std::bit_cast<void*>` (C++20, already enabled via `stdcpp20`), NOT a `union` type-pun (reading a non-active union member is ill-formed; `bit_cast` is the standard, well-defined idiom):
 ```cpp
+#include <bit>   // std::bit_cast (C++20)
 template <class PMF> inline void* pmfToVoid(PMF pmf) {
+    // The size guard catches multiple/virtual-INHERITANCE PMF inflation (>4 bytes) ONLY.
+    // It does NOT catch a &Class::virtualMethod — that is still pointer-sized but yields a
+    // vtable-dispatch stub, not the impl. Virtual rows must be SKIPPED per the landmine rules.
     static_assert(sizeof(PMF) == sizeof(void*), "inflated PMF (multiple/virtual inheritance) — needs a thunk");
-    union { PMF m; void* p; } u; u.p = nullptr; u.m = pmf; return u.p;
+    return std::bit_cast<void*>(pmf);
 }
 // row: { "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) }  // [CommandParser.h:149]
 ```
+**Per-row symbol-kind checklist (verify against the header BEFORE writing each row):**
+`{ static | pmf-nonvirtual | thunk | accessor | skip-virtual | omit }`. Pick one per row; the row form follows from the kind. Never bulk `&fn`.
+
 **Landmine flags (do NOT bulk `&fn`)** — per RESEARCH §"Pattern 3 CAVEAT" + Pitfall 1:
-- **virtual** members (`GroundScene::draw`, `Object::addToWorld/removeFromWorld/getType`) → `&fn` yields a vtable thunk, NOT the impl; the `static_assert` does NOT catch this. Skip (Utinni resolves off vtable) or instance-bound thunk.
-- **constructors** (`GroundScene::GroundScene`, `CommandParser::CommandParser`, all `UI*::ctor`) → address cannot be taken; free-function thunk mandatory (RESEARCH Pattern 4).
-- **private** members (`GroundScene::init/update/handleInputMap*`) → need `friend` or in-class thunk.
+- **virtual** members (`GroundScene::draw`, `Object::addToWorld/removeFromWorld`; NOTE `getObjectType`/`move_p`/`move_o` are NON-virtual — see corrected symbol list) → `&fn` yields a vtable thunk, NOT the impl; the `static_assert` does NOT catch this. Skip (Utinni resolves off vtable) or instance-bound thunk.
+- **constructors** (`GroundScene::GroundScene`, `CommandParser::CommandParser`, all `UI*::ctor`) → address cannot be taken; free-function thunk mandatory (RESEARCH Pattern 4). **Mandate `__thiscall` on the ctor thunk typedef** (32-bit MSVC member ctors are `__thiscall`) — or match the UtinniCore typedef exactly; a convention mismatch links clean and crashes at the first detour.
+- **private/protected** members (`GroundScene::init/update/handleInputMap*`; `CommandParser::createDelegateCommands` is PROTECTED at CommandParser.h:180) → need `friend`/derived-subclass/in-class thunk, else SKIP+document.
+- **inline** methods (`Game::getLoopCount` at Game.h:398; `Object::move_o` inline at Object.h:1216) → address may not be ODR-emitted; force emission via a non-inline shim, or OMIT.
+
+**Calling-convention contract (per-row, every non-`__cdecl` row):** the advertised `void*` carries NO convention — Utinni's typedef supplies it and it MUST match MSVC's emitted convention or the first live detour crashes. Non-static member PMFs are `__thiscall` (this in ECX); `client::wndProc` is `__stdcall`. State the convention in a row comment whenever it is not `__cdecl`.
 
 ---
 
@@ -130,7 +140,7 @@ template <class PMF> inline void* pmfToVoid(PMF pmf) {
     ...
   </ItemGroup>
 ```
-**To add:** `<ClCompile Include="..\..\src\win32\utinni_advertise.cpp" />` into the ClCompile ItemGroup, and `<ClInclude Include="..\..\src\shared\utinni_engine_hookpoints.h" />` (+ `.inc`) into the ClInclude ItemGroup.
+**To add:** `<ClCompile Include="..\..\src\win32\utinni_advertise.cpp" Condition="'$(Platform)'=='Win32'" />` into the ClCompile ItemGroup (the `Condition` keeps it Win32-only — an UNconditioned item would also compile/export from the existing x64 configs, breaching the 32-bit-only scope; the source ALSO carries an `#if !defined(_WIN64)` guard belt-and-suspenders), and `<ClInclude Include="..\..\src\shared\utinni_engine_hookpoints.h" />` (+ `.inc`) into the ClInclude ItemGroup.
 
 **Build-graph facts the planner needs (verified this session):**
 - NO `<ModuleDefinitionFile>` anywhere in the project — confirms dllexport-only is the export mechanism (matches the gl11 twin).
@@ -169,14 +179,15 @@ namespace ClientMainNamespace
 
 **Analog:** `src/engine/client/application/Direct3d11/src/win32/Direct3d11_ConstantBuffer.h:47-249` — the engine's established compile-time table-validation idiom (`static_assert(sizeof(...)==N, "msg")`, `offsetof` boundary asserts). Mirror this for the count gate.
 
-**Compile-time gate** (mirror the Direct3d11_ConstantBuffer.h pattern):
+**Compile-time gate** (mirror the Direct3d11_ConstantBuffer.h pattern). **CANONICAL FORM (pinned 2026-06-21, post-review): NO `{nullptr,nullptr}` sentinel row; `count = sizeof/sizeof`; the static_assert has NO `- 1`.** All three docs (37-01 / PATTERNS / RESEARCH) use this exact form:
 ```cpp
 static_assert(sizeof(Direct3d11_PerFrameCB) == 96, "Direct3d11_PerFrameCB size mismatch");   // ← the idiom
-// → for Phase 37:
-static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) - 1 == UTINNI_REQUIRED_COUNT,
+// → for Phase 37 (NO sentinel — do NOT add a {nullptr,nullptr} terminator row):
+static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) == UTINNI_REQUIRED_COUNT,
               "hookpoint table row count != required-set count (drift vs .inc)");
 ```
-**Runtime self-check** (RESEARCH Validation §"What THIS repo can self-verify" #3): a `verifyNoNullNoDup(s_engineHookPoints)` that returns false / logs on any null `addr` or duplicate `name`, callable once in a `#if !PRODUCTION` boot path. No external test framework exists (AGENTS.md: builds/boots are truth) — this build-time+boot self-check IS the gate. Build it in 37-01 so 37-02/37-03 inherit it.
+**Name-set-equality gate (the real zero-missing check — the count assert above is only a cheap drift smoke):** emit a parallel `s_requiredNames[]` from the SAME X-macro (`#define UTINNI_HOOKPOINT(g,n) #g "::" #n`, then `#include` the `.inc`), and have the runtime `utinni_verifyNoNullNoDup()` ALSO assert the table's name set equals `s_requiredNames` (every required name present exactly once, no extras). Count-parity alone cannot prove zero-missing (a missing name + a typo'd/duplicate name passes a count check).
+**Runtime self-check** (RESEARCH Validation §"What THIS repo can self-verify" #3): a `utinni_verifyNoNullNoDup()` that returns false / logs on any null `addr`, duplicate `name`, OR a name-set mismatch against the X-macro-generated `s_requiredNames[]` (the zero-missing check). Callable once in a `#if !defined(_PRODUCTION)` boot path — wire it into Debug boot before EPA-04 is declared green. No external test framework exists (AGENTS.md: builds/boots are truth) — this build-time+boot self-check IS the gate. Build it in 37-01 so 37-02/37-03 inherit it.
 
 ## Shared Patterns
 
