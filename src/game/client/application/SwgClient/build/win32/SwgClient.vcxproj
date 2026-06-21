@@ -149,6 +149,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_d.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
+      <!-- 32-bit Debug runnability (2026-06-20): give the x86 process the full ~4 GB user
+           address space on 64-bit Windows instead of the default 2 GB. Debug Tatooine
+           (~18k objects + D3DPOOL_MANAGED texture shadow copies + STL debug-iterator overhead)
+           walks into the 2 GB wall on world load and locks up. /LARGEADDRESSAWARE is the first
+           lever; watch for latent pointer-treated-as-signed bugs surfacing above 2 GB. -->
+      <LargeAddressAware>true</LargeAddressAware>
       <AdditionalOptions>/SAFESEH:NO /VERBOSE %(AdditionalOptions)</AdditionalOptions>
       <EntryPointSymbol>
       </EntryPointSymbol>
@@ -219,6 +225,9 @@ if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\.
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_o.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
+      <!-- 32-bit address space (2026-06-20): /LARGEADDRESSAWARE to match Debug/Release (~4 GB
+           user space on 64-bit Windows). -->
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <ResourceCompile>
       <PreprocessorDefinitions>_ITERATOR_DEBUG_LEVEL=2;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -277,6 +286,10 @@ if not exist "..\..\..\..\..\..\..\stage\miles\mssds3d.flt" xcopy /E /I /Y "..\.
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName)_r.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
+      <!-- 32-bit address space (2026-06-20): mirror the Debug config's /LARGEADDRESSAWARE so
+           Release gets the same ~4 GB user space on 64-bit Windows. Gives the cantina-cycle
+           memory climb more contiguous headroom and keeps Release behavior matched to Debug. -->
+      <LargeAddressAware>true</LargeAddressAware>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <ShowProgress>LinkVerbose</ShowProgress>
     </Link>
