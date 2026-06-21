@@ -1,6 +1,30 @@
-# 32-bit client cantina degradation — NEXT SESSION (debug)
+# 32-bit client cantina degradation — RESOLVED 2026-06-20
 
-**Status:** OPEN, next session. Surfaced 2026-06-20 while testing the door-snap fix across all 4
+**Status:** RESOLVED 2026-06-20. The diagnosis below was **WRONG** — this was TWO separate things, and
+neither is the leak-induced hitch theory:
+
+1. **The "camera fling / see Mos Eisley from inside the cantina" (screenshots 0386-0389) = a D3D9-on-32-bit
+   floating-point bug, NOT the leak.** Root cause: `Direct3d9::CreateDevice` was missing
+   `D3DCREATE_FPU_PRESERVE`, so D3D9 clamps the x87 FPU to single precision → degrades the SHARED
+   portal-visibility math → a borderline cell-cull flips at one cantina spot → exterior shows through the
+   wall (deterministic, angle-dependent, clears on look up/down). FIXED: one line in `Direct3d9.cpp`
+   (`vertexProcessingMode |= D3DCREATE_FPU_PRESERVE;`), built into gl05/gl06/gl07 Win32 Debug+Release,
+   runtime-verified on gl05 32-bit Release. Localized by the **renderer×bitness matrix at the exact spot**
+   (gl05-32bit BROKEN; gl05-x64 + gl11-32bit CLEAN). See memory
+   `project_d3d9_32bit_fpu_preserve_cantina_seethrough`.
+2. **The actual 2 GB memory leak is already fixed** by the Phase-32 VS bytecode cache (`ff02a367e`).
+   Re-measured 2026-06-20 (`tools/setup/mem-sampler.ps1`) over ~7 min cantina cycling on gl05 32-bit
+   Release: floor ~703 MB → plateaued **dead-flat at ~900 MB**, handles/GDI flat. The old +144 MB/2min
+   monotonic-to-2GB signature is gone.
+
+Carry-forward: rebuild x64 gl05/06/07 for source/binary consistency (FPU_PRESERVE is a no-op on x64).
+Commit pending Kenny's ask. Original (incorrect) diagnosis preserved below for the record.
+
+---
+
+_Original handoff (diagnosis was wrong — kept for the record):_
+
+Surfaced 2026-06-20 while testing the door-snap fix across all 4
 configs. **NOT a door-snap regression** (that fix is committed `3549c7104` and verified).
 
 ## Symptom
