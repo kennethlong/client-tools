@@ -255,3 +255,27 @@ The provider build-gate is green (see the 38-04 SUMMARY: Debug+Release link 0 un
   `38-03-SUMMARY.md` (chatWindow + version bump + Bucket-4), `38-04-SUMMARY.md` (this re-sync + build).
 - The two Utinni handoffs this doc answers: `2026-06-22-utinni-advertised-client-coverage-status.md`,
   `2026-06-22-utinni-dx11-advertised-client-gap.md`.
+
+---
+
+## 7. Post-implementation code-review finding (Utinni to assess — NOT a Phase-38 regression)
+
+A standard code review of the advertised table (`38-REVIEW.md`: 0 blockers, 5 warnings) surfaced one
+item worth a consumer-side decision. It concerns **Phase-37 `object::*` rows, pre-existing — not added
+by Phase 38** — but it affects how Utinni should consume them:
+
+- **WR-01 — five `object::*` rows advertise header-`inline` functions.** `object::getNetworkId`,
+  `getObjectTemplate`, `getPosition_w`, `setPosition_w`, `getAppearance` are defined `inline` in
+  `Object.h` with no out-of-line twin in `Object.cpp`. Taking `&fn` on them compiles and yields a
+  **valid COMDAT address** (non-null, no crash — they resolve fine and the live-inject won't fault on
+  them). BUT a **detour** placed on that address will NOT intercept call sites the compiler inlined —
+  the same Pitfall-2 rule under which `object::move_o` was correctly OMITTED.
+  - **If Utinni only CALLS these (invokes the original to read object state):** no action — the COMDAT
+    body is correct; they work as-is.
+  - **If Utinni DETOURS any of them (expects to intercept engine-internal calls):** the detour is
+    bypassed at inlined sites. For those, the provider would need to expose an out-of-line accessor
+    (engine change, future phase). **Tell the provider which of the five (if any) you detour** and a
+    follow-up can add out-of-line accessors for just those.
+- Lower-severity review notes (WR-02..05) are comment/semantic-citation mismatches on existing rows
+  (`g_runningFlags`→`bool isOver()`, `loadConfigFileString`→path-loader, `report::print`→non-formatting
+  `puts`); they advertise the correct functions — no consumer action needed.
