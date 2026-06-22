@@ -35,6 +35,8 @@
 #include "clientUserInterface/CuiIoWin.h"          // CuiIoWin::* (member PMFs)
 #include "clientUserInterface/CuiConsoleHelper.h"  // CuiConsoleHelper::processInput (member PMF)
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
+#include "clientGame/GroundScene.h"                 // GroundScene MI thunks + ctor (38-01)
+#include "utinni_groundScene_forward.h"             // utinni_groundScene* private-method forwarders (38-01; exe-local)
 
 // -- 37-03 full-catalog includes --------------------------------------------
 #include "sharedCollision/BaseExtent.h"            // BaseExtent::intersect (non-virtual overload, §8 #2)
@@ -119,6 +121,76 @@ static CommandParser * __fastcall utinni_commandParserCtor2(CommandParser * pThi
 }
 
 // ----------------------------------------------------------------------
+// consoleHelper::sendInput thunk (WR-05 fix; the cross-repo follow-up for the
+// Utinni Phase-24 D-02 carve-out -- the ONE .inc name they left unbound, on RVA,
+// pending this provider). The retail target SwgCuiConsoleHelper::sendInput (spec
+// line 283; SWGEmu 0x009141D0) has NO from-source twin in this client; the
+// engine-layer equivalent is CuiConsoleHelper::processInput. But processInput
+// takes a REQUIRED 2nd arg -- a stdset<Unicode::String>& recursion-guard stack
+// [CuiConsoleHelper.h:76] -- that an injector calling a one-string
+// "sendInput(text)" cannot know to supply, so a raw &CuiConsoleHelper::processInput
+// is detoured with garbage/absent arg2 and faults at the first call (WR-05). This
+// thunk presents the one-string __thiscall ABI and supplies the recursion stack
+// itself from the public static getRecurseStackForCommandBeingParsed()
+// [CuiConsoleHelper.h:123 / CuiConsoleHelper.cpp:1136] -- the SAME canonical call
+// form the engine uses internally (CuiConsoleHelper.cpp:99). (processInputLine,
+// the no-stack sibling, is PRIVATE [:132] so its address cannot be taken here.)
+//
+// CALLING CONVENTION: same __fastcall(pThis /*ECX*/, dummy /*EDX*/, args) ==
+// __thiscall emulation as the ctor thunks above (MSVC v145 forbids __thiscall on
+// a free function, C3865). CuiConsoleHelper is single-inheritance (UIEventCallback
+// only) so `this` needs no most-derived adjustment.
+// UTINNI-SIDE TYPEDEF TO MATCH: bool(__thiscall*)(CuiConsoleHelper*, const Unicode::String&).
+// ----------------------------------------------------------------------
+static bool __fastcall utinni_consoleHelperSendInput(CuiConsoleHelper * pThis, int /*edx*/,
+	const Unicode::String & istr)
+{
+	return pThis->processInput(istr, CuiConsoleHelper::getRecurseStackForCommandBeingParsed());
+}
+
+// ----------------------------------------------------------------------
+// groundScene::* MI thunks (38-01, EPA-05). GroundScene is MULTIPLE-INHERITANCE
+// (NetworkScene : public Scene, public MessageDispatch::Receiver) so every PMF
+// is inflated and trips the pmfToVoid sizeof guard (C2338) -- a __fastcall thunk
+// is mandatory; pmfToVoid(&GroundScene::member) must NEVER be used here.
+//
+// CALLING CONVENTION: same __fastcall(pThis /*ECX*/, int /*EDX*/, args) ==
+// __thiscall emulation as the ctor thunks above (MSVC v145 forbids __thiscall on
+// a free function, C3865; the dummy EDX makes the two ABIs byte-identical).
+//
+// These three target PUBLIC GroundScene methods, so they can be named directly
+// here (the four PRIVATE methods are reached via the GroundScene.cpp forwarders
+// declared in utinni_groundScene_forward.h -- a free thunk in this TU cannot
+// name a private member, C2248).
+// ----------------------------------------------------------------------
+static void __fastcall utinni_groundSceneReloadTerrain(GroundScene * pThis, int /*edx*/)
+{
+	pThis->reloadTerrain();                                          // public [GroundScene.h:215]
+}
+
+static void __fastcall utinni_groundSceneChangeCamera(GroundScene * pThis, int /*edx*/,
+	int newView, float value)
+{
+	pThis->setView(newView, value);                                 // public [GroundScene.h:207] (contract name changeCamera -> ours setView)
+}
+
+static GameCamera * __fastcall utinni_groundSceneGetCurrentCamera(GroundScene * pThis, int /*edx*/)
+{
+	return pThis->getCurrentCamera();                               // public, non-const this -> non-const overload, no cast [GroundScene.h:212]
+}
+
+// groundScene::ctor -- placement-new MI ctor thunk (you cannot take &Class::Class;
+// 37-03 ctor-thunk pattern). MI class -> the caller-supplied `this` is the
+// most-derived pointer; ::new(pThis) constructs the full object via the
+// (const char*, const char*, CreatureObject*) overload [GroundScene.h:199] -- NOT
+// the (const char*, const NetworkId&, ...) overload at :200.
+static GroundScene * __fastcall utinni_groundSceneCtor(GroundScene * pThis, int /*edx*/,
+	const char * terrainFilename, const char * playerFilename, CreatureObject * customizedPlayer)
+{
+	return ::new (static_cast<void *>(pThis)) GroundScene(terrainFilename, playerFilename, customizedPlayer);
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -164,15 +236,23 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "graphics::g_renderTargetWidth",  (void *)&Graphics::getCurrentRenderTargetWidth },  // ACCESSOR (sec 8 #3): RT width behind a static getter [Graphics.h:103] -- call-not-read
 	{ "graphics::g_renderTargetHeight", (void *)&Graphics::getCurrentRenderTargetHeight }, // ACCESSOR (sec 8 #3): RT height behind a static getter [Graphics.h:104] -- call-not-read
 
-	// -- scene::groundScene -- DEFERRED to 37-03 (Rule 3 landmine discovered at build):
-	// GroundScene derives (via NetworkScene) from MULTIPLE bases -- NetworkScene.h:28-30
-	// `class NetworkScene : public Scene, public MessageDispatch::Receiver`. A
-	// multiple-inheritance class has INFLATED member-function pointers (>sizeof(void*)),
-	// so &GroundScene::{reloadTerrain,getCurrentCamera,setView} trip the pmfToVoid
-	// sizeof(PMF)==sizeof(void*) guard (C2338). Even the "clean" public non-virtual rows
-	// need a __thiscall free-function thunk (the MI-class thunk pattern is 37-03's tier).
-	// OMITTED here (NOT weakened) -- a wrong/inflated & is worse than a missing row (spec sec 0).
-	// Names also removed from the .inc so the coverage gate stays in lockstep.
+	// -- scene::groundScene (clientGame; GroundScene.h) -- 38-01, EPA-05 ---------
+	// GroundScene is MULTIPLE-INHERITANCE (NetworkScene : public Scene, public
+	// MessageDispatch::Receiver [NetworkScene.h:28-30]) -> every PMF is inflated,
+	// so NONE of these use pmfToVoid(&GroundScene::member) (would trip the C2338
+	// sizeof guard). 3 PUBLIC methods + 1 ctor are __fastcall thunks defined above;
+	// the 4 PRIVATE methods are __fastcall forwarders defined in GroundScene.cpp
+	// (member access) and declared in utinni_groundScene_forward.h.
+	{ "groundScene::ctor",                 (void *)&utinni_groundSceneCtor },                    // placement-new MI ctor thunk -> GroundScene(const char*,const char*,CreatureObject*) [GroundScene.h:199] (NOT the NetworkId overload :200)
+	{ "groundScene::init",                 (void *)&utinni_groundSceneInit },                    // PRIVATE [GroundScene.h:173] -> in-TU GroundScene.cpp forwarder (member access)
+	{ "groundScene::reloadTerrain",        (void *)&utinni_groundSceneReloadTerrain },           // public [GroundScene.h:215] -> MI __fastcall thunk
+	{ "groundScene::changeCamera",         (void *)&utinni_groundSceneChangeCamera },            // public [GroundScene.h:207] MISMATCH: ours setView(int,float) -> MI __fastcall thunk
+	{ "groundScene::getCurrentCamera",     (void *)&utinni_groundSceneGetCurrentCamera },        // public [GroundScene.h:212] (non-const overload; const sibling :213) -> MI __fastcall thunk
+	{ "groundScene::update",               (void *)&utinni_groundSceneUpdate },                  // PRIVATE [GroundScene.h:77] -> in-TU GroundScene.cpp forwarder
+	{ "groundScene::handleInputMapUpdate", (void *)&utinni_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder
+	{ "groundScene::handleInputMapEvent",  (void *)&utinni_groundSceneHandleInputMapEvent },     // PRIVATE [GroundScene.h:168] -> in-TU GroundScene.cpp forwarder
+	// SKIP: groundScene::draw -- VIRTUAL [GroundScene.h:204] (also in the VIRTUAL SKIPS block); Utinni resolves off the live vtable. Not advertised.
+	// OMIT: groundScene::g_instance -- no dedicated GroundScene singleton; reached via INLINE Game::getScene() [Game.h:306] (no ODR address) cast to GroundScene, and Game::ms_scene is private [Game.h:271]. OMITTED (graceful degradation); FLAGGED for the EPA-08 handback -- if Utinni's groundScene editor strictly needs the raw singleton pointer, add a non-inline Game accessor in a follow-up.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
 	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
@@ -190,7 +270,7 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "cuiIo::g_instance",            (void *)&CuiManager::getIoWin },             // ACCESSOR: the CuiIoWin singleton accessor (CuiManager owns ms_theIoWin) [CuiManager.h:100]
 
 	// -- consoleHelper (clientUserInterface; CuiConsoleHelper.h) ----------------
-	{ "consoleHelper::sendInput",     pmfToVoid(&CuiConsoleHelper::processInput) },// member PMF __thiscall, single-inheritance [CuiConsoleHelper.h:76] (MISMATCH: spec "sendInput" -> ours processInput)
+	{ "consoleHelper::sendInput",     (void *)&utinni_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent)
 
 	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
 	{ "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) },  // bit_cast member PMF, __thiscall [CommandParser.h:149]

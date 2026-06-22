@@ -87,11 +87,21 @@ UTINNI_HOOKPOINT(graphics,      setStaticShader)
 UTINNI_HOOKPOINT(graphics,      g_renderTargetWidth)
 UTINNI_HOOKPOINT(graphics,      g_renderTargetHeight)
 
-// -- scene::groundScene -- ALL DEFERRED to 37-03: GroundScene is a MULTIPLE-
-//    INHERITANCE class (via NetworkScene : public Scene, public MessageDispatch::
-//    Receiver) -> inflated member PMFs fail the pmfToVoid sizeof guard. Even the
-//    "clean" reloadTerrain/getCurrentCamera/setView rows need a __thiscall thunk
-//    (37-03 tier). Not advertised this wave (kept out of the required set).
+// -- scene::groundScene (clientGame; GroundScene.h) -- 38-01, EPA-05 ---------
+// GroundScene is MULTIPLE-INHERITANCE (NetworkScene : public Scene, public
+// MessageDispatch::Receiver) -> every PMF inflated, so each row is a __fastcall
+// thunk (public methods + ctor in utinni_advertise.cpp; PRIVATE init/update/
+// handleInputMap* as in-TU GroundScene.cpp forwarders). draw is VIRTUAL (SKIP,
+// vtable-resolved) and g_instance is inline-getter/private (OMIT) -> both kept
+// OUT of this required set (see the .cpp SKIP/OMIT notes).
+UTINNI_HOOKPOINT(groundScene,   ctor)
+UTINNI_HOOKPOINT(groundScene,   init)
+UTINNI_HOOKPOINT(groundScene,   reloadTerrain)
+UTINNI_HOOKPOINT(groundScene,   changeCamera)
+UTINNI_HOOKPOINT(groundScene,   getCurrentCamera)
+UTINNI_HOOKPOINT(groundScene,   update)
+UTINNI_HOOKPOINT(groundScene,   handleInputMapUpdate)
+UTINNI_HOOKPOINT(groundScene,   handleInputMapEvent)
 
 // -- cui::manager (clientUserInterface, all static; CuiManager.h) ------------
 UTINNI_HOOKPOINT(cuiManager,    render)
