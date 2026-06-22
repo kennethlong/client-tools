@@ -31,13 +31,19 @@
 #define INCLUDED_utinni_engine_hookpoints_H
 
 // ----------------------------------------------------------------------
-// Contract version. PINNED at 1 for all waves: lockstep-by-shared-header
-// makes a per-wave bump cosmetic (the .h/.inc are re-copied into
-// D:/Code/Utinni at each wave so the consumer always sees the matching
-// version). Do NOT bump per wave -- the required action is the explicit
-// .inc + .h re-copy into D:/Code/Utinni (tasked in 37-02/37-03).
+// Contract version. POLICY (D-03, Phase 38 -- overrides the 37-era "pinned at
+// 1, do NOT bump per wave" note): any NAME ADD/REMOVE to the .inc bumps this
+// version. The version is advisory -- the contract is name-keyed, so a consumer
+// resolves endpoints by name regardless -- but the bump is the explicit signal
+// that the catalog grew. Lockstep is still enforced byte-exactly: the .h + .inc
+// are re-copied verbatim into D:/Code/Utinni/UtinniCore/swg/ at the catalog wave
+// (the .h/.inc re-sync is 38-04) so the consumer always sees the matching set.
+//
+// Bumped 1 -> 2 in 38-03: this single bump covers ALL the names added across the
+// Phase-38 catalog growth (38-01 groundScene::* x8, 38-02 client/config x4,
+// 38-03 cuiChatWindow::* x4).
 // ----------------------------------------------------------------------
-#define UTINNI_HOOKPOINTS_VERSION 1
+#define UTINNI_HOOKPOINTS_VERSION 2
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

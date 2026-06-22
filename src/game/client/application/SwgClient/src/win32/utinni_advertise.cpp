@@ -434,6 +434,25 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	// wave -> OMITTED (see OMIT/DEFER block + 37-03-SUMMARY). A genuinely
 	// accessible engine singleton accessor advertised raw as &g:
 	{ "graphics::g_frameNumber",     (void *)&Graphics::getFrameNumber },          // ACCESSOR (§8 #3): the frame counter behind a genuinely-accessible non-private static getter [Graphics.h:83] -- call-not-read, &g-style global row
+
+	// ======================================================================
+	// BUCKET-4 REMAINING ADDRESSABLE FULL-SET -- 38-03 confirm-or-OMIT ledger
+	// (D-04: a wrong & is worse than a missing row; never add on spec faith).
+	// Every spec §6 "remaining ~30 subsystems" candidate NOT already advertised
+	// above was source-confirmed in THIS tree this wave -> NET NEW ROWS THIS
+	// PASS: ZERO. The plain-&fn bulk was already taken in 37-03; the remainder
+	// is virtual / inline / protected / MI-ctor / private-no-accessor / NONEXISTENT.
+	// Each candidate is accounted for (none silently dropped):
+	//   OMIT  inline    -- Object::move_o                  [Object.h:1216 `inline void Object::move_o`]
+	//   SKIP  virtual   -- Object::addToWorld/removeFromWorld [Object.h:120-121] / setParentCell [:168 `virtual void setParentCell`]
+	//   OMIT  protected -- CommandParser::createDelegateCommands [CommandParser.h:180 (protected: block opens :178)] (would need an in-TU forwarder; Utinni's TJT path uses the already-advertised ctors/addSubCommand)
+	//   OMIT  inline    -- Camera::getViewportX0/Y0/Width/Height [Camera.h:210/226/242/.. `inline int Camera::getViewport*`] (no ODR address). The two out-of-line getViewport(int&,...)/(float&,...) overloads [Camera.h:170-171] ARE addressable, but the spec lists the camera getters generically under the inline-OMIT bucket with no distinct contract slot -> OMIT (adding a speculative overloaded camera::getViewport row would be a spec-faith add; flagged for EPA-08 if Utinni names a concrete slot).
+	//   SKIP  virtual   -- Appearance::render/collide, RenderWorld::render, clientWorld::collide overloads, proceduralTerrain::* (vtable-resolved; already in the VIRTUAL SKIPS block / 37-03)
+	//   DEFER MI ctor   -- hud/loginScreen/gameMenu/radialMenu + ~20 low-level UI control ctors (each needs its own placement-new __fastcall thunk + injector-supplied args; Utinni resolves via RVA today -- same rationale as the cuiChatWindow::ctor DEFER above)
+	//   OMIT  private    -- read-only globals (player health/stats, hud view-distance, terrain singleton/weather/filename, static-shader): private members with NO non-inline ODR accessor confirmable this wave (§8 #3: never take a private-member address)
+	//   NONE  (absent)   -- memory::deallocateString / math::vectorNormalize / network idManager* / crcString::calculateCrc / client::writeCrashLog / client::setupStartDataInstall: 0 source twin in this tree (MemoryManager has free() not deallocate; the rest grep to 0). NONEXISTENT -> OMIT, flagged for EPA-08.
+	// (No new #include / no new vcxproj include dir needed this pass -- zero adds.)
+	// ======================================================================
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
 
