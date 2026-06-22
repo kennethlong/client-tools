@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: x64 Port
-status: executing
-last_updated: "2026-06-22T21:25:11.026Z"
+status: verifying
+last_updated: "2026-06-22T21:38:31.530Z"
 last_activity: 2026-06-22
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 36
-  completed_plans: 29
-  percent: 81
+  completed_plans: 30
+  percent: 83
 ---
 
 # Project State
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15 after v2.3 close)
 
 **Core value:** Every change must leave the client bootable to character select. Visual parity achieved in v2.2 — D3D11 now matches the D3D9 baseline; never regress either renderer.
-**Current focus:** Phase 38 — utinni-advertised-client-coverage-completion
+**Current focus:** Phase 38 — utinni-advertised-client-coverage-completion **COMPLETE** (2026-06-22; 94-endpoint contract at version 2, re-synced byte-identical to D:/Code/Utinni, EPA-08 DX11 evidence handed back, final Debug+Release build green). Remaining = the maintainer's consolidated boot-smoke + live inject-smoke + the Utinni-side consumer worklist.
 
 ## Deferred Items (acknowledged at v3.0 close — 2026-06-20)
 
@@ -132,7 +132,7 @@ Plans: 2 (26-01 D-15 removal / HARD-03 partial — DONE commit 6c95fa990; 26-02 
 ### Prior — Phase 25 (cantina-corner-snap-fix) — INTERIOR snap RESOLVED-by-config; residual DOOR snap PARKED for HARD-05
 
 Plan: 1 of 1 (25-01 guard approach ABANDONED + reverted)
-Status: Ready to execute
+Status: Phase complete — ready for verification
   • The frame-scoped reversal guard (7820aea50) was REVERTED (a6df32348) — runtime FALSIFIED the cell-ping-pong premise (it desynced cell membership → interior→skybox). A follow-up CollisionResolve resetPos fix was also built + REVERTED (collision-independent; didn't fix it).
   • INTERIOR corner snap (the original HARD-02 bug) is RESOLVED on every shippable config: Release D3D11 AND Release gl07 both render cantina interiors clean. Debug gl05 amplifies it (slow timestep).
   • Residual MAIN-DOOR snap (front+back, ~85%) is a SEPARATE, collision-independent, 32-bit-build/codegen-fragile one-frame float transient at the cell→world handoff (interior floor world-Y~5.1 → terrain~1.06). Our door-exit source is BYTE-IDENTICAL to pristine SWG-Source (D:\Code\client-tools); the Koogie cherry-picks never touched it. SWGEmu + Restoration run the SAME D3D9/gl07 renderer with NO snap — Restoration runs it in **x64**. Leading cause (Kenny): "D3D9 32-bit vs D3D9 64-bit" timing/codegen (x87/SSE-mix fragility vs deterministic 64-bit SSE). _fpreset MXCSR test moved it only ~10% → HARD-05 (D3DCompile) unlikely to fully fix the door.
@@ -270,7 +270,7 @@ Items carried from v1 close:
 
 ## Session Continuity
 
-Last session: 2026-06-22T21:24:49.062Z
+Last session: 2026-06-22T21:38:22.781Z
 Prior session: 2026-06-16 (completed 31-09-PLAN.md — gap-closure increment 3, CAPPED convergence: FIXED the 4 genuine class-(B) width members unmasked by 31-08 [CuiCombatManager pos→size_t, MeshConstructionHelper 5× 0U→size_t literal, TcpClient/TcpServer completionKey→ULONG_PTR; feaddc08e; 0 C2665/C2664/C2672, no wire change]; RECLASSIFIED the sharedTemplateDefinition Unicode cluster tool-only out-of-scope by link evidence [81b19c345, files unedited]; CONFIRMED+EXCLUDED both harness-only non-defects [Direct3d9 #error + 5× winsock C2371; 79f5bc84a]. CAPPED -Scope all [2218 TUs]: 55→51 failing TUs, exhaustively classified = 41 class-(A) + 7 harness artifacts + 3 reclassified tool-only + 0 NEW class-(B). HARD CAP HELD → Phase-31 class-(B) source work COMPLETE; 31-06 Task 2/3 resumable; NO 31-10. SUMMARY self-check PASSED.)
 Prior session: 2026-06-16T04:45:00.000Z (completed 31-08-PLAN.md — gap-closure increment 2: the ~753 AutoDeltaMap/AutoDeltaPackedMap C2665/C2668 + the 8 AutoDeltaSet + the ~125-error cascade tail CLEARED via the 31-05 uint32_t count pin across all four AutoDelta* families [1b6a98ff4/5b5f08a2f] + the CreatureObject AutoDeltaVector callback Rule-3 fix [846a2ded6]. Exercised by a gitignored scratch instantiation TU; authoritative -Scope all [2218 TUs] = 0 AutoDelta header errors. SUMMARY self-check PASSED. STOP-and-report: clearing the cascade UNMASKED a residual pre-existing class-(B) surface [16 TUs — getFirstToken C2665, char16_t/wchar_t Unicode cluster, network size_t C2664; + harness-only Direct3d9 #error/network C2371], DEF-31-08-UNMASKED; recommend a 31-09 increment before 31-06 certifies x64-clean.)
 Prior session: 2026-06-16T03:10:00.000Z (completed 31-07-PLAN.md — the gap-closure plan: the 11 enumerated NEW class-(B) survivors from the 31-06 full sweep are CLEARED — 13 __asm ports incl. lane-faithful _mm_* SSE skinning w/ a _DEBUG oracle [CONSULT-44 resolved PoseModelTransform!=Transform], the TWO FUNCTIONAL fixes [PathSearch UAF, StatusWindow this], VoidBindSecond shared-header, LfgDataTable, AlterScheduler, and the time_t DISPLAY audits. 4 task commits + docs; SUMMARY self-check PASSED. The post-31-07 -Scope all then exposed a LARGE undercounted AutoDelta* C2665/C2668 surface [~154 TUs] — flagged STOP-and-report DEF-31-07-FULLSWEEP. RESIDUAL-31-06's gap-closure satisfied; recommend a 31-08 increment before 31-06 Task 2/3 certifies x64-clean.)
