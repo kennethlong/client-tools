@@ -115,6 +115,21 @@ UTINNI_HOOKPOINT(groundScene,   update)
 UTINNI_HOOKPOINT(groundScene,   handleInputMapUpdate)
 UTINNI_HOOKPOINT(groundScene,   handleInputMapEvent)
 
+// -- cui::chatWindow (swgClientUserInterface; SwgCuiChatWindow.h) -- 38-03, EPA-05 --
+// SwgCuiChatWindow is TRIPLE-INHERITANCE (SwgCuiLockableMediator, UINotification,
+// MessageDispatch::Receiver [SwgCuiChatWindow.h:58-61]) -> every PMF inflated, so
+// each row is a __fastcall thunk in utinni_advertise.cpp (all 4 target PUBLIC
+// non-virtual methods -- no friend decl needed). Contract names here are the SPEC
+// names; the in-tree method NAME MISMATCH (acceptTextInput/appendToAllTabs/
+// appendTextToCurrentTab/performEnterKey) is baked into the .cpp row comments.
+// ctor is an MI ctor requiring a live UIPage& arg (37-03 already deferred) -> OMIT
+// here (DEFER); chatEnterHandler advertises the CLEAN-entry performEnterKey only,
+// the Issue #11 mid-function NOP is a separate SWGEmu-only joint decision (.cpp note).
+UTINNI_HOOKPOINT(cuiChatWindow, enableTextInput)
+UTINNI_HOOKPOINT(cuiChatWindow, writeToAllTabs)
+UTINNI_HOOKPOINT(cuiChatWindow, writeToCurrentTab)
+UTINNI_HOOKPOINT(cuiChatWindow, chatEnterHandler)
+
 // -- cui::manager (clientUserInterface, all static; CuiManager.h) ------------
 UTINNI_HOOKPOINT(cuiManager,    render)
 UTINNI_HOOKPOINT(cuiManager,    setSize)
