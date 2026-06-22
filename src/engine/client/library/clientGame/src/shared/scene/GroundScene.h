@@ -58,9 +58,18 @@ class GroundScene : public NetworkScene
 	// ------------------------------------------------------------------
 	friend void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
 		const char * terrainFilename, CreatureObject * player, float timeInSeconds);
-	friend void __fastcall utinni_groundSceneUpdate(GroundScene * pThis, int /*edx*/, float elapsedTime);
 	friend void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
-	friend void __fastcall utinni_groundSceneHandleInputMapEvent(GroundScene * pThis, int /*edx*/, IoEvent * event);
+	// (38-05) the update / handleInputMapEvent CALL-THROUGH forwarder friends were
+	// REMOVED -- those two are DETOURED, so they are advertised by the REAL engine
+	// entry via the real-entry accessor friends below, not a forwarder.
+	// 38-05 (address-correctness): real-entry accessors for the two DETOURED private
+	// methods (update [:103], handleInputMapEvent [:194]). The PMF can only be taken in a TU with
+	// member access, so these in-TU accessors extract the real engine code entry
+	// (delta==0 verified) for Utinni to detour directly -- NOT the call-through
+	// forwarder above (a detour on a forwarder is silently dead). friend decls are
+	// ABI-neutral (no member/vtable change; no plugin cascade).
+	friend void * utinni_groundSceneUpdateRealEntry();
+	friend void * utinni_groundSceneHandleInputMapEventRealEntry();
 #endif
 
 public:

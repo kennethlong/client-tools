@@ -33,17 +33,25 @@
 // ----------------------------------------------------------------------
 // Contract version. POLICY (D-03, Phase 38 -- overrides the 37-era "pinned at
 // 1, do NOT bump per wave" note): any NAME ADD/REMOVE to the .inc bumps this
-// version. The version is advisory -- the contract is name-keyed, so a consumer
-// resolves endpoints by name regardless -- but the bump is the explicit signal
-// that the catalog grew. Lockstep is still enforced byte-exactly: the .h + .inc
-// are re-copied verbatim into D:/Code/Utinni/UtinniCore/swg/ at the catalog wave
-// (the .h/.inc re-sync is 38-04) so the consumer always sees the matching set.
+// version. 38-05 EXTENDS the policy: an ADDRESS-CORRECTNESS change behind an
+// UNCHANGED name set ALSO bumps the version, because a consumer that has already
+// bound an endpoint must know the address behind the name moved (here: 4 detoured
+// rows re-pointed from a call-through forwarder to the real engine entry). The
+// version is advisory -- the contract is name-keyed, so a consumer resolves
+// endpoints by name regardless -- but the bump is the explicit "what's behind a
+// name changed" signal. Lockstep is still enforced byte-exactly: the .h + .inc are
+// re-copied verbatim into D:/Code/Utinni/UtinniCore/swg/ at each wave so the
+// consumer always sees the matching set.
 //
-// Bumped 1 -> 2 in 38-03: this single bump covers ALL the names added across the
-// Phase-38 catalog growth (38-01 groundScene::* x8, 38-02 client/config x4,
-// 38-03 cuiChatWindow::* x4).
+// Bumped 1 -> 2 in 38-03: covered ALL the Phase-38 catalog GROWTH (38-01
+// groundScene::* x8, 38-02 client/config x4, 38-03 cuiChatWindow::* x4) -- 94 names.
+// Bumped 2 -> 3 in 38-05: ADDRESS-CORRECTNESS only -- the SAME 94-name set, but the
+// 4 DETOURED rows (groundScene::{update,handleInputMapEvent}, cuiChatWindow::
+// {enableTextInput,chatEnterHandler}) now advertise the REAL engine entry instead of
+// a call-through forwarder thunk (a detour on a forwarder is silently dead). The
+// consumer's required-set is UNAFFECTED -- only the addresses behind four names moved.
 // ----------------------------------------------------------------------
-#define UTINNI_HOOKPOINTS_VERSION 2
+#define UTINNI_HOOKPOINTS_VERSION 3
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

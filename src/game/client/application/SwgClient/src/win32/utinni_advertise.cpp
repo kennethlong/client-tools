@@ -24,7 +24,8 @@
 
 #include "FirstSwgClient.h"
 
-#include <bit>   // std::bit_cast (C++20, stdcpp20 enabled)
+#include <bit>      // std::bit_cast (C++20, stdcpp20 enabled)
+#include <cstring>  // std::memcpy (pmfRealEntry MI-PMF code-component extraction, 38-05)
 
 #include "utinni_engine_hookpoints.h"
 #include "ClientMain.h"                            // utinni_installConfigFileOverride() + ClientMain()
@@ -71,6 +72,52 @@ inline void * pmfToVoid(PMF pmf)
 {
 	static_assert(sizeof(PMF) == sizeof(void *), "inflated PMF (multiple/virtual inheritance) -- needs a thunk");
 	return std::bit_cast<void *>(pmf);
+}
+
+// ----------------------------------------------------------------------
+// pmfRealEntry (38-05, address-correctness fix). The REAL engine code entry of
+// a non-virtual member of an MI / inflated-PMF class -- for DETOURED endpoints.
+//
+// Why this exists: a DETOURED endpoint (Utinni patches the prologue so the
+// engine's OWN call into the method is intercepted) MUST advertise the actual
+// compiled method body the engine reaches, NOT a call-through forwarder thunk.
+// A DetourXS patch on a forwarder fires only when someone calls the FORWARDER;
+// the engine calls the real method directly, so a forwarder-advertised detour is
+// silently dead (links, exports, boots, hook never fires). See the Utinni review
+// finding .planning/handoff/2026-06-22-utinni-detour-vs-call-followup.md.
+//
+// MSVC 32-bit MI / virtual-inheritance NON-VIRTUAL PMF layout is
+//   { void * pfn; int delta; [int vtordisp; int vindex] }
+// pfn (offset 0) is the real code entry; delta (offset 4) is the this-adjustment
+// the caller would apply to reach the correct base subobject before the call.
+//
+// SAFETY GATE (the whole point): for an OWN non-virtual method of the MOST-DERIVED
+// class -- which all four 38-05 detour targets are (GroundScene::{update,
+// handleInputMapEvent}, SwgCuiChatWindow::{acceptTextInput,performEnterKey}) --
+// the primary base is at offset 0, so delta MUST be 0 and pfn IS the entry
+// Utinni's __thiscall trampoline reaches with `this` in ECX. If delta != 0 the
+// entry is a secondary-base method whose `this` needs adjustment and is NOT
+// directly detour-able with the raw `this`; we MUST NOT advertise it. We return
+// nullptr (after a DEBUG_FATAL) so utinni_verifyNoNullNoDup() catches it as a
+// null row and FAILS loudly -- never advertise a wrong / silent-dead entry.
+//
+// NOTE: this is for DETOURED rows only. CALLED rows keep their call-through
+// __fastcall forwarders (correct there -- Utinni invokes the forwarder, it
+// forwards). Do NOT use pmfRealEntry for a called endpoint.
+// ----------------------------------------------------------------------
+template <class PMF>
+inline void * pmfRealEntry(PMF pmf)
+{
+	static_assert(sizeof(PMF) >= sizeof(void *) + sizeof(int), "PMF smaller than expected MI layout");
+	struct MiPmf { void * pfn; int delta; };
+	MiPmf m{};
+	std::memcpy(&m, &pmf, sizeof(MiPmf));
+	if (m.delta != 0)
+	{
+		DEBUG_FATAL(true, ("utinni: non-zero PMF delta for a real-entry (detoured) row -- secondary-base method is NOT directly detour-able"));
+		return 0;
+	}
+	return m.pfn;
 }
 
 // ----------------------------------------------------------------------
@@ -194,31 +241,31 @@ static GroundScene * __fastcall utinni_groundSceneCtor(GroundScene * pThis, int 
 }
 
 // ----------------------------------------------------------------------
-// cui::chatWindow::* MI thunks (38-03, EPA-05 remainder). SwgCuiChatWindow is
-// TRIPLE-INHERITANCE (public SwgCuiLockableMediator, public UINotification,
-// public MessageDispatch::Receiver [SwgCuiChatWindow.h:58-61]) so every PMF is
-// inflated and trips the pmfToVoid sizeof guard (C2338) -- a __fastcall thunk is
-// mandatory; pmfToVoid(&SwgCuiChatWindow::member) must NEVER be used here.
+// cui::chatWindow::* (38-03 EPA-05 remainder; 38-05 detour-correctness). SwgCuiChatWindow
+// is TRIPLE-INHERITANCE (public SwgCuiLockableMediator, public UINotification, public
+// MessageDispatch::Receiver [SwgCuiChatWindow.h:58-61]) so every PMF is inflated and
+// trips the pmfToVoid sizeof guard (C2338).
 //
-// CALLING CONVENTION: same __fastcall(pThis /*ECX*/, int /*EDX*/, args) ==
-// __thiscall emulation as the groundScene/ctor thunks above (MSVC v145 forbids
-// __thiscall on a free function, C3865; the dummy EDX makes the two ABIs
-// byte-identical). All four targets are PUBLIC non-virtual methods [confirmed
-// SwgCuiChatWindow.h public block :63-231], so they are named directly here --
-// no friend decl needed (unlike the 38-01 groundScene private forwarders /
-// 38-02 Os::WindowProc shim, which targeted private members).
+// Two MECHANISMS now (the 38-05 split):
+//   * CALLED rows (writeToAllTabs / writeToCurrentTab) keep a call-through __fastcall
+//     thunk -- correct because Utinni INVOKES the thunk and it forwards. CALLING
+//     CONVENTION: __fastcall(pThis /*ECX*/, int /*EDX*/, args) == __thiscall (MSVC v145
+//     forbids __thiscall on a free function, C3865; dummy EDX makes the two ABIs byte-
+//     identical). The two targets are PUBLIC, named directly here (no friend decl).
+//   * DETOURED rows (enableTextInput->acceptTextInput, chatEnterHandler->performEnterKey)
+//     are advertised by their REAL engine code entry via pmfRealEntry(&SwgCuiChatWindow::m)
+//     INLINE in the table below (both are OWN non-virtual most-derived methods -> delta==0,
+//     so pmfRealEntry returns the real body the engine detours). A call-through thunk would
+//     be SILENTLY DEAD for a detour (the engine calls the real method, not the thunk) --
+//     the Utinni review finding (2026-06-22-utinni-detour-vs-call-followup.md). The two
+//     38-03 call-through chat thunks (utinni_chatWindowAcceptTextInput / ...PerformEnterKey)
+//     are therefore REMOVED here (38-05) -- they had no other referencer.
 //
-// The contract names are the SPEC names (enableTextInput/writeToAllTabs/
-// writeToCurrentTab/chatEnterHandler); the in-tree methods have DIFFERENT names
-// (acceptTextInput/appendToAllTabs/appendTextToCurrentTab/performEnterKey) --
-// the NAME MISMATCH is baked into each row comment, the contract names stay.
+// The contract names are the SPEC names (enableTextInput/writeToAllTabs/writeToCurrentTab/
+// chatEnterHandler); the in-tree methods have DIFFERENT names (acceptTextInput/
+// appendToAllTabs/appendTextToCurrentTab/performEnterKey) -- the NAME MISMATCH is baked
+// into each row comment, the contract names stay.
 // ----------------------------------------------------------------------
-static void __fastcall utinni_chatWindowAcceptTextInput(SwgCuiChatWindow * pThis, int /*edx*/,
-	bool b, bool setKeyboardInput, bool unfocusMediator)
-{
-	pThis->acceptTextInput(b, setKeyboardInput, unfocusMediator);   // public [SwgCuiChatWindow.h:112] (contract enableTextInput -> ours acceptTextInput)
-}
-
 static void __fastcall utinni_chatWindowAppendToAllTabs(SwgCuiChatWindow * pThis, int /*edx*/,
 	const Unicode::String & str)
 {
@@ -229,17 +276,6 @@ static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 	const Unicode::String & str)
 {
 	pThis->appendTextToCurrentTab(str);                             // public [SwgCuiChatWindow.h:174] (contract writeToCurrentTab -> ours appendTextToCurrentTab)
-}
-
-// chatEnterHandler -> the CLEAN function-entry performEnterKey() [SwgCuiChatWindow.h:214],
-// public non-virtual. This advertises the clean &fn entry ONLY. The Issue #11
-// mid-function chat-context-routing NOP that Utinni patches mid-body on SWGEmu is
-// a SEPARATE, SWGEmu-only joint decision (38-CONTEXT.md OUT-OF-SCOPE: "Mid-function-
-// patch features (Issue #11 chat routing)") -- NOT implemented here; no offset
-// arithmetic enters the contract. Flagged for the EPA-08 handback.
-static void __fastcall utinni_chatWindowPerformEnterKey(SwgCuiChatWindow * pThis, int /*edx*/)
-{
-	pThis->performEnterKey();                                       // public clean entry [SwgCuiChatWindow.h:214] (contract chatEnterHandler; Issue #11 mid-patch is a separate joint decision, NOT here)
 }
 
 // ----------------------------------------------------------------------
@@ -305,9 +341,9 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "groundScene::reloadTerrain",        (void *)&utinni_groundSceneReloadTerrain },           // public [GroundScene.h:215] -> MI __fastcall thunk
 	{ "groundScene::changeCamera",         (void *)&utinni_groundSceneChangeCamera },            // public [GroundScene.h:207] MISMATCH: ours setView(int,float) -> MI __fastcall thunk
 	{ "groundScene::getCurrentCamera",     (void *)&utinni_groundSceneGetCurrentCamera },        // public [GroundScene.h:212] (non-const overload; const sibling :213) -> MI __fastcall thunk
-	{ "groundScene::update",               (void *)&utinni_groundSceneUpdate },                  // PRIVATE [GroundScene.h:77] -> in-TU GroundScene.cpp forwarder
-	{ "groundScene::handleInputMapUpdate", (void *)&utinni_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder
-	{ "groundScene::handleInputMapEvent",  (void *)&utinni_groundSceneHandleInputMapEvent },     // PRIVATE [GroundScene.h:168] -> in-TU GroundScene.cpp forwarder
+	{ "groundScene::update",               utinni_groundSceneUpdateRealEntry() },               // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::update(float) [GroundScene.h:103]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
+	{ "groundScene::handleInputMapUpdate", (void *)&utinni_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder (CALLED/unused row -- forwarder is correct here, NOT detoured)
+	{ "groundScene::handleInputMapEvent",  utinni_groundSceneHandleInputMapEventRealEntry() },  // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::handleInputMapEvent(IoEvent*) [GroundScene.h:194]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
 	// SKIP: groundScene::draw -- VIRTUAL [GroundScene.h:204] (also in the VIRTUAL SKIPS block); Utinni resolves off the live vtable. Not advertised.
 	// OMIT: groundScene::g_instance -- no dedicated GroundScene singleton; reached via INLINE Game::getScene() [Game.h:306] (no ODR address) cast to GroundScene, and Game::ms_scene is private [Game.h:271]. OMITTED (graceful degradation); FLAGGED for the EPA-08 handback -- if Utinni's groundScene editor strictly needs the raw singleton pointer, add a non-inline Game accessor in a follow-up.
 
@@ -318,10 +354,10 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	// (would trip the C2338 sizeof guard). All 4 target PUBLIC non-virtual methods, so
 	// they are reached directly by the __fastcall thunks defined above (no friend decl).
 	// Contract names are the SPEC names; the in-tree method NAME MISMATCH is in each comment.
-	{ "cuiChatWindow::enableTextInput",   (void *)&utinni_chatWindowAcceptTextInput },         // public [SwgCuiChatWindow.h:112] MISMATCH: ours acceptTextInput(bool,bool,bool) -> MI __fastcall thunk
-	{ "cuiChatWindow::writeToAllTabs",    (void *)&utinni_chatWindowAppendToAllTabs },         // public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk
-	{ "cuiChatWindow::writeToCurrentTab", (void *)&utinni_chatWindowAppendTextToCurrentTab },  // public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk
-	{ "cuiChatWindow::chatEnterHandler",  (void *)&utinni_chatWindowPerformEnterKey },         // public CLEAN ENTRY [SwgCuiChatWindow.h:214] MISMATCH: ours performEnterKey() -> MI __fastcall thunk. Issue #11 mid-function chat-routing NOP is a SEPARATE SWGEmu-only joint decision (38-CONTEXT.md OUT-OF-SCOPE), NOT implemented; no offset arithmetic in the contract -- flagged for EPA-08.
+	{ "cuiChatWindow::enableTextInput",   pmfRealEntry(&SwgCuiChatWindow::acceptTextInput) },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
+	{ "cuiChatWindow::writeToAllTabs",    (void *)&utinni_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
+	{ "cuiChatWindow::writeToCurrentTab", (void *)&utinni_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
+	{ "cuiChatWindow::chatEnterHandler",  pmfRealEntry(&SwgCuiChatWindow::performEnterKey) },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
 	// DEFER: cuiChatWindow::ctor -- SwgCuiChatWindow(UIPage&, Game::SceneType, std::string const&) [SwgCuiChatWindow.h:106] is an MI ctor requiring a LIVE UIPage& arg the injector must supply (37-03 already deferred this exact ctor; matches groundScene/UI-mediator MI-ctor DEFER rationale). NOT advertised (no ctor row, no .inc name); FLAGGED for the EPA-08 handback -- if Utinni confirms it constructs chat windows through a page, add a placement-new __fastcall thunk in a follow-up.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
