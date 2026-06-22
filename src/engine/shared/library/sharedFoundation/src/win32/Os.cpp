@@ -1593,5 +1593,29 @@ bool Os::launchBrowser(std::string const & website)
 	return (result > 32);
 }
 
+// ======================================================================
+// Utinni engine entry-point advertisement (38-02, EPA-06): an external-linkage
+// shim over the PRIVATE Os::WindowProc [Os.h:138, under the private: block at
+// :133]. A free function in utinni_advertise.cpp cannot name a private member
+// (C2248), and Os.h lives in sharedFoundation/src/win32 (NOT a public include
+// dir), so the shim MUST be compiled here -- it has member access to the private
+// static and sees the win32 Os.h declaration.
+//
+// CALLING CONVENTION: Os::WindowProc is __stdcall (CALLBACK) -- the shim keeps
+// CALLBACK exactly (this is a real __stdcall window-proc, NOT the
+// __fastcall/__thiscall member-call emulation used for MI methods). Utinni-side
+// typedef: LRESULT(__stdcall*)(HWND,UINT,WPARAM,LPARAM).
+//
+// Win32-only: matches the whole !_WIN64 advertise body. The forwarder is declared
+// in the exe-local utinni_clientShims_forward.h (SwgClient/src/win32) -- NOT in a
+// shared header, so no gl0X plugin pulls it (no ABI cascade; AGENTS.md).
+// ======================================================================
+#if !defined(_WIN64)
+LRESULT CALLBACK utinni_osWindowProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+	return Os::WindowProc(h, m, w, l);   // member access to the private static; __stdcall preserved
+}
+#endif
+
 
 // ======================================================================
