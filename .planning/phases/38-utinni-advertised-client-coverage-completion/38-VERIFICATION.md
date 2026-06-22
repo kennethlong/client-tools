@@ -1,8 +1,8 @@
 ---
 phase: 38-utinni-advertised-client-coverage-completion
 verified: 2026-06-22T23:00:00Z
-status: human_needed
-score: 9/9 must-haves verified
+status: passed
+score: 9/9 must-haves verified (+ 3/3 human-verification items maintainer-approved 2026-06-22 at v3)
 overrides_applied: 0
 human_verification:
   - test: "Boot SwgClient_d.exe under rasterMajor=5 (gl05) to character select and confirm utinni_verifyNoNullNoDup() runtime self-check logs PASS for the 94-name set at version 2 (no null addr / no dup / name-set equal). Check the Debug log output."

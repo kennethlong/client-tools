@@ -146,7 +146,7 @@ v3.0 x64 Port executes in strict numeric order 31 → 32 → 33 → 34 → 35 �
 | 35. Miles 9.3b Audio Port | v3.0 | 4/4 | Complete    | 2026-06-18 |
 | 36. Verification & CORNERSNAP Cleanup | v3.0 | 1/2 | Concluded (VERIFY-02 pass; VERIFY-01 parked as pre-existing engine quirk; VERIFY-03/36-02 deferred) | 2026-06-20 |
 | 37. Utinni Engine Entry-Point Advertisement | post-v3.0 | 3/3 | Complete   | 2026-06-21 |
-| 38. Utinni Advertised-Client Coverage Completion | post-v3.0 | 5/5 | Executed (38-05 detour address-correctness; pending maintainer smoke) | 2026-06-22 |
+| 38. Utinni Advertised-Client Coverage Completion | post-v3.0 | 5/5 | Complete (v3 / 94 endpoints; detours fire; smoke-approved) | 2026-06-22 |
 
 ### Phase 37: Utinni Engine Entry-Point Advertisement (GetEngineHookPoints)
 
