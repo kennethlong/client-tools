@@ -63,6 +63,16 @@ swapped rows) were **removed** — verified no other referencer.
 now wire bindings for the four detoured endpoints — they resolve to the real engine entry and the
 detours will fire.
 
+> ⚠️ **ACTION REQUIRED — COMMIT THE SYNCED CONTRACT ON YOUR SIDE NOW.** The provider re-copies
+> `utinni_engine_hookpoints.{h,inc}` into `D:/Code/Utinni/UtinniCore/swg/` **uncommitted** (the provider
+> never commits your repo). Observed 2026-06-22: a Utinni-side `git checkout`/`reset`/`stash` during your
+> review **silently reverted the working-tree copies all the way back to the committed v1 / 78-name
+> contract** — wiping both the Phase-38 (v2, 94 names) and 38-05 (v3) syncs. The provider re-pushed v3
+> after detecting it, but it will revert again on your next git op until **you `git add` + commit the
+> v3 `.h`/`.inc`**. Verify before consuming: the `.h` must read `UTINNI_HOOKPOINTS_VERSION 3` and the
+> `.inc` must have **94** `UTINNI_HOOKPOINT(...)` lines. If in doubt, re-copy from the provider's
+> committed source of truth (`swg-client-v2` HEAD) rather than trusting the working-tree copy.
+
 ## 4. Reminder for the deferred `cuiChatWindow::ctor`
 
 `cuiChatWindow::ctor` remains DEFERRED (MI ctor needing a live `UIPage&`). When it is un-deferred,
