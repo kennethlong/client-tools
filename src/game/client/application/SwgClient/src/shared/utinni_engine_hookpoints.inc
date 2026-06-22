@@ -48,13 +48,25 @@
 //   commandParser::{ctor1,ctor2}(thunk) + createDelegateCommands(PROTECTED).
 // ----------------------------------------------------------------------
 
-// -- config (sharedFoundation, all static; ConfigFile.h) --------------------
+// -- config (sharedFoundation ConfigFile statics + 38-02 CuiPreferences statics) --
+// setModalChat/getModalChat are the 37-02 CORRECTION: they exist as PUBLIC
+// CuiPreferences statics (NOT config/ConfigFile) -- the row comments in
+// utinni_advertise.cpp carry the class MISMATCH; this list keeps the CONTRACT
+// names.
 UTINNI_HOOKPOINT(config,        loadOverrideConfig)
 UTINNI_HOOKPOINT(config,        loadConfigFileBuffer)
 UTINNI_HOOKPOINT(config,        loadConfigFileString)
+UTINNI_HOOKPOINT(config,        setModalChat)
+UTINNI_HOOKPOINT(config,        getModalChat)
 
-// -- client (exe entry; ClientMain.h) ---------------------------------------
+// -- client (exe entry + win32 exe-statics; ClientMain.h / Os.cpp / DebugHelp.cpp) --
+// wndProc/writeMiniDump (38-02) are external-linkage shims over the PRIVATE
+// Os::WindowProc (__stdcall) and DebugHelp::writeMiniDump (win32-private header).
+// writeCrashLog + setupStartDataInstall are NONEXISTENT in this tree (grep = 0
+// hits) -> OMITTED here + in the .cpp, flagged for the EPA-08 handback.
 UTINNI_HOOKPOINT(client,        clientMain)
+UTINNI_HOOKPOINT(client,        wndProc)
+UTINNI_HOOKPOINT(client,        writeMiniDump)
 
 // -- game (clientGame, all static; Game.h) ----------------------------------
 UTINNI_HOOKPOINT(game,          install)

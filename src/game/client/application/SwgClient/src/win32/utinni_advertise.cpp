@@ -37,6 +37,8 @@
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
 #include "clientGame/GroundScene.h"                 // GroundScene MI thunks + ctor (38-01)
 #include "utinni_groundScene_forward.h"             // utinni_groundScene* private-method forwarders (38-01; exe-local)
+#include "utinni_clientShims_forward.h"             // utinni_osWindowProc / utinni_writeMiniDump shims (38-02; exe-local)
+#include "clientUserInterface/CuiPreferences.h"     // CuiPreferences::setModalChat/getModalChat (38-02; 37-02 CORRECTION -- NOT ConfigFile)
 
 // -- 37-03 full-catalog includes --------------------------------------------
 #include "sharedCollision/BaseExtent.h"            // BaseExtent::intersect (non-virtual overload, §8 #2)
@@ -201,9 +203,14 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	{ "config::loadOverrideConfig",   (void *)&utinni_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
 	{ "config::loadConfigFileBuffer", (void *)&ConfigFile::loadFromBuffer },       // static bool loadFromBuffer(char const*,int) [ConfigFile.h:136]
 	{ "config::loadConfigFileString", (void *)&ConfigFile::loadFile },             // static bool loadFile(char const*) [ConfigFile.h:135] (MISMATCH: spec "loadFromString" -> ours is loadFile)
+	{ "config::setModalChat",         (void *)&CuiPreferences::setModalChat },     // 38-02 (37-02 CORRECTION): plain &fn -- a PUBLIC CuiPreferences static, NOT config/ConfigFile [CuiPreferences.h:95, def CuiPreferences.cpp:1267]; contract name stays config::setModalChat
+	{ "config::getModalChat",         (void *)&CuiPreferences::getModalChat },     // 38-02 (37-02 CORRECTION): plain &fn -- a PUBLIC CuiPreferences static, NOT config/ConfigFile [CuiPreferences.h:94, def CuiPreferences.cpp:1655]
 
-	// -- client (exe entry; ClientMain.h) --------------------------------------
+	// -- client (exe entry + win32 exe-statics; ClientMain.h / Os.cpp / DebugHelp.cpp) --
 	{ "client::clientMain",           (void *)&ClientMain },                       // int ClientMain(HINSTANCE,HINSTANCE,LPSTR,int) __cdecl [ClientMain.h:13]
+	{ "client::wndProc",              (void *)&utinni_osWindowProc },              // 38-02: external __stdcall/CALLBACK shim in Os.cpp over the PRIVATE Os::WindowProc [Os.h:138] (friend-granted member access); CALLBACK preserved
+	{ "client::writeMiniDump",        (void *)&utinni_writeMiniDump },             // 38-02: external shim in DebugHelp.cpp over DebugHelp::writeMiniDump [DebugHelp.h:36] (win32-private header not on the exe include path)
+	// OMIT (38-02, D-04 / Pitfall 5): client::writeCrashLog + client::setupStartDataInstall are NONEXISTENT in this tree (grep = 0 source hits). The crash .txt is written INLINE by SetupSharedFoundation's exception handler [SetupSharedFoundation.cpp:92 sprintf] -- no named writeCrashLog function; setupStartDataInstall is a SWGEmu Pre-CU concept with no from-source twin. NOT advertised (never guessed); FLAGGED for the EPA-08 handback.
 
 	// -- game (clientGame, all static; Game.h) ---------------------------------
 	{ "game::install",                (void *)&Game::install },                    // static void install(Application) [Game.h:94]
