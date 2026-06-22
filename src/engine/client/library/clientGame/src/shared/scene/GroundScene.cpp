@@ -3847,3 +3847,53 @@ void GroundScene::turnOffOverheadMap()
 }
 
 //----------------------------------------------------------------------
+//
+// Utinni engine entry-point advertisement -- PRIVATE-method forwarders
+// (Phase 38-01, EPA-05). GroundScene::{init,update,handleInputMapUpdate,
+// handleInputMapEvent} are PRIVATE [GroundScene.h:173,77,170,168], so a free
+// thunk authored in utinni_advertise.cpp would hit C2248. These forwarders are
+// compiled HERE -- inside GroundScene.cpp, the class's own TU, where the
+// private members are visible -- exactly as utinni_installConfigFileOverride()
+// lives in ClientMain.cpp to reach a file-local target (the 37-01 shim pattern).
+//
+// CALLING CONVENTION: GroundScene is a MULTIPLE-INHERITANCE class
+// (NetworkScene : public Scene, public MessageDispatch::Receiver), so a raw
+// &GroundScene::member PMF is inflated and trips the pmfToVoid sizeof guard
+// (C2338). Each forwarder is authored as __fastcall(GroundScene * pThis /*ECX*/,
+// int /*EDX*/, args) -- the ABI-correct emulation of __thiscall on a free
+// function (MSVC v145 forbids __thiscall on a free function, C3865; a dummy EDX
+// makes __fastcall byte-identical to __thiscall). One function is therefore BOTH
+// in-TU (member access) AND the correct MI-class thunk in a single definition.
+// Declared extern in the exe-local utinni_groundScene_forward.h (NOT pulled by
+// any gl0X plugin TU -- no shared-header ABI cascade); advertised in the table.
+//
+// 32-bit-only scope: the whole advertise body is Win32-only, so these compile to
+// nothing on x64 (no x64 export surface; mirrors utinni_advertise.cpp's guard).
+//----------------------------------------------------------------------
+
+#if !defined(_WIN64)
+
+void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
+	const char * terrainFilename, CreatureObject * player, float timeInSeconds)
+{
+	pThis->init(terrainFilename, player, timeInSeconds);   // private [GroundScene.h:173]; legal in this TU
+}
+
+void __fastcall utinni_groundSceneUpdate(GroundScene * pThis, int /*edx*/, float elapsedTime)
+{
+	pThis->update(elapsedTime);                            // private [GroundScene.h:77]
+}
+
+void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/)
+{
+	pThis->handleInputMapUpdate();                         // private [GroundScene.h:170]
+}
+
+void __fastcall utinni_groundSceneHandleInputMapEvent(GroundScene * pThis, int /*edx*/, IoEvent * event)
+{
+	pThis->handleInputMapEvent(event);                     // private [GroundScene.h:168]
+}
+
+#endif // !defined(_WIN64)
+
+//----------------------------------------------------------------------

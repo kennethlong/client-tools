@@ -45,6 +45,24 @@ class Vector;
 
 class GroundScene : public NetworkScene
 {
+#if !defined(_WIN64)
+	// ------------------------------------------------------------------
+	// Utinni engine entry-point advertisement (Phase 38-01, EPA-05).
+	// GroundScene::{init,update,handleInputMapUpdate,handleInputMapEvent} are
+	// PRIVATE; the advertised __fastcall forwarders are DEFINED in GroundScene.cpp
+	// and need member access. A free function in the same TU does NOT get private
+	// access (C2248) -- friendship is required. These friend declarations add NO
+	// data member and NO virtual, so the struct/vtable ABI is byte-identical (no
+	// shared-header plugin cascade; AGENTS.md). Win32-only: the whole advertise
+	// body + the forwarder definitions are #if !defined(_WIN64).
+	// ------------------------------------------------------------------
+	friend void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
+		const char * terrainFilename, CreatureObject * player, float timeInSeconds);
+	friend void __fastcall utinni_groundSceneUpdate(GroundScene * pThis, int /*edx*/, float elapsedTime);
+	friend void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
+	friend void __fastcall utinni_groundSceneHandleInputMapEvent(GroundScene * pThis, int /*edx*/, IoEvent * event);
+#endif
+
 public:
 
 	static void install ();
