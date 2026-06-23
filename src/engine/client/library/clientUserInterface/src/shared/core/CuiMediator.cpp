@@ -507,8 +507,20 @@ void CuiMediator::deactivate ()
 			}
 
 			UIEventCallback * const eventCallback = getCallbackObject();
-			
-			if (eventCallback)
+
+			//-- m_objectCallbackVector can be null when this mediator is deactivated mid-teardown
+			//-- (e.g. WM_ACTIVATE INACTIVE during embed focus/activate churn -- a subclass's
+			//-- performDeactivate() above can leave us half-torn-down). Guard the unguarded deref:
+			//-- the normal path is unchanged (vector is non-null); the torn-down path skips cleanup
+			//-- instead of null-deref'ing ->begin() (~null+0x14). One-shot WARNING pinpoints recurrence.
+			if (eventCallback && m_objectCallbackVector == 0)
+			{
+				static bool s_warnedNullObjectCallbackVector = false;
+				WARNING (!s_warnedNullObjectCallbackVector, ("CuiMediator::deactivate: null m_objectCallbackVector (half-torn-down during focus/activate churn) -- skipped callback cleanup [%s]", m_mediatorDebugName.c_str ()));
+				s_warnedNullObjectCallbackVector = true;
+			}
+
+			if (eventCallback && m_objectCallbackVector)
 			{
 				for (ObjectCallbackVector::iterator it = m_objectCallbackVector->begin (); it != m_objectCallbackVector->end (); ++it)
 				{
