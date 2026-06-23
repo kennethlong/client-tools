@@ -99,10 +99,12 @@ namespace Direct3d11Namespace
 	Gl_api ms_glApi;
 
 	// ------------------------------------------------------------------
-	// Lost-device callback registration -- D3D11 has no lost-device
-	// concept, but the engine still queries these slots during boot
-	// (PostProcessingEffectsManager registers callbacks unconditionally).
-	// Track registrations but never invoke them.
+	// Lost-device callback registration -- D3D11 has no true lost-device
+	// concept, but the engine registers screen-sized render-target owners here
+	// (PostProcessingEffectsManager / Bloom / Bink). They are invoked on a
+	// window resize (resize_impl, below) so those offscreen RTs re-fetch at the
+	// new size; a D3D11 swap-chain resize keeps the same device/context, so this
+	// is a release+recreate, not a real device-loss recovery.
 
 	typedef void (*CallbackFunction)();
 	std::vector<CallbackFunction> ms_deviceLostCallbacks;
@@ -187,6 +189,27 @@ namespace Direct3d11Namespace
 	{
 		for (auto it = ms_deviceRestoredCallbacks.begin(); it != ms_deviceRestoredCallbacks.end(); ++it)
 			if (*it == fn) { ms_deviceRestoredCallbacks.erase(it); return; }
+	}
+
+	// Gl_api::resize -- mirror Direct3d9Namespace::resize. The engine calls this
+	// via Graphics::resize (CutScene's 640x480 letterbox, and the gl11 WM_SIZE
+	// path wired in GraphicsNamespace::displayModeChanged). Graphics::resize has
+	// already updated the render-target dimension globals; here we fire the
+	// device-lost callbacks, resize the swap-chain back-buffer, then fire the
+	// device-restored callbacks so the screen-sized offscreen render targets
+	// (PostProcessingEffectsManager / Bloom / Bink) release + re-fetch at the new
+	// Graphics::getFrameBufferMax* size. The D3D11 device/context are unchanged
+	// across a swap-chain resize -- this is NOT a true device loss. (Replaces the
+	// Plan 11-02 STUB(resize) scaffold_fatal_stub, which FATAL'd if ever called.)
+	void resize_impl(int newWidth, int newHeight)
+	{
+		for (std::vector<CallbackFunction>::size_type i = 0; i < ms_deviceLostCallbacks.size(); ++i)
+			ms_deviceLostCallbacks[i]();
+
+		Direct3d11_Device::resizeBackBuffer(newWidth, newHeight);
+
+		for (std::vector<CallbackFunction>::size_type i = 0; i < ms_deviceRestoredCallbacks.size(); ++i)
+			ms_deviceRestoredCallbacks[i]();
 	}
 
 	int getShaderCapability_impl()
@@ -1023,7 +1046,10 @@ bool Direct3d11::install(Gl_install * gl_install)
 	// per-frame loop to start. Wave 4+ wires real gamma/contrast/brightness.
 	ms_glApi.setBrightnessContrastGamma = setBrightnessContrastGamma_impl;
 
-	STUB(resize);
+	// Plan 11-09.x: real binding replaces the Plan 11-02 STUB(resize). Drives the
+	// device-lost/back-buffer/device-restored cycle so a window resize rescales
+	// the scene RTs + camera (embedded-window resize fix).
+	ms_glApi.resize = resize_impl;
 
 	// Plan 11-09.5: real binding replaces the Plan 11-02 STUB(setWindowedMode)
 	// scaffold_fatal_stub reinterpret_cast. Iter-1 scope: windowed-mode only;

@@ -135,6 +135,13 @@ public:
 	// Recreates back-buffer RTV + DSV at the new HWND client-rect size.
 	static void displayModeChanged();
 
+	// Resize the swap-chain back-buffer (+ RTV/DSV) to an explicit client-rect
+	// size. Self-guards on uninstalled / zero / unchanged size. Shared by
+	// displayModeChanged() and the Gl_api resize slot (Direct3d11.cpp
+	// resize_impl), which wraps it in the device-lost/restored callback cycle so
+	// the offscreen scene render target(s) track the new size.
+	static void resizeBackBuffer(int newWidth, int newHeight);
+
 	// ------------------------------------------------------------------
 	// Plan 11-08 Iter-1: ID3D11InfoQueue frame-drain. Drains every D3D11
 	// debug-layer message accumulated since the previous call and routes

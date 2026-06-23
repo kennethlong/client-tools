@@ -1185,15 +1185,32 @@ void Direct3d11_Device::displayModeChanged()
 
 	RECT rc;
 	GetClientRect(ms_window, &rc);
-	int const newWidth  = rc.right - rc.left;
-	int const newHeight = rc.bottom - rc.top;
+	resizeBackBuffer(rc.right - rc.left, rc.bottom - rc.top);
+}
+
+// ----------------------------------------------------------------------
+// resizeBackBuffer -- recreate the swap-chain back-buffer (+ RTV/DSV) at an
+// explicit client-rect size. Self-guards on uninstalled / zero / unchanged
+// size. displayModeChanged() calls this with the live HWND client rect; the
+// Gl_api resize slot (Direct3d11.cpp resize_impl) wraps it in the
+// device-lost/restored callback cycle so the offscreen scene render target(s)
+// + the per-frame camera viewport/projection track the new size (this is the
+// embedded-window resize fix: without the wrap only the back-buffer resized
+// while the scene viewport/RT/projection stayed at the creation size, so the
+// scene rendered cropped to the top-left of a resized back-buffer).
+
+void Direct3d11_Device::resizeBackBuffer(int newWidth, int newHeight)
+{
+	if (!ms_installed)
+		return;
+
 	if (newWidth <= 0 || newHeight <= 0)
 		return;
 	if (newWidth == ms_width && newHeight == ms_height)
 		return;
 
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_Device::displayModeChanged %dx%d -> %dx%d\n",
+		("Direct3d11_Device::resizeBackBuffer %dx%d -> %dx%d\n",
 		 ms_width, ms_height, newWidth, newHeight));
 
 	// Release back-buffer references (required by ResizeBuffers).

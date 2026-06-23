@@ -374,6 +374,40 @@ void GraphicsNamespace::remove(void)
 
 void GraphicsNamespace::displayModeChanged()
 {
+	// D3D11 (gl11): a WM_SIZE / display change means the window client rect
+	// changed. Drive the engine's full resize -- Graphics::resize updates the
+	// render-target dimension globals AND calls ms_api->resize, which resizes the
+	// swap-chain back-buffer and fires the device-restored callbacks so the
+	// offscreen scene render target(s) (PostProcessingEffectsManager / Bloom) +
+	// the per-frame camera viewport/projection (GroundScene re-reads
+	// getCurrentRenderTarget* every frame) all track the new size. Without this
+	// only the back-buffer resized while the scene viewport/RT/projection stayed
+	// at the creation size, so the embedded scene rendered cropped to the
+	// top-left of a resized back-buffer.
+	//
+	// D3D9 keeps its legacy deferred path (ms_api->displayModeChanged sets a flag
+	// handled by checkDisplayMode) -- the embedded D3D9 case relies on
+	// render-target-space stretch and must not be rerouted through a device reset.
+	if (ms_rasterMajor == 11 && ms_api && ms_api->resize)
+	{
+		HWND const window = Os::getWindow();
+		if (window)
+		{
+			RECT rc;
+			if (GetClientRect(window, &rc))
+			{
+				int const newWidth  = rc.right - rc.left;
+				int const newHeight = rc.bottom - rc.top;
+				if (newWidth > 0 && newHeight > 0
+					&& (newWidth != ms_currentRenderTargetWidth || newHeight != ms_currentRenderTargetHeight))
+				{
+					Graphics::resize(newWidth, newHeight);
+				}
+			}
+		}
+		return;
+	}
+
 	if (ms_api && ms_api->displayModeChanged)
 		ms_api->displayModeChanged();
 }
