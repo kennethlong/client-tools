@@ -310,11 +310,31 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 	if (m_isCubeMap)
 		miscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
 
+	// CONSULT-47 Edit B: desc-validation diagnostic. Validate the engine
+	// dimensions BEFORE building any D3D11 desc / calling CreateTexture2D.
+	// On an invalid desc, NAME the offending asset (Release-visible) and skip
+	// the create loop so the existing !m_texture FATAL fires with our named
+	// diagnostic preceding it -- a named crash beats the opaque NVIDIA driver
+	// null-deref in NtGdiDdDDICreateAllocation. Edit A (Texture::load
+	// Release-safe fallback) should normally prevent ever reaching here; this
+	// is the discriminating diagnostic if a bad desc still slips through.
+	int  const w    = newEngineTexture.getWidth();
+	int  const h    = newEngineTexture.getHeight();
+	int  const d    = newEngineTexture.getDepth();
+	int  const mips = newEngineTexture.getMipmapLevelCount();
+	bool const dimsValid = w > 0 && w <= 16384 && h > 0 && h <= 16384 && mips >= 1 && mips <= 15 && (!m_isVolumeMap || (d > 0 && d <= 2048));
+	if (!dimsValid)
+	{
+		char const *nm = newEngineTexture.getName();
+		if (!nm || !*nm) nm = "<unnamed>";
+		WARNING(true, ("Direct3d11_TextureData: REJECTED invalid texture desc for '%s' (w=%d h=%d d=%d mips=%d cube=%d vol=%d) -- not calling CreateTexture2D; malformed asset (CONSULT-47)", nm, w, h, d, mips, m_isCubeMap ? 1 : 0, m_isVolumeMap ? 1 : 0));
+	}
+
 	// Walk the engine-supplied runtime-format list in order; first format
 	// whose DXGI mapping is non-UNKNOWN AND CheckFormatSupport accepts wins.
 
 	HRESULT lastResult = E_FAIL;
-	for (int i = 0; !m_texture && i < numberOfRuntimeFormats; ++i)
+	for (int i = 0; dimsValid && !m_texture && i < numberOfRuntimeFormats; ++i)
 	{
 		TextureFormat const candidate = runtimeFormats[i];
 		DXGI_FORMAT     const native    = translationTable[candidate];

@@ -492,6 +492,21 @@ void Texture::load(const char * fileName)
 	DEBUG_FATAL(headerRead != isizeof(ddsHeader), ("DDS header read failed"));
 	UNREF(headerRead);
 
+	// CONSULT-47 Edit A1: Release-safe bail on a malformed DDS magic/header.
+	// The DEBUG_FATALs above are no-ops in Release, so a short/corrupt DDS
+	// would otherwise continue and feed a garbage D3D11_TEXTURE2D_DESC into
+	// CreateTexture2D (the NVIDIA driver null-deref in NtGdiDdDDICreateAllocation).
+	// Fall back to the default texture instead. Mirrors the open-failure and
+	// unknown-format graceful-fallback idioms in this same function.
+	if (magicRead != 4 || magic != DDS::MakeFourCC('D', 'D', 'S', ' ') || headerRead != isizeof(ddsHeader))
+	{
+		delete fileInterface;
+		DEBUG_FATAL(fileName == TextureList::getDefaultTextureName(), ("Default texture has a malformed DDS header"));
+		WARNING(true, ("Texture::load: malformed DDS header for %s (magicRead=%d magicOk=%d headerRead=%d) -- falling back to default texture (CONSULT-47)", fileName, magicRead, (magic == DDS::MakeFourCC('D', 'D', 'S', ' ')) ? 1 : 0, headerRead));
+		load(TextureList::getDefaultTextureName());
+		return;
+	}
+
 	// Plan 11-09.15 Iter-31A2: dump raw bytes the engine sees for font
 	// textures. Previous Iter-31A confirmed Texture::load() identifies
 	// `verdana_14_000.dds` as TF_DXT5, but manual TRE extraction shows
@@ -542,6 +557,21 @@ void Texture::load(const char * fileName)
 	m_mipmapLevelCount = static_cast<int>(ddsHeader.dwMipMapCount);
 	if (m_mipmapLevelCount == 0)
 		m_mipmapLevelCount = 1;
+
+	// CONSULT-47 Edit A2: Release-safe bail on insane DDS dimensions. A
+	// corrupt header can yield wildly out-of-range Width/Height/Depth/Mips
+	// that build a bogus desc and crash the D3D11 driver inside
+	// CreateTexture2D. D3D11 feature level 11.0 caps 2D/3D dimensions at
+	// 16384 (texture3D depth at 2048). Reject + fall back to the default
+	// texture rather than hand the driver a malformed allocation request.
+	if (m_width <= 0 || m_height <= 0 || m_width > 16384 || m_height > 16384 || (m_volume && (m_depth <= 0 || m_depth > 2048)) || m_mipmapLevelCount > 15)
+	{
+		delete fileInterface;
+		DEBUG_FATAL(fileName == TextureList::getDefaultTextureName(), ("Default texture has invalid dimensions"));
+		WARNING(true, ("Texture::load: invalid DDS dimensions for %s (w=%d h=%d depth=%d mips=%d) -- falling back to default texture (CONSULT-47)", fileName, m_width, m_height, m_depth, m_mipmapLevelCount));
+		load(TextureList::getDefaultTextureName());
+		return;
+	}
 
 #ifdef _DEBUG
 	{
