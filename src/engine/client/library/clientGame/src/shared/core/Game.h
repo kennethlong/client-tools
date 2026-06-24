@@ -188,6 +188,7 @@ public:
 	static bool                isSceneLoading       ();
 
 	static int                 getLoopCount         ();
+	static int                 getMainLoopCount     ();   // out-of-line (ODR-emitted) twin of the inline getLoopCount(); exists so the engine-hookpoint advertisement contract can advertise the per-frame counter (game::g_mainLoopCounter) by &address -- see SwgClient/.../engine_advertise.cpp
 
 	static void                setProfanityFiltered (bool profanityFiltered);
 	static bool                isProfanityFiltered  ();

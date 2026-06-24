@@ -39,6 +39,7 @@
 #include "clientGame/GroundScene.h"                 // GroundScene MI thunks + ctor (38-01)
 #include "utinni_groundScene_forward.h"             // utinni_groundScene* private-method forwarders (38-01; exe-local)
 #include "utinni_clientShims_forward.h"             // utinni_osWindowProc / utinni_writeMiniDump shims (38-02; exe-local)
+#include "utinni_chatWindow_forward.h"              // utinni_chatWindowCreateNewWindowEntry() PRIVATE-funnel real-entry (24-4d; exe-local)
 #include "clientUserInterface/CuiPreferences.h"     // CuiPreferences::setModalChat/getModalChat (38-02; 37-02 CORRECTION -- NOT ConfigFile)
 #include "swgClientUserInterface/SwgCuiChatWindow.h" // SwgCuiChatWindow MI thunks (38-03; TRIPLE-MI -> __fastcall thunks, never pmfToVoid)
 
@@ -301,7 +302,7 @@ static const EngineHookPoint s_engineHookPoints[] =
 	// -- game (clientGame, all static; Game.h) ---------------------------------
 	{ "game::install",                (void *)&Game::install },                    // static void install(Application) [Game.h:94]
 	{ "game::quit",                   (void *)&Game::quit },                       // static void quit() [Game.h:98]
-	{ "game::mainLoop",               (void *)&Game::run },                        // static void run() [Game.h:96] (MISMATCH: spec "runGame" -> ours run)
+	{ "game::mainLoop",               (void *)&Game::runGameLoopOnce },            // 24-4a RE-POINT (was &Game::run): Game::run [Game.h:96] is the OUTER once-per-process loop (`while(!isOver()) runGameLoopOnce(false,NULL,0,0)` Game.cpp:1029); the PER-FRAME tick is static void runGameLoopOnce(bool presentToWindow,HWND,int width,int height) [Game.h:103/Game.cpp:1059] -- EXACT __cdecl signature match to Utinni hkMainLoop. (Game::run available as a separate row on request.)
 	{ "game::setupScene",             (void *)static_cast<void(*)(bool, const char *, const char *, CreatureObject *)>(&Game::setScene) }, // OVERLOADED [Game.h:108] -> cast to the (terrain,player,customized) overload
 	{ "game::cleanupScene",           (void *)&Game::cleanupScene },               // static void cleanupScene() [Game.h:101]
 	{ "game::getPlayer",              (void *)&Game::getPlayer },                  // static Object* getPlayer() [Game.h:150]
@@ -311,6 +312,7 @@ static const EngineHookPoint s_engineHookPoints[] =
 	{ "game::isViewFirstPerson",      (void *)&Game::isViewFirstPerson },          // static bool isViewFirstPerson() [Game.h:185]
 	{ "game::isHudSceneTypeSpace",    (void *)&Game::isHudSceneTypeSpace },        // static bool isHudSceneTypeSpace() [Game.h:215]
 	{ "game::g_runningFlags",         (void *)&Game::isOver },                     // ACCESSOR (sec 8 #3): ms_done is private; isOver() is the NON-inline accessor [Game.h:134 / Game.cpp:1021] -- call-not-read
+	{ "game::g_mainLoopCounter",      (void *)&Game::getMainLoopCount },           // 24-4b NEW: ACCESSOR for the per-frame counter ms_loops (private, ++ at Game.cpp:1248). getLoopCount() [Game.h:190] is INLINE (no ODR addr); getMainLoopCount() is the NEW out-of-line twin [Game.h / Game.cpp] mirroring isOver() -- call-not-read, replaces the consumer's hardcoded 0x1908830 read
 
 	// -- graphics (clientGraphics facade, all static; Graphics.h) [EPA-03] -----
 	{ "graphics::install",            (void *)&Graphics::install },                // static bool install() [Graphics.h:70] -- EPA-03 DX11 overlay kickoff row
@@ -358,7 +360,7 @@ static const EngineHookPoint s_engineHookPoints[] =
 	{ "cuiChatWindow::writeToAllTabs",    (void *)&utinni_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
 	{ "cuiChatWindow::writeToCurrentTab", (void *)&utinni_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
 	{ "cuiChatWindow::chatEnterHandler",  pmfRealEntry(&SwgCuiChatWindow::performEnterKey) },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
-	// DEFER: cuiChatWindow::ctor -- SwgCuiChatWindow(UIPage&, Game::SceneType, std::string const&) [SwgCuiChatWindow.h:106] is an MI ctor requiring a LIVE UIPage& arg the injector must supply (37-03 already deferred this exact ctor; matches groundScene/UI-mediator MI-ctor DEFER rationale). NOT advertised (no ctor row, no .inc name); FLAGGED for the EPA-08 handback -- if Utinni confirms it constructs chat windows through a page, add a placement-new __fastcall thunk in a follow-up.
+	{ "cuiChatWindow::createNewWindow",   utinni_chatWindowCreateNewWindowEntry() },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (utinni_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
 	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
@@ -438,6 +440,7 @@ static const EngineHookPoint s_engineHookPoints[] =
 	{ "audio::setMasterVolume",       (void *)&Audio::setMasterVolume },           // static void setMasterVolume(float) [Audio.h:165]
 	{ "audio::getMasterVolume",       (void *)&Audio::getMasterVolume },           // static float getMasterVolume() [Audio.h:166]
 	{ "treeFile::open",               (void *)&TreeFile::open },                   // static AbstractFile* open(const char*,PriorityType,bool) DLLEXPORT [TreeFile.h:85]
+	{ "treeFile::searchTree",         (void *)&TreeFile::addSearchTree },          // 24-4c NEW: the real search-PATH REGISTRATION fn (resolves the open/searchTree collision). static void addSearchTree(const char* fileName, int priority) [TreeFile.h:78] -- registers a .tre at a priority. CONSUMER ABI NOTE: TreeFile is ALL-STATIC -> this is __cdecl with NO pThis (NOT __thiscall), and arg order is REVERSED vs SWGEmu (ours: fileName,priority -- SWGEmu: priority,treeFilename). The loose-dir sibling addSearchPath(path,priority) [TreeFile.h:76] is available on request.
 	{ "report::print",                (void *)&Report::puts },                     // static void puts(const char*) [Report.h:41] (spec "Report::print" -> ours puts; printf is variadic)
 
 	// -- commandParser ctors (free-function __thiscall thunks; NEVER &Class::Class) --

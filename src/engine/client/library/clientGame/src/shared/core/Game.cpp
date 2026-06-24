@@ -1023,6 +1023,17 @@ bool Game::isOver(void)
 	return ms_done || !IoWinManager::haveWindow() || Os::isGameOver();
 }
 
+//-------------------------------------------------------------------
+// Out-of-line (ODR-emitted) twin of the inline getLoopCount(). The inline
+// accessor has no taken-address; this one does, so the engine-hookpoint
+// advertisement contract can advertise the per-frame loop counter by &address
+// (game::g_mainLoopCounter). ms_loops is ++'d once per runGameLoopOnce().
+
+int Game::getMainLoopCount(void)
+{
+	return ms_loops;
+}
+
 
 //-------------------------------------------------------------------
 

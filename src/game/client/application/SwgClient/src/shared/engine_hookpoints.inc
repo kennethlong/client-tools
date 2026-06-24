@@ -81,6 +81,7 @@ ENGINE_HOOKPOINT(game,          getConstCamera)
 ENGINE_HOOKPOINT(game,          isViewFirstPerson)
 ENGINE_HOOKPOINT(game,          isHudSceneTypeSpace)
 ENGINE_HOOKPOINT(game,          g_runningFlags)
+ENGINE_HOOKPOINT(game,          g_mainLoopCounter)
 
 // -- graphics (clientGraphics facade, all static; Graphics.h) ---------------
 ENGINE_HOOKPOINT(graphics,      install)
@@ -129,6 +130,7 @@ ENGINE_HOOKPOINT(cuiChatWindow, enableTextInput)
 ENGINE_HOOKPOINT(cuiChatWindow, writeToAllTabs)
 ENGINE_HOOKPOINT(cuiChatWindow, writeToCurrentTab)
 ENGINE_HOOKPOINT(cuiChatWindow, chatEnterHandler)
+ENGINE_HOOKPOINT(cuiChatWindow, createNewWindow)
 
 // -- cui::manager (clientUserInterface, all static; CuiManager.h) ------------
 ENGINE_HOOKPOINT(cuiManager,    render)
@@ -211,6 +213,7 @@ ENGINE_HOOKPOINT(memory,        free)
 ENGINE_HOOKPOINT(audio,         setMasterVolume)
 ENGINE_HOOKPOINT(audio,         getMasterVolume)
 ENGINE_HOOKPOINT(treeFile,      open)
+ENGINE_HOOKPOINT(treeFile,      searchTree)
 ENGINE_HOOKPOINT(report,        print)
 
 // -- commandParser ctors (free-function __thiscall thunks) ------------------

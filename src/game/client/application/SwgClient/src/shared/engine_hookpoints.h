@@ -50,8 +50,15 @@
 // {enableTextInput,chatEnterHandler}) now advertise the REAL engine entry instead of
 // a call-through forwarder thunk (a detour on a forwarder is silently dead). The
 // consumer's required-set is UNAFFECTED -- only the addresses behind four names moved.
+// Bumped 3 -> 4 in 24-§4 (MISC/INPUT editor-unlock batch): 3 NAME ADDs --
+// game::g_mainLoopCounter (new out-of-line Game::getMainLoopCount accessor for ms_loops),
+// treeFile::searchTree (&TreeFile::addSearchTree -- resolves the open/searchTree collision),
+// cuiChatWindow::createNewWindow (&SwgCuiChatWindow::createNewWindow -- the sole ctor funnel;
+// the requested raw-ctor real-entry is infeasible, you cannot address a ctor in C++). 97 names.
+// Also an ADDRESS re-point under an UNCHANGED name: game::mainLoop now points at the per-frame
+// Game::runGameLoopOnce (was the once-per-process Game::run).
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 3
+#define ENGINE_HOOKPOINTS_VERSION 4
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
