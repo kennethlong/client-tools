@@ -1,6 +1,6 @@
 // ======================================================================
 //
-// utinni_advertise.cpp -- Utinni engine entry-point advertisement provider
+// engine_advertise.cpp -- Utinni engine entry-point advertisement provider
 // (handoff 2026-06-20). The exe-side game-logic twin of the shipped graphics
 // gl11_r.dll!GetHookPoints (Direct3d11.cpp:856-888).
 //
@@ -27,7 +27,7 @@
 #include <bit>      // std::bit_cast (C++20, stdcpp20 enabled)
 #include <cstring>  // std::memcpy (pmfRealEntry MI-PMF code-component extraction, 38-05)
 
-#include "utinni_engine_hookpoints.h"
+#include "engine_hookpoints.h"
 #include "ClientMain.h"                            // utinni_installConfigFileOverride() + ClientMain()
 #include "sharedFoundation/ConfigFile.h"           // ConfigFile::loadFile / loadFromBuffer (static)
 #include "clientGame/Game.h"                       // Game::* (static) + isOver accessor
@@ -283,7 +283,7 @@ static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
 // ----------------------------------------------------------------------
-static const UtinniEngineHookPoint s_engineHookPoints[] =
+static const EngineHookPoint s_engineHookPoints[] =
 {
 	// -- config (sharedFoundation, all static; ConfigFile.h) -------------------
 	{ "config::loadOverrideConfig",   (void *)&utinni_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
@@ -492,9 +492,9 @@ static const UtinniEngineHookPoint s_engineHookPoints[] =
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
 
-static const UtinniEngineHookPoints s_table =
+static const EngineHookPoints s_table =
 {
-	UTINNI_HOOKPOINTS_VERSION,
+	ENGINE_HOOKPOINTS_VERSION,
 	(unsigned int)(sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]),   // NO -1 (no sentinel)
 	s_engineHookPoints
 };
@@ -511,9 +511,9 @@ static const UtinniEngineHookPoints s_table =
 enum
 {
 	UTINNI_REQUIRED_COUNT = 0
-#define UTINNI_HOOKPOINT(g, n) + 1
-#include "utinni_engine_hookpoints.inc"
-#undef UTINNI_HOOKPOINT
+#define ENGINE_HOOKPOINT(g, n) + 1
+#include "engine_hookpoints.inc"
+#undef ENGINE_HOOKPOINT
 };
 static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) == UTINNI_REQUIRED_COUNT,
               "hookpoint table row count != .inc required-set count (drift)");
@@ -522,9 +522,9 @@ static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) == UTIN
 // emitted from the SAME .inc via the X-macro -- no hand-typed name strings.
 static const char * const s_requiredNames[] =
 {
-#define UTINNI_HOOKPOINT(g, n) #g "::" #n,
-#include "utinni_engine_hookpoints.inc"
-#undef UTINNI_HOOKPOINT
+#define ENGINE_HOOKPOINT(g, n) #g "::" #n,
+#include "engine_hookpoints.inc"
+#undef ENGINE_HOOKPOINT
 };
 
 // (c) Runtime self-check. Never crashes (graceful degradation, EPA-04):
@@ -625,9 +625,9 @@ bool utinni_verifyNoNullNoDup()
 // (proven by the shipped gl11 GetHookPoints twin, dumpbin-confirmed). Returns a
 // pointer to the process-lifetime static; Utinni only reads it.
 // ----------------------------------------------------------------------
-extern "C" __declspec(dllexport) const UtinniEngineHookPoints * __cdecl GetEngineHookPoints();
+extern "C" __declspec(dllexport) const EngineHookPoints * __cdecl GetEngineHookPoints();
 
-const UtinniEngineHookPoints * GetEngineHookPoints()
+const EngineHookPoints * GetEngineHookPoints()
 {
 	return &s_table;
 }

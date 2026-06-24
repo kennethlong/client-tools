@@ -3851,7 +3851,7 @@ void GroundScene::turnOffOverheadMap()
 // Utinni engine entry-point advertisement -- PRIVATE-method helpers (Phase 38-01
 // EPA-05; 38-05 detour-correctness split). GroundScene::{init,update,
 // handleInputMapUpdate,handleInputMapEvent} are PRIVATE [GroundScene.h:173,103,170,194],
-// so a free thunk authored in utinni_advertise.cpp would hit C2248. These helpers are
+// so a free thunk authored in engine_advertise.cpp would hit C2248. These helpers are
 // compiled HERE -- inside GroundScene.cpp, the class's own TU, where the private
 // members are visible -- exactly as utinni_installConfigFileOverride() lives in
 // ClientMain.cpp to reach a file-local target (the 37-01 shim pattern).
@@ -3877,7 +3877,7 @@ void GroundScene::turnOffOverheadMap()
 // any gl0X plugin TU -- no shared-header ABI cascade); advertised in the table.
 //
 // 32-bit-only scope: the whole advertise body is Win32-only, so these compile to
-// nothing on x64 (no x64 export surface; mirrors utinni_advertise.cpp's guard).
+// nothing on x64 (no x64 export surface; mirrors engine_advertise.cpp's guard).
 //----------------------------------------------------------------------
 
 #if !defined(_WIN64)
@@ -3923,7 +3923,7 @@ void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 // method whose `this` needs adjustment, NOT directly detour-able) we return nullptr
 // so the exe-side utinni_verifyNoNullNoDup() catches it as a null row and FAILS
 // loudly -- never advertise a wrong / silent-dead entry. (This mirrors the exe-side
-// pmfRealEntry() helper in utinni_advertise.cpp; inlined here because the PRIVATE
+// pmfRealEntry() helper in engine_advertise.cpp; inlined here because the PRIVATE
 // PMF can only be taken in this TU.)
 //
 // 32-bit-only: matches the whole advertise body (#if !defined(_WIN64)).

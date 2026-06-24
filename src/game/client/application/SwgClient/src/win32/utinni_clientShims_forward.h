@@ -24,7 +24,7 @@
 //   bool(*)(char const*, PEXCEPTION_POINTERS)           // client::writeMiniDump
 //
 // EXE-LOCAL: this header lives under SwgClient/src/win32 and is included ONLY by
-// utinni_advertise.cpp. It MUST NOT be pulled by any gl0X plugin TU -- the shim
+// engine_advertise.cpp. It MUST NOT be pulled by any gl0X plugin TU -- the shim
 // DEFINITIONS in Os.cpp / DebugHelp.cpp do not change any struct ABI, but keeping
 // this declaration header exe-local avoids any shared-header ABI cascade
 // (AGENTS.md).

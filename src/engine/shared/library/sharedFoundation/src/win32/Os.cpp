@@ -1596,7 +1596,7 @@ bool Os::launchBrowser(std::string const & website)
 // ======================================================================
 // Utinni engine entry-point advertisement (38-02, EPA-06): an external-linkage
 // shim over the PRIVATE Os::WindowProc [Os.h:138, under the private: block at
-// :133]. A free function in utinni_advertise.cpp cannot name a private member
+// :133]. A free function in engine_advertise.cpp cannot name a private member
 // (C2248), and Os.h lives in sharedFoundation/src/win32 (NOT a public include
 // dir), so the shim MUST be compiled here -- it has member access to the private
 // static and sees the win32 Os.h declaration.

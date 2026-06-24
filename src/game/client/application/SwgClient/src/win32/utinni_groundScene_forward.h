@@ -4,9 +4,9 @@
 // GroundScene methods advertised to Utinni (Phase 38-01, EPA-05; 38-05 split).
 //
 // GroundScene::{init,update,handleInputMapUpdate,handleInputMapEvent} are PRIVATE
-// [GroundScene.h:173,103,170,194], so they cannot be named from utinni_advertise.cpp
+// [GroundScene.h:173,103,170,194], so they cannot be named from engine_advertise.cpp
 // (C2248). The matching helpers are DEFINED in GroundScene.cpp (the class's own TU,
-// which has member access); this header only DECLARES them so utinni_advertise.cpp
+// which has member access); this header only DECLARES them so engine_advertise.cpp
 // can reference them. TWO MECHANISMS after 38-05:
 //   * CALLED/forwarder rows (init, handleInputMapUpdate): __fastcall call-through
 //     forwarders -- Utinni invokes them, they forward.
@@ -27,7 +27,7 @@
 //   void(__thiscall*)(GroundScene*, IoEvent*)     // handleInputMapEvent (real entry)
 //
 // EXE-LOCAL: this header lives under SwgClient/src/win32 and is included ONLY by
-// utinni_advertise.cpp. It MUST NOT be pulled by any gl0X plugin TU -- the
+// engine_advertise.cpp. It MUST NOT be pulled by any gl0X plugin TU -- the
 // forwarder DEFINITIONS in GroundScene.cpp do not change the GroundScene struct
 // ABI, but keeping this declaration header exe-local avoids any shared-header
 // ABI cascade (AGENTS.md). Forward-declares its argument types -- no heavy

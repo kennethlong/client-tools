@@ -116,7 +116,7 @@ using namespace ClientMainNamespace;
 // external-linkage forwarding shim for the file-local crash-fixer. Additive
 // -- touches no existing caller and does not change installConfigFileOverride
 // behavior. The ClientMainNamespace:: qualifier is explicit so there is no
-// ambiguity under the using-namespace above. utinni_advertise.cpp wraps this
+// ambiguity under the using-namespace above. engine_advertise.cpp wraps this
 // in the config::loadOverrideConfig thunk row (EPA-02). Declared in ClientMain.h.
 // ----------------------------------------------------------------------
 void utinni_installConfigFileOverride()

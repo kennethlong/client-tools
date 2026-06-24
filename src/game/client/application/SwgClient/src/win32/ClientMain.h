@@ -18,14 +18,14 @@ int ClientMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, in
 // ClientMainNamespace::installConfigFileOverride(). Named utinni_* so it
 // does NOT collide with the unqualified installConfigFileOverride() callers
 // inside ClientMain.cpp (which compile under `using namespace
-// ClientMainNamespace;`). utinni_advertise.cpp wraps this in the
+// ClientMainNamespace;`). engine_advertise.cpp wraps this in the
 // config::loadOverrideConfig thunk row (EPA-02 crash-fixer).
 // ----------------------------------------------------------------------
 void utinni_installConfigFileOverride();
 
 // ----------------------------------------------------------------------
 // Utinni hookpoint coverage self-check (37-01, EPA-04 seed). Defined in
-// utinni_advertise.cpp (Win32-only). Scans the advertised table for null
+// engine_advertise.cpp (Win32-only). Scans the advertised table for null
 // addrs, duplicate names, and name-set equality vs the X-macro-generated
 // required set; logs + returns false on any miss (never crashes). Called once
 // on the Debug boot path (PRODUCTION == 0). On x64 the definition is compiled
