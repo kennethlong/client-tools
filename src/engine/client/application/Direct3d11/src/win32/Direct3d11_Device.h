@@ -48,6 +48,7 @@ public:
 	static IDXGISwapChain1 *     getSwapChain();
 	static int                   getWidth();
 	static int                   getHeight();
+	static bool                  isInstalled();   // device+swapchain created (guards the resize/device-restored path)
 	static HWND                  getWindow();
 	static bool                  isWindowed();
 	static bool                  engineOwnsWindow();

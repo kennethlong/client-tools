@@ -203,6 +203,14 @@ namespace Direct3d11Namespace
 	// Plan 11-02 STUB(resize) scaffold_fatal_stub, which FATAL'd if ever called.)
 	void resize_impl(int newWidth, int newHeight)
 	{
+		// Defense: never run the device-lost/restored fan-out before the device +
+		// swap chain exist (device-restored re-fetches render-target textures,
+		// which needs a live device). The engine also defers gl11 resizes until
+		// after the first present (Graphics::beginScene), so this guard mainly
+		// covers the CutScene / console Graphics::resize callers during startup.
+		if (!Direct3d11_Device::isInstalled())
+			return;
+
 		for (std::vector<CallbackFunction>::size_type i = 0; i < ms_deviceLostCallbacks.size(); ++i)
 			ms_deviceLostCallbacks[i]();
 

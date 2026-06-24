@@ -84,6 +84,18 @@ namespace GraphicsNamespace
 	Graphics::TranslatePointFromGameToScreen  ms_translatePointFromGameToScreen;
 
 	int                                       ms_rasterMajor;
+
+	// gl11 embed-resize deferral. A WM_SIZE that arrives before the first frame
+	// is presented (e.g. Utinni reparent/SetWindowPos during startup) must NOT
+	// trigger the resize/device-restored fan-out before render state exists --
+	// doing so regressed the injected startup (no render). displayModeChanged
+	// records the latest requested size; beginScene applies it once the first
+	// present has happened. (project_d3d11_embed_resize_scene_rt_fix)
+	bool                                      ms_resizePending = false;
+	int                                       ms_pendingResizeWidth = 0;
+	int                                       ms_pendingResizeHeight = 0;
+	bool                                      ms_firstPresentDone = false;
+
 	GlFillMode                                ms_fillMode = GFM_solid;
 	GlCullMode                                ms_cullMode = GCM_counterClockwise;
 
@@ -398,10 +410,28 @@ void GraphicsNamespace::displayModeChanged()
 			{
 				int const newWidth  = rc.right - rc.left;
 				int const newHeight = rc.bottom - rc.top;
-				if (newWidth > 0 && newHeight > 0
-					&& (newWidth != ms_currentRenderTargetWidth || newHeight != ms_currentRenderTargetHeight))
+				if (newWidth > 0 && newHeight > 0)
 				{
-					Graphics::resize(newWidth, newHeight);
+					// DEFER -- never resize synchronously here. Under Utinni
+					// injection the window is reparented + SetWindowPos-resized
+					// during startup, delivering WM_SIZE before the first frame.
+					// Doing the resize/device-restored fan-out before the first
+					// present (device/RTs/callback targets not yet established)
+					// regressed the injected render path (no render). Record the
+					// latest requested size; Graphics::beginScene applies it once
+					// ms_firstPresentDone -- i.e. the latest size wins, applied at
+					// a frame boundary after render state exists. Standalone is
+					// unaffected (it gets no early embed resize).
+					ms_pendingResizeWidth  = newWidth;
+					ms_pendingResizeHeight = newHeight;
+					ms_resizePending       = true;
+
+					static bool s_loggedResizeRequest = false;
+					WARNING(!s_loggedResizeRequest,
+						("Graphics::displayModeChanged(gl11): resize request w=%d h=%d rasterMajor=%d firstPresentDone=%d -> %s",
+						 newWidth, newHeight, ms_rasterMajor, ms_firstPresentDone ? 1 : 0,
+						 ms_firstPresentDone ? "apply next beginScene" : "DEFERRED until first present"));
+					s_loggedResizeRequest = true;
 				}
 			}
 		}
@@ -964,6 +994,28 @@ void Graphics::update(float elapsedTime)
 
 void Graphics::beginScene()
 {
+	// gl11 embed-resize deferral: apply a pending resize at a frame boundary, but
+	// only once the first present has happened (render state established). This is
+	// the safe point for the resize/device-restored fan-out; an early embed
+	// WM_SIZE (Utinni reparent during startup) is queued by displayModeChanged
+	// and lands here on the next frame after the first present. beginScene runs
+	// only from the game loop (the install-time clear uses the plugin's beginScene
+	// directly), so this never runs mid-init.
+	if (ms_resizePending && ms_firstPresentDone)
+	{
+		ms_resizePending = false;
+		if (ms_pendingResizeWidth > 0 && ms_pendingResizeHeight > 0
+			&& (ms_pendingResizeWidth != ms_currentRenderTargetWidth || ms_pendingResizeHeight != ms_currentRenderTargetHeight))
+		{
+			static bool s_loggedResizeApply = false;
+			WARNING(!s_loggedResizeApply,
+				("Graphics::beginScene: applying deferred gl11 resize w=%d h=%d", ms_pendingResizeWidth, ms_pendingResizeHeight));
+			s_loggedResizeApply = true;
+
+			Graphics::resize(ms_pendingResizeWidth, ms_pendingResizeHeight);
+		}
+	}
+
 #ifdef _DEBUG
 	ms_haveBegin = true;
 #endif
@@ -1063,7 +1115,9 @@ bool Graphics::unlockBackBuffer()
 bool Graphics::present()
 {
 	NOT_NULL(ms_api->present);
-	return ms_api->present();
+	bool const result = ms_api->present();
+	ms_firstPresentDone = true;   // gl11 embed-resize deferral gate
+	return result;
 }
 
 // ----------------------------------------------------------------------
@@ -1073,7 +1127,9 @@ bool Graphics::present(HWND window, int const width, int const height)
 	DEBUG_FATAL(!window, ("window handle is NULL"));
 
 	NOT_NULL(ms_api->presentToWindow);
-	return ms_api->presentToWindow(window, width, height);
+	bool const result = ms_api->presentToWindow(window, width, height);
+	ms_firstPresentDone = true;   // gl11 embed-resize deferral gate
+	return result;
 }
 
 // ----------------------------------------------------------------------

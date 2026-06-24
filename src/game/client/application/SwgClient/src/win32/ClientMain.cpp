@@ -124,6 +124,29 @@ void utinni_installConfigFileOverride()
 	ClientMainNamespace::installConfigFileOverride();
 }
 
+// ----------------------------------------------------------------------
+// bootTrace -- crash-robust flushed boot milestone log. The process-wide
+// SetUnhandledExceptionFilter + minidump (writeMiniDumps is already true) can
+// be BYPASSED under Utinni injection -- the injector may override the filter,
+// or an early fast-fail / stack fault skips it -- so an injected boot crash
+// before Game::run leaves no dump. Each milestone appends one immediately
+// FLUSHED line to swgclient-boot-trace.log (cwd = the staging dir); the last
+// line before death names the boot phase reached. First call truncates.
+// (gl11 injected-startup no-render debug, 2026-06-23)
+// ----------------------------------------------------------------------
+static void bootTrace(char const * const msg)
+{
+	static bool s_truncated = false;
+	FILE * const f = fopen("swgclient-boot-trace.log", s_truncated ? "a" : "w");
+	s_truncated = true;
+	if (f)
+	{
+		fprintf(f, "[boot +%lums] %s\n", static_cast<unsigned long>(GetTickCount()), msg);
+		fflush(f);
+		fclose(f);
+	}
+}
+
 // ======================================================================
 // Entry point for the application
 //
@@ -146,6 +169,7 @@ int ClientMain(
 	UNREF(hPrevInstance);
 	UNREF(nCmdShow);
 
+	bootTrace("00 ClientMain entry");
 
 	//-- thread
 	SetupSharedThread::install();
@@ -183,7 +207,9 @@ int ClientMain(
 #endif
 	data.writeMiniDumps = true; // SWG Source Change - Just always write crash log .txt files, there's no reason not to
 
+	bootTrace("01 pre SetupSharedFoundation::install");
 	SetupSharedFoundation::install(data);
+	bootTrace("02 post SetupSharedFoundation (SEH filter + minidump installed)");
 
 	REPORT_LOG(true, ("ClientMain: Command Line = \"%s\"\n", lpCmdLine));
 	REPORT_LOG(true, ("ClientMain: Memory size = %i MB\n", MemoryManager::getLimit()));
@@ -331,8 +357,10 @@ int ClientMain(
 		setupGraphicsData.alphaBufferBitDepth = 0;
 		SetupClientGraphics::setupDefaultGameData(setupGraphicsData);
 
+		bootTrace("03 pre SetupClientGraphics::install (gl11 device + displayModeChanged hook)");
 		if (SetupClientGraphics::install(setupGraphicsData))
 		{
+			bootTrace("04 post SetupClientGraphics::install (gl11 device up, WM_SIZE hook now live)");
 			VideoList::install(Audio::getMilesDigitalDriver());
 
 			//-- directinput
@@ -384,7 +412,9 @@ int ClientMain(
 
 			//-- run game
 			rootInstallTimer.manualExit();
-			SetupSharedFoundation::callbackWithExceptionHandling(Game::run);
+				bootTrace("05 pre Game::run (subsystems installed; entering frame loop -- first present happens here)");
+		SetupSharedFoundation::callbackWithExceptionHandling(Game::run);
+			bootTrace("06 Game::run returned (clean exit / shutdown)");
 
 			//-- save options
 			// @todo: write a flexible options load/save system, both of ours suck

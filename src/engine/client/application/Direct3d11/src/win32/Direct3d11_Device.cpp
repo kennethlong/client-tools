@@ -726,6 +726,7 @@ void Direct3d11_Device::setFrameHasDrawActivity()
 ID3D11DeviceContext * Direct3d11_Device::getContext() { return ms_context.Get(); }
 int                   Direct3d11_Device::getWidth()   { return ms_width; }
 int                   Direct3d11_Device::getHeight()  { return ms_height; }
+bool                  Direct3d11_Device::isInstalled(){ return ms_installed; }
 HWND                  Direct3d11_Device::getWindow()  { return ms_window; }
 bool                  Direct3d11_Device::isWindowed() { return ms_windowed; }
 bool                  Direct3d11_Device::engineOwnsWindow() { return ms_engineOwnsWindow; }
