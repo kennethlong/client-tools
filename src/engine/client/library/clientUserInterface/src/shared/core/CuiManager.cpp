@@ -815,6 +815,26 @@ void CuiManager::render ()
 	ptimer.start ();
 #endif
 
+	//-- Re-layout the UI when the engine's render size changes (window / embed
+	//-- resize). The UI root page is sized once at install (CuiManager.cpp:448)
+	//-- and nothing in the game client re-lays it out on resize -- Graphics::resize
+	//-- updates the screen dims but cannot call up into the UI layer, and only the
+	//-- Qt editor widgets called CuiManager::setSize. Self-detect the dim change
+	//-- here so the login screen + in-game HUD reflow to the new size. No-op when
+	//-- unchanged (normal play / standalone).
+	{
+		int const screenWidth  = Graphics::getCurrentRenderTargetWidth ();
+		int const screenHeight = Graphics::getCurrentRenderTargetHeight ();
+		static int s_lastUiWidth  = 0;
+		static int s_lastUiHeight = 0;
+		if (screenWidth > 0 && screenHeight > 0 && (screenWidth != s_lastUiWidth || screenHeight != s_lastUiHeight))
+		{
+			s_lastUiWidth  = screenWidth;
+			s_lastUiHeight = screenHeight;
+			CuiManager::setSize (screenWidth, screenHeight);
+		}
+	}
+
 	Graphics::setViewport (0, 0, Graphics::getCurrentRenderTargetWidth (), Graphics::getCurrentRenderTargetHeight ());
 
 	//-- ensure that the player mesh is rendered

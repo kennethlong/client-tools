@@ -383,9 +383,25 @@ void GraphicsNamespace::remove(void)
 }
 
 // ----------------------------------------------------------------------
+// gl11 resize-path trace -- FLUSHED one line per event to swgclient-resize-trace.log
+// (cwd = the staging dir). The WARNING() diagnostics route through the engine
+// REPORT system (RF_log -> buffered TailFileLogObserver; RF_print -> OutputDebug-
+// String), which is NOT flushed per line and so is invisible in a stage log on a
+// clean (non-crashing) injected run -- which is why "the WARNINGs never appeared."
+// This flushed trace is always on disk, so the next injected smoke conclusively
+// shows whether displayModeChanged fires, whether the deferred apply runs, and
+// whether Graphics::resize (scene RTs + projection) actually executes.
+
+static void gl11ResizeTrace(char const * const what, int const a, int const b)
+{
+	FILE * const f = fopen("swgclient-resize-trace.log", "a");
+	if (f) { fprintf(f, "[gl11-resize] %-34s %d x %d\n", what, a, b); fflush(f); fclose(f); }
+}
 
 void GraphicsNamespace::displayModeChanged()
 {
+	gl11ResizeTrace("displayModeChanged CALLED rM/fpd", ms_rasterMajor, ms_firstPresentDone ? 1 : 0);
+
 	// D3D11 (gl11): a WM_SIZE / display change means the window client rect
 	// changed. Drive the engine's full resize -- Graphics::resize updates the
 	// render-target dimension globals AND calls ms_api->resize, which resizes the
@@ -425,6 +441,8 @@ void GraphicsNamespace::displayModeChanged()
 					ms_pendingResizeWidth  = newWidth;
 					ms_pendingResizeHeight = newHeight;
 					ms_resizePending       = true;
+
+					gl11ResizeTrace(ms_firstPresentDone ? "REQUEST (apply next frame)" : "REQUEST (deferred, pre-present)", newWidth, newHeight);
 
 					static bool s_loggedResizeRequest = false;
 					WARNING(!s_loggedResizeRequest,
@@ -583,6 +601,7 @@ void Graphics::toggleWindowedMode()
 
 void Graphics::resize(int newWidth, int newHeight)
 {
+	gl11ResizeTrace("Graphics::resize ENTER (dims+RTs+proj)", newWidth, newHeight);
 	NOT_NULL(ms_api->resize);
 	ms_viewportWidth = ms_currentRenderTargetWidth = ms_currentRenderTargetMaxWidth = ms_frameBufferMaxWidth = newWidth;
 	ms_viewportHeight = ms_currentRenderTargetHeight = ms_currentRenderTargetMaxHeight = ms_frameBufferMaxHeight = newHeight;
@@ -1003,16 +1022,49 @@ void Graphics::beginScene()
 	// directly), so this never runs mid-init.
 	if (ms_resizePending && ms_firstPresentDone)
 	{
-		ms_resizePending = false;
+		// Compare against ms_frameBufferMaxWidth/Height (the stable back-buffer
+		// dims), NOT ms_currentRenderTargetWidth/Height -- the latter fluctuates
+		// within a frame as setRenderTarget switches to offscreen RTs, so it can
+		// be a stale offscreen size at beginScene entry and spuriously skip a real
+		// resize. frameBufferMax only changes in Graphics::resize.
 		if (ms_pendingResizeWidth > 0 && ms_pendingResizeHeight > 0
-			&& (ms_pendingResizeWidth != ms_currentRenderTargetWidth || ms_pendingResizeHeight != ms_currentRenderTargetHeight))
+			&& (ms_pendingResizeWidth != ms_frameBufferMaxWidth || ms_pendingResizeHeight != ms_frameBufferMaxHeight))
 		{
+			gl11ResizeTrace("APPLY (Graphics::resize)", ms_pendingResizeWidth, ms_pendingResizeHeight);
+
 			static bool s_loggedResizeApply = false;
 			WARNING(!s_loggedResizeApply,
 				("Graphics::beginScene: applying deferred gl11 resize w=%d h=%d", ms_pendingResizeWidth, ms_pendingResizeHeight));
 			s_loggedResizeApply = true;
 
 			Graphics::resize(ms_pendingResizeWidth, ms_pendingResizeHeight);
+		}
+		ms_resizePending = false;
+	}
+
+	// Fallback self-detect (gl11): if the SWG window's client rect no longer
+	// matches the engine's back-buffer size and no WM_SIZE-driven resize was
+	// queued, drive the resize from here. Under Utinni injection the embed WM_SIZE
+	// may never reach the client's WndProc, so displayModeChanged (and the pending
+	// apply above) never fire -- this poll makes the scene + UI track the window
+	// regardless of message delivery. Post-first-present + size-changed only -> a
+	// no-op in normal play and standalone. gl11 only (D3D9 keeps its legacy path).
+	if (ms_firstPresentDone && ms_rasterMajor == 11)
+	{
+		HWND const window = Os::getWindow();
+		if (window)
+		{
+			RECT rc;
+			if (GetClientRect(window, &rc))
+			{
+				int const w = rc.right - rc.left;
+				int const h = rc.bottom - rc.top;
+				if (w > 0 && h > 0 && (w != ms_frameBufferMaxWidth || h != ms_frameBufferMaxHeight))
+				{
+					gl11ResizeTrace("POLL window != backbuffer", w, h);
+					Graphics::resize(w, h);
+				}
+			}
 		}
 	}
 
