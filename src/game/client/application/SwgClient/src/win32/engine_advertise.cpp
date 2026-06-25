@@ -288,6 +288,14 @@ static void __cdecl utinni_gameSetupScene(void * groundScene)
 // ----------------------------------------------------------------------
 static void __cdecl utinni_gameLoadScene(const char * terrainFilename, const char * playerFilename)
 {
+	// SINGLE-PLAYER (2026-06-25 loading-screen-stuck consult, Option A): the advertised editor client
+	// has NO connection, so the server-driven PlayerObject (ghost) never arrives. GroundScene's
+	// loading-screen teardown is gated on isFinishedLoading(), which requires getPlayerObject() != NULL
+	// (GroundScene.cpp:1837) -> offline that is permanently false -> the fullscreen load/cut screen never
+	// dismisses. Mark single-player BEFORE the load: the engine's loading path honors getSinglePlayer()
+	// (skips the network clientReady send, GroundScene.cpp:2103) and isFinishedLoading() is relaxed to
+	// accept single-player in lieu of a ghost. The flag is otherwise false for SWGEmu connected play.
+	Game::setSinglePlayer(true);
 	Game::setScene(true, terrainFilename, playerFilename, nullptr);   // immediately=true (load now), customizedPlayer=nullptr (engine loads avatar from playerFilename)
 }
 

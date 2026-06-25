@@ -1834,7 +1834,11 @@ bool GroundScene::isFinishedLoading() const
 	{
 		terrainGenerationStabilized = clientProceduralTerrainAppearance->terrainGenerationStabilized();
 	}
-	bool const hasPlayerObject = (Game::getPlayerObject() != NULL);
+	// In single-player (offline editor / advertised client) there is no server-driven PlayerObject
+	// (ghost) -- the avatar is a bare client CreatureObject. Accept single-player in lieu of the ghost
+	// so the fullscreen loading screen can finish + dismiss (2026-06-25 editor loadScene consult,
+	// Option A). For SWGEmu connected play getSinglePlayer() is false, so this is a no-op there.
+	bool const hasPlayerObject = (Game::getPlayerObject() != NULL) || Game::getSinglePlayer();
 
 	return (cachedFileManagerDone
 			&& spacePreloadedAssetManagerDone
