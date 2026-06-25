@@ -37,6 +37,7 @@
 #include "clientUserInterface/CuiConsoleHelper.h"  // CuiConsoleHelper::processInput (member PMF)
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
 #include "clientGame/GroundScene.h"                 // GroundScene MI thunks + ctor (38-01)
+#include "clientGame/Scene.h"                        // Scene complete type for the game::setupScene MI upcast (2026-06-25 re-map)
 #include "utinni_groundScene_forward.h"             // utinni_groundScene* private-method forwarders (38-01; exe-local)
 #include "utinni_clientShims_forward.h"             // utinni_osWindowProc / utinni_writeMiniDump shims (38-02; exe-local)
 #include "utinni_chatWindow_forward.h"              // utinni_chatWindowCreateNewWindowEntry() PRIVATE-funnel real-entry (24-4d; exe-local)
@@ -242,6 +243,30 @@ static GroundScene * __fastcall utinni_groundSceneCtor(GroundScene * pThis, int 
 }
 
 // ----------------------------------------------------------------------
+// game::setupScene -- pre-built-scene setter thunk (2026-06-25 re-map). The editor's
+// "Load scene" uses the build-then-set pattern: Utinni constructs the scene itself via
+// the advertised groundScene::ctor and hands the GroundScene* here (the SWGEmu
+// setupScene(GroundScene*) shape). The row PREVIOUSLY advertised the strings-builder
+// overload Game::setScene(bool,terrain,player,customized) [Game.h:108], which reads the
+// pointer as its bool `immediately` + garbage filename args -> builds a scene with a
+// garbage player -> 0xC0000005 WRITE in GroundScene::GroundScene (player->setPosition_p,
+// GroundScene.cpp:948). The correct "set this pre-built scene active" entry is
+// Game::_setScene(Scene*) [Game.h:126 / Game.cpp:1386, ms_scene = newScene]. (NOTE: the
+// request assumed _setScene is PRIVATE; in THIS tree it is PUBLIC -> direct call, no
+// friend/forwarder needed -- correction vs the SWGEmu layout.)
+//
+// CAST: Utinni passes the most-derived GroundScene* (from groundScene::ctor) as a void*.
+// GroundScene is MULTIPLE-INHERITANCE (NetworkScene : public Scene, public
+// MessageDispatch::Receiver) so the Scene base is at a NON-ZERO offset -- static_cast<Scene*>
+// applies the correct this-adjustment; a raw reinterpret to Scene* would pass the wrong
+// subobject. __cdecl(void*) matches Utinni's swg::game::setupScene typedef void(__cdecl*)(GroundScene*).
+// ----------------------------------------------------------------------
+static void __cdecl utinni_gameSetupScene(void * groundScene)
+{
+	Game::_setScene(static_cast<Scene *>(reinterpret_cast<GroundScene *>(groundScene)));
+}
+
+// ----------------------------------------------------------------------
 // cui::chatWindow::* (38-03 EPA-05 remainder; 38-05 detour-correctness). SwgCuiChatWindow
 // is TRIPLE-INHERITANCE (public SwgCuiLockableMediator, public UINotification, public
 // MessageDispatch::Receiver [SwgCuiChatWindow.h:58-61]) so every PMF is inflated and
@@ -284,7 +309,10 @@ static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
 // ----------------------------------------------------------------------
-static const EngineHookPoint s_engineHookPoints[] =
+// NOTE: NON-const -- the 29 function-call rows are { name, 0 } compile-time-constant
+// placeholders (so the whole array is image-valid at module load, no static-init tail
+// deferral), completed at runtime by ensureDynamicRowsFilled() on the reader's thread.
+static EngineHookPoint s_engineHookPoints[] =
 {
 	// -- config (sharedFoundation, all static; ConfigFile.h) -------------------
 	{ "config::loadOverrideConfig",   (void *)&utinni_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
@@ -303,7 +331,7 @@ static const EngineHookPoint s_engineHookPoints[] =
 	{ "game::install",                (void *)&Game::install },                    // static void install(Application) [Game.h:94]
 	{ "game::quit",                   (void *)&Game::quit },                       // static void quit() [Game.h:98]
 	{ "game::mainLoop",               (void *)&Game::runGameLoopOnce },            // 24-4a RE-POINT (was &Game::run): Game::run [Game.h:96] is the OUTER once-per-process loop (`while(!isOver()) runGameLoopOnce(false,NULL,0,0)` Game.cpp:1029); the PER-FRAME tick is static void runGameLoopOnce(bool presentToWindow,HWND,int width,int height) [Game.h:103/Game.cpp:1059] -- EXACT __cdecl signature match to Utinni hkMainLoop. (Game::run available as a separate row on request.)
-	{ "game::setupScene",             (void *)static_cast<void(*)(bool, const char *, const char *, CreatureObject *)>(&Game::setScene) }, // OVERLOADED [Game.h:108] -> cast to the (terrain,player,customized) overload
+	{ "game::setupScene",             (void *)&utinni_gameSetupScene },             // 2026-06-25 RE-MAP (was the strings-overload &Game::setScene): __cdecl(void*) thunk over Game::_setScene(Scene*) -- the editor's build-then-set path passes a groundScene::ctor GroundScene*, NOT filenames; the old overload crashed (0xC0000005 in GroundScene::GroundScene). Same name -> address re-map only, no version bump.
 	{ "game::cleanupScene",           (void *)&Game::cleanupScene },               // static void cleanupScene() [Game.h:101]
 	{ "game::getPlayer",              (void *)&Game::getPlayer },                  // static Object* getPlayer() [Game.h:150]
 	{ "game::getPlayerCreatureObject",(void *)&Game::getPlayerCreature },          // static CreatureObject* getPlayerCreature() [Game.h:157] (MISMATCH name)
@@ -343,9 +371,9 @@ static const EngineHookPoint s_engineHookPoints[] =
 	{ "groundScene::reloadTerrain",        (void *)&utinni_groundSceneReloadTerrain },           // public [GroundScene.h:215] -> MI __fastcall thunk
 	{ "groundScene::changeCamera",         (void *)&utinni_groundSceneChangeCamera },            // public [GroundScene.h:207] MISMATCH: ours setView(int,float) -> MI __fastcall thunk
 	{ "groundScene::getCurrentCamera",     (void *)&utinni_groundSceneGetCurrentCamera },        // public [GroundScene.h:212] (non-const overload; const sibling :213) -> MI __fastcall thunk
-	{ "groundScene::update",               utinni_groundSceneUpdateRealEntry() },               // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::update(float) [GroundScene.h:103]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
+	{ "groundScene::update", 0 },               // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::update(float) [GroundScene.h:103]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
 	{ "groundScene::handleInputMapUpdate", (void *)&utinni_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder (CALLED/unused row -- forwarder is correct here, NOT detoured)
-	{ "groundScene::handleInputMapEvent",  utinni_groundSceneHandleInputMapEventRealEntry() },  // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::handleInputMapEvent(IoEvent*) [GroundScene.h:194]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
+	{ "groundScene::handleInputMapEvent", 0 },  // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::handleInputMapEvent(IoEvent*) [GroundScene.h:194]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
 	// SKIP: groundScene::draw -- VIRTUAL [GroundScene.h:204] (also in the VIRTUAL SKIPS block); Utinni resolves off the live vtable. Not advertised.
 	// OMIT: groundScene::g_instance -- no dedicated GroundScene singleton; reached via INLINE Game::getScene() [Game.h:306] (no ODR address) cast to GroundScene, and Game::ms_scene is private [Game.h:271]. OMITTED (graceful degradation); FLAGGED for the EPA-08 handback -- if Utinni's groundScene editor strictly needs the raw singleton pointer, add a non-inline Game accessor in a follow-up.
 
@@ -356,11 +384,11 @@ static const EngineHookPoint s_engineHookPoints[] =
 	// (would trip the C2338 sizeof guard). All 4 target PUBLIC non-virtual methods, so
 	// they are reached directly by the __fastcall thunks defined above (no friend decl).
 	// Contract names are the SPEC names; the in-tree method NAME MISMATCH is in each comment.
-	{ "cuiChatWindow::enableTextInput",   pmfRealEntry(&SwgCuiChatWindow::acceptTextInput) },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
+	{ "cuiChatWindow::enableTextInput", 0 },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
 	{ "cuiChatWindow::writeToAllTabs",    (void *)&utinni_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
 	{ "cuiChatWindow::writeToCurrentTab", (void *)&utinni_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
-	{ "cuiChatWindow::chatEnterHandler",  pmfRealEntry(&SwgCuiChatWindow::performEnterKey) },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
-	{ "cuiChatWindow::createNewWindow",   utinni_chatWindowCreateNewWindowEntry() },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (utinni_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
+	{ "cuiChatWindow::chatEnterHandler", 0 },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
+	{ "cuiChatWindow::createNewWindow", 0 },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (utinni_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
 	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
@@ -373,15 +401,15 @@ static const EngineHookPoint s_engineHookPoints[] =
 	// NOTE: cui::io::processEvent (CuiIoWin.h:62) and ::draw (:61) are VIRTUAL overrides of
 	// IoWin -- SKIP: Utinni resolves off the live vtable (spec sec 6). Not advertised as &fn
 	// (a &CuiIoWin::processEvent would be a vtable-dispatch thunk, not the impl).
-	{ "cuiIo::setKeyboardInputActive",pmfToVoid(&CuiIoWin::setKeyboardInputActive) }, // member PMF __thiscall, single-inheritance [CuiIoWin.h:66]
-	{ "cuiIo::requestKeyboard",       pmfToVoid(&CuiIoWin::requestKeyboard) },     // member PMF __thiscall [CuiIoWin.h:102]
+	{ "cuiIo::setKeyboardInputActive", 0 }, // member PMF __thiscall, single-inheritance [CuiIoWin.h:66]
+	{ "cuiIo::requestKeyboard", 0 },     // member PMF __thiscall [CuiIoWin.h:102]
 	{ "cuiIo::g_instance",            (void *)&CuiManager::getIoWin },             // ACCESSOR: the CuiIoWin singleton accessor (CuiManager owns ms_theIoWin) [CuiManager.h:100]
 
 	// -- consoleHelper (clientUserInterface; CuiConsoleHelper.h) ----------------
 	{ "consoleHelper::sendInput",     (void *)&utinni_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent)
 
 	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
-	{ "commandParser::addSubCommand", pmfToVoid(&CommandParser::addSubCommand) },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
+	{ "commandParser::addSubCommand", 0 },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
 
 	// ======================================================================
 	// 37-03 FULL CATALOG. Per-row symbol kind in the comment. Every & resolved
@@ -393,30 +421,30 @@ static const EngineHookPoint s_engineHookPoints[] =
 	// The NON-virtual BaseExtent::intersect(begin,end) const overload via PMF +
 	// explicit overload static_cast. Single-inheritance base -> PMF not inflated.
 	// Collapses the UtinniCore retail(0x0126AF70)/SWGEmu(0x0125FA10) RVA split.
-	{ "extent::intersect",            pmfToVoid(static_cast<bool (BaseExtent::*)(Vector const &, Vector const &) const>(&BaseExtent::intersect)) }, // OVERLOADED non-virtual [BaseExtent.h:47]
+	{ "extent::intersect", 0 }, // OVERLOADED non-virtual [BaseExtent.h:47]
 
 	// -- object (sharedObject; Object.h) -- NON-VIRTUAL only -------------------
 	// VIRTUAL skips (NOT advertised; Utinni resolves off the live vtable, spec §6):
 	//   Object::addToWorld / removeFromWorld [Object.h:120-121], setParentCell [:165].
 	// move_o is INLINE [Object.h:1216] -> OMITTED (no ODR-emitted address, Pitfall 2).
-	{ "object::getObjectType",        pmfToVoid(&Object::getObjectType) },         // Tag getObjectType() const NON-virtual [Object.h:152]
-	{ "object::getObjectTemplate",    pmfToVoid(&Object::getObjectTemplate) },     // const ObjectTemplate* getObjectTemplate() const [Object.h:150]
-	{ "object::getObjectTemplateName",pmfToVoid(&Object::getObjectTemplateName) }, // const char* getObjectTemplateName() const [Object.h:151]
-	{ "object::getNetworkId",         pmfToVoid(&Object::getNetworkId) },          // const NetworkId& getNetworkId() const [Object.h:162]
-	{ "object::getParentCell",        pmfToVoid(&Object::getParentCell) },         // CellProperty* getParentCell() const NON-virtual [Object.h:166]
-	{ "object::getTransform_o2w",     pmfToVoid(&Object::getTransform_o2w) },      // Transform const& getTransform_o2w() const DLLEXPORT [Object.h:243]
-	{ "object::setTransform_o2w",     pmfToVoid(&Object::setTransform_o2w) },      // void setTransform_o2w(const Transform&) [Object.h:248]
-	{ "object::getPosition_w",        pmfToVoid(&Object::getPosition_w) },         // const Vector getPosition_w() const [Object.h:245]
-	{ "object::setPosition_w",        pmfToVoid(&Object::setPosition_w) },         // void setPosition_w(const Vector&) [Object.h:247]
-	{ "object::getAppearance",        pmfToVoid(static_cast<Appearance * (Object::*)()>(&Object::getAppearance)) }, // OVERLOADED (const/non-const) [Object.h:170-171]
-	{ "object::setAppearance",        pmfToVoid(&Object::setAppearance) },         // void setAppearance(Appearance*) [Object.h:174]
-	{ "object::move_p",               pmfToVoid(&Object::move_p) },                // void move_p(const Vector&) NON-virtual non-inline [Object.h:251]
+	{ "object::getObjectType", 0 },         // Tag getObjectType() const NON-virtual [Object.h:152]
+	{ "object::getObjectTemplate", 0 },     // const ObjectTemplate* getObjectTemplate() const [Object.h:150]
+	{ "object::getObjectTemplateName", 0 }, // const char* getObjectTemplateName() const [Object.h:151]
+	{ "object::getNetworkId", 0 },          // const NetworkId& getNetworkId() const [Object.h:162]
+	{ "object::getParentCell", 0 },         // CellProperty* getParentCell() const NON-virtual [Object.h:166]
+	{ "object::getTransform_o2w", 0 },      // Transform const& getTransform_o2w() const DLLEXPORT [Object.h:243]
+	{ "object::setTransform_o2w", 0 },      // void setTransform_o2w(const Transform&) [Object.h:248]
+	{ "object::getPosition_w", 0 },         // const Vector getPosition_w() const [Object.h:245]
+	{ "object::setPosition_w", 0 },         // void setPosition_w(const Vector&) [Object.h:247]
+	{ "object::getAppearance", 0 }, // OVERLOADED (const/non-const) [Object.h:170-171]
+	{ "object::setAppearance", 0 },         // void setAppearance(Appearance*) [Object.h:174]
+	{ "object::move_p", 0 },                // void move_p(const Vector&) NON-virtual non-inline [Object.h:251]
 
 	// -- objectTemplate (sharedObject base static + sharedGame SharedObjectTemplate) --
 	{ "objectTemplate::createObject", (void *)static_cast<Object * (*)(const char *)>(&ObjectTemplate::createObject) }, // OVERLOADED: static createObject(const char*) [ObjectTemplate.h:32] vs virtual createObject() const [:50]
-	{ "objectTemplate::getAppearanceFilename",   pmfToVoid(&SharedObjectTemplate::getAppearanceFilename) },   // const std::string& (bool=false) const NON-virtual [SharedObjectTemplate.h:353]
-	{ "objectTemplate::getPortalLayoutFilename", pmfToVoid(&SharedObjectTemplate::getPortalLayoutFilename) }, // [SharedObjectTemplate.h:354]
-	{ "objectTemplate::getClientDataFile",       pmfToVoid(&SharedObjectTemplate::getClientDataFile) },       // [SharedObjectTemplate.h:355]
+	{ "objectTemplate::getAppearanceFilename", 0 },   // const std::string& (bool=false) const NON-virtual [SharedObjectTemplate.h:353]
+	{ "objectTemplate::getPortalLayoutFilename", 0 }, // [SharedObjectTemplate.h:354]
+	{ "objectTemplate::getClientDataFile", 0 },       // [SharedObjectTemplate.h:355]
 
 	// -- worldSnapshot (clientGame; WorldSnapshot.h) -- ALL STATIC in this tree -
 	{ "worldSnapshot::load",          (void *)&WorldSnapshot::load },              // static void load(char const*) [WorldSnapshot.h:44]
@@ -428,11 +456,11 @@ static const EngineHookPoint s_engineHookPoints[] =
 
 	// -- camera (clientGraphics; Camera.h) -- NON-VIRTUAL non-inline setters ----
 	// (getViewport*/getViewportWidth etc. are INLINE [Camera.h:210-258] -> OMITTED.)
-	{ "camera::setViewport",          pmfToVoid(static_cast<void (Camera::*)(int, int, int, int)>(&Camera::setViewport)) }, // OVERLOADED [Camera.h:172]
-	{ "camera::setNearPlane",         pmfToVoid(&Camera::setNearPlane) },          // void setNearPlane(real) [Camera.h:174]
-	{ "camera::setFarPlane",          pmfToVoid(&Camera::setFarPlane) },           // void setFarPlane(real) [Camera.h:175]
-	{ "camera::setHorizontalFieldOfView", pmfToVoid(&Camera::setHorizontalFieldOfView) }, // void(real) [Camera.h:178]
-	{ "camera::reverseProjectInViewportSpace", pmfToVoid(static_cast<const Vector (Camera::*)(int, int) const>(&Camera::reverseProjectInViewportSpace)) }, // OVERLOADED non-inline [Camera.h:160]
+	{ "camera::setViewport", 0 }, // OVERLOADED [Camera.h:172]
+	{ "camera::setNearPlane", 0 },          // void setNearPlane(real) [Camera.h:174]
+	{ "camera::setFarPlane", 0 },           // void setFarPlane(real) [Camera.h:175]
+	{ "camera::setHorizontalFieldOfView", 0 }, // void(real) [Camera.h:178]
+	{ "camera::reverseProjectInViewportSpace", 0 }, // OVERLOADED non-inline [Camera.h:160]
 
 	// -- misc statics (memory/audio/file/report) -------------------------------
 	{ "memory::allocate",             (void *)&MemoryManager::allocate },          // static void* allocate(size_t,uint32,bool,bool) DLLEXPORT [MemoryManager.h:58]
@@ -549,8 +577,85 @@ static bool utinni_strEq(const char * a, const char * b)
 	return *a == *b;
 }
 
+// ----------------------------------------------------------------------
+// Static-init race fix (2026-06-25). GetEngineHookPoints() is read by the injected
+// consumer (Utinni) from a REMOTE thread while this exe's main thread is still
+// SUSPENDED -- BEFORE the CRT runs _initterm (our static initializers). Rows whose addr
+// is a compile-time constant ((void*)&Symbol / static_cast<fn>) are image-valid at
+// module load; rows whose addr is a runtime CALL (pmfToVoid / pmfRealEntry / the
+// real-entry accessors) are dynamically initialized at static-init and are NULL until
+// the main thread resumes -- and MSVC defers the WHOLE array tail from the first such
+// row, so even the constant rows after it read null early. The consumer saw a half-built
+// table (the 40/96 it reported -- the prefix up to the first call-row).
+//
+// FIX: the 29 call-rows are now { name, 0 } constant placeholders, so the ENTIRE array is
+// image-valid at load (no dynamic init, no tail deferral). We complete them HERE, on
+// first read, on the READER's thread. Guarded by a PLAIN static bool (constant-init at
+// load -> NO MSVC magic-static guard; that guard would EnterCriticalSection on the CRT's
+// not-yet-initialized thread-safe-static lock on the pre-resume remote thread). Every
+// producer is pure address arithmetic (bit_cast / PMF-byte memcpy / &function) -- no
+// heap, no TLS, no CRT -- so it is safe pre-_initterm. Idempotent (same addresses) so a
+// benign concurrent double-fill is harmless. Patched by NAME, not index, so it cannot
+// silently drift if the table is reordered. (Option A of the 2026-06-25 request -- the
+// only race-proof option: constexpr can't extract an MI-PMF entry, early ctors still race.)
+// ----------------------------------------------------------------------
+static void ensureDynamicRowsFilled()
+{
+	static bool s_filled = false;   // constant-init at load; plain flag, no magic-static guard
+	if (s_filled)
+		return;
+
+	struct DynRow { const char * name; void * addr; };
+	const DynRow dyn[] =
+	{
+		{ "groundScene::update",                     utinni_groundSceneUpdateRealEntry() },
+		{ "groundScene::handleInputMapEvent",        utinni_groundSceneHandleInputMapEventRealEntry() },
+		{ "cuiChatWindow::enableTextInput",          pmfRealEntry(&SwgCuiChatWindow::acceptTextInput) },
+		{ "cuiChatWindow::chatEnterHandler",         pmfRealEntry(&SwgCuiChatWindow::performEnterKey) },
+		{ "cuiChatWindow::createNewWindow",          utinni_chatWindowCreateNewWindowEntry() },
+		{ "cuiIo::setKeyboardInputActive",           pmfToVoid(&CuiIoWin::setKeyboardInputActive) },
+		{ "cuiIo::requestKeyboard",                  pmfToVoid(&CuiIoWin::requestKeyboard) },
+		{ "commandParser::addSubCommand",            pmfToVoid(&CommandParser::addSubCommand) },
+		{ "extent::intersect",                       pmfToVoid(static_cast<bool (BaseExtent::*)(Vector const &, Vector const &) const>(&BaseExtent::intersect)) },
+		{ "object::getObjectType",                   pmfToVoid(&Object::getObjectType) },
+		{ "object::getObjectTemplate",               pmfToVoid(&Object::getObjectTemplate) },
+		{ "object::getObjectTemplateName",           pmfToVoid(&Object::getObjectTemplateName) },
+		{ "object::getNetworkId",                    pmfToVoid(&Object::getNetworkId) },
+		{ "object::getParentCell",                   pmfToVoid(&Object::getParentCell) },
+		{ "object::getTransform_o2w",                pmfToVoid(&Object::getTransform_o2w) },
+		{ "object::setTransform_o2w",                pmfToVoid(&Object::setTransform_o2w) },
+		{ "object::getPosition_w",                   pmfToVoid(&Object::getPosition_w) },
+		{ "object::setPosition_w",                   pmfToVoid(&Object::setPosition_w) },
+		{ "object::getAppearance",                   pmfToVoid(static_cast<Appearance * (Object::*)()>(&Object::getAppearance)) },
+		{ "object::setAppearance",                   pmfToVoid(&Object::setAppearance) },
+		{ "object::move_p",                          pmfToVoid(&Object::move_p) },
+		{ "objectTemplate::getAppearanceFilename",   pmfToVoid(&SharedObjectTemplate::getAppearanceFilename) },
+		{ "objectTemplate::getPortalLayoutFilename", pmfToVoid(&SharedObjectTemplate::getPortalLayoutFilename) },
+		{ "objectTemplate::getClientDataFile",       pmfToVoid(&SharedObjectTemplate::getClientDataFile) },
+		{ "camera::setViewport",                     pmfToVoid(static_cast<void (Camera::*)(int, int, int, int)>(&Camera::setViewport)) },
+		{ "camera::setNearPlane",                    pmfToVoid(&Camera::setNearPlane) },
+		{ "camera::setFarPlane",                     pmfToVoid(&Camera::setFarPlane) },
+		{ "camera::setHorizontalFieldOfView",        pmfToVoid(&Camera::setHorizontalFieldOfView) },
+		{ "camera::reverseProjectInViewportSpace",   pmfToVoid(static_cast<const Vector (Camera::*)(int, int) const>(&Camera::reverseProjectInViewportSpace)) },
+	};
+
+	const unsigned int dynCount = (unsigned int)(sizeof dyn / sizeof dyn[0]);
+	const unsigned int rowCount = (unsigned int)(sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]);
+	for (unsigned int d = 0; d < dynCount; ++d)
+		for (unsigned int i = 0; i < rowCount; ++i)
+			if (utinni_strEq(s_engineHookPoints[i].name, dyn[d].name))
+			{
+				s_engineHookPoints[i].addr = dyn[d].addr;
+				break;
+			}
+
+	s_filled = true;
+}
+
 bool utinni_verifyNoNullNoDup()
 {
+	ensureDynamicRowsFilled();   // complete the call-rows before checking (verify runs at static-init, after the consumer's early read)
+
 	bool ok = true;
 	const unsigned int count = s_table.count;
 
@@ -633,6 +738,7 @@ extern "C" __declspec(dllexport) const EngineHookPoints * __cdecl GetEngineHookP
 
 const EngineHookPoints * GetEngineHookPoints()
 {
+	ensureDynamicRowsFilled();   // complete the 29 call-rows on THIS (the reader's) thread, before returning the table -- the static-init race fix (2026-06-25)
 	return &s_table;
 }
 
