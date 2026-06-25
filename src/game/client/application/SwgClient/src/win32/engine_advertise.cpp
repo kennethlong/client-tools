@@ -267,6 +267,31 @@ static void __cdecl utinni_gameSetupScene(void * groundScene)
 }
 
 // ----------------------------------------------------------------------
+// game::loadScene -- FULL editor scene-load via the SceneCreator lifecycle (2026-06-25
+// consult). game::setupScene (-> _setScene(Scene*)) only does `ms_scene = it`; it SKIPS
+// the SceneCreator/_startScene integration (loading-manager handshake, endDeferredCreation,
+// ms_nextScene management), so a pre-built GroundScene set that way is half-integrated ->
+// next-frame C++ throw (Fatal). The correct entry is the string builder:
+//   Game::setScene(immediately, terrain, player, customized) [Game.h:108]
+//     -> SinglePlayerSceneCreator -> _setScene(SceneCreator&, immediately)
+//     -> _startScene -> SinglePlayerSceneCreator::create() [new GroundScene] -> _setScene(Scene*)
+// So the editor must pass terrain+avatar FILENAMES and let the engine build+integrate, NOT
+// hand over a pre-built GroundScene.
+//
+// immediately = TRUE: load this scene NOW (no planet intro cinematic / cutscene defer). This
+// is exactly what the engine's OWN by-name loaders use -- SwgCuiSceneSelection.cpp:264,
+// SwgCuiLocations.cpp:179, SwgCuiCommandParserScene.cpp:288 all call setScene(true, ...).
+// customizedPlayer = nullptr: the editor has no customization-screen object, so the GroundScene
+// ctor loads the avatar synchronously from playerFilename (GroundScene.cpp:930-945 -- the normal
+// single-player path; matches SwgCuiLocations / SwgCuiCommandParserScene which pass 0).
+// REQUIREMENT: playerFilename must be a loadable object template or the ctor FATALs (GroundScene.cpp:942).
+// ----------------------------------------------------------------------
+static void __cdecl utinni_gameLoadScene(const char * terrainFilename, const char * playerFilename)
+{
+	Game::setScene(true, terrainFilename, playerFilename, nullptr);   // immediately=true (load now), customizedPlayer=nullptr (engine loads avatar from playerFilename)
+}
+
+// ----------------------------------------------------------------------
 // cui::chatWindow::* (38-03 EPA-05 remainder; 38-05 detour-correctness). SwgCuiChatWindow
 // is TRIPLE-INHERITANCE (public SwgCuiLockableMediator, public UINotification, public
 // MessageDispatch::Receiver [SwgCuiChatWindow.h:58-61]) so every PMF is inflated and
@@ -332,6 +357,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "game::quit",                   (void *)&Game::quit },                       // static void quit() [Game.h:98]
 	{ "game::mainLoop",               (void *)&Game::runGameLoopOnce },            // 24-4a RE-POINT (was &Game::run): Game::run [Game.h:96] is the OUTER once-per-process loop (`while(!isOver()) runGameLoopOnce(false,NULL,0,0)` Game.cpp:1029); the PER-FRAME tick is static void runGameLoopOnce(bool presentToWindow,HWND,int width,int height) [Game.h:103/Game.cpp:1059] -- EXACT __cdecl signature match to Utinni hkMainLoop. (Game::run available as a separate row on request.)
 	{ "game::setupScene",             (void *)&utinni_gameSetupScene },             // 2026-06-25 RE-MAP (was the strings-overload &Game::setScene): __cdecl(void*) thunk over Game::_setScene(Scene*) -- the editor's build-then-set path passes a groundScene::ctor GroundScene*, NOT filenames; the old overload crashed (0xC0000005 in GroundScene::GroundScene). Same name -> address re-map only, no version bump.
+	{ "game::loadScene",              (void *)&utinni_gameLoadScene },             // CONSULT 2026-06-25 NAME ADD: __cdecl(const char* terrain, const char* player) FULL scene-load via the SceneCreator lifecycle -> Game::setScene(true, terrain, player, nullptr). The editor passes FILENAMES (not a pre-built GroundScene); fixes the half-integrated-scene next-frame throw that setupScene/_setScene(Scene*) leaves. immediately=true + customizedPlayer=nullptr mirror the engine's own by-name loaders (SwgCuiSceneSelection/Locations/CommandParserScene).
 	{ "game::cleanupScene",           (void *)&Game::cleanupScene },               // static void cleanupScene() [Game.h:101]
 	{ "game::getPlayer",              (void *)&Game::getPlayer },                  // static Object* getPlayer() [Game.h:150]
 	{ "game::getPlayerCreatureObject",(void *)&Game::getPlayerCreature },          // static CreatureObject* getPlayerCreature() [Game.h:157] (MISMATCH name)

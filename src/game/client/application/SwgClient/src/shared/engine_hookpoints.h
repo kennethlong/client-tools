@@ -61,8 +61,14 @@
 // (&TreeFile::enumerateFiles -- new static that walks ms_searchNodes and yields every
 // SearchTree/SearchTOC filename via a callback, so the consumer Repository can populate the
 // editor pickers). 98 names. (The companion in-world CUI reflow fix is behavior-only -- no row.)
+// Bumped 5 -> 6 in 24-SCENE-LOAD (editor "Load scene"): 1 NAME ADD -- game::loadScene (a
+// __cdecl(terrain,player) thunk over Game::setScene(true,terrain,player,nullptr), the full
+// SceneCreator lifecycle). game::setupScene -> _setScene(Scene*) only sets ms_scene and leaves
+// a pre-built GroundScene half-integrated (next-frame throw); loadScene lets the engine build
+// + integrate from filenames. 99 names. (game::setupScene stays mapped as the low-level
+// set-pre-built-scene primitive -- unchanged.)
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 5
+#define ENGINE_HOOKPOINTS_VERSION 6
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
