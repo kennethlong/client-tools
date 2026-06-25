@@ -214,6 +214,7 @@ ENGINE_HOOKPOINT(audio,         setMasterVolume)
 ENGINE_HOOKPOINT(audio,         getMasterVolume)
 ENGINE_HOOKPOINT(treeFile,      open)
 ENGINE_HOOKPOINT(treeFile,      searchTree)
+ENGINE_HOOKPOINT(treeFile,      enumerateFiles)
 ENGINE_HOOKPOINT(report,        print)
 
 // -- commandParser ctors (free-function __thiscall thunks) ------------------

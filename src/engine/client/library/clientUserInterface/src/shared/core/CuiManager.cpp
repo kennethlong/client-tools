@@ -822,9 +822,19 @@ void CuiManager::render ()
 	//-- Qt editor widgets called CuiManager::setSize. Self-detect the dim change
 	//-- here so the login screen + in-game HUD reflow to the new size. No-op when
 	//-- unchanged (normal play / standalone).
+	//
+	//-- RNDR-04 (in-world fullscreen restyle): key off the FRAME-BUFFER (back-buffer)
+	//-- size, NOT getCurrentRenderTarget*. The latter returns whatever RT is bound and
+	//-- bounces to a fullscreen-sized scene/post-fx texture mid-frame; on world entry
+	//-- the client does a window-level fullscreen restyle and the embed watchdog resizes
+	//-- the window back to the panel, but the scene RT stays fullscreen -> the CUI was
+	//-- latching the fullscreen res (minimap/toolbar/chat clipped). getFrameBufferMax* is
+	//-- the back-buffer the embed-resize poll (Graphics::beginScene) keeps synced to the
+	//-- window client rect, so the CUI now tracks back down to the panel. Equals the
+	//-- current-RT dims in normal play/standalone -> no regression to startup/maximize.
 	{
-		int const screenWidth  = Graphics::getCurrentRenderTargetWidth ();
-		int const screenHeight = Graphics::getCurrentRenderTargetHeight ();
+		int const screenWidth  = Graphics::getFrameBufferMaxWidth ();
+		int const screenHeight = Graphics::getFrameBufferMaxHeight ();
 		static int s_lastUiWidth  = 0;
 		static int s_lastUiHeight = 0;
 		if (screenWidth > 0 && screenHeight > 0 && (screenWidth != s_lastUiWidth || screenHeight != s_lastUiHeight))

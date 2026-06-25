@@ -537,6 +537,18 @@ AbstractFile *TreeFile::SearchTree::open(const char *fileName, AbstractFile::Pri
 	return NULL;
 }
 
+// ----------------------------------------------------------------------
+
+void TreeFile::SearchTree::enumerateFiles(void (*callback)(const char *fileName, void *context), void *context) const
+{
+	// Yield every TOC filename: the name block m_fileNames holds the null-terminated
+	// engine-relative paths (e.g. "terrain/tatooine.trn"); each entry indexes it by
+	// fileNameOffset. m_numberOfFiles is int here (uint32 on SearchTOC).
+	if (m_fileNames && m_tableOfContents)
+		for (int i = 0; i < m_numberOfFiles; ++i)
+			callback(m_fileNames + m_tableOfContents[i].fileNameOffset, context);
+}
+
 // ======================================================================
 
 bool TreeFile::SearchTOC::validate(const char *fileName)
@@ -935,6 +947,18 @@ AbstractFile *TreeFile::SearchTOC::open(const char *fileName, AbstractFile::Prio
 	}
 
 	return NULL;
+}
+
+// ----------------------------------------------------------------------
+
+void TreeFile::SearchTOC::enumerateFiles(void (*callback)(const char *fileName, void *context), void *context) const
+{
+	// Same shape as SearchTree::enumerateFiles, but m_numberOfFiles is uint32 here.
+	// fileNameOffset was rewritten from on-disk lengths to running byte offsets at
+	// construction (see ctor), so it indexes m_fileNames directly.
+	if (m_fileNames && m_tableOfContents)
+		for (uint32 i = 0; i < m_numberOfFiles; ++i)
+			callback(m_fileNames + m_tableOfContents[i].fileNameOffset, context);
 }
 
 // ======================================================================

@@ -57,8 +57,12 @@
 // the requested raw-ctor real-entry is infeasible, you cannot address a ctor in C++). 97 names.
 // Also an ADDRESS re-point under an UNCHANGED name: game::mainLoop now points at the per-frame
 // Game::runGameLoopOnce (was the once-per-process Game::run).
+// Bumped 4 -> 5 in 24-ENUM-A (editor file-pickers): 1 NAME ADD -- treeFile::enumerateFiles
+// (&TreeFile::enumerateFiles -- new static that walks ms_searchNodes and yields every
+// SearchTree/SearchTOC filename via a callback, so the consumer Repository can populate the
+// editor pickers). 98 names. (The companion in-world CUI reflow fix is behavior-only -- no row.)
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 4
+#define ENGINE_HOOKPOINTS_VERSION 5
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
