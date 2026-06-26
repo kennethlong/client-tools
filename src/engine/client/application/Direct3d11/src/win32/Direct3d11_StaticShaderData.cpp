@@ -1732,6 +1732,37 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 					// value passes through unchanged.
 					Direct3d11_StateCache::setColorWriteEnable(engPass->m_writeEnable);
 
+					// 2026-06-26: D3D9-parity alpha-FADE blend (RenderDoc Capture41-confirmed).
+					// A MeshAppearance fading in/out (Graphics::setAlphaFadeOpacity, driven by
+					// MeshAppearance::alter ramping m_opaqueAlpha 0->1) makes the dot3/static PS
+					// write the fade opacity into output alpha (o0.w = enabled ? fadeOpacity : a).
+					// But D3D11 previously only RECORDED the opacity (Direct3d11_StateCache::
+					// setAlphaFadeOpacity) and never flipped the OM blend state, so the character
+					// wrote OPAQUE -- the fade alpha was computed and discarded (Capture41 EID299:
+					// shaderOut.a=0.21 yet post-blend RGB == full opaque color -> no fade-in, the
+					// gl05-vs-gl11 char-select parity bug). D3D9 forces blend ON here
+					// (Direct3d9.cpp:4089-4093): ALPHABLENDENABLE=true, and for OPAQUE surfaces
+					// masks the alpha color-write; already-translucent passes keep their own blend
+					// (D3D9 branches on ms_alphaBlendEnable -- mirrored below). Engages only while a
+					// fade is active, so non-fading draws are untouched.
+					// NOTE: D3D9 also scales D3DRS_ALPHAREF by opacity (4094) for alpha-TESTED
+					// cutout fades, and the dot3 output-alpha is only set when d3.valid; those
+					// remain a separate parity gap (no regression -- non-dot3/alpha-test fades just
+					// stay as today).
+					if (Direct3d11_StateCache::getAlphaFadeEnabled())
+					{
+						Direct3d11_StateCache::setAlphaBlendEnable(true);
+						if (!engPass->m_alphaBlendEnable)
+						{
+							// opaque surface fading in: blend the PS fade-opacity alpha and mask the
+							// alpha color-write (so the reduced alpha is not written to the RT).
+							Direct3d11_StateCache::setAlphaBlendFactors(
+								D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD);
+							Direct3d11_StateCache::setColorWriteEnable(static_cast<uint8>(
+								engPass->m_writeEnable & ~static_cast<uint8>(D3D11_COLOR_WRITE_ENABLE_ALPHA)));
+						}
+					}
+
 					// Plan 11-09.15 Iter-44C REVERTED 2026-05-23: re-attempt
 					// of per-pass blend factors with 44A+B+E prerequisites in
 					// place. Smoke STILL regressed (screenShot0007.jpg vs
