@@ -836,6 +836,12 @@ void NebulaManagerClient::handleEnqueuedLightningEvents()
 				if (lightningAppearance == NULL)
 				{
 					WARNING(true, ("NebulaManagerClient unable to create lightning appearance [%s]", lightningAppearanceName.c_str()));
+					//-- the lightning appearance could not be created (missing/wrong-type asset); drop this
+					//-- entry instead of falling through to dereference the still-null objectWatcher below
+					//-- (NOT_NULL at the deref is a no-op in Release). Mirrors the erase+continue skip used
+					//-- for the missing-nebula and empty-appearance-name cases above.
+					it = s_lightningObjectVector.erase(it);
+					continue;
 				}
 				else
 				{
