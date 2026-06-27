@@ -210,7 +210,14 @@ namespace CuiWidget3dObjectListViewerNamespace
 
 				Shader * const shader = ms_currentOverrideShaderTemplate->fetchModifiableShader();
 				StaticShader * const staticShader = shader->getStaticShader();
-				if (staticShader)
+				// 2026-06-26: getTexture(TAG_MAIN) can report the MAIN stage PRESENT while leaving
+				// mainTexture NULL (defined-but-unbound MAIN slot). Hit on jump-to-lightspeed: the
+				// ui_membrane override extracts an object's MAIN texture mid-transition while the
+				// binding is momentarily null (async/timing -- the asset itself is fine; it renders
+				// textured standalone). The override path below dereferences mainTexture (fetch() +
+				// *mainTexture), so guard it. With no MAIN we fall through to the object's OWN shader
+				// (proven-good); the else-branch release() frees the modifiable shader we fetched.
+				if (staticShader && mainTexture)
 				{
 					mainTexture->fetch();
 					staticShader->setTexture(TAG_MAIN, *mainTexture);
