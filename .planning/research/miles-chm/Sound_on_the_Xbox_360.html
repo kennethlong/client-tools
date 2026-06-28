@@ -1,0 +1,98 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Sound on the Xbox 360</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Sound on the Xbox 360'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Sound on the Xbox 360</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Sound_on_the_Xbox_360.html#_Discussion' class='paragraph'>Sound on the Xbox 360: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Distributing_Miles_with_Xbox_360_Applications.html' class='paragraph'>Distributing Miles with Xbox 360 Applications</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Memory_management_on_the_Xbox_360.html' class='paragraph'>Memory management on the Xbox 360</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='The_Microsoft_Xbox_360_Platform.html' class='paragraph'>The Microsoft Xbox 360 Platform</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Sound on the Xbox 360::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  For digital audio output, Miles for Xbox 360 uses the XAudio system library. Miles only uses one XAudio voice - we do everything else in software for maximum speed (we are much faster than the Xbox system library (which are also software based).  We do all of our work on a background CPU, so you can play hundreds of digital samples at once with no CPU hit on the main CPU at all! 
+
+</p>
+<p>
+The Miles Sound System on Xbox 360 supports uncompressed, IMA ADPCM, Bink Audio, MP3, Ogg Vorbis, and XMA digital sound. IMA, Ogg Vorbis, and MP3 are not natively  supported by the Xbox, but Miles makes the decompression and streaming to the sound hardware seamless - they just take  a little more CPU.   
+
+</p>
+<p>
+The Xbox 360 also supports full 5.1 discrete audio. You can set the volume levels of the 5.1 individual channels with the  <a href='AIL_set_sample_51_volume_pan.html' class='paragraph'>AIL_set_sample_51_volume_pan</a> or <a href='AIL_set_sample_51_volume_levels.html' class='paragraph'>AIL_set_sample_51_volume_levels</a> functions. 
+
+</p>
+<p>
+Miles for Xbox 360 uses its built-in DLS synthesizer for all MIDI playback.  This has  the added advantage of allowing you to author custom DLS instrument sets to optimize memory use. 
+
+</p>
+<p>
+And that's pretty much it - Miles is a piece of cake to use on the Xbox 360. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Distributing_Miles_with_Xbox_360_Applications.html' class='paragraph'>Distributing Miles with Xbox 360 Applications</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='The_Microsoft_Xbox_360_Platform.html' class='paragraph'>The Microsoft Xbox 360 Platform</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Memory_management_on_the_Xbox_360.html' class='paragraph'>Memory management on the Xbox 360</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

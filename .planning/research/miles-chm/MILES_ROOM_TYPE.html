@@ -1,0 +1,259 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MILES_ROOM_TYPE</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MILES_ROOM_TYPE'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MILES_ROOM_TYPE</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ specifies a room type to use for the environmental reverb.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_room_type.html#_Discussion' class='paragraph'>AIL_set_room_type: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_2_Properties.html#_Discussion' class='paragraph'>Creative's EAX 2 Properties: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='EAX_REVERB.html' class='paragraph'>EAX_REVERB</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Types</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_sample_exclusion.html' class='paragraph'>AIL_sample_exclusion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Type Definition:</span>
+<span class='type'>typedef <a href='U32.html' class='blue'>U32</a></span> <a href='MILES_ROOM_TYPE.html'>MILES_ROOM_TYPE</a>;
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ specifies a room type to use for the environmental reverb.</table>
+<div class="discussion_heading">Predefined values</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_GENERIC' class=nohover>ENVIRONMENT_GENERIC</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Default setting.  (Debugger value: 0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_PADDEDCELL' class=nohover>ENVIRONMENT_PADDEDCELL</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Padded cell reverb. (Debugger value: 1).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_ROOM' class=nohover>ENVIRONMENT_ROOM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Simple room reverb. (Debugger value: 2).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_BATHROOM' class=nohover>ENVIRONMENT_BATHROOM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Bathroom reverb. (Debugger value: 3).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_LIVINGROOM' class=nohover>ENVIRONMENT_LIVINGROOM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Living room reverb. (Debugger value: 4).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_STONEROOM' class=nohover>ENVIRONMENT_STONEROOM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Stone room reverb. (Debugger value: 5).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_AUDITORIUM' class=nohover>ENVIRONMENT_AUDITORIUM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Auditorium reverb. (Debugger value: 6).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_CONCERTHALL' class=nohover>ENVIRONMENT_CONCERTHALL</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Concert hall reverb. (Debugger value: 7).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_CAVE' class=nohover>ENVIRONMENT_CAVE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Cave reverb. (Debugger value: 8).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_ARENA' class=nohover>ENVIRONMENT_ARENA</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Arena reverb. (Debugger value: 9).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_HANGAR' class=nohover>ENVIRONMENT_HANGAR</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Hanger reverb. (Debugger value: 10).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_CARPETEDHALLWAY' class=nohover>ENVIRONMENT_CARPETEDHALLWAY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Carpeted hallway reverb. (Debugger value: 11).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_HALLWAY' class=nohover>ENVIRONMENT_HALLWAY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Hallway reverb. (Debugger value: 12).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_STONECORRIDOR' class=nohover>ENVIRONMENT_STONECORRIDOR</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Stone corridor reverb. (Debugger value: 13).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_ALLEY' class=nohover>ENVIRONMENT_ALLEY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Alley reverb. (Debugger value: 14).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_FOREST' class=nohover>ENVIRONMENT_FOREST</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Forest reverb. (Debugger value: 15).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_CITY' class=nohover>ENVIRONMENT_CITY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ City reverb. (Debugger value: 16).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_MOUNTAINS' class=nohover>ENVIRONMENT_MOUNTAINS</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Mountains reverb. (Debugger value: 17).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_QUARRY' class=nohover>ENVIRONMENT_QUARRY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Quarry reverb. (Debugger value: 18).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_PLAIN' class=nohover>ENVIRONMENT_PLAIN</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Open plain reverb. (Debugger value: 19).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_PARKINGLOT' class=nohover>ENVIRONMENT_PARKINGLOT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Parking lot reverb. (Debugger value: 20).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_SEWERPIPE' class=nohover>ENVIRONMENT_SEWERPIPE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Sewer pipe reverb. (Debugger value: 21).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_UNDERWATER' class=nohover>ENVIRONMENT_UNDERWATER</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Underwater reverb. (Debugger value: 22).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_DRUGGED' class=nohover>ENVIRONMENT_DRUGGED</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Drugged reverb. (Debugger value: 23).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_DIZZY' class=nohover>ENVIRONMENT_DIZZY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Dizzy reverb. (Debugger value: 24).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ENVIRONMENT_PSYCHOTIC' class=nohover>ENVIRONMENT_PSYCHOTIC</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Psychotic reverb. (Debugger value: 25).</td>
+  </tr>
+</table>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_sample_exclusion.html' class='paragraph'>AIL_sample_exclusion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td>
+    <td width=33% align=right>&nbsp;</td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

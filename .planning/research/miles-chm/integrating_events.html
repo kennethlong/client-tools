@@ -1,0 +1,186 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Integrating The Miles Event System</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Integrating The Miles Event System'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Integrating The Miles Event System</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event.html#_Discussion' class='paragraph'>AIL_enqueue_event: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_by_name.html#_Discussion' class='paragraph'>AIL_enqueue_event_by_name: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='getting_in.html#starting_game' class='paragraph'>Getting It In The Game: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='getting_started.html#starting_overview' class='paragraph'>Getting Started: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='auditioning.html#introaudin' class='paragraph'>Miles Auditioning: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='migration.html' class='paragraph'>Migrating From Miles 8</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='getting_started.html' class='paragraph'>Getting Started</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='integrating_overview' class='nohover'><b>Using the Event System</b></a></div>
+<p>
+Basic integration with the Miles high level event system is incredibly simple. It's designed around a "Fire and forget" system, where
+you enqueue events (preferably by name), and once a frame you tick the event system, durign which it executes the events. Here's a quick example
+of how to get the event system up and running:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>    <font color=#008000>// Somewhere in the file add #include "mss.h"</font>
+
+    <font color=#008000>// Initialize Miles</font>
+    <a href='AIL_startup.html' class='paragraph'>AIL_startup</a>();
+    
+    <font color=#008000>// Create a driver to render our audio - 44khz, 16 bit,</font>
+    <a href='HDIGDRIVER.html' class='paragraph'>HDIGDRIVER</a> dig = <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>(44100, 16, 2, 0);
+
+    <font color=#008000>// Create an event system tied to that driver - let Miles choose memory defaults.</font>
+    <a href='AIL_startup_event_system.html' class='paragraph'>AIL_startup_event_system</a>(dig, 0, 0, 0);
+
+    <font color=#008000>// Wow, that's really it?</font>
+</pre></div>
+<p>
+The above code is all the initialization code required to get the system up and running. However, the system still needs to tick.
+Wherever you process your frame, add this code:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>    <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>();
+
+    <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a>();
+</pre></div>
+<p>
+We're up to 5 function calls and the system is up and running. It's time to start playing with events. To do this,
+we call <a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a>().
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>    void Actor_Player::FireMyGuns(<a href='S32.html' class='paragraph'>S32</a> i_ReallyFast)
+    {
+        <font color=#008000>// Spawn a bullet!</font>
+        
+        <font color=#008000>// Use up ammo!</font>
+
+        <font color=#008000>// And play a sound from the "Effects" sound bank, in the "Player" folder, called "Fire".</font>
+        <a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a>("Effects/Player/Fire");
+    }
+</pre></div>
+<p>
+At this point, we've got the system up and running, it's ticking, and we have an event that will try to play. But where
+will it get that data?
+</p>
+<p>
+We need to load a soundbank!
+</p>
+<p>
+Back up after the startup code, add this:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>    <a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a>("Effects.msscmp", "Effects");
+</pre></div>
+<p>
+And that's all it takes for basic usage. However, you'll want to integrate the audition system as well.
+</p>
+<p>
+It's significantly more complicated.
+</p>
+<div class="discussion_heading"><a name='integrating_audition' class='nohover'><b>Using the Audition System</b></a></div>
+<p>
+</p>
+<div class=prototype>
+<pre>    <font color=#008000>// Do this after <a href='AIL_startup_event_system.html' class='paragraph'>AIL_startup_event_system</a>() and *before* <a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a>()</font>
+
+    <font color=#008000>// Initialize the audition system. Use server assets, default platform, and default language</font>
+    <a href='AIL_audition_startup.html' class='paragraph'>AIL_audition_startup</a>(0, 0, 0);
+
+    <font color=#008000>// Connect to the current machine for <a href='auditioning.html' class='paragraph'>Miles Auditioning</a>.</font>
+    <a href='AIL_audition_connect.html' class='paragraph'>AIL_audition_connect</a>(<a href='AIL_audition_local_host.html' class='paragraph'>AIL_audition_local_host</a>());
+</pre></div>
+<p>
+I lied, sorry. It's not complicated - that's it!
+</p>
+<p>
+A quick footnote - the audition system is implemented in a separate library, so that when you release you
+don't have a bunch of code lying around not getting used. However, that means you'll need a way for ship
+to not call these functions, otherwise you'll have a dependency around you don't want. For example:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>#ifndef SHIP_GAME
+    <a href='AIL_audition_startup.html' class='paragraph'>AIL_audition_startup</a>(0, 0, 0);
+    <a href='AIL_audition_connect.html' class='paragraph'>AIL_audition_connect</a>(<a href='AIL_audition_local_host.html' class='paragraph'>AIL_audition_local_host</a>());
+#endif
+</pre></div>
+<p>
+For basic integration of Miles, you're done. For more advanced integration techniques, check out <a href='advanced_code.html' class='paragraph'>Advanced Topics</a>.
+If you've got all you need from the code side of things, head over to <a href='getting_in.html' class='paragraph'>Getting It In The Game</a>.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%>&nbsp;</td>
+    <td width=33% align=center><img src='arrowup.png'><a href='getting_started.html' class='paragraph'>Getting Started</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='migration.html' class='paragraph'>Migrating From Miles 8</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

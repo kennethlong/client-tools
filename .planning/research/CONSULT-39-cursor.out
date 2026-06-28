@@ -1,0 +1,151 @@
+﻿## Verdict: **sound-with-conditions** (not a guaranteed fix; mechanism is mostly detection-threshold + occasional slide-rescue, not “subdivide ⇒ slide always recovers”)
+
+**Single biggest risk:** Persistent parallel-wall grazing where **every** sub-step still records a circle hit (FWD branch, `FloorMesh.cpp:2909–2916`) — resolution math then **sums to the same error** as one big step; you pay ~3× full `updateSegment` cost for no net gain.
+
+**Better hook:** **H1** (lower `CollisionWorld.cpp:639` divisor) over **H2** — H1 keeps floor, obstacles, `storePosition`, and `contact.m_time` in one coherent segment. H2 splits only floor and desyncs against full-step obstacle contacts.
+
+---
+
+## Q1 — Eliminate stutter or slice it? (2-substep parallel-wall trace)
+
+### What the LOCKED evidence actually implies
+
+The proposal frames loss as `step*(1-min)`. The addendum in `CONSULT-38-doorsnap-resolution-EVIDENCE.md` is stronger: **`resetPos` rewind magnitude ≈ full `step`, independent of `min`**, because `resetPos = moveSeg.getBegin(m_cellB)` (`CollisionResolve.cpp:320`) always rewinds to **frame/substep start**, not to the contact param.
+
+That rewind magnitude is **not** the net displacement error. Net error is whether the slide replay adds the tangential remainder:
+
+```421:463:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+		Vector contactPoint = moveSeg.atParam(contactCell,contact.m_time);
+		outList.push_back( CellPosition(contactCell,contactPoint) );
+		// ...
+		if(contactCount == 1)
+		{
+			Vector delta = secondSeg.getDelta(contactCell);
+			Vector slidDelta = Collision3d::SingleSlide(delta,contact.m_normal);
+			Vector localStartDelta = CollisionUtils::rotateToCell(startCell,startDelta,contactCell);
+			if(slidDelta.dot(localStartDelta) <= 0.0f)
+			{
+				return RR_Resolved;   // ← only contactPoint in outList; remainder discarded
+			}
+			// ...
+			moveSeg.m_pointB = contactPoint + slidDelta;
+		}
+```
+
+If slide succeeds: `final ≈ start + min·Δ + SingleSlide((1-min)·Δ, N)`.
+
+For a **pure tangent** step `Δ = s·T` and wall normal `N ⊥ T`:
+
+- `SingleSlide` (`CollisionUtils.cpp:249–315`) leaves `V` unchanged when `V·N = 0` (`251`).
+- Remainder `(1-min)·s·T` is fully kept.
+- **Net = s·T regardless of `min`.**
+
+So subdividing **does not change the math** when the **world-space graze point** and **slide success/failure** are unchanged.
+
+### Concrete 2-substep vs 1-step (parallel wall, graze only on last half)
+
+Assume walk along +Z, `D = 0.30 m`, graze world position at `P₀ + 0.225·ẑ`.
+
+| | Single step | 2 substeps (0.15 m each) |
+|---|---|---|
+| Substep 1 | — | No hit → `RR_NoCollision`, ends `P₀+0.15ẑ` (`CollisionWorld.cpp:921` `storePosition`) |
+| Substep 2 | `min=0.75`, remainder `0.075ẑ` | From `P₀+0.15ẑ`, `min=0.5`, remainder **also `0.075ẑ`** |
+| `secondSeg` | `0.075ẑ` | `0.075ẑ` — **identical** |
+| `SingleSlide` input | same | same |
+| Net if slide OK | `P₀ + 0.30ẑ` | `P₀ + 0.30ẑ` — **no gain** |
+
+Subdivision only helps resolution here if slide **fails on the 0.30 m step but succeeds on the 0.075 m remainder** (backward-motion guard at `:452–454`). That is possible but **not guaranteed**; it depends on circle-derived contact normals (`FloorMesh.cpp:2864–2866`), not step count alone.
+
+### Worst case: graze **every** sub-step (persistent parallel wall)
+
+If each 0.15 m sub-step also records FWD circle hit with the same fractional `min`:
+
+- Per sub-step slide-fail net ≈ `min·s`
+- N substeps → `Σ min·s = min·D` — **same as one step with that `min`**
+- You do **not** eliminate stutter; you **slice** it into invisible within-frame micro-resolves (all before render), with **identical final position** if failure mode is identical.
+
+**When F3 actually wins:** sub-steps **fall below the graze detection band** so `pathWalkCircle` returns `PWR_WalkOk` on early chunks (`FloorMesh.cpp:3018` only reached after no `hitAnything`). That matches retail’s smaller per-frame `step` (LOCKED fact 7) — **detection threshold**, not finer sliding.
+
+---
+
+## Q3 — H2 `circleHitTime` / `contact.m_time` rescaling
+
+`contact.m_time` feeds directly into:
+
+```65:70:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+Vector MoveSegment::atParam ( CellProperty const * relativeCell, float time ) const
+{
+	return begin + (end-begin)*time;
+}
+```
+
+H2 loops sub-deltas inside `findContactWithFloor` (`741–821`) but leaves `moveSeg` as the **full-frame** segment (`755–757`: `end = moveSeg.getEnd`, `delta = end - begin`).
+
+If sub-chunk `k` with local `t_local ∈ [0,1]` finds first hit:
+
+| Rescaling | Global param | Contact point |
+|---|---|---|
+| **Correct** | `t_global = (k + t_local) / N` | `start + t_global · D_full` |
+| **Naive (wrong)** | `t_local` | `start + t_local · D_full` — **up to `(N-1)/N` frame early** |
+
+Example: `N=3`, hit on chunk `k=2` at `t_local=0.2`:
+
+- Correct: `t_global = (2+0.2)/3 = 0.733`
+- Naive: `0.2` → contact **53% too early**, `secondSeg` bloated, `SingleSlide` gets wrong vector, wrong normal dot gate at `:452`.
+
+Additional H2 landmine: `begin = loc.getPosition_p()` (`754`) is **footprint locator**, not object pivot. Sub-chunking must advance `begin` each chunk; using fixed `begin` + partial delta without locator sync rescales wrong for offset circles (radius 0.5, LOCKED fact 2).
+
+`findFirstContact` also compares floor time against **full-step** obstacle sweeps (`661–696`) — floor sub-chunk times must be globalized before comparison, or obstacle-first ordering breaks.
+
+---
+
+## Q4 — Perf / cadence (H1 at 0.15 m)
+
+Walk `step ≈ 0.44 m` → `ceil(0.44/0.15) = 3` segments (`CollisionWorld.cpp:639–706`).
+
+**Per sub-step**, `updateSegment` runs (`726–785`):
+
+1. Full `updateStep` (`830–924`): floor DB update, static collision, `foot->updatePreResolve` (attach + optional `shoveAway`, `Footprint.cpp:573–651`), `resolveCollisions`, `foot->updatePostResolve`.
+2. Up to **10×** `snapObjectToGround` + `updateStep(0)` loops (`774–784`).
+
+`snapToCellFloor` (`Footprint.cpp:897–917`) runs **once** after all segments (`CollisionWorld.cpp:719`) — not N×. Proposal’s “per-substep snapToCellFloor” concern is slightly overstated for H1, but **snapObjectToGround ×10 × N** is real.
+
+Cost is **worse than linear** in crowded scenes: each sub-step rebuilds obstacle lists (`explodeCollider`, `616–641`), re-queries floor DB (`870`), and re-runs footprint attach/shove. For every player-radius-0.5 creature in zone, not just avatar.
+
+At 3× resolves, likely acceptable for avatar-only experiments; **risky as unconditional global default**.
+
+---
+
+## Q6 — Cheaper variants (same “small effective step” goal)
+
+| Variant | Hook | Why cheaper / sharper |
+|---|---|---|
+| **A. FWD `wallEpsilon` guard** | `FloorMesh.cpp:2909–2916` (mirror PEN `:2884–2886`) | Zero extra resolves; directly targets unguarded FWD graze when `centerWalk==PWR_WalkOk` (LOCKED facts 2–3). Fixes detection, not resolution. |
+| **B. Conditional sub-step** | `CollisionWorld.cpp:639` only if `moveLength > threshold` **or** prior frame had circle `PWR_HitEdge` + `centerWalkOk` | Pays 3× cost only on suspect frames. |
+| **C. Partial rewind / skip backward gate for grazing floor contacts** | `CollisionResolve.cpp:320–337`, `:452–454` | Addresses resolution path directly; one resolve per frame. **High blast radius** — backward gate exists to kill oscillation into walls. |
+| **D. Fix `findContactWithFloor` begin/end consistency** | `:754–757` use `moveSeg.getBegin` + `getDelta`, not locator `begin` | May reduce spurious contacts without sub-stepping; orthogonal to F3. |
+| **E. Resolution-only floor delta cap** | Cap `delta` passed to `floor->canMove` inside `findContactWithFloor`, but run **one** outer resolve with properly rescaled `m_time` | ~N× `canMove` only, not N× full `updateSegment` — cheaper than H1 if rescaling is correct. Still H2-class desync risk with obstacles unless `findFirstContact` is unified. |
+
+**Best bang-for-buck adversarial ranking:** **A → B (H1 gated) → E → raw H1 → H2**.
+
+---
+
+## Q2 / Q5 (brief)
+
+**H1 vs H2:** H1 reuses the proven warp segment loop (`674–706`) with consistent `MoveSegment`, `storePosition` cadence, and obstacle/floor time in the same param space. H2 leaves obstacle sweeps on the full step while floor sees chunks — a creature can floor-clear sub-chunks but extent-block on the unsplit segment (or vice versa). **H1 is safer; H2 is broken without refactoring `findFirstContact`.**
+
+**Retail equivalence:** Mostly **coincidence via smaller geometric step** (fewer FWD grazes), **not** because sub-stepping reproduces retail’s per-frame input/velocity integration. Pure geometric subdivision within one `CollisionWorld::update` does not insert inter-frame state that retail had at ~30 FPS.
+
+---
+
+## What to measure (confirm / falsify)
+
+1. **Contact rate vs sub-step size:** log `CORNERSNAP-CIRCLE` FWD/PEN counts per frame at divisors 2.0 / 0.30 / 0.15 — win condition is **fewer total contacts**, not just smaller `step` on hit frames.
+2. **Slide-fail rate:** instrument `:452–454` early returns; F3 helps only if fail_rate drops faster than contact_rate rises.
+3. **Net XZ displacement per frame** along cantina wall vs retail — compare `|Δintended − Δactual|`, not rewind magnitude alone (LOCKED addendum shows rewind ≈ step always).
+4. **Persistent-graze scenario:** walk tight parallel to one boundary edge for 5 s — if contacts/frame ≈ sub-step count and net speed unchanged, F3 is **slicing not fixing**.
+5. **Profiler:** `CollisionWorld::update: segments > 1`, `resolveCollisions`, `update footprints` with zone NPC count — confirm sub-linear hope isn’t violated by floor DB + snap loops.
+
+---
+
+**Bottom line:** F3 via H1 is a **plausible retail mimic for sub-threshold detection** and **may** rescue slides that fail only on large remainders — but it is **not** mechanically guaranteed to recover tangential motion under continuous parallel-wall grazing, and the naive “sum of N small rewinds” framing in the proposal misreads the LOCKED evidence (full-step rewind is by design at `:320`, not the loss term). Treat F3 as an **empirical step-size knob**; pair with **FWD `wallEpsilon`** or a **resolution-side** fix if sub-stepping alone doesn’t drop contact counts.

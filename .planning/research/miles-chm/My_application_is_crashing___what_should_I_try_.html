@@ -1,0 +1,105 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>My application is crashing - what should I try?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='My application is crashing - what should I try?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>My application is crashing - what should I try?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_Apple_iOS.html' class='paragraph'>Call Logging on Apple iOS</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_the_Nintendo.html' class='paragraph'>Call Logging on the Nintendo</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_the_Nintendo_3DS.html' class='paragraph'>Call Logging on the Nintendo 3DS</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_the_Nintendo_Wii_U.html' class='paragraph'>Call Logging on the Nintendo Wii-U</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_the_PlayStation_3.html' class='paragraph'>Call Logging on the PlayStation 3</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_on_the_Xbox_360.html' class='paragraph'>Call Logging on the Xbox 360</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_under_GNU_Linux.html' class='paragraph'>Call Logging under GNU/Linux</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_under_MacOS.html' class='paragraph'>Call Logging under MacOS</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_under_the_Sony_NGP.html' class='paragraph'>Call Logging under the Sony NGP</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_under_the_Sony_PSP.html' class='paragraph'>Call Logging under the Sony PSP</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Call_Logging_under_Windows.html' class='paragraph'>Call Logging under Windows</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='My_sound_is_skipping___what_can_I_do_.html' class='paragraph'>My sound is skipping - what can I do?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Where_is_the_Miles_source_code___How_can_I_rebuild_it__in_debug_mode__.html' class='paragraph'>Where is the Miles source code?  How can I rebuild it (in debug mode)?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='My application is crashing - what should I try?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: My application is crashing - what should I try?</p>
+<p>
+A: Here's my quick list of things to ask yourself when you get a crash. Most of them seem really obvious, but one of these questions solves pretty much every technical support query we get! 
+
+</p>
+<p>
+Go through the questions one by one and <b>don't assume</b> the answer to any of them - actually explore each question.  Without fail, the most complicated crashes are usually reduced to one simple assumption that was never completely confirmed. 
+
+</p>
+<p>
+<ol><li> What call is crashing?  Does it crash every time, or just once in a while? </li><li> If you cut that call into one of the Miles sample applications, does it still crash? </li><li> Is the problem data-dependent?  Do other sound files work? </li><li> Don't overlook the obvious - what are the contents of the parameters being passed to the crashing function?  Are they valid?  Double-check them at run-time in the debugger. </li><li> Are you using the latest version of Miles?  See the "What is the latest version of MSS?" <i><a href='What_is_the_latest_version_of_MSS_.html' class='paragraph'>FAQ</a></i> for details. </li><li> Make sure that the header file, the DLLs and shared libraries, and all of the add-on files (the ASIs, FLTs, etc) are all the same version! Scan your drive for the Miles library files - make sure there are none on your drive except the very latest version. </li><li> Miles is used in a <b>lot</b> of games (about 700 per year).  If you are getting a crash, try to imagine what is different about your application - are you doing anything you'd guess is unusual? </li><li> Try never freeing your sound memory buffers.  You'll leak memory, but if you don't crash, then you are probably freeing a piece of memory before Miles is done with it.  See the "When can I free the memory I gave to MSS?" <i><a href='When_can_I_free_the_memory_I_gave_to_MSS_.html' class='paragraph'>FAQ</a></i> for details. </li><li> Does it happen on a specific machine?  On a specific OS?  Does it only happen with a particular sound card?  Do you have the latest sound card drivers for your sound card? </li><li> Does it only happen when a particular channel specification (<a href='MSS_MC_SPEC.html' class='paragraph'>MSS_MC_SPEC</a> value) is passed to <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>? </li><li> Create and examine a Miles call log (see the call logging sections in the Platform  chapters of this document).  Does anything appear unusual? </li><li> Build the Miles DLL in debug mode - can you tell what's happening from the crash location in the source code?  See the "How can I rebuild the Miles source code?" <i><a href='Where_is_the_Miles_source_code___How_can_I_rebuild_it__in_debug_mode__.html' class='paragraph'>FAQ</a></i> for details. </li><li> Try simplifying the problem.  Turn off everything unnecessary (DSP filters, 3D spatialization, reverb, etc.) - does it affect the crash? </li><li> Are you using callbacks?  Try turning them off completely - does it still crash? </li><li> Finally, if you've been able to reproduce a crash in Miles, send us the example (keep it short and simple - the console applications in the \Examples directory are a good place to start) and we'll get it fixed for you.  We can usually fix reproducible problems within hours. 
+
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='My_sound_is_skipping___what_can_I_do_.html' class='paragraph'>My sound is skipping - what can I do?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Where_is_the_Miles_source_code___How_can_I_rebuild_it__in_debug_mode__.html' class='paragraph'>Where is the Miles source code?  How can I rebuild it (in debug mode)?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_allocate_sample_handle</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_allocate_sample_handle'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_allocate_sample_handle</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ searches for a free sample handle and returns it to the application for use in the playback of digital audio data.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_allocate_sample_handle.html#_Discussion' class='paragraph'>AIL_allocate_sample_handle: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_end_sample.html#_Discussion' class='paragraph'>AIL_end_sample: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_init_sample.html#_Discussion' class='paragraph'>AIL_init_sample: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_output_filter_driver_property.html#_Discussion' class='paragraph'>AIL_output_filter_driver_property: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html#_Discussion' class='paragraph'>AIL_sample_buffer_available: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_status.html#_Discussion' class='paragraph'>AIL_sample_status: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_stop_sample.html#_Discussion' class='paragraph'>AIL_stop_sample: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_can_I_play_two_HSAMPLEs_from_the_same_memory_address_.html#_Discussion' class='paragraph'>How can I play two HSAMPLEs from the same memory address?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_play_a_digital_sound_.html#_Discussion' class='paragraph'>How do I play a digital sound?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='HSAMPLE.html#_Discussion' class='paragraph'>HSAMPLE: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_release_sample_handle.html' class='paragraph'>AIL_release_sample_handle</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_digital_master_volume_level.html' class='paragraph'>AIL_digital_master_volume_level</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_release_sample_handle.html' class='paragraph'>AIL_release_sample_handle</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='type'><a href='AIL_allocate_sample_handle.html'>AIL_allocate_sample_handle</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>dig</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ searches for a free sample handle and returns it to the application for use in the playback of digital audio data.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='dig' class=nohover>dig</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies which digital audio driver is to play the audio data associated with the sample handle.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ A handle to an available sample slot, or NULL if all sample handles have already been allocated.</table>
+<div class="discussion_heading"><a name='AIL_allocate_sample_handle::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Each digital audio driver, when installed, is provided with a number of <i>sample handles</i>.  Sample handles are reusable descriptors for application audio data  at any moment in time, each instance of a playing digital sample must be associated with a sample handle.  The number of sample handles allocated, hence the maximum number of HSAMPLE sample handles available from <a href='AIL_allocate_sample_handle.html' class='paragraph'>AIL_allocate_sample_handle</a>, is determined by the <a href='MILES_PREFERENCES.html' class='paragraph'>DIG_MIXER_CHANNELS</a> preference.  This value is normally 64, but can be set to any value by use of the <a href='AIL_set_preference.html' class='paragraph'>AIL_set_preference</a> function prior to driver installation. 
+
+</p>
+<p>
+When a per-voice digital output option such as DirectSound3D or EAX is selected, the number of available HSAMPLE handles is limited by hardware... and is typically much smaller than 64!  You <i>must</i> check the return value from <a href='AIL_allocate_sample_handle.html' class='paragraph'>AIL_allocate_sample_handle</a>  rather than simply assuming that <a href='MILES_PREFERENCES.html' class='paragraph'>DIG_MIXER_CHANNELS</a> handles will be available under all conditions. 
+
+</p>
+<p>
+After loading a digital audio driver, the application should allocate as many sample handles as it will require, based on the maximum number of simultaneous sound effects needed. When a sound effect is to be played, the application calls <a href='AIL_sample_status.html' class='paragraph'>AIL_sample_status</a> for each of its allocated sample handles, searching for one with the status  <a href='MILES_DIGITAL_STATUS.html' class='paragraph'>SMP_DONE</a>.  This indicates that the system is either finished playing the last audio sample assigned to the sample handle, or that the sample handle has been allocated but not yet used to play a sample. Assuming an available sample handle is found, the next step is to call <a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a> to prepare the sample handle for use with new data, followed by calls to set the address, size, playback volume, and other playback information.  (Alternatively, file images may be passed directly to MSS with the <a href='AIL_set_sample_file.html' class='paragraph'>AIL_set_sample_file</a> and <a href='AIL_set_named_sample_file.html' class='paragraph'>AIL_set_named_sample_file</a>  functions.)  Playback of the sample data will begin when <a href='AIL_start_sample.html' class='paragraph'>AIL_start_sample</a> is called. 
+
+</p>
+<p>
+The number of simultaneously-playing samples which should be allowed by the application varies.  Products which can afford to dedicate more CPU time to sound-effects processing may permit the maximum number of available sample handles to be active at once.  In reality, however, the human ear has a very difficult time sorting out more than eight or ten sounds at once, and too many additional sounds are likely to waste processor time without conveying any meaningful information to the user. 
+
+</p>
+<p>
+Example files that use this function: SSTEST.C, DBTEST.C, DIGPLAY.C, EXAMMS.CPP<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_digital_master_volume_level.html' class='paragraph'>AIL_digital_master_volume_level</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_release_sample_handle.html' class='paragraph'>AIL_release_sample_handle</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

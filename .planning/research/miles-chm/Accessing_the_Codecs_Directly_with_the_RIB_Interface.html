@@ -1,0 +1,341 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Accessing the Codecs Directly with the RIB Interface</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Accessing the Codecs Directly with the RIB Interface'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Accessing the Codecs Directly with the RIB Interface</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Accessing_the_Codecs_Directly_with_the_RIB_Interface.html#_Discussion' class='paragraph'>Accessing the Codecs Directly with the RIB Interface: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Working_with_Voice_Input.html' class='paragraph'>Working with Voice Input</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Performing_the_Compression_and_Decompression.html' class='paragraph'>Performing the Compression and Decompression</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Accessing the Codecs Directly with the RIB Interface::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  Most MSS applications don't need to access the library's ASI (Audio Stream Interface) layer directly - the details of communicating with individual ASI providers are encapsulated by high-level library functions such as the streaming and quick-integration APIs.  However, real-time voice chat is an exception.  To achieve good latency performance and full control over the compression/decompression process, it's necessary for the application to gain low-level access to the Voxware codecs by means of the ASI interface. 
+
+</p>
+<p>
+The ASI standard represents a very simple, generalized interface for MSS-compatible audio compression and decompression codecs.  ASI uses the RAD Interface Broker (RIB) architecture to allow various codecs to be enumerated and selected on the basis of any of their properties and capabilities, including the standard file suffix of the data format they support.  (See the RIB Architecture chapter for more information on the RIB interface model.) MSSCHTC.CPP and MSSCHTS.CPP demonstrate the process of selecting an ASI codec to handle a given input or output data format.  The ASI codecs responsible for delivering the Voxware MetaVoice functionality are supplied  in the <b>MSSVoice.ASI</b> file and include: include: 
+
+</p>
+<p>
+A 2900-bps high-quality fixed-rate compressor/decompressor. Suffix: ".V29" 
+
+</p>
+<p>
+A 2400-bps fixed-rate compressor/decompressor. Suffix: ".V24" 
+
+</p>
+<p>
+A 1200-bps low-bandwidth variable-rate compressor/decompressor. Suffix: ".V12" 
+
+</p>
+<p>
+By using each ASI codec's file suffix as a descriptor of the data format in use, MSSCHTC and MSSCHTC illustrate a way to make your chat system independent of any particular data format.  When you run the Miles chat front-end (MSSCHAT.EXE), it calls MSSCHTC.EXE with the codec to use specified on the Windows command line.  The client will try to find an ASI codec capable of both compression and decompression of data with the specified suffix type.  Likewise, it will inform the server during the logon process that all data coming from the client will be compressed in the specified format, and that all data sent back to the client should be delivered in the same format.  If both the client and the server are able to locate an ASI provider for the specified format, the link can be successfully established. 
+
+</p>
+<p>
+As an example of direct ASI codec access, MSSCHTC uses RIB services to locate an ASI encoder (compressor) for the data format specified on its command line. 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Find ASI provider to encode voice data for transmission</font>
+<font color=#008000>//</font>
+
+transmit_encoder = RIB_find_file_provider("ASI codec",
+                                          "Output file types",
+                                           suffix);
+
+if (transmit_encoder == NULL)
+{
+   show_error("Error: No ASI provider available to encode data type %s\n", suffix);
+   exit(1);
+}
+
+show_success("Using ASI provider %X to transmit data type %s\n",
+              transmit_encoder,
+              suffix);
+</pre></div>
+<p>
+</p>
+<p>
+Once the transmit encoder provider is obtained, MSSCHTC calls RIB to obtain an interface to various functions supported by the ASI codec.  (As with all RIB components, it is the requestor's responsibility to specify the interface it wants to use when communicating with a RIB service provider). 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Get ASI stream interface for transmit encoder</font>
+<font color=#008000>//</font>
+
+<a href='RIB_INTERFACE_ENTRY.html' class='paragraph'>RIB_INTERFACE_ENTRY</a> ASISTR[] =
+{
+   { RIB_FUNCTION, "ASI_stream_open",           (<a href='U32.html' class='paragraph'>U32</a>) &amp;XMIT_stream_open,           RIB_NONE },
+   { RIB_FUNCTION, "ASI_stream_close",          (<a href='U32.html' class='paragraph'>U32</a>) &amp;XMIT_stream_close,          RIB_NONE },
+   { RIB_FUNCTION, "ASI_stream_process",        (<a href='U32.html' class='paragraph'>U32</a>) &amp;XMIT_stream_process,        RIB_NONE }
+}
+
+RIB_request(transmit_encoder,"ASI stream",ASISTR);
+
+<font color=#008000>//</font>
+<font color=#008000>// Open stream with codec, registering callback function</font>
+<font color=#008000>//</font>
+
+transmit_stream = XMIT_stream_open(0,
+                                   transmit_stream_callback,
+                                   0);
+
+if (transmit_stream == NULL)
+{
+   show_error("Could not open stream encoder\n");
+   exit(1);
+}
+</pre></div>
+<p>
+</p>
+<p>
+Subsequently, a similar block of code is used to locate an ASI provider capable of decompressing the same data format as it is received from the server.  The only difference in this case is the use of the "Input file types" property as the search key passed to <i>RIB_find_file_provider</i>. 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Search for ASI codec capable of processing specified input file type</font>
+<font color=#008000>//</font>
+<font color=#008000>// This ASI provider will be used to decode data sent from the server</font>
+<font color=#008000>// to the client</font>
+<font color=#008000>//</font>
+
+receive_decoder = RIB_find_file_provider("ASI codec",
+                                         "Input file types",
+                                          suffix);
+
+
+if (receive_decoder == NULL)
+{
+   show_error("Error: No ASI provider available to decode data type %s\n",
+              suffix);
+   exit(1);
+}
+</pre></div>
+<p>
+</p>
+<p>
+To illustrate a "well-behaved" application's interaction with an ASI provider, the client receive provider's interface contains requests for a few key properties, in addition to the same basic functions as those previously obtained from the transmit provider: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Get ASI stream interface for receive decoder</font>
+<font color=#008000>//</font>
+
+<a href='RIB_INTERFACE_ENTRY.html' class='paragraph'>RIB_INTERFACE_ENTRY</a> RECVSTR[] =
+{
+   { RIB_FUNCTION,   "ASI_stream_property",  (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.ASI_stream_property,     RIB_NONE },
+   { RIB_FUNCTION,   "ASI_stream_open",      (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.ASI_stream_open,         RIB_NONE },
+   { RIB_FUNCTION,   "ASI_stream_seek",      (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.ASI_stream_seek,         RIB_NONE },
+   { RIB_FUNCTION,   "ASI_stream_close",     (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.ASI_stream_close,        RIB_NONE },
+   { RIB_FUNCTION,   "ASI_stream_process",   (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.ASI_stream_process,      RIB_NONE },
+   { RIB_PROPERTY,   "Output sample rate",   (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.OUTPUT_SAMPLE_RATE,      RIB_NONE },
+   { RIB_PROPERTY,   "Output sample width",  (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.OUTPUT_BITS,             RIB_NONE },
+   { RIB_PROPERTY,   "Output channels",      (<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.OUTPUT_CHANNELS,         RIB_NONE },
+   { RIB_PROPERTY,   "Requested sample rate",(<a href='U32.html' class='paragraph'>U32</a>) &amp;RECV.REQUESTED_RATE,          RIB_NONE },
+};
+
+RIB_request(receive_decoder,"ASI stream",RECVSTR);
+
+<font color=#008000>//</font>
+<font color=#008000>// Open the receiver stream</font>
+<font color=#008000>//</font>
+<font color=#008000>// If the codec needs to inspect the stream data to</font>
+<font color=#008000>// configure itself, this call will block in the RECV_stream_CB()</font>
+<font color=#008000>// handler until the requested amount of data (typically only</font>
+<font color=#008000>// the first few bytes of the source stream) is received from the</font>
+<font color=#008000>// client.</font>
+<font color=#008000>//</font>
+
+RECV_read_cursor = 0;
+RECV_write_cursor = 0;
+
+RECV.stream = RECV.ASI_stream_open(0,
+                                   RECV_stream_CB,
+                                   0);
+
+if (RECV.stream == NULL)
+{
+   show_error("Could not open stream decoder\n");
+   exit(1);
+}
+</pre></div>
+<p>
+</p>
+<p>
+These properties are used to request operation at the standard 8 kHz sample rate (HW_RATE) and to obtain the actual data format used by the codec to configure the output stream's HSAMPLE: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Request codec output rate which matches hardware rate</font>
+<font color=#008000>//</font>
+
+<a href='U32.html' class='paragraph'>U32</a> req_rate = HW_RATE;
+
+RECV.ASI_stream_property(RECV.stream,
+                         RECV.REQUESTED_RATE,
+                         0, &amp;req_rate, 0 );
+
+<font color=#008000>//</font>
+<font color=#008000>// Stream is now open -- get its properties and set output</font>
+<font color=#008000>// sample properties accordingly</font>
+<font color=#008000>//</font>
+
+<a href='U32.html' class='paragraph'>U32</a> nch, rate, bits;
+
+RECV.ASI_stream_property(RECV.stream, RECV.OUTPUT_CHANNELS,    &amp;nch,  0, 0 );
+RECV.ASI_stream_property(RECV.stream, RECV.OUTPUT_SAMPLE_RATE, &amp;rate, 0, 0 );
+RECV.ASI_stream_property(RECV.stream, RECV.OUTPUT_BITS,        &amp;bits, 0, 0 );
+
+<a href='S32.html' class='paragraph'>S32</a> type;
+
+if (nch == 2)
+{
+   type = ( (bits == 16) ? DIG_F_STEREO_16 : DIG_F_STEREO_8 ) |
+          ( (bits == 16) ? DIG_PCM_SIGN    : 0 );
+}
+else
+{
+   type = ( (bits == 16) ? DIG_F_MONO_16   : DIG_F_MONO_8 | )
+          ( (bits == 16) ? DIG_PCM_SIGN    : 0 );
+}
+
+<a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a>             (stream, type, 0);
+<a href='AIL_set_sample_playback_rate.html' class='paragraph'>AIL_set_sample_playback_rate</a>(stream, rate);
+
+receive_buffer_size = <a href='AIL_minimum_sample_buffer_size.html' class='paragraph'>AIL_minimum_sample_buffer_size</a>(dig, rate, type);
+
+show_info("Receive stream format: %d channels, %d Hz, %d bits\n",nch,rate,bits);
+
+show_info("Receive buffer size=%d\n",receive_buffer_size);
+</pre></div>
+<p>
+</p>
+<p>
+In reality, as noted previously, all MSS ASI providers used for voice communication are internally hardwired for operation with 16-bit monaural PCM audio at a sample rate of 8 kHz, so the above code to query the stream properties is not, strictly speaking, necessary.  However, besides being good programming (or at least typing) practice, it serves as an example of how to obtain properties and set properties for an ASI stream.  This general technique will be useful if the application wishes to take advantage of the Voxware warping and comfort-noise masking features described below. 
+
+</p>
+<p>
+Once the transmit and receive providers have been selected and their corresponding streams opened successfully, all that remains to be done on the client side with respect to ASI is the actual encoding and decoding of data.  The following except from <i>receive_ASI_thread_procedure</i> in MSSCHTC.CPP illustrates the use of the <i>ASI_stream_process</i> function to turn compressed audio data back into playable PCM format: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// If fetch buffer empty, call ASI decoder to acquire decompressed data</font>
+<font color=#008000>// from server</font>
+<font color=#008000>//</font>
+<font color=#008000>// This will block in RECV_stream_CB() until enough data is received</font>
+<font color=#008000>// from the server to fill the fetch buffer</font>
+<font color=#008000>//</font>
+<font color=#008000>// Using the temporary fetch buffer allows us to read and decompress</font>
+<font color=#008000>// data while all of the receive buffers are full -- otherwise, we'd</font>
+<font color=#008000>// have to spin until an empty receive buffer becomes available</font>
+<font color=#008000>//</font>
+
+if (!fetch_buffer_full)
+{
+   <a href='S32.html' class='paragraph'>S32</a> amount = RECV.ASI_stream_process(RECV.stream,
+                                        fetch_buffer,
+                                        receive_buffer_size);
+
+   if (amount != receive_buffer_size)
+   {
+      <font color=#008000>//</font>
+      <font color=#008000>// Bad read</font>
+      <font color=#008000>//</font>
+
+      active = 0;
+      return 0;
+   }
+
+   fetch_buffer_full = 1;
+}
+</pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Working_with_Voice_Input.html' class='paragraph'>Working with Voice Input</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Performing_the_Compression_and_Decompression.html' class='paragraph'>Performing the Compression and Decompression</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,169 @@
+﻿# Phase 33 Cross-AI Plan Review
+
+Independent review against the live tree at `D:\Code\swg-client-v2` (2026-06-17). Ground truth: **no `x64-platform.props`**, **no `Debug|x64` in `swg.sln`**, **`D3DXAssembleShader` still live at `Direct3d9_VertexShaderData.cpp:760`**, **HLSL `D3DCompile` path landed** (Phase 32-02 in code, ROADMAP still unchecked).
+
+---
+
+## Phase Summary
+
+The six-plan wave structure is **directionally correct** and matches the locked decisions: finish D3DX removal on the still-32-bit tree (Plans 02–03), then platform-add + link (04–05), then `stage-x64/` boot proof (06). Research/PATTERNS ground-truthing is strong (dpvs guard, Bink dynamic load, `/FORCE` link-grep, `stage-x64/` isolation). Several **factual census errors**, **dependency edges that are too loose**, and **Release|x64 / tinyxml / matrix-path blind spots** could burn executor time or pass green gates that miss renderer regressions on gl06/gl07. Phase 32-02 is **not** a blocker (code landed); Phase 32-03/05 work correctly absorbed into 33-02. Overall: executable with fixes, not rubber-stamp.
+
+---
+
+## Strengths
+
+- **D3DX-before-x64-link ordering is sound.** Plans 02→03 remove compile + non-compile D3DX on Win32 before Plan 05 drops `d3dx9.lib` from x64 link inputs (`Direct3d9.vcxproj:115` still lists `d3dx9.lib` today).
+- **Research corrections are verified.** Bink is dynamic (`BinkVideo.cpp:55`); dpvs needs explicit `!_M_X64` guard (`dpvsPrivateDefs.hpp:129-131`); icu/discord-rpc absent from tree; `/FORCE` trap documented with grep acceptance.
+- **Plan 02/03 ownership split for `Direct3d9_VertexShaderData.cpp` is coherent.** Plan 02 swaps assemble call only; Plan 03 owns typedef/`d3dx9*.h` removal — matches live file state (`:155-156` comment still says asm path untouched).
+- **Miles stub decision is locked and necessary.** `Mss32.lib` + `mss32.lib` in `SwgClient.vcxproj:103`; 163 + 3 `AIL_*` refs in `Audio.cpp` / `SoundObject3d.cpp`; x64 link cannot succeed without stub or P35 port.
+- **Non-regression architecture is well designed.** Distinct `\x64\` OutDirs, separate `stage-x64/`, Win32 `#else` branches preserved, SC#4 dual-renderer check in 06-T3.
+- **Human-verify gates are appropriately placed** for asm render (02-T3), DirectXMath A/B (03-T4), x64 boot 5/6/7 (06-T2), Win32 regression (06-T3) — the right places automation cannot cover.
+- **Phase 32-01 D3DAssemble gate claim checks out** (`32-01-SUMMARY.md` PASS); Plan 02 mechanical swap is proportionate.
+
+---
+
+## Concerns
+
+| Severity | ID | Issue |
+|----------|-----|-------|
+| **HIGH** | **33-01-T1 / 33-04** | `x64-platform.props` hardcodes `_DEBUG` / `DEBUG_LEVEL=2` with `Condition="'$(Platform)'=='x64'"` only — **no Debug vs Release split**. Release\|x64 projects importing it would compile with `_DEBUG`. Plans add Release\|x64 everywhere (04, 05) but validate mostly on Debug. |
+| **HIGH** | **33-04 depends_on** | Plan 04 depends **only on 33-01**, not 33-03. Wave 3 can start after foundations while D3DX still in plugin source. Safer edge: 04-T3 adds sln x64 mappings for plugins **before** 05 adds plugin vcxproj x64 blocks — premature `msbuild … /p:Platform=x64 /t:Direct3d9` fails confusingly. |
+| **HIGH** | **33-03-T1 / Pitfall 1** | `:4031` `D3DXMatrixMultiplyTranspose` is inside `#ifdef FFP` within `#ifdef VSPS` (`Direct3d9.cpp:4014-4036`). **gl05** = FFP+VSPS (uses transpose path); **gl07** = VSPS-only (else branch, **different multiply order**, no transpose); **gl06** = FFP-only (**entire VSPS block excluded**). Plan 03 A/B is **gl05/Tatooine-only** — can miss gl06/gl07 matrix regressions required by X64-02 (rasterMajor 6/7). |
+| **HIGH** | **33-05-T1** | “163 AIL_* call sites” stub is **high blast-radius**. Miss one `AIL_*` → x64 link unresolved despite `/FORCE` grep gate. Plan acceptance (“grep `_M_X64` >= 1”) is **too weak** vs “zero `AIL_*` in x64 TU”. |
+| **MEDIUM** | **33-RESEARCH / 33-03-T2** | **`D3DXLoadSurfaceFromSurface` count wrong: 4 live sites, not 8.** Verified: `Direct3d9_RenderTarget.cpp:317` + `Direct3d9_TextureData.cpp:549,603,681`. Plans over-scope Task 2 and under-specify per-site format checks (A3). |
+| **MEDIUM** | **33-01-T3** | **tinyxml OutDir/import paths likely wrong depth.** Plan uses `..\..\..\..\..\compile\...` (5 levels) from `tinyxml/build/win32/`; peer `udplibrary.vcxproj` uses 4 levels from `library/udplibrary/`; `dpvs.vcxproj` uses 6 from `msvc8/`. Expect compile output in wrong place. |
+| **MEDIUM** | **33-01 / 33-05** | SwgClient links `tinyxmld.lib;tinyxmld_STL.lib` (`SwgClient.vcxproj:103`). Plan 01 outputs `tinyxml.lib`. **Plan 05 never maps x64 tinyxml link name** — first x64 link likely LNK2019 unless 05 adds explicit swap. |
+| **MEDIUM** | **33-02-T3 / census** | 32-01 probed **6/96** asm shaders byte-identical. Plan 02-T3 Tatooine smoke is necessary but **not sufficient** for “no silent null VS” on full corpus — acceptable if documented as sampling risk. |
+| **MEDIUM** | **33-03-T3 / A4** | `optimizeIndexBuffer` no-op (`Direct3d9.cpp:4617+`) is reasonable but **NvTriStrip is already in SwgClient link** (`NvTriStrip.lib` in `:103`) — plan skips existing in-repo tool without noting it. Low correctness risk; perf regression unmeasured. |
+| **MEDIUM** | **33-06-T1** | **dpvs.dll staging:** dpvs is `DynamicLibrary` (`dpvs.vcxproj`); no postbuild-to-stage today. Checklist includes `dpvs.dll` but Plan 05 postbuild only covers exe/plugins — **manual staging step easy to miss** before first boot. |
+| **MEDIUM** | **ROADMAP vs handoff** | `ROADMAP.md` shows 32-02..32-05 unchecked; handoff + code show **32-02 COMPLETE**. Executors may hesitate on Plan 02’s “32-02 precondition” — **artifact drift only**, not a code blocker. |
+| **LOW** | **33-CONTEXT:01** | Says “committed `x64-platform.props`” — file **does not exist** yet (Plan 01 deliverable). Wording implies done state. |
+| **LOW** | **33-04 / D-03 count** | “~57” vs “~53 engine + 4 third-party + 3 plugins + SwgClient” — `sharedTemplateDefinition` exclusion noted but not verified against `SwgClient.vcxproj` (grep: **absent** — exclusion correct). |
+| **LOW** | **A2-TIME-T** | `_USE_32BIT_TIME_T` omission documented; **no plan task audits serialized `time_t`** — residual acknowledged in research only. |
+| **LOW** | **33-VALIDATION** | `nyquist_compliant: false`, `wave_0_complete: false`, per-task table empty — honest draft state; must be filled before execute. |
+
+---
+
+## Suggestions
+
+1. **Fix `depends_on`:** `33-04` → `["33-01", "33-03"]` (or minimum `33-02`+`33-03` before sln plugin mappings). Keeps platform-add from advertising buildable x64 plugin configs before D3DX cleared.
+
+2. **Split `x64-platform.props` by Configuration:** e.g. `x64-debug.props` / `x64-release.props`, or `Condition="'$(Configuration)|$(Platform)'=='Debug|x64'"` with `NDEBUG`, `DEBUG_LEVEL=0`, `/MD` for Release. Mirror `sharedMath.vcxproj` Debug vs Release blocks.
+
+3. **Correct surface-copy census to 4 sites** in 33-RESEARCH, 33-03-T2, and require **per-site** StretchRect vs lock-blit note in SUMMARY (A3).
+
+4. **Expand matrix A/B in 03-T4 / 06-T2:** minimum **three boots** on same scene under rasterMajor **5, 6, and 7** after DirectXMath conversion — not just gl05. Explicitly document FFP/VSPS `#ifdef` branches at `Direct3d9.cpp:4030-4036`.
+
+5. **Miles stub acceptance (05-T1):** add  
+   `grep AIL_ clientAudio x64 object / link log` == 0, or build `clientAudio` x64 and `dumpbin /symbols` spot-check. Prefer **central stub header** over 166 inline guards.
+
+6. **tinyxml (01-T3 + 05-T3):** fix OutDir depth to match `dpvs`/`udplibrary`; output **`tinyxmld_STL.lib`** (or document SwgClient x64 dep rename); add tinyxml to `swg.sln` in 01 or 04 with verified GUID.
+
+7. **Plan 04-T2:** add automated count — expect **~53** engine vcxprojs with `Debug|x64`, not hand-wavy “~57”.
+
+8. **Plan 06-T1:** add explicit **dpvs postbuild** (or copy step in 05 SwgClient postbuild) so `dpvs.dll` isn’t manual-only.
+
+9. **Sync ROADMAP** 32-02/32-03 disposition (32-03 absorbed by 33-02) to stop executor confusion.
+
+10. **Plan 02-T1 verify:** current grep for `D3DXAssembleShader` must exclude comments — plan already does; also grep **`d3dx9.lib` still in plugin link** until Plan 05 (expected).
+
+---
+
+## Per-Plan Assessment
+
+### Plan 01 — x64 foundations
+**Verdict:** Good Wave 0 scope; fix paths and Release props before execute.
+
+- Strengths: Import-lib recipe (Pitfall 6), V14 provenance checklist, icu/discord N/A disposition, no Win32 touch until import.
+- Blockers/gaps: props Debug-only (**HIGH**); tinyxml path/output name (**MEDIUM**); `x64-platform.props` not committed yet (expected).
+
+### Plan 02 — D3DAssemble + Fix-A
+**Verdict:** Correctly sequenced; 32-02 precondition satisfied in code.
+
+- Verified: `:760` still `D3DXAssembleShader`; HLSL path uses `D3DCompile` (`:183-189`); Fix-A wraps HLSL only (`:170-189`), asm path already FATAL-loud (`:761`).
+- Risk: 96 asm shaders, 6 probed — 02-T3 is the real gate (**MEDIUM**).
+- Fix-A disposition task is well-specified (retire vs document).
+
+### Plan 03 — non-compile D3DX → DirectXMath
+**Verdict:** Right files; census and A/B scope need tightening.
+
+- Verified: matrix sites at `:562-565`, `:3291`, `:4031-4034`; mesh at `:4619+`; D3DX confined to Direct3d9 plugin (grep).
+- **Fix 8→4 surface copies.** **Expand human A/B beyond gl05** for X64-02.
+- Typedef swap correctly deferred to Task 3 after Plan 02.
+
+### Plan 04 — dpvs + platform-add
+**Verdict:** dpvs guard verified mandatory; dependency edge too weak.
+
+- Verified: `DPVS_CPU_X86` unconditional at `dpvsPrivateDefs.hpp:129-131`.
+- `depends_on: ["33-01"]` should include **33-03** before sln plugin x64 rows (**HIGH**).
+- Mechanical ~53 vcxproj edits is realistic given Phase 31 compile-clean claim.
+
+### Plan 05 — link blocks + first x64 link
+**Verdict:** Correct integration gate; Miles + tinyxml are the likely link churn.
+
+- Verified: `d3dx9.lib` in all three plugin vcxprojs; SwgClient carries full D3DX + Miles + binkw32 + libpcre.a + dual libxml2 + dual tinyxml.
+- `/FORCE` + grep == 0 acceptance is **correct and essential** (`SwgClient.vcxproj:113`).
+- Add tinyxml x64 dep mapping; verify jpeg import lib on **plugin** link blocks (05-T2 mentions it — good).
+
+### Plan 06 — stage + boot + regression
+**Verdict:** Strong phase gate; runtime residuals appropriately scoped.
+
+- `stage-x64/` + dumpbin-all (**Pitfall 2**) — correct.
+- DebugHelp RIP widen at `DebugHelp.cpp:574` — correctly identified (`uint32*` narrows x64 Rip).
+- 06-T3 Win32 **rasterMajor 5 + 11** matches AGENTS.md SC#4.
+- Missing: explicit **dpvs.dll** staging automation (**MEDIUM**).
+
+---
+
+## Focus-Area Answers
+
+### Dependency ordering / wave correctness
+**Mostly sound.** D3DX removal (02→03) before x64 link (05) is correct. **Gap:** 04 can run parallel to 03 (depends only on 01). Recommend **04 after 03**. Plan 02↔03 edge (`depends_on: ["33-02"]`) is correct. Typedef split 02/03 is clean. Shared-header ABI cascade correctly noted as N/A for file-static matrices.
+
+### Phase 32 precondition
+- **32-02 (D3DCompile):** **Landed** — not a blocker; ROADMAP lag.
+- **32-03 (D3DAssemble):** **Not landed** — Plan 33-02 must run first; gate PASSED in 32-01.
+- **32-05 (Fix-A):** Plan 33-02-T2 absorbs — OK.
+
+### Correctness risks
+- **:4031 transpose:** Real for gl05 (FFP+VSPS); **not universal** across plugins — **HIGH** if only gl05 A/B.
+- **Surface copies:** 4 sites, not 8; A3 format assumption still needs per-site confirmation.
+- **Mesh no-op:** Acceptable for boot; NvTriStrip alternative unmentioned.
+- **D3DAssemble / 96 asm:** Sample-proven; full-scene smoke required; no null-VS if FATAL path kept.
+
+### Link correctness
+- `/FORCE` grep gate: **well specified** throughout.
+- Import-lib machine check: **well specified** (Plan 01).
+- Miles stub: **critical**; acceptance criteria need strengthening.
+- `stage/` isolation: **well specified** via `stage-x64/`.
+
+### Verifiability
+- Strong: link-grep, dumpbin machine, BOM-safe cfg instructions.
+- Weak: 05-T1 `_M_X64` grep count; 03-T4 / 06-T2 only deeply specify gl05 Tatooine; 04-T2 “wc -l” without golden number.
+- 33-VALIDATION draft — not execution-ready until populated.
+
+### Scope
+- **Missing for booting x64 client:** lifted DLL copy automation (partially manual 06-T1), tinyxml link name on SwgClient x64, dpvs.dll to stage-x64, possible Release\|x64 props.
+- **Not over-engineered:** Optimized\|x64 deferred — good. gl11 x64, Miles P35, door-snap P36 correctly out of scope.
+- **In scope and correct:** audio-silent boot, D3D9-only x64 gate, hybrid sourcing.
+
+---
+
+## Risk Assessment
+
+### **Overall: MEDIUM–HIGH**
+
+**Justification:** Architecture and sequencing are among the best-aligned parts of the milestone — D3DX-first, `/FORCE` grep, `stage-x64/`, dpvs guard, Bink dynamic load are all verified against the tree. Risk concentrates in **execution details**: Release\|x64 props, **three-flavor matrix `#ifdef` geometry**, **166-site Miles stub completeness**, **tinyxml path/naming**, and **under-specified renderer A/B for rasterMajor 6/7**. None are plan-design fatal flaws; several are fixable in plan text before execute. First x64 link (05-T3) will still be a multi-iteration grep chase — expected and adequately documented.
+
+---
+
+## Phase-Goal Verdict
+
+| Success criterion | Plans cover it? |
+|-------------------|-----------------|
+| X64-01 platform + x64 exe | Yes (04+05+06), props Release gap |
+| X64-04 deps resolve x64 | Yes (01 LIFT + 04 build-from-source + 06 staging) |
+| X64-02 gl05/06/07 char-select | Yes (06-T2), matrix A/B under-specified for 6/7 |
+| SC#4 Win32 non-regression | Yes (06-T3, OutDir isolation) |
+
+**Bottom line:** Execute after tightening **depends_on**, **x64-platform.props Configuration split**, **surface census (4 not 8)**, **three-renderer matrix validation**, and **Miles/tinyxml link acceptance**. Do not treat ROADMAP 32-02 unchecked as a code blocker — treat **`D3DXAssembleShader` at `:760`** and **missing `x64-platform.props`** as the live preconditions.

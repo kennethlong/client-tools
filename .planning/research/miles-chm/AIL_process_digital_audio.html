@@ -1,0 +1,190 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_process_digital_audio</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_process_digital_audio'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_process_digital_audio</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ provides high-level access to the Miles sound mixer.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_process_digital_audio.html#_Discussion' class='paragraph'>AIL_process_digital_audio: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_size_processed_digital_audio.html' class='paragraph'>AIL_size_processed_digital_audio</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_WAV_marker_by_name.html' class='paragraph'>AIL_WAV_marker_by_name</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_size_processed_digital_audio.html' class='paragraph'>AIL_size_processed_digital_audio</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_process_digital_audio.html'>AIL_process_digital_audio</a></span>(</td><td><span class='type'>void*</span> <span class='parameter'>dest</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>destsize</span>,<br><span class='type'><a href='U32.html' class='blue'>U32</a></span> <span class='parameter'>destrate</span>,<br><span class='type'><a href='U32.html' class='blue'>U32</a></span> <span class='parameter'>destformat</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>num_srcs</span>,<br><span class='type'><a href='AILMIXINFO.html' class='blue'>AILMIXINFO const *</a></span> <span class='parameter'>srcs</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ provides high-level access to the Miles sound mixer.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='dest' class=nohover>dest</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ points to the output buffer.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='destsize' class=nohover>destsize</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ contains the size of the output buffer.  If the mixer fills the output buffer, then it will return (allowing you to calling again and again until the source data is exhausted).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='destrate' class=nohover>destrate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ contains the output data rate that you want the destination buffer to be mixed to.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='destformat' class=nohover>destformat</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ contains the format that you want the destination buffer to be mixed to.  See the <a href='MILES_DIGITAL_FORMAT.html' class='paragraph'>MILES_DIGITAL_FORMAT</a> flags for the possible output formats.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='num_srcs' class=nohover>num_srcs</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ contains the number of buffers that you want to mix.  If you don't want to mix multiple samples, then just pass 1 for this parameter.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='srcs' class=nohover>srcs</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ is a pointer to an array of "num_srcs" <a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a> structures. The only part of the <a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a> structure that you need to set is the Info structure inside the <a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a> structure.  The Info structure is of type <a href='AILSOUNDINFO.html' class='paragraph'>AILSOUNDINFO</a>, so you can use <a href='AIL_WAV_info.html' class='paragraph'>AIL_WAV_info</a> to set the appropriate fields.  See the example below for details.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ The number of bytes mixed if the call was successful, or 0 if the call failed.</table>
+<div class="discussion_heading"><a name='AIL_process_digital_audio::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ You can use this function to mix one or more samples together, perform sample rate conversions - basically anything that the Miles mixer can do! 
+
+</p>
+<p>
+This function modifies the srcs data structures, so that you can call it over and over mixing the next pieces of the input data each call (this is handy when mixing through a small destination buffer. 
+
+</p>
+<p>
+This function can directly accept IMA ADPCM compressed data, but not MPEG Layer 3 or other ASI-compressed data. 
+
+</p>
+<p>
+Multichannel (> 2 channels) data is not supported. 
+
+</p>
+<p>
+You can use the <a href='AIL_WAV_info.html' class='paragraph'>AIL_WAV_info</a> function to automatically fill the input src->Info structures.   However, the output data is raw data, so you should use <a href='AIL_WAV_file_write.html' class='paragraph'>AIL_WAV_file_write</a> if you need to write the output data in wave format. 
+
+</p>
+<p>
+Example: The following example will mix two wave files together and write out the result: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>void* in1, * in2, * out;
+<a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a> mix[ 2 ];
+<a href='U32.html' class='paragraph'>U32</a> outsize, mixsize;
+
+In1=<a href='AIL_file_read.html' class='paragraph'>AIL_file_read</a>( "file1.wav", 0 );
+In2=<a href='AIL_file_read.html' class='paragraph'>AIL_file_read</a>( "file2.wav", 0 );
+
+<a href='AIL_WAV_info.html' class='paragraph'>AIL_WAV_info</a>( in1, &amp;mix[ 0 ].Info );
+<a href='AIL_WAV_info.html' class='paragraph'>AIL_WAV_info</a>( in2, &amp;mix[ 1 ].Info );
+
+outsize = <a href='AIL_size_processed_digital_audio.html' class='paragraph'>AIL_size_processed_digital_audio</a>( 44100, DIG_F_MONO_16, 2, mix );
+out = <a href='AIL_mem_alloc_lock.html' class='paragraph'>AIL_mem_alloc_lock</a>( outsize );
+
+mixsize = <a href='AIL_process_digital_audio.html' class='paragraph'>AIL_process_digital_audio</a>( out, outsize, 44100, DIG_F_MONO_16, 2, mix );
+
+<a href='AIL_WAV_file_write.html' class='paragraph'>AIL_WAV_file_write</a>( "mixed.wav", out, mixsize, 44100, DIG_F_MONO_16 );
+</pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_WAV_marker_by_name.html' class='paragraph'>AIL_WAV_marker_by_name</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_size_processed_digital_audio.html' class='paragraph'>AIL_size_processed_digital_audio</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

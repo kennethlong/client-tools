@@ -1,0 +1,183 @@
+# CONSULT-37 (Opus) — Ordering / lifecycle analysis of async .mgn load
+
+Angle: ordering / lifecycle invariants on the async SkeletalMeshGeneratorTemplate (.mgn) load.
+Scope: enumerate interleavings of (A) request async load, (B) zone-in/appearance build,
+(C) load completes-or-fails, (D) consumer deref. Identify the invariant and exact missing guard.
+Evidence given (treat as fact): intermittent c0000005 on ground zone-in; pre-existing on 32-bit
+Release+Debug, rare; "usually first run after rebuild" (cold cache, async loads SLOWER); breadcrumb
+SkeletalMeshGeneratorTemplateAsync: armor_marauder_s01_belt_m_l3.mgn (a HINT, may mis-attribute).
+
+================================================================================
+1. THE LIFECYCLE STATE MACHINE (as actually coded)
+================================================================================
+
+A SkeletalMeshGeneratorTemplate (SMGT) has THREE relevant state bits, all set on the MAIN thread:
+  m_isLoaded (false until load() finishes)
+  m_asynchronousLoadInProgress
+  m_uninitializedMeshGenerators (vector of SkeletalMeshGenerator* awaiting fixup)
+
+Creation of an UNLOADED template:
+  MeshGeneratorTemplateList::fetch(name, create=true)            [MeshGeneratorTemplateList.cpp:377]
+    if AsynchronousLoader::isEnabled() && extension supports async  [:424]
+      -> creationFunction(NULL, filename)  // NULL Iff = async stub  [:431]
+         => SkeletalMeshGeneratorTemplate(NULL, name): m_isLoaded=false, load() NOT called [:2105-2112]
+
+Consumer creates a generator instance from the (possibly unloaded) template:
+  SkeletalAppearance2::getOwnedMeshGeneratorsForDetailLevel(lod)  [SkeletalAppearance2.cpp:3538+]
+    bmgTemplate->createMeshGenerator()                            [:3511]
+      SkeletalMeshGeneratorTemplate::createMeshGenerator()        [SMGT.cpp:1953]
+        if !m_isLoaded && !m_asynchronousLoadInProgress:
+            AsynchronousLoader::add(name, asynchronousLoadCallback, this)  [:1964]  (event A)
+        meshGenerator = new SkeletalMeshGenerator(this)           [:1976]
+          ctor: if template->isLoaded() create(); else SKIP create()  [SkeletalMeshGenerator.cpp:211]
+                => when unloaded: m_blendValues stays NULL, m_isCreated effectively deferred
+        if !m_isLoaded: m_uninitializedMeshGenerators->push_back(meshGenerator)  [:1984-1991]
+
+Completion (event C), runs on MAIN thread via processCallbacks():
+  AsynchronousLoader::processCallbacks() -> (*request->callback)(data)  [AsynchronousLoader.cpp:631]
+    SkeletalMeshGeneratorTemplate::asynchronousLoadCallback()     [SMGT.cpp:3250]
+      open Iff; if openSuccess load(iff) [:3266-3270]  (load() sets m_isLoaded=true at :2222)
+      if !openSuccess: DEBUG_WARNING + RETURN, leaving m_isLoaded=false FOREVER  [:3277-3281]  <-- FAILURE PATH
+      m_asynchronousLoadInProgress = false  [:3285]
+      for each m_uninitializedMeshGenerators: SkeletalMeshGenerator::create()  [:3290]  (fixup)
+      delete + null the list  [:3291-3292]
+
+KEY THREADING FACT: the worker thread (AsynchronousLoader::threadRoutine) only PRE-CACHES file
+bytes into the TreeFile cache; it NEVER calls the SMGT fetch/parse on the worker. The actual
+SMGT::load() and the uninitialized-generator fixup BOTH run on the MAIN thread inside
+processCallbacks(). So there is no classic data race between worker and main on the SMGT object.
+The hazard is purely SAME-THREAD ORDERING: a consumer dereferences the half-built generator on the
+main thread in a frame BETWEEN createMeshGenerator() (B) and the processCallbacks() that runs the
+callback (C). On a cold cache C is delayed by many frames -> the (B..C) window widens -> matches the
+"first run after rebuild" symptom exactly.
+
+================================================================================
+2. THE INVARIANT
+================================================================================
+
+INVARIANT: No consumer may call any data-bearing method on a SkeletalMeshGenerator
+(applySkeletonModifications, addShaderPrimitives, getOcclusionLayer, createAppearance,
+getReferencedSkeletonTemplate*, blend-value access) before its SMGT has m_isLoaded==true AND the
+deferred SkeletalMeshGenerator::create() fixup has run for that instance.
+
+The intended enforcement is a TWO-LAYER gate:
+  (a) RELEASE-time gate: SkeletalAppearance2 must not rebuildMesh() until
+      areAllMeshGeneratorsReadyForDetailLevel(lod) returns true (which is
+      MeshGenerator::isReadyForUse() == SMGT::isLoaded() per SkeletalMeshGenerator.cpp:149-153).
+  (b) DEBUG-only assertion: every consumer method on SkeletalMeshGenerator opens with
+      DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ...) [SkeletalMeshGenerator.cpp:80,
+      88, 96, 135, 143, 159, 167].
+
+================================================================================
+3. ENUMERATED INTERLEAVINGS
+================================================================================
+
+Legend: A=request, B=build/construct generator, C=load completes(C+)/fails(C-), D=deref.
+
+I1.  A, B, C+, D   (normal, warm cache): load done before any deref. SAFE.
+
+I2.  A, B, D, C+   (MERELY LATE — cold cache): consumer wants to render/collide before C+.
+     - Render/collide path: collide() -> rebuildIfDirtyAndAvailable() ->
+       areAllMeshGeneratorsReadyForDetailLevel() returns FALSE (isLoaded false) -> rebuild SKIPPED
+       [SkeletalAppearance2.cpp:1311, 4250-4252, 4303]. SAFE for the standard render/collide entry.
+       The (a) gate holds here. This is why it is only INTERMITTENT, not deterministic.
+
+I3.  A, B, D, C+   but D enters CompositeMesh DIRECTLY without re-checking readiness.
+     CompositeMesh::applySkeletonModifications [CompositeMesh.cpp:369-377] and
+     CompositeMesh::addShaderPrimitives [:381-417] iterate m_meshGenerators and call straight into
+     meshGenerator->applySkeletonModifications()/addShaderPrimitives() with NO isReadyForUse()/
+     isLoaded() check. They rely 100% on the caller (rebuildMesh) having been gated. Any code path
+     that reaches addShaderPrimitives()/applySkeletonModifications() on an unready generator
+     dereferences unloaded SMGT internals (m_perShaderData empty/garbage, m_blendTargets NULL,
+     m_skeletonTemplateNames empty). In RELEASE the DEBUG_FATAL guards (layer b) are compiled out,
+     so instead of a clean assert you get reads off empty/688 partially-constructed std::vectors and
+     a NULL m_blendValues -> c0000005. This is the structural single-point-of-failure: the gate is
+     in ONE place (rebuildMesh's caller), not at the deref site.
+
+I4.  A, B, C-, (D forever)   (FAILURE / FILE-MISSING path — the strongest suspect for "cold/first
+     run"): asynchronousLoadCallback() opens the Iff; if open FAILS it DEBUG_WARNINGs and RETURNS
+     with m_isLoaded LEFT false and m_asynchronousLoadInProgress LEFT... actually set false only
+     AFTER the early return, so on failure m_asynchronousLoadInProgress stays TRUE
+     [SMGT.cpp:3277-3285]. Consequences:
+       * m_isLoaded stays false PERMANENTLY -> isReadyForUse() never becomes true -> the appearance
+         silently never renders that LOD (matches "rare, non-fatal-most-times").
+       * m_uninitializedMeshGenerators is NEVER fixed up and NEVER freed by the callback (the
+         delete/null at :3291-3292 is AFTER the early return). The half-built SkeletalMeshGenerator
+         instances (m_blendValues==NULL) leak AND remain reachable.
+       * createMeshGenerator() at :1959 will not re-kick the load because m_asynchronousLoadInProgress
+         is still true -> a wedged template that can never recover for the process lifetime.
+     This is an ASYMMETRIC-CLEANUP ordering bug: the failure branch returns before the two
+     post-conditions (clear in-progress flag, run/clear fixup list) that the success branch
+     guarantees. Under a cold cache, TreeFile::open on the worker can transiently fail or the
+     callback can be invoked with the bytes not actually present, making C- far more likely on the
+     first post-rebuild run than on warm subsequent runs.
+
+I5.  A, B, C+, D-via-stale-pointer (TEMPORAL, already partly fixed):
+     unloadUnusedResources() can free a display-LOD shader primitive between frames, and collide()
+     would traverse freed memory. There is an EXISTING in-tree mitigation note + MRU-touch at
+     SkeletalAppearance2.cpp:1310-1322 ("debug session c0000005-async-mgn-crash ... D3D11 single-
+     stream branch"). This is a sibling temporal bug, distinct from the load-ordering bug; note that
+     the breadcrumb category log (last-asset-touched) would still point at the .mgn even though the
+     fault is in shader-primitive eviction. Reinforces "breadcrumb may mis-attribute."
+
+I6.  A, B, C+ but fixup order vs first-use:  asynchronousLoadCallback runs load() (sets m_isLoaded
+     true at :2222) BEFORE running create() on the uninitialized generators (:3290). If any
+     reentrancy during load()/preloadAssets() (which fetches shaders+texture renderers, can pump
+     other callbacks) queries isReadyForUse() it now returns TRUE while m_blendValues on the pending
+     generators is still NULL. A deref of blend data in that sub-window touches NULL. Narrow but
+     real: the "ready" signal (m_isLoaded) is raised before the per-instance fixup completes — the
+     readiness predicate and the actual readiness of the instances are not atomic.
+
+================================================================================
+4. THE VIOLATED INVARIANT + EXACT MISSING/INSUFFICIENT GUARDS
+================================================================================
+
+Primary structural violation (I3): the consumer-side deref guard exists ONLY as a compiled-out
+DEBUG_FATAL and as a SINGLE upstream gate. There is no RELEASE-safe readiness check at the actual
+deref sites.
+  MISSING GUARD locations:
+   - CompositeMesh::applySkeletonModifications  CompositeMesh.cpp:376  (no isReadyForUse() before deref)
+   - CompositeMesh::addShaderPrimitives         CompositeMesh.cpp:417  (no isReadyForUse() before deref)
+   - SkeletalMeshGenerator::applySkeletonModifications  SkeletalMeshGenerator.cpp:86-90 (guard is DEBUG_FATAL only)
+   - SkeletalMeshGenerator::addShaderPrimitives         SkeletalMeshGenerator.cpp:94-98 (guard is DEBUG_FATAL only)
+  The invariant "deref only after isLoaded && fixup done" is enforced exactly once, indirectly, at
+  SkeletalAppearance2.cpp:4250-4252 / 4303 (areAllMeshGeneratorsReadyForDetailLevel). Any new or
+  alternate call site into rebuildMesh()/buildCompositeMesh() that skips that predicate is
+  unprotected in RELEASE.
+
+Highest-suspicion concrete defect for THIS symptom (I4 — failure-path ordering):
+  SkeletalMeshGeneratorTemplate::asynchronousLoadCallback()  SMGT.cpp:3277-3285
+  The `if (!openSuccess) { DEBUG_WARNING(...); return; }` early-return executes BEFORE
+    (1) m_asynchronousLoadInProgress = false;            [:3285]
+    (2) the m_uninitializedMeshGenerators fixup+free.    [:3288-3293]
+  Required invariant: on EITHER success or failure the callback must (1) clear the in-progress flag
+  and (2) resolve the uninitialized-generator list — otherwise the template is wedged unloaded with
+  live, half-constructed (m_blendValues==NULL) generators still referenced by the appearance, which
+  the appearance's readiness gate will correctly refuse to render, but which become latent landmines
+  for any non-gated deref (I3) and which can never recover. Cold-cache first-run is precisely when
+  openSuccess==false is most probable, tying I4 to the "first run after rebuild" observation.
+
+Secondary ordering violation (I6): m_isLoaded is set true at SMGT.cpp:2222 (inside load()) while the
+per-instance SkeletalMeshGenerator::create() fixup is not run until SMGT.cpp:3290 — so the public
+readiness predicate (isLoaded) leads the actual per-instance readiness. Window is small but the two
+should be made atomic w.r.t. observers (e.g. don't expose loaded==true until fixup loop completes).
+
+================================================================================
+5. FAILURE vs MERELY-LATE — verdict
+================================================================================
+- MERELY LATE (I2): well guarded for the normal render/collide entry; explains why it is usually
+  fine. Not the crash by itself.
+- FAILURE / FILE-MISSING (I4): asymmetric-cleanup early-return at SMGT.cpp:3277 is the most
+  ordering-sound explanation for an intermittent, cold-cache-biased, pre-existing-on-all-builds
+  c0000005 (or silent wedge that a later non-gated deref turns into c0000005).
+- NON-GATED DEREF (I3): the structural reason a late/failed load can become an AV instead of a clean
+  skip in RELEASE — CompositeMesh + SkeletalMeshGenerator deref sites have only DEBUG_FATAL guards.
+- The breadcrumb naming the belt .mgn is consistent with I4 (that file was the in-flight async load)
+  but per I5 the breadcrumb category log can also mis-attribute a shader-primitive-eviction fault to
+  the .mgn. Do not over-trust it.
+
+RECOMMENDED CAPTURE TO CONFIRM (not a patch): break in RELEASE on c0000005; inspect whether the
+faulting `this` is a SkeletalMeshGenerator with m_blendValues==NULL and its template m_isLoaded==
+false and m_asynchronousLoadInProgress==true (=> I4 wedge), vs a freed ShaderPrimitive (=> I5), vs a
+template with empty m_perShaderData reached via CompositeMesh::addShaderPrimitives (=> I3). Each
+distinguishes the three cleanly.

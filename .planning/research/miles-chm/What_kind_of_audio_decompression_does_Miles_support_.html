@@ -1,0 +1,105 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>What kind of audio decompression does Miles support?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='What kind of audio decompression does Miles support?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>What kind of audio decompression does Miles support?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_stream_a_file_off_a_hard_disk_or_CD_.html' class='paragraph'>How do I stream a file off a hard disk or CD?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='What_is_the_CPU_and_memory_hit_of_each_audio_compression_format__Which_format_should_I_use_.html' class='paragraph'>What is the CPU and memory hit of each audio compression format? Which format should I use?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='What kind of audio decompression does Miles support?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: What kind of audio decompression does Miles support?</p>
+<p>
+A: Miles supports IMA ADPCM, Bink Audio, MP3 (MPEG Layer 3), Ogg Vorbis, Voxware voice, and Xbox 360 XMA decompression. 
+
+</p>
+<p>
+For performance comparisons, see this <a href='What_is_the_CPU_and_memory_hit_of_each_audio_compression_format__Which_format_should_I_use_.html' class='paragraph'>FAQ</a>. 
+
+</p>
+<p>
+<ul><li> IMA ADPCM is a simple format that provides 4 to 1 compression on 16-bit data.  There is essentially no CPU hit for decoding ADPCM - it's that simple.  Like all ADPCM variants, it is somewhat hissy, though. 
+
+</li></ul></p>
+<p>
+<ul><li> Bink <a href='What_is_Bink_Audio_.html' class='paragraph'>Audio</a> is our psychoacostic-based audio codec, similar to MP3 or Ogg, but  much easier to decode.  It is usually 20-30% faster than MP3, and up to twice as fast as Ogg!  It uses far less dynamic memory during playback than MP3 or Ogg, and it supports multi-channel sound files directly. Bink Audio will usually give a <a href='BinkA_encode.html' class='paragraph'>compression</a> rate of 8-12 to 1, but it is also inherently VBR, so if you have sound samples with lots of silence (dialog), then it  will compress <b>much</b> smaller.  We expect most games to use Bink Audio format - it's simply the best option for games. 
+
+</li></ul></p>
+<p>
+<ul><li> MP3 (or MPEG Layer 3) is a more complicated format that usually provides 11 to 1 compression with no audible loss.  It does use a bit more CPU, though.  See the "What is MPEG Audio and MP3?" <i><a href='What_is_MPEG_Audio_and_MP3_.html' class='paragraph'>FAQ</a></i> for more details about MP3.  You need to sign a special license addendum to use MP3. 
+
+</li></ul></p>
+<p>
+<ul><li> Ogg Vorbis is an non-patented MP3 alternative, with similar capabilities and limitations. It does use about twice the CPU of MP3, so it is the most expensive of our codecs. At low bit rates (128 kbit or less), Ogg usually sounds  a little better than MP3.  At higher bit rates, you can't tell the difference, so you are better off using MP3 due to the lower CPU hit.  You also need to sign a special license addendum to use Ogg Vorbis. 
+
+</li></ul></p>
+<p>
+<ul><li> The Voxware voice codecs are complicated formats that provide up to 200 to 1 compression on voice data (fairly compressed-sounding, though).  They are only for voice data, though - they can't do anything at all with music or sound effects.  The Voxware codecs are used almost exclusively for Internet voice chat. 
+
+</li></ul></p>
+<p>
+<ul><li> On the Xbox 360, Miles can play XMA files.  XMA is a perceptual encoder like MP3 and Ogg, but not quite as powerful. It can be decompressed mostly in hardware, so it's only a little slower than IMA ADPCM, though.  It's a great option on the Xbox 360, but it can't be played on any other platform. 
+
+</li></ul></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_stream_a_file_off_a_hard_disk_or_CD_.html' class='paragraph'>How do I stream a file off a hard disk or CD?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='What_is_the_CPU_and_memory_hit_of_each_audio_compression_format__Which_format_should_I_use_.html' class='paragraph'>What is the CPU and memory hit of each audio compression format? Which format should I use?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>SPU Usage on the PlayStation 3</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='SPU Usage on the PlayStation 3'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>SPU Usage on the PlayStation 3</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_PlayStation_3_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a PlayStation 3 Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='SPU_Usage_on_the_PlayStation_3.html#_Discussion' class='paragraph'>SPU Usage on the PlayStation 3: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Resource_Usage_on_the_PlayStation_3.html' class='paragraph'>Resource Usage on the PlayStation 3</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='SPU_Thread_Control_API.html' class='paragraph'>SPU Thread Control API</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='The_Sony_PlayStation_3_Platform.html' class='paragraph'>The Sony PlayStation 3 Platform</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='SPU Usage on the PlayStation 3::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Miles can run almost everything on the SPU - mixing, DSP filters, resampling, ADPCM decompression, MP3 decompression and more. About the only major feature that isn't yet on the SPU is Ogg decompression which just accesses too much memory randomly (in the  future, we hope to get this codec onto the SPU as well). 
+
+</p>
+<p>
+Rather that supply a pre-built ELF for the SPU decompression module, we instead supply static libraries that you can use to build this ELF. This technique lets us supply multiple SPU support libraries, so that you aren't locked into any particular SPU image format. 
+
+</p>
+<p>
+So, to make an SPU ELF, you take the Miles SPU libraries (MilesSPU.a and BinkaSPU.a) and link it with an SPU support library (like MssSPU_sputhreads.a, MssSPU_raw.a, or MssSPU_spurs.a) to create an ELF that you load with the <a href='MilesStartAsyncThread.html' class='paragraph'>MilesStartAsyncThread</a> function. (You might also add optional libraries for MP3 as well). 
+
+</p>
+<p>
+Then, you link your PPU application with the matching PPU library (like MssPPU_sputhreads.a, MssPPU_raw.a, or MssPPU_spurs.a). So, there are always two halves to the SPU support - one for the SPU and one for the PPU. One you link with MssSPU.a to make an ELF, and one you link with your PPU game to talk to the other SPU half. 
+
+</p>
+<p>
+Right now, we ship with SPU thread support, RAW support and SPURS task support. You can also write your own SPU support library as well. To do this, you need to implement the small APIs that are prototyped in the radspu.h and radppu.h header files. 
+
+</p>
+<p>
+Note that if you are doing custom SPU interface work, the r1 register (the stack pointer) must be initialized as the standard SPU ABI dictates. That is, the 2nd word in r1 must contain the amount of remaining stack space free. SPU Threads, SPURS and RAW SPU all handle this correctly, so you only have to worry about it if you are doing something custom. 
+
+</p>
+<p>
+So, for example, the command to build the Miles SPU elf for SPURS looks something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>spu-lv2-g++.exe -mspurs-task -o mssspurs.elf -g -Xlinker --gc-sections -L%SCE_PS3_ROOT%\target\spu\lib -fno-exceptions -fno-rtti -L -Xlinker -Map -Xlinker mssspurs.map -Xlinker --start-group libdma.a  mssspu.a binkaspu.a mp3spu.a mssspu_spurs.a -Xlinker --end-group
+</pre></div>
+<p>
+</p>
+<p>
+In this command, notice how the mp3spu.a file is in between the mssspu.a and the mssspu_spurs.a file - this  order is important so that Miles sees the MP3 support functions. 
+
+</p>
+<p>
+OK, now we have an SPU elf image! Some people load this image off the disc directly, but most people embed the SPU image into the PPU elf.   Note that if you use the <b>spu_elf-to-ppu_obj</b> command to embed your SPU image into your game, then you need to add the switch "--strip-mode=normal" to the end (Miles uses the extra data that the strip-mode=hard option removes).  
+
+</p>
+<p>
+Next, you need to install the SPU image by calling <a href='MilesStartAsyncThread.html' class='paragraph'>MilesStartAsyncThread</a> to start the SPU elf.  It is then ready to receive audio commands from the Miles PPU library. 
+
+</p>
+<p>
+Once you finally have the SPU image built and loaded, then you need to tell Miles itself to use it! To do this, you pass in the <a href='MILES_OPEN_DIGITAL_FLAGS.html' class='paragraph'>AIL_OPEN_DIGITAL_USE_SPU</a> flag to <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a> that matches the SPU index that you passed to <a href='MilesStartAsyncThread.html' class='paragraph'>MilesStartAsyncThread</a>. Now, whenever Miles has any work to do, it will call down to the SPU image to perform the work in the background. 
+
+</p>
+<p>
+Everything else is automatic - the exact same Miles API now takes no PPU time! <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Resource_Usage_on_the_PlayStation_3.html' class='paragraph'>Resource Usage on the PlayStation 3</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='The_Sony_PlayStation_3_Platform.html' class='paragraph'>The Sony PlayStation 3 Platform</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='SPU_Thread_Control_API.html' class='paragraph'>SPU Thread Control API</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

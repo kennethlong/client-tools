@@ -1,0 +1,86 @@
+﻿## (a) Is the cfg manifest missing required TRE wiring?
+
+**Mostly complete for base JTL; one required layer was missing and is now patched locally. ILM is optional, not base.**
+
+**Wired today** (`stage/client.cfg` `[SharedFile]`):
+
+| Key | Priority | Target |
+|-----|----------|--------|
+| `searchTOC_00_0` | 0 | `sku0_client.toc` → 131 TREs |
+| `searchTOC_01_1` | 1 | `sku1_client.toc` → 44 TREs |
+| `searchTOC_02_2` | 2 | `sku2_client.toc` → 15 TREs |
+| `searchTOC_03_3` | 3 | `sku3_client.toc` → 8 TREs |
+| `searchTree_00_7` | 7 | `disable_wayfar_dearic_snow.tre` |
+| `searchTree_00_8` | 8 | `swgsource_3.0.tre` |
+| `searchPath_00_9` | 9 | `D:/Code/SWGSource Client v3.0/` (loose install root) |
+| `searchPath_00_10` | 10 | `D:/Code/swg-client-v2/stage/override` |
+
+**198 TREs** via TOCs; **not** in any TOC/searchTree: the 9 unwired (`ILM_*`×6, `gu8.tre`, `hotfix_56_*`×2).
+
+**Repo intent (D-04):** sku0–3 + `swgsource_3.0` + snow disable — **deliberately excludes ILM**. Tracked template `tools/setup/client.cfg.template` (not `src/cmake/config/client.cfg.in`, which is gone/stale) matches that and **still omits** `searchPath_00_9`.
+
+**Install-side proof ILM is optional** — `D:/Code/SWGSource Client v3.0/live.cfg`:
+
+```1:17:D:/Code/SWGSource Client v3.0/live.cfg
+# live.cfg
+## To enable ILM features uncomment/comment below the ILM tre's.
+...
+	#searchTree_00_6=ILM_animation.tre
+	#searchTree_00_5=ILM_visuals.tre
+	#searchTree_00_4=ILM_music.tre
+	#searchTree_00_3=ILM_maps.tre
+	#searchTree_00_2=ILM_sound.tre
+	#searchTree_00_1=ILM_ui.tre
+	searchTOC_03_3=sku3_client.toc
+```
+
+**Required gap (fixed in staged cfg, not template):** `searchPath_00_9` for loose retail files (GU21 `ui/ui_hud_space.inc`). CONSULT-47 established `ILM_ui.tre` is a **community mod** (key without widget); the complete HUD lives loose at pri 9 > `swgsource_3.0.tre` (8).
+
+**ILM vs wired overlap:** core ship LODs (`appearance/lod/ship_component_*.lod`) and nebula tables exist in **wired** `patch_11_*.tre` as well as `ILM_visuals.tre`. Of 5812 ILM appearance files, **108 are ILM-only** (mostly Gosaan/planet deco, not ship meshes). ILM is an **enhancement overlay**, not the sole JTL visual base.
+
+**Skip:** `gu8.tre` (ground GU8, no space content), `hotfix_56_*` (empty). **Do not wire `ILM_ui.tre`** — loose retail UI at pri 9 is the correct HUD source.
+
+**Conclusion:** Unwired ILM does **not** explain missing ship placeholder if the failing ship’s appearance resolves in the current virtual tree (evidence already shows sampled ship assets in wired TREs). The one **required** cfg omission was **`searchPath_00_9`** (HUD); ship/env breakage likely lies elsewhere (runtime template path, CDF, or rendering).
+
+---
+
+## (b) Exact cfg lines if you wire ILM anyway
+
+Follow install `live.cfg` priorities **1–6**, below snow (7) / swgsource (8) / searchPath (9–10). **Omit `ILM_ui.tre`.**
+
+```cfg
+	searchTree_00_1="D:/Code/SWGSource Client v3.0/ILM_sound.tre"
+	searchTree_00_2="D:/Code/SWGSource Client v3.0/ILM_maps.tre"
+	searchTree_00_3="D:/Code/SWGSource Client v3.0/ILM_music.tre"
+	searchTree_00_4="D:/Code/SWGSource Client v3.0/ILM_visuals.tre"
+	searchTree_00_5="D:/Code/SWGSource Client v3.0/ILM_animation.tre"
+```
+
+Also ensure this stays (required, not optional):
+
+```cfg
+	searchPath_00_9="D:/Code/SWGSource Client v3.0/"
+```
+
+Add to `tools/setup/client.cfg.template` so regen doesn’t drop it.
+
+---
+
+## (c) Single decisive test
+
+**Resolve the failing ship’s runtime appearance path against the merged virtual tree** (current `stage/client.cfg` via `tools/tre-compare` or in-game `TreeFile::exists` on the ship object’s appearance template name from the space session log).
+
+- **Path found in wired layers (TOCs / patch_11 / swgsource / loose pri 9)** → cfg manifest is complete for that ship; chase code/renderer, not TRE wiring.
+- **Path found only in unwired `ILM_visuals.tre`** → add `searchTree_00_4=ILM_visuals.tre` (or full ILM stack above) and retest the same ship.
+
+**Fast A/B:** add only `searchTree_00_4="…/ILM_visuals.tre"` at priority 4, same server/ship/zone — **no visual change ⇒ ILM unwiring is not the cause.**The asset-path probe finished. Here’s what it showed:
+
+**Overlap, not ILM-only base layer:** Core ship assets like `appearance/lod/ship_component_engine_s01.lod` and nebula data like `datatables/space/nebula/space_corellia_2.iff` live in **wired** `patch_11_*.tre` TREs as well as `ILM_visuals.tre`. That matches why nebula data can load even with ILM unwired.
+
+**ILM is mostly redundant for ships:** Of 5,812 appearance files in `ILM_visuals.tre`, only **108 are ILM-only** — mostly Gosaan/planet decoration, not ship meshes.
+
+**Wrong sample paths:** Generic names like `ship_yt1300.lod` / `ship_xwing.lod` weren’t found in either wired or ILM archives (likely bad guesses, not proof of missing data).
+
+**Takeaway:** Unwired ILM is unlikely to explain the placeholder ship or broken space environment. The cfg gap that mattered was **`searchPath_00_9`** (loose retail HUD), not the ILM pack.
+
+**Next step if you want to close the loop:** Resolve the **actual failing ship’s appearance template** from the space session log against the merged virtual tree — that’s the one check that confirms or rules out cfg wiring as the cause.

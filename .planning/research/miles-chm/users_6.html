@@ -1,0 +1,184 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Ducking and Ramps</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Ducking and Ramps'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Ducking and Ramps</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_ramp.html#ref_ramp_main' class='paragraph'>Apply Ramp: Overview</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_set_ramp.html#ref_set_ramp_main' class='paragraph'>Ramps: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_5.html' class='paragraph'>Cross Fading</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_3.html' class='paragraph'>Presets and Variables</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_6_main' class='nohover'><b></b></a></div>
+<p>
+This walkthrough will discuss decreasing the volume of a group of sounds, so that another may be heard more easily when it plays, and then returning
+the previous sounds to their original volume upon completion.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Event Asset
+</li><li> Sound Asset
+</li><li> Start Sound Event Step
+</li><li> Control Sounds Event Step
+</li><li> Audition
+</li><li> Labels
+</li><li> Label Query
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b><br>
+</p>
+<p>
+<ol><li> <b>Ramp:</b> A Ramp is a construct that allows you to interpolate various aspects of a sound over time. They allow for interpolation of volume, wet level, low pass cutoff, 
+and playback rate (pitch). Similar to Control Sounds, they use a label query to determine what sounds to affect. A ramp starts at an initial value, which is the value applied
+to all matching sounds if the ramp is never altered via any event. The effect a ramp has on a sound is modulated, not replaced - meaning if a volume ramp sets the volume attentuation to
+-10 dB, and the sound's 3D position causes an attentuation of -10 dB, the resulting volume will be at -20 dB. This holds true for other ramp types as well.
+</p>
+<p>
+</li><li> <b>Apply Ramp Event Step:</b> This event step sets the destination for a Ramp, and how long it takes to get there. For example, it may set the
+target of a volume ramp to -96 dB over a time of 1 second. After 1 second, all sounds affected by the ramp will be inaudible. However, the ramp will start its interpolation
+at whatever value it was last left at, which might not be at any target value if the interpolation hasn't had time to complete. In more detail,
+say we have a volume ramp that has been created, and is at the default initial value of 0 dB. All the sounds that are affected by that ramp are not attentuated at
+all as a result of this ramp. Then we run an Apply Ramp using that ramp, moving it to a target value of -96 dB over 4 seconds. If that were the only event run,
+in 4 seconds the affected sounds would be inaudible. However, 2 seconds later we run another Apply Ramp using the same ramp, moving it to a target value of 0 dB over 4 additional seconds. The
+starting position of the second Apply Ramp will be -10 dB instead of -96 dB, since it only had half the time ( 2 seconds instead of 4 seconds ) to ramp the volume, and
+as a result was at a volume attentuation of 50% when the new Apply Ramp began. However, this only means the *rate* of volume change will be different - it will still take 4
+seconds to reach 0 dB.
+</p>
+<p>
+</li><li> <b>Completion Event:</b> A completion event is an event that has been set to automatically run when a sound finishes playing.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Drag two sounds in to Miles Studio and for each of them right click and select "Create Event For Sound". One will be treated as Music for the purposes of this guide, and such should be significantly longer than the other. You should end up with something like this:</i><br><br>
+<img src="6_list.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Create a new label called "Music" and assign it to whichever sound is longer by dragging the event that starts it to the label's entry in the Asset List.</i><br><br>
+<img src="6_labels.png"/><br><br>
+</p>
+<p>
+</li><li> <i>In the Asset List, Select "Ramps" and create a new ramp called "MusicDuck".</i><br><br>
+<img src="6_ramp.png"/><br><br>
+</p>
+<p>
+This creates a Ramp that can be referenced by an Apply Ramp Event Step in an Event. This ramp will be responsible for attentuating the sound with the Music label while the shorter sound plays.
+</p>
+<p>
+</li><li> <i>Select the new ramp and click the plus next to "Labels to Control" and pick "Music".</i><br><br>
+<img src="6_rampedit.png"/><br><br>
+</p>
+<p>
+By default, ramps have an empty label query, so they affect all sounds. We want this ramp to only affect our Music sound. Also note that the Initial Value defaults to "has no effect". For volume ramps, this means 0 dB - they will not
+attentuate any affected sounds. Similarly, playback rate ramps default to 0 sT, and low pass cutoff ramps default to 24khz.
+</p>
+<p>
+</li><li> <i>Now we need to set up the shorter sound to "duck" the longer sound using the new ramp. Select the shorter sound's event, scroll down, and click the "Add New Step" button. Change the new step to "Apply Ramp" via the drop down, and adjust the "Target Value" slider to "-96 dB"</i><br><br>
+<img src="6_rampapply.png"/><br><br>
+</p>
+<p>
+Now, immediately after the sound is started, the MusicDuck ramp smoothly moves the volume of the sound with the Music label to silence. However, the ramp takes 1 full second, and our sound starts immediately.
+</p>
+<p>
+</li><li> <i>Scroll back up in the same event and set the min and max Delay of the start sound event step to 1000 ms.</i><br><br>
+<img src="6_delay.png"/><br><br>
+</p>
+<p>
+This causes the sound to delay starting for 1 second, so the MusicDuck ramp has time to attentuate the sound with the Music label. However the sound with the Music label has no way to return to full volume. To move the sound with the Music label back to full volume, we need another Apply Ramp event step.
+</p>
+<p>
+</li><li> <i>Create a new empty event named "NewEvent", add a new event step and change the type to "Apply Ramp". Leave the "Target Value" slider to "0 dB".</i><br><br>
+<img src="6_ramp2.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Select the shorter sound's event, and drag "NewEvent" to the "Completion Event" field.</i><br><br>
+<img src="6_drag.png"/><br><br>
+</p>
+<p>
+Completion events are events that are automatically run when a sound completes. In this case, the completion event runs the event containing the Apply Ramp event step that returns
+the sound with the Music label back to full volume.
+</p>
+<p>
+</li><li> <i>Audition the event that starts the sound with the Music label, then while that sound is playing audition the event that starts the other sound.</i><br><br>
+</p>
+<p>
+Due to the effects of the MusicDuck ramp, the second sound played will silence the sound with the Music label before playing. Then, upon completion, it will restore the sound
+with the Music label to full volume.
+</p>
+</li></ol><br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_5.html' class='paragraph'>Cross Fading</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_3.html' class='paragraph'>Presets and Variables</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

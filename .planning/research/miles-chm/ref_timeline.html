@@ -1,0 +1,145 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Timeline</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Timeline'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Timeline</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_navigator.html' class='paragraph'>Navigator</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_options.html' class='paragraph'>Options</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_timeline_main' class='nohover'><b>Overview</b></a></div>
+<p>
+The timeline is where all event inspection and replay occurs.
+</p>
+<p>
+<center><img src="s_timeline.png" /></center>
+</p>
+<p>
+<ol><li> List of open captures. The scratch pad is always open.
+</li><li> Clear the scratchpad to empty.
+</li><li> Open a previously saved capture.
+</li><li> Save the current capture to file.
+</li><li> Close the opened capture.
+</li><li> The selected capture's filename.
+</li><li> Capture playback - Rewind, Stop, Play with new random values, Play with recorded random values.
+</li><li> On/Off - Record ("Capture") the capture to a WAV file.
+</li><li> Set the WAV file to record to.
+</li><li> Choose the settings for the replay - this determines what assets to use if they have been specialized via <a href='ref_assets.html' class='paragraph'>Specialization</a>.
+</li><li> Zoom the timeline view in and out.
+</li><li> Switch between normal and compact view.
+</li><li> The scrub bar for the timeline. The darkness represents the density of events at that location. Looped sections will be tinted green. A glassy pane shows the currently visible section for long timelines.
+</li><li> The timeline view.
+</li><li> The type of details to show regarding the current capture.
+</li><li> Whether to show the captured or replay state in the details and graphs.
+</li></ol></p>
+<p>
+Whenever you audition in the tool, the event will always show up on the Scratch Pad. Not everything can be captured, so you won't get System Graphs
+for the scratch pad.
+</p>
+<p>
+<center><img src="s_timeline2.png" /></center>
+</p>
+<p>
+<ol><li> The track listing of events. Green means only this event will play, purple means the event is muted, red is the event isn't loaded in the tool,
+dark grey means the event is muted because another event is set to solo play.
+</li><li> The event instances. A hollow square means the event played no sounds. A solid square means the
+    event played a sound, but it was too short to show at the current zoom. Otherwise, the blue line is the length of the sound, the green is the 
+    length of the replay, if one exists.
+</li></ol></p>
+<div class="discussion_heading"><a name='ref_timeline_dets' class='nohover'><b>Event Details</b></a></div>
+<p>
+<center><img src="s_eventdets.png" /></center>
+</p>
+<p>
+<ol><li> Whether to show event details (shown above), or the system graphs (shown below)
+</li><li> The name of the selected event. Click to edit.
+</li><li> The number of sounds started.
+</li><li> A sound that was started. Click to edit.
+</li><li> The select of source data for the current graph. Note that for events played in Miles Studio, the final volume includes any attenuation from the Master Volume in Miles Studio itself.
+</li><li> The duration, as well as the results of the <b>random</b> volume, pitch, and delay. This does not take in to account
+    3d volume, ramps, or any other source of volume or pitch - only the sources from the Start Sound event step.
+</li><li> The graph for the current selection. The data type is either decibel, semitones, hertz, or distance.
+</li><li> Whether to show the current ramps or variables that affected this sound.
+</li><li> The list of ramps or variables (based on above), by name.
+</li><li> The name of the ramp/variable, whether it affected all sounds or just this sound, and what event caused it.
+</li><li> The graph of the ramp/variable's value over the length of the sound instance.
+</p>
+<p>
+</li></ol></p>
+<div class="discussion_heading"><a name='ref_timeline_graphs' class='nohover'><b>System Graphs</b></a></div>
+<p>
+Graphs show various values over time. These include system information, user ramps, and user variables. 
+These graphs line up with the timeline scrollbar.
+</p>
+<p>
+<center><img src="s_sysgraphs.png" /></center>
+</p>
+<p>
+<ol><li> The CPU Usage graph. Given as a percent of total CPU time.
+</li><li> The remaining handle memory. This is the memory that the event system uses for managing sounds. Sound data is not included in this.
+</li><li> The number of playing samples.
+</p>
+<p>
+More graphs are available than shown.
+</p>
+</li></ol><br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_navigator.html' class='paragraph'>Navigator</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_options.html' class='paragraph'>Options</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

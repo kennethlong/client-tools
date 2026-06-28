@@ -1,0 +1,83 @@
+﻿## x64 `FreeBlock` / `cms_freeBlockSize`
+
+**LOCKED base** (`CONSULT-33MM-EVIDENCE.md`): `sizeof(Block) == 0x18` (24); `m_previous`@0, `m_next`@8, `m_free`@0x10.
+
+**`FreeBlock`** (`MemoryManager.cpp:137-150`) adds 4×8-byte pointers after the `Block` subobject:
+
+| Field | x64 offset | Size |
+|---|---|---|
+| `m_previous` (Block) | 0x00 | 8 |
+| `m_next` (Block) | 0x08 | 8 |
+| `m_free` (Block) | 0x10 | 1 (+ pad to 0x18) |
+| `m_smallerFreeBlock` | **0x18** | 8 |
+| `m_sameFreeBlock` | **0x20** | 8 |
+| `m_largerFreeBlock` | **0x28** | 8 |
+| `m_parentFreeBlock` | **0x30** | 8 |
+
+- **`sizeof(FreeBlock)` = 0x38 (56)**
+- **`cms_freeBlockSize`** (`:210`) = `(56+15)&~15` = **0x40 (64)**
+
+x86 (Release, `DO_TRACK`/`DO_GUARDS`/`DO_SCALAR` all 0): 4-byte pointers, `cms_blockSize` = 16 (`:300`). Typical MSVC layout: `Block` = 8 (two ptrs + bitfield), `FreeBlock` = 24, tree fields @ **+8/+12/+16/+20**, `cms_freeBlockSize` = **32**.
+
+---
+
+## `addToFreeList` write offsets (into the block passed in)
+
+Split path hits the **else** branch (`:988-995`) — writes these **tree** fields on `freeBlock`:
+
+| Field | x64 offset | x86 offset |
+|---|---|---|
+| `m_smallerFreeBlock` | 0x18 | 0x08 |
+| `m_sameFreeBlock` | 0x20 | 0x0C |
+| `m_largerFreeBlock` | 0x28 | 0x10 |
+| `m_parentFreeBlock` | 0x30 | 0x14 |
+
+**Last byte touched: x64 = 0x37 (56 bytes from block base); x86 = 0x17 (24 bytes).**
+
+(Same-size branch `:972-986` can also write the same four fields plus conditional child `m_parentFreeBlock` updates on *other* nodes.)
+
+---
+
+## Split threshold `:1251-1262` — minimum remainder
+
+Release (`DO_GUARDS=0`, `cms_guardBandSize=0`):
+
+```1251:1262:src/engine/shared/library/sharedMemoryManager/src/shared/MemoryManager.cpp
+		if (bestFreeBlock->getSize() > (allocSize + cms_allocatedBlockSize + cms_guardBandSize + 1 + cms_guardBandSize))
+		{
+			Block *block = reinterpret_cast<Block *>(reinterpret_cast<byte *>(bestFreeBlock) + allocSize);
+			block->setPrevious(bestFreeBlock);
+			block->setNext(bestFreeBlock->getNext());
+			block->setFree(true);
+			// ...
+			addToFreeList(block);
+		}
+```
+
+Let `R = remainder size = getSize() − allocSize`. Split iff:
+
+`R > cms_allocatedBlockSize + 1` → **minimum R = cms_allocatedBlockSize + 2**
+
+| | x86 | x64 |
+|---|---|---|
+| `cms_allocatedBlockSize` (`:211`) | 16 | 32 |
+| **Min remainder R** | **18** | **34** |
+| `sizeof(FreeBlock)` (addToFreeList footprint) | 24 | 56 |
+| **Overrun past remainder end** | **6 bytes** | **22 bytes** |
+
+Remainder layout at minimum R:
+
+```
+[remainder+0 .. remainder+R-1]  = valid region
+[remainder+R]                  = next block's m_previous (@0)  ← adjacent header
+```
+
+At **R=34 (x64)**: `addToFreeList` writes through `remainder+0x37`, but valid region ends at `remainder+0x21` (34 bytes). Bytes **`remainder+0x22 .. remainder+0x37`** (22 B) stomp the **next** block's header — starting with **`m_previous` at offset 0** of that neighbor.
+
+At **R=18 (x86)**: writes through `+0x17`, valid ends at `+0x11`; **6-byte** overrun into neighbor `m_previous`.
+
+---
+
+## Verdict
+
+**Yes — on x64 the `:1251` threshold explicitly allows a 34-byte remainder, but `addToFreeList` needs 56 bytes of `FreeBlock` tree storage.** That is a **22-byte header stomp** into the physically adjacent block. The threshold keys off `cms_allocatedBlockSize` (32), not `sizeof(FreeBlock)`/`cms_freeBlockSize` (56/64). The x64 pointer growth widens the gap (threshold +16, footprint +32); x86 has the same logic bug but only a 6-byte margin, which explains x86 booting while x64 corrupts `m_previous` to NULL before the first `free` (`:1557`).

@@ -1,0 +1,160 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Volume Ramp Filter</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Volume Ramp Filter'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Volume Ramp Filter</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Gain_Block_Filter.html' class='paragraph'>Gain Block Filter</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_smoothly_ramp_up_or_ramp_down_the_volume_of_a_sample_over_time_.html#_Discussion' class='paragraph'>How do I smoothly ramp up or ramp down the volume of a sample over time?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Volume_Ramp_Filter.html#_Discussion' class='paragraph'>Volume Ramp Filter: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Gain_Block_Filter.html' class='paragraph'>Gain Block Filter</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Ring_Amplitude_Modulator_Filter.html' class='paragraph'>Ring-Amplitude Modulator Filter</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Filter_Services.html' class='paragraph'>Digital Filter Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Volume Ramp Filter::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  This filter allows the you to smoothly ramp up a sound signal from one volume level to another.  The volume is slowly adjusted on a sample by sample basis for completely smooth ramping.  To use this filter, you first set the ramp time, and then you set the ramp level. The volume ramping will begin as soon as you set the ramp level.  To set the initial ramp level to ramp from, you set the ramp time to zero first.  So, to smoothly ramp the volume up from 0.0 to 1.0, use something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// First, set the ramp time to zero, to init the ramp level</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_time = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// we want start at level zero</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+<font color=#008000>//</font>
+<font color=#008000>//</font>
+<font color=#008000>//ok now, set the ramp time to 1000 ms (fade in over 1 second)</font>
+ramp_time = 1000.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// ramp up to 1.0 (full volume)</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 1.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+</pre></div>
+<p>
+</p>
+<p>
+Similarly, to fade out over one second, do something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// First, set the ramp time to zero, to init the ramp level</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_time = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// we want start at full volume</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 1.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+<font color=#008000>//</font>
+<font color=#008000>//</font>
+<font color=#008000>//ok now, set the ramp time to 1000 ms (fade out over 1 second)</font>
+ramp_time = 1000.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// ramp down to 0.0 (silence)</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+</pre></div>
+<p>
+</p>
+<p>
+Note that the filter remembers the last ramp level, so you only have to set the starting ramp level if you don't already know what it is.  So, if you ramp from 0.0 to 1.0, and then later want to wrap back down to 0.0, then you don't need to set the initial ramp level to 1.0 for the fade out. 
+
+</p>
+<p>
+<b>Name for use with <a href='AIL_find_filter.html' class='paragraph'>AIL_find_filter</a>:</b> "Volume Ramp Filter" 
+
+</p>
+<p>
+<b>Properties:</b> 
+
+</p>
+<p>
+<b>"Ramp Time":</b> Time to apply the new ramp level over. <i>Range:</i> 0.0 to milliseconds.  So, to fade in over 1 second, use 1000. 
+
+</p>
+<p>
+<b>"Ramp To":</b> The new volume level to smoothly ramp to. <i>Range:</i> 0.0 (silence) to 1.0 (full volume). 
+
+</p>
+<p>
+<b>properties:</b> 
+
+</p>
+<p>
+<b>"Ramp At":</b> Returns the current level of the volume ramping.  This property will change over the ramp time until it matchs the "Ramp To" value. You can poll this property to determine when a volume ramp is complete.  <i>Range:</i> 0.0 (silence) to 1.0 (full volume). <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Gain_Block_Filter.html' class='paragraph'>Gain Block Filter</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Filter_Services.html' class='paragraph'>Digital Filter Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Ring_Amplitude_Modulator_Filter.html' class='paragraph'>Ring-Amplitude Modulator Filter</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

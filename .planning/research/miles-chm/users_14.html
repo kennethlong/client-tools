@@ -1,0 +1,141 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Ducking and Busses</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Ducking and Busses'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Ducking and Busses</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_3.html' class='paragraph'>Presets and Variables</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_7.html' class='paragraph'>Dynamic Presets and Sliders</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='users14_main' class='nohover'><b></b></a></div>
+<p>
+This guide will cover how to set up busses such that music is automatically ducked by a dialog bus.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Label & Label Query
+</li><li> Preset
+</li><li> Events & Sounds
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b>
+</p>
+<p>
+<ol><li> <b>Bus:</b> A mixed group of samples, set up such that you can modify them as you would any other sample.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Create a label and name it "Dialog".</i>
+</p>
+<p>
+</li><li> <i>Load a music track, and create an event to play it.</i>
+</p>
+<p>
+</li><li> <i>Load a dialog track, and create an event to play it. Assign it the Dialog label.</i><br>
+<img src="14_tracks.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Select the "Busses" setting, and click "Activate".</i><br>
+<img src="14_busses.png"/><br><br>
+</p>
+<p>
+[after clicking]<br>
+<img src="14_activated.png"/><br><br>
+</p>
+<p>
+This tells Miles to initialize the bus system and create two busses. The first is the Main bus, which all samples
+are assigned to by default. However, with the addition of a new bus, all samples matching the label query for the bus
+are assigned to it. Since the default label query is empty, that means all samples will go to that bus, so we narrow the query to only assigning
+sounds with "Dialog" to the aux bus.<br>
+</p>
+<p>
+</li><li> <i>Add the label "Dialog" to "Aux Bus 1".</i><br>
+<img src="14_buslabel.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Create a new Preset, and select the "Compressor" Filter in Stage 1.</i>
+</p>
+<p>
+</li><li> <i>Select "Aux Bus 1" for the "Input" Parameter of the Compressor.</i><br>
+<img src="14_filter.png"/><br><br>
+</p>
+<p>
+The compressor filter will attentuate based on the strength of an input signal. In this case, we want to attentuate the Main bus, where our
+music will be playing, based on the volume of the Dialog bus, which is on Aux Bus 1.
+</p>
+<p>
+</li><li> <i>Select the "Busses" setting, and drag the Preset to the Preset field of the Main Bus.</i><br>
+<img src="14_mainbus.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Audition your music event, then audition the dialog event.</i>
+</p>
+</li></ol><br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_3.html' class='paragraph'>Presets and Variables</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_7.html' class='paragraph'>Dynamic Presets and Sliders</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

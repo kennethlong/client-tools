@@ -1,0 +1,137 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_register_SOB_callback</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_register_SOB_callback'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_register_SOB_callback</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ arranges for callback service to be provided to an application's function just before a block of sample data is merged into the hardware buffer.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_register_SOB_callback.html#_Discussion' class='paragraph'>AIL_register_SOB_callback: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='What_is_the_deal_with_callbacks___are_they_threads__interrupts__system_timers__or_what_.html#_Discussion' class='paragraph'>What is the deal with callbacks - are they threads, interrupts, system timers, or what?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_register_EOB_callback.html' class='paragraph'>AIL_register_EOB_callback</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_register_EOS_callback.html' class='paragraph'>AIL_register_EOS_callback</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Advanced_Digital_Audio_Services.html#_Discussion' class='paragraph'>Advanced Digital Audio Services: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_register_EOB_callback.html' class='paragraph'>AIL_register_EOB_callback</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='AILSAMPLECB.html' class='blue'>AILSAMPLECB</a></span> <span class='type'><a href='AIL_register_SOB_callback.html'>AIL_register_SOB_callback</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='AILSAMPLECB.html' class='blue'>AILSAMPLECB</a></span> <span class='parameter'>SOB</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ arranges for callback service to be provided to an application's function just before a block of sample data is merged into the hardware buffer.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the sample for which start-of-block (SOB) callback service is desired.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='SOB' class=nohover>SOB</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ should be set to the address of the callback function which is to be invoked just before the audio data at <a href='AIL_sample_position.html' class='paragraph'>AIL_sample_position</a> is merged into the hardware buffer for playback.  A value of NULL cancels start-of-block callbacks.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ The address of the previously-installed SOB callback function handler.</table>
+<div class="discussion_heading"><a name='AIL_register_SOB_callback::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The Miles Sound System digital audio mixer operates on the application's audio data in small chunks, called <i>blocks</i>. Part of the system's responsibility is to poll the hardware buffers in the background to determine when the next block of audio data from the application should be processed and copied into an empty hardware half-buffer.  As an example, consider a hardware driver which is configured to play 16-bit audio at 20,000 Hz with a pair of 1,000-byte half-buffers.  The driver's <i>data rate</i> is 40,000 bytes per second, implying a half-buffer playback rate of 40,000 / 1,000, or 40 buffer transitions per second. 
+
+</p>
+<p>
+At a rate of 40 times per second, then, a sample block equivalent to one half-buffer's worth of data is fetched from the application's sample data buffer at the current playback position.  The samples are resampled if necessary to conform to the driver's hardware rate, converted between 8-bit and 16-bit formats where appropriate, mathematically scaled for volume and panpot control, algebraically added to data from other active samples, clipped, and copied into the driver's empty half-buffer to be played as soon as the other half-buffer finishes playing. 
+
+</p>
+<p>
+Consequently, any change made to a sample's playback characteristics - be it a change in volume, panpot value, pitch, start/stop status, or playback position - must wait until the next half-buffer transition occurs before it can take effect.  Certain applications, such as those employing synchronized video playback, may find it useful to set up a start-of-block callback handler with this function so they can be informed of exactly when their data is about to be processed.  After the start-of-block callback occurs, the first data sample point at the current sample position (as reported by <a href='AIL_sample_position.html' class='paragraph'>AIL_sample_position</a>) is guaranteed to be transferred to the sound hardware in one half-buffer period or less.  This period of "uncertainty" amounts to one to two half-buffer periods if the application merely relies on the time of its <a href='AIL_start_sample.html' class='paragraph'>AIL_start_sample</a> call to determine its audio playback timing, since a total of two hardware half-buffer transitions must occur before data from the sample is actually passed to the sound hardware. 
+
+</p>
+<p>
+Most MSS functions can be safely invoked from within callback functions. Exceptions are noted in the descriptions of the functions involved.  If in doubt about whether a particular action may safely be performed from within a callback function, contact RAD Game Tools for assistance. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Advanced_Digital_Audio_Services.html#_Discussion' class='paragraph'>Advanced Digital Audio Services: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_register_EOB_callback.html' class='paragraph'>AIL_register_EOB_callback</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

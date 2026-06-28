@@ -1,0 +1,106 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Working with Voice Input</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Working with Voice Input'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Working with Voice Input</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Working_with_Voice_Input.html#_Discussion' class='paragraph'>Working with Voice Input: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Voxware_Voice_Chat_Codecs.html' class='paragraph'>Voxware Voice Chat Codecs</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Accessing_the_Codecs_Directly_with_the_RIB_Interface.html' class='paragraph'>Accessing the Codecs Directly with the RIB Interface</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Working with Voice Input::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  Before you can compress and transmit voice data, you'll need to acquire it. We've provided an easy-to-use set of API functions for voice input (see the Digital Input Services chapter), which allow the application to control and monitor the recording of audio data from the user's microphone or other input source.  MSSCHTC.CPP demonstrates how to open a device for digital input and obtain incoming data from it by means of a callback function.  The speech-compression codecs are not hard-wired into MSS's audio input/output architecture -- other voice-input mechanisms may be used by the application, including calling DirectSoundInput or the waveIn API directly for the absolute lowest possible latency.  However, three aspects of voice input should be kept in mind regardless of how the data is obtained. 
+
+</p>
+<p>
+<i>Use 16-bit mono audio at 8 kHz.</i>  The Voxware codecs are optimized for most efficient compression and reproduction at a sampling rate of 8 kHz.  This is the standard sample rate used in almost all commercial and military speech-communication applications, including the US telephone system.  The Voxware ASI codec implementations are designed solely for use with 16-bit PCM audio at 8 kHz, and will not support any other format. 
+
+</p>
+<p>
+<i>Turn on full-duplex input.</i> All modern sound drivers are full-duplex, but sometimes this must be switched on in the Control Panel under Windows.  If the input system won't open while a digital driver is loaded, then check the sound card settings. 
+
+</p>
+<p>
+<i>Choose voice-operated, continuous, or "push to talk" operation.</i>  Depending on the nature of your application (i.e., how "noisy" it is, how much network bandwidth is available, and under what circumstances your users will want to communicate) you'll need to decide how to control the flow of speech input. 
+
+</p>
+<p>
+Voice-operated (VOX) control may be appropriate in cases where the application doesn't generate a continuous stream of loud, raucous sound effects that would tend to cause false triggering.  This can be implemented by leaving the input subsystem active all the time, and watching the incoming PCM input data buffers for an average signal level that exceeds a predetermined threshold, indicating that the user is speaking.  Since you'll be dealing with 16-bit signed PCM data, you can simply examine the magnitude (absolute value) of individual samples or groups of samples in the buffer to determine their relative loudness.  Typically it makes sense to average amplitude values over a period of time - several dozen milliseconds or more - in order to make sure the user has really begun speaking.  VOX control may be an especially good match for applications that are bundled with telephone-operator-style headsets, or that otherwise require their use. 
+
+</p>
+<p>
+Continuous speech streaming may be useful in cases where network bandwidth is not particularly constrained, and/or your application supports only a few simultaneous users.  This is the model implemented by the MSSCHTC and MSSCHTS example programs.  It simply implies that the input API is left active on a constant basis, with all incoming data compressed and transmitted to the server for mixing and broadcasting. 
+
+</p>
+<p>
+Push-to-talk (PTT) offers a worthwhile compromise between the VOX and continuous operation models.  The input subsystem may or may not be active on a continuous basis, but voice data is compressed and transmitted to the server only when the user holds down a particular key or input-device button.  In noisy game environments with many simultaneous users, PTT is likely to be the mode of choice.  In a bandwidth-saving variation on the PTT theme, each client could ask the server for "permission" to speak upon receiving a PTT input, allowing the server to limit the amount of incoming data from clients who are trying to speak at the same time. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Voxware_Voice_Chat_Codecs.html' class='paragraph'>Voxware Voice Chat Codecs</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Accessing_the_Codecs_Directly_with_the_RIB_Interface.html' class='paragraph'>Accessing the Codecs Directly with the RIB Interface</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

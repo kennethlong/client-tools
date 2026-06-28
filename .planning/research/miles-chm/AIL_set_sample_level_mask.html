@@ -1,0 +1,121 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_level_mask</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_level_mask'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_level_mask</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Sets the system levels at which a sample will play.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_push_system_state.html#_Discussion' class='paragraph'>AIL_push_system_state: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_level_mask.html#_Discussion' class='paragraph'>AIL_sample_level_mask: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_level_mask.html#_Discussion' class='paragraph'>AIL_set_sample_level_mask: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_system_state_level.html' class='paragraph'>AIL_system_state_level</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_sample_level_mask.html' class='paragraph'>AIL_sample_level_mask</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_sample_level_mask.html'>AIL_set_sample_level_mask</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='U8.html' class='blue'>U8</a></span> <span class='parameter'>mask</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Sets the system levels at which a sample will play.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The sample to set the mask for.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='mask' class=nohover>mask</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The bitmask of levels for which the sample will play.</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='AIL_set_sample_level_mask::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Under normal push/pop operations, a sample's mask is set when it is  started to the level the system is at. If the system is pushed without a reset, then the mask is adjusted to include the new level. When a system is popped, if the sample is going to continue playing, the state mask is adjusted to remove the level the system is popping <i>from</i>. 
+
+</p>
+<p>
+If you have a sample playing on a higher system level that needs to continue after a pop, you can adjust the sample's mask by using this function in conjunction with <a href='AIL_system_state_level.html' class='paragraph'>AIL_system_state_level</a> and <a href='AIL_sample_level_mask.html' class='paragraph'>AIL_sample_level_mask</a>: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>        <a href='AIL_set_sample_level_mask.html' class='paragraph'>AIL_set_sample_level_mask</a>(S, <a href='AIL_sample_level_mask.html' class='paragraph'>AIL_sample_level_mask</a>(S) |= (1 &lt;&lt; (<a href='AIL_system_state_level.html' class='paragraph'>AIL_system_state_level</a>(dig) - 1)));
+    </pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_system_state_level.html' class='paragraph'>AIL_system_state_level</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_sample_level_mask.html' class='paragraph'>AIL_sample_level_mask</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

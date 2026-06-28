@@ -1,0 +1,163 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_enqueue_event</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_enqueue_event'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_enqueue_event</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Enqueue an event to be processed by the next <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a> function.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_begin_event_queue_processing.html#_Discussion' class='paragraph'>AIL_begin_event_queue_processing: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event.html#_Discussion' class='paragraph'>AIL_enqueue_event: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_system.html#_Discussion' class='paragraph'>AIL_enqueue_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_event_contents.html#_Discussion' class='paragraph'>AIL_get_event_contents: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_High_Level_Event_System.html#_Discussion' class='paragraph'>High Level Event System: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='migration.html#migrating_breaks' class='paragraph'>Migrating From Miles 8: Migrating From Miles 8</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='auditioning.html#introaudin' class='paragraph'>Miles Auditioning: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_userbuffer.html#advanced_userbuffer_one' class='paragraph'>Using the User Buffer: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='U64.html' class='blue'>U64</a></span> <span class='type'><a href='AIL_enqueue_event.html'>AIL_enqueue_event</a></span>(</td><td><span class='type'><a href='U8.html' class='blue'>U8 const *</a></span> <span class='parameter'>event_or_name</span>,<br><span class='type'>void*</span> <span class='parameter'>user_buffer</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>user_buffer_len</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>enqueue_flags</span>,<br><span class='type'><a href='U64.html' class='blue'>U64</a></span> <span class='parameter'>apply_to_ID</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Enqueue an event to be processed by the next <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a> function.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='event_or_name' class=nohover>event_or_name</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to the event contents to queue, or the name of the event to find and queue.  If an event, the contents must be valid until the next call to <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>. If a name, the string is copied internally and does not have any lifetime requirements, and MILES_ENQUEUE_BY_NAME must be present in enqueue_flags.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_buffer' class=nohover>user_buffer</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to a user buffer. Depending on <a href='AIL_enqueue_event.html#enqueue_flags' class='paragraph'>enqueue_flags parameter to AIL_enqueue_event</a>, this pointer can be saved directly, or its contents copied into the sound instance.  This data is then accessible later, when enumerating the instances.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_buffer_len' class=nohover>user_buffer_len</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Size of the buffer pointed to by user_buffer.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='enqueue_flags' class=nohover>enqueue_flags</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Optional <a href='MILESEVENTENQUEUEFLAGS.html' class='paragraph'>MILESEVENTENQUEUEFLAGS</a> logically OR'd together that control how to enqueue this event (default is 0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='apply_to_ID' class=nohover>apply_to_ID</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Optional value that is used for events that affect sound instances. Normally, when Miles triggers one of these event steps, it matches the name and labels stored with the event step. However, if  you specify an apply_to_ID value, then event step will only run on sounds that matches this QueuedID,InstanceID,or EventID too.  This is how you execute events only specific sound instances.  QueuedIDs are returned from each call <a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a>.  InstanceIDs and EventIDs are returned from <a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a>.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ On success, returns QueuedID value that is unique to this queued event for the rest of this  program run (you can use this ID to uniquely identify sounds triggered from this event).</table>
+<div class="discussion_heading"><a name='AIL_enqueue_event::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function enqueues an event to be triggered - this is how you begin execution of an event.  First, you queue it, and then later (usually once a game frame), you call <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a> to execute an event. 
+
+</p>
+<p>
+This function is very lightweight.  It does nothing more than post the event and data to a  command buffer that gets executed via <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>. 
+
+</p>
+<p>
+The user_buffer parameter can be used in different ways. If no flags are passed in, then Miles will copy the data from user_buffer (user_buffer_len bytes long) and store the data with the queued sound - you can then free the user_buffer data completely!  This lets Miles keep track of all your sound related memory directly and is the normal way to use the system (it is very  convenient once you get used to it). 
+
+</p>
+<p>
+If you instead pass the MILESEVENT_ENQUEUE_BUFFER_PTR flag, then user_buffer pointer will simply be associated with each sound that this event may start. In this case, user_buffer_len is ignored. 
+
+</p>
+<p>
+In both cases, when you later enumerate the sound instances, you can access your sound data  with the <a href='MILESEVENTSOUNDINFO.html#UserBuffer' class='paragraph'>MILESEVENTSOUNDINFO.UserBuffer</a> field. 
+
+</p>
+<p>
+You can call this function from any number threads - it's designed to be called from anywhere in your game. 
+
+</p>
+<p>
+If you want events you queue to be captured by Miles Studio, then they have to be passed by name. This can be done by either using the convenience function <a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a>, or by using the MILESEVENT_ENQUEUE_BY_NAME flag and  passing the name in event_or_name. For introduction to the auditioning system, see <a href='integrating_events.html' class='paragraph'>Integrating The Miles Event System</a>.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

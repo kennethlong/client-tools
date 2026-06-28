@@ -1,0 +1,220 @@
+﻿# Phase 32 Plan Review — Cursor (Detailed Code Reader)
+
+## 1. Summary
+
+The plan set is **directionally sound**: it learns from Phase 27 (wholesale gl11 lift, not per-error-code), gates the unproven `D3DAssemble` dialect behind Wave 0, and branches Wave 2 cleanly on PASS/FAIL. Research and 32-02 correctly identify the WIP branch’s real gap as **render-correctness**, not compile mechanics.
+
+However, after tracing `Direct3d11_HlslRewrite.cpp` and `Direct3d9_VertexShaderData.cpp`, the **verbatim Rules D/E/F lift is not “proven safe because WIP compiles”** — compile success is a weak signal for D3D9 `vs_2_0` constant layout. The deepest latent bug is **Rule D’s cbuffer wrap applied to `vertex_shader_constants.inc`**, which can silently remap `c0..c60` while the C++ side keeps calling `SetVertexShaderConstantF(N, …)` against the legacy flat register contract. Secondary gaps: **rewrite runs pre-preprocessor** (macro-injected `: register(vN)` bypasses Rules B/C), **Fix-A scope is misdocumented** (HLSL-only today; asm is unguarded), and **SHADER-01 / ROADMAP Phase 33 “D3DX gone” wording overclaims** what Phase 32 actually delivers (compile-path only; `d3dx9.lib` stays).
+
+---
+
+## 2. Strengths
+
+- **Phase 27 lesson internalized** (`32-CONTEXT.md` D-02, `32-02-PLAN.md` objective): full ruleset up front, not X3000→X3202→X4016 iteration (`c0f890875`).
+- **Wave 0 gate is well-designed** (`32-01-PLAN.md` Task 2–3): `GetProcAddress("D3DAssemble")` sidesteps the mangled `.lib` symbol (`32-RESEARCH.md` §3); explicit PASS/FAIL recorded in `32-CENSUS.md` gates 32-03 vs 32-04 unambiguously.
+- **Conditional Wave 2 is mechanically clear**: mutually exclusive `conditional:` headers on 32-03/32-04; 32-05 branch-aware Fix-A retirement reads the Wave-2 SUMMARY.
+- **Scope boundary for non-compile D3DX** (D-05) is repeated consistently — avoids the Phase 27 scope-mixing revert trigger.
+- **32-02 render gate is the right priority**: Tatooine bump/dot3 vs Fix-A reference (`db83b0f5c`) targets the known failure mode, not “boots = done.”
+- **Research quality is high**: WIP branch as baseline, `Direct3d9_StateCache::setConstants()` c95 push documented, pitfall 3/semantic-loss caveat cross-linked to gl11 source.
+
+---
+
+## 3. Concerns
+
+### HIGH
+
+**H1 — Verbatim Rule D can corrupt the D3D9 `register(cN)` constant contract (`32-02-PLAN.md` Task 1, `32-RESEARCH.md` Pattern 2 Rule D)**
+
+Rule D (`Direct3d11_HlslRewrite.cpp:746–1003`) wraps globals like:
+
+```81:91:.planning/research/vsh-extract/vertex_shader_constants.inc
+float4x4  objectWorldCameraProjectionMatrix : register(c0);
+float4x4  objectWorldMatrix : register(c4);
+...
+LightData lightData : register(c16);
+```
+
+into `cbuffer SwgVertexConstants : register(b0) { … packoffset(cN) … }`. That fix targets **SM4+ `$Globals` / X4016** (`Direct3d11_HlslRewrite.cpp:751–755`), not D3D9 `vs_2_0`, where flat `: register(cN)` **is** the native model.
+
+The engine still pushes constants by index (`Direct3d9_StateCache.cpp:237` — `setVertexShaderConstants(95, …)`; material/light paths use the same flat scheme). If Rule D changes how `c0`, `c16`, etc. land in bytecode, you get **wrong lighting/matrices with no compile error** — exactly the semantic-loss scenario documented in `Direct3d11_HlslRewrite.h:118–130`.
+
+WIP “compiles” does not disprove this; it is the leading explanation for “render-incomplete” beyond register(vN).
+
+**H2 — Rewriter runs pre-preprocessor; macro-expanded `: register(vN)` bypasses Rules B/C (`32-02-PLAN.md` Pitfall 3 mitigation is incomplete)**
+
+Pipeline in WIP/plan: `applyToMainSource` → `D3DCompile` (preprocess inside compiler). Rules B/C (`Direct3d11_HlslRewrite.cpp:294–425`, `sawColonThisLine` at `:540–625`) only see **raw** source/includes.
+
+But `stage/override/vertex_program/tfcl.vsh:22–23` still defines:
+
+```22:23:stage/override/vertex_program/tfcl.vsh
+#define DECLARE_textureCoordinateSets	\
+	float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
+```
+
+That text is expanded **inside** `D3DCompile`, after the rewrite pass. Engine-side omission in `Direct3d9_VertexShaderData.cpp:455–457` does not help when the override `#define` wins. Mitigation in 32-02 (“strip only struct-member stacked semantics”) does not cover this path.
+
+**H3 — Fix-A scope is wrong in multiple plans (factual error vs master)**
+
+Master code: Fix-A wraps **HLSL only** (`Direct3d9_VertexShaderData.cpp:477`); asm calls `D3DXAssembleShader` **directly** with no SEH guard (`:567`).
+
+Yet `32-CONTEXT.md` D-04, `32-04-PLAN.md`, and `32-05-PLAN.md` repeatedly say Fix-A stays for the asm fallback. On FAIL branch, asm was **never** guarded; the plan’s retention story does not match code.
+
+**H4 — SHADER-01 / Phase 33 dependency wording overclaims (`REQUIREMENTS.md` SHADER-01, `ROADMAP.md` Phase 32–33)**
+
+SHADER-01: “D3DX removed from the **x64 build**” and correct under **x64**. Phase 32 validates **Win32 only**, keeps `d3dx9.lib` for ~23 non-compile call sites (D-05), and 32-05 still asserts “SHADER-01 satisfied” / “unblocks Phase 33 x64 link.” Non-compile D3DX **still blocks a clean x64 link** unless an unstated follow-up phase lands first. ROADMAP Phase 33 “Depends on Phase 32 (D3DX must be gone)” is ambiguous vs D-05.
+
+**H5 — Wave 0 probe gate is necessary but insufficient for asm correctness (`32-01-PLAN.md` Task 2:162–165)**
+
+Probe PASS = assemble + `CreateVertexShader` S_OK. That does **not** prove bytecode matches `D3DXAssembleShader` output or that Tatooine //asm draws match. Semantic drift (register allocation, instruction selection) can PASS the gate and fail in Wave 2 smoke — with no automated bytecode diff planned.
+
+### MEDIUM
+
+**M1 — Rule E strip may be redundant but is probably safe on D3D9; Rule F is inert on VS (`32-02-PLAN.md` Task 1, A3)**
+
+Rule E (`Direct3d11_HlslRewrite.cpp:427–519`) strips `#pragma def(vs, c95, …)` from `vertex_shader_constants.inc:114`. Engine pushes the same values every frame (`Direct3d9_StateCache.cpp:235–237`). Stripping is likely OK for D3D9 **if** `setConstants()` always runs before affected draws — but this is an assumption, not verified in the plan.
+
+Rule F (`Direct3d11_HlslRewrite.cpp:1005–1130`) only matches PS `pow(...)` idioms; D3D9 VS path never hits it. Harmless copy-paste, not load-bearing.
+
+**M2 — Rule A + identifier renames need corpus-wide check**
+
+Rule A (`Direct3d11_HlslRewrite.cpp:138–268`) renames whole-word `point`/`line`/`triangle`/etc. Safe for X3000, but any identifier that crosses shader/C++ string boundaries (unlikely) or appears in non-HLSL contexts in `.inc` files could surprise. Low probability, not scheduled beyond Tatooine smoke.
+
+**M3 — 32-02 depends on 32-01 unnecessarily**
+
+HLSL port (Wave 1) does not need the asm gate. Serializing on `32-CENSUS.md` delays the render-debug loop that research says is the critical path (`32-RESEARCH.md` Open Question 3).
+
+**M4 — Missing explicit tasks for D-02 “full treatment” items**
+
+D-02 lists `stage/override/` reauthored shaders + generic VS fallback. Plans assume overrides exist (they do — 9 files in `stage/override/vertex_program/`) but **no task** ensures D3D9 HLSL path loads them, cache-busts (`D3D11_REWRITE_VERSION` equivalent for gl05), or fixes override `#define`s still carrying `: register(v7)`.
+
+**M5 — `32-01-PLAN.md` execution_context paths point at `D:/Code/swg-client/` (wrong repo)**
+
+Line 51–52 reference `swg-client`, not `swg-client-v2`. Executor friction / wrong-workflow risk.
+
+**M6 — Corpus count inconsistency**
+
+`32-01-PLAN.md:96` says 16 `.vsh`; `32-RESEARCH.md:306` says 12 in one place, 16 in another. Minor, but census deliverable should be single-sourced.
+
+### LOW
+
+**L1 — 32-02 keeps Fix-A wrapping `D3DCompile` (belt-and-suspenders)**
+
+WIP removes Fix-A because `D3DCompile` is FP-immune (`32-02-PLAN.md:167–168` vs WIP branch comments). Harmless but adds noise to Wave 3 diff.
+
+**L2 — vs_1_1 branch under-tested (A2)**
+
+`Direct3d9_VertexShaderData.cpp:392–395` still selects `vs_1_1` when `getShaderCapability() < 2.0`. WIP notes D3DCompile may drop `vs_1_1`. No plan task validates this branch on real hardware or forces `vs_2_0` promotion.
+
+---
+
+## 4. Suggestions
+
+1. **Split D3D9 rewriter from gl11 verbatim copy (`32-02-PLAN.md` Task 1)**  
+   - **Keep verbatim:** Rules A, B, C + `sawColonThisLine` (`Direct3d11_HlslRewrite.cpp:540–625`) + two-pass `DEBUG_FATAL` guards (`:657`, `:740`).  
+   - **Disable for D3D9 include path:** Rule D (`tryRuleDWrap`, `:899–1003`) — run A/B/C/E only on `vertex_shader_constants.inc` at `vs_2_0`.  
+   - **Rule E:** disable initially; confirm `#pragma def` behavior with a one-off `D3DCompile` probe before stripping.  
+   - **Rule F:** omit from D3D9 VS rewriter (PS-only, dead weight).
+
+2. **Add a pre-compilation diagnostic task (before Tatooine smoke)**  
+   Dump post-rewrite, post-preprocess constant declarations for one //hlsl shader + one override (`tfcl.vsh`): verify `register(c0)`, `register(c16)`, etc. still appear as flat globals, not cbuffer members. Compare constant count/layout against Fix-A/D3DX baseline bytecode (disasm via `D3DXDisassembleShader` or existing tooling). This catches H1/H2 without relying on eyeballing Tatooine.
+
+3. **Fix override macro register leakage (`32-02-PLAN.md` Task 2)**  
+   Either rewrite override `#define DECLARE_textureCoordinateSets` lines in `stage/override/vertex_program/*.vsh` to omit `: register(vN)`, **or** add a post-preprocess rewrite hook (harder). Current plan only patches engine injection at `:455–457`.
+
+4. **Correct Fix-A documentation (`32-CONTEXT.md` D-04, `32-04-PLAN.md`, `32-05-PLAN.md`)**  
+   State: Fix-A is **HLSL/D3DXCompileShader-only** today; asm is unguarded. FAIL branch retains D3DX on asm without Fix-A unless you explicitly add a new asm guard.
+
+5. **Strengthen Wave 0 / Wave 2 asm validation (`32-01-PLAN.md`, `32-03-PLAN.md`)**  
+   Require bytecode **size + hash diff** vs `D3DXAssembleShader` for the three probe shaders. FAIL on mismatch even if `CreateVertexShader` succeeds. Optionally spot-check disassembly for `dcl`/`def`/`c#` usage.
+
+6. **Decouple Wave 1 from Wave 0 gate**  
+   Allow 32-02 to start after census Task 1 (classification only); only 32-03 needs GATE VERDICT.
+
+7. **Reconcile SHADER-01 phasing in ROADMAP / 32-05 success criteria**  
+   Explicitly mark Phase 32 as **SHADER-01 partial (compile-path, Win32)**; name the non-compile D3DX phase required before x64 link satisfies SHADER-01 fully.
+
+8. **Expand manual smoke beyond Tatooine (`32-VALIDATION.md`)**  
+   Add a second scene or debug command that exercises: (a) multi texcoord patched VS, (b) `LightData`/`Material` heavy //hlsl, (c) a //asm shader from census flag-list. Tatooine alone will not catch wrong `c16` on shaders not drawn there.
+
+---
+
+## 5. Risk Assessment
+
+**Overall: HIGH**
+
+Justification: The HLSL path is the hard problem (Phase 27 revert, WIP render-incomplete), and the plan’s default “verbatim Rules A–F” likely introduces a **silent constant-layout bug via Rule D** that compiles cleanly. Manual Tatooine-vs-Fix-A smoke is necessary but **not sufficient** to catch wrong-constant-register bugs on the broader //hlsl corpus (190 shaders). The asm half is honestly gated but the probe bar is low. SHADER-01/x64 claims need tightening to avoid a false Phase 32 close-out.
+
+Wave 2 branching itself is **sound and unambiguous**; the highest execution risk sits in **32-02 Task 1’s verbatim lift**, not in plan orchestration.
+
+---
+
+## Deep Trace: HLSL Render-Correctness (Requested Angle)
+
+### Rules A/B/C — load-bearing and mostly safe to lift
+
+| Rule | gl11 lines | D3D9 `vs_2_0` verdict |
+|------|------------|----------------------|
+| **A** | `:138–268`, applied `:551–558` | **Required.** X3000 on `point`/`line`/etc. Profile-agnostic. |
+| **B/C** | `:294–425`, context `:306–307`, `:394–395` | **Required**, with `sawColonThisLine`. Strips stacked `: POSITION0 : register(v0)` (`:58` comment). **Must preserve** first-colon global `: register(cN)` (`:59–62`, Iter-11 fix narrative `:64–73`). |
+| **D** | `:746–1003`, invoked `:1147–1166` | **Dangerous on D3D9.** Transforms flat `register(cN)` globals into `cbuffer` + `packoffset`. Built for X4016 under SM4+ (`:751–755`). Likely **wrong** for `vs_2_0` where engine expects flat `c#` indices. **Primary suspect for WIP render-incomplete** if WIP included Rule D (confirmed on `d3d9-fixb-d3dcompile-wip`). |
+| **E** | `:427–519` | **Probably redundant** on D3D9: engine sets `c95` (`Direct3d9_StateCache.cpp:235–237`). Strip only if `#pragma def` breaks `D3DCompile` at `vs_2_0`; otherwise leave it. |
+| **F** | `:1005–1130`, main-source only `:1220–1236` | **Inert** on VS. PS NaN guard; comment at `:1016–1018` says D3D9 bytecode unaffected. |
+
+**Verdict on verbatim A–F:** **Not safe.** Copy A/B/C (+ bounds guards) verbatim; **conditionally** E; **skip D and F** for D3D9 until proven necessary.
+
+### `DECLARE_textureCoordinateSets` / `: register(vN)` omission
+
+**Master emits stacked binding** (`Direct3d9_VertexShaderData.cpp:435–457`):
+
+```435:457:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+// #define DECLARE_textureCoordinateSets  float2 textureCoordinateSet0 : TEXCOORD0 : register(v7);
+...
+SCRATCH_STRING(" : register(v", 13);
+SCRATCH_INT(VSVR_textureCoordinateSet0 + i);
+```
+
+`VSVR_textureCoordinateSet0 = 7` (`Direct3d9_VertexShaderVertexRegisters.h:30`).
+
+**D3D9 binding model:** Runtime links vertex declaration **usage/usageIndex** to shader **semantics** (`TEXCOORD0`), not to the internal `v#` chosen at compile time. gl11 documents this for D3D11 IA (`Direct3d11_HlslRewrite.cpp:204–212`; `Direct3d11_VertexShaderData.cpp:756–757`).
+
+**For D3D9, omitting `: register(vN)` while keeping `: TEXCOORD<i>` is *likely* correct** for input streams — unlike `register(cN)` on constants, which **must** stay aligned with `SetVertexShaderConstantF`.
+
+**Why WIP still broke:** More likely **Rule D constant corruption** or **override macros re-injecting `: register(v7)` post-rewrite** (compile may succeed with `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY` but layout differs), not texcoord semantic binding alone.
+
+**Plan mitigation gap:** 32-02 Task 2 cites Pitfall 3 (`preserve global register(cN)`) but does not address **override `#define`s** or **Rule D**.
+
+### Does Tatooine smoke catch wrong-constant-register bugs?
+
+**Partially, insufficient alone.**
+
+- Tatooine bump/dot3 exercises **some** //hlsl bump/dot3 and many //asm paths (96/286), but not all 190 //hlsl variants or all constant layouts (`c16` light block, `c11` material, etc.).
+- Wrong `c4`/`c16` → subtle lighting errors, black specular, NaN fog (`cLog2e` via `c95.w` in `fog.inc:18`) — may look “almost fine” in one camera angle.
+- **No FATAL, draws continue** — matches semantic-loss caveat (`Direct3d11_HlslRewrite.h:118–130`).
+- **“Renders clean vs Fix-A reference”** is a good **blocking gate for 32-02**, but should be paired with **bytecode/constant-layout spot checks** on `vertex_shader_constants.inc` shaders and at least one **non-Tatooine** //hlsl spot from census.
+
+**CreateVertexShader-only asm gate (32-01)** definitely does **not** catch wrong-constant or bytecode semantic drift.
+
+---
+
+## Conditional Wave 2 (PASS/FAIL) — Sound?
+
+**Yes, structurally.** `32-03-PLAN.md:7` / `32-04-PLAN.md:7` mutual exclusivity, human checkpoint in `32-01-PLAN.md:179–204`, downstream 32-05 branch read — clear.
+
+**Caveat:** PASS criteria should add **bytecode equivalence or render diff**, not just `CreateVertexShader` S_OK (`32-01-PLAN.md:162–165` explicitly weakens this).
+
+---
+
+## Factual Claims to Verify
+
+| Claim | Verdict |
+|-------|---------|
+| WIP branch compiles, render-incomplete | Consistent with research + branch inspection |
+| Rules D/E/F “inert/wrong at D3D9” | **Half right:** F inert; E redundant if engine sets c95; **D is actively harmful, not inert** |
+| Fix-A covers asm on fallback | **Wrong** vs `Direct3d9_VertexShaderData.cpp:567` |
+| Phase 32 satisfies SHADER-01 fully | **Overstated** — compile-path Win32 only; x64 + full D3DX removal deferred |
+| `d3dcompiler.lib` already linked | Reasonable (Phase 27 residue); still need 0-unresolved grep |
+| vsh-extract 12 vs 16 files | Inconsistent across docs |
+
+---
+
+**Bottom line for executors:** Treat 32-02 as **“finish WIP, but do not ship verbatim Rule D.”** The render-debug loop should start with a **constant-layout probe** on rewritten `vertex_shader_constants.inc`, not another Tatooine-only iteration. Wave 0/2 asm branching is fine; raise the PASS bar with bytecode diff. Fix Fix-A and SHADER-01 scope language before calling Phase 32 done.

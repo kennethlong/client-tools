@@ -1,0 +1,117 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Limits</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Limits'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Limits</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_set_ramp.html' class='paragraph'>Ramps</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_vars.html' class='paragraph'>Variables</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='ref_settings.html' class='paragraph'>Settings</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_set_limit_main' class='nohover'><b></b></a></div>
+<p>
+Contains a list of "Limit Entries", each of which set the maximum number of sounds that can play for a label.
+</p>
+<p>
+<center><img src="s_limitdef.png" /></center>
+</p>
+<p>
+<ol><li> A label to limit.
+</li><li> Remove the limit for this label.
+</li><li> Add a new label for limiting.
+</li></ol></p>
+<p>
+When a sound starts, it contains a list of labels that are assigned to it (via <a href='ref_startsound.html' class='paragraph'>Start Sound</a>. For each label, the corresponding
+Limit Entry is found, and if there are too many sounds playing with that label, one will be selected to not play. The removed sound
+can be either the new sound, or an existing sound. As an example:
+</p>
+<p>
+<ul><li>    We have an event that starts a sound "Gunshot", with the label "Effect". We leave all other settings in the Start Sound
+    event as default.
+</p>
+<p>
+We've also created a limit with a limit entry defining "Effect" to only allow 2 concurrently playing sounds.
+</p>
+<p>
+We then queue that event 3 times in a row, rapidly enough that the first sound has not had a chance to end.
+</p>
+<p>
+When the 3rd event tries to play, the limit entry is checked, and it is determined that a sound has to stop. This
+    will either be one of the 2 existing sounds, or the new sound that is trying to play.
+</p>
+<p>
+By default, the start sound event step specifies "Age" for the parameter "If Limited, evict:". (see <a href='ref_startsound.html' class='paragraph'>Start Sound</a>. As a result,
+    the oldest sound is chosen to stop, and the new sound is allowed to begin.
+</li></ul></p>
+<p>
+This occurs for each label listed on a sound, so even though the first label listed might not bump up against a limit, the next one might.
+</p>
+<p>
+If a limit entry does not exist for a label, then that label is not limited.
+</p>
+<p>
+If a start sound event step has no labels listed, then the sound is not limited. To find unlabeled sounds, go to the bank properties and choose "Uncategorized Sounds".
+</p>
+<p>
+See also: <a href='users_11.html' class='paragraph'>Limited Sound Counts</a>
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_set_ramp.html' class='paragraph'>Ramps</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='ref_settings.html' class='paragraph'>Settings</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_vars.html' class='paragraph'>Variables</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

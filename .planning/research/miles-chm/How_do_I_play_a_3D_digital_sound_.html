@@ -1,0 +1,78 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>How do I play a 3D digital sound?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='How do I play a 3D digital sound?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>How do I play a 3D digital sound?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_smoothly_ramp_up_or_ramp_down_the_volume_of_a_sample_over_time_.html' class='paragraph'>How do I smoothly ramp up or ramp down the volume of a sample over time?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='My_3D_sound_is_not_falling_off_like_I_expected___what_is_going_on_.html' class='paragraph'>My 3D sound is not falling off like I expected - what is going on?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='How do I play a 3D digital sound?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: How do I play a 3D digital sound?</p>
+<p>
+A: Just like you'd play a 2D one, except that to give the sound a position in 3D space, you'll need to pass its location to  <a href='AIL_set_sample_3D_position.html' class='paragraph'>AIL_set_sample_3D_position</a>.  Unless your sound positions are relative to a listener at the origin, you'll also want to pass the listener's location to <a href='AIL_set_listener_3D_position.html' class='paragraph'>AIL_set_listener_3D_position</a>.   
+
+</p>
+<p>
+Most likely, your application will also need to use the <a href='AIL_set_sample_3D_distances.html' class='paragraph'>AIL_set_sample_3D_distances</a> function to set the 3D volume-falloff characteristics. See the "My 3D sound isn't falling off like I expected..." <i><a href='My_3D_sound_is_not_falling_off_like_I_expected___what_is_going_on_.html' class='paragraph'>FAQ</a></i> for more details on 3D distances. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_smoothly_ramp_up_or_ramp_down_the_volume_of_a_sample_over_time_.html' class='paragraph'>How do I smoothly ramp up or ramp down the volume of a sample over time?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='My_3D_sound_is_not_falling_off_like_I_expected___what_is_going_on_.html' class='paragraph'>My 3D sound is not falling off like I expected - what is going on?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,13 +1,10 @@
-$$ cdb probe v5: is the main-thread AIL_service_stream loop running AND driving reads at login?
-$$ Disambiguates the 3 remaining possibilities on the current build (auto-service OFF + manual service):
-$$   SERVICE_STREAM fires repeatedly + SYNC_READ fires repeatedly => servicing works; silence is output/volume
-$$   SERVICE_STREAM fires repeatedly + SYNC_READ never (after open) => AIL_service_stream uses async path, not our sync cb
-$$   SERVICE_STREAM never fires                                     => alter() loop not running/reaching the stream at login
+$$ cdb probe v6: what string does AIL_open_stream receive for the title music?
+$$   OPEN_STREAM "*<tre>*<size>*<offset>.mp3"  => subfile descriptor built (good); format/path is next suspect
+$$   OPEN_STREAM "music/mus_title_lp.mp3"      => getArchiveSubfile fell back (file resolved elsewhere / compressed)
+$$ Also log the returned HSTREAM + start + status so we see if Miles accepted the descriptor.
 .lines
-bu mss64!AIL_open_stream ".printf \"OPEN_STREAM file=%ma\\n\", @rdx; gc"
+bu mss64!AIL_open_stream ".printf \"OPEN_STREAM name=%ma\\n\", @rdx; gu; .printf \"   -> ret=%p\\n\", @rax; gc"
 bu mss64!AIL_start_stream ".printf \"START_STREAM h=%p\\n\", @rcx; gc"
-bu mss64!AIL_service_stream ".printf \"SERVICE_STREAM h=%p fill=%d\\n\", @rcx, @edx; gc"
-bu SwgClient_d!fileReadCallBack ".printf \"SYNC_READ h=%p bytes=%d\\n\", @rcx, @r8d; gc"
 bl
 g
 $$ when the client exits (you quit it), g returns here and cdb quits automatically:

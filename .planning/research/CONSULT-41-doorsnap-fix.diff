@@ -1,0 +1,76 @@
+diff --git a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+index b415c6b96..9609d92ee 100644
+--- a/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
++++ b/src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+@@ -104,6 +104,7 @@ namespace
+ 	}
+ 
+ 	static const float cs_cameraSnapBackSpeedModifier = 6.5f; // <-- this is arbitrary
++	static const float cs_cameraPullInSpeed = 8.0f; // door-snap fix: max inward camera velocity (m/s) — eases the instant wall pull-IN + shoulder-offset collapse (brief near-plane wall peek accepted)
+ 
+ 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ }
+@@ -599,6 +600,8 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 		m_zoom *= zoomMultiplier;
+ 	}
+ 
++	float const zoomAtFrameStart = m_currentZoom; // door-snap fix: last frame's rendered zoom, for the inward pull-in rate limit below
++
+ 	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
+ 
+ 	//-- move camera to the avatar's cell and position
+@@ -663,8 +666,12 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 		Vector endPos_w = startPos_w + (creatureObject->rotate_o2w(Vector::unitX) * (m_desiredOffset.x + 0.25f));
+ 		if(ClientWorld::collide(getParentCell(),startPos_w,endPos_w,CollideParameters::cms_default,result,ClientWorld::CF_allCamera))
+ 		{
++			// Door-snap fix: ease the shoulder offset to zero instead of an INSTANT snap. This block used
++			// to zero m_offset.x in one frame when the side-ray hit the doorframe -> the camera jumped
++			// sideways by the full shoulder offset (~0.4 m) nearly every crossing. Ease it instead (same
++			// rate as the zoom pull-in). Brief shoulder-cam wall clip during the ease is accepted.
+ 			move_o(Vector(-m_offset.x * elapsedTime, 0.0f, 0.0f));
+-			m_offset.x = 0.0f;
++			m_offset.x = linearInterpolate (m_offset.x, 0.0f, clamp (0.f, elapsedTime * cs_cameraPullInSpeed, 1.f));
+ 		}
+ 	}
+ 			
+@@ -740,6 +747,18 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			}
+ 		}
+ 
++		// ---- Door-snap fix: rate-limit the inward PULL-IN ----
++		// The measured door snap is the camera yanking IN by up to ~2 m in a single frame when the
++		// doorframe collision ray hits. Cap how fast m_currentZoom may DECREASE per frame so it eases
++		// inward instead of snapping. Pop-OUT (recovery toward m_zoom) is untouched. Trade-off: the
++		// camera may briefly show the near plane through a wall while easing in — accepted (the chase
++		// camera is expected to pass through walls when above/behind the avatar).
++		{
++			float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
++			if (m_currentZoom < zoomAtFrameStart - maxPullIn)
++				m_currentZoom = zoomAtFrameStart - maxPullIn;
++		}
++
+ 		if (m_currentZoom < scaledFirstPersonDistance)
+ 			setFirstPerson (true);
+ 		else
+diff --git a/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp b/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+index 01ec23501..b105a0a5c 100644
+--- a/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
++++ b/src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+@@ -2854,6 +2854,17 @@ PathWalkResult FloorMesh::pathWalkCircleGetIds ( FloorLocator const & inStartLoc
+ 			}
+ 			else
+ 			{
++				// ---- Door-snap fix (avatar floor-seam rubberband) ----
++				// The circle-CENTER walked this triangle cleanly (PWR_WalkOk), which proves this
++				// uncrossable boundary edge is WALKABLE floor (a doorway / floor-mesh seam, not a real
++				// wall — a real wall blocks the center too, centerWalk != WalkOk). Suppress the spurious
++				// footprint-circle contact so the avatar isn't pinned/rubberbanded against a seam its
++				// center freely crosses. Real walls are unaffected.
++				if(centerWalkResult == PWR_WalkOk)
++				{
++					continue;
++				}
++
+ 				// If the circle is moving away from its contact point with the segment, there's no contact
+ 
+ 				Vector endPoint = begin + V * hitRange.getMin();

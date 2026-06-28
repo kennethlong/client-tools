@@ -1,0 +1,104 @@
+﻿**Summary**
+
+Overall, the phase is well-shaped: it separates procurement/header compatibility, source/API porting, final link/staging, and human audio UAT in a sensible dependency chain. The strongest part is that it explicitly accounts for this repo’s known traps: `/FORCE` false-green links, gitignored libs/stage, codec-provider staging, x64 Miles-disable cleanup, and manual audible validation. The main risks are stale-state validation, exact grep-count brittleness, hidden consumers of the old Miles tree, and whether the staging/postbuild work proves the runtime is using the intended 9.3b bytes rather than merely linking cleanly.
+
+**35-01**
+
+Strengths:
+- Good first wave. Vendoring SDK + include/lib path change before API edits isolates header compatibility risk.
+- Force-adding `mss32.lib` and `mss64.lib` correctly handles the broad `*.lib` gitignore.
+- Mirroring the existing `miles-7.2e` layout lowers project-file churn.
+- Compile-only `clientAudio` smoke on both platforms is a useful early check.
+
+Concerns:
+- **MEDIUM:** Compile-only is necessary but weak. If `clientAudio` compiles while `SwgClient` still links against old lib dirs, stale 7.2e import resolution can survive until 35-03.
+- **MEDIUM:** The plan should explicitly verify architecture of both libs with `dumpbin /headers`, not just existence. Wrong-machine libs often fail clearly, but catching provenance early matters.
+- **LOW:** “No `.m3d`” is correct for 9.3b, but the vendor tree should include a documented provider manifest so later staging checks are not inferred from directory contents.
+
+Suggestions:
+- Add an acceptance check for zero remaining active `src/external/3rd/library/miles/` include/lib path references in `clientAudio.vcxproj`.
+- Record SHA256, size, and machine type for `mss32.lib` / `mss64.lib`, matching the x64 DLL checklist pattern.
+- Add a “no accidental redist omission” manifest file or plan artifact listing exact tracked provider filenames by platform.
+
+Risk: **LOW-MEDIUM**. Mostly build-graph/provenance risk, not behavioral risk yet.
+
+**35-02**
+
+Strengths:
+- Correctly puts the 7.2e to 9.3b source edits in the shared path, consistent with D-01.
+- Explicitly deletes all three Phase-33 x64 disables while preserving retail `disableMiles`, which is the right distinction.
+- Recognizes the codec probe as functional behavior, not cosmetic logging. Repointing it is required for AUDIO-02.
+- Keeping only a platform-aware provider probe under `_M_X64` is reasonable.
+
+Concerns:
+- **HIGH:** Exact setter count `26` and `_M_X64 == 2` gates are brittle. They are useful as diagnostics, but bad as hard pass/fail criteria if nearby code changes or legitimate platform-aware staging logic moves.
+- **HIGH:** The provider-probe rewrite can become a new “all-or-nothing” footgun. If optional providers such as EAX/DS3D are unavailable or unsupported on a machine, the probe must distinguish fatal missing core codec/runtime from degraded optional effects, unless the product decision is truly to fail audio wholesale.
+- **MEDIUM:** `bus_index=0` is only UAT-deferred. UAT can prove audible behavior, but it may not prove that room type is applied to the intended bus under all mixer paths. Reverb/room-type testing must include a log or runtime observation if Miles exposes one.
+- **MEDIUM:** Removing the `SoundObject3d` listener gate restores calls on x64, but the plan should explicitly audit that listener creation/order cannot run before `Audio::install()` successfully creates the digital driver.
+- **LOW:** “Two TUs that call Miles” should be backed by a grep gate for live `AIL_` references. Phase 33 introduced stubs; stale comments/macros can confuse this.
+
+Suggestions:
+- Replace exact-count gates with semantic gates: no Phase-33 x64 disable tokens, no x64 AIL stubs, all live `AIL_set_room_type(` include the 3-arg form, all live `AIL_room_type(` include bus index.
+- Make the provider probe classify required vs optional providers. At minimum, log exactly which missing filename suppressed audio.
+- Add a debug log around `AIL_room_type(dig, 0)` / `AIL_set_room_type(dig, 0, ...)` during UAT #4 so “audible reverb” is not the only signal.
+
+Risk: **MEDIUM**. The code edits are small, but the codec-probe and disable-removal behavior can silently suppress or flood audio.
+
+**35-03**
+
+Strengths:
+- Correctly defers final link validation until after both vendor and source edits.
+- Re-adding `mss64.lib` to x64 link directly addresses the Phase-33 intentional drop.
+- The plan knows `/FORCE` makes exit code insufficient and uses unresolved-symbol grep.
+- Explicit stale-stage clearing plus staged-provider existence checks are essential.
+- Adding x64 postbuild staging to `stage-x64/miles` is aligned with the current x64 stage split.
+
+Concerns:
+- **HIGH:** `unresolved external symbol == 0` is not enough to prove the right Miles lib was used. It proves all symbols resolved, not that they resolved from 9.3b instead of stale 7.2e or an inherited path.
+- **HIGH:** A 9.3b-only sentinel only repairs stale 7.2e if the postbuild deletes or overwrites the old provider set. If old files remain beside new files, the probe or Miles loader may find stale providers first.
+- **MEDIUM:** Editor/tool `.vcxproj`s still referencing old Miles paths are latent breakage. They are pre-broken on Qt, so they need not block Phase 35, but leaving old active project references creates future integration debt and confusing grep results.
+- **MEDIUM:** File-exists provider checks do not verify architecture. `mss64.dll` and x64 providers should be machine-checked where possible.
+- **MEDIUM:** If postbuild is sentinel-guarded, the plan must test both “empty stage” and “dirty stage with old sentinel/files” behavior. Otherwise the repair path is theoretical.
+- **LOW:** Clearing stale stages is good for validation but can hide whether incremental postbuild repairs a user’s dirty local stage.
+
+Suggestions:
+- Add linker `/VERBOSE:LIB` grep or equivalent link-log proof that `mss32.lib` / `mss64.lib` came from `miles-9.3b`.
+- Add repo-wide grep reporting for old `library/miles/` references, split into blocking SwgClient/clientAudio refs and non-blocking editor refs.
+- Make postbuild remove known 7.2e-only provider names, especially `.m3d`, before copying 9.3b providers.
+- Verify staged binary architecture with `dumpbin /headers` for `mss64.dll` and any DLL providers.
+- Run one validation from a deliberately dirty stage containing old Miles files.
+
+Risk: **MEDIUM-HIGH**. This is the phase where stale paths and stale stage state can produce a clean build but wrong runtime.
+
+**35-04**
+
+Strengths:
+- Correctly makes human UAT blocking. Audio cannot be fully proven by compile/link.
+- The four D-06 dimensions are the right runtime matrix: music, 2D UI, 3D positional, reverb/room-type.
+- Pre-flight log census for “redist missing” and warning flood is valuable.
+
+Concerns:
+- **HIGH:** “No warning-flood” needs a concrete threshold and time window. Otherwise a low-frequency recurring provider warning can slip through.
+- **MEDIUM:** Win32 smoke is required by D-01, but the plan should specify whether Win32 uses the same 9.3b provider set and whether old `stage/miles` was purged first.
+- **MEDIUM:** Reverb/room-type UAT is hard to evaluate subjectively. It needs a known location/action with expected room transition, or it may become a weak checkbox.
+- **LOW:** Pre-flight should explicitly confirm `disableMiles=false` in the actual cfg read by each exe, not just a template or source cfg.
+
+Suggestions:
+- Define log thresholds: e.g. zero “redist missing”, zero repeated provider-open failures, and no repeated audio warnings above N occurrences in M seconds.
+- Use exact exe/cfg/stage tuples in the UAT record: `SwgClient_d.exe` + `client_d.cfg` + `stage-x64` or `stage`.
+- Include a “negative control” only if cheap: flip `disableMiles=true` locally and confirm silence/no flood, then restore BOM-safely. This proves the cfg path being inspected is the one the exe reads.
+
+Risk: **MEDIUM**. Runtime validation is correctly placed, but the subjective room/reverb criterion needs tightening.
+
+**Phase-Wide Concerns**
+
+- **HIGH:** Wrong-lib resolution is the biggest hidden risk. A clean link can still use stale library search paths. Require `/VERBOSE:LIB` evidence or equivalent.
+- **HIGH:** Stale provider files can make runtime behavior nondeterministic. The stage repair must delete old 7.2e provider names, not merely copy new files.
+- **MEDIUM:** Exact grep counts should be downgraded from acceptance gates to review aids unless they check semantic tokens.
+- **MEDIUM:** Non-client project references to old Miles should be inventoried and either repointed now or documented as deferred with an explicit rationale.
+- **MEDIUM:** `bus_index=0` is plausible, but UAT alone may be a thin proof for room routing. Add logging or a focused reverb scenario.
+- **LOW:** The plan is somewhat artifact-heavy, but the risk profile justifies most of it because this middleware is binary/runtime-sensitive.
+
+**Overall Risk Assessment: MEDIUM-HIGH**
+
+The plan is directionally strong and likely to achieve AUDIO-01/AUDIO-02 if executed carefully. The risk is not the known API delta; it is proof quality around binary provenance and runtime staging. Tighten wrong-lib detection, stale-stage repair, semantic grep gates, and room/reverb validation, and the phase drops closer to **MEDIUM**.

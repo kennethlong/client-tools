@@ -1,0 +1,155 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>EAX_CHORUS</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='EAX_CHORUS'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>EAX_CHORUS</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ used to control the chorus filter in the EAX 4 3D provider</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_4_Properties.html#_Discussion' class='paragraph'>Creative's EAX 4 Properties: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='EAX_CHORUS.html#_Discussion' class='paragraph'>EAX_CHORUS: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='EAX_AUTOWAH.html' class='paragraph'>EAX_AUTOWAH</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='EAX_DISTORTION.html' class='paragraph'>EAX_DISTORTION</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='EAX_CHORUS.html'>EAX_CHORUS</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Slot;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Volume;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;Waveform;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Phase;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;Rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;Depth;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;Feedback;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;Delay;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ used to control the chorus filter in the EAX 4 3D provider</table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='Slot' class=nohover>Slot</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the slot to query or set.  Chorus can use slot 1, 2 and/or 3.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Volume' class=nohover>Volume</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the volume of this slot in standard EAX attenuation units (-10000 to 0 fixed point millibels, default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Waveform' class=nohover>Waveform</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ selects the waveform - 0 = sinusoid, 1 = triangle.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Phase' class=nohover>Phase</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the chorus phase in degrees (-180 to 180, default 90).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Rate' class=nohover>Rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the chorus rate in hertz (0.0 to 10.0, default 1.1).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Depth' class=nohover>Depth</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the chorus depth (0 to 1, default 0.1).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Feedback' class=nohover>Feedback</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the chorus feedback (-1 to 1, default 0.25).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Delay' class=nohover>Delay</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the delay in seconds (0.0002 to 0.016, default 0.016).</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='EAX_CHORUS::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ See the EAX 4 documentation for technical details on this filter.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='EAX_AUTOWAH.html' class='paragraph'>EAX_AUTOWAH</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='EAX_DISTORTION.html' class='paragraph'>EAX_DISTORTION</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Bank Reference</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Bank Reference'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Bank Reference</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_sounds.html' class='paragraph'>Sound Reference</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_navigator.html' class='paragraph'>Navigator</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_banks_main' class='nohover'><b></b></a></div>
+<p>
+Only a few properties are exposed at the moment. In general, the bank properties page is used to find assets that are potentially problematic.
+</p>
+<div class="discussion_heading"><a name='ref_bank_prop' class='nohover'><b>Properties</b></a></div>
+<p>
+<ul><li> <b>Use Source Control</b> If checked, editing an asset will cause Miles Studio to try and update the file in Perforce.
+</li><li> <b>Compile Unreferenced</b> If checked, all non-event assets will be compiled, whether or not they are referenced by any events. This excludes any references
+due to a Cache/Purge Sounds event step, and if a sound is only referenced via one of those two event steps, the event will be edited on compilation to exclude
+that reference.
+</li></ul></p>
+<div class="discussion_heading"><a name='ref_bank_find' class='nohover'><b>Asset Search</b></a></div>
+<p>
+The bank properties has a variety of searches it can do to find potential asset problems within the bank:
+</p>
+<p>
+<ul><li> <b>Unreferenced Assets</b> Displays non-event assets that are not referenced by any event.
+</li><li> <b>Dangling References</b> Displays any references an event may have that doesn't exist in the bank. 
+</li><li> <b>Unlabeled Sounds</b> Displays any events containing Start Sound event steps with no labels assigned to them.
+</li><li> <b>Uncached Sounds</b> Shows any sound assets that are never loaded via a cache sounds event step.
+</li><li> <b>Sounds Not Ready</b> Lists any sound assets that are not in a completed state, and are thus not ready to play. That is, they still need a source asset,
+their compression is out of date, or they are still compressing.
+</li></ul></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_sounds.html' class='paragraph'>Sound Reference</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_navigator.html' class='paragraph'>Navigator</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

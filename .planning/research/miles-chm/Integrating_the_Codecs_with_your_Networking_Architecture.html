@@ -1,0 +1,94 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Integrating the Codecs with your Networking Architecture</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Integrating the Codecs with your Networking Architecture'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Integrating the Codecs with your Networking Architecture</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_the_Codecs_with_your_Networking_Architecture.html#_Discussion' class='paragraph'>Integrating the Codecs with your Networking Architecture: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Performing_the_Compression_and_Decompression.html' class='paragraph'>Performing the Compression and Decompression</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Mixing_the_Client_Sound_Data_on_the_Server.html' class='paragraph'>Mixing the Client Sound Data on the Server</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Integrating the Codecs with your Networking Architecture::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  When it comes to picking a topology for your voice-networking subsystem, several options are available.  Which one is right for your application will be determined by such factors as the nature of your application's existing network support (if any), availability of server-side and client-side network bandwidth, and availability of server-side and client-side processing power. 
+
+</p>
+<p>
+<b>In a pure client-server model,</b> as illustrated by the MSSCHTC and MSSCHTS example applications, only one compression and one decompression thread run on each client.  Data is acquired at the client, compressed, and transmitted to the server.  At the server side, incoming data from each client is decompressed and mixed with data from other clients, then transmitted back to each client.  Each stream transmitted from the server must be mixed and compressed discretely to avoid echoing a given client's contribution to the mix back to that client.  Server-side I/O bandwidth and processing overhead can be quite high unless special measures are taken to optimize bandwidth. Such measures might include permission-to-talk schemes such as outlined in the Push-to-talk section above, and/or simply limiting the number of clients allowed to contribute to the output mix at any given time. 
+
+</p>
+<p>
+<b>A peer-to-peer model</b> implies that each client runs one compression thread and as many decompression threads as are necessary to receive speech from all other clients who may be speaking.  All decompression and mixing takes place redundantly at each client, and all compressed data must be sent to every other client.  Lacking an adequate IP-multi-cast-compatible transport layer, the pure peer-to-peer model does not scale adequately beyond a few clients in the general case.  However, the peer-to-peer model may represent the simplest and most efficient way to implement person-to-person IP telephony applications and two-player games. 
+
+</p>
+<p>
+<b>A distributed-server model</b> may be an excellent compromise in massively-multiplayer games and online communities, especially in cases where centralized server resources are limited or nonexistent.  In a distributed-server environment, each client station acts as a mixing server for a limited number of other clients, typically partitioned by "channels" or other logical divisions between groups of users that don't need to talk to each other on a continuous basis.  Communication between any two users may still be established on demand by means of appropriate interfaces in the game or online environment, subject to a given number of simultaneous "connections" allowed at each client. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Performing_the_Compression_and_Decompression.html' class='paragraph'>Performing the Compression and Decompression</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Mixing_the_Client_Sound_Data_on_the_Server.html' class='paragraph'>Mixing the Client Sound Data on the Server</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Preset Reference</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Preset Reference'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Preset Reference</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_events.html' class='paragraph'>Event Reference</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_environments.html' class='paragraph'>Environment Reference</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_presets_main' class='nohover'><b></b></a></div>
+<p>
+Presets are grouped properties that can be applied to sounds. Each property has a check box signifying this preset affects that property, 
+and a value to set the property to. Some properties are enabled together, e.g. the volume properties.
+</p>
+<p>
+Properties can be set to either a numeric value, or a variable name.
+</p>
+<p>
+<b>Filters</b>
+</p>
+<p>
+Presets also are responsible for applying filters to sounds. There are 8 filter stages that can be set. By default a preset does not
+affect the filter. To remove an existing filter, select "Remove Existing" for the relevant filter stage.
+</p>
+<p>
+When you select the desired filter, the properties for the filter are displayed. These can be set to variables as well.
+</p>
+<p>
+<b>Properties</b>
+</p>
+<p>
+<ul><li><b>Volume, Pan, Center, LFE</b> - these are decibel and left/right front/back scalars for the sound.
+</p>
+<p>
+</li><li><b>Playback rate scale</b> - this lets you speed up or slow down playback. In semitones.
+</p>
+<p>
+</li><li><b>Reverb wet level</b> - this lets you control how much reverb is applied during playback.  Decibels.
+<i>To hear environmental reverb, you'll have to move this slider beyond its default setting of -96!</i>  This is basically a volume control for the sound's reverb path.
+</p>
+<p>
+</li><li><b>Reverb dry level</b> - this lets you control how much of the original sound is left during playback. Decibels.
+</p>
+<p>
+</li><li><b>Built-in LPF cutoff</b> - this lets you turn on the super-fast low-pass-filter that's available on every sound.  In Hertz.
+</p>
+<p>
+</li><li><b>Occlusion</b> - this controls how `occluded` the audio will sound.  Occlusion means the extent to which the sound source is completely blocked - a sound playing
+in another room separated by a wall, for example. This setting is usually not saved in a preset but rather controlled directly by the game engine (although you can
+turn it on to audition and test the effect).
+</p>
+<p>
+</li><li><b>Obstruction</b> - this controls how `obstructed` the audio will sound.  Obstructions imply that the direct path of the sound is blocked, 
+but an indirect path is still available - a sound playing from behind a crate, for example.  This setting is usually not saved in a preset 
+but rather controlled directly by the game engine (although you can turn it on to audition and test the effect).
+</p>
+<p>
+</li><li><b>Exclusion</b> - this controls how `excluded` the audio will sound.  Exclusion means the extent to which the sound's direct path is clear 
+but its reverberations are blocked - a sound playing outside a room and heard through an open window, for example.  This setting is usually 
+not saved in a preset but rather controlled directly by the game engine (although you can turn it on to audition and test the effect).
+</p>
+<p>
+</li><li><b>Spatialization</b> - this controls whether the sound will use its 3d position to sound like its coming from that direction, relative to the listener.
+</p>
+<p>
+</li><li><b>3D minimum distance</b> - since sound effects should always be normalized, you'll need to use the minimum distance to make each sound
+`feel correct` as it approaches and moves away from the listener. For example, a bumblebee could have a minimum-distance of 0.25 while a
+jet plane might have a minimum distance of a hundred meters.  By default, each time the distance between the listener and the sound is halved, 
+the volume of the sound is doubled. This means that any sound within the minimum distance plays at the maximum volume, while beyond the 
+minimum distance, the volume becomes one-half as loud each time the distance from the listener to the minimum-distance boundary is doubled.  
+Only the minimum distance controls the falloff curve -- when the maximum distance is reached, the sound will continue playing, but its volume 
+will be forced to zero.
+</p>
+<p>
+</li><li><b>3D maximum distance</b> - this establishes a hard clip point where the volume is forced to zero. This setting doesn't affect the 
+volume falloff - it just hard clips to zero when reached.
+</p>
+<p>
+</li><li><b>3D wet reverb attenuation</b> - specifies whether the reverb on this sound (if any) should be scaled by distance to the listener as well.
+</p>
+<p>
+</li><li><b>3D cone inner angle</b> - specifies the interior angle of the audible sound cone.  If the listener is within this angle, the volume will be normal.
+</p>
+<p>
+</li><li><b>3D cone outer angle</b> - specifies the outer angle of the audible sound code. If the listener is outside this angle, then the sound volume
+will be scaled by the cone's outer volume setting.  As the source-listener angle moves from the inner angle value to the outer angle value, 
+the volume is gradually scaled to approach the outer volume.
+</p>
+<p>
+</li><li><b>3D cone outer volume</b> - sets the volume attenuation outside the 3D outer angle. Decibels.
+</p>
+<p>
+</li></ul></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_events.html' class='paragraph'>Event Reference</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_environments.html' class='paragraph'>Environment Reference</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

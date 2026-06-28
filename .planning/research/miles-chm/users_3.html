@@ -1,0 +1,181 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Presets and Variables</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Presets and Variables'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Presets and Variables</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_6.html' class='paragraph'>Ducking and Ramps</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_14.html' class='paragraph'>Ducking and Busses</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_3_main' class='nohover'><b></b></a></div>
+<p>
+This guide will introduce a new way of affecting how a sample sounds via Presets.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Asset List
+</li><li> Event Asset
+</li><li> Sound Asset
+</li><li> Start Sound Event Step
+</li><li> Audition
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b>
+</p>
+<p>
+<ol><li> <b>Variable:</b> A variable is a named value that can be referenced by many places in Miles Studio. The value is usually taken from the game (set
+by the programmer), but you can set them in Miles Studio as well.
+</p>
+<p>
+</li><li> <b>Preset:</b> Presets are groups of settings that can be applied to sounds. These settings include whether to 3D spatialize the sound,
+what the falloff parameters are, what DSP filters to apply, and more.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Create a sound and an event to play it.</i>
+</p>
+<p>
+</li><li> <i>Cick "Create" and select "New Preset". Accept the default name.</i><br><br>
+<img src="3_create.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Double Click the new Preset in the Asset List.</i><br><br>
+<img src="3_preset.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Switch the first filter entry to "Chorus".</i><br><br>
+<img src="3_filter.png"/><br><br>
+</p>
+<p>
+All sounds have 8 filter stages that can be assigned to a DSP filter. A preset can affect all 8 at once by setting or removing a filter. A
+specific stage can also be ignored using the default "Don't Change" selection - this will leave whatever was set on that stage alone. This preset
+now assigned the Chorus filter to the first filter stage on any sound it is applied to.
+</p>
+<p>
+</li><li> <i>Select the event you created to start a sound, and drag the preset "NewPreset" to the "Preset" field.</i><br><br>
+<img src="3_drag.png"/><br><br>
+</p>
+<p>
+At this point, the sound will play with a chorus effect. This is a very basic use of a preset - but it illustrates how to
+set up and apply a preset to a sound. Go ahead and audition the sound to hear it.
+</p>
+<p>
+In this case, the chorus filter's parameter are unchanging - the filter will apply the same way to all sounds that use this preset. This
+may be desired, but if more variability is required, a Variable must be used.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Variables</b>
+</p>
+<p>
+Variables are generally set by the game. They represent values that can't be known ahead of time - user volume levels,
+etc. To reference them in Miles Studio, they need to be created in much the same way Labels are. Once that's done, they can be placed
+in many locations where a specific number would have gone. When done so, instead of using the number, Miles will query the value of the variable
+at that time, and use that value instead. For this guide, since we don't have a game to set anything for us, we're going to use the capability of
+the Start Sound Event Step to initialize variables for use in the sound it starts.
+</p>
+<p>
+<ol><li> <i>Select "Variables" and create a new variable.</i><br><br>
+<img src="3_var.png"/><br><br>
+</p>
+<p>
+</li><li> <i>Select the event you created in the first part of this guide.</i><br><br>
+</p>
+<p>
+</li><li> <i>Click the Plus in Variable Initialization and select your new variable.</i><br><br>
+<img src="3_varinit.png"/><br><br>
+</p>
+<p>
+Variable initialization specifies a range to randomly select from when initializing a desired variable. In this step, we are saying we want
+to initialize the variable NewVariable, and the default range of 0 to 1 will be used.
+</p>
+<p>
+</li><li> <i>Edit the "From" value, set it to .3, and hit enter.</i><br><br>
+<img src="3_varedit.png"/><br><br>
+</p>
+<p>
+In order to hear the effect more strongly, the lower portion of the range is cut off. The start sound event step will now randomly choose a number
+between .3 and 1, and set the variable NewVariable to that number.
+</p>
+<p>
+</li><li> <i>Select "NewPreset" and click "Assign Variable" next to the Chorus Filter's "Wet Level". Select the variable you've created.</i><br><br>
+<img src="3_varfilter.png"/><br><br>
+</p>
+<p>
+This tells Miles to look up the value associated with NewVariable instead of using the previous number of .5. So in order, the start sound event step
+picks a value between .3 and 1, and sets it to NewVariable. Later in the process of starting the sound, it applies the preset, which finds that
+a variable has been specified as the wet level in the chorus filter. Upon reaching that variable, it checks the sound that is in the process of being started
+for any variables with that name, and finds the random value. It then uses that value for the wet level.
+</p>
+<p>
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_6.html' class='paragraph'>Ducking and Ramps</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_14.html' class='paragraph'>Ducking and Busses</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

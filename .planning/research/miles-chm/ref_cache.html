@@ -1,0 +1,89 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Cache/Purge Sounds</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Cache/Purge Sounds'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Cache/Purge Sounds</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_comment.html' class='paragraph'>Comment</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_limits.html' class='paragraph'>Enable Limits</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='ref_events.html' class='paragraph'>Event Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_cache_main' class='nohover'><b>Overview</b></a></div>
+<p>
+Cache and Purge Sounds load and unload sounds from memory, for use in Start Sound events.
+</p>
+<p>
+<center><img src="s_cache.png" /></center>
+</p>
+<p>
+<ol><li> The bank to load or unload from. Only one soundbank's sounds can be affected in a single cache/purge step.
+</li><li> The number of bytes this will load. With respect to <a href='ref_assets.html' class='paragraph'>Asset Specialization</a>, this uses the assets for the current platform and language for computing the size.
+</li><li> The sound list to load. Entries that do not exist will be highlighted in red. Sounds can be dragged to this pane to add them.
+</li><li> Button to add sounds. This is the only way to add more than one sound at once.
+</li><li> Clear any bad (red) references to sounds that do not exist.
+</li></ol></p>
+<p>
+It's important to note that the sounds will take a while to load, and it's generaly unpredictable which sound will be loaded
+first in the list. If you have a situation where you need to load a lot of sounds, but one in particular needs to be loaded
+first (say, for main menu music), you should make two cache sound event steps, and load the urgent sounds first.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_comment.html' class='paragraph'>Comment</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='ref_events.html' class='paragraph'>Event Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_limits.html' class='paragraph'>Enable Limits</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

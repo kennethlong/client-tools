@@ -1,0 +1,152 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_minimum_sample_buffer_size</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_minimum_sample_buffer_size'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_minimum_sample_buffer_size</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ returns the minimum usable buffer size for use with the low-level streaming function AIL_load_sample_buffer.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_minimum_sample_buffer_size.html#_Discussion' class='paragraph'>AIL_minimum_sample_buffer_size: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html#_Discussion' class='paragraph'>AIL_sample_buffer_available: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_load_sample_buffer.html' class='paragraph'>AIL_load_sample_buffer</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_info.html' class='paragraph'>AIL_sample_buffer_info</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AILSAMPLECB.html' class='paragraph'>AILSAMPLECB</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_minimum_sample_buffer_size.html'>AIL_minimum_sample_buffer_size</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>dig</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>playback_rate</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>format</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ returns the minimum usable buffer size for use with the low-level streaming function AIL_load_sample_buffer.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='dig' class=nohover>dig</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies which digital audio driver is to be used for low-level streaming audio playback.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='playback_rate' class=nohover>playback_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the intended playback rate in samples per second.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='format' class=nohover>format</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the format of the audio data to be played.  See <a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a> for a description of the available audio formats.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ The lowest usable size in bytes for each of the individual buffers used by the <a href='AIL_load_sample_buffer.html' class='paragraph'>AIL_load_sample_buffer</a> function.</table>
+<div class="discussion_heading"><a name='AIL_minimum_sample_buffer_size::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ When playing uncompressed PCM data, MSS's built-in low-level streaming mechanism (namely, the <a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a> and <a href='AIL_load_sample_buffer.html' class='paragraph'>AIL_load_sample_buffer</a> functions) cannot be used with buffers which are smaller than the hardware half-buffer size used at the hardware level, because the hardware buffer can be filled with sample data only at its beginning and half-buffer points.  The <a href='AIL_minimum_sample_buffer_size.html' class='paragraph'>AIL_minimum_sample_buffer_size</a> function returns the smallest PCM buffer size which can be used with a given driver configuration. 
+
+</p>
+<p>
+The value returned by this function is a <i>minimum</i> value, which will typically range from 2K to 8K bytes. Use of smaller buffers is likely to cause audio dropouts. It is permissible, and often advisable, to use larger buffer sizes than that recommended by <a href='AIL_minimum_sample_buffer_size.html' class='paragraph'>AIL_minimum_sample_buffer_size</a>. For example, applications which are unable to poll the <a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a> function frequently may need to employ buffer sizes of 16K, 32K, or greater. 
+
+</p>
+<p>
+In calculating the minimum usable buffer size, this function takes into account the difference between the driver's hardware playback rate and the sample's playback rate, as well as any conversions between 8-bit and 16-bit or mono and stereo formats that automatically occur during playback.  Consequently, the value returned may be greater or less than the actual hardware half-buffer size. If the playback rate will be varied during the low-level streaming process, the highest rate to be used should be passed to <a href='AIL_minimum_sample_buffer_size.html' class='paragraph'>AIL_minimum_sample_buffer_size</a> so that the buffer size can accommodate variations at playback time. 
+
+</p>
+<p>
+Buffers which are smaller than the minimum size can be used under three conditions: (1) when the final fragment of sample data is being submitted; (2) when compressed data (.MP3, .BinkA, .OGG, etc.) is being played; and (3) when <a href='AIL_set_sample_buffer_count.html' class='paragraph'>AIL_set_sample_buffer_count</a> is used to make more than two low-level streaming buffers available for a given HSAMPLE.  In general, as long as the mixer has enough data to avoid starvation in the interval(s) before the next time the buffers are serviced, dropouts will not occur. 
+
+</p>
+<p>
+Applications which play synchronized audio-video streams with small audio chunks (less than 4-8K) must be designed to queue video and/or audio frame data in memory, in order to present audio buffers of sufficient size to the low-level streaming playback routines. 
+
+</p>
+<p>
+Example files that use this function: DBTEST.C<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AILSAMPLECB.html' class='paragraph'>AILSAMPLECB</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

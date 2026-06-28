@@ -1,0 +1,125 @@
+﻿## Verdict: error/warnings blob — **ruled out** on the hot path
+
+Under the locked A/B facts (+144 MB / 2 min, Release, handles flat), I traced every allocation/release in the Phase-32 HLSL compile path. The **priority suspect (non-NULL warnings `ID3DBlob` on every successful compile) is released on every path that matters for steady-state cantina cycling.**
+
+---
+
+### Error blob (`error`) — exhaustive path trace
+
+Allocation site:
+
+```540:548:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+		IncludeHandler includeHandler;
+		ID3DXBuffer *error = NULL;
+		// ...
+		std::vector<char> rewrittenSource;
+		Direct3d9_HlslRewrite::applyToMainSource(m_compileText, static_cast<std::size_t>(m_compileTextLength), rewrittenSource, m_vertexShader->m_fileName.getString());
+		HRESULT result = compileVertexShaderFpGuarded(rewrittenSource.data(), static_cast<UINT>(rewrittenSource.size()), &(ms_defines.front()), &includeHandler, "main", target, D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY, &compiledShader, &error);
+```
+
+Release site (only place; no other references to `error`):
+
+```560:565:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+		FATAL(FAILED(result), ("Could not compile shader %s %d (%s)", m_vertexShader->m_fileName.getString(), HRESULT_CODE(result), error ? error->GetBufferPointer() : "none"));
+		if (error)
+		{
+			DEBUG_REPORT_LOG_PRINT(true, ("%s", error->GetBufferPointer()));
+			error->Release();
+		}
+```
+
+| Path | What happens to `error` |
+|------|-------------------------|
+| **Success-with-warnings** (common: `S_OK` + non-NULL blob) | `FATAL(FAILED(S_OK), …)` is a NOP → lines 561–565 run → `error->Release()` |
+| **`__try`/`__except` fault path** with bytecode | `compileVertexShaderFpGuarded` sets `hr = S_OK` when `*outShader` is set (lines 128–136); caller still hits 561–565 |
+| **Compile failure** (`FAILED(result)`) | `FATAL` → `InternalFatal` → `Os::abort()` (`Fatal.cpp:157–184`) — execution never reaches 561–565, but process exits |
+| **Release build logging** | `DEBUG_REPORT_LOG_PRINT` is **`NOP`** in Release (`Report.h:62–65`) — no log-buffer retention of the warnings text |
+
+The old `D3DXCompileShader` path had **identical** error handling at the same lines (pre-`405bba1c1`); the behavioral delta is that `D3DCompile` now fills the blob on success-with-warnings, but the engine still `Release()`s it every time execution continues past the compile gate.
+
+**Conclusion:** There is no conditional non-release of the warnings blob on the success path. A 1–300 KB/blob leak here would require skipping line 564 while still reaching line 647 — that does not happen in Release on `S_OK`.
+
+---
+
+### Code blob (`compiledShader`) — also balanced on success
+
+```642:647:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+	IDirect3DVertexShader9 *vertexShader = NULL;
+	HRESULT const hresult = Direct3d9::getDevice()->CreateVertexShader(reinterpret_cast<DWORD const *>(compiledShader->GetBufferPointer()), &vertexShader);
+	FATAL_DX_HR("CreateVertexShader failed %s", hresult);
+	NOT_NULL(vertexShader);
+	compiledShader->Release();
+```
+
+No early returns in `createVertexShader`. On success, `compiledShader` is always released at line 647. Failure paths abort via `FATAL`/`FATAL_DX_HR` before return.
+
+---
+
+### Include handler Open/Close — no new per-compile leak vs D3DX
+
+Engine path (`Direct3d9::engineOwnsWindow()`): Open returns cached `Include::m_data`; Close is intentionally a no-op — **same design pre-Phase-32**. D3DCompile still calls Close for every Open (API contract); the data lives in the global cache by design.
+
+Non-engine (viewer) path: Open returns heap from `applyToIncludeBuffer`; Close `delete[]`s it:
+
+```238:244:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+HRESULT Direct3d9_VertexShaderDataNamespace::IncludeHandler::Close(LPCVOID data)
+{
+	if (!Direct3d9::engineOwnsWindow())
+		delete [] (const_cast<byte *>(reinterpret_cast<byte const *>(data)));
+	return 0;
+}
+```
+
+Include ctor rewrite ownership is correct (`152–174`, freed in `~Include` at `178–181` or via Close on viewer path).
+
+---
+
+### `Direct3d9_HlslRewrite` / `ms_defines`
+
+- **`rewrittenSource`** (`std::vector<char>`, line 546): stack-scoped; destroyed when `createVertexShader` returns — not a persistent leak (heap may retain freed blocks as private bytes, but not orphaned allocations).
+- **`applyToIncludeBuffer`**: `delete[]`s input on rewrite (`Direct3d9_HlslRewrite.cpp:842`); fast path returns input unchanged (`824–834`).
+- **`ms_defines.clear()`** (line 437): clears entries only; macro strings live in static `ms_scratchBuffer` — no heap growth per compile.
+
+---
+
+## Next candidates (ranked)
+
+Since the blob path is balanced, the measured +72 MB/min is more consistent with:
+
+### 1. **`d3dcompiler_47` internal heap retention per `D3DCompile` call** (Question B — strongest)
+
+- Engine blobs are released; handles flat → raw heap, not COM/handles.
+- D3D9 has **no bytecode disk cache** (contrast gl11’s `Direct3d11_ShaderCache::tryLoad/store` around `Direct3d11_VertexShaderData.cpp:940–966`).
+- Interior↔exterior transitions likely pull in **new `.vsh` families** each cycle (different active shader sets), so first-touch compiles keep happening even though per-`(vsh, texcoordKey)` caching in `m_container`/`m_nonPatchedVertexShader` (`654–686`) prevents recompile of *already-seen* keys.
+- Old `D3DXCompileShader` (statically linked legacy D3DX) did not show this retention in the same A/B.
+
+**Fix direction:** persist compiled bytecode (gl11-style cache), or cap/reuse a single d3dcompiler module with explicit cache drain — not another `Release()` in this file.
+
+### 2. **Global `ms_includeCache` — process-lifetime, never evicted** (session-cumulative, not strictly per-compile)
+
+```297:317:src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp
+void Direct3d9_VertexShaderData::install()
+{
+	ms_defines.reserve(32);
+	ms_includeCache = new IncludeCache;
+}
+// ...
+void Direct3d9_VertexShaderData::remove()  // plugin shutdown ONLY
+{
+	if (ms_includeCache) { /* delete all Include* */ }
+}
+```
+
+Phase 32 made cached bytes **rewrite-expanded** (`Include` ctor, `152–174`), so each newly encountered `.inc` permanently retains a larger buffer than pre-Phase-32 raw file storage. This grows as cantina cycling exposes new shader/include combinations, but is **bounded by the include corpus** — unlikely alone to explain 72 MB/min unless compile volume is very high.
+
+### 3. **Compile-failure-only engine leak** (not cantina steady-state)
+
+If `FatalSetThrowExceptions(true)` were ever used, `FAILED(result)` at line 560 would throw **before** line 564, leaking both blobs. Release cantina path uses `abort()`, not throw — not the measured scenario.
+
+---
+
+## Bottom line
+
+**No missed `Release()` of the D3DCompile error/warnings blob on the success-with-warnings path** — explicitly ruled out at `Direct3d9_VertexShaderData.cpp:561–565`. Same for `compiledShader` at `:647` on success.
+
+The measured leak signature (raw private bytes, flat handles, linear per cantina cycle, D3DCompile-only A/B) points to **(a) d3dcompiler internal per-call retention amplified by ongoing first-touch compiles across cell transitions**, plus possibly **(b) monotonic `ms_includeCache` growth** as new shader/include combinations are encountered — not an engine-visible blob orphan on the hot path.

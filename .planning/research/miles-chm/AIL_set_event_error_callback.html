@@ -1,0 +1,100 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_event_error_callback</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_event_error_callback'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_event_error_callback</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Set the error handler for the event system.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_event_error_callback.html#_Discussion' class='paragraph'>AIL_set_event_error_callback: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='MSS_USER_RAND.html' class='paragraph'>MSS_USER_RAND</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_register_random.html' class='paragraph'>AIL_register_random</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_event_error_callback.html'>AIL_set_event_error_callback</a></span>(</td><td><span class='type'><a href='AILEVENTERRORCB.html' class='blue'>AILEVENTERRORCB*</a></span> <span class='parameter'>i_ErrorCallback</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Set the error handler for the event system.</table>
+<div class="discussion_heading"><a name='AIL_set_event_error_callback::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Generally the event system handles errors gracefully - the only noticeable effect is that a given sound won't play, or a preset doesn't get set. As a result, the errors can sometimes be somewhat invisible. This function allows you to see what went wrong, when it went wrong. 
+
+</p>
+<p>
+The basic usage is to have the callback check <a href='AIL_last_error.html' class='paragraph'>AIL_last_error</a>() for the overall category of  failure. The parameter passed to the callback might provide some context, but it can and will be zero on occasion. Generally it will represent the resource string that is being worked on when the error occurred. 
+
+</p>
+<p>
+Note that there are two out of memory errors - one is the event system ran out of memory - meaning the value passed in to <a href='AIL_startup_event_system.html' class='paragraph'>AIL_startup_event_system</a> was insufficient for the current load, and the other is the memory used for sound data - allocated via <a href='AIL_mem_alloc_lock.html' class='paragraph'>AIL_mem_alloc_lock</a> - ran out.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='MSS_USER_RAND.html' class='paragraph'>MSS_USER_RAND</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_register_random.html' class='paragraph'>AIL_register_random</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

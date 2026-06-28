@@ -1,0 +1,148 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_loop_count</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_loop_count'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_loop_count</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ arranges for a sample to be restarted immediately upon completion, for a total of two or more iterations.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_init_sample.html#_Discussion' class='paragraph'>AIL_init_sample: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html#_Discussion' class='paragraph'>AIL_sample_buffer_available: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_loop_count.html#_Discussion' class='paragraph'>AIL_sample_loop_count: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_loop_count.html#_Discussion' class='paragraph'>AIL_set_sample_loop_count: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MakeLoop.html#_Discussion' class='paragraph'>MakeLoop: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_loop_block.html' class='paragraph'>AIL_sample_loop_block</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_loop_block.html' class='paragraph'>AIL_set_sample_loop_block</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_sample_51_volume_levels.html' class='paragraph'>AIL_set_sample_51_volume_levels</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_sample_loop_block.html' class='paragraph'>AIL_set_sample_loop_block</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_sample_loop_count.html'>AIL_set_sample_loop_count</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>loop_count</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ arranges for a sample to be restarted immediately upon completion, for a total of two or more iterations.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the sample to loop.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='loop_count' class=nohover>loop_count</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ should be set to the desired number of iterations.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_sample_loop_count::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ A loop_count value of 1 results in a single iteration, with no looping.  This is the default loop count value, as initialized by <a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a>. 
+
+</p>
+<p>
+A loop_count value of 0 creates an infinite loop, which can be interrupted by calling <a href='AIL_stop_sample.html' class='paragraph'>AIL_stop_sample</a>, <a href='AIL_end_sample.html' class='paragraph'>AIL_end_sample</a>, or by calling <a href='AIL_set_sample_loop_count.html' class='paragraph'>AIL_set_sample_loop_count</a> to establish a different loop count. 
+
+</p>
+<p>
+loop_count values of 2 or more cause the sample to be played a total of 2 or more times.  The current number of iterations remaining may be monitored with <a href='AIL_sample_loop_count.html' class='paragraph'>AIL_sample_loop_count</a>. 
+
+</p>
+<p>
+To loop a low-level streaming ("double-buffered") sample, it is necessary to trap the end-of-file condition (zero bytes read) and seek back to the file's beginning to re-execute the <i>read</i> call. The <a href='AIL_set_sample_loop_count.html' class='paragraph'>AIL_set_sample_loop_count</a> function is not applicable to low-level streaming samples, since it can be used only when the entire sample is resident in memory.  If used, it will cause only the currently playing buffer to loop, which is not likely to be the desired result.  For more information about low-level streaming, refer to the <a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a> function description.  Note that the high-level streaming API handles looping for you! 
+
+</p>
+<p>
+To loop a stream, you must use <a href='AIL_set_stream_loop_count.html' class='paragraph'>AIL_set_stream_loop_count</a> rather  than calling <a href='AIL_set_sample_loop_count.html' class='paragraph'>AIL_set_sample_loop_count</a> on the stream's  underlying HSAMPLE. 
+
+</p>
+<p>
+Example files that use this function: SSTEST.C, EXAMMS.CPP<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_sample_51_volume_levels.html' class='paragraph'>AIL_set_sample_51_volume_levels</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_sample_loop_block.html' class='paragraph'>AIL_set_sample_loop_block</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

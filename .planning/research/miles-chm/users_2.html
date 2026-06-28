@@ -1,0 +1,141 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Playing A Sound</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Playing A Sound'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Playing A Sound</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_1.html' class='paragraph'>A First Look</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_4.html' class='paragraph'>Stopping Sounds</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_2_main' class='nohover'><b></b></a></div>
+<p>
+In the last guide, a capture was loaded and played using assets previously created, but now we're going to create our own sound to play.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Event Asset
+</li><li> Timeline
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b>
+</p>
+<p>
+<ol><li> <b>Asset List:</b> The Asset List is the area on the left of Miles Studio where loaded Sound Banks and Assets are displayed.
+</p>
+<p>
+</li><li> <b>Auditioning:</b> Auditioning is the process of testing out an event and hearing the results. This can be from either a connected
+game client, or from Miles Studio itself.
+</p>
+<p>
+</li><li> <b>Scratch Pad:</b> The scratch pad is where events auditioned from Miles Studio are placed. To see it, select the Timeline Tab, and
+pick Scratch Pad from the list box above the timeline itself.
+</p>
+<p>
+</li><li> <b>Sound Asset:</b> Sound Assets represent a source audio sample. The Sound Asset contains a variety of settings related to
+data storage and sound representation in memory, e.g. sample rate conversions and compression type.
+</p>
+<p>
+</li><li> <b>Start Sound Event Step:</b> An event step used to play one or more sounds in Miles Studio. It contains commons settings for affecting
+how a sample sounds, including looping and start offsets.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li><i>Find a WAV file on your computer with Explorer and drag it to the asset list.</i><br><br>
+<img src="2_drag.png"/><br><br>
+</p>
+<p>
+This creates a Sound Asset that loads the source WAV file and readies it for play. As long as it is still loading, the sound asset will have
+a period (.) before it's name, and the status bar at the bottom of the screen will say "Compressing" and not "Idle".
+</p>
+<p>
+</li><li><i>Right Click on the new sound and select "Create Event For Sound".</i><br><br>
+<img src="2_rightclick.png"/><br><br>
+</p>
+<p>
+This creates an Event Asset with a Start Sound event step automatically created inside of it, so that it is immediately set up to play the sound
+it was created from. Events that are created in such a fashion are named after the Sound they are created from, with "Start_" prepended.
+</p>
+<p>
+</li><li><i>Right Click on the new event and select "Audition".</i><br><br>
+<img src="2_audition.png"/><br><br>
+</p>
+<p>
+This auditions the event - meaning it runs it and records the result to the Timeline. If you select the Timeline Tab along the top, you will
+see an entry on the Timeline representing the event you auditioned. If you don't, make sure the Scratch Pad is selected.
+</p>
+<p>
+That's it! You have added the sound into a sound bank, and then created an event that will play the sound when
+triggered (either in Miles Studio or in your game)! If all you needed were one-off sounds such as this, you could drag in more sounds,
+create events to play them as you did in step 2, and be done!
+</p>
+<p>
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_1.html' class='paragraph'>A First Look</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_4.html' class='paragraph'>Stopping Sounds</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

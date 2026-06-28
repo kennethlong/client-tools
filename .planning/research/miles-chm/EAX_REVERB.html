@@ -1,0 +1,309 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>EAX_REVERB</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='EAX_REVERB'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>EAX_REVERB</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ used to control the environmental reverb filter in the EAX 4 3D provider</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_4_Properties.html#_Discussion' class='paragraph'>Creative's EAX 4 Properties: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='EAX_REVERB.html#_Discussion' class='paragraph'>EAX_REVERB: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='EAX_SAMPLE_SLOT_VOLUMES.html' class='paragraph'>EAX_SAMPLE_SLOT_VOLUMES</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='EAX_AUTOGAIN.html' class='paragraph'>EAX_AUTOGAIN</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='EAX_REVERB.html'>EAX_REVERB</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Slot;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Volume;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MILES_ROOM_TYPE.html' class='blue'>MILES_ROOM_TYPE</a></span>&nbsp;Environment;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;EnvironmentSize;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;EnvironmentDiffusion;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Room;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;RoomHF;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;RoomLF;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;DecayTime;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;DecayHFRatio;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;DecayLFRatio;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Reflections;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReflectionsDelay;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReflectionsPanX;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReflectionsPanY;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReflectionsPanZ;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;Reverb;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReverbDelay;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReverbPanX;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReverbPanY;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ReverbPanZ;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;EchoTime;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;EchoDepth;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ModulationTime;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;ModulationDepth;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;AirAbsorptionHF;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;HFReference;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;LFReference;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='F32.html' class='blue'>F32</a></span>&nbsp;RoomRolloffFactor;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;Flags;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ used to control the environmental reverb filter in the EAX 4 3D provider</table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='Slot' class=nohover>Slot</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the slot to query or set.  Reverb can use slot 0, 2 and/or 3.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Volume' class=nohover>Volume</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the volume of this slot in standard EAX attenuation units (-10000 to 0 fixed point millibels, default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Environment' class=nohover>Environment</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies one of the room type environment constants (default <a href='MILES_ROOM_TYPE.html' class='paragraph'>ENVIRONMENT_GENERIC</a>).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='EnvironmentSize' class=nohover>EnvironmentSize</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies environment size in meters (default 7.5).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='EnvironmentDiffusion' class=nohover>EnvironmentDiffusion</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ controls the echo density in the reverberation decay (0.0 to 1.0, default 1.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Room' class=nohover>Room</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the room effect level (at mid frequencies) in standard EAX attenuation units (-10000 to 0 fixed point millibels, default -1000).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RoomHF' class=nohover>RoomHF</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the relative room effect level at high frequencies in standard EAX attenuation units (-10,000 to 0 fixed point millibels, default -100).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RoomLF' class=nohover>RoomLF</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the relative room effect level at low frequencies in standard EAX attenuation units (-10,000 to 0 fixed point millibels, default 0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DecayTime' class=nohover>DecayTime</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the reverberation decay time at mid frequencies in seconds (0.1 to 20.0, default 1.49).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DecayHFRatio' class=nohover>DecayHFRatio</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the high-frequency to mid-frequency decay time ratio (0.1 to 2.0, default 0.83).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DecayLFRatio' class=nohover>DecayLFRatio</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the low-frequency to mid-frequency decay time ratio (0.1 to 2.0, default 1.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Reflections' class=nohover>Reflections</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ controls the early reflections level relative to room effect in standard EAX attenuation units (-10000 to 0 fixed point millibels, default -2602).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReflectionsDelay' class=nohover>ReflectionsDelay</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the initial reflection delay time from direct path to first reflection in seconds (0.0 to 0.3, default 0.007).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReflectionsPanX' class=nohover>ReflectionsPanX</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized X coordinate of the early reflections panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReflectionsPanY' class=nohover>ReflectionsPanY</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized Y coordinate of the early reflections panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReflectionsPanZ' class=nohover>ReflectionsPanZ</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized Z coordinate of the early reflections panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Reverb' class=nohover>Reverb</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the late reverberation level relative to room effect in standard EAX attenuation units (-10000 to 2000 fixed point millibels, default 200).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReverbDelay' class=nohover>ReverbDelay</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the late reverberation delay time relative to initial reflection in seconds (0.0 to 0.1, default 0.011).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReverbPanX' class=nohover>ReverbPanX</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized X coordinate of the late reverberation panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReverbPanY' class=nohover>ReverbPanY</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized Y coordinate of the late reverberation panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ReverbPanZ' class=nohover>ReverbPanZ</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the normalized Z coordinate of the late reverberation panning vector (default 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='EchoTime' class=nohover>EchoTime</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the time lag of an echo in the reverberation decay in seconds (0.075 to 0.25, default 0.25).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='EchoDepth' class=nohover>EchoDepth</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies a factor controlling the strength of the echo effect (0.0 to 1.0, default: 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ModulationTime' class=nohover>ModulationTime</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies rate of modulation in seconds (0.04 to 4.0, default: 0.25).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ModulationDepth' class=nohover>ModulationDepth</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies a factor controlling the pitch range of the modulation effect (0.0 to 1.0, default: 0.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='AirAbsorptionHF' class=nohover>AirAbsorptionHF</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the change in level per meter at high frequencies (-100.0 to 0.0, default -5.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='HFReference' class=nohover>HFReference</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the reference high frequency in hertz (1000.0 to 20000.0, default 5000.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='LFReference' class=nohover>LFReference</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the reference  low frequency in hertz (20.0 to 1000.0, default 250.0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RoomRolloffFactor' class=nohover>RoomRolloffFactor</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the a DS3D-style rolloff factor but for room effects (0 to 10.0, default 0,0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='Flags' class=nohover>Flags</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ modifies the behavior of properties - you can use one or more of these values:<br> 1 = delay time adjusted by environment size, <br> 2 = reflection level adjusted by environment size, <br> 4 = reflection delay time adjusted by environment size, <br> 8 = reverb level adjusted by environment size, <br> 16 = reverb delay time adjusted by environment size, <br> 64 = echo time adjusted by environment size, <br> 128 = modulation time adjusted by environment size, <br> 32 = limit high-frequency decay time according to air absorption.<br> Default: 255.</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='EAX_REVERB::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ See the EAX 4 documentation for technical details on this filter.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='EAX_SAMPLE_SLOT_VOLUMES.html' class='paragraph'>EAX_SAMPLE_SLOT_VOLUMES</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='EAX_AUTOGAIN.html' class='paragraph'>EAX_AUTOGAIN</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Start Sound</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Start Sound'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Start Sound</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_controlsound.html#ref_cs_over' class='paragraph'>Control Sounds: Overview</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='users_11.html#users_11_main' class='paragraph'>Limited Sound Counts: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_set_limit.html#ref_set_limit_main' class='paragraph'>Limits: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_sounds.html#ref_sounds_main' class='paragraph'>Sound Reference: Overview</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='upgrading92.html#upgr92' class='paragraph'>Upgrading To Miles Studio 9.2: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_controlsound.html' class='paragraph'>Control Sounds</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='ref_events.html' class='paragraph'>Event Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_startsound_main' class='nohover'><b>Overview</b></a></div>
+<p>
+Start Sound starts one or more sounds.
+</p>
+<p>
+<center><img src="s_start_sound.png" /> </center>
+</p>
+<p>
+<ol><li> The list of sounds available to the start sound step.
+</li><li> The method used to select a sound to play.
+</li><li> If checked, the sound expects a value from the game in order to select a sound to play.
+</li><li> Selects a sound to add.
+</li><li> The preset to apply on start - name, clear, and select.
+</li><li> The event to queue when the sound completes - name, clear, and select.
+</li><li> The labels the sound will be known by - names, remove a label, and add a label.
+</li><li> If checked, the sound streams data in over time.
+</li><li> If checked the sound must be loaded in memory before it can start. Ignored for streams.
+</li><li> If checked, the preset polls its variables every frame and updates, otherwise it only checks when the sound starts.
+</li><li> The method used to select a sound to evict, if this sound encounters a limit.
+</li><li> The priority for this sound, when checked for eviction.
+</li><li> The time the sound fades in over.
+</li><li> The max and min time to select the start delay from, in milliseconds.
+</li><li> The max and min decibels to select the start volume with.
+</li><li> The max and min semitones to select the start pitch with.
+</li><li> The number of times to loop the sound, 0 for infinite.
+</li><li> The offset to start the sound at. See remarks below.
+</li><li> The loop end point to use. See remarks below.
+</li><li> The loop start point to use. See remarks below.
+</li><li> The list of variables to initialize for the sound before it starts, and their ranges.
+</li><li> Buttons to add a new/delete variable initializations.
+</p>
+</li></ol><div class="discussion_heading"><a name='ref_startsound_selection' class='nohover'><b>Sound Selection</b></a></div>
+<p>
+When a Start Sound step is encountered, it plays one or more sounds. Currently there is only
+one way to start multiple sounds, using the Blended method. If not a Blended sound, the "Via" field is only used if you want
+to share the list state across multiple events - in general it should be avoided. For a Blended sound, a drop down
+showing the available Blends is displayed.
+</p>
+<p>
+<ul><li> <b>Random</b> - A sound is selected at random from the list, and may repeat.
+</li><li> <b>Random No Repeat</b> - A sound is selected randomly, but the last played sound will not be selected.
+</li><li> <b>In Order</b> - Each time the event plays, the next sound in the list plays.
+</li><li> <b>Random List</b> - The list is randomized and played, then once all sounds have been played, it is randomized again.
+</li><li> <b>Blended</b> - All sounds are started, and the selected Blend is used to crossfade between them. In order to control the crossfade,
+the game must set a variable equal to the name of the Blend.
+</li></ul></p>
+<p>
+The "Selected" check box is used for more advanced sound selection. If checked, when the start sound
+event step is selecting a sound to play, it will expect the game code to have enqueued a specific value
+(see <a href='AIL_enqueue_event_selection.html' class='paragraph'>AIL_enqueue_event_selection</a> with the event name. The start sound event step will then replace any numbers
+following the name of the chosen sound from the sounds list with the number provided. For example, lets assume the sounds list contains only "MyBank/ElfAnnounce001" and is marked as Selected. The game programmer passes in 12 when queueing by
+using <a href='AIL_enqueue_event_selection.html' class='paragraph'>AIL_enqueue_event_selection</a>. The sound that will be played is "MyBank/ElfAnnounce012". Note that the number
+of digits is retained - the sound was NOT "MyBank/ElfAnnounce12" - the zero is kept. This is very useful for dialog,
+as only one event can be used to play any number of sounds.
+</p>
+<div class="discussion_heading"><a name='ref_startsound_eviction' class='nohover'><b>Sound Eviction</b></a></div>
+<p>
+Sound eviction occurs when a sound tries to play, but encouters a limit you've set. This limit can come from
+one of two places, either a Set Limits event step, or the limit on a Sound Asset itself.
+</p>
+<p>
+When this occurs, the runtime looks at all the currently playing sounds as well as the new sound that is trying
+to play, and chooses one to either stop, or prevent from playing.
+</p>
+<p>
+There are 4 methods that can be used:
+<ul><li> <b>Priority</b> - Evict the sound with the lowest priority value. In the event all sounds have the same priority,
+the new sound will not play.
+</li><li> <b>Distance</b> - Evict the sound that is the farthest from the listener.
+</li><li> <b>Volume</b> - Evict the sound that has the quietest volume setting. This includes factors such as ramps, 3d spatialization,
+and blends. It does not take in to account the sample's waveform, so a sound that happens to be at a quiet point will not be affected.
+</li><li> <b>Age</b> - Evict the sound that has been playing the longest.
+</li></ul></p>
+<div class="discussion_heading"><a name='ref_startsound_offset' class='nohover'><b>Sound Offsets And Loop Points</b></a></div>
+<p>
+The start offset and loop points can be represented in several different ways. Most likely you'll use
+the first two, but all are available. Generally you'll just hit the "Edit" button, and be guided through this
+process without having to know the awkward syntax.
+</p>
+<p>
+<ul><li> <b>Variable Time Offset</b> - By just typing a variable name in the text box, the runtime will look up
+that variable and use the value as a time in milliseconds to use. E.g. "LevelTime"
+</li><li> <b>Sound Marker</b> - By typing "=" and then a marker name, the runtime will look for that marker in
+the Sound Asset and use that. E.g. "=MenuLoopStart"
+</li><li> <b>SampleStart</b> - The string "SampleStart" is hard wired to the start of the sound.
+</li><li> <b>SampleEnd</b> - The string "SampleEnd" is hard wired to the end of the sound.
+</li><li> <b>Hardcoded Time Offset</b> - By typing "=" and then a value, the runtime will use that offset in milliseconds.
+E.g. "=1000" for 1 second in to the sound.
+</li><li> <b>Variable Byte Offset</b> - By prepending a variable name with "@", the variable will be used as a data offset,
+not a time offset. E.g. "@SomeDataOffsetVar"
+</li><li> <b>Hardcoded Byte Offset</b> - By prepending with "@", a hardcoded time offset will instead be a byte offset.
+E.g "@=4096" for a 4k data offset.
+</li></ul></p>
+<p>
+<b>Note</b> that any point specified in time will only reliably work with Bink Audio or WAVs.
+</p>
+<p>
+By default, the loop start will use the Sound Asset Marker "LoopStart", and "LoopEnd" for the end. Any entry in the text boxes
+will override this behavior.
+</p>
+<div class="discussion_heading"><a name='ref_startsound_varinit' class='nohover'><b>Sound Variable Initalization</b></a></div>
+<p>
+Variable initialization sets a variable on a sound instance prior to any checks for variables. This
+allows the sound designer to randomize all places where a variable could be used during the start sound process.
+</p>
+<p>
+For instance, you could add a "StartOffset" variable, with a min of 0 and a max of 1000, set the Start Offset
+property to it, and the sound would start randomly between 0 and 1 seconds in to its sound.
+</p>
+<p>
+In addition, you can add a "ChorusDelay" variable, randomize its initialization, and use it for a Chorus filter
+applied via preset.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%>&nbsp;</td>
+    <td width=33% align=center><img src='arrowup.png'><a href='ref_events.html' class='paragraph'>Event Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_controlsound.html' class='paragraph'>Control Sounds</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

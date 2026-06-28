@@ -1,0 +1,102 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>What is the CPU and memory hit of each audio compression format? Which format should I use?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='What is the CPU and memory hit of each audio compression format? Which format should I use?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>What is the CPU and memory hit of each audio compression format? Which format should I use?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_can_I_lower_the_CPU_hit_of_playing_an_MP3_file_.html#_Discussion' class='paragraph'>How can I lower the CPU hit of playing an MP3 file?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='What_is_Bink_Audio_.html#_Discussion' class='paragraph'>What is Bink Audio?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='What_kind_of_audio_decompression_does_Miles_support_.html#_Discussion' class='paragraph'>What kind of audio decompression does Miles support?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='What_kind_of_audio_decompression_does_Miles_support_.html' class='paragraph'>What kind of audio decompression does Miles support?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Streams_are_taking_a_long_time_to_open__even_on_asynchronous_platforms_such_as_the_Wii___What_factors_affect_stream_overhead_.html' class='paragraph'>Streams are taking a long time to open, even on asynchronous platforms such as the Wii.  What factors affect stream overhead?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='What is the CPU and memory hit of each audio compression format? Which format should I use?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: What is the CPU and memory hit of each audio compression format? Which format should I use?</p>
+<p>
+A:  The CPU and memory hit of each format varies per-platform, as well as per sound format (44 Khz takes more than 22 Khz, for example).  To make some rough guidelines, we've made two tables - one for sound effects (mono at 22 Khz), and one for music (stereo at 44 Khz). 
+
+</p>
+<p>
+As for which format you should use, we recommend ADPCM or <a href='What_is_Bink_Audio_.html' class='paragraph'>Bink-Audio</a> for sound effects, and Bink Audio or <a href='What_is_MPEG_Audio_and_MP3_.html' class='paragraph'>MP3</a> for music. You should rarely use uncompressed samples - the memory can be put to better use. 
+
+</p>
+<p>
+Uncompressed and ADPCM use about the same amount of CPU - ADPCM takes cycles to decode, but saves the memory hit. Both are fast enough, that we don't bother listing them in the tables below - it's just too low to care about  (on a PC it takes 256 samples to hit 1% CPU, on an Xbox it takes 64 for 1%). 
+
+</p>
+<p>
+<table border> <tr align="right"><th>Sound Effects (22 Khz Mono):</th><th><a href='What_is_Bink_Audio_.html' class='paragraph'>Bink-Audio</a></th><th><a href='What_is_MPEG_Audio_and_MP3_.html' class='paragraph'>MP3</a></th> <th>Ogg Vorbis</th></tr> <tr align="right"><td>PC CPU Hit (2.4 Ghz) - 10 Samples</td><td>0.8%</td><td>1.2%</td><td>1.1%</td></tr> <tr align="right"><td>Xbox CPU Hit - 10 Samples</td><td>2.5%</td><td>3.7%</td><td>4%</td></tr> <tr align="right"><td>PS3 CPU Hit - 10 Samples</td><td>0% (on SPU)</td><td>0% (on SPU)</td><td>5.5%</td></tr> <tr align="right"><td>Wii CPU Hit - 10 Samples</td><td>4%</td><td>6%</td><td>7%</td></tr> <tr align="right"><td>PSP CPU Hit - 10 Samples</td><td>25%</td><td>40%</td><td>34%</td></tr> <tr align="right"><td>iPhone CPU Hit - 10 Samples</td><td>26%</td><td>35%</td><td>34%</td></tr> <tr align="right"><td>Per Sample Memory</td><td>4 KB</td><td>20 KB</td><td>222 KB (!)</td></tr> <tr align="right"><td>Multi-channel Capable</td><td>Yes</td><td>No</td><td>Yes</td></tr> <tr align="right"><td>Compression ratio</td><td>8-12 to 1></td><td>12 to 1</td><td>16 to 1</td></tr> <tr align="right"><td>VBR (Smaller for silent sounds)</td><td>Yes, always</td><td>Possible, not recommended</td><td>Yes, optional</td></tr> <tr align="right"><td>Patented</td><td>No</td><td>Yes, (rights included)</td><td>No</td></tr> <tr align="right"><td>LGPL/BSD License?</td><td>No</td><td>No</td><td>Not for our version (clean-room derived)</td></tr> </table> 
+
+</p>
+<p>
+<table border> <tr align="right"><th>Music (44 Khz Stereo):</th><th><a href='What_is_Bink_Audio_.html' class='paragraph'>Bink-Audio</a></th><th><a href='What_is_MPEG_Audio_and_MP3_.html' class='paragraph'>MP3</a></th> <th>Ogg Vorbis</th></tr> <tr align="right"><td>PC CPU Hit (2.4 Ghz) - 1 Sample</td><td>0.22%</td><td>0.3%</td><td>0.25%</td></tr> <tr align="right"><td>Xbox CPU Hit - 1 Sample</td><td>.7%</td><td>1.2%</td><td>1.1%</td></tr> <tr align="right"><td>PS3 CPU Hit - 1 Sample</td><td>0% (on SPU)</td><td>0% (on SPU)</td><td>1.25%</td></tr> <tr align="right"><td>Wii CPU Hit - 1 Sample</td><td>1.7%</td><td>2.3%</td><td>2.5%</td></tr> <tr align="right"><td>PSP CPU Hit - 1 Sample</td><td>6%</td><td>11.8%</td><td>10.4%</td></tr> <tr align="right"><td>iPhone CPU Hit - 1 Sample</td><td>6.5%</td><td>9.8%</td><td>10%</td></tr> <tr align="right"><td>Per Sample Memory</td><td>15 KB</td><td>25 KB</td><td>470 KB (!)</td></tr> <tr align="right"><td>Multi-channel Capable</td><td>Yes</td><td>No</td><td>Yes</td></tr> <tr align="right"><td>Compression ratio</td><td>8-12 to 1></td><td>12 to 1</td><td>16 to 1</td></tr> <tr align="right"><td>VBR (Smaller for silent sounds)</td><td>Yes, always</td><td>Possible, not recommended</td><td>Yes, optional</td></tr> <tr align="right"><td>Patented</td><td>No</td><td>Yes, (rights included)</td><td>No</td></tr> <tr align="right"><td>LGPL/BSD License?</td><td>No</td><td>No</td><td>Not for our version (clean-room derived)</td></tr> </table> <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='What_kind_of_audio_decompression_does_Miles_support_.html' class='paragraph'>What kind of audio decompression does Miles support?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Streams_are_taking_a_long_time_to_open__even_on_asynchronous_platforms_such_as_the_Wii___What_factors_affect_stream_overhead_.html' class='paragraph'>Streams are taking a long time to open, even on asynchronous platforms such as the Wii.  What factors affect stream overhead?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

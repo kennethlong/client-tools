@@ -1,0 +1,298 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>High Level Event System</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='High Level Event System'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>High Level Event System</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_3d.html#advanced_3d_one' class='paragraph'>Adding 3D to event sounds: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AILEVENTERRORCB.html#_Discussion' class='paragraph'>AILEVENTERRORCB: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_add_event_system.html#_Discussion' class='paragraph'>AIL_add_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_add_soundbank.html#_Discussion' class='paragraph'>AIL_add_soundbank: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_audition_connect.html#_Discussion' class='paragraph'>AIL_audition_connect: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_audition_startup.html#_Discussion' class='paragraph'>AIL_audition_startup: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_begin_event_queue_processing.html#_Discussion' class='paragraph'>AIL_begin_event_queue_processing: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_clear_event_queue.html#_Discussion' class='paragraph'>AIL_clear_event_queue: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_complete_event_queue_processing.html#_Discussion' class='paragraph'>AIL_complete_event_queue_processing: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event.html#_Discussion' class='paragraph'>AIL_enqueue_event: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_buffer.html#_Discussion' class='paragraph'>AIL_enqueue_event_buffer: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_by_name.html#_Discussion' class='paragraph'>AIL_enqueue_event_by_name: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_cancel.html#_Discussion' class='paragraph'>AIL_enqueue_event_cancel: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_context.html#_Discussion' class='paragraph'>AIL_enqueue_event_context: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_end_named.html#_Discussion' class='paragraph'>AIL_enqueue_event_end_named: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_filter.html#_Discussion' class='paragraph'>AIL_enqueue_event_filter: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_position.html#_Discussion' class='paragraph'>AIL_enqueue_event_position: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_selection.html#_Discussion' class='paragraph'>AIL_enqueue_event_selection: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_start.html#_Discussion' class='paragraph'>AIL_enqueue_event_start: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_system.html#_Discussion' class='paragraph'>AIL_enqueue_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_variablef.html#_Discussion' class='paragraph'>AIL_enqueue_event_variablef: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_velocity.html#_Discussion' class='paragraph'>AIL_enqueue_event_velocity: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_preset_persists.html#_Discussion' class='paragraph'>AIL_enumerate_preset_persists: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_sound_instances.html#_Discussion' class='paragraph'>AIL_enumerate_sound_instances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_event_system_command_queue_remaining.html#_Discussion' class='paragraph'>AIL_event_system_command_queue_remaining: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_event_system_state.html#_Discussion' class='paragraph'>AIL_event_system_state: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_event_contents.html#_Discussion' class='paragraph'>AIL_get_event_contents: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_event_length.html#_Discussion' class='paragraph'>AIL_get_event_length: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_soundbank.html#_Discussion' class='paragraph'>AIL_open_soundbank: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_pause_sound_instances.html#_Discussion' class='paragraph'>AIL_pause_sound_instances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_register_random.html#_Discussion' class='paragraph'>AIL_register_random: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_release_soundbank.html#_Discussion' class='paragraph'>AIL_release_soundbank: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_requeue_failed_asyncs.html#_Discussion' class='paragraph'>AIL_requeue_failed_asyncs: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_resume_sound_instances.html#_Discussion' class='paragraph'>AIL_resume_sound_instances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_event_bank_functions.html#_Discussion' class='paragraph'>AIL_set_event_bank_functions: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_event_error_callback.html#_Discussion' class='paragraph'>AIL_set_event_error_callback: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sound_label_limits.html#_Discussion' class='paragraph'>AIL_set_sound_label_limits: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sound_start_offset.html#_Discussion' class='paragraph'>AIL_set_sound_start_offset: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_variable_float.html#_Discussion' class='paragraph'>AIL_set_variable_float: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_variable_int.html#_Discussion' class='paragraph'>AIL_set_variable_int: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_shutdown_event_system.html#_Discussion' class='paragraph'>AIL_shutdown_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_startup_event_system.html#_Discussion' class='paragraph'>AIL_startup_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_start_sound_instance.html#_Discussion' class='paragraph'>AIL_start_sound_instance: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_stop_sound_instances.html#_Discussion' class='paragraph'>AIL_stop_sound_instances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_text_dump_event_system.html#_Discussion' class='paragraph'>AIL_text_dump_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_variable_float.html#_Discussion' class='paragraph'>AIL_variable_float: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_variable_int.html#_Discussion' class='paragraph'>AIL_variable_int: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='getting_in.html#starting_game' class='paragraph'>Getting It In The Game: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_stream.html#advanced_stream_one' class='paragraph'>Handling Stream Errors: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='HEVENTSYSTEM.html#_Discussion' class='paragraph'>HEVENTSYSTEM: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_High_Level_Event_System.html#_Discussion' class='paragraph'>High Level Event System: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='HMSOUNDBANK.html#_Discussion' class='paragraph'>HMSOUNDBANK: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_refer_to_a_specific_High_Level_Sound_Instance_at_run_time_.html#_Discussion' class='paragraph'>How do I refer to a specific High-Level Sound Instance at run-time?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_trigger_a_High_Level_Sound_Event_that_was_made_in_the_Miles_Sound_Studio_.html#_Discussion' class='paragraph'>How do I trigger a High-Level Sound Event that was made in the Miles Sound Studio?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='integrating_events.html#integrating_overview' class='paragraph'>Integrating The Miles Event System: Using the Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='migration.html#migrating_breaks' class='paragraph'>Migrating From Miles 8: Migrating From Miles 8</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='auditioning.html#introaudin' class='paragraph'>Miles Auditioning: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_High_Level_Callbacks.html#_Discussion' class='paragraph'>Miles High Level Callbacks: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESEVENTSOUNDFLAG.html#_Discussion' class='paragraph'>MILESEVENTSOUNDFLAG: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESEVENTSOUNDINFO.html#_Discussion' class='paragraph'>MILESEVENTSOUNDINFO: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESEVENTSOUNDSTATUS.html#_Discussion' class='paragraph'>MILESEVENTSOUNDSTATUS: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESEVENTSTATE.html#_Discussion' class='paragraph'>MILESEVENTSTATE: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MSSSOUNDBANK.html#_Discussion' class='paragraph'>MSSSOUNDBANK: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MSS_USER_RAND.html#_Discussion' class='paragraph'>MSS_USER_RAND: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_startsound.html#ref_startsound_selection' class='paragraph'>Start Sound: Sound Selection</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_stop.html#advanced_stop_one' class='paragraph'>Stopping a sound from code: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='users_9.html#users_9_main' class='paragraph'>Using Multiple Sound Banks: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_userbuffer.html#advanced_userbuffer_one' class='paragraph'>Using the User Buffer: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_add_event_system.html' class='paragraph'>AIL_add_event_system</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_apply_environment_preset.html' class='paragraph'>AIL_apply_environment_preset</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_apply_sound_preset.html' class='paragraph'>AIL_apply_sound_preset</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_close_soundbank.html' class='paragraph'>AIL_close_soundbank</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_context.html' class='paragraph'>AIL_enqueue_event_context</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_system.html' class='paragraph'>AIL_enqueue_event_system</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_environment_presets.html' class='paragraph'>AIL_enumerate_environment_presets</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_events.html' class='paragraph'>AIL_enumerate_events</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_preset_persists.html' class='paragraph'>AIL_enumerate_preset_persists</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_sound_assets.html' class='paragraph'>AIL_enumerate_sound_assets</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_sound_presets.html' class='paragraph'>AIL_enumerate_sound_presets</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_event_system_state.html' class='paragraph'>AIL_event_system_state</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_find_environment_preset.html' class='paragraph'>AIL_find_environment_preset</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_find_sound_preset.html' class='paragraph'>AIL_find_sound_preset</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_event_contents.html' class='paragraph'>AIL_get_event_contents</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_marker_list.html' class='paragraph'>AIL_get_marker_list</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_soundbank_filename.html' class='paragraph'>AIL_get_soundbank_filename</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_soundbank_mem_usage.html' class='paragraph'>AIL_get_soundbank_mem_usage</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_soundbank_name.html' class='paragraph'>AIL_get_soundbank_name</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_soundbank.html' class='paragraph'>AIL_open_soundbank</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_register_random.html' class='paragraph'>AIL_register_random</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_release_soundbank.html' class='paragraph'>AIL_release_soundbank</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_event_error_callback.html' class='paragraph'>AIL_set_event_error_callback</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sound_label_limits.html' class='paragraph'>AIL_set_sound_label_limits</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sound_asset_info.html' class='paragraph'>AIL_sound_asset_info</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_startup_event_system.html' class='paragraph'>AIL_startup_event_system</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_start_sound_instance.html' class='paragraph'>AIL_start_sound_instance</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_unapply_environment_preset.html' class='paragraph'>AIL_unapply_environment_preset</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_unapply_sound_preset.html' class='paragraph'>AIL_unapply_sound_preset</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='System_Services.html' class='paragraph'>System Services</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Memory_and_File_Services.html' class='paragraph'>Memory and File Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Miles High Level Event System::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The Miles High Level Event System is the programmer side of the Miles Sound Studio.  That is, it's the API and system necessary to incorporate SoundBanks and events into your game. 
+
+</p>
+<p>
+It's probably easiest to start with some definitions: 
+
+</p>
+<p>
+<ul><li> Miles Sound Studio - the application that your sound designer uses to  create and audition soundbanks and events. </li><li> SoundBanks - a packed file (like a zip) that contains several different kind of objects: sound assets, labels, sound presets, environment presets, and events.  There are two kinds of soundbanks - master soundbanks and platform soundbanks.  The sound designer creates the master soundbanks, and then deploys the platform soundbanks from the master version (which applies platform specific compression, copies specific files and more).  The programmer only deals with the platform soundbanks generally.  You usually only check the master sound bank and the original sound files into source code control. </li><li> Sound assets - a wave file, MP3, Bink Audio, Ogg, or ACPCM compressed sample. Sound assets are either referenced by name within a SoundBank, or the data is actually embedded  directly in the SoundBank - it's up to the sound designer. </li><li> Labels - simple text strings that are applied when playing a sound.  You can then later control sounds based on their labels (some game systems call labels, "tags").  A sound can have as many labels as you want (and usually will have many). </li><li> Sound presets - a set of sound properties (like volume, dsp settings, etc). A sound preset can be applied to a sound immediately, or it can persist into the future so that any sound that matches the label with inherit the properties. </li><li> Environment presets - a set of global properties for the sound system (master volumes, reverb types, listener 3D positions, etc). </li><li> Events - little programs that the sound designers create.  Events can start sounds, apply presets, control already playing sounds (like stop and pause), control the caching of the sounds and more.  Events are the engine that let your sound  designers create the sound for your game. </li><li> Event Steps - an event can have many steps in it - each step is a like a statement in a normal programming language. </li><li> Sound Instances - a sound instance is created when a sound asset is played from an event. There is one instance for every active sound in the system and each instance ID is unique for the run of your application. </li></ul></p>
+<p>
+</p>
+<p>
+OK, now that the definitions are out of the way, let's talk about how you use the event system.  First off, the programmer and sound designer agree on the naming schemes to use for the SoundBanks and their contents.  There are several things to think about here: 
+
+</p>
+<p>
+<ul><li> How to name the SoundBanks themselves.  Usually, you will want a "global" soundbank and then at least one more soundbank per level.  Some games may even break the files up finer. </li><li> How to name the sound assets within the soundbank, so that they follow a logical ordering. Since the programmer will usually be triggering events that refer to the sound assets internally, it's not critical for the programmer, but discussing this ahead of time will keep your system logical. </li><li> What compression format to use for each platform and whether the sounds are embedded or not. Since this will control how the IO is handled, it's important for the sound programmer to give the sound designer some direction here. </li><li> How to name the events. The primary job of the programmer using the event system is to trigger events based on game state.  This means you must communicate the names of the events so that they are triggered correctly.  You might have names like "Level 1 Start", "Fire Gun", or very generic names like "Wind".  But you do have to decide together how to handle this. </li><li> The label scheme to use.  Labels are text based tags, that can be queried and controlled at runtime by the sound designer or the programmer.  You might want to pause all sound instances with the "dialog" label, or you might want to set the 3D position of any sound labeled "3D".  In general, err on the side of too many labels, because you never know what queries you'll need to issue later! </li></ul></p>
+<p>
+</p>
+<p>
+Once you have agreed on a naming scheme, the programmer's job is really simple.  First, use <a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a> to load all of the soundbanks provided by the designer.  Next, just call <a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a> everywhere in the game when a sound event should be triggered. This function is very lightweight -- unlike many AIL functions, it can even be invoked from multiple threads. 
+
+</p>
+<p>
+Then, once each frame, call <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a> and <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a> to process all of the events that have been queued up for that frame.  All of the actual sound-processing logic takes place between these two function calls.   
+
+</p>
+<p>
+Over the project's lifetime, you can continue to work with your sound designer to rename events, add new tags,  change compression formats, or tweak other properties.  But the work on the programming side is done once the  event-processing calls are in place! <div class="discussion_heading"><a name='(null)' class='nohover'><b>Contents</b></a></div>
+<ul class="TOCItem">
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;Structures</li>
+<ul class="TOCItem" style="display:none">
+<li><img src="topic_icon.jpg">&nbsp;<a href="MSSSOUNDBANK.html">MSSSOUNDBANK</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESEVENTSOUNDINFO.html">MILESEVENTSOUNDINFO</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESEVENTSTATE.html">MILESEVENTSTATE</a></li>
+</ul>
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;Typedefs</li>
+<ul class="TOCItem" style="display:none">
+<li><img src="topic_icon.jpg">&nbsp;<a href="HMSOUNDBANK.html">HMSOUNDBANK</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="HEVENTSYSTEM.html">HEVENTSYSTEM</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESEVENTENQUEUEFLAGS.html">MILESEVENTENQUEUEFLAGS</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESEVENTSOUNDSTATUS.html">MILESEVENTSOUNDSTATUS</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESEVENTSOUNDFLAG.html">MILESEVENTSOUNDFLAG</a></li>
+</ul>
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;Functions</li>
+<ul class="TOCItem" style="display:none">
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_startup_event_system.html">AIL_startup_event_system</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_add_event_system.html">AIL_add_event_system</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_shutdown_event_system.html">AIL_shutdown_event_system</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_add_soundbank.html">AIL_add_soundbank</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_release_soundbank.html">AIL_release_soundbank</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_system.html">AIL_enqueue_event_system</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_by_name.html">AIL_enqueue_event_by_name</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_start.html">AIL_enqueue_event_start</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_cancel.html">AIL_enqueue_event_cancel</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_position.html">AIL_enqueue_event_position</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_velocity.html">AIL_enqueue_event_velocity</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_buffer.html">AIL_enqueue_event_buffer</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_variablef.html">AIL_enqueue_event_variablef</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_filter.html">AIL_enqueue_event_filter</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_context.html">AIL_enqueue_event_context</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_selection.html">AIL_enqueue_event_selection</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event_end_named.html">AIL_enqueue_event_end_named</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enqueue_event.html">AIL_enqueue_event</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_begin_event_queue_processing.html">AIL_begin_event_queue_processing</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_variable_int.html">AIL_set_variable_int</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_variable_float.html">AIL_set_variable_float</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_variable_int.html">AIL_variable_int</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_variable_float.html">AIL_variable_float</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_requeue_failed_asyncs.html">AIL_requeue_failed_asyncs</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_sound_start_offset.html">AIL_set_sound_start_offset</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enumerate_sound_instances.html">AIL_enumerate_sound_instances</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_complete_event_queue_processing.html">AIL_complete_event_queue_processing</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_stop_sound_instances.html">AIL_stop_sound_instances</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_pause_sound_instances.html">AIL_pause_sound_instances</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_resume_sound_instances.html">AIL_resume_sound_instances</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_start_sound_instance.html">AIL_start_sound_instance</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_clear_event_queue.html">AIL_clear_event_queue</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_sound_label_limits.html">AIL_set_sound_label_limits</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_enumerate_preset_persists.html">AIL_enumerate_preset_persists</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_text_dump_event_system.html">AIL_text_dump_event_system</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_event_bank_functions.html">AIL_set_event_bank_functions</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_get_event_bank_functions.html">AIL_get_event_bank_functions</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_event_system_state.html">AIL_event_system_state</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_event_system_command_queue_remaining.html">AIL_event_system_command_queue_remaining</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_get_event_length.html">AIL_get_event_length</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AILEVENTERRORCB.html">AILEVENTERRORCB</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MSS_USER_RAND.html">MSS_USER_RAND</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_set_event_error_callback.html">AIL_set_event_error_callback</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="AIL_register_random.html">AIL_register_random</a></li>
+</ul>
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;<a href="Miles_High_Level_Callbacks.html">Miles High Level Callbacks</a></li>
+<ul class="TOCItem" style="display:none">
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;Structures</li>
+<ul class="TOCItem" style="display:none">
+<li><img src="topic_icon.jpg">&nbsp;<a href="MILESBANKFUNCTIONS.html">MILESBANKFUNCTIONS</a></li>
+</ul>
+<li><img onClick='HandleClick(event, null); return false' class="TOCGroup" src="closedbook_icon.jpg">&nbsp;Functions</li>
+<ul class="TOCItem" style="display:none">
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankFreeAll.html">MilesBankFreeAll</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetPreset.html">MilesBankGetPreset</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetEnvironment.html">MilesBankGetEnvironment</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetSound.html">MilesBankGetSound</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetEvent.html">MilesBankGetEvent</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetMarkerList.html">MilesBankGetMarkerList</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetLoadedCount.html">MilesBankGetLoadedCount</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetMemUsage.html">MilesBankGetMemUsage</a></li>
+<li><img src="topic_icon.jpg">&nbsp;<a href="MilesBankGetLoadedName.html">MilesBankGetLoadedName</a></li>
+</ul>
+</ul>
+</ul>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='System_Services.html' class='paragraph'>System Services</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='index.html' class='paragraph'>Introduction</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Memory_and_File_Services.html' class='paragraph'>Memory and File Services</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

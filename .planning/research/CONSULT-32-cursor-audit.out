@@ -1,0 +1,170 @@
+﻿## Audit scope (LOCKED facts honored)
+
+Treat the spawn-load OOM as **pool exhaustion during live instantiation of ~18,478 objects**, with victim stacks that name **last allocators**, not necessarily leak sites. Owner attribution is broken (fact #6). `SwgCuiAllTargets` is a known but **minor** leak; `garbageCollect` there did **not** stop OOM (fact #8).
+
+---
+
+## Subsystem alloc/free audit
+
+### Verdict on the dominant path
+
+In the named skeletal / object / template subsystems, I did **not** find a per-object **missing `delete`/`release`** on the normal **create → live → destroy** path that would explain ~1.3M live blocks at OOM. The stacks in fact #4 are consistent with **mass legitimate instantiation** (~70 small blocks/object × 18,478 objects ≈ census in fact #5), not a single runaway leak in `Skeleton.cpp` or `GroundScene.cpp`.
+
+What follows are **balanced paths** and **actual imbalances** (minor or conditional).
+
+---
+
+### `clientSkeletalAnimation`
+
+| Site | Allocation | Matching free | Load-path note |
+|------|------------|---------------|----------------|
+| `Skeleton.cpp:791,797` | `new Segment(...)` in ctor | `~Skeleton` `PointerDeleter` on `m_skeletonSegments` (`827-828`) | One skeleton graph per appearance LOD; freed when appearance dies |
+| `Skeleton.cpp:1886,1893` | `new uint8[...]` transform backing stores | `allocateTransformArrays` deletes prior stores (`1868-1879`); `~Skeleton` deletes arrays (`819-823`) | Realloc-safe; not a leak |
+| `BasicSkeletonTemplate.cpp:518` | `return new Skeleton(...)` | Owned by `SkeletalAppearance2::m_skeletons`; `~SkeletalAppearance2` `PointerDeleter` + `delete m_skeletons` (`1262-1263`) | Balanced |
+| `SkeletalAppearanceTemplate.cpp:297-327` | `SkeletonTemplateList::fetch`, `fetchBasicSkeletonTemplate`, `createSkeleton` | `basicSkeletonTemplate->release()` (`340`); `std::for_each(..., release)` on skeleton templates (`349`) | Per-appearance build is ref-count balanced |
+| `SkeletalAppearanceTemplate.cpp:426` | `return new SkeletalAppearance2(this)` | `Object::setAppearance` / `~Object` delete appearance (`883-886`, `1551`) | Balanced |
+| `SkeletalAppearance2.cpp:1013-1125,1080,1083` | `AnimationEnvironment`, skeleton/mesh vectors, resolver, shader-prim vectors | Full teardown in `~SkeletalAppearance2` (`1183-1278`) | Balanced |
+| `SkeletalAppearance2.cpp:2252-2271` | `compositeMesh.addShaderPrimitives` → new SBSSPs | Old LOD vector swapped out then `PointerDeleter` (`2267-2271`) | Rebuild replaces, does not accumulate |
+| `MeshConstructionHelper.cpp` (static scratch via `SkeletalMeshGeneratorTemplate.cpp:3429-3561`) | Temp mesh build data | `clearAllData()` deletes per-shader/per-TRD scratch (`499-505`) after each `addShaderPrimitives` (`3560-3561`) | Shared singleton helper; cleared per mesh build |
+| `SoftwareBlendSkeletalShaderPrimitive.cpp:482` | **Not an alloc site** — `prepareToView()` | N/A | OOM stack line is render-time, not load leak |
+| `SoftwareBlendSkeletalShaderPrimitive.cpp:394-1151` | `_initialize`: streams, index buffer, `m_sourceData`, render commands | `~SoftwareBlendSkeletalShaderPrimitive` (`430-447`) | Large **per-instance** cost when mesh builds; expected retention while object lives |
+
+**Minor / tooling imbalances (not 18k-scale):**
+
+```615:616:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearanceTemplate.cpp
+	// @todo remove the fetched MeshGeneratorTemplate from m_meshGenerators.
+```
+
+```651:652:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearanceTemplate.cpp
+	// @todo remove the fetched SkeletonTemplate from m_skeletonTemplates.
+```
+
+Editor `removeMeshGenerator` / `removeSkeletonTemplate` can leave fetched template refs in `m_meshGenerators` / `m_skeletonTemplates`. Not the cantina spawn path.
+
+**Asymmetric but intentional template caching:**
+
+```490:501:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearanceTemplate.cpp
+		for (MeshGeneratorTemplateVector::iterator it = m_meshGenerators.begin(); it != endIt; ++it)
+		{
+			if (*it)
+				(*it)->garbageCollect();   // does NOT release fetch ref
+		}
+```
+
+vs skeleton/LAT refs released in the same function (`506-525`). Preload pins MGT data in the SAT template until SAT dtor (`125-131`). That is **cache retention**, not a per-spawn-object leak; it does contribute to **working set** during `WorldSnapshot::preloadSomeAssets` (1173 templates preloaded).
+
+---
+
+### `sharedObject` — `AppearanceTemplateList.cpp:400`
+
+**Reference counting is correct** on the hot path:
+
+```397:407:src/engine/shared/library/sharedObject/src/shared/appearance/AppearanceTemplateList.cpp
+	const AppearanceTemplate *const appearanceTemplate = fetch(fileName);
+	Appearance *const appearance = appearanceTemplate->createAppearance();
+	// ...
+	release(appearanceTemplate);
+```
+
+`Appearance` ctor fetches the template again (`Appearance.cpp:82`); dtor releases (`107`). Net: one ref held by each live `Appearance`. Named templates stay in `ms_namedTemplates` by design — shared across instances, not duplicated per object.
+
+---
+
+### `clientGame` — object create/destroy
+
+| Site | Allocation | Matching free | Note |
+|------|------------|---------------|------|
+| `ClientTangibleObjectTemplate.cpp:150` | `new TangibleObject(this)` | `delete object` via scene destroy / `WorldSnapshot::unload` (`390-391`) | Balanced |
+| `TangibleObject.cpp:319` | `changeAppearance(*newTemplate)` in ctor | Appearance owned by `Object`; replaced via `setAppearance` | Balanced |
+| `TangibleObject.cpp:604` | `AppearanceTemplateList::createAppearance(...)` | `setAppearance(appearance)` (`673-674`) deletes prior appearance in `Object::setAppearance` (`1537-1551`) | Balanced |
+| `GroundScene.cpp:2536` | `ObjectTemplate::createObject(...)` | `delete existingObject` on recreate/destroy paths (`2500`, `2513`, destroy handler) | Balanced |
+| `WorldSnapshot.cpp:172-173` | `createObject()` + `releaseReference()` on template | Object deleted in `unload` (`390-391`) | Balanced |
+
+**Conditional imbalance found:**
+
+```1132:1134:src/engine/client/library/clientGame/src/shared/object/CreatureObject.cpp
+			if(m_localLookAtPositionObject == NULL)
+				m_localLookAtPositionObject = new Object();
+```
+
+`~CreatureObject` (`740-774`) deletes watchers/underwear/healing attach — **no `delete m_localLookAtPositionObject`**. Leaks one `Object` per creature that hits the look-at override path. Not all 18,478 spawn objects.
+
+`CreatureObject.cpp:608` `attributesOnSet` callback is a member pointer connect only — no per-callback heap leak.
+
+---
+
+## Why this still OOMs during cantina load (without re-deriving facts)
+
+1. **Working set, not a missing free on the audited path:** Each tangible with a skeletal appearance retains `SkeletalAppearance2` → skeleton LODs → (when mesh builds) `SoftwareBlendSkeletalShaderPrimitive` vertex/index/source buffers. That matches fact #5’s small-block spray and victim stacks (b, c, d).
+
+2. **Preload amplifies baseline:** With `preloadWorldSnapshot` enabled when pool limit ≥ 375 MB (`ConfigClientGame.cpp:1114-1116`), `WorldSnapshot::preloadSomeAssets` (`726-730`) loads assets for all snapshot templates **before** streaming finishes — on top of live object graphs.
+
+3. **Regression is unlikely to be a new “forgotten delete” in these files** on the evidence timeline. Phase-31 touch points here (`feaddc08` MeshConstructionHelper casts, `d9ee92088` SSE skinning + `_DEBUG` oracle) do not add persistent load-time allocations. The oracle runs at skin time in `_DEBUG` only (`SoftwareBlendSkeletalShaderPrimitive.cpp:1842-1859`), not during object create.
+
+4. **Diagnostic overhead can push a borderline load over the edge:** Your **uncommitted** `MemoryManager.cpp` re-enables `DO_TRACK`/`DO_GUARDS` in Debug and adds census dumping at 150 MB. That adds per-block metadata/guards on ~1M+ blocks — memory **overhead**, not a logic leak in the stacks above.
+
+---
+
+## Secondary: `SwgCuiAllTargets` + `garbageCollect(false)` fix
+
+### Pre-fix imbalance (confirmed)
+
+```337:343:src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiAllTargets.cpp
+		status = new SwgCuiStatusGround(*page, SwgCuiStatusGround::ST_target);
+		IGNORE_RETURN(m_statii->insert(std::make_pair(id, status)));
+```
+
+Erasing from `m_statii` (`828`, `850`) without reaping the mediator left `SwgCuiStatusGround` allocated. `~CuiMediator` is protected; direct `delete` is illegal.
+
+### Is the fix correct?
+
+**Yes, mechanistically.** `CuiMediator::garbageCollect` is the sanctioned reaper:
+
+```929:942:src/engine/client/library/clientUserInterface/src/shared/core/CuiMediator.cpp
+void CuiMediator::garbageCollect (bool force)
+{
+	for (MediatorVector::iterator it = s_mediators.begin (); it != s_mediators.end ();)
+	{
+		CuiMediator * const mediator = NON_NULL (*it);
+		if (mediator->getRefCount () == 0 && (force || !mediator->isOpenNextFrame ()))
+		{
+			mediator->deactivate ();
+			it = s_mediators.erase (it);
+			delete mediator;
+		}
+```
+
+Your branches call `deactivate()` on status pages first, then `garbageCollect(false)` (`832`, `865`) — matching `SwgCuiInventoryContainer.cpp` and other UI code.
+
+### Double-free safety
+
+- Delete only when `getRefCount() == 0` and mediator is erased from `s_mediators` before `delete`.
+- `~CuiMediator` fatals if `m_refcount != 0` (`269`) or still listed in `s_mediators` (`265-267`).
+- `deactivate()` is idempotent when already inactive (`462`).
+- `SwgCuiStatusGround` does not `fetch()` itself; `m_statii` holds raw pointers, not refcounts — so refcount should be 0 when evicted.
+
+**Not double-free safe in the sense of “only these status pages” — it’s a global sweep**, but that matches existing engine UI practice and should not double-delete the same pointer.
+
+### Edge cases
+
+1. **`s_mediatorsToAddNext` blind spot:** New mediators are queued in the ctor (`CuiMediator.cpp:242`) and merged into `s_mediators` only at the **end** of `CuiMediator::updateAll` (`1028-1035`). `garbageCollect` scans **`s_mediators` only**. Status pages created and deactivated **before** that merge may survive one frame unreaped.
+
+2. **OOM-before-first-`updateAll`:** If HUD `updateOnRender` creates statuses then OOMs before mediator update merges/reaps, those blocks remain — consistent with fact #8 (minor vs millions of blocks).
+
+3. **External `fetch()`:** If anything held a refcount on a status mediator, GC correctly skips it (no premature delete).
+
+4. **Global side effects:** `garbageCollect(false)` may delete **any** refcount-0, not-open-next-frame mediator in the global list, plus `UIManager::garbageCollect()` (`948-950`). Usually desirable; not scoped to `SwgCuiAllTargets` only.
+
+---
+
+## Bottom line
+
+| Finding | Severity vs cantina OOM |
+|---------|-------------------------|
+| Audited skeletal/appearance/object paths | **No dominant alloc/free imbalance** on create/destroy |
+| Working set of 18k objects + template preload + SBSSP mesh data | **Dominant memory consumer** (matches LOCKED census/stacks) |
+| `SwgCuiAllTargets` + `garbageCollect` | **Real but minor leak**; fix is **correct and double-free-safe** with merge-timing caveats |
+| `CreatureObject::m_localLookAtPositionObject` | **Real conditional leak**; not spawn-scale |
+| Debug `DO_TRACK`/`DO_GUARDS` re-enable (local diff) | **Can worsen OOM** without being a code-path leak |
+
+If you want the next investigative step, the highest-yield angles outside this audit are: compare **live bytes per skeletal object** before/after Phase 31 on the same snapshot, toggle **`preloadWorldSnapshot`**, and run once with **`DO_TRACK` off** to separate diagnostic overhead from working-set growth. I’m in Ask mode — say if you want those run in Agent mode.

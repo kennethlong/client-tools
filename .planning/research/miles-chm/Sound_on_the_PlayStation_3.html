@@ -1,0 +1,98 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Sound on the PlayStation 3</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Sound on the PlayStation 3'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Sound on the PlayStation 3</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Sound_on_the_PlayStation_3.html#_Discussion' class='paragraph'>Sound on the PlayStation 3: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Distributing_Miles_with_PlayStation_3_Applications.html' class='paragraph'>Distributing Miles with PlayStation 3 Applications</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Memory_management_on_the_PlayStation_3.html' class='paragraph'>Memory management on the PlayStation 3</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='The_Sony_PlayStation_3_Platform.html' class='paragraph'>The Sony PlayStation 3 Platform</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Sound on the PlayStation 3::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The Miles Sound System on PS3 supports the same uncompressed PCM, IMA ADPCM, Bink Audio, MP3, and Ogg Vorbis digital sound formats that we  support on our other platforms.   
+
+</p>
+<p>
+Miles talks to the libAudio library for its sound output.  It does all mixing internally, taking advantage of the SPUs when possible.  Miles supports full multi-channel output support on the PS3 (up to 7.1). 
+
+</p>
+<p>
+To configure the hardware correctly on the PS3-side, you should first run the system HUD to select the output you'd like (this is what your end-users do).  Then, at runtime, you query the system to find out what mode the user requested, and then call <b>cellAudioOutConfigure</b> to actually put the hardware into that mode.  Finally, you call <b>cellAudioInit</b> to start libAudio, and then start up Miles normally!  See the <b>MilesPS3.cpp</b> file for an example of all of this. 
+
+</p>
+<p>
+In the meantime, you should run the system settings utility (we use the dtpon.exe utility) to set up the hardware, and then tell Miles to run in 6 or 8 channel mode.  In some cases, you will still only get stereo output, but the hardware will eventually do all of this correctly.  Miles on PS3 supports stereo, 5.1 discrete and 7.1 discrete output. 
+
+</p>
+<p>
+Miles for PS3 uses its built-in DLS synthesizer for all MIDI playback.  This has the advantage of allowing you to author  custom DLS instrument sets to optimize memory use. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Distributing_Miles_with_PlayStation_3_Applications.html' class='paragraph'>Distributing Miles with PlayStation 3 Applications</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='The_Sony_PlayStation_3_Platform.html' class='paragraph'>The Sony PlayStation 3 Platform</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Memory_management_on_the_PlayStation_3.html' class='paragraph'>Memory management on the PlayStation 3</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

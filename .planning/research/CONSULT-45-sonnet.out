@@ -1,0 +1,325 @@
+# CONSULT-45 — Zone-in load "jerk": Lateral-angle analysis
+# Consultant: fresh Sonnet (lateral / out-of-the-box angle)
+# Date: 2026-06-20
+
+---
+
+## Framing
+
+This analysis takes the lateral angle: what differences between the MSVC v145/C++20 rebuild
+and the original VS2003 retail binary could cause zone-in main-thread hitches, BEYOND the
+confirmed runtime VS-compile (Fact A). The crew's other angles cover the compile detail,
+disk cache design, and synchronous load mapping. I focus on allocation cost, STL, texture
+pool behavior, debug overhead leaking into Release, and a few lateral catches.
+
+All findings are based on direct code inspection of:
+- `src/engine/shared/library/sharedMemoryManager/src/shared/MemoryManager.cpp`
+- `src/engine/client/application/Direct3d9/src/win32/Direct3d9_TextureData.cpp`
+- `src/engine/client/application/Direct3d9/src/win32/Direct3d9_HlslRewrite.cpp`
+- `src/engine/client/application/Direct3d9/src/win32/Direct3d9_VertexShaderData.cpp`
+- `src/engine/shared/library/sharedFile/src/shared/ZlibFile.cpp`
+- `src/engine/shared/library/sharedDebug/src/shared/Report.cpp`
+- `src/game/client/application/SwgClient/build/win32/SwgClient.vcxproj`
+
+---
+
+## Candidate 1: MemoryManager global CRITICAL_SECTION — process-wide serialization point
+
+**What it is.** Every `MemoryManager::allocate()` and `::free()` call wraps the entire
+tree-search + block split/merge in a single `ms_criticalSection->enter()/leave()` at
+MemoryManager.cpp:1216 and 1365/1604. The lock type is a Win32 `CRITICAL_SECTION`
+(RecursiveMutex.h:36). This is a process-global, single-threaded-access serializer.
+
+**Zone-in load vs retail.** The retail binary almost certainly used SOE's SmartHeap
+(widely used in late-1990s/early-2000s SOE titles) or the CRT malloc, which both use
+small-block free-lists without a large binary-search-tree traversal per allocation.
+Our MemoryManager uses a Knuth-style best-fit ternary search tree
+(addToFreeList / removeFromFreeList / searchFreeList in MemoryManager.cpp:941–1159).
+On a warm heap with hundreds of blocks the worst-case tree depth grows with O(log N)
+live allocations. The zone-in path creates a large number of new objects (textures,
+geometry, shader objects, etc.) on the main thread.
+
+**Magnitude assessment: MED-LOW.** On a single-threaded main loop (which this is),
+there is no lock contention — EnterCriticalSection on an uncontested CS is ~5ns
+(a few instructions). The tree traversal per alloc is the real cost: in a heap
+with say 50k live blocks the searchFreeList walk is O(log 50k) = ~16 comparisons,
+each touching a different cache line (the tree is scatter-allocated). At zone-in
+you might do tens of thousands of allocations in a short window; if the tree height
+is large and the free-block tree is fragmented (which grows worse over a session),
+each alloc can be a cache-miss chain. This would manifest as a moderate background
+drag rather than a per-frame spike.
+
+**Debug-specific wrinkle.** In Debug builds (`ms_debugProfileAllocate`) there is a
+PROFILER_BLOCK_ENTER/LEAVE per alloc (MemoryManager.cpp:1195–1196,1371). Also
+`ms_debugVerifyGuardPatterns`/`ms_debugVerifyFreePatterns` trigger a full O(N) heap
+walk on every alloc/free (MemoryManager.cpp:1197–1198). If either flag is on by
+default in any configuration, Debug is dramatically slower. But flags default to 0
+in the source; the real Debug pain point is `_ITERATOR_DEBUG_LEVEL=2` (see candidate 4).
+
+**Retail comparison.** SmartHeap (Micro Quill) uses separate size-class free-lists
+and does not do a search per alloc in the common case — it is effectively O(1) for
+the most common allocation sizes. Our ternary-tree allocator at full heap occupancy
+is categorically slower per-alloc.
+
+**What to measure:**
+- Add a PixCounter that increments a global cycle counter around the `ms_criticalSection->enter()` block in allocate(). Read via the in-game profiler or PixCounter dump.
+- Alternatively: PIX/Intel VTune sampling profile during cantina zone-in — look for `searchFreeList` or `addToFreeList` appearing in the hot-path.
+- A/B: set `#define DISABLE_MEMORY_MANAGER 1` (MemoryManager.cpp:38) in a test build, which falls through to the CRT `malloc`/`free`. If zone-in hitches visibly improve, the custom allocator is implicated.
+
+---
+
+## Candidate 2: D3DPOOL_MANAGED textures — first-use GPU upload stall
+
+**What it is.** All normal textures are created with `D3DPOOL_MANAGED`
+(Direct3d9_TextureData.cpp:395, 432). In D3D9, MANAGED pool means the runtime keeps
+a system-memory shadow copy and uploads to GPU VRAM on first-use — specifically on
+the first `Present()` or `DrawPrimitive()` call that touches the texture. The upload
+is synchronous-to-the-GPU from the CPU's perspective: the runtime detects the dirty
+system-memory buffer, calls the GPU to DMA it, and the CPU stalls waiting for the
+transfer to complete (or at least for the command to be submitted and acked).
+
+**Zone-in context.** When zoning into the cantina, many textures are first-used.
+In the D3D9 driver (WDDM model on Win10/11), the MANAGED pool upload goes through
+the UMD → KMD → DMA path. Under WDDM, the very first Present() after N new MANAGED
+textures have been DMAed can cause a brief GPU sync stall.
+
+**Retail comparison.** The retail binary also uses D3DPOOL_MANAGED (it was the
+standard D3D9 pattern in 2003). So this is NOT a new difference introduced by our
+rebuild. However: the retail binary is 32-bit and has a fixed ~2GB address space;
+our rebuilt client has LARGEADDRESSAWARE and can buffer more textures between
+checkpoints. More importantly, on modern WDDM drivers there is an additional cost
+that did not exist under XPDM (Win XP): WDDM's staging-buffer indirection and
+residency tracking add overhead to MANAGED pool that was absent in the WinXP drivers
+that the retail binary was tuned for.
+
+**Magnitude: MED.** Not a new rebuilder regression per se, but the WDDM amplification
+is real and untested. Per-frame hitches during zone-in that correlate with DrawPrimitive
+calls touching new textures are the signature.
+
+**What to measure:**
+- GPU performance counters in PIX/RenderDoc: look for GPU-idle stalls at Present() during zone-in.
+- Switch to `D3DPOOL_DEFAULT` + explicit `D3DPOOL_SYSTEMMEM` staging upload via `UpdateTexture()` for non-render-target textures. This gives the app explicit control over when the upload happens (pre-upload all zone-in textures before the first frame) rather than paying it per-draw.
+- Count new MANAGED textures per frame during zone-in with a PixCounter.
+
+---
+
+## Candidate 3: OutputDebugString during shader rewrite — kernel round-trip per compile
+
+**What it is.** In Debug builds, every shader rewrite emits via `DEBUG_REPORT_LOG_PRINT(true, ...)`:
+- `Direct3d9_HlslRewrite.cpp:844` — emits for every #include rewrite during compilation.
+- `Direct3d9_HlslRewrite.cpp:888` — emits for every main-source rewrite.
+- `Direct3d9_VertexShaderData.cpp:700` — emits shader compile errors/warnings.
+
+`REPORT_LOG_PRINT(true, ...)` calls `Report::setFlags(RF_log|RF_print)` then
+`Report::puts()`, which calls `OutputDebugString(buffer)` (Report.cpp:145). Under a
+debugger, `OutputDebugString` is a round-trip through a named kernel mutex and shared
+memory (`DBWIN_BUFFER` protocol) — this can cost 1–5ms per call when a debugger
+(Visual Studio, WinDbg) is attached. With 44 VS compiles each triggering multiple
+rewrite log lines, the cumulative Debug overhead is significant.
+
+**In Release builds:** `DEBUG_REPORT_LOG_PRINT` is defined to `NOP` (Report.h:65).
+So this is Debug-only overhead.
+
+**Magnitude (Debug): HIGH.** With a VS debugger attached and 44 VS compiles each
+producing 2–5 OutputDebugString calls, this can add 100–500ms to the zone-in window
+in Debug. This explains why the user observes "worse in Debug" (Evidence file).
+In Release this is zero.
+
+**Magnitude (Release): NONE.** Compile-error messages that use
+`DEBUG_REPORT_LOG_PRINT` become no-ops. The `REPORT_LOG_PRINT(true, ...)` variant
+(non-debug) is used for the MemoryManager shutdown summary only, not in the
+compile path.
+
+**What to measure:**
+- Detach the debugger and test Debug build — if Debug hitches reduce significantly
+  with no debugger attached, OutputDebugString is the cause.
+- Check ETW/Procmon for DebugObject named events during zone-in.
+
+---
+
+## Candidate 4: _ITERATOR_DEBUG_LEVEL=2 in Debug — per-operation STL iterator validation
+
+**What it is.** The SwgClient Debug vcxproj sets `_ITERATOR_DEBUG_LEVEL=2`
+(SwgClient.vcxproj:200). IDL=2 enables full iterator validation in the MSVC STL:
+every `std::vector::operator[]`, `std::map::find`, `begin()`/`end()` access is
+validated at runtime with range checks and ownership checks. Modern MSVC STL with
+IDL=2 is dramatically slower for container-heavy workloads than the original
+STLport (which had debug mode off by default, or was shipped in Release mode with
+no iterator validation).
+
+**Zone-in relevance.** The zone-in path is extremely container-heavy:
+- `Direct3d9_VertexShaderData.cpp` line 64: `std::vector<D3D_SHADER_MACRO>` rebuilt per compile.
+- The global bytecode cache at line 143: `std::map<std::string, VsByteCode>` indexed per compile miss.
+- The terrain shader cache, object lists, etc. all use `stdvector`/`stdmap` which resolve to `std::vector`/`std::map`.
+
+STLport (used in the original code) did not have a concept of IDL=2 — it shipped
+with a flat container implementation. Under IDL=2, even a simple `push_back` on a
+`vector<D3D_SHADER_MACRO>` (44 entries × 44 compiles) does checked reallocs.
+This is pure Debug tax, but it's non-trivial: IDL=2 can slow STL-heavy code by 5–20x
+in Debug compared to Release.
+
+**Release:** IDL=0 is set in all Release configs (vcxproj:261). Zero overhead.
+**Debug:** IDL=2. Meaningful amplifier for container-heavy paths.
+
+**Magnitude (Debug): HIGH-amplifier.** Not a standalone hitch cause but IDL=2
+multiplies the cost of every STL operation in the already slow Debug path.
+
+**What to measure:**
+- Add `_ITERATOR_DEBUG_LEVEL=1` to Debug preprocessor defines (keeps some safety,
+  removes the expensive ownership tracking) — measure zone-in hitch duration.
+- IDL=0 in Debug (same as Release) will show the maximum speedup; IDL=1 is a
+  reasonable middle ground.
+- ETW CPU sampling in Debug should show % time in STL iterator-check inlined code.
+
+---
+
+## Candidate 5: ZlibFile decompression — lazy, first-read, on-main-thread
+
+**What it is.** Assets in the TRE archives are zlib-compressed. When a ZlibFile is
+first accessed (via `read()` or `seek()`), `createDecompressedMemoryFile()` is called
+lazily (ZlibFile.cpp:121–123, 111–113). This decompresses the entire file on first read.
+The decompression runs synchronously on the thread that first touches the file.
+During zone-in, large numbers of TRE assets (textures, mesh geometry, shader
+templates) are first-accessed on the main thread.
+
+**Retail comparison.** This is the SAME code — not a rebuild regression. However:
+MSVC v145's `zlib` build (linked at compile time via the engine's own zlib copy)
+may be codegen'd differently. More meaningfully: MSVC v145 inlining behavior and
+code-gen for tight decompression loops differs from VS2003. The retail binary was
+likely compiled with aggressive PGO by SOE; our rebuild uses plain `/O2` without PGO.
+Additionally, MSVC v145 at `/O2` without PGO may not inline the inflate inner loop
+as aggressively as VS2003 + PGO on a zlib-heavy workload.
+
+**Magnitude: LOW.** zlib inflate is bandwidth-bound, not heavily dependent on
+compiler optimization. The lazy first-read pattern is the bigger latency issue, and
+it's the same in both binaries. Not a meaningful rebuild regression.
+
+---
+
+## Candidate 6: C++20 EH / SEH overhead in compileVertexShaderFpGuarded
+
+**What it is.** The VS compile path in `Direct3d9_VertexShaderData.cpp` wraps
+`D3DCompile` in an SEH-guarded call `compileVertexShaderFpGuarded`. Under MSVC
+v145 with C++20, mixing SEH (`__try`/`__except`) with C++ EH (`/EHsc`) in the same
+translation unit forces the compiler to emit a frame-based unwind table for every
+function in the TU that might have objects requiring destruction, even if it never
+throws. This increases instruction-fetch overhead and stack frame setup.
+
+**Magnitude: LOW.** SEH frame setup is a one-time cost per call frame entry, not
+per-iteration work. With 44 compiles during zone-in, the overhead is at most a
+few microseconds total. Not a meaningful contributor to visible hitches.
+
+---
+
+## Candidate 7: Demand-paging of large Debug image on first zone-in
+
+**What it is.** The Debug SwgClient binary is significantly larger than the Release
+binary (more symbols, debug info sections, RTC fill code). On Windows, demand-paging
+means that code sections first executed during zone-in (which executes a much wider
+code surface than the title screen) trigger page faults. Each hard-page-fault (kernel
+round-trip from disk or page-file) costs ~1–10ms.
+
+**Magnitude: MED in Debug / LOW in Release.** The first zone-in after a cold boot
+is worst. In subsequent zone-ins on the same process the pages are warm in the
+working set. This is a standard Debug-binary warmup cost, not specific to our rebuild,
+but our binary is larger (more C++20 headers, heavier STL, more inlined template
+instantiations). Superseded after first zone-in.
+
+**What to measure:**
+- Windows Performance Toolkit (WPT) `xperf` or Task Manager Page Faults column:
+  count hard faults during zone-in vs subsequent zone-ins.
+- Compare Debug vs Release page-fault count during zone-in.
+
+---
+
+## Candidate 8: `D3DCREATE_FPU_PRESERVE` — per-draw SSE/x87 mode sync cost
+
+**What it is.** `D3DCREATE_FPU_PRESERVE` was just added (Direct3d9.cpp:1494).
+This flag prevents D3D9 from clamping the x87 FPU to single precision, but it also
+disables a driver micro-optimization: some D3D9 driver paths assume the FPU is
+in single-precision mode and can skip the mode save/restore around FP instructions.
+With FPU_PRESERVE the driver must save and restore the FPU control word on every
+state-setting or draw call that it internally uses FP for.
+
+**Magnitude: LOW.** The per-draw overhead is sub-microsecond. With thousands of
+draws per frame the cumulative cost is measurable (perhaps 1–5% frame time) but
+not a spike/hitch source. Not a zone-in-specific amplifier.
+
+---
+
+## Candidate 9: Modern MSVC STL string/map — allocation profile vs STLport
+
+**What it is.** The original code used STLport. STLport used `node_alloc`, a
+per-size-class free-list that bypassed the global allocator for small containers.
+Modern MSVC STL (2019+) uses `std::allocator` which routes to `::operator new`
+and thus to our `MemoryManager::allocate()`. Every `std::string` short-string-
+optimization threshold in MSVC is 15 bytes (vs STLport's 16); `std::map` nodes
+route through the global allocator.
+
+**The specific zone-in impact:** the bytecode cache key at VertexShaderData.cpp:151
+builds a `std::string` (fileName + \\x1f + key suffix) per lookup. The map lookup
+itself does string comparisons. With MSVC STL each map node is a separate allocation
+through MemoryManager. With STLport's node allocator, map nodes were pooled within
+STLport's own size-class free-list (bypassing MemoryManager entirely for the common
+case).
+
+**Magnitude: MED-LOW.** This is a background-drag contribution. Each map node
+allocation at zone-in goes through the MemoryManager tree search (Candidate 1).
+The two amplify each other. Not a standalone spike source.
+
+---
+
+## Summary ranking: what actually matters for zone-in HITCHES
+
+| # | Candidate | Config | Contribution | Key reason |
+|---|---|---|---|---|
+| 3 | OutputDebugString per rewrite/compile | Debug only | HIGH | 1–5ms per ODS call under debugger × many calls = 100–500ms aggregate Debug tax |
+| 4 | _ITERATOR_DEBUG_LEVEL=2 | Debug only | HIGH-amplifier | 5–20x STL slowdown; amplifies every container op during the compile/load path |
+| 7 | Demand-paging large Debug image | Debug (first zone-in) | MED | Hard page faults; warms after first zone-in |
+| 2 | D3DPOOL_MANAGED first-use GPU upload | All configs | MED | WDDM staging overhead not present under WinXP XPDM; per-frame texture-touch stall |
+| 1 | MemoryManager global CS + BST per alloc | All configs | MED-LOW | Background drag; free-list tree grows with fragmentation; exacerbated by modern STL routing through it |
+| 9 | MSVC STL map/string — no node allocator | All configs | MED-LOW | Map nodes now through MemoryManager BST search (was bypassed by STLport node allocator) |
+| 5 | ZlibFile lazy decompression | All configs | LOW | Same as retail; not a rebuild regression |
+| 6 | SEH/EH in compile guard | All configs | LOW | One-time per-call, negligible magnitude |
+| 8 | D3DCREATE_FPU_PRESERVE overhead | All configs | LOW | Sub-microsecond per draw |
+
+---
+
+## Key finding: the Debug hitches are artificially inflated by TWO independent taxes
+
+The observation "worse in Debug" points to candidates 3 and 4 stacking:
+- Every D3DCompile call (44 zone-in) triggers 2–5 `OutputDebugString` calls
+  (via `DEBUG_REPORT_LOG_PRINT(true, ...)` in Direct3d9_HlslRewrite.cpp), each
+  costing 1–5ms under a debugger.
+- IDL=2 multiplies every STL container operation in the shader-compile and
+  asset-load paths by 5–20x.
+
+Neither of these taxes exist in Release. The Release hitches are therefore more
+"honest" (just the D3DCompile time + candidate 2 MANAGED pool stalls), while Debug
+adds a large synthetic inflation from ODS and IDL=2.
+
+---
+
+## Actionable measurements
+
+1. **Isolate ODS overhead (Debug):** Detach VS debugger and re-test Debug build.
+   The ODS calls become no-ops when no debugger listens; if Debug hitches shrink
+   significantly this is confirmed.
+
+2. **IDL=1 in Debug:** Change vcxproj Debug `_ITERATOR_DEBUG_LEVEL` from 2 to 1.
+   Rebuild Debug. Measure zone-in time. Expected: 30–60% improvement in Debug
+   hitch duration.
+
+3. **MemoryManager BST drag:** Enable `ms_debugProfileAllocate` flag in a Debug
+   build (DebugFlags "SharedMemoryManager/profileAllocate") and look at the
+   allocate profiler block time in the PIX profiler during zone-in.
+
+4. **D3DPOOL_MANAGED stall in Release:** Add a PixCounter counting CreateTexture
+   calls per frame. In RenderDoc: look for GPU timeline gaps at Present() during
+   zone-in frames — these are the MANAGED-pool upload stalls.
+
+5. **DISABLE_MEMORY_MANAGER test:** In a scratch build, set `DISABLE_MEMORY_MANAGER 1`
+   at MemoryManager.cpp:38 to fall through to CRT malloc. If Release zone-in
+   improves measurably, pursue a size-class slab allocator or mimalloc replacement.
+
+---

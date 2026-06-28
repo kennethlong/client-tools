@@ -1,0 +1,107 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_unlock</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_unlock'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_unlock</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ resumes timer service to all MSS drivers and application callback functions after a matching call to AIL_lock.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_lock.html#_Discussion' class='paragraph'>AIL_lock: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_unlock.html#_Discussion' class='paragraph'>AIL_unlock: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_lock.html' class='paragraph'>AIL_lock</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Timer_Services.html' class='paragraph'>Timer Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_unlock.html'>AIL_unlock</a></span>(</td><td>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ resumes timer service to all MSS drivers and application callback functions after a matching call to AIL_lock.</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_unlock::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Calls to <a href='AIL_lock.html' class='paragraph'>AIL_lock</a> and <a href='AIL_unlock.html' class='paragraph'>AIL_unlock</a> should bracket any sections of application code which must not be interrupted by background MSS timer callbacks.  Examples would include non-reentrant application functions which may be called from both the foreground application and an MSS timer, XMIDI, or digital sound callback function. 
+
+</p>
+<p>
+<a href='AIL_lock.html' class='paragraph'>AIL_lock</a> increments a counter which is decremented by each corresponding call to <a href='AIL_unlock.html' class='paragraph'>AIL_unlock</a>.  When an <a href='AIL_unlock.html' class='paragraph'>AIL_unlock</a> call decrements the counter to zero, MSS timer service is resumed. 
+
+</p>
+<p>
+Note that this call won't insure that the background thread isn't <i>already</i> running, just that if it has begun yet, it won't run.  To guarantee that the background thread hasn't started, use <a href='AIL_mutex_lock.html' class='paragraph'>AIL_mutex_lock</a>. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_lock.html' class='paragraph'>AIL_lock</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Timer_Services.html' class='paragraph'>Timer Services</a></td>
+    <td width=33% align=right>&nbsp;</td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

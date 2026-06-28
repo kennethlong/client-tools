@@ -1,0 +1,181 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AILSOUNDINFO</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AILSOUNDINFO'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AILSOUNDINFO</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ specifies audio format details.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AILMIXINFO.html#_Discussion' class='paragraph'>AILMIXINFO: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_info.html#_Discussion' class='paragraph'>AIL_set_sample_info: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html#_Discussion' class='paragraph'>How do I use multi-channel sound output in Miles?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Types</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu2>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_decompress_ADPCM.html' class='paragraph'>AIL_decompress_ADPCM</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_info.html' class='paragraph'>AIL_set_sample_info</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_WAV_info.html' class='paragraph'>AIL_WAV_info</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu2"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Runtime_Utility_Services.html#_Discussion' class='paragraph'>Runtime Utility Services: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='AILSOUNDINFO.html'>AILSOUNDINFO</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;format;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'>void*</span>&nbsp;data_ptr;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;data_len;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;bits;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;channels;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;channel_mask;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;samples;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;block_size;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ specifies audio format details.</table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='format' class=nohover>format</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the format constant - MSS supported values are WAVE_FORMAT_PCM for standard, uncompressed wave files and WAVE_FORMAT_IMA_ADPCM for IMA ADPCM compressed wave files.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='data_ptr' class=nohover>data_ptr</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains a pointer to the beginning of the sound data in the wave file.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='data_len' class=nohover>data_len</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the length of the sound data in the wave file.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='rate' class=nohover>rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the playback rate of the wave file.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='bits' class=nohover>bits</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the bit depth of the sound data (usually 4, 8, or 16).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='channels' class=nohover>channels</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the number of channels in the wave file (1 is mono, 2 is stereo).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='channel_mask' class=nohover>channel_mask</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Specifies the Microsoft WDM-compatible 32-bit channel mask for multichannel samples, or ~0U for traditional mono or stereo samples.  See the <i>How do I use multi-channel sound output in Miles?</i> <i><a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html' class='paragraph'>FAQ</a></i>  for more information on channel masks and multichannel content authoring.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='samples' class=nohover>samples</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the total number of samples in the wave file (used with ADPCM).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='block_size' class=nohover>block_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Contains the IMA ADPCM block size.</td>
+  </tr>
+</table>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Runtime_Utility_Services.html#_Discussion' class='paragraph'>Runtime Utility Services: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

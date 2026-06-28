@@ -1,0 +1,182 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_enqueue_event_buffer</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_enqueue_event_buffer'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_enqueue_event_buffer</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Attaches a user buffer to the event.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_3d.html#advanced_3d_one' class='paragraph'>Adding 3D to event sounds: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_buffer.html#_Discussion' class='paragraph'>AIL_enqueue_event_buffer: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_userbuffer.html#advanced_userbuffer_one' class='paragraph'>Using the User Buffer: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_enqueue_event_velocity.html' class='paragraph'>AIL_enqueue_event_velocity</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_enqueue_event_variablef.html' class='paragraph'>AIL_enqueue_event_variablef</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_enqueue_event_buffer.html'>AIL_enqueue_event_buffer</a></span>(</td><td><span class='type'><a href='S32.html' class='blue'>S32*</a></span> <span class='parameter'>token</span>,<br><span class='type'>void*</span> <span class='parameter'>user_buffer</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>user_buffer_len</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>user_buffer_is_ptr</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Attaches a user buffer to the event.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='token' class=nohover>token</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ A token created with <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_buffer' class=nohover>user_buffer</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to a user buffer to pass with the event. If user_buffer_is_ptr is 1, the pointer is copied directly and user_buffer_len is ignored.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_buffer_len' class=nohover>user_buffer_len</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The size of the user_buffer to attach to the event.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_buffer_is_ptr' class=nohover>user_buffer_is_ptr</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ If 1, the pointer is copied and user_buffer_len is ignored.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ 0 if the enqueue buffer is full</table>
+<div class="discussion_heading"><a name='AIL_enqueue_event_buffer::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ User buffers are helpful for bridging the gap between game objects and sound objects. 
+
+</p>
+<p>
+There are two use cases available in this function 
+
+</p>
+<p>
+<ul><li> <b>Pointer</b> If user_buffer_is_ptr is 1, then the value passed to user_buffer is copied directly as the user buffer contents, and then exposed during sound enumeration. This is equivalent in spirit to the void* value that often accompanies callbacks. In this case, user_buffer_len is ignored, as user_buffer is never dereferenced. </li><li> <b>Buffer</b> If user_buffer_is_ptr is 0, then user_buffer_len bytes are copied from user_buffer and  carried with the event. During sound enumeration this buffer is made available, and you never have to worry about memory management. </li></ul></p>
+<p>
+</p>
+<p>
+Pointer- </p>
+<div class=prototype>
+<pre>        struct useful_data
+        {
+            <a href='S32.html' class='paragraph'>S32</a> game_stat;
+            <a href='S32.html' class='paragraph'>S32</a> needed_info;
+        };
+
+        useful_data* data = (useful_data*)malloc(sizeof(useful_data));
+        data-&gt;game_stat = 1;
+        data-&gt;needed_info = 2;
+
+        <font color=#008000>// Pointer - the "data" pointer will be copied directly, so we can't free() "data" until after the sound </font>
+        <font color=#008000>// completes and we're done using it in the enumeration loop.</font>
+        <a href='S32.html' class='paragraph'>S32</a> ptr_token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+        <a href='AIL_enqueue_event_buffer.html' class='paragraph'>AIL_enqueue_event_buffer</a>(&amp;ptr_token, data, 0, 1);
+        <a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a>(ptr_token, "mybank/myevent");
+    </pre></div>
+<p>
+</p>
+<p>
+Buffer- </p>
+<div class=prototype>
+<pre>        struct useful_data
+        {
+            <a href='S32.html' class='paragraph'>S32</a> game_stat;
+            <a href='S32.html' class='paragraph'>S32</a> needed_info;
+        };
+
+        useful_data data;
+        data.game_stat = 1;
+        data.needed_info = 2;
+
+        <font color=#008000>// Buffer - the "data" structure will be copied internally, so we can free() the data - or just use </font>
+        <font color=#008000>// a stack variable like this</font>
+        <a href='S32.html' class='paragraph'>S32</a> buf_token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+        <a href='AIL_enqueue_event_buffer.html' class='paragraph'>AIL_enqueue_event_buffer</a>(&amp;buf_token, &amp;data, sizeof(data), 0);
+        <a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a>(buf_token, "mybank/myevent");
+    </pre></div>
+<p>
+</p>
+<p>
+As noted in <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>(), there's only 512 bytes available to an enqueue, so that places an upper limit on the amount of data you can pass along. If the data is huge, then you should use user_buffer_is_ptr.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_enqueue_event_velocity.html' class='paragraph'>AIL_enqueue_event_velocity</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_enqueue_event_variablef.html' class='paragraph'>AIL_enqueue_event_variablef</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

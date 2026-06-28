@@ -1,0 +1,82 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>How do I access files from a big packed file?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='How do I access files from a big packed file?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>How do I access files from a big packed file?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_use_a_Unicode_path_on_Windows_.html' class='paragraph'>How do I use a Unicode path on Windows?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='I_want_a_small_installation___do_I_need_all_of_the_files_in_the__redist_directories_.html' class='paragraph'>I want a small installation - do I need all of the files in the \redist directories?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='How do I access files from a big packed file?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: How do I access files from a big packed file?</p>
+<p>
+A: One solution is to use the <a href='AIL_set_file_callbacks.html' class='paragraph'>AIL_set_file_callbacks</a> function to point to your own routines for doing I/O.  A better one for most applications is to take advantage of <a href='AIL_open_stream.html' class='paragraph'>AIL_open_stream</a>'s ability to accept a system file handle (on Windows, see FileHndl.c for an example). 
+
+</p>
+<p>
+Miles uses synchronous IO from a background thread to do its IO. 
+
+</p>
+<p>
+Most applications should allow Miles to manage its own file access.  There are very few reasons to  provide your own file-access callbacks to Miles... and with Miles's extensive use of multithreading, there are  a lot of things that can go wrong if you do. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_use_a_Unicode_path_on_Windows_.html' class='paragraph'>How do I use a Unicode path on Windows?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='I_want_a_small_installation___do_I_need_all_of_the_files_in_the__redist_directories_.html' class='paragraph'>I want a small installation - do I need all of the files in the \redist directories?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

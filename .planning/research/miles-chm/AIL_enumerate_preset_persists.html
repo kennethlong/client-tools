@@ -1,0 +1,120 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_enumerate_preset_persists</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_enumerate_preset_persists'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_enumerate_preset_persists</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Enumerates the current persisted presets that active in the system.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_preset_persists.html#_Discussion' class='paragraph'>AIL_enumerate_preset_persists: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_sound_label_limits.html' class='paragraph'>AIL_set_sound_label_limits</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_text_dump_event_system.html' class='paragraph'>AIL_text_dump_event_system</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_enumerate_preset_persists.html'>AIL_enumerate_preset_persists</a></span>(</td><td><span class='type'><a href='HEVENTSYSTEM.html' class='blue'>HEVENTSYSTEM</a></span> <span class='parameter'>system</span>,<br><span class='type'><a href='HMSSENUM.html' class='blue'>HMSSENUM*</a></span> <span class='parameter'>next</span>,<br><span class='type'>char const **</span> <span class='parameter'>name</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Enumerates the current persisted presets that active in the system.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='system' class=nohover>system</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The system to enumerate the persists for, or 0 to use the default system.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='next' class=nohover>next</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Enumeration token - initialize to MSS_FIRST before the first call.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='name' class=nohover>name</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to a char* that receives the name of the persist. NOTE that this pointer can change frame to frame and should be immediately copied to a client-allocated buffer if persistence is desired.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Returns 0 when enumeration is complete.</table>
+<div class="discussion_heading"><a name='AIL_enumerate_preset_persists::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function lets you enumerate all the persisting presets that are currently active in the system.  It is mostly a debugging aid.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_sound_label_limits.html' class='paragraph'>AIL_set_sound_label_limits</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_text_dump_event_system.html' class='paragraph'>AIL_text_dump_event_system</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

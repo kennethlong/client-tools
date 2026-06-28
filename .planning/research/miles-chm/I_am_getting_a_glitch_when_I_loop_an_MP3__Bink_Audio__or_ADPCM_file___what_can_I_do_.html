@@ -1,0 +1,101 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>I am getting a glitch when I loop an MP3, Bink Audio, or ADPCM file - what can I do?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='I am getting a glitch when I loop an MP3&#44; Bink Audio&#44; or ADPCM file - what can I do?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>I am getting a glitch when I loop an MP3, Bink Audio, or ADPCM file - what can I do?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_position.html#_Discussion' class='paragraph'>AIL_set_sample_position: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_Sound_Player.html#_Discussion' class='paragraph'>Miles Sound Player: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_can_I_lower_the_CPU_hit_of_playing_an_MP3_file_.html' class='paragraph'>How can I lower the CPU hit of playing an MP3 file?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='How_do_I_apply_a_low_pass_filter_.html' class='paragraph'>How do I apply a low-pass filter?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='I am getting a glitch when I loop an MP3, Bink Audio, or ADPCM file - what can I do?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: I am getting a glitch when I loop an MP3, Bink Audio, or ADPCM file - what can I do?</p>
+<p>
+A:  <i>Short answer</i>: Use the Miles Sound Studio to encode any .MP3, Bink Audio, or ADPCM .WAV files that need to be looped at runtime.  The Miles Sound Studio can process these files automatically for seamless or near-seamless looping. You can also place loop markers by hand in files that still exhibit glitches after automatic loop optimization. 
+
+</p>
+<p>
+You can also make loopable sound files using our command line <a href='MakeLoop.html' class='paragraph'>MakeLoop</a> tool. MakeLoop uses the same techniques as the Miles Sound Studio, but because it's a console application, it's suitable for batch processing large numbers of files at once.  It may also be easier to integrate into legacy production workflows that don't include the Miles Sound Studio. 
+
+</p>
+<p>
+<i>Long answer</i>: A number of things can go wrong when trying to loop or seek within a block-oriented file or stream.  For example, MP3 decoding is a DSP-intensive process that uses discrete mathematical transforms to operate on continuous real-world data -- which is itself partitioned into discrete frames!  What that means is that MP3 frames can't be interpreted in a vacuum.  To decode a given frame properly, the decoder must overlap its data with data left over from the previous frame.  Worse, using an entirely-unrelated feature called the <i>bit reservoir</i>, MP3 files can 'borrow' space needed to store data for a particular frame from several of the preceding frame.  These two factors make it unlikely that an arbitrary attempt to seek from one part of an MP3 file to another will be free of objectionable artifacts. 
+
+</p>
+<p>
+ADPCM files aren't as complicated, but they also use a block-oriented structure with similar implications.  In either case, MAKELOOP.EXE and the Miles Sound Studio work by <i>decimating</i> your input file, or resampling it to conform to the next-smaller multiple of the encoded frame size.  Frame sizes are typically very small -- on the order of 1000-4000 samples for ADPCM files and 1152 samples for MP3 files -- so this resampling process does not usually cause a large change in the pitch of the encoded sample. 
+
+</p>
+<p>
+One other note: if you're encoding .MP3 files yourself with the popular open-source <a href='http://lame.sourceforge.net'>LAME</a> (Lame Ain't an MP3 Encoder) package, we strongly recommend using the <b>--nores</b> option to encode any files that will undergo looping or seeking.  MakeLoop and the Miles Sound Studio will handle this and other details for you. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_can_I_lower_the_CPU_hit_of_playing_an_MP3_file_.html' class='paragraph'>How can I lower the CPU hit of playing an MP3 file?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='How_do_I_apply_a_low_pass_filter_.html' class='paragraph'>How do I apply a low-pass filter?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

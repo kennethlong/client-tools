@@ -1,0 +1,125 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MILESEVENTSOUNDFLAG</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MILESEVENTSOUNDFLAG'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MILESEVENTSOUNDFLAG</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Specifies the status of a sound instance.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESEVENTSOUNDFLAG.html#_Discussion' class='paragraph'>MILESEVENTSOUNDFLAG: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='MILESEVENTSOUNDSTATUS.html' class='paragraph'>MILESEVENTSOUNDSTATUS</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Type Definition:</span>
+<span class='type'>typedef <a href='U32.html' class='blue'>U32</a></span> <a href='MILESEVENTSOUNDFLAG.html'>MILESEVENTSOUNDFLAG</a>;
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Specifies the status of a sound instance.</table>
+<div class="discussion_heading">Predefined values</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='MILESEVENT_SOUND_FLAG_MISSING_SOUND' class=nohover>MILESEVENT_SOUND_FLAG_MISSING_SOUND</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ The event system tried to look up the sound requested from a Start Sound event and couldn't find anything in the loaded banks. [Value: 0x1]</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MILESEVENT_SOUND_FLAG_EVICTED' class=nohover>MILESEVENT_SOUND_FLAG_EVICTED</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ The sound was evicted due to a sound instance limit being hit. Another sound was selected as being higher priority, and this sound was stopped as a result. This can be the result of either a Label Sound Limit, or a limit on the sound itself. [Value: 0x2]</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MILESEVENT_SOUND_FLAG_WAITING_ASYNC' class=nohover>MILESEVENT_SOUND_FLAG_WAITING_ASYNC</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ The sound is pending because the data for it is currently being loaded.  The sound will start when sufficient data has been loaded to hopefully avoid a skip. [Value: 0x4]</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MILESEVENT_SOUND_FLAG_FAILED_HITCH' class=nohover>MILESEVENT_SOUND_FLAG_FAILED_HITCH</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ The sound meta data was found, but the sound was not in memory, and the Start Sound event was marked as "Must Be Cached". To prevent this, either clear the flag in the event, which will cause a start delay as the sound data is asynchronously loaded, or specify the sound in a Cache Sounds step prior to attempting to start it. [Value: 0x10]</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MILESEVENT_SOUND_FLAG_FAILED_ASYNC' class=nohover>MILESEVENT_SOUND_FLAG_FAILED_ASYNC</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ The sound tried to load and the asynchronous I/O operation failed - most likely either the media was removed during load, or the file was not found. [Value: 0x20]</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='MILESEVENTSOUNDFLAG::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ These are the flag values that each sound instance can have.  Use <a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a> to retrieve them. Instances may have more than one flag, logically 'or'ed together.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='MILESEVENTSOUNDSTATUS.html' class='paragraph'>MILESEVENTSOUNDSTATUS</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right>&nbsp;</td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

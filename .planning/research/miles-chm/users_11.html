@@ -1,0 +1,192 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Limited Sound Counts</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Limited Sound Counts'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Limited Sound Counts</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_set_limit.html#ref_set_limit_main' class='paragraph'>Limits: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_8.html' class='paragraph'>Environments and Reverb</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_12.html' class='paragraph'>Applying User Volumes</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='users_11_main' class='nohover'><b></b></a></div>
+<p>
+This guide demonstrates how to categorically set the maximum number of playing sounds.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Label
+</li><li> Sound Asset
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b><br>
+</p>
+<p>
+<ol><li> <b>Limit:</b> A limit is a named group of limit entries. Only one limit can be active at any time. When active, a limit will cap the number of playing sounds based on
+the labels that exist on each sound. When a sound starts, each label the sound has is checked against each entry in the current limit. If too many sounds with that label are
+currently playing, either the new sound will not be allowed to start, or another sound will be stopped to make room for the new sound. For example,
+say we have a sound representing an explosion, and it has the label "Effect" on it. In addition, a limit has been created with a limit entry
+specifying that the label Effect only have 3 sounds playing at once. If the sound is started rapidly 4 times in a row, the 4th sound will either not play, or kick one of
+the previous 3 out.
+</p>
+<p>
+</li><li> <b>Limit Entry:</b> A limit entry is a label/count pair that determines how many sounds with that label can be playing. A limit is a group of these entries.
+</p>
+<p>
+</li><li> <b>Eviction:</b> When a sound starts, and the number of sounds playing with a label on the new sound reaches the count specified by the
+limit entry for that label, a sound is chosen to be evicted. The evicted sound could be the new sound, or a sound that has already started.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Create a sound and an event to play it.</i><br><br>
+</p>
+<p>
+</li><li> <i>Create a label.</i><br><br>
+Limit entries apply a maximum sound count to a specific label. This will be the label that is capped.
+</p>
+<p>
+</li><li> <i>Drag the event that starts the sound to the new label, to assign it to the start sound event step within.</i>
+</p>
+<p>
+</li><li> <i>Select "Limits" in the Asset List and create a new limit.</i><br><br>
+<img src="11_createlimit.png"/><Br><br>
+</p>
+<p>
+This will contain a bunch of limit entries. Each limit entry will apply to a different label.
+</p>
+<p>
+</li><li> <i>Select the new limit.</i><Br><br>
+<img src="11_limitdef.png"/><br><br>
+</p>
+<p>
+Limits are defined by groups of limit entries. A limit starts with no entries, and as a result, will have no effect
+on the number of playing sounds until entries are added.
+</p>
+<p>
+</li><li> <i>Click "Add Limit Entry", and select the label created in step 1.</i><br><br>
+<img src="11_addlabel.png"/><br><br>
+<img src="11_limited.png"/><br><br>
+</p>
+<p>
+By default, the new limit entry is set to 1. This means that there will only ever be 1 sound playing that has
+that label. If another tries to start, it will either fail to start, or another sound will be stopped to free space
+for the new sound.
+</p>
+<p>
+</li></ol></p>
+<p>
+That is all that is necessary in setting up a Limit to control the number concurrent sounds in your game. At this point, there
+can only ever be one playing instance of the sound created during this guide. Auditioning the sound twice in a row will kick out
+the first sound when the second one starts.
+</p>
+<p>
+<br><br><b>Controlling Sound Counts Per Sound Asset</b><br><br>
+</p>
+<p>
+There's another less common method for setting the maximum number of sounds that can be played. This is less useful because
+the limit is on the actual sound asset, instead of on a Label. However, it may come up. In order to limit the maximum number
+of times a Sound Asset can be used at one time, simply select the sound asset and alter the Play Sound Limit property.
+</p>
+<p>
+<div style="padding: 20px 0px 20px 40px;"><img src="11_soundasset.png"/></div>
+<div style="padding: 20px 0px 20px 40px;"><img src="11_soundlimit.png"/></div>
+</p>
+<p>
+If this count is hit, eviction will occur in the same way as if a Limit Entry's count had been hit.
+</p>
+<p>
+<br><br>
+</p>
+<p>
+<b>Eviction</b><br><br>
+</p>
+<p>
+Eviction occurs when a count is reached, and there are more sounds that want to play than there is room for. There are several different ways to
+control what sound gets chosen. This is primarily determined by the "If limited, evict" property on the start sound event step.
+</p>
+<p>
+<div style="padding: 20px 0px 20px 40px;"><img src="11_eviction.png"/></div>
+</p>
+<p>
+By default, the oldest sound is kicked, meaning the new sound will always play.
+</p>
+<p>
+These settings are documented here: <a href='ref_startsound.html' class='paragraph'>Start Sound</a>.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_8.html' class='paragraph'>Environments and Reverb</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_12.html' class='paragraph'>Applying User Volumes</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

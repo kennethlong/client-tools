@@ -29,12 +29,15 @@ on the creation path → throttling creation spreads the GPU cost). Full detail 
 `project_zonein_load_jerk_optimizations`. Tool/probe: `tools/setup/mem-sampler.ps1`.
 
 ## OPEN follow-ups (none blocking)
-1. **Back-room chase-camera clip** — separate, pre-existing (NOT from this work: the throttle never
-   touches the camera and the clamp is inactive at normal framerate). In tight/tall interiors the chase
-   camera gets behind near geometry / near-plane clips (screenshots `stage/screenshots/screenShot0392,
-   0394,0395.jpg`). Likely the door-snap fix's rate-limited pull-in (`cs_cameraPullInSpeed`, `3549c7104`
-   — its comment documents "may show the near plane through a wall while easing in"). Candidate fix:
-   tune `cs_cameraPullInSpeed` or add a "snap in fast when deeply clipped into geometry" exception.
+1. ~~**Back-room chase-camera clip**~~ — **RESOLVED 2026-06-20, commit `810b6c9a9`** (all 4 variants,
+   Win32 verified vs SWGEmu + x64 verified by run-through). Two fixes in `FreeChaseCamera.cpp`:
+   (a) the door-snap pull-in rate-limit now baselines off last frame's zoom + gates on collision so the
+   camera CONVERGES onto the wall instead of the recovery lerp ejecting it through (that eject was the
+   screenShot0394 regression); (b) interior zoom cap `freeChaseCameraInteriorMaximumZoom` (default 3.0m)
+   holds the camera off interior walls — the retail/SWGEmu mechanism, which also keeps it clear of the
+   gl05/32-bit borderline portal cull (see-through) and stops props occluding the avatar. SWGEmu A/B was
+   the spec: retail does NOT collide with interior props, so prop-collision was deliberately NOT added.
+   Full detail: memory `project_backroom_camera_interior_zoom_cap`.
 2. **`_ITERATOR_DEBUG_LEVEL=2`→1** — the real remaining Debug-only perf lever, but a cross-cutting ABI
    change across ~50 projects (must match everywhere); deferred as its own decision.
 3. **Texture pre-warm during zone transition** — the residual first-entry cost is device-affine texture

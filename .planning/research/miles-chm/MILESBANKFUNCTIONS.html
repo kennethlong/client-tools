@@ -1,0 +1,171 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MILESBANKFUNCTIONS</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MILESBANKFUNCTIONS'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MILESBANKFUNCTIONS</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ specifies callbacks for each of the Miles event system.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MILESBANKFUNCTIONS.html#_Discussion' class='paragraph'>MILESBANKFUNCTIONS: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_event_bank_functions.html' class='paragraph'>AIL_get_event_bank_functions</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_event_bank_functions.html' class='paragraph'>AIL_set_event_bank_functions</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Miles_High_Level_Callbacks.html#_Discussion' class='paragraph'>Miles High Level Callbacks: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='MilesBankFreeAll.html' class='paragraph'>MilesBankFreeAll</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Callbacks.html' class='paragraph'>Miles High Level Callbacks</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='MILESBANKFUNCTIONS.html'>MILESBANKFUNCTIONS</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankFreeAll.html' class='blue'>MilesBankFreeAll*</a></span>&nbsp;FreeAll;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetPreset.html' class='blue'>MilesBankGetPreset*</a></span>&nbsp;GetPreset;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetEnvironment.html' class='blue'>MilesBankGetEnvironment*</a></span>&nbsp;GetEnvironment;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetSound.html' class='blue'>MilesBankGetSound*</a></span>&nbsp;GetSound;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetEvent.html' class='blue'>MilesBankGetEvent*</a></span>&nbsp;GetEvent;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetMarkerList.html' class='blue'>MilesBankGetMarkerList*</a></span>&nbsp;GetMarkerList;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetLoadedCount.html' class='blue'>MilesBankGetLoadedCount*</a></span>&nbsp;GetLoadedCount;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetMemUsage.html' class='blue'>MilesBankGetMemUsage*</a></span>&nbsp;GetMemUsage;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='MilesBankGetLoadedName.html' class='blue'>MilesBankGetLoadedName*</a></span>&nbsp;GetLoadedName;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ specifies callbacks for each of the Miles event system.</table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='FreeAll' class=nohover>FreeAll</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback that tells you to free all user-side bank memory.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetPreset' class=nohover>GetPreset</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve a sound preset.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetEnvironment' class=nohover>GetEnvironment</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve an environment preset.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetSound' class=nohover>GetSound</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to return the actual filename of a sound asset.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetEvent' class=nohover>GetEvent</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve a sound event.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetMarkerList' class=nohover>GetMarkerList</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve a sound marker list.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetLoadedCount' class=nohover>GetLoadedCount</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve a count of loaded sound banks.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetMemUsage' class=nohover>GetMemUsage</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve the amount of memory in use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='GetLoadedName' class=nohover>GetLoadedName</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Callback to retrieve the filename for a sound asset index.</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='MILESBANKFUNCTIONS::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This structure is used to provide overrides for all of the high-level loading functionality.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Miles_High_Level_Callbacks.html#_Discussion' class='paragraph'>Miles High Level Callbacks: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Callbacks.html' class='paragraph'>Miles High Level Callbacks</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='MilesBankFreeAll.html' class='paragraph'>MilesBankFreeAll</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

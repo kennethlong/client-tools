@@ -1,0 +1,182 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>What are these ASI and FLT files? What is RIB?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='What are these ASI and FLT files? What is RIB?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>What are these ASI and FLT files? What is RIB?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='I_want_a_small_installation___do_I_need_all_of_the_files_in_the__redist_directories_.html#_Discussion' class='paragraph'>I want a small installation - do I need all of the files in the \redist directories?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='The_Internet_voice_chat_example_has_a_lot_of_latency_____or_it_does_not_work_on_my_LAN____what_s_going_on_.html' class='paragraph'>The Internet voice chat example has a lot of latency (...or it does not work
+on my LAN) - what's going on?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='FAQs_and_How_Tos.html#_Discussion' class='paragraph'>FAQs and How Tos: Discussion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='What are these ASI and FLT files? What is RIB?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: What are these ASI and FLT files? What is RIB?</p>
+<p>
+A:  RIB stands for RAD Interface Broker - it is RAD's mechanism for expanding and enhancing the system through the use of dynamically-loadable modules. These modules, called RIBs, are designed in conformance with the new RAD Interface Broker (RIB) standard.  ASI and FLT files are RIB-based loadable modules. 
+
+</p>
+<p>
+ASI files are sound codecs - MP3 decoding support is provided by the <b>MSSMP3.ASI</b> file, for example. 
+
+</p>
+<p>
+FLT files are digital sound filters.  All of the default sample-pipeline filters are  in the <b>MSSDSP.FLT</b> file.  FLT files can also provide per-voice DirectSound3D/EAX support and matrix (Dolby/SRS) support.   
+
+</p>
+<p>
+This is all you really need to know about RIB to use Miles, but if you are interesting in the technical underpinnings of RIB, read on... 
+
+</p>
+<p>
+The RIB standard allows either MSS or the application itself to scan a directory for installable modules, load them, query their properties, and take advantage of the features they offer at runtime, all in a manner that's completely transparent to your application.  RIBs deliver many of the same benefits of "component-oriented" design that are commonly associated with more complex and proprietary industry standards such as Microsoft's COM model, but on an open, cross-platform basis, and with several key features designed to avoid many of the headaches that eventually come to plague users of other runtime object models. 
+
+</p>
+<p>
+As with most component-based models in use today, RIB components represent individual functions and data elements as collective members of named interfaces.  Unlike more familiar object models such as those associated with MS COM and even C++ itself, however, an application's view of a particular RIB interface and its elements is determined completely by the application itself, and not the RIB component provider or any of its header files.  The MSS RIB manager implements true dynamic binding at no additional cost in runtime performance.  By way of illustration, three different ways to instantiate the same object might look like: 
+
+</p>
+<p>
+<b>C++ With Static Binding</b> 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>MyStream = new MP3Stream;
+</pre></div>
+<p>
+</p>
+<p>
+<b>MS COM With Runtime Binding</b> 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>MP3StreamFactory-&gt;QueryInterface(IID_Stream,
+                                 (void **) &amp;MyStream);
+</pre></div>
+<p>
+<br> <br> <b>RAD Interface Broker With Runtime Binding</b> 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>STR_OPEN STR_open;
+...
+HPROPERTY OUTPUT_SAMPLE_RATE
+...
+<a href='RIB_INTERFACE_ENTRY.html' class='paragraph'>RIB_INTERFACE_ENTRY</a> MyStreamInterface[] =
+{
+   FN(STR_property),
+   FN(STR_open),
+   FN(STR_close),
+   FN(STR_process),
+
+   PR("Output sample rate",    OUTPUT_SAMPLE_RATE),
+   PR("Output sample width",   OUTPUT_BITS),
+   PR("Output channels",       OUTPUT_CHANNELS)
+}
+
+<a href='HSTREAM.html' class='paragraph'>HSTREAM</a> STR = RIB_find_file_provider("Audio stream",
+                                     "Input file types",
+                                     "*.MP3");
+
+RIB_request(STR,
+           "Audio stream",
+            MyStreamInterface);
+
+MyStreamHandle = STR_open();
+</pre></div>
+<p>
+</p>
+<p>
+It's apparent at a glance that the RIB-based example is, if nothing else, more complex.  What benefits are being gained with all that extra code?  The answer lies in a fundamental aspect of the RIB system's design: RIB interfaces specify content, not structure.  RIB components never reveal the exact layout of their interfaces to the application.  A RIB interface name is only used to refer to a collection of available, related functions and data properties.  Unlike a C++ class, a RIB interface does not expose implementation details which have to be artificially segregated from the outside world with "private" or "public" labels.  And unlike an MS COM interface, a RIB interface does not introduce dangerous dependencies on the underlying language's virtual-function table model, including the number of functions an interface provider offers and the order in which its function prototypes appear in a class declaration.  As suggested by the example above, each RIB application is able to specify its own view of the functions and data exposed by its component providers.  The binding of the provider's resources with the application's declarations takes place dynamically, via the <i>RIB_request</i> function.  There are several advantages to this approach: 
+
+</p>
+<p>
+- No more obsolete header files.  A RIB component's header file contains only the typedef'ed prototypes for the functions exported by the component at its time of release.  The application declares variables of these types to receive function pointers when <i>RIB_request</i> is called to resolve its requested functions by name.  Data properties are resolved in a similar manner, through the use of tokens which are passed down from the provider to the caller via <i>RIB_request</i>. 
+
+</p>
+<p>
+- No more broken interfaces.  A RIB interface does not contain or imply any implementation details such as the order in which its functions appear in an internal virtual-method table.  Consequently, new functions and data members may be exposed in subsequent releases, without "breaking" any existing application compiled with an older version of the component's header file. Similarly, different providers of the same interface (e.g., an MPEG audio decoder and an IMA ADPCM audio decoder) can export provider-specific properties and functions, which the application can either enumerate or ask for explicitly at runtime.  Applications are also free to request functions and properties which may not be supported by all providers of a given interface, taking advantage of optional features when available and degrading gracefully otherwise. 
+
+</p>
+<p>
+- Full runtime browsability.  All communication between RIB components and their calling applications takes place via functions and properties whose names are presented as plain-text ASCII strings.  This applies as well to the names of the components' interfaces themselves.  The RIB manager API allows the names, members, and types of all interface elements to be enumerated in a standardized fashion, making it possible for general-purpose component browsers to be developed for all providers of a given interface. 
+
+</p>
+<p>
+What does this mean to you, as the creator of your own MSS applications? The good news is that we've made it easy for you to take advantage of the new RIB providers without getting involved in the details of the RIB component model.  MSS's API has been expanded to make access to both the 3D audio and MPEG compression feature sets as painless as possible.  Most application authors will never come into direct contact with the RIB manager API that's built into MSS.  For the curious, however, the complete RIB API documentation is available in RIB.H.  Specific RIB interface specs used  by Miles are found in MSS.H. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='The_Internet_voice_chat_example_has_a_lot_of_latency_____or_it_does_not_work_on_my_LAN____what_s_going_on_.html' class='paragraph'>The Internet voice chat example has a lot of latency (...or it does not work
+on my LAN) - what's going on?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='FAQs_and_How_Tos.html#_Discussion' class='paragraph'>FAQs and How Tos: Discussion</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -18,7 +18,7 @@ minimal recompile.
 
 The single highest-value discovery: **the prior-WIP branch `d3d9-fixb-d3dcompile-wip` already
 contains a complete, compiling port of the HLSL path** — a `Direct3d9_HlslRewrite.{h,cpp}`
-(re-namespaced copy of the battle-tested `Direct3d11_HlslRewrite`, Rules A-F intact),
+(re-namespaced copy of the battle-tested `Direct3d11_HlslRewrite`, Rules A-E intact — there is no Rule F),
 `D3DXCompileShader`→`D3DCompile` via reinterpret-cast at the call boundary (the D3DX/d3dcompiler
 ABI is identical for `D3DXMACRO`/`ID3DXInclude`/`ID3DXBuffer`), the `register(vN)` omission in the
 engine-injected `DECLARE_textureCoordinateSets` macro, and `D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY`.
@@ -118,12 +118,12 @@ and **gl07** (`Direct3d9_vsps.vcxproj`) define `VSPS` — these are the two targ
 |---------|---------|---------|--------------|
 | `d3dcompiler_47.dll` | v47 (D3D_COMPILER_VERSION 47) | `D3DCompile` (HLSL) + `D3DAssemble` (asm), x64-clean | The modern, x64-native HLSL compiler; gl11 has used it since Phase 11. [VERIFIED: dumpbin /exports — ordinals 1 (D3DAssemble), 4 (D3DCompile)] |
 | `d3dcompiler.lib` | matches WK 10.0.19041.0 | Import lib for the above | Already in `AdditionalDependencies` of gl05/gl07 vcxproj; resolves from Windows Kit `Lib/.../um/x86/`. [VERIFIED: vcxproj grep + WK x86 lib exists] |
-| `Direct3d11_HlslRewrite` (logic) | in-tree, Phase 11 | Rules A/B/C/D/E/F textual rewrite — the D-02 lift source | Battle-tested over 13+ iterations against the exact legacy-HLSL→strict-compiler problems gl05 now faces. [VERIFIED: read of .h + .cpp] |
+| `Direct3d11_HlslRewrite` (logic) | in-tree, Phase 11 | Rules A/B/C/D/E textual rewrite (no Rule F) — the D-02 lift source | Battle-tested over 13+ iterations against the exact legacy-HLSL→strict-compiler problems gl05 now faces. [VERIFIED: read of .h + .cpp] |
 
 ### Supporting
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `Direct3d9_HlslRewrite.{h,cpp}` | on branch `d3d9-fixb-d3dcompile-wip` | Re-namespaced copy of the gl11 rewriter (Rules A-F), already created | Cherry-pick / re-derive as the gl05/gl07 rewriter. [VERIFIED: `git ls-tree d3d9-fixb-d3dcompile-wip`] |
+| `Direct3d9_HlslRewrite.{h,cpp}` | on branch `d3d9-fixb-d3dcompile-wip` | Re-namespaced copy of the gl11 rewriter (Rules A-E), already created | Cherry-pick / re-derive as the gl05/gl07 rewriter. [VERIFIED: `git ls-tree d3d9-fixb-d3dcompile-wip`] |
 | `d3dx9.lib` | tracked (`directx9/lib/`) | Non-compile D3DX (mesh/matrix/surface) | STAYS linked this phase (D-05); only `D3DXCompileShader`/`D3DXAssembleShader` leave |
 
 ### Alternatives Considered
@@ -167,7 +167,7 @@ The `directx9/include/` tree has **NO `d3dcompiler.h`** — the WK header is use
          │              │                            │            │
          │   ┌──────────▼───────────┐                │            │
          │   │ NEW: apply rewrite   │                │            │
-         │   │ (Rules A/B/C/D/E/F)  │                │            │
+         │   │ (Rules A/B/C/D/E)    │                │            │
          │   │ to main src + each   │                │            │
          │   │ #include (handler)   │                │            │
          │   └──────────┬───────────┘                │            │
@@ -198,7 +198,7 @@ The `directx9/include/` tree has **NO `d3dcompiler.h`** — the WK header is use
 src/engine/client/application/Direct3d9/src/win32/
 ├── Direct3d9_VertexShaderData.cpp   # port target — both call sites
 ├── Direct3d9_HlslRewrite.h          # NEW (re-namespaced from gl11; on WIP branch)
-└── Direct3d9_HlslRewrite.cpp        # NEW (Rules A-F)
+└── Direct3d9_HlslRewrite.cpp        # NEW (Rules A-E)
 src/engine/client/application/Direct3d9/build/win32/
 ├── Direct3d9.vcxproj                # gl05 — add HlslRewrite.cpp to ClCompile; drop d3dx9.lib? NO (D-05)
 └── Direct3d9_vsps.vcxproj           # gl07 — same
@@ -243,17 +243,19 @@ The full ruleset from `Direct3d11_HlslRewrite.cpp` [VERIFIED: read]. Each rule a
   Census must determine whether D3DCompile-at-vs_2_0 accepts or rejects `#pragma def`. (registers.inc maps
   `c0_0`→`c95.x` etc., and the shaders reference these — if the pragma is stripped, those constants must
   come from elsewhere, matching the existing D3D9 runtime behavior.)
-- **Rule F — specular `pow()` NaN guard (pre-pass, main-source/PS only).** Wraps `pow(saturate(dot(...)),
-  materialSpecularPower)` against NaN when power==0. **D3D11-SPECIFIC — the D3D9 path runs the original
-  bytecode and does NOT hit this NaN** (the comment in HlslRewrite.cpp:1016 says so explicitly: "D3D9
-  runs the original ps_2_0 bytecode (pow(x,0)~0, no NaN); only the D3D11 recompile hits it"). For the
-  D3D9 vertex path, Rule F is almost certainly inert — but it is also harmless (no match in VS sources).
+- **(No Rule F.)** The lifted ruleset is **A-E only** — the WIP `Direct3d9_HlslRewrite` and gl11
+  `Direct3d11_HlslRewrite` enumerate A/B/C/D/E (review-adjudicated, repo-confirmed). An earlier draft
+  referred to a sixth "Rule F" (a specular `pow()` NaN guard around `pow(saturate(dot(...)),
+  materialSpecularPower)` when power==0); that NaN guard is a **D3D11-recompile-only concern** (the D3D9
+  path runs the original `ps_2_0` bytecode — `pow(x,0)~0`, no NaN) and is **not a separately enumerated
+  rewrite rule** in the source being lifted. Do not plan for a "Rule F" — there is none on the D3D9 VS path.
 
 **Net for D3D9:** Rules A, B, C are the load-bearing ones (the Phase-27 revert cascade was exactly
-A→B/C). Rules D, E, F are D3D11-specific compensations for SM4+ `$Globals` promotion and are likely
-inert or unnecessary at the `vs_2_0`/`vs_1_1` D3D9 target — **but the WIP branch copied all six verbatim
-and it compiled.** The planner should start with the verbatim copy (proven to compile) and let the
-census/render smoke determine if D/E need D3D9-specific divergence.
+A→B/C). Rules D and E are D3D11-specific compensations for SM4+ `$Globals` promotion and are likely
+inert or unnecessary at the `vs_2_0`/`vs_1_1` D3D9 target — **and Rule D (cbuffer/packoffset wrap) is
+actively harmful on the D3D9 flat `register(cN)` constant model (review fix #3): copy A/B/C verbatim,
+DISABLE Rule D for D3D9, and run Rule E conditionally** (probe `#pragma def`/c95 usage first). The WIP
+branch copied A-E verbatim and it compiled, but "compiles" ≠ "renders" — see Pattern 3 / Pitfall 3.
 
 ### Pattern 3: register(vN) omission in the engine-injected macro
 The engine builds `DECLARE_textureCoordinateSets` at runtime (`createVertexShader` :433-462) with
@@ -317,7 +319,7 @@ X3000 (`point` keyword) → fix Rule A → X3202 (`register(vN)` on member) → 
 (global register over-strip) → fix context-aware guard → ... Each rebuild reveals only the next error.
 **Why it happens:** Modern `d3dcompiler_47` validates strictly; 2003 `D3DXCompileShader` was lenient.
 **How to avoid:** Lift gl11's COMPLETE ruleset up front (D-02), not incrementally. The WIP branch already
-did this (Rules A-F copied verbatim) — start there. Sequence the work as "land the full rewriter, then
+did this (Rules A-E copied verbatim) — start there. Sequence the work as "land the full rewriter, then
 debug render-correctness," not "add one rule per iteration." [VERIFIED: revert commit c0f890875 documents
 the exact cascade]
 **Warning signs:** A plan with a task per error code (X3000 task, X3202 task, ...) — that IS the reverted
@@ -480,14 +482,15 @@ parser accepts it (vs. some restricted internal grammar). The census proves it o
 |---|-------|---------|---------------|
 | A1 | `D3DAssemble` accepts the SWG `.vsh` asm dialect (`TARGET`/`m4x4`/`dcl_*`/`oPos`/`b#`) | Pitfall 2, Code §3-4 | HIGH — if wrong, the asm port is impossible this phase; triggers the D-03 fallback (keep D3DXAssembleShader + Fix-A, split to follow-up). This is precisely why D-06 mandates the census gate FIRST. |
 | A2 | vs_1_1 is dropped by D3DCompile (only vs_2_0+ compiles) | State of the Art | MEDIUM — if vs_1_1 shaders exist that must compile and D3DCompile rejects vs_1_1, those shaders need vs_2_0 promotion or stay on D3DX. The runtime branches to vs_1_1 only when `getShaderCapability() < 2.0` (ancient GPUs — likely never on a modern test machine). Verify the actual target taken at runtime. |
-| A3 | Rules D/E/F are inert/unnecessary at the D3D9 vs_2_0 target | Architecture Pattern 2 | LOW-MEDIUM — if Rule E (`#pragma def` strip) is wrongly applied, D3D9 shaders that legitimately use `def` lose constants. The WIP branch copied all six and compiled; render-correctness untested. Census/smoke resolves. |
+| A3 | Rules D/E are inert/unnecessary at the D3D9 vs_2_0 target (there is no Rule F) | Architecture Pattern 2 | LOW-MEDIUM — Rule D (cbuffer/packoffset wrap) is actively harmful on D3D9 flat `register(cN)` and is DISABLED for D3D9 (review fix #3); if Rule E (`#pragma def` strip) is wrongly applied, D3D9 shaders that legitimately use `def` lose constants (run E conditionally). The WIP branch copied A-E and compiled; render-correctness untested. Census/smoke resolves. |
 | A4 | The 190 //hlsl + 96 //asm of 286 .vsh Phase-27 framing is still accurate | (census refresh) | LOW — D-06 mandates a census refresh anyway. The extracted corpus in vsh-extract/ is a sample (12 files), not the full 286; the full census enumerates the TRE corpus. |
 | A5 | Dropping `register(vN)` from DECLARE_textureCoordinateSets is safe for D3D9 input binding | Pattern 3, Pitfall 3 | MEDIUM — likely the WIP branch's render-incompleteness root cause. Under D3D9 the vertex declaration drives binding, but the inline register may still matter. Test in the Tatooine smoke. |
 | A6 | d3dcompiler.lib already in the link path makes D3DCompile/D3DAssemble link cleanly | Standard Stack | LOW — verified the lib is in AdditionalDependencies; the symbol is present. Only the C++-mangled-vs-undecorated question (Code §3) needs the Wave-0 GetProcAddress fallback. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does D3DAssemble accept the SWG asm dialect?** (A1)
+   - RESOLVED: addressed by the 32-01 Wave-0 census GATE (probe + bytecode size+hash diff vs D3DXAssembleShader; tri-state verdict).
    - What we know: D3DAssemble is exported (ordinal 1) + in d3dcompiler.lib (mangled C++ symbol);
      undecorated export name "D3DAssemble" works via GetProcAddress. SWG asm is canonical D3D9 vs_1_1/2_0.
    - What's unclear: whether D3DAssemble's parser accepts `TARGET`-expanded profiles, `m4x4`/`dcl_*`/`oPos`,
@@ -497,6 +500,7 @@ parser accepts it (vs. some restricted internal grammar). The census proves it o
      the D3DXAssembleShader output, and renders. This IS the D-06 census gate.
 
 2. **Is Rule E (`#pragma def`) handling correct at vs_2_0?** (A3)
+   - RESOLVED: addressed by 32-02 Task 1 (Rule E run CONDITIONALLY — probe #pragma def / c95 usage first) + the Task-2F audit.
    - What we know: Rule E strips `#pragma def(vs, c95, ...)`; under SM4+ it collides with FXC's allocator.
      `def` is a native D3D9 instruction; `vs_2_0` may accept the pragma.
    - What's unclear: whether D3DCompile-at-vs_2_0 accepts `#pragma def`, and whether the c95.x/y/z/w
@@ -505,6 +509,7 @@ parser accepts it (vs. some restricted internal grammar). The census proves it o
      investigate whether the engine sets them via SetVertexShaderConstantF.
 
 3. **What is the WIP branch's render-incompleteness root cause?** (A5)
+   - RESOLVED: addressed by 32-02 Task 2F (the up-front constant-layout probe AND PACK_MATRIX_ROW_MAJOR flag audit — both contested root causes tested before Tatooine smoke).
    - What we know: branch compiles, renders incomplete; the register-omission edit (Pattern 3) is the prime
      suspect per the semantic-loss caveat.
    - Recommendation: bring the WIP branch to a bootable state, capture the Tatooine bump/dot3 spot under
@@ -592,7 +597,7 @@ prototype (C++ linkage to match the mangled lib symbol) or `GetProcAddress` (und
 ### Primary (HIGH confidence)
 - Codebase (read/verified 2026-06-16):
   - `Direct3d9_VertexShaderData.cpp` (port target, both call sites, Fix-A guard)
-  - `Direct3d11_HlslRewrite.{h,cpp}` (Rules A-F, the D-02 lift source)
+  - `Direct3d11_HlslRewrite.{h,cpp}` (Rules A-E, the D-02 lift source)
   - `Direct3d11_VertexShaderData.cpp` :650-950 (DECLARE_textureCoordinateSets register-omission, D3DCompile call, profile, flags)
   - `Direct3d9.vcxproj` / `Direct3d9_vsps.vcxproj` / `Direct3d9_ffp.vcxproj` (link deps, VSPS macro scope, include/lib paths)
   - branch `d3d9-fixb-d3dcompile-wip` (prior HLSL port — `Direct3d9_HlslRewrite` + D3DCompile swap, "compiles render-incomplete")

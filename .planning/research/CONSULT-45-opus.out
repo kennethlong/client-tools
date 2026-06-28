@@ -1,0 +1,207 @@
+# CONSULT-45 — Architecture & Fix-Design Ranking (Opus angle)
+
+Scope: design and RANK the candidate fixes for the cantina zone-in jerk by value vs risk vs
+effort, reasoning about the main-thread frame budget and D3D9 device thread-affinity. Grounded in
+the engine's actual threading model (file:line below). I do NOT re-trace sync-vs-async loading,
+the GPU-resource file:line detail, or the allocator/STL/paging lateral angle — those are other
+crew members.
+
+================================================================================
+1. GROUND TRUTH — the engine's threading model (what CAN move off-thread)
+================================================================================
+
+These are the load-bearing facts my ranking rests on. All verified in-tree.
+
+**(G1) The device-affine boundary is already a clean handoff at the bytecode line.**
+In `Direct3d9_VertexShaderData.cpp`:
+  - `D3DCompile(...)` at **:684** — pure CPU, thread-safe, produces an `ID3DBlob` of bytecode.
+    This is the EXPENSIVE part (~44 compiles on first cantina; fxc optimizer dominates).
+  - `CreateVertexShader(bytecode)` at **:584** (cache-hit path) — the device-affine call. It is
+    cheap (driver just registers bytecode); it MUST stay on the render/device thread.
+  The two are ALREADY separated by an owned `std::vector<uint8>` of bytecode. The architecture is
+  pre-shaped for "compile anywhere, create on device thread." This is the single most important
+  structural fact for option 3.
+
+**(G2) The bytecode cache key is already the permutation tuple.**
+`buildByteCodeCacheKey(fileName, textureCoordinateSetKey, target)` at **:151** keys on exactly the
+three inputs that determine the bytecode — and the comment says it "Mirrors
+Direct3d11_ShaderCache::hashSource's contract." The `textureCoordinateSetKey` permutation IS
+captured in the key. So a disk cache does NOT need to enumerate permutations offline — it lazily
+accumulates whatever permutations the game actually touches, keyed correctly. (This neutralizes
+the stated objection to option 2 by routing around it.)
+
+**(G3) D3D11 ALREADY HAS the disk-persisted cache. gl05 does not.**
+`Direct3d11_ShaderCache.cpp`: `ms_cacheDir`, `<cacheDir>/<hash:016x>.cso`, `tryLoad()` (:176
+fopen "rb"), `store()` (:236 fopen "wb"), `install(cacheDir)` with `create_directories`. The blob
+is treated as opaque & self-versioning. **The D3D9 in-memory cache (commit ff02a367e) is a
+half-port of this.** Finishing it to disk is a *mirror-gl11* job — the lowest-novelty, most
+de-risked kind of change this project does (cf. Phase 34 "pure mechanical gl05 mirror, ZERO
+fix-what-breaks").
+
+**(G4) The engine has a real, proven worker-thread runtime — but it deliberately does NOT do
+GPU work off-thread.**
+  - `runNamedThread(...)` + `Thread` priority levels (kIdle..kCritical):
+    `sharedThread/src/win32/Thread.cpp`.
+  - `AsynchronousLoader` (`sharedFile/AsynchronousLoader.cpp`) is a producer/consumer worker
+    (`threadRoutine` :429) that ONLY pulls raw file bytes into the TreeFile cache. Resource
+    construction happens back on the MAIN thread in `processCallbacks()` at **:631**
+    (`(*request->callback)(request->data)`), under a per-frame budget
+    `getAsynchronousLoaderCallbacksPerFrame()` (:589). It even self-throttles via an 8 MB
+    `cms_postponeThreshold` (:117) so the worker never runs the cache too far ahead.
+  - `FileStreamerThread` (kHigh priority, :59) is the disk-read thread; multi-priority queues
+    (AudioVideo > Data > Low) with read chunking at 128 KB (`cms_maxReadSize`).
+  **Conclusion:** the original SOE architecture is "stream BYTES async, build RESOURCES on the main
+  thread under a callback budget." It was designed around D3D9 device affinity. Any async-compile
+  design must respect that grain: move D3DCompile (CPU) off-thread, keep CreateVertexShader on the
+  device thread. The infrastructure to do this (named worker threads, mutex, semaphore, the
+  per-frame callback drain) ALREADY EXISTS and is battle-tested.
+
+================================================================================
+2. FRAME-BUDGET REASONING — why the jerk happens and what each fix buys
+================================================================================
+
+The hitch is a main-thread *time* stall (GIVEN: not OOM, Debug worse). At zone-in the main thread
+serially does, in one or a few frames: stream/parse assets -> build appearances -> **for each new
+shader permutation: HLSL rewrite + D3DCompile (fxc optimize) + CreateVertexShader** -> create
+VB/IB/textures. ~44 first-load VS compiles, each tens of ms in Debug, land in a tight window. The
+frame can't Present until that frame's slice of work finishes, so dt balloons and the camera
+lurches (option 5 only masks the lurch, not the stall).
+
+Two independent levers:
+  - **(L1) Eliminate the work** (don't compile at all after the first ever run): disk cache.
+    First-EVER load still pays once; every subsequent first-load-per-process is free.
+  - **(L2) Hide the work** (compile off the main thread): async compile. First-ever load also
+    smooths, because the stall moves to a worker; the main thread just waits for bytecode (or
+    renders a fallback until ready).
+These are COMPLEMENTARY, not competing. The optimal end state is L1+L2: disk cache makes the
+steady state free; async compile smooths the genuine cold-cache first run and any
+cache-invalidation event (driver/toolchain change → .cso miss).
+
+================================================================================
+3. RANKED PLAN (best value-to-risk first)
+================================================================================
+
+### #1 — Disk-persisted VS bytecode cache (mirror Direct3d11_ShaderCache to gl05) ★ FIRST STEP
+- **Impact:** HIGH on the *recurring* complaint, MODERATE on a literal first-ever boot. After one
+  warm run the ~44 first-cantina compiles drop to ~44 file reads + CreateVertexShader (cheap).
+  This is the bulk of the felt jerk in normal play/testing.
+- **Risk:** LOW. The pattern is already shipping in gl11 (G3). Blob is opaque/self-versioning;
+  worst case of a stale/corrupt .cso is a `tryLoad` miss → recompile (already the current
+  behavior). Key correctness is solved (G2). No threading touched → no new race surface.
+- **Effort:** LOW–MEDIUM. Port `install(cacheDir)`/`tryLoad`/`store` from gl11; wire the two
+  existing cache touch-points (:579 lookup, :711 fill) to also hit disk; call `install` from the
+  D3D9 device-init alongside the gl11 call site. Pick a cacheDir under the writable user/stage
+  dir (NOT inside a TRE). Reuse the existing key string as the filename stem (hash it for FS
+  safety, same as gl11's `%016x`).
+- **Key constraint:** cacheDir must be WRITABLE and per-toolchain-stable. Invalidate on a version
+  stamp (toolchain/d3dcompiler version + a format byte) so a recompiled engine doesn't load
+  bytecode from an incompatible fxc — gl11 already treats the blob as self-versioning; carry a
+  cheap header tag to be safe.
+- **Why first:** highest value-to-risk by a wide margin — it reuses a proven in-repo
+  implementation, touches no thread-affinity rules, and directly kills the dominant cost on every
+  load after the first. It is also a prerequisite that makes #3 mostly unnecessary in steady
+  state (you only async-compile on a genuine miss).
+
+### #2 — Async / background SHADER COMPILE (move D3DCompile off the main thread; keep
+###       CreateVertexShader on the device thread)
+- **Impact:** HIGH, and uniquely covers the case the disk cache can't: the genuine first-ever /
+  cold-cache load and any post-invalidation miss. Smooths the stall instead of just relocating
+  it.
+- **Risk:** MEDIUM. This is real concurrency. But the design is constrained and safe BECAUSE of
+  G1: only the pure-CPU `D3DCompile` (:684) crosses to a worker; the returned bytecode is handed
+  back and `CreateVertexShader` (:584) runs on the device thread inside the existing per-frame
+  drain (model it on `processCallbacks` :631). The render path must tolerate "bytecode not ready
+  yet" — use a fallback/last-known VS or briefly skip the draw, exactly the kind of per-frame
+  budgeted completion the AsynchronousLoader already does. Hazards to control: the `ms_defines` /
+  `ms_scratchBuffer` static scratch state (:599, file-static) is NOT thread-safe — the worker must
+  build its own define list, not share the statics; and the in-memory `ms_byteCodeCache` map
+  (:144) needs a mutex once a worker writes it.
+- **Effort:** MEDIUM–HIGH. New compile-request queue + worker (reuse `runNamedThread` and the
+  Mutex/Semaphore already used by AsynchronousLoader), a "pending compile" state on the shader
+  object, and a main-thread completion drain that calls CreateVertexShader. De-static the scratch
+  build.
+- **Key constraint:** D3D9 device affinity — NEVER call CreateVertexShader (or any device
+  Create*) off the worker. Compile→bytecode off-thread; create on-thread. Also: don't async the
+  //asm `D3DXAssembleShader` path (it's flat in the A/B and lives behind the FP-SEH guard).
+- **Sequencing:** do this AFTER #1. With the disk cache in place, async compile only fires on
+  cold misses, so its complexity is exercised rarely and its payoff (smoothing the first-ever
+  load) is the only gap left.
+
+### #3 — Offline / build-time shader precompile (what retail/SWGEmu ship)
+- **Impact:** HIGH in principle (zero runtime compile, like retail) BUT…
+- **Risk:** MEDIUM–HIGH on completeness. Our VS are parameterized by the runtime
+  `textureCoordinateSetKey` permutation (:577, :604). Enumerating ALL permutations offline is a
+  combinatorial guess; miss one and you silently fall back to runtime compile (the jerk returns
+  for that asset) or worse, ship a wrong permutation. You'd need a capture-the-keys harness
+  (record every (file,key,target) the game requests across content) to seed the build — which is
+  essentially what the **disk cache produces for free at runtime** (G2).
+- **Effort:** HIGH (new build step + permutation enumeration + packaging + a fallback path you
+  still have to keep).
+- **Verdict:** LOWER priority. The disk cache (#1) is a *self-populating, always-correct* superset
+  of what offline precompile tries to do, without the enumeration risk. Reach for offline
+  precompile only if you later want a shippable warm cache out-of-box (you could even ship the
+  accumulated .cso set from a dev warm run as the "prebuilt" cache — best of both, near-zero extra
+  code). So: subsumed by #1; revisit only for distribution.
+
+### #4 — Allocator swap (faster small/large-object allocator)
+- **Impact:** LOW–MODERATE on THIS hitch, and indirect. The stall is dominated by fxc
+  compile time, not allocation (GIVEN E: custom free-list-tree allocator in the hot path, but the
+  jerk is compile-bound). Allocation cost rides along (each compile churns transient heap) but
+  killing the compiles (#1/#2) removes most of that churn anyway. Debug-worse is consistent with
+  compiler/codegen + guard overhead, not primarily allocator throughput.
+- **Risk:** MEDIUM–HIGH and broad. Swapping the SOE MemoryManager (or interposing
+  mimalloc/rpmalloc) is a global, invasive change with its own ABI/init-order/exit-chain hazards
+  and can perturb unrelated subsystems. High blast radius for a second-order win.
+- **Effort:** MEDIUM–HIGH (interpose vs replace; the engine's MemoryManager has its own
+  new/delete plumbing and debug instrumentation).
+- **Verdict:** DEFER. Do not chase it for the zone-in jerk. Reconsider only as a separate,
+  measured perf workstream AFTER #1/#2, and only if profiling then shows allocation as a real
+  residual cost. (Cross-check with the lateral crew member's allocator findings before acting.)
+
+### #5 — elapsedTime clamp (bound the VISIBLE lurch)
+- **Impact:** COSMETIC only — does not reduce the stall, but caps the dt fed to camera/movement so
+  a 200 ms frame doesn't teleport the view. Cheap insurance that improves *perceived* smoothness
+  during any unavoidable hitch (incl. the first-ever cold load before #1 is warm, and #2's
+  fallback frames).
+- **Risk:** LOW, but with a correctness caveat: clamping dt makes the sim under-advance during the
+  stall (movement/animation briefly lag real time). For a client where movement is server-driven
+  and dt-scaled (GIVEN D), a modest clamp (e.g. cap frame dt at ~100 ms) is standard and benign;
+  do NOT clamp so hard you desync from the server's authoritative position.
+- **Effort:** LOW (one clamp at the frame-time source).
+- **Verdict:** Ship it as a cheap COMPLEMENT, not a fix. Pair it with #1. It's the only item that
+  helps the literal first-ever boot before any cache is warm, and it costs almost nothing.
+
+================================================================================
+4. RECOMMENDED SEQUENCE
+================================================================================
+
+  Step 0 (free, parallel): add the elapsedTime clamp (#5) — bounds the lurch immediately, helps
+          even the cold first run, near-zero risk/effort.
+  Step 1 (THE first real fix): disk-persisted VS bytecode cache (#1) — mirror gl11's
+          Direct3d11_ShaderCache into gl05. Highest value-to-risk; reuses shipping code; kills the
+          recurring jerk after one warm run.
+  Step 2 (if cold-load smoothness still matters): async compile (#2) — move D3DCompile to a worker
+          using the existing thread infra, keep CreateVertexShader on the device thread. Now only
+          fires on genuine cache misses, so its concurrency risk is rarely exercised.
+  Skip/defer: offline precompile (#3, subsumed by #1 — optionally ship #1's warm .cso set as the
+          "prebuilt" cache later); allocator swap (#4, separate measured workstream, not for this
+          bug).
+
+**Single highest value-to-risk FIRST step: the disk-persisted VS bytecode cache (#1)** — it is a
+mechanical mirror of an already-shipping gl11 component (Direct3d11_ShaderCache), reuses the
+existing, already-correct permutation key, touches NO thread-affinity rules, and directly
+eliminates the dominant compile cost on every load after the first.
+
+================================================================================
+5. CITATIONS
+================================================================================
+- Direct3d9_VertexShaderData.cpp:584  CreateVertexShader (device-affine; cache-hit path)
+- Direct3d9_VertexShaderData.cpp:684  D3DCompile (pure CPU; the off-loadable cost)
+- Direct3d9_VertexShaderData.cpp:151  buildByteCodeCacheKey(fileName, texcoordKey, target)
+- Direct3d9_VertexShaderData.cpp:143/:579/:711  in-memory VsByteCodeCache (lookup / fill)
+- Direct3d9_VertexShaderData.cpp:599  ms_scratchBuffer / ms_defines static scratch (NOT thread-safe)
+- Direct3d11_ShaderCache.cpp:99/:176/:236  install(cacheDir)/tryLoad/store — the disk cache to mirror
+- AsynchronousLoader.cpp:429 threadRoutine (bytes-only worker) / :631 main-thread resource callback
+                              / :589 callbacks-per-frame budget / :117 8MB postpone throttle
+- FileStreamerThread.cpp:58/:59  runNamedThread "File", kHigh priority; multi-priority read queues
+- sharedThread/src/win32/Thread.cpp  Thread priority infra (runNamedThread, kIdle..kCritical)

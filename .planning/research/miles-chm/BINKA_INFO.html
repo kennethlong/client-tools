@@ -1,0 +1,166 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>BINKA_INFO</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='BINKA_INFO'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>BINKA_INFO</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ </td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_BinkA_frames.html#_Discussion' class='paragraph'>AIL_enumerate_BinkA_frames: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_inspect_BinkA.html#_Discussion' class='paragraph'>AIL_inspect_BinkA: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='BINKA_INFO.html#_Discussion' class='paragraph'>BINKA_INFO: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_BinkA_frames.html' class='paragraph'>AIL_enumerate_BinkA_frames</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_inspect_BinkA.html' class='paragraph'>AIL_inspect_BinkA</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='MP3_INFO.html' class='paragraph'>MP3_INFO</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='BINKA_INFO.html'>BINKA_INFO</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'>char const *</span>&nbsp;file_image;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;image_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;total_samples;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;channel_count;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;sample_rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;samples_per_frame;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'>char const *</span>&nbsp;current_frame;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;byte_offset;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ </table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='file_image' class=nohover>file_image</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Original pointer passed to <a href='AIL_inspect_BinkA.html' class='paragraph'>AIL_inspect_BinkA</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='image_size' class=nohover>image_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Original file_size passed to <a href='AIL_inspect_BinkA.html' class='paragraph'>AIL_inspect_BinkA</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='total_samples' class=nohover>total_samples</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Total samples in the file. Divide by sample_rate to get length in seconds.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='channel_count' class=nohover>channel_count</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Total channel count in the file.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='sample_rate' class=nohover>sample_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The sample rate for the file.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='samples_per_frame' class=nohover>samples_per_frame</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ The samples contained in one frame enumerated via <a href='AIL_enumerate_BinkA_frames.html' class='paragraph'>AIL_enumerate_BinkA_frames</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='current_frame' class=nohover>current_frame</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Internal pointer used for enumeration.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='byte_offset' class=nohover>byte_offset</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Offset of the frame from file_image, suitable for a loop point.</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='BINKA_INFO::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ All fields except byte_offset are valid as soon as <a href='AIL_inspect_BinkA.html' class='paragraph'>AIL_inspect_BinkA</a> returns. byte_offset is valid once an enumeration has taken place.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AILMIXINFO.html' class='paragraph'>AILMIXINFO</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='MP3_INFO.html' class='paragraph'>MP3_INFO</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

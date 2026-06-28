@@ -1,0 +1,147 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>RIB_DATA_SUBTYPE</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='RIB_DATA_SUBTYPE'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>RIB_DATA_SUBTYPE</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ describes the variable type of the RIB entry.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='RIB_INTERFACE_ENTRY.html' class='paragraph'>RIB_INTERFACE_ENTRY</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Types</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='RIB_ENTRY_TYPE.html' class='paragraph'>RIB_ENTRY_TYPE</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Filter_Services.html' class='paragraph'>Digital Filter Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Type Definition:</span>
+<span class='type'>typedef <a href='U32.html' class='blue'>U32</a></span> <a href='RIB_DATA_SUBTYPE.html'>RIB_DATA_SUBTYPE</a>;
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ describes the variable type of the RIB entry.</table>
+<div class="discussion_heading">Predefined values</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_NONE' class=nohover>RIB_NONE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry has no type (usually a callable function). (Debugger value: 0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_CUSTOM' class=nohover>RIB_CUSTOM</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a pointer to an application-specific structure. (Debugger value: 1).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_DEC' class=nohover>RIB_DEC</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a 32-bit integer value to be reported in decimal. (Debugger value: 2).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_HEX' class=nohover>RIB_HEX</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a 32-bit integer value to be reported in hex. (Debugger value: 3).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_FLOAT' class=nohover>RIB_FLOAT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a 32-bit single-precision FP value. (Debugger value: 4).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_PERCENT' class=nohover>RIB_PERCENT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a 32-bit single-precision FP value to be reported as percentage. (Debugger value: 5).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_BOOL' class=nohover>RIB_BOOL</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a boolean-constrained integer value to be reported as TRUE or FALSE. (Debugger value: 6).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_STRING' class=nohover>RIB_STRING</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a pointer to a null-terminated ASCII strings. (Debugger value: 7).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='RIB_READONLY' class=nohover>RIB_READONLY</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+ Entry is a read-only property (or-ed with other flags). (Debugger value: 0x80000000).</td>
+  </tr>
+</table>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='RIB_ENTRY_TYPE.html' class='paragraph'>RIB_ENTRY_TYPE</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Filter_Services.html' class='paragraph'>Digital Filter Services</a></td>
+    <td width=33% align=right>&nbsp;</td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

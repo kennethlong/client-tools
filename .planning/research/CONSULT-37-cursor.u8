@@ -1,0 +1,92 @@
+## 1. Summary
+
+The three-plan wave (37-01 spike → 37-02 MVP → 37-03 full catalog) is sensibly sequenced, mirrors the shipped `gl11_r.dll!GetHookPoints` pattern, and explicitly documents the real C++ landmines (virtual/ctor/private/overload/inline). The spike-first approach is the right de-risk. Under your assigned lens, though, there are material gaps: the PMF `union` helper is MSVC-pragmatic but not standards-safe and its `static_assert` does **not** exclude virtual or semantic mismatches; the coverage bridge has a **documented off-by-one split** between 37-01 and 37-PATTERNS/37-RESEARCH; and several symbol-resolution claims in 37-RESEARCH/37-03 (especially `object::getType`/`object::move`, `extent::intersect`) do not match this repo’s headers. Export via `extern "C" __declspec(dllexport) __cdecl` from a 32-bit EXE should yield undecorated `GetEngineHookPoints` (not `_GetEngineHookPoints@0`, which would imply `__stdcall`), but that remains unproven until 37-01 Task 3 dumpbin runs—the handoff spec is correctly more cautious than the plans.
+
+---
+
+## 2. Strengths
+
+- **Spike-before-catalog sequencing (37-01 → 37-02 → 37-03)** isolates the four hard mechanisms (undecorated export, PMF conversion, `installConfigFileOverride` exposure, coverage scaffold) before ~230 rows.
+- **EPA-02 correction is correct and verified**: Utinni’s zero-arg `config::loadOverrideConfig` maps to a thunk around `installConfigFileOverride()` in `ClientMain.cpp:98-109`, not `ConfigFile::loadFromBuffer` (`ConfigFile.h:136`).
+- **Confirmed spike symbols check out**: `Game::install` is `static void install(Application)` at `Game.h:94`; `CommandParser::addSubCommand` is a public non-virtual instance method at `CommandParser.h:149`.
+- **Landmine rules are stated honestly**: plans repeatedly say virtual `&fn` is a vtable thunk and that the count `static_assert` will **not** catch it (37-02 Task 2, 37-PATTERNS:108-109).
+- **Exe-local header** (`utinni_engine_hookpoints.h` not in plugin headers) avoids the shared-header ABI cascade called out in AGENTS.md.
+- **`/FORCE` link-grep gate** is the right mitigation for typo’d `&Class::method` rows.
+- **Out-of-repo acceptance is explicitly deferred** in 37-VALIDATION.md and 37-03 Task 3—honest about what build-time checks cannot prove.
+
+---
+
+## 3. Concerns
+
+### C++ mechanism (your assigned focus)
+
+| Severity | Issue |
+|----------|-------|
+| **HIGH** | **PMF `union` is not well-defined in ISO C++**, even with `static_assert(sizeof(PMF)==sizeof(void*))`. Reading `u.p` after writing `u.m` is type-punning through a non-common initial member; MSVC tolerates this in practice for hooking, but it is not portable or strictly defined. Prefer `std::bit_cast<void*>` (C++20, already enabled) or `memcpy` for the bits, keeping the size guard. |
+| **HIGH** | **`static_assert(sizeof(PMF)==sizeof(void*)) does not rule out unsafe cases it claims to.** On 32-bit MSVC, **single-inheritance virtual** PMFs are still 4 bytes—the assert passes, but `&Object::addToWorld` (virtual at `Object.h:120`) yields a **vtable dispatch stub**, not the implementation. RESEARCH even says this (Pattern 3 CAVEAT), but 37-RESEARCH also wrongly lists `Object::getType`/`move` as virtual at `Object.h:120-121`—those lines are `addToWorld`/`removeFromWorld` only. |
+| **HIGH** | **Coverage `static_assert` is internally inconsistent.** **37-01 Task 2** uses `(sizeof table / sizeof[0]) == UTINNI_REQUIRED_COUNT` with **no sentinel**. **37-PATTERNS:176-177** uses **`- 1`**, matching **37-RESEARCH:433-437** which adds `{ nullptr, nullptr }` and sets `s_table.count` with `- 1`. An executor mixing documents gets either a compile failure or a silent off-by-one in `s_table.count` vs `.inc`. **37-01’s no-sentinel version is correct**; PATTERNS/RESEARCH should be aligned or the spike will inherit the wrong idiom. |
+| **MEDIUM** | **Count bridge catches only `.inc` ↔ table row drift, not correctness.** It will not catch: wrong function at a non-null address, virtual vtable thunks, accessor-advertised-as-global semantic mismatch (`game::g_mainLoopCounter` → `&Game::getLoopCount` at `Game.h:190`), or inline methods with no unique address (`Object::move_o` is `inline` at `Object.h:1216`). |
+| **MEDIUM** | **Confirmed: virtual-advertised-as-`&fn` will NOT fail the coverage gate.** Only greps/landmine discipline catch it (e.g. 37-02 acceptance: no `&CuiIoWin::processEvent`). One missed grep in 37-03’s ~160 new rows ships a wrong detour target with a green build. |
+
+### Undecorated export from EXE
+
+| Severity | Issue |
+|----------|-------|
+| **LOW** (mechanism) / **MEDIUM** (evidence) | **`extern "C" __declspec(dllexport) __cdecl` should produce undecorated public name `GetEngineHookPoints` on 32-bit MSVC**, with internal symbol `_GetEngineHookPoints`. **`_GetEngineHookPoints@0` would indicate `__stdcall`**, not `__cdecl`; the plan’s acceptance criteria correctly distinguish these. EXE and DLL share the same PE export-table mechanism when `dllexport` is used; SwgClient.vcxproj has no `ModuleDefinitionFile` (grep confirms). **However**: the canonical handoff spec §5 explicitly warns that leading-underscore behavior may require `/EXPORT` or `.def`—more conservative than 37-01/RESEARCH “dllexport alone suffices.” Analog is proven for **`gl11_r.dll`** (`Direct3d11.cpp:879`), not yet for **`SwgClient_*.exe`**. `/EXPORT` fallback is reasonable insurance, not proof the primary path fails. |
+| **LOW** | 37-01 puts the export declaration in **both** header and `.cpp`. Harmless if consistent; duplicate declarations must stay identical to avoid ODR/link surprises. |
+
+### Symbol-resolution risk (spot-check)
+
+| Severity | Plan claim | Repo reality |
+|----------|------------|--------------|
+| **HIGH** | 37-03 / RESEARCH: `object::getType`, `object::move` virtual at `Object.h:120-121` | **Wrong lines and wrong symbols.** `getType` **does not exist**; closest is non-virtual `Tag getObjectType() const` (`Object.h:152`). `move` **does not exist**; there are non-virtual `move_p` / `move_o` (`Object.h:251-252`), with `move_o` **inline** (`Object.h:1216`). Skipping `getType`/`move` as virtual would **omit required Utinni names**; advertising `&Object::getType` **will not compile**. |
+| **HIGH** | 37-03 Task 1: `extent::intersect` → `&Extent::intersect` (§8 #2) | **`Extent::intersect` does not exist.** Non-virtual `BaseExtent::intersect` overloads live at `BaseExtent.h:45-47`; `Extent::realIntersect` is **protected virtual** (`Extent.h:90`). Row needs explicit overload resolution on `BaseExtent::intersect`, likely via `pmfToVoid` + `static_cast`, not `&Extent::intersect`. |
+| **MEDIUM** | 37-02: `commandParser::createDelegateCommands` | **`createDelegateCommands` is `protected`** (`CommandParser.h:180`)—plan says CHECK/friend/thunk, but easy to get wrong under `/FORCE`. |
+| **MEDIUM** | 37-02: `game::g_mainLoopCounter` / private statics | **`ms_loops`/`ms_done` are private** (`Game.h:276-277`); **`getLoopCount()` accessor exists** (`Game.h:190`, inline at 398)—plan’s accessor pattern is right, but Utinni may expect a **readable global address**, not a callable accessor. |
+| **MEDIUM** | 37-02: `graphics::present` no-arg cast | Overloads at `Graphics.h:161-162`—cast approach is right; must match UtinniCore typedef exactly (plan marks CHECK). |
+| **LOW** | Confirmed MISMATCH corrections (`loadFile`, `run`, `getPlayerCreature`, `screenShot`, `setHardwareMouseCursorEnabled`, `setView`, `getIoWin`) | **Verified** against `ConfigFile.h:135`, `Game.h:96/157`, `Graphics.h:170/177`, `GroundScene.h:207`, `CuiManager.h:100`. |
+
+### Sequencing, scope, verifiability
+
+| Severity | Issue |
+|----------|-------|
+| **MEDIUM** | **37-03 Task 2 SKIP policy vs shared `.inc`**: virtual endpoints are excluded from `.inc` required-set, but Utinni’s contract names (~230) still include them. EPA-04 “zero-missing” then means “zero-missing on our trimmed required-set,” not Utinni’s full hook list—needs explicit Utinni-side coordination or live injection will still miss vtable-resolved names unless Utinni already handles that path. |
+| **MEDIUM** | **Ctor thunk calling convention**: 32-bit MSVC member ctors are typically `__thiscall`. Plan shows generic `static <ret> CtorThunk(...)` without mandating `__thiscall` on thunks—ABI mismatch would pass link-grep and fail at first Utinni detour. |
+| **MEDIUM** | **Runtime `utinni_verifyNoNullNoDup()`** is scaffolded in 37-01 but **not wired into boot path** until optionally `#if !PRODUCTION` in 37-02/03. Task 3 allows “verify by inspection”—weak for ~230 rows. |
+| **LOW** | 37-02 builds canonical **5-target** (all renderers) though only SwgClient changes—correct per AGENTS.md, slightly heavy for the phase scope. |
+| **LOW** | **`ClientMain.cpp` exposure**: function lives in `ClientMainNamespace` with `using namespace` at line 112; shim-at-file-scope is fine, but must not duplicate behavior or break internal callers. |
+
+---
+
+## 4. Suggestions
+
+1. **Pick one coverage idiom and delete the other.** Standardize on 37-01: no sentinel row; `static_assert(sizeof(s_engineHookPoints)/sizeof(s_engineHookPoints[0]) == UTINNI_REQUIRED_COUNT)`; `s_table.count` uses the same expression. Fix 37-PATTERNS:176 and 37-RESEARCH:429-437 to match.
+
+2. **Replace PMF `union` with `std::bit_cast<void*>(pmf)`** (or `memcpy`) under the existing `static_assert`, and add a one-line comment that the guard catches MI/VI inflation only, **not virtual dispatch stubs**.
+
+3. **Add a “symbol kind” checklist per row** in 37-02/03 execution: `{static | pmf-nonvirtual | thunk | accessor | skip-virtual | omit}` verified against the header **before** writing the table row. Grep gates alone are insufficient at scale.
+
+4. **Fix RESEARCH/37-03 object bucket before execution:**
+   - `object::getType` → map to `getObjectType` (non-virtual PMF), not skip-as-virtual.
+   - `object::move` → resolve UtinniCore typedef against `move_o`/`move_p`; if inline, force emission (`#pragma optimize off` / move to `.cpp`) or document OMIT.
+   - Remove false “virtual at Object.h:120-121” citation for getType/move.
+
+5. **Fix `extent::intersect` row:** target `BaseExtent::intersect` with explicit overload `static_cast`; verify against UtinniCore signature-source; do not reference nonexistent `Extent::intersect`.
+
+6. **37-01 Task 3:** treat dumpbin on **`SwgClient_d.exe`** as blocking; if public name is not exactly `GetEngineHookPoints`, apply `#pragma comment(linker, "/EXPORT:GetEngineHookPoints")` as handoff §5 prescribes—don’t treat it as failure-only fallback.
+
+7. **Wire `utinni_verifyNoNullNoDup()` into Debug boot** (once, early in `ClientMain`) before declaring EPA-04 green on MVP/full set.
+
+8. **Document accessor-vs-global rows** in 37-02 SUMMARY with “call-not-read” semantics so Utinni consumers don’t dereference `getLoopCount`/`getIoWin` as data pointers.
+
+9. **Ctor thunks:** mandate `__thiscall` (or match UtinniCore typedef exactly) in 37-PATTERNS Pattern 4 example.
+
+---
+
+## 5. Risk Assessment
+
+**Overall: MEDIUM**
+
+**Justification:** The architecture (spike → MVP → full, gl11 twin, exe-local header, `/FORCE` grep, EPA-02 thunk) is sound and the easy static rows are low risk. Risk rises to **medium** because: (1) PMF conversion + virtual/inline landmines can ship **plausible but wrong addresses** with all in-repo gates green; (2) **internal doc inconsistency** on the coverage `-1` sentinel can cause a broken spike or wrong `count` field; (3) **RESEARCH symbol errors** on `getType`/`move`/`extent::intersect` will burn execution time or produce wrong rows if copied verbatim; (4) **true acceptance** (first-detour crash gone, overlay renders) remains out-of-repo, and the in-repo gates are mostly structural parity—not behavioral proof against Utinni’s typedefs.
+
+The export mechanism is **likely LOW risk** once dumpbin confirms undecorated `GetEngineHookPoints`; the PMF/count/correctness cluster is where the plans are most vulnerable.

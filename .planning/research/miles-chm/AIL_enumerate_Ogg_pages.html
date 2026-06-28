@@ -1,0 +1,135 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_enumerate_Ogg_pages</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_enumerate_Ogg_pages'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_enumerate_Ogg_pages</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ obtains information about successive pages in an Ogg container file.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_Ogg_pages.html#_Discussion' class='paragraph'>AIL_enumerate_Ogg_pages: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_inspect_Ogg.html#_Discussion' class='paragraph'>AIL_inspect_Ogg: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='OGG_INFO.html#_Discussion' class='paragraph'>OGG_INFO: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_inspect_Ogg.html' class='paragraph'>AIL_inspect_Ogg</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='MILES_FILE_TYPE.html' class='paragraph'>MILES_FILE_TYPE</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_enumerate_Ogg_pages.html'>AIL_enumerate_Ogg_pages</a></span>(</td><td><span class='type'><a href='OGG_INFO.html' class='blue'>OGG_INFO*</a></span> <span class='parameter'>inspection_state</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ obtains information about successive pages in an Ogg container file.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='inspection_state' class=nohover>inspection_state</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ points to an instance of an OGG_INFO structure owned by the application and previously initialized by a call to <a href='AIL_inspect_Ogg.html' class='paragraph'>AIL_inspect_Ogg</a>.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ 1 if the page-data portion of the <a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a> structure represents a valid page; 0 if no (further) valid pages exist in the file image.</table>
+<div class="discussion_heading"><a name='AIL_enumerate_Ogg_pages::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function returns information about all of the valid Ogg pages in the file image, beginning with the first, by filling  in the appropriate <a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a> structure fields. 
+
+</p>
+<p>
+You can inspect all of the pages in an Ogg file image with the following code: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>   <a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a> info;
+   <a href='AIL_inspect_Ogg.html' class='paragraph'>AIL_inspect_Ogg</a>(&amp;info,
+                   my_Ogg_file_image,
+                   size_in_bytes_of_my_Ogg_file_image);
+
+   printf("Valid Ogg data, if any, begins at %X\n",info.start_Ogg_data);
+
+   while (<a href='AIL_enumerate_Ogg_pages.html' class='paragraph'>AIL_enumerate_Ogg_pages</a>(&amp;info))
+      {
+      printf("Valid page found at byte offset %d from info.start_Ogg_data\n",info.byte_offset);
+      }
+</pre></div>
+<p>
+</p>
+<p>
+See the <a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a> structure description for details about the information retrieved by this function.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_inspect_Ogg.html' class='paragraph'>AIL_inspect_Ogg</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='MILES_FILE_TYPE.html' class='paragraph'>MILES_FILE_TYPE</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

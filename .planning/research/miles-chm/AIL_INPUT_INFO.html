@@ -1,0 +1,139 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_INPUT_INFO</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_INPUT_INFO'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_INPUT_INFO</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ specifies the details for performing digital input.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_input_info.html' class='paragraph'>AIL_get_input_info</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_input.html' class='paragraph'>AIL_open_input</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Digital_Audio_Input__Recording__Services.html#_Discussion' class='paragraph'>Digital Audio Input (Recording) Services: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_open_input.html' class='paragraph'>AIL_open_input</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Input__Recording__Services.html' class='paragraph'>Digital Audio Input (Recording) Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='AIL_INPUT_INFO.html'>AIL_INPUT_INFO</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;device_ID;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U32.html' class='blue'>U32</a></span>&nbsp;hardware_format;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;hardware_rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;buffer_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='UINTa.html' class='blue'>UINTa</a></span>&nbsp;user_data;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='AIL_input_callback.html' class='blue'>AIL_input_callback</a></span>&nbsp;callback;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ specifies the details for performing digital input.</table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='device_ID' class=nohover>device_ID</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ waveIn device ID or WAVE_MAPPER for the Control Panel input setting on Windows.  Zero on MacOS.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='hardware_format' class=nohover>hardware_format</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ requested input sound format - use one of the <a href='MILES_DIGITAL_FORMAT.html' class='paragraph'>MILES_DIGITAL_FORMAT</a> constants.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='hardware_rate' class=nohover>hardware_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ requested input sound rate (usually 8000, 11025, 22050, or 44100).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='buffer_size' class=nohover>buffer_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ exact amount of data in bytes to be returned to the callback in each call.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='user_data' class=nohover>user_data</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ the value that will be passed to the callback function as the user parameter.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='callback' class=nohover>callback</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ callback to call as the sound data is received by the input device.</td>
+  </tr>
+</table>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Digital_Audio_Input__Recording__Services.html#_Discussion' class='paragraph'>Digital Audio Input (Recording) Services: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Input__Recording__Services.html' class='paragraph'>Digital Audio Input (Recording) Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_open_input.html' class='paragraph'>AIL_open_input</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

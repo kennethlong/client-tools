@@ -1,0 +1,133 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Cross Fading</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Cross Fading'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Cross Fading</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_4.html' class='paragraph'>Stopping Sounds</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_6.html' class='paragraph'>Ducking and Ramps</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_5_main' class='nohover'><b></b></a></div>
+<p>
+Starting and stopping is all well and good, but we'd like to fade in another sound while the first is fading out.
+This isn't going to introduce very much, but it's likely to be so common that it deserves being singled out.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Asset List
+</li><li> Event Asset
+</li><li> Sound Asset
+</li><li> Start Sound Event Step
+</li><li> Control Sounds Event Step
+</li><li> Audition
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b><br>
+None!
+</p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li><i>Follow all instructions in the Stopping Sounds guide, creating an event to start a sound with a label, and an event to stop that sound.</i><br><br>
+</p>
+<p>
+</li><li><i>Double click the event "NewEvent" and click "Add New Step" below the Control Sounds event step.</i><br><br>
+<img src="5_add.png"/><br><br>
+</p>
+<p>
+Double clicking an Asset in the Asset List selects it, and switches the current tab to Editor, effectively ensuring it is immediately editable. By adding
+a new step, the default Start Sound step has been added below the Control Sounds step that existed before.
+</p>
+<p>
+</li><li><i>Drag your sound to the Sound List in the new Start Sounds event step. (bigbossexplosion01 in the picture)</i><br><br>
+<img src="5_drag.png"/><br><br>
+</p>
+<p>
+Now the same event that stops the sound, will start a new one after starting the fade out for the first one. Dragging a sound to the pane adds it to the
+list of sounds the event will select from to play. Alternatively, you can add sounds via the button at the upper right of the sound pane in the Start 
+Sound event step.
+</p>
+<p>
+</li><li><i>Scroll down if necessary, change the Fade In value to 1, and hit enter.</i><br><br>
+<img src="5_fade.png"/><br><br>
+</p>
+<p>
+This sets the sound to start at max attentuation (-96 dB) and fade it in over 1 second.
+</p>
+<p>
+</li><li><i>Right Click on the sound event and select Audition. Wait a few seconds then do the same for "New Event".</i><br><br>
+<img src="4_auditions.png"/><br><br>
+</p>
+<p>
+It's not a very interesting crossfade, but the first instance of the sound has been faded out, and another
+instance started, fading in at the same time. Note that you can hit the stop button on the Timeline Tab
+to stop all sound playing in the tool.
+</p>
+<p>
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_4.html' class='paragraph'>Stopping Sounds</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_6.html' class='paragraph'>Ducking and Ramps</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

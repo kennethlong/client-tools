@@ -1,0 +1,130 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>How do I set a DSP filter on a sample?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='How do I set a DSP filter on a sample?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>How do I set a DSP filter on a sample?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_apply_a_low_pass_filter_.html' class='paragraph'>How do I apply a low-pass filter?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='How_much_CPU_do_the_various_filters_use_.html' class='paragraph'>How much CPU do the various filters use?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='How do I set a DSP filter on a sample?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: How do I set a DSP filter on a sample?</p>
+<p>
+A: To set a DSP filter, you have to first find the filter(s) that you want to apply.  To find a filter, you can either enumerate through the possible filters looking for the one you want (using the <a href='AIL_enumerate_filters.html' class='paragraph'>AIL_enumerate_filters</a> function), or you can use the  simple utility function <a href='AIL_find_filter.html' class='paragraph'>AIL_find_filter</a>.  For example, to find the high-pass DSP filter, do something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(DSP);   <font color=#008000>// Needed on static library platforms such as Xbox, Wii, and PS3</font>
+<a href='AIL_startup.html' class='paragraph'>AIL_startup</a>();
+...
+...
+...
+<a href='HPROVIDER.html' class='paragraph'>HPROVIDER</a> high_pass;
+
+if ( <a href='AIL_find_filter.html' class='paragraph'>AIL_find_filter</a>( "HighPass Filter", &amp;high_pass ) )
+{
+  <font color=#008000>// success!</font>
+}
+</pre></div>
+<p>
+</p>
+<p>
+Once we have a handle to the high-pass filter, we have to apply it to our HSAMPLE with the <a href='AIL_set_sample_processor.html' class='paragraph'>AIL_set_sample_processor</a> function.  Eight filter slots, labeled SP_FILTER_0 through SP_FILTER_7, are available: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// init the sample</font>
+<a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a>( S, DIG_F_MONO_16 );
+
+<font color=#008000>//later, apply the filter</font>
+<a href='AIL_set_sample_processor.html' class='paragraph'>AIL_set_sample_processor</a>( S, SP_FILTER_0, high_pass );
+</pre></div>
+<p>
+</p>
+<p>
+Make sure you call <a href='AIL_set_sample_processor.html' class='paragraph'>AIL_set_sample_processor</a> <i>after</i> you call  <a href='AIL_init_sample.html' class='paragraph'>AIL_init_sample</a>, <a href='AIL_set_sample_file.html' class='paragraph'>AIL_set_sample_file</a>, <a href='AIL_set_sample_info.html' class='paragraph'>AIL_set_sample_info</a>, or <a href='AIL_set_named_sample_file.html' class='paragraph'>AIL_set_named_sample_file</a>.   Filters may be assigned in any order, and it's OK to skip slots altogether.  Filters assigned to  lower-numbered slots are executed prior to those in higher-numbered ones. 
+
+</p>
+<p>
+Now, all that remains is setting the specific filter properties that you'd like to control.  To do that, call the <a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a> function with one of the properties described in the Digital Filter Services <i><a href='Digital_Filter_Services.html' class='paragraph'>Section</a></i>.  To finish our example, let's set the high-pass filter to kick in at 4000 Hz, like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><a href='F32.html' class='paragraph'>F32</a> value=4000.0F;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Highpass Cutoff", -1, &amp;value, 0, 0 );
+</pre></div>
+<p>
+</p>
+<p>
+Again, in most cases, you should install any DSP filters after declaring an  HSAMPLE's format, but before starting playback.  Installing or removing a DSP pipeline filter on a playing HSAMPLE may cause audible artifacts.  To disable an existing filter's influence on a given HSAMPLE without uninstalling the filter, set the filter's "Wet Level' preference (if available) to 0.0. 
+
+</p>
+<p>
+See the FILTER.CPP and MULTIFLT.CPP example programs for more information. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_apply_a_low_pass_filter_.html' class='paragraph'>How do I apply a low-pass filter?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='How_much_CPU_do_the_various_filters_use_.html' class='paragraph'>How much CPU do the various filters use?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_open_stream</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_open_stream'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_open_stream</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ opens a stream handle based on a supported file (.WAV, Bink Audio, Ogg Vorbis, XMA, or MP3, and others).</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_stream.html#_Discussion' class='paragraph'>AIL_open_stream: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_file_callbacks.html#_Discussion' class='paragraph'>AIL_set_file_callbacks: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_stream_loop_count.html#_Discussion' class='paragraph'>AIL_set_stream_loop_count: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_access_files_from_a_big_packed_file_.html#_Discussion' class='paragraph'>How do I access files from a big packed file?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_stream_a_file_off_a_hard_disk_or_CD_.html#_Discussion' class='paragraph'>How do I stream a file off a hard disk or CD?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='HSTREAM.html#_Discussion' class='paragraph'>HSTREAM: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Streams_are_taking_a_long_time_to_open__even_on_asynchronous_platforms_such_as_the_Wii___What_factors_affect_stream_overhead_.html#_Discussion' class='paragraph'>Streams are taking a long time to open, even on asynchronous platforms such as the Wii.  What factors affect stream overhead?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_close_stream.html' class='paragraph'>AIL_close_stream</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_file_callbacks.html' class='paragraph'>AIL_set_file_callbacks</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Digital_Audio_Streaming_Services.html#_Discussion' class='paragraph'>Digital Audio Streaming Services: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_close_stream.html' class='paragraph'>AIL_close_stream</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Streaming_Services.html' class='paragraph'>Digital Audio Streaming Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='HSTREAM.html' class='blue'>HSTREAM</a></span> <span class='type'><a href='AIL_open_stream.html'>AIL_open_stream</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>dig</span>,<br><span class='type'>char const *</span> <span class='parameter'>name</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>stream_mem</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ opens a stream handle based on a supported file (.WAV, Bink Audio, Ogg Vorbis, XMA, or MP3, and others).</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='dig' class=nohover>dig</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the digital driver handle to use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='name' class=nohover>name</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the name of the file to stream.  The streaming API supports .WAV, Bink Audio, Ogg Vorbis, XMA, and MP3 files, among other possible formats.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='stream_mem' class=nohover>stream_mem</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the amount of memory to use for streaming.  Normally, you will pass a zero for this parameter which tells MSS to determine the optimal amount of memory to use.  You may want to increase this parameter if you plan on increasing the playback rate.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ A handle to the new stream, or NULL if the open failed.</table>
+<div class="discussion_heading"><a name='AIL_open_stream::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Currently-supported file types include uncompressed .WAV files, IMA ADPCM compressed .WAV files, Xbox 360 XMA-compressed .WAV files, Bink Audio, Ogg Vorbis files (mono, stereo, and multichannel),  .WAV-wrapped MP3 files, and standard MP3 files. 
+
+</p>
+<p>
+A stream is similar to a digital sample, but instead of the entire file being loaded into memory, only a small portion of the file is loaded at once. 
+
+</p>
+<p>
+To stream data files that are embedded within other packed files or libraries, you can mark up the filename to tell MSS how to access it. Simply use a filename string of the form 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>                *my_large_packed_file.pak*3141592*271828.mp3
+                </pre></div>
+<p>
+</p>
+<p>
+to access (for example) a 3,141,592-byte .mp3 file that resides within a container file at  byte offset 271,828.  When creating a subfile descriptor string, only the suffix portion  of the original filename (.mp3 in this case) is needed. 
+
+</p>
+<p>
+Of course, you can also override the I/O functions that Miles uses to read from the stream with the <a href='AIL_set_file_callbacks.html' class='paragraph'>AIL_set_file_callbacks</a> function, if you don't want to bother composing a subfile descriptor or using the (deprecated) ASCII-encoded file handle technique.  Note, however, that <i>most applications are better off letting Miles do its own file access</i>, even with packed files that your application has already opened.  Unless you have a very specific reason for overriding Miles's file I/O calls, we recommend against doing so. 
+
+</p>
+<p>
+Streams are automatically serviced in the background by default.  You can service the buffers manually with the <a href='AIL_service_stream.html' class='paragraph'>AIL_service_stream</a> and <a href='AIL_auto_service_stream.html' class='paragraph'>AIL_auto_service_stream</a> functions. 
+
+</p>
+<p>
+If the total size of the streaming buffers is greater than or equal to the total stream size, then the MSS will preload all of the data automatically, so you'll never use more memory than a normal sample would take. 
+
+</p>
+<p>
+This function doesn't actually load any of the streaming buffers - the only routine in the streaming API that performs the file reading is <a href='AIL_service_stream.html' class='paragraph'>AIL_service_stream</a>. 
+
+</p>
+<p>
+Monaural-source streams may be steered to multiple output speakers via <a href='AIL_stream_sample_handle.html' class='paragraph'>AIL_stream_sample_handle</a> and the various volume/pan and channel-level control functions.  Additionally, multichannel (&gt; 2-channel)  Bink Audio and Ogg Vorbis files may be streamed with full channel/speaker routing capabilities via <a href='AIL_set_sample_channel_levels.html' class='paragraph'>AIL_set_sample_channel_levels</a>.   Consult the <i>How do I use multi-channel sound output in Miles?</i> <i><a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html' class='paragraph'>FAQ</a></i>  for an overview of multichannel audio support. 
+
+</p>
+<p>
+Example files that use this function: Demo.C, Streamer.C, FileHndl.C<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Digital_Audio_Streaming_Services.html#_Discussion' class='paragraph'>Digital Audio Streaming Services: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Streaming_Services.html' class='paragraph'>Digital Audio Streaming Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_close_stream.html' class='paragraph'>AIL_close_stream</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

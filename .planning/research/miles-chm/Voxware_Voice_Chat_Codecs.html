@@ -1,0 +1,89 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Voxware Voice Chat Codecs</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Voxware Voice Chat Codecs'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Voxware Voice Chat Codecs</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Voxware_Voice_Chat_Codecs.html#_Discussion' class='paragraph'>Voxware Voice Chat Codecs: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Working_with_Voice_Input.html' class='paragraph'>Working with Voice Input</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Voxware Voice Chat Codecs::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The Miles Sound System includes Audio Stream Interface (ASI)-based support for the popular Voxware? MetaVoice compression and decompression libraries.  Available for use by MSS developers on a royalty-free basis, this package includes the RT29 and RT24 fixed-rate codecs which are capable of compression and decompression of speech at bit rates of 2900 and 2400 bits per second, respectively; and the VR12 variable-rate codec which operates at varying bit rates between 600 and 1800 bits per second.  Compared to standard 8-kHz 16-bit monaural voice input at 128,000 bits per second, these bit rates correspond to compression ratios between 50:1 and 100:1! 
+
+</p>
+<p>
+It's important, however, to understand that the Voxware codecs are not general-purpose audio compression resources.  They achieve their spectacular performance by emulating the acoustical characteristics of the human vocal tract with specific, highly-refined DSP techniques and data models. Consequently, the MetaVoice technology should not be viewed as a competitor to IMA ADPCM, MP3, and other popular compression standards, but rather as a complementary technology that addresses the bandwidth/performance shortcomings of conventional codecs with respect to speech compression.  Put another way, if you try to compress music or sound-effects samples with Voxware's low-bandwidth codecs, you'll be unlikely to recognize, much less appreciate, the decompressed result. 
+
+</p>
+<p>
+Using these high-performance codecs effectively in your application requires that you understand their capabilities and limitations, and plan your communications architecture carefully.  To use the Miles Sound System's codecs for voice communications in a networked environment, you'll need to be comfortable with four basic aspects of the job.  Most of these points are illustrated for demonstration purposes in the MSSCHTC.CPP (client) and MSSCHTS.CPP (server) example programs included with MSS. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%>&nbsp;</td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Working_with_Voice_Input.html' class='paragraph'>Working with Voice Input</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

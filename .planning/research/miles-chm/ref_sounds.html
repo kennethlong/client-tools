@@ -1,0 +1,159 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Sound Reference</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Sound Reference'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Sound Reference</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='ref_defaults.html#ref_defaults_main' class='paragraph'>Defaults: Overview</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='ref_environments.html' class='paragraph'>Environment Reference</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='ref_bank.html' class='paragraph'>Bank Reference</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='ref_sounds_main' class='nohover'><b>Overview</b></a></div>
+<p>
+Sound Assets control the source sound files and how they are compressed.
+</p>
+<p>
+<center><img src="s_sound.png" /></center>
+</p>
+<p>
+<ol><li> The source file for the sound. This can be a compressed file that Miles recognizes, or a .WAV file.
+</li><li> Browse for source file.
+</li><li> Show the source file in Explorer.
+</li><li> The current status for the sound. See below.
+</li><li> The size of the file, as compressed.
+</li><li> Whether to deploy externally. See below. You probably don't want to do this.
+</li><li> How many instances of this sound are allowed at any one time. Zero is infinite.
+</li><li> If this sound is ever streamed, this will be the memory buffer size used. Zero will use the Miles default.
+</li><li> How to compress the sound. More options will show up when a compression type is selected.
+</li><li> Recompress the sound with the current settings.
+</li><li> Quality / Bitrate for the compression type.
+</li><li> If checked, the waveform has all samples below a given decibel level trimmed from the front and back of the sound.
+</li><li> If checked, Miles Studio will <b>try</b> to align the sound such that it loops well under compression. See below.
+</li><li> If not zero, the input wave will be resampled to the given sample rate, for example 44100.
+</li><li> Decompress the compressed sample, and save it to a .WAV file. Used for debugging or testing compression artifacts.
+</li><li> Save the compressed sound to a file, for play in another tool.
+</li><li> The list of markers in the sound. Right click to Rename. See below.
+</li><li> Delete the selected marker.
+</li><li> Source file information
+</li><li> Set and clear a preset to play the sound with, for testing. When selected, then name will be shown.
+</li><li> Playback controls for simple playback.
+</li><li> Loop controls for testing. Sets the start and end loop markers, and clears the loop points.
+</li><li> The white line represents the current cursor location.
+</li><li> The waveform of the compressed sound.
+</li><li> The selected marker.
+</li></ol></p>
+<p>
+<b>Compressed Files As Input</b>
+</p>
+<p>
+Miles allows you to bring in your own compressed files for use as an asset, but the file format has to be one Miles can read. 
+When you do this, Miles will not process the source file at all.
+</p>
+<p>
+<b>Sound Status</b>
+</p>
+<p>
+Sounds are compressed in the background, meaning you can continue to work while all of your sounds are compressing. The current status of
+the compression is reported here. When is says "Ready to Audition", the sound has completed all necessary steps and is ready to be
+played. Any errors will be reported here as well.
+</p>
+<p>
+<b>External Deployment</b>
+</p>
+<p>
+By default, sounds are packed in to the sound bank when deployed for use in a game. By checking this, you are asserting
+that you are responsible for telling Miles where to get this sound. See the "eventexternal" sample app. Sound Designers:
+never check this unless your programmer tells you to.
+</p>
+<p>
+<b>Markers</b>
+</p>
+<p>
+Markers are stored positions within a sound. They can be referenced via <a href='ref_startsound.html#ref_startsound_offset' class='paragraph'>Start Sound: Sound Offsets And Loop Points</a>. An important thing to note is
+they are data offsets, not time offsets, so they will *not* be valid if you change compression. For instance, if you set a
+marker when the sound is a .WAV file, then compress to Bink Audio, the marker will likely exist off the end of the sound data,
+and as such isn't very useful.
+</p>
+<p>
+<b>Loop Processing</b>
+</p>
+<p>
+Looping with compressed sound is fraught with peril. Compressors work in frames, which leads to a couple of issues for looping.
+Among those issues is the length of the sound might not be a multiple of a frame size, so you'll get a small bit of silence at the end that
+prevents perfect looping. Second, the frames tend to "bleed" between each other, causing pops when looping.
+</p>
+<p>
+When you mark this setting, Miles will resample the length of the sound to a multiple of the frame size, and try to 
+compensate for the compressor latencies and blending. This is not an exact science, but if you are having trouble
+looping an entire file and you really want the sound compressed, this may help.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='ref_environments.html' class='paragraph'>Environment Reference</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='studio_reference.html' class='paragraph'>Miles Studio Reference</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='ref_bank.html' class='paragraph'>Bank Reference</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

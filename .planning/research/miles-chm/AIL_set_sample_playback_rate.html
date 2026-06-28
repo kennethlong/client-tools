@@ -1,0 +1,153 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_playback_rate</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_playback_rate'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_playback_rate</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ sets a sample's absolute playback rate in hertz.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html#_Discussion' class='paragraph'>AIL_sample_buffer_available: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_playback_rate.html#_Discussion' class='paragraph'>AIL_sample_playback_rate: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_playback_rate_factor.html#_Discussion' class='paragraph'>AIL_sample_playback_rate_factor: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_named_sample_file.html#_Discussion' class='paragraph'>AIL_set_named_sample_file: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_file.html#_Discussion' class='paragraph'>AIL_set_sample_file: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_info.html#_Discussion' class='paragraph'>AIL_set_sample_info: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_playback_rate.html#_Discussion' class='paragraph'>AIL_set_sample_playback_rate: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_playback_rate_factor.html#_Discussion' class='paragraph'>AIL_set_sample_playback_rate_factor: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_playback_rate.html' class='paragraph'>AIL_sample_playback_rate</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_playback_rate_factor.html' class='paragraph'>AIL_sample_playback_rate_factor</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_address.html' class='paragraph'>AIL_set_sample_address</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_playback_rate_factor.html' class='paragraph'>AIL_set_sample_playback_rate_factor</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_sample_user_data.html' class='paragraph'>AIL_set_sample_user_data</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_sample_playback_rate_factor.html' class='paragraph'>AIL_set_sample_playback_rate_factor</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_sample_playback_rate.html'>AIL_set_sample_playback_rate</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>playback_rate</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ sets a sample's absolute playback rate in hertz.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the sample whose playback rate is to be set.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='playback_rate' class=nohover>playback_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the number of samples per second at which to play the sample data.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_sample_playback_rate::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ An individual audio data sample may be played by the application at any desired rate, which implies that a number of sample points are skipped or repeated during playback. Undersampling is used when the playback rate is greater than the recorded rate, and results in a "fast-forward" effect because a number of sample points must be skipped to achieve the higher playback rate.  Conversely, oversampling occurs when the playback rate is lower than the recorded rate.  In this case, some sample bytes or words must be played more than once before moving on to the next sample point, causing a "dragging" or slowdown effect. 
+
+</p>
+<p>
+Internally, MSS uses oversampling and undersampling to resolve differences between application data rates and hardware rates.  Distortion due to oversampling, in particular, may result when low-frequency data is played at high hardware data rates.  Abrupt transitions between repeated sample point values can introduce unwanted high-frequency components which are not effectively attenuated by the hardware's antialiasing filters.  On the other hand, the same antialiasing filters may clip treble frequencies from the sample data if the hardware's rate is significantly lower than the application's data rate. 
+
+</p>
+<p>
+For the reasons mentioned above, the best audio quality will always be achieved when the driver's hardware data rate is matched as closely as possible to the application's sample data rate.  If most of an application's sample data was recorded at a rate of 11025 Hz, for example, it would be a good idea to use 11025 Hz in the call to <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>. This will ensure that most of the samples are played without introducing distortion or attenuating treble frequencies.  Any samples played at frequencies other than 11025 Hz will be undersampled or oversampled to conform to the hardware rate of 11025 Hz established by the <a href='AIL_set_preference.html' class='paragraph'>AIL_set_preference</a> call.  If the hardware or driver in use does not support a 11025 Hz rate, the closest supported hardware rate will be selected, and the application's data will be resampled accordingly. 
+
+</p>
+<p>
+It is not necessary to call this function if <a href='AIL_set_named_sample_file.html' class='paragraph'>AIL_set_named_sample_file</a>, <a href='AIL_set_sample_file.html' class='paragraph'>AIL_set_sample_file</a>, or <a href='AIL_set_sample_info.html' class='paragraph'>AIL_set_sample_info</a> is used to play memory-resident .VOC or .WAV files directly. 
+
+</p>
+<p>
+Most applications will want to use <a href='AIL_set_sample_playback_rate_factor.html' class='paragraph'>AIL_set_sample_playback_rate_factor</a> instead of this function.  <a href='AIL_set_sample_playback_rate_factor.html' class='paragraph'>AIL_set_sample_playback_rate_factor</a> allows you to adjust the playback rate relative to the sound file's original sample rate, avoiding the need to keep track of the original rate for scaling purposes. 
+
+</p>
+<p>
+Example files that use this function: SSTEST.C<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_sample_user_data.html' class='paragraph'>AIL_set_sample_user_data</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_sample_playback_rate_factor.html' class='paragraph'>AIL_set_sample_playback_rate_factor</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

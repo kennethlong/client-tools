@@ -1,0 +1,90 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Integrating Miles into a MacOS Build Environment</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Integrating Miles into a MacOS Build Environment'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Integrating Miles into a MacOS Build Environment</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_MacOS_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a MacOS Build Environment: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Sound_under_MacOS.html' class='paragraph'>Sound under MacOS</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Distributing_Miles_with_MacOS_Applications.html' class='paragraph'>Distributing Miles with MacOS Applications</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='The_MacOS_Platform.html' class='paragraph'>The MacOS Platform</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Integrating Miles into a MacOS Build Environment::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ To build an application that uses MSS, you must include the MSS SDK in the build process.  There are four simple steps to do this: 
+
+</p>
+<p>
+<ol><li> Include <b>MSS.H</b> in your source files. </li><li> Link with the correct shared library. For PPC, use the <b>libMilesPPC.dylib</b> file.  For x86, use the <b>libMilesX86.dylib</b> file. In Xcode, you usually just have to drop the file into your project). </li><li> If you use MIDI, add the <b>libMilesPPCMIDI.dylib</b> or <b>libMilesX86MIDI.dylib</b> library. </li><li> If you use MIDI, link with the <b>MSSWiiMIDI.LIB</b> library. </li><li> Place the <b>libMilesPPC.dylib</b> or the <b>libMilesX86.dylib</b> file in the folder containing your application executable.   Note that Mach-O applications place the executables for an application package in a subfolder called "Contents/MacOS".   Mach-O application packages are just a defined set of folders, so to open the Contents subfolder in Finder, Control-click  on the application icon and choose "Show Package Contents".  Then just drop the file into the  "Contents/MacOS" folder. </li><li> Copy the other files in the <b>/redist/macppc</b> or <b>/redist/macx86</b> folders into a subfolder off your application's folder. 
+
+</li></ol></p>
+<p>
+And that's it - you should now be able to call the Miles functions! <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Sound_under_MacOS.html' class='paragraph'>Sound under MacOS</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='The_MacOS_Platform.html' class='paragraph'>The MacOS Platform</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Distributing_Miles_with_MacOS_Applications.html' class='paragraph'>Distributing Miles with MacOS Applications</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

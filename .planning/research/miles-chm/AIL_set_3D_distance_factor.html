@@ -1,0 +1,128 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_3D_distance_factor</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_3D_distance_factor'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_3D_distance_factor</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ sets the driver's global 3D distance factor.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_3D_distance_factor.html#_Discussion' class='paragraph'>AIL_set_3D_distance_factor: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_3D_distance_factor.html' class='paragraph'>AIL_3D_distance_factor</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_3D_doppler_factor.html' class='paragraph'>AIL_set_3D_doppler_factor</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_3D_doppler_factor.html' class='paragraph'>AIL_set_3D_doppler_factor</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_3D_rolloff_factor.html' class='paragraph'>AIL_3D_rolloff_factor</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='3D_Digital_Audio_Services.html' class='paragraph'>3D Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_3D_distance_factor.html'>AIL_set_3D_distance_factor</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>driver</span>,<br><span class='type'><a href='F32.html' class='blue'>F32</a></span> <span class='parameter'>factor</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ sets the driver's global 3D distance factor.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='driver' class=nohover>driver</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the driver to set.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='factor' class=nohover>factor</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the new distance factor to use.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_3D_distance_factor::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Internally, the 3D units used in Miles are meters, but you can switch to your game's own units by using this function.  For example, if your game's units were feet, then you would specify 0.3048 for the distance factor (1 foot = 0.3048 meters). 
+
+</p>
+<p>
+It's actually rare that you need to use this function, since the <a href='AIL_set_sample_3D_distances.html' class='paragraph'>AIL_set_sample_3D_distances</a> function acts as the distance scale.  So, the only time the distance factor is really used is in the Doppler calculations.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_3D_doppler_factor.html' class='paragraph'>AIL_set_3D_doppler_factor</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='3D_Digital_Audio_Services.html' class='paragraph'>3D Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_3D_rolloff_factor.html' class='paragraph'>AIL_3D_rolloff_factor</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

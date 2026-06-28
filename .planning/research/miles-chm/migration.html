@@ -1,0 +1,177 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Migrating From Miles 8</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Migrating From Miles 8'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Migrating From Miles 8</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index2.html#intro' class='paragraph'>High-Level Programmer User Guide: Welcome To Miles 9</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='usersguides.html#guideindex' class='paragraph'>Sound Designer User Guide: Welcome To Miles 9</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='integrating_events.html' class='paragraph'>Integrating The Miles Event System</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='getting_in.html' class='paragraph'>Getting It In The Game</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='getting_started.html' class='paragraph'>Getting Started</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='migrating_breaks' class='nohover'><b>Migrating From Miles 8</b></a></div>
+<p>
+In Miles 9, the format of Sound Banks was fundamentally changed.  These changes
+allowed us to add many new features and optimiziations - loading is now simpler,
+multiple users can edit a Sound Bank at once, deployment is simpler, etc.  Moving
+to Miles 9 will be a little work, but it will totally be worth it!
+</p>
+<p>
+For Miles 9, sound banks are compiled in to a rapid-load format. This is the only format the runtime can load, and it does so
+in a handful of allocations. No more confusion between editing banks and deployed "child" banks.
+</p>
+<p>
+What does this mean for you? Well, the bad news is that a few of the things that were available in Miles 8 sound banks are no
+longer available. We're pretty sure no one used them, and hopefully the benefits dramatically outweight the drawbacks. Without
+further ado:
+</p>
+<p>
+<ul><li> Compression/platform overrides are done via a new system. If you want to specialize the deployment of an asset to a target platform,
+    you need to use <a href='ref_assets.html' class='paragraph'>Asset Reference</a>. This is far easier to manage, but a little less flexible.
+</p>
+<p>
+</li><li> AIL_find_event isn't really needed anymore. The common usage pattern was to use this prior to a <a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a>, but really 
+    you just want to enqueue by name. This is needed for the auditioner anyway, so if at all possible, use <a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a>.
+    If you're worried about speed, the assets are sorted when compiled, and searched via binary search.
+</p>
+<p>
+</li><li> Names include the soundbank. Previously there were places you could get away with just specifying the name of an event
+    inside a bank, e.g. "MyList/EventName", but now the soundbank name is always required: "MyBank/MyFolder/EventName".
+</p>
+<p>
+</li><li> Sound flag enum changes. Some errors were not specific enough when enumerating sounds, these have been clarified.
+</p>
+<p>
+</li><li> <a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a> requires a name. This is for auditioner purposes - it should be what your soundbank is named, prior
+    to filename changes due to compilation. See docs for <a href='AIL_add_soundbank.html' class='paragraph'>AIL_add_soundbank</a>.
+</p>
+<p>
+</li><li> Externally deployed sounds are not handled the same way at all. It was difficult in Miles 8 to assure that the sounds
+    would be found, and with the new async loading system, the runtime needed metadata that just isn't available if all
+    you have is a filename. The new system requires that you supply Miles with the information necessary to load the
+    file correctly. See the eventexternal example.
+</p>
+<p>
+</li><li> The error handler now has a bit more information with it. These are also captured by the auditioner.
+</p>
+<p>
+</li><li> The giant 2d channel<->speaker matrix is gone. If you need that level of control, your programmer can do it.
+</p>
+<p>
+</li></ul></p>
+<p>
+It's not all bad news, however. A few things are markedly easier in Miles 9:
+</p>
+<div class="discussion_heading"><a name='migrating_newstuff' class='nohover'><b>New Stuff To Use</b></a></div>
+<p>
+<ul><li> Crossfading is super easy now! Control Sounds
+    allows you to fade a sound out linearly in loudness, and Start Sounds allows you to fade a sound in linearly in 
+    loudness.
+</p>
+<p>
+</li><li> High Level variables. For most properties you can enter a variable instead of a number, and the runtime will poll
+    this value for the relevant number.
+</p>
+<p>
+</li><li> Sounds can be controlled via time instead of just byte offsets. This is limited to sounds that this works well for -
+    Bink Audio and WAVs, for instead. Most compressed format's don't allow for such exact seeking.
+</p>
+<p>
+</li><li> Random No Repeat, Random List in Start Sound. Everyone asks for it, and now you have it.
+</p>
+<p>
+</li><li> Blended Sounds. These are primarily designed for car or other engine sounds, and allow you to play multiple sounds simultaneously, crossfading
+    and pitch bending between them based on an input variable set by the game.
+</p>
+<p>
+</li><li> Ramps. Smoothly adjust the volume, pitch, wet level, or low pass cutoff for groups of sounds.
+</p>
+<p>
+</li><li> Folders. Actual folders, not weird list things that save all at once for no apparent reason.
+</p>
+<p>
+</li><li> Undo! Ctrl-Z mistakes for an easier, less aggravated editing experience.
+</p>
+<p>
+</li><li> Alter filters in a preset without re-applying existing filters. You can now ignore a filter slot in a preset, allowing presets
+    to independently alter filter slots.
+</p>
+<p>
+</li><li> Per sample 3d falloff. Some sounds you want to fall off more quickly than others, and now you can do that.
+</p>
+<p>
+</li><li> And last but not least, the Miles Sound Studio asuditioner, which lets you capture game audio traces, modify them,
+and then hot-load the data back into the game!
+</p>
+<p>
+</li></ul></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='integrating_events.html' class='paragraph'>Integrating The Miles Event System</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='getting_started.html' class='paragraph'>Getting Started</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='getting_in.html' class='paragraph'>Getting It In The Game</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

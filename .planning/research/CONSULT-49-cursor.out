@@ -1,0 +1,121 @@
+﻿## (a) Planets — confirmed `setActive(false)` with no restore
+
+**`SpaceEnvironment` object buckets (ctor):**
+
+| Bucket | Contents | Hyperspace disable? |
+|--------|----------|---------------------|
+| `m_objectVector` | skybox, stars, celestials, distant-appearance **parent** | only parents also in disable list |
+| `m_objectsToDisableForHyperspace` | distant-appearance **parent only** (line 246) | **yes** |
+| `m_objectsFollowCameraVector` | non-infinite distant parents (line 242) | same objects, still disabled |
+
+```245:246:src/engine/client/library/clientTerrain/src/shared/appearance/SpaceEnvironment.cpp
+			m_objectVector->push_back(parent);
+			m_objectsToDisableForHyperspace->push_back(parent);
+```
+
+Celestials (175–193) and stars (159–172) go to `m_objectVector` only — **not** on the disable list. Suns are only disabled if the space template defines them as **distant appearances**, not celestials.
+
+**Only active-state mutation in `SpaceEnvironment`:**
+
+```377:391:src/engine/client/library/clientTerrain/src/shared/appearance/SpaceEnvironment.cpp
+void SpaceEnvironment::disableEnvironmentForHyperspace()
+{
+	// ...
+	for (; ii != iiEnd; ++ii)
+	{
+		Object * const object = *ii;
+		if (object != 0)
+		{
+			object->setActive(false);
+		}
+	}
+}
+```
+
+No `enableEnvironmentForHyperspace` anywhere in the tree. `render()`/`alter()` never call `setActive(true)` (unlike `GroundEnvironment.cpp:1350`). Dtor deletes objects; no reactivation.
+
+**Rendering gate** (why inactive planets vanish permanently):
+
+```156:170:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+	void worldEnvironmentRender(Object * const object)
+	{
+		if (object->isActive())
+		{
+			// ... appearance->render(); children ...
+		}
+	}
+```
+
+**Missed restore:** none. Repo-wide grep: only `HyperspaceIoWin.cpp:329` calls `disableEnvironmentForHyperspace`. All `setActive(true)` in `HyperspaceIoWin` are on the temp `GameCamera` (566, 671, 783, 853), never environment objects. `~HyperspaceIoWin` (976–1012) restores camera/collision/audio only.
+
+---
+
+## (b) Ships — different mechanism; does not explain persistent absence
+
+**Mechanism 1 — permanent (planets only):**  
+`deactivateSpaceEnvironmentObjects` → `disableEnvironmentForHyperspace` → `Object::setActive(false)`.
+
+**Mechanism 2 — per-frame only (world tangibles / ships):**
+
+```335:366:src/engine/client/library/clientGame/src/shared/core/HyperspaceIoWin.cpp
+void HyperspaceIoWinNamespace::disableOtherObjectsThisFrame(...)
+{
+	for (int i = begin; i < end; ++i)  // WOL_Tangible .. WOL_TangibleNotTargetable
+	{
+		// skip playerShip, hyperspace camera, objects in cockpit cell
+		RenderWorld::recursivelyDisableDpvsObjectsForThisRender(object);
+	}
+}
+```
+
+This touches **DPVS visibility for one render**, not `Object::setActive`. Restored at end of every `RenderWorld::render`:
+
+```1109:1115:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+		for (DpvsObjects::const_iterator i = ms_excludedDpvsObjects.begin(); i != iEnd; ++i)
+		{
+			DPVS::Object *dpvsObject = *i;
+			dpvsObject->set(DPVS::Object::ENABLED, true);
+		}
+		ms_excludedDpvsObjects.clear();
+```
+
+Called from `CockpitStage::draw` (659) when `hideOtherObjects()==true`, and every `ThirdPersonStage::draw` (839). **`CockpitLeaveStage::hideOtherObjects()` returns `false` (730–732)** — post-load arrival IoWin skips both disable paths.
+
+**Distinction:** `disableEnvironmentForHyperspace` = one-shot `setActive(false)`, survives IoWin close. `disableOtherObjectsThisFrame` = per-draw DPVS cull, self-restores same frame; after IoWin closes, ships render normally unless something else hides them.
+
+---
+
+## Hyperspace flow (station launch path)
+
+1. **`CM_aboutToHyperspace`** → `new HyperspaceIoWin(..., S_enter)` (`PlayerCreatureController.cpp:2007`); sets `playHyperspaceBeforeSceneChange=true` (959).
+2. **Stages queued:** `CockpitStage` → `ThirdPersonStage` (963–964). Disable call sites:
+   - `CockpitStage::draw` 652–657: after `s_secondsToDisableOtherObjects` (5s default, iff line 201), once via `m_deactivatedEnvironment`.
+   - `ThirdPersonStage::begin` 790: immediate one-shot.
+3. **Zone load:** `GameNetwork::startScene` destroys old `GroundScene`, `GroundScene::load` creates fresh `ClientSpaceTerrainAppearance` + new `SpaceEnvironment` (`ClientSpaceTerrainAppearance.cpp:29`) — all objects start **active**.
+4. **`emitSceneChange`** → `onSceneChanged` (1101–1113): `finish()` all stages, `delete`, `IoWinManager::close(this)` — **no env restore**.
+5. **Load complete:** `GroundScene.cpp:2113–2122` → `new HyperspaceIoWin(..., S_leave)` (`CockpitLeaveStage` only) — **never calls** `deactivateSpaceEnvironmentObjects`.
+
+**When the bug sticks:** `deactivateSpaceEnvironmentObjects` must run while `TerrainObject::getInstance()` is already a live `ClientSpaceTerrainAppearance` **and that same instance survives** into gameplay. That happens if `S_enter` runs **after** space terrain exists (e.g. `CM_aboutToHyperspace` after zone load, no terrain recreate) and reaches line 656 or 790 — not from `S_leave` alone. Standard “hyperspace on station → zone swap → fresh `SpaceEnvironment`” destroys the disabled instance; disable on the old ground scene is a no-op (`HyperspaceIoWin.cpp:325–326` dynamic_cast fails).
+
+---
+
+## (c) Operator symptom map
+
+| Visible / missing | Mechanism | Restore? |
+|---|---|---|
+| **Starfield** | `StarAppearance` in `m_objectVector` only, not disabled | n/a |
+| **UI markers** | HUD/overlay, unrelated | n/a |
+| **Planets** | `m_objectsToDisableForHyperspace` → `setActive(false)` | **none** |
+| **Celestials** | Not on disable list unless template puts them as distant appearances | n/a for celestial entries |
+| **Other ships (during IoWin draw)** | `disableOtherObjectsThisFrame` → DPVS | **same-frame** (1109–1115) |
+| **Other ships (in-space flight)** | Not explained by either hyperspace disable path | — |
+
+Evidence cleanly explains **planets** (and distant-appearance “suns”) via mechanism 1. It does **not** cleanly explain **persistent** missing ships post-IoWin — only transient hide during hyperspace draw. Missing celestials that are true `CelestialObject` entries also aren’t explained by mechanism 1 alone.
+
+---
+
+## Fix — no missed restore; cleanest insertion
+
+Add symmetric restore, e.g. `SpaceEnvironment::enableEnvironmentForHyperspace()` (loop `m_objectsToDisableForHyperspace`, `setActive(true)`), and call from **`HyperspaceIoWin::~HyperspaceIoWin`** before line 1012 (always runs on IoWin death, including `onSceneChanged` close). Optionally also `onSceneChanged` (1101) before `close(this)` for belt-and-suspenders. Mirror call in `CockpitStage::finish` / `ThirdPersonStage::finish` only if you want stage-scoped pairing with the one-shot disable flags.
+
+**Bottom line:** (a) **Yes** — planets on the live `SpaceEnvironment` instance are deactivated with zero restore in-tree. (b) **Ships — separate** per-frame DPVS path with automatic restore; not the same bug as planets. (c) **Fix:** new `enableEnvironmentForHyperspace()` + call from `~HyperspaceIoWin` (976–1012); no existing restore to quote.

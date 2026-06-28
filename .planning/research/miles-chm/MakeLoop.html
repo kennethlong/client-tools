@@ -1,0 +1,103 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MakeLoop</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MakeLoop'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MakeLoop</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='I_am_getting_a_glitch_when_I_loop_an_MP3__Bink_Audio__or_ADPCM_file___what_can_I_do_.html#_Discussion' class='paragraph'>I am getting a glitch when I loop an MP3, Bink Audio, or ADPCM file - what can I do?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MakeLoop.html#_Discussion' class='paragraph'>MakeLoop: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='What_MP3_encoder_should_I_use_.html#_Discussion' class='paragraph'>What MP3 encoder should I use?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='MakeLoop::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The MAKELOOP.EXE utility is a Windows console application that creates perfectly looped files in Bink Audio, MP3, or ADPCM format.  For MP3, it works with the LAME MP3 encoder, and for Bink it uses the <a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a> tool. 
+
+</p>
+<p>
+MakeLoop will accept PCM .WAV, ADPCM .WAV, or existing .MP3 files as input. MakeLoop resamples your input file to the next-smaller  multiple of the frame size (usually 1152 samples for MP3, for example), then launches the appropriate encoder with a combination of options chosen for loop-transition quality.   Finally, MakeLoop post-processes MP3 files to remove silent frames.   
+
+</p>
+<p>
+MakeLoop is convenient because you don't need to specify subblock offsets with <a href='AIL_set_sample_loop_block.html' class='paragraph'>AIL_set_sample_loop_block</a> or <a href='AIL_set_stream_loop_block.html' class='paragraph'>AIL_set_stream_loop_block</a> to loop a file encoded by it.   Just use <a href='AIL_set_sample_loop_count.html' class='paragraph'>AIL_set_sample_loop_count</a> or <a href='AIL_set_stream_loop_count.html' class='paragraph'>AIL_set_stream_loop_count</a> to loop the entire file. Most loopable .WAV files will sound great when encoded with MAKELOOP.EXE, saving your production department the need to select and audition loop points manually with the Miles Sound Studio. 
+
+</p>
+<p>
+MakeLoop works by prepending a copy of the last frame in the file to the beginning of the file.  This makes the file appear to be a continuous stream from the encoder's point of view, with the goal of preventing mismatches between Bink Audio's overlaping blocks, ADPCM block initializers and MP3 overlap-window contents when the file is looped at runtime.   
+
+</p>
+<p>
+Then the file is then compressed with either the LAME command-line encoder, the <a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a> command-line tool, or the with our ADPCM compression function, depending on the specified file type.  Finally, we post-process the encoded output file to remove unnecessary frames, including silent and metadata frames added by LAME and the copy of the final frame that was prepended earlier. 
+
+</p>
+<p>
+You can run MAKELOOP.EXE with no command-line options to see usage notes for the current version.  Most .WAV files can be encoded simply by running <b>makeloop infile.wav outfile.mp3</b> to generate an .MP3 output file, or <b>makeloop infile.wav outfile.binka</b> to generate an Bink Audio output file or <b>makeloop infile.wav outfile.wav</b> to generate an ADPCM .WAV file. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%>&nbsp;</td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

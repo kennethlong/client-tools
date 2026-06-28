@@ -1,0 +1,122 @@
+﻿## 1. Fine diff (6412 vs 6413 lines)
+
+**Only seven substantive deltas** in ~6400 lines (~0.1%). Same `HudSpace` tree otherwise.
+
+| # | Location | swgsource_3.0 | ILM_ui |
+|---|----------|---------------|--------|
+| 1 | HudSpace CodeData | *(absent)* | `buttonEnterSpace='buttons.enterSpaceButton'` |
+| 2 | `buttons` composite `Size` | `'127,107'` | `'127,135'` |
+| 3 | `trainerButton` `Location` | `'0,39'` | `'0,78'` |
+| 4 | `exitStationButton` `Location` | `'0,67'` | `'0,106'` |
+| 5 | `targetLeadIndicator` `Color` | `'#FF6262'` | `'#55ff55'` |
+| 6 | `targetLeadIndicatorOutOfRange` `Color` | `'#FF0000'` | `'#551111'` |
+| 7 | eject `</Button>` | no trailing space | trailing whitespace |
+
+**CodeData delta (only differing entry):**
+
+```1254:1260:D:/Code/swg-client-v2/.planning/research/CONSULT-47-data-swgsource_3.0--ui_hud_space.inc
+		<Data
+			AllTargets='AllTargets'
+			ButtonBar='ButtonBar'
+			buttonEject='buttons.ejectButton'
+			buttonExitStation='buttons.exitStationButton'
+			buttonTrainer='buttons.trainerButton'
+```
+
+```1254:1260:D:/Code/swg-client-v2/.planning/research/CONSULT-47-data-ILM_ui--ui_hud_space.inc
+		<Data
+			AllTargets='AllTargets'
+			ButtonBar='ButtonBar'
+			buttonEject='buttons.ejectButton'
+			buttonEnterSpace='buttons.enterSpaceButton'
+			buttonExitStation='buttons.exitStationButton'
+			buttonTrainer='buttons.trainerButton'
+```
+
+**Widget/layout deltas:**
+
+```2464:2507:D:/Code/swg-client-v2/.planning/research/CONSULT-47-data-swgsource_3.0--ui_hud_space.inc
+			ScrollExtent='127,107'
+			Size='127,107'
+			...
+				Location='0,39'
+				Name='trainerButton'
+			...
+				Location='0,67'
+				Name='exitStationButton'
+```
+
+```2465:2508:D:/Code/swg-client-v2/.planning/research/CONSULT-47-data-ILM_ui--ui_hud_space.inc
+			ScrollExtent='127,107'
+			Size='127,135'
+			...
+				Location='0,78'
+				Name='trainerButton'
+			...
+				Location='0,106'
+				Name='exitStationButton'
+```
+
+Neither TRE copy defines `Name='enterSpaceButton'`. ILM relayout matches a **complete** copy elsewhere on disk (`D:/Code/SWGSource Client v3.0/ui/ui_hud_space.inc` lines 2405–2417) that **does** ship the widget.
+
+**Which is newer?** ILM_ui — by exactly one atmospheric-flight slice: CodeData key + 4-button stack layout (+2 cosmetic reticle colors). swgsource_3.0.tre is a **regression** of that slice, not a separate lineage.
+
+---
+
+## 2. Version markers
+
+**None.** Both open with `<Page Name='HudSpace'...>`; no copyright, date, build, or revision stamps. `eq2usescomwndcontrols='false'` is toolchain residue, not versioning.
+
+---
+
+## 3. Oddities reconciled
+
+**`buttonEnterSpace` / missing `enterSpaceButton`**
+
+- ILM: half-finished atmospheric-flight pass — CodeData + taller `buttons` composite, widget never authored in this TRE extract.
+- swgsource_3.0: reverted even the CodeData line; still 3-button compact layout.
+- Code hard-fetches `"buttonEnterSpace"` (`SwgCuiHudSpace.cpp:131`). With CodeData present, lookup follows path `buttons.enterSpaceButton` and **FATALs** on missing target. Without CodeData, fallback is `GetChild("buttonEnterSpace")` — also **FATAL** (no such child).
+
+**`missileLockOnYou` / `missileLockOnYouDeformer` without CodeData**
+
+Not a data bug. `getCodeDataObject` resolves CodeData paths first; if no property exists, it falls back to `GetChild(name)`:
+
+```1499:1522:D:/Code/swg-client-v2/src/engine/client/library/clientUserInterface/src/shared/core/CuiMediator.cpp
+	if (theData->GetPropertyNarrow (UILowerString (name), path))
+	{
+		result = rootPage->GetObjectFromPath (path.c_str ());
+		...
+	}
+	else
+	{
+		result = rootPage->GetChild (name);
+		FATAL   (!result && !optional, ("Unable to find CodeData property '%s' ...
+```
+
+Both copies define direct HudSpace children:
+
+```2378:2457:D:/Code/swg-client-v2/.planning/research/CONSULT-47-data-ILM_ui--ui_hud_space.inc
+		<Page
+			Name='missileLockOnYou'
+			OnShow='missileLockOnYouDeformer'
+			...
+		</Page>
+		<DeformerWave
+			Name='missileLockOnYouDeformer'
+```
+
+Code expectations for those two are satisfied by **both** TRE copies.
+
+**Frankenstein?** No. One JTL-era HudSpace (~6400 lines), forked by a small incomplete atmospheric-flight edit. ILM = WIP patch; swgsource_3.0.tre = patch stripped. ILM’s internal blemish: `Size='127,135'` vs `ScrollExtent='127,107'` (lines 2465–2466) — layout reservation without the widget.
+
+---
+
+## Deliverable
+
+**(a) Newer copy:** **ILM_ui.tre** — newer by **1 CodeData entry + 4-button layout shift + 2 reticle color tweaks** (~7 field edits). Not a major HUD revision.
+
+**(b) Single-version or mixed?** **Single lineage, incomplete in both TRE extracts.** Core JTL space HUD is coherent; atmospheric-flight wiring is **unfinished in ILM, absent in swgsource_3.0**. A **complete** `ui_hud_space.inc` with `enterSpaceButton` exists loose under `D:/Code/SWGSource Client v3.0/ui/` (lines 1180, 2410) — so the contract *can* be satisfied from operator data, but **neither compared TRE copy delivers it**.
+
+**(c) Decisive test:** **Remove `swgsource_3.0.tre` from `searchTree` and boot to space HUD.**  
+- If crash shifts from `Unable to find CodeData property 'buttonEnterSpace'` → `Unable to find CodeData object 'buttonEnterSpace' [buttons.enterSpaceButton]` → **same code, swgsource_3.0 override regressed ILM’s partial forward step** (assembly/priority mismatch, not “JTL never had this”).  
+- Then point override at the loose complete `ui/ui_hud_space.inc` (has `Name='enterSpaceButton'` at line 2410); if ctor passes → **real gap is TRE packaging/shadowing**, not missing SWGSource feature in code.

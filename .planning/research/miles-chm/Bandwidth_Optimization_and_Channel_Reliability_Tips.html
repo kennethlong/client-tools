@@ -1,0 +1,161 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Bandwidth Optimization and Channel Reliability Tips</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Bandwidth Optimization and Channel Reliability Tips'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Bandwidth Optimization and Channel Reliability Tips</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Bandwidth_Optimization_and_Channel_Reliability_Tips.html#_Discussion' class='paragraph'>Bandwidth Optimization and Channel Reliability Tips: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Implementation_Details.html' class='paragraph'>Implementation Details</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Implementing_Voice_Chat.html#_Discussion' class='paragraph'>Implementing Voice Chat: Discussion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Bandwidth Optimization and Channel Reliability Tips::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  Any real-world implementation of networked voice communication is likely to be a complex affair.  Below are some hints on how to get the most out of the MSS voice chat codecs. 
+
+</p>
+<p>
+<b>Use UDP networking.</b>  The MSSCHTS and MSSCHTC example programs delivered with MSS use TCP/IP with the Winsock 1.X API, for simplicity.  It's important to note, though, that TCP/IP is a stream-oriented rather than a packet-oriented protocol.  TCP/IP provides certain guarantees of data integrity, but those guarantees come at a price: packet size and delivery latency.  Because the MSS chat codecs operate on a frame-by-frame basis, it's more efficient to transport the data for each frame in an independent UDP datagram, rather than forcing the TCP layer to treat the compressed data as fragments of a continuous stream.  The UDP protocol imposes significantly less overhead on data communications than TCP, but it does require significantly more programming effort to handle missing or duplicated packets in a robust fashion.   If you are working on a high-performance real-time multiplayer game, chances are you're already using UDP.  In such a case, your task is simply to add ASI compression and decompression support to your existing network code. 
+
+</p>
+<p>
+<b>Optimize the size of each transmitted frame.</b>  There is a subtle inefficiency in the general-purpose ASI interface that becomes evident when working with the Voxware codecs.  The compressed frame size of each ASI codec is a fixed number of bytes, obtainable by querying the "Maximum frame size" property on the decompressor provider (or, alternatively, by querying the "Minimum input block size" property on an open decompressor stream).  The inefficiency arises from the minuscule size of a frame of Voxware-compressed data.  The V29 codec uses a 67-bit frame; the V24 codec a 54-bit frame; and the V12 codec deals with frame sizes which vary between 2 and 41 bits.  The ASI frame size property always reports frame size at byte granularity, resulting in the effective waste of several bits per frame - which is a significant quantity of data at such small frame sizes!  If your networking layer is efficient enough to take advantage of otherwise-unused bits in outgoing and incoming voice packets, or if you wish to pack multiple frames' worth of data into a single transmission unit, you may want to query the S32 "Actual bits encoded last frame" property in the encoder's "ASI stream" interface, to determine the exact number of bits in each compressed frame. 
+
+</p>
+<p>
+<b>Use warping and comfort-noise masking to adapt to varying network conditions.</b>  Two of the most powerful, network-friendly features of the Voxware MetaVoice codecs delivered with the Miles Sound System are "warping" and "comfort noise."  The ASI codecs expose these features through the F32 "Warp factor" and S32 "Comfort noise frames" properties in the decoders' "ASI stream" interfaces. 
+
+</p>
+<p>
+Warping enables the application to slow down or speed up the rate at which the Voxware decoder consumes network data.  A warp factor of 1.0 causes decoded data to be produced at the standard Voxware rate of 180 bytes per frame, every frame.  A warp factor of greater than 1.0 causes the Voxware codec to "slow down" the generation of output voice data, occasionally generating an extra 180-byte output frame without demanding any new input data.  Interestingly, the voice does not undergo any pitch change whatsoever!  Similarly, a warp factor of less than 1.0 causes the codec to "speed up" the output voice data, occasionally swallowing an input frame without generating any output data for that frame.  By varying the warp factor around 1.0, your code can dynamically adjust for changes in packet arrival times without resorting to large buffers that may substantially increase perceived latency. 
+
+</p>
+<p>
+Comfort noise is a similar bandwidth-optimization feature.  When a network connection becomes so unreliable that the latencies can't be easily handled by warping alone, you can set the "Comfort noise frames" property to a non-zero value.  Subsequent calls to the decoder's <i>ASI_stream_process</i> function will not fetch any data from the application callback, but instead will generate a "masking tone" based on the previous characteristics of the stream's voice, such that a human listener is unlikely to notice one or two missing packets.  This is substantially preferable to the usual alternative of allowing the stream to drop out completely.  Just set the "Comfort noise frames" property to the number of subsequent frames you would like to mask, and the codec will do the rest. 
+
+</p>
+<p>
+Neither MSSCHTC.CPP nor MSSCHTS.CPP implements comfort noise or warping, or any other form of packet-arrival timing compensation.  To use warping and comfort noise within the context of your own networking code, simply follow these examples: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// Get property handles for warping and comfort noise</font>
+<font color=#008000>//</font>
+
+HPROPERTY WARP_FACTOR,
+COMFORT_NOISE_FRAMES;
+
+<a href='RIB_INTERFACE_ENTRY.html' class='paragraph'>RIB_INTERFACE_ENTRY</a> ASISTR[] =
+{
+   PR("Warp factor",            WARP_FACTOR),
+   PR("Comfort noise frames",   COMFORT_NOISE_FRAMES),
+};
+
+RIB_request(ASI,"ASI stream",ASISTR);
+
+<font color=#008000>//</font>
+<font color=#008000>// Adjust Voxware warping/masking properties</font>
+<font color=#008000>//</font>
+
+if (/* need to increment warp factor */)
+{
+   <a href='F32.html' class='paragraph'>F32</a> warp;
+   ASI_stream_property(stream, WARP_FACTOR, &amp;warp, 0, 0 );
+
+   if (warp &lt; 3.0F) warp += 0.1F;
+
+   ASI_stream_property(stream, WARP_FACTOR, 0, &amp;warp, 0 );
+}
+
+if (/* need to decrement warp factor */)
+{
+   <a href='F32.html' class='paragraph'>F32</a> warp;
+   ASI_stream_property(stream, WARP_FACTOR, &amp;warp, 0, 0 );
+
+   if (warp &gt; 0.1F) warp -= 0.1F;
+
+   ASI_stream_property(stream, WARP_FACTOR, 0, &amp;warp, 0 );
+}
+
+if (/* need to request 1 frame of comfort noise */)
+{
+   <a href='S32.html' class='paragraph'>S32</a> c;
+   ASI_stream_property(stream, COMFORT_NOISE_FRAMES, &amp;c, 0, 0 );
+
+   c = c + 1;
+
+   ASI_stream_property(stream, COMFORT_NOISE_FRAMES, 0, &amp;c, 0 );
+}
+ </pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Implementation_Details.html' class='paragraph'>Implementation Details</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Implementing_Voice_Chat.html#_Discussion' class='paragraph'>Implementing Voice Chat: Discussion</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

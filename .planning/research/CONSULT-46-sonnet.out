@@ -1,0 +1,180 @@
+CONSULT-46 — Angle Q2: "Should we even throttle ClientInteriorLayoutManager?"
+ROI / JUDGMENT CALL
+Analyst: fresh Sonnet (claude-sonnet-4-6), 2026-06-20
+Read-only; no code changes.
+
+═══════════════════════════════════════════════════════════════════════════════
+RECOMMENDATION: DON'T — or at most DO A TRIVIAL VARIANT (see §6).
+═══════════════════════════════════════════════════════════════════════════════
+
+Code grounded in:
+  ClientInteriorLayoutManager.cpp (lines 62–130) — the burst loop
+  CellProperty.cpp (lines 563–580) — removeFromWorld resets m_appliedInteriorLayout
+  TangibleObject.cpp (lines 495–507) — removeFromWorld deletes the interior objects
+  WorldSnapshot.cpp (line 914) — the reference throttle pattern
+  Direct3d9_TextureData.cpp (lines 394–396, 860) — D3DPOOL_MANAGED + main-thread assert
+
+─────────────────────────────────────────────────────────────────────────────
+§1. What #1 and #4 already bought us — and what remains
+─────────────────────────────────────────────────────────────────────────────
+#1 (disk shader cache) removed the D3DCompile stall: runtime compile hit on
+every new object template is now a disk-cache hit after the first session.
+This is almost certainly the DOMINANT first-entry cost, not the object-create
+loop.  The evidence: re-entry within a session is SMOOTH despite running the
+exact same ClientInteriorLayoutManager path again — the only difference is that
+all the textures are already in D3DPOOL_MANAGED resident memory and the shader
+bytecode is on disk.
+
+#4 (minFrameRate=10, Clock clamp) bounds the simulation tick to ≤0.1 s so the
+camera/avatar don't lurch by a huge simulated timestep on the slow frame.  This
+is the correct player-visible fix for the *camera jerk*: even if a frame takes
+500 ms, the game time only advances 100 ms worth.
+
+What is left: a single *frozen frame* ~500–800 ms (rough: object-create burst +
+texture first-fetch from disk).  The player sees a hitch but doesn't see a
+physics/camera lurch.  That's a meaningfully different residual — one-time,
+first-session only.
+
+─────────────────────────────────────────────────────────────────────────────
+§2. Is the layout burst or the texture upload the real residual cost?
+─────────────────────────────────────────────────────────────────────────────
+Key observation: D3DPOOL_MANAGED texture creation in D3D9 DOES defer driver
+upload to first use — but the first draw call referencing that texture forces a
+sync copy from the managed pool into video memory.  That sync happens on the
+render thread during the *same frame* the object first renders, regardless of
+whether the object was created in the current frame or a prior one.
+
+Direct3d9_TextureData.cpp:392 contains:
+    DEBUG_FATAL(!Os::isMainThread(), ("Creating texture from alternate thread"));
+This confirms texture creation is main-thread-affine; it cannot be deferred off
+the render path.
+
+If texture upload is the bottleneck, spreading object CREATION across N frames
+delays when the textures get first-drawn but doesn't reduce the total work per
+frame in which each texture first appears.  It might spread the pain across
+several hitchy frames instead of one — net negative UX in some cases.
+
+If the object-create loop itself (ObjectTemplateList::createObject, parsing
+templates, allocating, addToWorld) is the bottleneck, a throttle could help.
+But re-entry being smooth suggests the template parsing + alloc cost is a
+*cold-path* cost — template data lands in OS file cache after the first pass,
+making re-entry cheap.  The one-time-per-session nature points to I/O + texture
+upload, not CPU alloc.
+
+Verdict on §2: Texture upload is the likely dominant residual.  Splitting object
+creation across frames doesn't address it and may spread hitches without
+reducing total work.
+
+─────────────────────────────────────────────────────────────────────────────
+§3. Does #4 already make the residual acceptable?
+─────────────────────────────────────────────────────────────────────────────
+#4 handles the MOTION artifact (camera lurch, rubber-band, physics jump).
+The residual is a FREEZE, not a lurch.  These are different:
+
+- Motion lurch: game misperceives elapsed time → physics / camera overcorrect.
+  FIXED by #4.
+- Visual freeze: CPU is busy; no new frame rendered for ~0.5 s.  Not fixed by
+  #4 — it can't reduce actual frame time.
+
+So #4 doesn't make the freeze acceptable; it makes it less disorienting.  The
+freeze still exists.
+
+However: the freeze is first-session-only, single-entry, and known to the
+player as "loading."  The STUTTER that originally prompted CONSULT-45 is
+meaningfully smaller after #1.  The question is whether the remaining hitch is
+bad enough to justify the throttle risk.
+
+─────────────────────────────────────────────────────────────────────────────
+§4. The asymmetry of risk
+─────────────────────────────────────────────────────────────────────────────
+The throttle failure mode is NOT hypothetical.  The existing code has a
+structural hazard that makes partial-create especially dangerous:
+
+  CellProperty.cpp:579 — removeFromWorld() resets m_appliedInteriorLayout=false.
+  TangibleObject.cpp:497–507 — removeFromWorld() deletes the entire
+      m_clientOnlyInteriorLayoutObjectList.
+
+This means if a player enters then immediately exits before all objects in a
+throttled queue are created, the scenario is:
+  1. Cell enters visible list; setAppliedInteriorLayout() marks it done (:84).
+  2. N objects are created; M remain in queue.
+  3. Player exits; TangibleObject::removeFromWorld deletes the N created objects.
+  4. CellProperty::removeFromWorld resets m_appliedInteriorLayout to false.
+  5. Player re-enters; cell appears not-yet-applied; loop re-runs.
+
+IF the throttle keeps raw pointers (CellProperty*, TangibleObject*) in a
+pending queue across frames, step 3+4 have already freed/invalidated those
+pointers → crash or corruption on resume.  Even with a Watcher, the watcher
+going null requires explicit null-check on resume.  Missing that check = silent
+partial interior (props missing, no crash).
+
+The WorldSnapshot reference throttle (WorldSnapshot.cpp:914) avoids this
+because its pending list holds Node* into a reader/writer structure that
+persists for the lifetime of the zone load — not runtime CellProperty/
+TangibleObject instances that the engine owns and can delete.  The safety
+properties do NOT transfer by analogy.
+
+Downside of a bug: missing cantina props on every subsequent interior entry,
+not just first.  Affects ALL buildings.  Silent, player-visible regression.
+
+Upside of the throttle working: smoother first-entry of one session. Re-entry
+is already smooth.
+
+─────────────────────────────────────────────────────────────────────────────
+§5. What the throttle can and cannot fix
+─────────────────────────────────────────────────────────────────────────────
+Can fix: the CPU burst from ObjectTemplateList::createObject + addToWorld
+  (template parsing, allocation, container insertion) if that IS the dominant
+  time — likely small compared to texture I/O.
+
+Cannot fix: the texture first-upload stall (device-affine, render-thread,
+  happens on first draw regardless of when object was created).
+
+Cannot fix: asset I/O for novel templates encountered for the first time.
+  Spreading creates across frames spreads I/O too, but the same total I/O
+  must complete before the player sees the fully populated cell.
+
+─────────────────────────────────────────────────────────────────────────────
+§6. Cheaper/safer alternatives
+─────────────────────────────────────────────────────────────────────────────
+A. ACCEPT IT — the residual is first-session-only, single-event, and now
+   meaningfully smaller after #1.  This is the most defensible choice until
+   a profiler capture proves layout-create (not texture upload) is the
+   bottleneck.
+
+B. PRE-WARM textures — if we can preload the cantina textures during the zone
+   transition screen (before the player enters the building), the textures
+   arrive resident in D3DPOOL_MANAGED before the first draw.  This addresses
+   the likely real bottleneck, has no correctness risk, and is orthogonal to
+   throttling.
+
+C. TRIVIAL BURST CAP, no queue — instead of a full throttle with pending state,
+   add a simple per-frame counter: if creates_this_frame > CAP, mark remaining
+   cells as NOT applied (don't call setAppliedInteriorLayout) and let them
+   retry next frame.  This avoids any mid-create state.  The cell is either
+   fully-created-this-frame or fully-deferred-to-next.  No partial object
+   ownership, no dangling pointers.  The trade-off: the N objects for one cell
+   all land in one frame (no partial cell), but multiple cells can be spread.
+   Cost: one extra frame of visible delay per cell beyond the cap.  Risk:
+   very low — no new pointer lifetimes, no new state.  This is the "DO-A-
+   CHEAPER-VARIANT" path if the stutter after #1 is still unacceptable.
+
+─────────────────────────────────────────────────────────────────────────────
+§7. Summary verdict
+─────────────────────────────────────────────────────────────────────────────
+DON'T implement the full throttle with a pending-create queue.
+
+The ROI case is weak:
+  - #1 already removed the dominant cost (shader compile stall).
+  - The residual is plausibly texture-upload-bound, which a create throttle
+    cannot reduce.
+  - First-session-only, one-time-per-session hitch: low annoyance frequency.
+  - The correctness risk (dangling CellProperty*/TangibleObject* mid-eviction)
+    is real, not theoretical, and the failure mode is silent missing props on
+    ALL interiors — a worse regression than the stutter.
+
+If the stutter after #1 is still unacceptable (measure first with a profiler
+or frame timer):
+  - If texture upload dominates: pursue pre-warm (option B) — addresses root.
+  - If CPU-create dominates: use the trivial cell-level burst cap (option C)
+    — same spreading effect, no pointer-lifetime risk.

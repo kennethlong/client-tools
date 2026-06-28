@@ -1,0 +1,188 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_channel_levels</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_channel_levels'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_channel_levels</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ for 2D sounds, scales the output contribution from each source channel in the specified HSAMPLE to each speaker.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_calculate_3D_channel_levels.html#_Discussion' class='paragraph'>AIL_calculate_3D_channel_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_stream.html#_Discussion' class='paragraph'>AIL_open_stream: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_51_volume_levels.html#_Discussion' class='paragraph'>AIL_sample_51_volume_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_51_volume_pan.html#_Discussion' class='paragraph'>AIL_sample_51_volume_pan: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_channel_levels.html#_Discussion' class='paragraph'>AIL_sample_channel_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_output_levels.html#_Discussion' class='paragraph'>AIL_sample_output_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_3D_position.html#_Discussion' class='paragraph'>AIL_set_sample_3D_position: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_51_volume_levels.html#_Discussion' class='paragraph'>AIL_set_sample_51_volume_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_51_volume_pan.html#_Discussion' class='paragraph'>AIL_set_sample_51_volume_pan: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_channel_levels.html#_Discussion' class='paragraph'>AIL_set_sample_channel_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_speaker_scale_factors.html#_Discussion' class='paragraph'>AIL_set_sample_speaker_scale_factors: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html#_Discussion' class='paragraph'>How do I use multi-channel sound output in Miles?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_speaker_scale_factors.html' class='paragraph'>AIL_sample_speaker_scale_factors</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_speaker_scale_factors.html' class='paragraph'>AIL_set_sample_speaker_scale_factors</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_sample_volume_levels.html' class='paragraph'>AIL_set_sample_volume_levels</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_sample_speaker_scale_factors.html' class='paragraph'>AIL_set_sample_speaker_scale_factors</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_sample_channel_levels.html'>AIL_set_sample_channel_levels</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='MSS_SPEAKER.html' class='blue'>MSS_SPEAKER const *</a></span> <span class='parameter'>source_speaker_indexes</span>,<br><span class='type'><a href='MSS_SPEAKER.html' class='blue'>MSS_SPEAKER const *</a></span> <span class='parameter'>dest_speaker_indexes</span>,<br><span class='type'><a href='F32.html' class='blue'>F32 const *</a></span> <span class='parameter'>level_array</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>n_levels</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ for 2D sounds, scales the output contribution from each source channel in the specified HSAMPLE to each speaker.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the HSAMPLE for which the channel levels are to be set.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='source_speaker_indexes' class=nohover>source_speaker_indexes</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies an array of one or more channels in the source data.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='dest_speaker_indexes' class=nohover>dest_speaker_indexes</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies an array of one or more speakers.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='level_array' class=nohover>level_array</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies an array of coefficients from 0.0 to 1.0 which will scale the output of the HSAMPLE at each combination of source/destination channels specified by the corresponding source_speaker_indexes and dest_speaker_indexes entries.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='n_levels' class=nohover>n_levels</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ specifies the number of entries in level_array, source_speaker_indexes, and dest_speaker_indexes.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_sample_channel_levels::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function allows the application to provide scale factors that determine the routing between the  specified 2D sample's source channels and the driver's logical output channels. In general, you should use this function to route particular input channels to particular output channels (using 0.0 and 1.0), and use <a href='AIL_set_sample_speaker_scale_factors.html' class='paragraph'>AIL_set_sample_speaker_scale_factors</a> to control the levels of each of the output channels. 
+
+</p>
+<p>
+The input arrays must all have the same number of elements, specified by n_levels.  They can be as simple as  three single-entry arrays that establish the level of a single channel at a single speaker, or a  completely-general matrix where audio from any number of source channels is steered to any number of  destination speakers.  References to channels that are not present in the source or destination will simply be  ignored. 
+
+</p>
+<p>
+Here's an example of how you might implement a simple downmix function that maps the center channel in a 3.0-channel source sample to the front-left and front-right speakers in a stereo output configuration: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>  <a href='MSS_SPEAKER.html' class='paragraph'>MSS_SPEAKER</a> downmix_source_list[] = { MSS_SPEAKER_FRONT_CENTER, MSS_SPEAKER_FRONT_CENTER };
+  <a href='MSS_SPEAKER.html' class='paragraph'>MSS_SPEAKER</a> downmix_dest_list[] =   { MSS_SPEAKER_FRONT_LEFT,   MSS_SPEAKER_FRONT_RIGHT  };
+  <a href='F32.html' class='paragraph'>F32</a>         downmix_level_list[] =  { 0.5F,                     0.5F                     };
+
+  <a href='AIL_set_sample_channel_levels.html' class='paragraph'>AIL_set_sample_channel_levels</a>(S,
+                                downmix_source_list,
+                                downmix_dest_list,
+                                downmix_level_list,
+                                2);
+</pre></div>
+<p>
+</p>
+<p>
+This function will have no effect on 3D voices 
+
+</p>
+<p>
+For a detailed understanding of per-channel level control, you should carefully review the <i>How do I use multi-channel sound output in Miles? </i><a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html' class='paragraph'>FAQ</a>  before attempting to use this function.   
+
+</p>
+<p>
+Most applications won't need to set channel levels explicitly.  To handle mono samples in a multichannel environment, it's often best  to let Miles' built-in 3D positioning code do the work for you!  (If an HSAMPLE has been assigned a 3D position with  <a href='AIL_set_sample_3D_position.html' class='paragraph'>AIL_set_sample_3D_position</a>, then the values passed to this function aren't used at all!)<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_sample_volume_levels.html' class='paragraph'>AIL_set_sample_volume_levels</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Digital_Audio_Services.html' class='paragraph'>Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_sample_speaker_scale_factors.html' class='paragraph'>AIL_set_sample_speaker_scale_factors</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

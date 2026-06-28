@@ -1,0 +1,182 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Stopping Sounds</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Stopping Sounds'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Stopping Sounds</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_2.html' class='paragraph'>Playing A Sound</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_5.html' class='paragraph'>Cross Fading</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_4_main' class='nohover'><b></b></a></div>
+<p>
+Well, you can start a sound, which works great for one-off effects. But what if you need to stop a sound? Say a level ended
+and the music needs to be stopped.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Asset List
+</li><li> Event Asset
+</li><li> Sound Asset
+</li><li> Start Sound Event Step
+</li><li> Audition
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b>
+</p>
+<p>
+<ol><li> <b>Label:</b> Labels are how Miles Studio categorizes all sounds that have been started.
+</p>
+<p>
+</li><li> <b>Label Query:</b> Label Queries are simple queries that select one or more sounds from the sounds that are currently playing. They
+allow match against sounds that must have a given label, must not have a given label, or may have a given label. An empty label query matches
+all sounds.
+</p>
+<p>
+</li><li> <b>Control Sounds Event Step:</b> The Control sounds event step uses a Label Query to affect the playback of one or more sounds.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li><i>Create an event to play a long sound, using the methods discussed in earlier guides.</i>
+</p>
+<p>
+</li><li><i>Click on "Labels" under "Settings" in the Asset List - the one highlighted in the image below.</i><br><br>
+<img src="4_label.png"/><br><br>
+</p>
+<p>
+This is where you create new labels for use everywhere in Miles Studio. The "Labels" tree node below it is a container for all created labels,
+allowing easy access for assignment.
+</p>
+<p>
+</li><li><i>Click "Create" and accept the label name.</i><br><br>
+<img src="4_newlabel.png"/><br>
+<img src="4_acceptlabel.png"/><br><br>
+</p>
+<p>
+At this point, you've created a Label that can be applied to started sounds. In this way you can categorize the sounds you start, and use
+that categorization to find sounds once they've been started. In the Asset List a new entry has been created for your new label under the
+tree node "Labels".
+</p>
+<p>
+</li><li><i>Drag your event to the NewLabel entry in the list asset list.</i><br><br>
+<img src="4_drag.png"/><br><br>
+</p>
+<p>
+Now the sound that is started by that event will be assigned that label.
+</p>
+<p>
+</li><li><i>Cick "Create" and select "New Event". Accept the default name.</i><br><br>
+<img src="4_newevent.png"/><br><br>
+</p>
+<p>
+Events start completely empty, and must be populated by Event Steps.
+</p>
+<p>
+</li><li><i>Click "Add New Step".</i><br><br>
+<img src="4_empty.png"/><br><Br>
+</p>
+<p>
+When adding a new step, a Start Sound event step is added by default.
+</p>
+<p>
+</li><li><i>Change the step type to "Control Sounds".</i><br><br>
+<img src="4_control.png"/><br><br>
+</p>
+<p>
+</li><li><i>Click the plus next to "Labels To Control" and select the label you created earlier.</i><br><br>
+<img src="4_addlabel.png"/><br><br>
+</p>
+<p>
+In this guide, we want to only affect sounds started using the label we created in step 3. By default, a control sounds event step contains an
+empty label query, which matches all sounds. By adding our label, we've set the label query to match any sound that was started with this label, and
+so the Control Sounds will only affect those sounds.
+</p>
+<p>
+</li><li><i>Select "Stop w/ Fade" for the playhead action.</i><br><br>
+<img src="4_stopfade.png"/><br><br>
+</p>
+<p>
+Stop with fade will fade the sound out over a period of time before stopping it.
+</p>
+<p>
+</li><li><i>Set the fade out time to 1 and hit enter.</i><br><br>
+<img src="4_fadetime.png"/>
+</p>
+<p>
+</li><li><i>Right Click on the event that starts the sound and select Audition. Wait a few seconds then do the same for "New Event".</i><br><br>
+<img src="4_auditions.png"/>
+</p>
+<p>
+When the second event "New Event" is auditioned, it uses the Label Query set up in step 8 to look for sounds to affect. Since the label query merely 
+matches any sounds with the label you created, it finds the sound started with the first event, and fades it out over 1 second.
+</p>
+<p>
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_2.html' class='paragraph'>Playing A Sound</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_5.html' class='paragraph'>Cross Fading</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

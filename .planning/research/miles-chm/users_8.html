@@ -1,0 +1,140 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Environments and Reverb</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Environments and Reverb'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Environments and Reverb</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_7.html' class='paragraph'>Dynamic Presets and Sliders</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_11.html' class='paragraph'>Limited Sound Counts</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_8_main' class='nohover'><b></b></a></div>
+<p>
+Reverb is a common effect in games, and in Miles Studio they are set up in Environments. However, the environment only sets up the reverb itself,
+each sound has to declare whether it is affected by that reverb, and by how much.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Sounds
+</li><li> Events
+</li><li> Preset
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b><br>
+</p>
+<p>
+<ol><li> <b>Environment:</b> Environments are groups of settings that affect how the listener perceives sounds. Most commonly these are reverb settings.
+</p>
+<p>
+</li><li> <b>Apply Environment Event Step:</b> The apply environment step tells Miles what environment should be used until further notice, and whether that environment
+should poll its variables every frame or not (Dynamic).
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Drag a reasonable length sound in to Miles Studio, but do *not* create an event for it.</i>
+</p>
+<p>
+</li><li> <i>Create a new environment called "New Environment". Click the check box next to "Room Type" and set the drop down to "Bathroom".</i><br><br>
+<img src="8_room.png"/><br><br>
+</p>
+<p>
+For simplicity, this example will use the EAX standard "Bathroom" reverb setup.
+</p>
+<p>
+</li><li> <i>Create a new a event called "New Event", add a new step, and change it to "Apply Environment". Drag the "NewEnvironment" asset to the Environment field.</i><br><br>
+<img src="8_env.png"/><br><br>
+</p>
+<p>
+In order for Miles to use an environment, it has to be told which environment to use. The Apply Environment event step accomplishes that.
+</p>
+<p>
+</li><li> <i>Create a new preset called "NewPreset". Click the check box next to "Wet Level", and update the value to 0.</i><br><Br>
+<img src="8_wet.png"/><br><br>
+</p>
+<p>
+By default, a sound is not affected by reverb. In order to change this, the Wet Level for the sound must be brought above -96 dB.
+</p>
+<p>
+</li><li> <i>Scroll down and add a new step to "New Event". Drag your sound to this Start Sound Event Step so that it will play it, and the preset to the preset field.</i><br><br>
+</p>
+<p>
+The event now has two actions - the first will apply the environment that contains the reverb, and the second will start the sound with the preset that ensures the sound will
+be affected by the reverb.
+</p>
+<p>
+</li><li> <i>Audition the event.</i>
+</p>
+<p>
+This is clearly a basic integration of reverb, but you can easily extrapolate from here. For instance, the
+reverb parameters could be bound to variables and updated based on level geometry (don't forget to mark the
+environment Dynamic!), or the wet level on the Presets could be controlled. Feel free to bind such parameters to
+variables and play around with them on the sliders!
+</p>
+</li></ol><br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_7.html' class='paragraph'>Dynamic Presets and Sliders</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_11.html' class='paragraph'>Limited Sound Counts</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

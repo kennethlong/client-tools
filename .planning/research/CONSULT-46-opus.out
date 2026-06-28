@@ -1,0 +1,271 @@
+# CONSULT-46 — Q3 DESIGN (Opus): the safest throttle for ClientInteriorLayoutManager::update()
+
+Angle: assume we DECIDE to throttle. Design the SAFEST possible throttle. (Others judge if/value/risk.)
+READ-ONLY analysis — no code modified.
+
+================================================================================
+## 0. Ground-truth I verified in the tree (these drive the whole design)
+================================================================================
+
+GT-1. `update()` is called **once per frame**, unconditionally, from `GroundScene.cpp:2006`
+      (inside the per-frame draw/alter path). So "spread across frames" = "let successive
+      `update()` calls each do a bounded slice." No new pump is needed.
+
+GT-2. The cell-done flag is a single bool, set unconditionally at line :84 BEFORE the inner
+      create loop (:103-128). `CellProperty.h:229  bool mutable m_appliedInteriorLayout;`
+      get/set at `CellProperty.cpp:1256/1263`. set() only ever flips it to true; there is no
+      "partial" state today.
+
+GT-3. **CRITICAL — the flag self-clears on unload.**
+      `CellProperty::removeFromWorld()` (`CellProperty.cpp:563-580`) does
+      `m_appliedInteriorLayout = false;` at :579. Also ctor inits false (:358). So when a cell
+      leaves the world (player leaves POB, LOD eviction, fast in/out), the next time it is
+      visible+inWorld it is treated as fresh and re-applied from scratch. This is the safety
+      anchor: **the engine already gives us a reliable "this cell must (re)start from object 0"
+      signal for free** — no teardown hook to add.
+
+GT-4. **The created objects are owned by the building, freed on building unload.**
+      `TangibleObject::addClientOnlyInteriorLayoutObject` (:1080-1086) stores a
+      `Watcher<Object>` in `m_clientOnlyInteriorLayoutObjectList`. On building teardown,
+      `TangibleObject::removeFromWorld()` (:495-507) `delete`s every object in that list and
+      frees the list. So the building, not the manager, owns lifetime. The manager holds **no**
+      authoritative pointer to created objects.
+
+GT-5. The work source each frame is `RenderWorld::getVisibleCells()`
+      (`stdvector<const CellProperty*>` — RenderWorld.h:56/100), recomputed by the renderer.
+      Pointers in it are only valid for the duration of one `update()` call. They are NOT safe
+      to stash across frames (a cell can unload between frames).
+
+GT-6. The per-cell guards that gate creation are all re-checkable every frame from the live
+      cell pointer: `getOwner().isInWorld()` (:76), `getPortalProperty()` (:87),
+      owner→asTangibleObject (:94), `tangibleObject->getInteriorLayout()` (:98). The layout
+      reader is deterministic & ordered: `getNumberOfObjects(cellName)` and
+      `getObjectTemplateName(cellName, i)` / `getTransform_o2p(cellName, i)` (:103-106) — index
+      `i` is a stable, replayable cursor into the layout file.
+
+================================================================================
+## 1. Model choice: RESUME-INDEX vs PENDING-QUEUE  →  pick RESUME-INDEX (count-based)
+================================================================================
+
+### (b) PENDING-CREATE QUEUE — REJECT.
+WorldSnapshot's queue (WorldSnapshot.cpp:914, `ms_maximumNumberOfCreatesPerFrame`) is safe ONLY
+because its entries reference **stable buildout `Node*`** that outlive any frame. Our work items
+would have to capture `CellProperty*` + `TangibleObject*` + a layout index. The instant a
+building/cell unloads, every queued entry for it is a dangling `CellProperty*`/`TangibleObject*`.
+To make a queue safe you must (i) get an unload notification to purge it, or (ii) Watcher-wrap
+the pointers and null-check on dequeue. (i) violates the "don't touch teardown elsewhere"
+constraint; (ii) is doable (`Watcher<TangibleObject>` + re-resolve cell by name each pop) but it
+is strictly MORE state and MORE failure surface than necessary — and it still has to solve the
+re-derivation problem to handle "cell unloaded then came back" without dup/miss. The queue buys
+nothing here.
+
+### (a) RESUME — ACCEPT, but in its safe-by-construction form: a per-cell PROGRESS COUNT
+       stored ON THE CELL, never a cross-frame raw pointer.
+
+Do not store "which cell + which index" in the manager (that re-introduces a stashed
+`CellProperty*`). Instead store, **on each CellProperty**, the count of layout objects already
+created for it: `m_interiorLayoutCreatedCount` (int, mutable, default 0). The manager keeps NO
+cross-frame state at all. Each frame it re-derives 100% of its work from the live visible-cell
+list (GT-5) and each cell's own progress count (GT-3/GT-4 guarantee that count is consistent
+with reality because it tracks the same lifecycle as `m_appliedInteriorLayout`).
+
+This is the WorldSnapshot insight (bounded creates/frame) re-expressed against UNSTABLE runtime
+pointers by **never holding the pointer** — the count lives with the object whose lifetime
+defines validity.
+
+================================================================================
+## 2. The design (safe-by-construction)
+================================================================================
+
+### Storage delta (minimal, on CellProperty — the lifecycle owner):
+- Replace/augment the bool with a count. Simplest: keep `m_appliedInteriorLayout` semantics by
+  deriving "applied == (createdCount == totalForCell)" — OR keep the bool AND add a count.
+  RECOMMEND: keep the bool, add `int mutable m_interiorLayoutCreatedCount = 0;`.
+  - Reset BOTH in `removeFromWorld()` (:579) — add one line next to the existing reset (this is
+    the ONE byte of CellProperty change, and it sits literally beside an existing reset of the
+    same concept, so it is in-scope and self-evidently correct).
+  - Reset both in ctor (:358 already resets the bool; add the count = 0).
+- DO NOT set the "applied" bool until the cell is FULLY done (this fixes the :84-too-early bug).
+
+### New pseudocode for update() (replaces :62-130):
+
+```
+static int s_maxCreatesPerFrame = config("ClientGame/ClientInteriorLayoutManager",
+                                          "maxInteriorCreatesPerFrame", 0);  // 0 = unlimited (old behavior)
+
+void update():
+    if (disableLazy || disableInteriorLayouts) return;
+
+    int budget = (s_maxCreatesPerFrame > 0) ? s_maxCreatesPerFrame : INT_MAX;
+
+    const CellPropertyList & cells = RenderWorld::getVisibleCells();   // live, this-frame only (GT-5)
+    for i in 0..cells.size():
+        cell = cells[i]
+        if (!cell || cell == worldCell) continue
+        if (!cell->getOwner().isInWorld()) continue          // (GT-6) re-checked every frame
+        if (cell->getInteriorLayoutFullyApplied()) continue  // was getAppliedInteriorLayout()
+
+        portal = cell->getPortalProperty(); if (!portal) { markFullyApplied(cell); continue }
+        owner  = portal->getOwner()
+        tang   = owner.asClientObject() ? owner.asClientObject()->asTangibleObject() : 0
+        if (!tang) { markFullyApplied(cell); continue }
+        layout = tang->getInteriorLayout(); if (!layout) { markFullyApplied(cell); continue }
+
+        cellName = TemporaryCrcString(cell->getCellName(), true)
+        total    = layout->getNumberOfObjects(cellName)
+
+        start = cell->getInteriorLayoutCreatedCount()        // RESUME cursor (GT-2 cursor is stable)
+        idx = start
+        while (idx < total && budget > 0):
+            createOneInteriorObject(layout, cellName, idx, cell, tang)   // = old :105-127 body
+            ++idx
+            --budget
+            cell->setInteriorLayoutCreatedCount(idx)         // PERSIST progress after EACH create
+                                                             //   (crash/early-out safe; never re-does idx)
+        if (idx >= total):
+            cell->setInteriorLayoutFullyApplied()            // mark done ONLY when complete (fixes :84)
+        if (budget <= 0):
+            break                                            // stop this frame; resume next frame
+```
+
+`createOneInteriorObject` is exactly the existing inner body (:105-127): createObject →
+addClientOnlyInteriorLayoutObject → setParentCell → (portalTransitions off) setTransform →
+addObjectNotifications → endBaselines → addToWorld. Including the failure branch (:126-127):
+note that a `createObject`==null still consumes an index (++idx) so a bad template doesn't wedge
+the cursor — matches old behavior of "skip and continue."
+
+================================================================================
+## 3. CORRECTNESS ARGUMENT (no-miss / no-dup / no-dangle)
+================================================================================
+
+Let, for a given live cell C with building B and layout L, `total(C)` = L->getNumberOfObjects(C)
+(a pure function of the layout file, deterministic & order-stable — GT-6), and let
+`created(C)` = C.m_interiorLayoutCreatedCount.
+
+**Invariant I:** at the start of every `update()`, for every cell ever seen,
+`created(C)` equals the number of layout objects of C currently live in B's
+`m_clientOnlyInteriorLayoutObjectList`, AND those are exactly indices `[0, created(C))` of L.
+
+- **Establishment:** ctor sets created=0 and the building list is empty → I holds. (GT-3/GT-4)
+- **Preservation by a create step:** we call createOne(idx==created(C)) → push to B's list →
+  THEN `++created(C)`. The created object corresponds to layout index `created(C)` before the
+  increment. So the set of live objects becomes exactly `[0, created(C)+1)`. I preserved.
+  Persisting AFTER the push (not before) is what makes a mid-loop early-out / crash safe: if we
+  die between push and ++, worst case is created lags by one and that single object is re-created
+  next frame — but see NO-DUP below for why even that can't double-add.
+- **Preservation by unload:** B->removeFromWorld() deletes ALL objects in the list AND we reset
+  created(C)=0 in CellProperty::removeFromWorld (GT-3 already fires for the cell; we add the
+  count reset right beside it). Both sides snap to empty/0 together → I preserved. THIS is the
+  no-dangle guarantee: the count and the object list are reset by the SAME lifecycle event, so
+  the count can never out-live (or under-count) the objects.
+
+**NO-MISS:** A cell is marked `FullyApplied` ONLY when `idx >= total` (loop ran the cursor to the
+end). Until then it stays un-applied and is revisited every frame (it's still in
+getVisibleCells while visible). Each frame advances the cursor by ≥0 and, whenever budget>0 and
+work remains, by ≥1 (forward progress, see §4). So created(C) monotonically rises to total(C)
+in finite frames, then FullyApplied latches. No index in [0,total) is ever skipped because the
+loop is a contiguous `while (idx < total)` starting at exactly `created(C)`. ∎
+
+**NO-DUP:** The only creator is the `idx` loop, which starts at `created(C)` and never revisits
+an index < created(C) (created only increases while the cell stays in-world). The other path that
+could create twice — flicker (cell drops out of visible list for a frame then returns) — does NOT
+reset created(C): `m_appliedInteriorLayout`/count reset only on `removeFromWorld()` (a real
+world-leave), NOT on mere invisibility. So a flicker just pauses progress; on return we resume at
+created(C). And a true unload resets created→0 AND deletes the objects together (Invariant I), so
+the post-reload pass re-creates [0,total) into a now-empty list — correct, not duplicate. ∎
+(Contrast: the OLD code's bug surface — if you split the burst but kept the :84 early mark, a
+flicker mid-burst would see AppliedInteriorLayout==true and MISS the tail. Our fix is to move the
+mark to completion AND key resumption off the count, so flicker is miss-proof.)
+
+**NO-DANGLE:** The manager stores ZERO cross-frame pointers. Every frame it re-acquires cell,
+portal, owner, tangible, layout fresh from the live visible-cell list and re-runs the null guards
+(GT-6). The only persisted datum is an int count living ON the cell, whose lifetime is the cell's
+own. A queue of `CellProperty*`/`TangibleObject*` (model b) would dangle; a count cannot dangle.
+∎
+
+================================================================================
+## 4. BUDGET: value, config knob, anti-starvation
+================================================================================
+
+- **Knob:** `ClientGame/ClientInteriorLayoutManager / maxInteriorCreatesPerFrame`, int, via the
+  existing `ConfigFile::getKeyInt` pattern used at install() (the file already reads keys in this
+  section — :44/:46). **Default 0 = unlimited = byte-for-byte old behavior** (zero-risk default;
+  the throttle is opt-in until validated, then the cfg flips it on). This keeps the change inert
+  for anyone who doesn't set the cfg and makes A/B trivial.
+- **Recommended value:** start at **8–12 creates/frame.** Rationale: the cantina is the stress
+  case; if the burst is ~N objects in one cell, a cap of ~10 spreads it over ceil(N/10) frames.
+  At 30fps that's a few hundred ms of gentle fill instead of one hitch — below the perceptual
+  hitch threshold while finishing the room in well under a second. Tune by measuring cantina N
+  (the burst-quantification consultant owns that number; wire the knob so it's a one-line cfg
+  change, no rebuild).
+- **Anti-starvation / guaranteed forward progress:** budget is a per-FRAME cap, refreshed every
+  frame; it is never carried/decremented across frames. As long as `maxInteriorCreatesPerFrame >= 1`
+  (or 0=unlimited), every frame with remaining work creates ≥1 object → strictly monotonic
+  created(C) → completion in ≤ ceil(total/cap) frames. There is no global queue that one cell can
+  hog forever: the OUTER loop is over visible cells in renderer order, and budget is shared. To
+  avoid one giant cell starving smaller ones in the same frame you could round-robin, but for the
+  cantina (effectively one POB visible at a time) the simple shared-budget drain is fine and
+  simpler — recommend NOT adding round-robin unless multi-POB starvation is observed. Guard
+  against a pathological cfg of negative/zero meaning "never": treat `<=0` as unlimited (old
+  behavior) so a typo can't wedge interiors to empty.
+
+================================================================================
+## 5. SMALLEST VIABLE DIFF SHAPE
+================================================================================
+
+Contained almost entirely to ClientInteriorLayoutManager.cpp, plus ~3 trivial lines in
+CellProperty (the count field + its two resets, sitting beside identical existing resets).
+
+A. **CellProperty.h** (1 line): add `int mutable m_interiorLayoutCreatedCount;` near :229.
+   Optionally rename the bool concept to a helper, but keep the bool to minimize churn.
+   Add inline accessors get/setInteriorLayoutCreatedCount (or reuse a small pair like the
+   existing get/setAppliedInteriorLayout at :180-181).
+
+B. **CellProperty.cpp** (3 lines):
+   - :358 ctor — init `m_interiorLayoutCreatedCount(0)` in the init list.
+   - :579 removeFromWorld — add `m_interiorLayoutCreatedCount = 0;` directly beside the existing
+     `m_appliedInteriorLayout = false;` (SAME lifecycle event → keeps Invariant I; this is the
+     no-dangle linchpin and is self-evidently in scope because it mirrors the line above it).
+   - implement the count accessors (or make them inline in the header → 0 cpp lines).
+   ⚠ CellProperty.h is a shared header consumed by plugins → adding a data member changes the
+   struct → ABI cascade (per AGENTS.md shared-header trap). Adding an int to CellProperty triggers
+   "rebuild ALL plugin .vcxprojs (gl05/06/07/11)", not just SwgClient. This is the one cross-file
+   cost; it is mechanical (full 5-target build) but must be honored or you get a deterministic
+   boot crash. (If you want to AVOID even that: store the count in a manager-side
+   `std::map<const CellProperty*, int>` keyed by pointer — but then YOU must purge it on unload,
+   which reintroduces the teardown-hook dependency and a stale-key hazard. NOT recommended; the
+   on-cell int is strictly safer. The ABI rebuild is the cheaper price.)
+
+C. **ClientInteriorLayoutManager.cpp** (the substantive change, self-contained):
+   - install() (:44 area): read `maxInteriorCreatesPerFrame` (int) into a file-static.
+   - update() (:62-130): replace the inner unconditional full-loop with the budgeted resume loop
+     from §2. Move the "mark applied" from before the loop (:84) to AFTER completion. Factor the
+     :105-127 body into a small local `createOneInteriorObject` helper (or inline it; the loop
+     change is the same either way). NO other functions touched. `applyInteriorLayout` (:134, the
+     eager non-lazy path) is left ENTIRELY untouched — it isn't the per-frame burst path.
+
+D. **Config (stage cfg)**: add `maxInteriorCreatesPerFrame=10` under
+   `[ClientGame/ClientInteriorLayoutManager]` in client_d.cfg / client.cfg (BOM-safe edit only).
+   With the 0-default, this cfg line is the entire "turn it on" surface; remove it to revert.
+
+Net: ~1 header line (+inline accessors), ~3 CellProperty.cpp lines, one rewritten loop +
+one config read in the manager, one cfg line. No teardown hook added anywhere. No new container.
+No cross-frame pointer. The only non-local cost is the mandatory plugin ABI rebuild from touching
+CellProperty.h.
+
+================================================================================
+## 6. One-paragraph recommendation (design verdict, scoped to Q3)
+================================================================================
+
+Use a **count-based resume cursor stored on CellProperty**, not a pending-create queue and not a
+manager-side stashed pointer. It is safe BY CONSTRUCTION because (1) the manager holds no
+cross-frame pointer and re-derives all work each frame from the live visible-cell list + per-cell
+re-checked guards (no-dangle); (2) the resume cursor and the created-object list are reset by the
+SAME lifecycle event — CellProperty/TangibleObject::removeFromWorld — so they can never disagree
+(no-dangle/no-dup across unload+reload); (3) flicker (mere invisibility) does NOT reset the
+cursor, and the "applied" latch moves to LOOP COMPLETION, so a paused burst resumes exactly where
+it stopped (no-miss, no-dup); (4) a per-frame cap refreshed every frame with `>=1` guarantees
+monotonic forward progress to completion (no-starve). Budget knob
+`maxInteriorCreatesPerFrame`, default 0 = unlimited (inert/old behavior), recommend 8–12 once the
+cantina object count is known. The diff is contained to the manager + three CellProperty lines;
+the only non-local cost is the shared-header ABI plugin rebuild from adding the int.

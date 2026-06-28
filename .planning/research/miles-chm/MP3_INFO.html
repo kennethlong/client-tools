@@ -1,0 +1,349 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MP3_INFO</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MP3_INFO'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MP3_INFO</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ </td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_MP3_frames.html#_Discussion' class='paragraph'>AIL_enumerate_MP3_frames: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_inspect_MP3.html#_Discussion' class='paragraph'>AIL_inspect_MP3: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MP3_INFO.html#_Discussion' class='paragraph'>MP3_INFO: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_MP3_frames.html' class='paragraph'>AIL_enumerate_MP3_frames</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_inspect_MP3.html' class='paragraph'>AIL_inspect_MP3</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='BINKA_INFO.html' class='paragraph'>BINKA_INFO</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Structure definition:</span>
+<span class='type'>struct</span> <a href='MP3_INFO.html'>MP3_INFO</a>
+{
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U8.html' class='blue'>U8*</a></span>&nbsp;MP3_file_image;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;MP3_image_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U8.html' class='blue'>U8*</a></span>&nbsp;ID3v2;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;ID3v2_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U8.html' class='blue'>U8*</a></span>&nbsp;ID3v1;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U8.html' class='blue'>U8*</a></span>&nbsp;start_MP3_data;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='U8.html' class='blue'>U8*</a></span>&nbsp;end_MP3_data;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;sample_rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;bit_rate;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;channels_per_sample;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;samples_per_frame;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;byte_offset;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;next_frame_expected;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;average_frame_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;data_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;header_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;side_info_size;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;ngr;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;main_data_begin;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;hpos;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;MPEG1;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;MPEG25;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;layer;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;protection_bit;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;bitrate_index;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;sampling_frequency;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;padding_bit;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;private_bit;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;mode;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;mode_extension;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;copyright;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;original;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class='type'><a href='S32.html' class='blue'>S32</a></span>&nbsp;emphasis;
+};
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ </table>
+<div class="discussion_heading">Members</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='MP3_file_image' class=nohover>MP3_file_image</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Original MP3_file_image pointer passed to <a href='AIL_inspect_MP3.html' class='paragraph'>AIL_inspect_MP3</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MP3_image_size' class=nohover>MP3_image_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Original MP3_image_size passed to <a href='AIL_inspect_MP3.html' class='paragraph'>AIL_inspect_MP3</a>.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ID3v2' class=nohover>ID3v2</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ ID3v2 tag, if not NULL.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ID3v2_size' class=nohover>ID3v2_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Size of tag in bytes.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ID3v1' class=nohover>ID3v1</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ ID3v1 tag, if not NULL (always 128 bytes long if present).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='start_MP3_data' class=nohover>start_MP3_data</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to start of data area in file (not necessarily first valid frame).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='end_MP3_data' class=nohover>end_MP3_data</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Pointer to last valid byte in MP3 data area (before ID3v1 tag, if any).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='sample_rate' class=nohover>sample_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Sample rate in Hz (normally constant across all frames in file).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='bit_rate' class=nohover>bit_rate</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Bits/second for current frame.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='channels_per_sample' class=nohover>channels_per_sample</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Always 1 or 2.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='samples_per_frame' class=nohover>samples_per_frame</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Always 576 or 1152 samples in each MP3 frame, depending on rate.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='byte_offset' class=nohover>byte_offset</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Offset of frame from start_MP3_data (i.e., suitable for use as loop point).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='next_frame_expected' class=nohover>next_frame_expected</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Offset from start_MP3_data where the next frame was <i>expected</i>.  Will normally be equal to byte_offset unless garbage data or an ID3v2 tag was skipped before the currently-enumerated frame, or EOF was reached before the next frame header.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='average_frame_size' class=nohover>average_frame_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Average source bytes per frame, determined solely by bit rate and sample rate.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='data_size' class=nohover>data_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ # of data-only bytes in this particular frame.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='header_size' class=nohover>header_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ 4 or 6 bytes, depending on CRC.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='side_info_size' class=nohover>side_info_size</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Valid for layer 3 side info only.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='ngr' class=nohover>ngr</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Always 2 for MPEG1, else 1.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='main_data_begin' class=nohover>main_data_begin</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Always 0 in files with no bit reservoir.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='hpos' class=nohover>hpos</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+  Current bit position in header/side buffer.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MPEG1' class=nohover>MPEG1</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='MPEG25' class=nohover>MPEG25</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='layer' class=nohover>layer</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='protection_bit' class=nohover>protection_bit</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='bitrate_index' class=nohover>bitrate_index</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='sampling_frequency' class=nohover>sampling_frequency</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='padding_bit' class=nohover>padding_bit</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='private_bit' class=nohover>private_bit</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='mode' class=nohover>mode</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='mode_extension' class=nohover>mode_extension</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='copyright' class=nohover>copyright</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='original' class=nohover>original</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='emphasis' class=nohover>emphasis</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Data copied directly from frame header; see ISO docs for info.</td>
+  </tr>
+</table>
+<div class="discussion_heading"><a name='MP3_INFO::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ All MP3_INFO fields other than those documented above are for internal use, and may change between MSS versions.   
+
+</p>
+<p>
+Fields between MP3_file_image and end_MP3_data, inclusive, are valid as soon as <a href='AIL_inspect_MP3.html' class='paragraph'>AIL_inspect_MP3</a> returns, even if the file contains no valid MP3 frames. 
+
+</p>
+<p>
+All remaining fields pertain to the current frame being inspected, and are valid only after <a href='AIL_enumerate_MP3_frames.html' class='paragraph'>AIL_enumerate_MP3_frames</a>  has returned TRUE.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='BINKA_INFO.html' class='paragraph'>BINKA_INFO</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='OGG_INFO.html' class='paragraph'>OGG_INFO</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

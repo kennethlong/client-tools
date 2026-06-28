@@ -1,0 +1,98 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>WavMux</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='WavMux'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>WavMux</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='BinkA_encode.html#_Discussion' class='paragraph'>BinkA_encode: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html#_Discussion' class='paragraph'>How do I use multi-channel sound output in Miles?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='WavMux.html#_Discussion' class='paragraph'>WavMux: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Miles_MIDI_Studio.html' class='paragraph'>Miles MIDI Studio</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='WavMux::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The WavMux.EXE utility is a Windows console application that merges multiple stereo or mono files into one large multichannel wave file. This is useful as an input to <a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a> or to simply make uncompressed multichannel wave files from the command-line. 
+
+</p>
+<p>
+You can even use WavMux to create a PCM .WAV file that contains gaps in its channel mask.  For instance, the command: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>      wavmux output.wav none none none none back_left.wav back_right.wav</pre></div>
+<p>
+</p>
+<p>
+...will leave gaps in the default channel mapping allowing you to automatically route each channel to the right speaker (you can also do this manually, at run-time). <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='BinkA_encode.html' class='paragraph'>BinkA_encode</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Miles_MIDI_Studio.html' class='paragraph'>Miles MIDI Studio</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

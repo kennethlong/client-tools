@@ -1,0 +1,200 @@
+# CONSULT-38 evidence: uncommitted hardening diff (clientSkeletalAnimation)
+# Generated Fri Jun 19 18:01:09 CDT 2026
+
+diff --git a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshGeneratorTemplateList.cpp b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshGeneratorTemplateList.cpp
+index 9159ad0f0..a26ed06e6 100644
+--- a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshGeneratorTemplateList.cpp
++++ b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/MeshGeneratorTemplateList.cpp
+@@ -421,6 +421,23 @@ const MeshGeneratorTemplate *MeshGeneratorTemplateList::fetch(const CrcString &f
+ 					asyncBindData = asyncFindIt->second;
+ 			}
+ 
++			// [MGN-PROBE] DECISIVE: log whether .mgn takes the ASYNC stub path or loads SYNCHRONOUSLY, and
++			// WHY (the 3 gating conditions). If SYNC, the whole async #4 race is inert in this config and
++			// the other probes can never fire. Rate-limited to the first few fetches (cache-miss only).
++			{
++				static int s_probeFetchLogged = 0;
++				if (s_probeFetchLogged < 8)
++				{
++					++s_probeFetchLogged;
++					bool const eAsync = AsynchronousLoader::isEnabled();
++					bool const eBind  = (asyncBindData != 0);
++					bool const eSup   = (asyncBindData && asyncBindData->supportsAsynchronousLoading());
++					REPORT_LOG(true, ("[MGN-PROBE] FETCH [%s] isEnabled=%d bind=%d supportsAsync=%d -> %s\n",
++						filename.getString(), eAsync ? 1 : 0, eBind ? 1 : 0, eSup ? 1 : 0,
++						(eAsync && eBind && eSup) ? "ASYNC" : "SYNC"));
++				}
++			}
++
+ 			if (AsynchronousLoader::isEnabled() && asyncBindData && asyncBindData->supportsAsynchronousLoading())
+ 			{
+ 				// Handle async loading.
+diff --git a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGenerator.cpp b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGenerator.cpp
+index c5a2ea92f..7f7c688c0 100644
+--- a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGenerator.cpp
++++ b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGenerator.cpp
+@@ -77,7 +77,11 @@ void SkeletalMeshGenerator::operator delete(void *data)
+ 
+ int SkeletalMeshGenerator::getOcclusionLayer() const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getOcclusionLayer() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getOcclusionLayer on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		return 0;
++	}
+ 	return getSkeletalMeshGeneratorTemplate().getOcclusionLayer();
+ }
+ 
+@@ -85,7 +89,14 @@ int SkeletalMeshGenerator::getOcclusionLayer() const
+ 
+ void SkeletalMeshGenerator::applySkeletonModifications(Skeleton &skeleton) const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("applySkeletonModifications() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	// HARDEN I3 (CONSULT-37): in Release the old DEBUG_FATAL was compiled out, so a call on an unloaded
++	// template fell straight through to deref m_blendValues (NULL) / empty template internals = AV. Guard
++	// release-safe: log the would-have-fired condition and skip (the appearance re-renders once loaded).
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED applySkeletonModifications on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		return;
++	}
+ 	getSkeletalMeshGeneratorTemplate().applySkeletonModifications(m_blendValues, skeleton);
+ }
+ 
+@@ -93,7 +104,14 @@ void SkeletalMeshGenerator::applySkeletonModifications(Skeleton &skeleton) const
+ 
+ void SkeletalMeshGenerator::addShaderPrimitives(Appearance &appearance, int lodIndex, CustomizationData *customizationData, const TransformNameMap &transformNameMap, const OcclusionZoneSet &zonesCurrentlyOccluded, OcclusionZoneSet &zonesOccludedByThisLayer, ShaderPrimitiveVector &shaderPrimitives) const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("addShaderPrimitives() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	// HARDEN I3 (CONSULT-37): prime AV site during the early zone-in shader-primitive build. In Release the
++	// DEBUG_FATAL was compiled out -> deref of an unloaded template. Guard release-safe: log + skip (no
++	// shader primitives contributed until the template finishes loading; the appearance rebuilds then).
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED addShaderPrimitives on UNLOADED [%s] lod=%d\n", getSkeletalMeshGeneratorTemplate().getName().getString(), lodIndex));
++		return;
++	}
+ 	getSkeletalMeshGeneratorTemplate().addShaderPrimitives(appearance, lodIndex, customizationData, m_blendValues, transformNameMap, zonesCurrentlyOccluded, zonesOccludedByThisLayer, shaderPrimitives);
+ }
+ 
+@@ -132,7 +150,11 @@ void SkeletalMeshGenerator::setCustomizationData(CustomizationData *customizatio
+ 
+ Appearance *SkeletalMeshGenerator::createAppearance() const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("createAppearance() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED createAppearance on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		return 0;
++	}
+ 	return getSkeletalMeshGeneratorTemplate().createAppearance();
+ }
+ 
+@@ -140,7 +162,11 @@ Appearance *SkeletalMeshGenerator::createAppearance() const
+ 
+ void SkeletalMeshGenerator::addCustomizationVariables(CustomizationData &customizationData) const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("addCustomizationVariables() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED addCustomizationVariables on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		return;
++	}
+ 	getSkeletalMeshGeneratorTemplate().addCustomizationVariables(customizationData);
+ }
+ 
+@@ -156,7 +182,11 @@ bool SkeletalMeshGenerator::isReadyForUse() const
+ 
+ int SkeletalMeshGenerator::getReferencedSkeletonTemplateCount() const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getReferencedSkeletonTemplateCount() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getReferencedSkeletonTemplateCount on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		return 0;   // no referenced skeletons until loaded -> callers won't index getReferencedSkeletonTemplateName
++	}
+ 	return getSkeletalMeshGeneratorTemplate().getReferencedSkeletonTemplateCount();
+ }
+ 
+@@ -164,7 +194,12 @@ int SkeletalMeshGenerator::getReferencedSkeletonTemplateCount() const
+ 
+ const CrcLowerString &SkeletalMeshGenerator::getReferencedSkeletonTemplateName(int index) const
+ {
+-	DEBUG_FATAL(!getSkeletalMeshGeneratorTemplate().isLoaded(), ("getReferencedSkeletonTemplateName() called on not-yet-loaded SkeletalMeshGenerator [%s].", getSkeletalMeshGeneratorTemplate().getName().getString()));
++	if (!getSkeletalMeshGeneratorTemplate().isLoaded())   // HARDEN I3: release-safe guard (was DEBUG_FATAL-only)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] I3-DEREF-AVERTED getReferencedSkeletonTemplateName on UNLOADED [%s]\n", getSkeletalMeshGeneratorTemplate().getName().getString()));
++		static CrcLowerString const s_empty("");   // safe sentinel; count-guard above means this is normally unreachable
++		return s_empty;
++	}
+ 	return getSkeletalMeshGeneratorTemplate().getReferencedSkeletonTemplateName(index);
+ }
+ 
+@@ -218,7 +253,13 @@ SkeletalMeshGenerator::~SkeletalMeshGenerator()
+ {
+ 	SkeletalMeshGeneratorTemplate const &mgTemplate = getSkeletalMeshGeneratorTemplate();
+ 	if (!mgTemplate.isLoaded())
++	{
++		// [MGN-PROBE] RANK-1 (Sonnet CONSULT-37): generator destroyed while its template's async load is
++		// still pending. If the template was itself released/freed first, the line below derefs freed
++		// memory = AV. Silent unless this teardown-during-pending path is actually taken.
++		REPORT_LOG(true, ("[MGN-PROBE] RANK1-DESTROY-PENDING ~SkeletalMeshGenerator while template UNLOADED [%s]\n", mgTemplate.getName().getString()));
+ 		mgTemplate.removeAsynchronouslyLoadedMeshGenerator(this);
++	}
+ 
+ 	delete m_blendValues;
+ 
+diff --git a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+index 7cb3e1c8c..d211bd259 100644
+--- a/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
++++ b/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+@@ -3273,17 +3273,26 @@ void SkeletalMeshGeneratorTemplate::asynchronousLoadCallback()
+ 		delete s_asynchronousLoadIff;
+ 		s_asynchronousLoadIff = NULL;
+ 
++		//-- HARDEN I4 (CONSULT-37, Opus): clear the in-progress flag on EITHER outcome. Previously this was
++		//   cleared only AFTER the success-only return below, so a failed cold-load (openSuccess==false, most
++		//   likely right after a full build flushes the disk cache) left the template WEDGED: inProgress stuck
++		//   TRUE -> the load is never re-kicked, m_uninitializedMeshGenerators never resolved, and the live
++		//   half-built generators (m_blendValues==NULL) become latent landmines. Clearing here lets a later
++		//   createMeshGenerator() observe (!isLoaded && !inProgress) and re-issue the async load = recovery.
++		m_asynchronousLoadInProgress = false;
++
+ 		//-- Exit if we failed to load the Iff.
+ 		if (!openSuccess)
+ 		{
++			// [MGN-PROBE] I4: log the would-have-wedged condition (now recovered: inProgress cleared above).
++			// Uninitialized generators are intentionally LEFT QUEUED so a future successful load fixes them up
++			// (running create() here would build against unloaded data).
++			REPORT_LOG(true, ("[MGN-PROBE] I4-WEDGE-AVERTED async openSuccess=false name=[%s] inProgress-now-cleared uninitCount=%d\n", getName().getString(), m_uninitializedMeshGenerators ? static_cast<int>(m_uninitializedMeshGenerators->size()) : -1));
+ 			DEBUG_WARNING(true, ("Asynchronous loader called SkeletalMeshGeneratorTemplate callback but the async loaded file [%s] failed to load via iff.  How does that happen?  Leaving in unloaded state.", getName().getString()));
+ 			return;
+-		} 
++		}
+ 	}
+ 
+-	//-- Remember there's no async load in progress.
+-	m_asynchronousLoadInProgress = false;
+-
+ 	//-- Fixup uninitialized mesh generators.
+ 	if (m_uninitializedMeshGenerators)
+ 	{
+@@ -3966,7 +3975,16 @@ const SkeletalMeshGeneratorTemplate::Dot3VectorVector *SkeletalMeshGeneratorTemp
+ void SkeletalMeshGeneratorTemplate::removeAsynchronouslyLoadedMeshGenerator(SkeletalMeshGenerator *meshGenerator) const
+ {
+ 	NOT_NULL(meshGenerator);
+-	NOT_NULL(m_uninitializedMeshGenerators);
++
++	//-- HARDEN RANK-1 (CONSULT-37, Sonnet): a generator destroyed while its template's async load is still
++	//   pending lands here. If the uninitialized list was already resolved/freed (load completed, or the I4
++	//   failure path), m_uninitializedMeshGenerators is NULL and the NOT_NULL below would deref NULL in
++	//   Release (compiled-out assert) -> AV. Guard release-safe: nothing to remove, just return.
++	if (!m_uninitializedMeshGenerators)
++	{
++		REPORT_LOG(true, ("[MGN-PROBE] RANK1-REMOVE-NULL-LIST removeAsynchronouslyLoadedMeshGenerator on [%s] with no pending list (averted NULL deref)\n", getName().getString()));
++		return;
++	}
+ 
+ 	MeshGeneratorVector::iterator findIt = std::find(m_uninitializedMeshGenerators->begin(), m_uninitializedMeshGenerators->end(), meshGenerator);
+ 	if (findIt != m_uninitializedMeshGenerators->end())

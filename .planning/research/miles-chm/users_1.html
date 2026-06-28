@@ -1,0 +1,150 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>A First Look</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='A First Look'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>A First Look</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_2.html' class='paragraph'>Playing A Sound</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_1_main' class='nohover'><b></b></a></div>
+<p>
+Welcome to the New Miles! We're really happy with this release, focusing on the high level tool.
+It has been rewritten from the ground up to be more usable, scalable, functional, and fast.
+These User's Guides are targeted towards sound designers, or those wanting an introduction to
+the tool itself. For introduction to the coding side of things, please look at the Programmer's
+Introduction help file.
+</p>
+<p>
+This is the first of a series of user's guides designed to introduce you to important concepts. They
+will be organized in consistent manner:
+</p>
+<p>
+<ol><li> A brief description of the goals of the guide.
+</li><li> A list of terminology that is assumed from prior guides, with links to definitions.
+</li><li> A list of new terminology, with explanation.
+</li><li> A series of steps to follow along with to learn the concept.
+</li></ol></p>
+<p>
+<b>Requisite Terminology</b><br>
+None!
+</p>
+<p>
+<b>New Terminology</b>
+</p>
+<p>
+<ol><li> <b>Asset</b>: Assets are single objects you edit and work with in Miles Studio. Each asset is a single file on disk.
+There are four core types of Assets: Events, Sounds, Presets, and Environments. All content in Miles Studio are Assets.
+</p>
+<p>
+</li><li> <b>Sound Bank</b>: Sound banks are just a collection of Assets. When your game ships, each sound bank will be a single compiled
+file that is loaded very fast.
+</p>
+<p>
+</li><li> <b>Event Asset</b>: Events are tiny script-like Assets that do all of the heavy lifting in Miles Studio. They are comprised of Event Steps,
+which are activated in sequence, doing a variety of things. The most common Event Step is the Start Sound Step.
+</p>
+<p>
+</li><li> <b>Timeline</b>: The timeline is a representation of played or playing events. It is viewed on the Timeline Tab. The timeline stores a great deal of information about
+the event, including what sounds were started, how long they lasted, the volumes of the sounds, and what affected the volume over time. In addition,
+the timeline can replay old recordings.
+</p>
+<p>
+</li><li> <b>Capture</b>: A capture is a timeline recorded from a game. These can be saved to disk and loaded in the Timeline Tab, allowing you to adjust your content and
+hear it without loading the game.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Click Open and select media/examples.mssbnk.</i><br><br>
+<img src="1_header.png" /><br><br>
+</p>
+<p>
+This loads a previously saved Sound Bank. Along the left of Miles Studio you will see the Assets in this sound bank.
+</p>
+<p>
+</li><li><i>Switch to the Timeline Tab.</i><br><br>
+<img src="1_tabs.png" />
+</p>
+<p>
+</li><li><i>Click Open and select media/example.msscap.</i><br><br>
+<img src="1_captures.png" />
+</p>
+<p>
+This loads a previously saved Capture. The timeline now shows several events that were recorded and when they happened.
+</p>
+<p>
+</li><li><i>Click Play.</i><br><br>
+<img src="1_playhead.png" />
+</p>
+<p>
+</li></ol></p>
+<p>
+Right now you are hearing a replay of a timeline I put together using the same example sound bank,
+but on a completely different machine. You can see the events, when they occurred, and if you click 
+on each instance, you can see many details about them. Feel free to click around and see what all 
+you can inspect.
+</p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%>&nbsp;</td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_2.html' class='paragraph'>Playing A Sound</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

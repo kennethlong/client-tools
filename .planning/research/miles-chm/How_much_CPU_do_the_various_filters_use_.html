@@ -1,0 +1,86 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>How much CPU do the various filters use?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='How much CPU do the various filters use?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>How much CPU do the various filters use?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_set_a_DSP_filter_on_a_sample_.html' class='paragraph'>How do I set a DSP filter on a sample?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='How_can_I_play_two_HSAMPLEs_from_the_same_memory_address_.html' class='paragraph'>How can I play two HSAMPLEs from the same memory address?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='How much CPU do the various filters use?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: How much CPU do the various filters use?</p>
+<p>
+A: The built-in filters are <b>very</b> fast! 
+
+</p>
+<p>
+The built-in global reverb is about as expensive as mixing each sample twice (which is basically free - mixing 64 samples on a modern PC only costs about 1.5% of the CPU).  
+
+</p>
+<p>
+The built-in low-pass filter is also almost free - on a modern PC, you can low-pass filter  64 samples in less than 2% of the CPU. 
+
+</p>
+<p>
+Other filters are more CPU-intensive -- using the Chorus filter on 64 samples, for instance, takes about 8% of the CPU.  You can use the <a href='AIL_digital_CPU_percent.html' class='paragraph'>AIL_digital_CPU_percent</a> function to check the CPU demands imposed by the filter(s) your application uses.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_set_a_DSP_filter_on_a_sample_.html' class='paragraph'>How do I set a DSP filter on a sample?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='How_can_I_play_two_HSAMPLEs_from_the_same_memory_address_.html' class='paragraph'>How can I play two HSAMPLEs from the same memory address?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

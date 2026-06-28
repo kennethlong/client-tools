@@ -1,0 +1,144 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_enqueue_event_start</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_enqueue_event_start'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_enqueue_event_start</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Start assembling a packet to use for enqueuing an event.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_3d.html#advanced_3d_one' class='paragraph'>Adding 3D to event sounds: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_buffer.html#_Discussion' class='paragraph'>AIL_enqueue_event_buffer: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_by_name.html#_Discussion' class='paragraph'>AIL_enqueue_event_by_name: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_end_named.html#_Discussion' class='paragraph'>AIL_enqueue_event_end_named: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_start.html#_Discussion' class='paragraph'>AIL_enqueue_event_start: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_userbuffer.html#advanced_userbuffer_one' class='paragraph'>Using the User Buffer: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_enqueue_event_cancel.html' class='paragraph'>AIL_enqueue_event_cancel</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_enqueue_event_start.html'>AIL_enqueue_event_start</a></span>(</td><td>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Start assembling a packet to use for enqueuing an event.</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ A token used for passing to functions that add data to the event.</table>
+<div class="discussion_heading"><a name='AIL_enqueue_event_start::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This is used to pass more data to an event that will be executed. For instance, if  an event is going to spatialize a sound, but there's no need to move the sound over the course of its lifetime, you can add positional data to the event via <a href='AIL_enqueue_event_position.html' class='paragraph'>AIL_enqueue_event_position</a>. When a  sound is started it will use that for its initial position, and there is no need to do any game object <-> event id tracking. 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>        <font color=#008000>// Start the enqueue.</font>
+        <a href='S32.html' class='paragraph'>S32</a> enqueue_token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+
+        <font color=#008000>// Tell all sounds started by the event to position at (100, 100, 100)</font>
+        <a href='AIL_enqueue_event_position.html' class='paragraph'>AIL_enqueue_event_position</a>(&amp;enqueue_token, 100, 100, 100);
+
+        <font color=#008000>// Complete the token and enqueue the event to the command buffer.</font>
+        <a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a>(enqueue_token);
+    </pre></div>
+<p>
+</p>
+<p>
+The enqueue process is still completely thread safe. No locks are used, however only 8 enqueues can be "assembling" at the same time - if more than that occur, the <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a> will yield the thread until a slot is open.  
+
+</p>
+<p>
+The ONLY time that should happen is if events enqueues are started but never ended: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>        <font color=#008000>// Start the enqueue</font>
+        <a href='S32.html' class='paragraph'>S32</a> enqueue_token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+
+        <font color=#008000>// Try to get the game position</font>
+        Vector3* position = GetPositionOfSomething(my_game_object);
+        if (position == 0)
+            return; <font color=#008000>// OOPS! enqueue_token was leaked here, never to be reclaimed.</font>
+
+    </pre></div>
+<p>
+</p>
+<p>
+Each event has a limit to the amount of data that can be attached to it. Currently this amount is 512 bytes - which should cover all use cases. If any enqueue functions return 0, then this amount has been reached. The ErrorHandler will be called as well, with <a href='AIL_last_error.html' class='paragraph'>AIL_last_error</a> reporting that the enqueue buffer was filled.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_enqueue_event_by_name.html' class='paragraph'>AIL_enqueue_event_by_name</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_enqueue_event_cancel.html' class='paragraph'>AIL_enqueue_event_cancel</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

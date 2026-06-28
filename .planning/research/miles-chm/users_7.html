@@ -1,0 +1,175 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Dynamic Presets and Sliders</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Dynamic Presets and Sliders'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Dynamic Presets and Sliders</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='users_14.html' class='paragraph'>Ducking and Busses</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='users_8.html' class='paragraph'>Environments and Reverb</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='user_7_main' class='nohover'><b></b></a></div>
+<p>
+In the last guide, the preset checked the variable when it was applied (at sound start), but then that was it. This may be the desired result,
+but in some cases you want the preset to constantly update when the game changes the value of the variable.
+</p>
+<p>
+To be more specific, after a preset is applied, the game can set the variable to whatever it wants and the change will not be picked up. 
+To pick up those changes, the Dynamic flag needs to be set.
+</p>
+<p>
+<b>Requisite Terminology</b>
+</p>
+<p>
+<ol><li> Sounds
+</li><li> Events
+</li><li> Preset
+</li><li> Variable
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>New Terminology</b><br>
+</p>
+<p>
+<ol><li> <b>Sliders:</b> Sliders are how variables can be experimented with in Miles Studio without having a game connected. Depending on the MIDI hardware,
+they can be bound to a MIDI fader board to make it easier to adjust several at once.
+</p>
+<p>
+</li></ol></p>
+<p>
+<b>Steps</b>
+</p>
+<p>
+<ol><li> <i>Create a reasonable length sound, and an event to play it.</i>
+</p>
+<p>
+</li><li> <i>Create a variable named "LowPass".</i>
+</p>
+<p>
+</li><li> <i>Create a new preset called "NewPreset". Click the check box next to "LowPass Cutoff" and assign it to the variable LowPass.</i><br><br>
+<img src="7_lpf.png"/><br><br>
+</p>
+<p>
+For this example, we are going to set the low pass cutoff of a playing sound to a variable, and adjust that variable over time to see how
+the preset constantly updates.
+</p>
+<p>
+</li><li> <i>At the bottom of the screen, right click "Sliders" and add the variable "LowPass".</i><br><br>
+<img src="7_slider.png"/><br><br>
+</p>
+<p>
+In order to adjust the variable on the fly, we need to set it to a Slider. When adding a variable, you need to know what units its going to
+be in. For instance, if the variable were applied to the playback rate of a sound, it would need to be in semitones (sT). Volume would be decibels. In our
+case, the units are hertz. Since that is somewhat arbitrary, Miles Studio doesn't have a convenient check box to set up our bounds for us. So we need
+the next step.
+</p>
+<p>
+</li><li> <i>Set the maximum for the slider to 5000, due to low pass being measured in hertz, and click Accept.</i><br><br>
+<img src="7_sliderdets.png"/><br><br>
+</p>
+<p>
+Now the slider will allow adjustment between 0 and 5000, reasonable values for experimenting with low pass cutoff.
+</p>
+<p>
+</li><li> <i>Select the event that starts your sound and set the loop count to "0" (meaning infinite).</i><br><br>
+<img src="7_looping.png"/><br><br>
+</p>
+<p>
+In case your sound is somewhat short, we loop infinitely to give time for experimentation.
+</p>
+<p>
+</li><li> <i>Set your sound's preset to "NewPreset" .</i><br><br>
+<img src="7_preset.png"/><br><br>
+</p>
+<p>
+This assigns the preset to the sound. At this point, the variable will only be checked when the sound starts.
+</p>
+<p>
+</li><li> <i>Click the check box next to "Dynamic Preset".</i><br><br>
+<img src="7_dynamic.png"/><br><br>
+</p>
+<p>
+This is the critical step. Now, this sound will tell the preset to check its variables every frame.
+</p>
+<p>
+</li><li> <i>Audition the event.</i>
+</p>
+<p>
+</li><li> <i>While the sound is playing, move the slider up and down. </i><br><br>
+<img src="7_sliderdrag.png"/><br><br>
+</p>
+<p>
+Since the slider defaults to 0, you won't be able to hear anything. After all, there are no frequencies below zero! As you adjust the slider,
+the low pass will update accordingly, and the sound is much more dynamic, and able to respond to game events.
+</p>
+<p>
+</li><li> <i>Since the sound is playing infinitely, switch to the Timeline Tab and click the Stop button to end playback.</i><br><br>
+<img src="7_stop.png"/><br><br>
+</p>
+<p>
+It's important to understand that the dynamic property only matters if a preset uses variables. If there are no variables, then there
+is nothing to check for changes!
+</p>
+<p>
+</li></ol></p>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='users_14.html' class='paragraph'>Ducking and Busses</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='usersguides.html' class='paragraph'>Sound Designer User Guide</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='users_8.html' class='paragraph'>Environments and Reverb</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

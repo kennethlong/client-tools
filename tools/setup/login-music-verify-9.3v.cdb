@@ -1,0 +1,17 @@
+$$ login-music verify under Miles 9.3v (Phase 35-05 fix validation)
+$$ PROVES: (1) the loaded mss64 IS 9.3v, (2) the title stream is SERVICED end-to-end --
+$$ fileReadCallBack fires repeatedly with the resume offset climbing monotonically (sequential
+$$ streaming). Under the OLD 9.3b bug the empty-name re-open returned NULL -> no reads -> silence.
+.lines
+$$ --- confirm which Miles core is loaded (9.3v mss64.dll = 483,328 bytes) ---
+lm vm mss64
+$$ --- locate the fix's resume-offset static (anonymous namespace) ---
+x SwgClient_d!*streamResumeOffset*
+$$ --- log every open: real name (new session) vs empty name (Miles bg-IO re-open we substitute) ---
+bu SwgClient_d!fileOpenCallBack ".printf \"OPEN name='%ma'\\n\", @rcx; gc"
+$$ --- log every read on the stream + the running resume offset (climbing == playing) ---
+bu SwgClient_d!fileReadCallBack ".printf \"READ resumeOffset=%d bytes=%d\\n\", poi(SwgClient_d!s_streamResumeOffset), @r8; gc"
+bl
+g
+$$ client quit -> g returns here -> cdb exits
+q

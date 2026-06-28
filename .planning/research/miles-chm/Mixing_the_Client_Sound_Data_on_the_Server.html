@@ -1,0 +1,198 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Mixing the Client Sound Data on the Server</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Mixing the Client Sound Data on the Server'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Mixing the Client Sound Data on the Server</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Mixing_the_Client_Sound_Data_on_the_Server.html#_Discussion' class='paragraph'>Mixing the Client Sound Data on the Server: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Integrating_the_Codecs_with_your_Networking_Architecture.html' class='paragraph'>Integrating the Codecs with your Networking Architecture</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Implementation_Details.html' class='paragraph'>Implementation Details</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Mixing the Client Sound Data on the Server::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  Any model other than peer-to-peer will require that data be buffered and mixed on one or more servers, in preparation for transmission to clients. Fortunately, given the tight constraints on PCM data formats used for voice communication, it's difficult to imagine an easier audio programming job. Mixing of 16-bit signed PCM data is accomplished by means of simple algebraic addition of the corresponding samples from each client buffer, followed by a hard clamping operation to avoid distortion due to sample data overflow.  The lack of any need for sample rate conversion, volume scaling, or reformatting enables a simple C/C++ loop to do the job efficiently. 
+
+</p>
+<p>
+It's important to mix the data from each client at higher-than-16-bit precision, performing the clipping operation only after all samples have been added.  Doing so actually reduces the amount of sample points that ultimately have to be clipped, since each incoming waveform sample point has a roughly equal chance of causing an overflow condition or canceling an existing one.  MSSCHTS.CPP illustrates how 16-bit sample data may be mixed at 32-bit precision: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// ------------------------------------------------------------</font>
+<font color=#008000>// Merge data from all active clients into each client's</font>
+<font color=#008000>// mixer buffer</font>
+<font color=#008000>// ------------------------------------------------------------</font>
+
+for (i=0; i &lt; N_CLIENTS; i++)
+{
+   CLIENT *C = &amp;clients[i];
+
+   <font color=#008000>//</font>
+   <font color=#008000>// If not actively streaming, skip further foreground processing</font>
+   <font color=#008000>//</font>
+
+   if (!C-&gt;in_use)
+   {
+      continue;
+   }
+
+   <font color=#008000>//</font>
+   <font color=#008000>// Clear client's mixer buffer to signed-PCM 0 value (0x0000)</font>
+   <font color=#008000>//</font>
+
+   memset(C-&gt;mixer_buffer,
+          0,
+          sizeof(C-&gt;mixer_buffer));
+
+   <font color=#008000>//</font>
+   <font color=#008000>// Add samples from each contributing client's decode buffer to</font>
+   <font color=#008000>// target's mixing buffer</font>
+   <font color=#008000>//</font>
+
+   for (<a href='S32.html' class='paragraph'>S32</a> j=0; j &lt; N_CLIENTS; j++)
+   {
+      CLIENT *SRC = &amp;clients[j];
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Avoid echoing each client's own traffic back to it, unless</font>
+      <font color=#008000>// we've enabled local echo as a diagnostic option</font>
+      <font color=#008000>//</font>
+
+      if (SendMessage(hear,BM_GETCHECK,0,0)==0)
+      {
+        if (i == j)
+        {
+           continue;
+        }
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Skip inactive or newly-logged-on clients that don't have</font>
+      <font color=#008000>// enough data buffered yet</font>
+      <font color=#008000>//</font>
+
+      if (SRC-&gt;samples_to_mix == 0)
+      {
+         continue;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Add 16-bit data to 32-bit output buffer</font>
+      <font color=#008000>//</font>
+
+      <a href='S16.html' class='paragraph'>S16</a> *src  = SRC-&gt;fetch_buffer;
+      <a href='S32.html' class='paragraph'>S32</a> *dest = C-&gt;mixer_buffer;
+
+      for (<a href='S32.html' class='paragraph'>S32</a> m=0; m &lt; samples; m++)
+      {
+         dest[m] += src[m];
+      }
+   }
+
+   <font color=#008000>//</font>
+   <font color=#008000>// Clip and copy contents of client's mixer buffer to output buffer</font>
+   <font color=#008000>//</font>
+
+   C8 output_buffer[TRANSMIT_QUEUE_SIZE];
+
+   <a href='S32.html' class='paragraph'>S32</a> *src  =         C-&gt;mixer_buffer;
+   <a href='S16.html' class='paragraph'>S16</a> *dest = (<a href='S16.html' class='paragraph'>S16</a> *) output_buffer;
+
+   for (<a href='S32.html' class='paragraph'>S32</a> m=0; m &lt; samples; m++)
+   {
+      <a href='S32.html' class='paragraph'>S32</a> s = src[m];
+
+      if (s &lt; -32768)
+      {
+         *dest++ = -32768;
+      }
+      else if (s &gt; 32767)
+      {
+         *dest++ = 32767;
+      }
+      else
+      {
+         *dest++ = <a href='S16.html' class='paragraph'>S16</a>(s);
+      }
+   }
+
+   <font color=#008000>//</font>
+   <font color=#008000>// Add buffer to transmit queue</font>
+   <font color=#008000>//</font>
+
+   C-&gt;transmit-&gt;put_data(output_buffer,
+                         samples * sizeof(<a href='S16.html' class='paragraph'>S16</a>));
+}
+</pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Integrating_the_Codecs_with_your_Networking_Architecture.html' class='paragraph'>Integrating the Codecs with your Networking Architecture</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Implementation_Details.html' class='paragraph'>Implementation Details</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

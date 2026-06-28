@@ -1,0 +1,156 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>How do I smoothly ramp up or ramp down the volume of a sample over time?</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='How do I smoothly ramp up or ramp down the volume of a sample over time?'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>How do I smoothly ramp up or ramp down the volume of a sample over time?</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Volume_Ramp_Filter.html' class='paragraph'>Volume Ramp Filter</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='How_do_I_start_an_audio_file_somewhere_in_the_middle_.html' class='paragraph'>How do I start an audio file somewhere in the middle?</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='How_do_I_play_a_3D_digital_sound_.html' class='paragraph'>How do I play a 3D digital sound?</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='How do I smoothly ramp up or ramp down the volume of a sample over time?::_Discussion' class='nohover'><b></b></a></div>
+<p>
+Q: How do I smoothly ramp up or ramp down the volume of a sample over time?</p>
+<p>
+A: If you are using the high-level API, check out this <a href='How_do_I_fade_out_a_High_Level_Sound_Event_.html' class='paragraph'>FAQ</a>. 
+
+</p>
+<p>
+However, in code, there is a special digital filter for this very purpose.  To use it, you attach the  filter to the sample, and then just set the time and ramp levels that you want to use. To find the filter and attach it to the HSAMPLE, you would use code like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><a href='HPROVIDER.html' class='paragraph'>HPROVIDER</a> volume_ramp;
+
+if ( <a href='AIL_find_filter.html' class='paragraph'>AIL_find_filter</a>( "Volume Ramp Filter", &amp;volume_ramp ) )
+{
+  <a href='AIL_set_sample_processor.html' class='paragraph'>AIL_set_sample_processor</a>( S, SP_FILTER_0, volume_ramp );
+}
+</pre></div>
+<p>
+</p>
+<p>
+Once you've done this, the sample can be volume-ramped whenever you like. You set the level once with  the ramp time at zero to set the starting ramp level, and then again with a non-zero ramp time to set  the final level and begin the ramping.  <i>Remember to always set the ramp time first, and then the  ramp level.</i>  So, to smoothly ramp the volume up from 0.0 to 1.0, use something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// First, set the ramp time to zero, to init the ramp level</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_time = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// we want start at level zero</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+<font color=#008000>//</font>
+<font color=#008000>//</font>
+<font color=#008000>//ok now, set the ramp time to 1000 ms (fade in over 1 second)</font>
+ramp_time = 1000.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// ramp up to 1.0 (full volume)</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 1.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+</pre></div>
+<p>
+</p>
+<p>
+Similarly, to fade out over one second, do something like this: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// First, set the ramp time to zero, to init the ramp level</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_time = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// we want start at full volume</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 1.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+<font color=#008000>//</font>
+<font color=#008000>//</font>
+<font color=#008000>//ok now, set the ramp time to 1000 ms (fade out over 1 second)</font>
+ramp_time = 1000.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp Time", -1, 0, &amp;ramp_time, 0 );
+<font color=#008000>//</font>
+<font color=#008000>// ramp down to 0.0 (silence)</font>
+<a href='F32.html' class='paragraph'>F32</a> ramp_level = 0.0f;
+<a href='AIL_sample_stage_property.html' class='paragraph'>AIL_sample_stage_property</a>( S, SP_FILTER_0, "Ramp To", -1, 0, &amp;ramp_level, 0 );
+</pre></div>
+<p>
+</p>
+<p>
+Note that the filter remembers the last ramp level, so you only have to set the starting ramp level  if you don't already know what it is.  So, if you ramp from 0.0 to 1.0, and then later want to ramp back down to 0.0,  you don't need to set the initial ramp level to 1.0. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='How_do_I_start_an_audio_file_somewhere_in_the_middle_.html' class='paragraph'>How do I start an audio file somewhere in the middle?</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='FAQs_and_How_Tos.html' class='paragraph'>FAQs and How Tos</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='How_do_I_play_a_3D_digital_sound_.html' class='paragraph'>How do I play a 3D digital sound?</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

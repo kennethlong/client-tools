@@ -1,0 +1,354 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Performing the Compression and Decompression</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Performing the Compression and Decompression'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Performing the Compression and Decompression</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Performing_the_Compression_and_Decompression.html#_Discussion' class='paragraph'>Performing the Compression and Decompression: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Accessing_the_Codecs_Directly_with_the_RIB_Interface.html' class='paragraph'>Accessing the Codecs Directly with the RIB Interface</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Integrating_the_Codecs_with_your_Networking_Architecture.html' class='paragraph'>Integrating the Codecs with your Networking Architecture</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Performing the Compression and Decompression::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  Under the ASI standard, all compression and decompression takes place within the provider's <i>ASI_stream_process</i> function.  This function is extremely open-ended in nature, and completely symmetrical with respect to compression and decompression.  The application simply calls it with a request for any desired amount of compressed or decompressed data, from bytes to megabytes. <i>ASI_stream_process</i> fulfills as much of the application's request as possible from the provider's own internal buffers, if any data is left over from a previous call.  Subsequently, it invokes the application callback function that was originally passed to <i>ASI_stream_open</i> to request that the application send it enough source data to enable it to fulfill the compression or decompression request.  In this case, MSSCHTC.CPP's <i>RECV_stream_CB</i> function is called by the <i>ASI_stream_open</i> handler to obtain compressed data from the server, one "frame" at a time, until enough frames of data have arrived to fulfill the application's request: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// ---------------------------------------------------------------------------</font>
+<font color=#008000>// RECV_stream_CB()</font>
+<font color=#008000>// Runs from client receive thread</font>
+<font color=#008000>// ---------------------------------------------------------------------------</font>
+
+<a href='S32.html' class='paragraph'>S32</a> CALLBACK RECV_stream_CB(<a href='U32.html' class='paragraph'>U32</a>       user,
+                            void FAR *dest,
+                            <a href='S32.html' class='paragraph'>S32</a>       bytes_requested,
+                            <a href='S32.html' class='paragraph'>S32</a>       offset)
+{
+   <font color=#008000>//</font>
+   <font color=#008000>// A seek offset of 0 occurs only when the stream is opened (initial seek to</font>
+   <font color=#008000>// beginning to determine stream characteristics) and when the first frame</font>
+   <font color=#008000>// of the stream is read after opening (when actually beginning to stream</font>
+   <font color=#008000>// data).  Since we are dealing with a non-seekable input stream, we</font>
+   <font color=#008000>// must handle this second case by maintaining a separate read and write</font>
+   <font color=#008000>// cursor in the frame buffer.  The second 0-offset seek is guaranteed</font>
+   <font color=#008000>// to occur while the initial frame data is still in the buffer.</font>
+   <font color=#008000>//</font>
+   <font color=#008000>// Most voice codecs won't perform any seek operations at all -- this</font>
+   <font color=#008000>// functionality is here primarily to support MP3 streaming and similar</font>
+   <font color=#008000>// operations.  A chat server designed strictly for use with the Voxware</font>
+   <font color=#008000>// codecs can safely ignore the offset parameter altogether.</font>
+   <font color=#008000>//</font>
+   <font color=#008000>//</font>
+
+   if (offset != -1)
+   {
+      RECV_read_cursor = offset;
+   }
+
+   <font color=#008000>//</font>
+   <font color=#008000>// Data will typically be requested one frame at a time by the ASI codec</font>
+   <font color=#008000>// (although frame header components may be requested separately, a few words</font>
+   <font color=#008000>// at a time).  A return value of less than bytes_requested indicates the</font>
+   <font color=#008000>// end of the stream has been reached.  We don't support fragmented frames,</font>
+   <font color=#008000>// so we'll return 0 to the codec if the client disconnects while we're</font>
+   <font color=#008000>// polling it for data.  Any ASI codec designed for compatibility with</font>
+   <font color=#008000>// IP streaming MUST accept 0-byte return values at any stage.</font>
+   <font color=#008000>//</font>
+
+   <a href='S32.html' class='paragraph'>S32</a> needed = bytes_requested;
+
+   while (1)
+   {
+      <font color=#008000>//</font>
+      <font color=#008000>// Get as much data as possible from frame buffer</font>
+      <font color=#008000>//</font>
+
+      if (RECV_read_cursor &lt; RECV_write_cursor)
+      {
+         <a href='S32.html' class='paragraph'>S32</a> n = min(needed,
+                     RECV_write_cursor - RECV_read_cursor);
+
+         memcpy(dest,
+               &amp;RECV_frame[RECV_read_cursor],
+                n);
+
+         dest              = ((C8 *) dest) + n;
+         RECV_read_cursor += n;
+         needed           -= n;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// If all requested data has been read, return</font>
+      <font color=#008000>//</font>
+
+      if (needed &lt;= 0)
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// Keep read/write cursors in first half of frame buffer</font>
+         <font color=#008000>//</font>
+
+         if (RECV_read_cursor &gt;= RECEIVE_FRAME_SIZE)
+         {
+            RECV_read_cursor  -= RECEIVE_FRAME_SIZE;
+            RECV_write_cursor -= RECEIVE_FRAME_SIZE;
+         }
+
+         return bytes_requested;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// We need more data -- read it into the frame buffer</font>
+      <font color=#008000>//</font>
+
+      <a href='S32.html' class='paragraph'>S32</a> result = NET_poll_for_data(&amp;RECV_frame[RECV_write_cursor],
+                                      needed);
+
+      if (result == -1)
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// Client disconnected, return 0 to abort current frame</font>
+         <font color=#008000>//</font>
+
+         return 0;
+      }
+
+      if (result == 0)
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// No data available yet</font>
+         <font color=#008000>//</font>
+
+         Sleep(10);
+      }
+      else
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// Advance the write cursor</font>
+         <font color=#008000>//</font>
+
+         RECV_write_cursor += result;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Block until more data comes in or server disconnects</font>
+   }
+}
+</pre></div>
+<p>
+</p>
+<p>
+As the comments suggest, this code is somewhat more robust than it has to be for simple voice communication with the Voxware codecs.  Many ASI decompressors, notably the MP3 decoder, can output different PCM data formats depending on the exact format of the compressed source data.  In such a case, the application needs to be able to determine the sample format required to play the decoded data immediately after calling the <i>ASI_stream_open</i> function.  So a typical ASI codec must examine the first few bytes of the data when opening a stream, in order to report the stream's format to the application.  This is the only case in which a "seek" operation must be supported by the codec when dealing with streamed data, so it's a good practice to support valid offset parameters in an ASI decompressor's callback function if you expect to support more general codecs in the future.  (Typically the ability to seek 1 or 2 KB backwards in a stream after the first frame is fetched is sufficient for most popular data formats). 
+
+</p>
+<p>
+Turning uncompressed PCM data from the input API or data file into compressed data suitable for transmission to the server is an almost identical process, thanks to the inherent symmetry of the ASI specification. MSSCHTC.CPP's <i>transmit_ASI_thread_procedure</i> calls the transmit ASI provider as follows: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>//</font>
+<font color=#008000>// See if more transmit data is needed</font>
+<font color=#008000>//</font>
+
+if (current_send_offset == TRANSMIT_PACKET_SIZE)
+{
+   <font color=#008000>//</font>
+   <font color=#008000>// Request data from ASI encoder to send to server</font>
+   <font color=#008000>//</font>
+   <font color=#008000>// This will block in XMIT_stream_CB( ) until enough input</font>
+   <font color=#008000>// data is available to satisfy the request</font>
+   <font color=#008000>//</font>
+
+   <a href='S32.html' class='paragraph'>S32</a> amount = XMIT_stream_process(transmit_stream,
+                                    send_buffer,
+                                    TRANSMIT_PACKET_SIZE);
+
+   if (amount != TRANSMIT_PACKET_SIZE)
+   {
+      <font color=#008000>//</font>
+      <font color=#008000>// Bad read</font>
+      <font color=#008000>//</font>
+
+      active = 0;
+      return 0;
+   }
+
+   current_send_offset = 0;
+}
+</pre></div>
+<p>
+</p>
+<p>
+As in the receiver code above, the <i>XMIT_stream_process</i> function calls the application-supplied callback function <i>XMIT_stream_CB</i> to fetch enough data to fulfill the application's request.  In this case, <i>XMIT_stream_CB</i> blocks until sufficient data is available from the input API: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><font color=#008000>// ---------------------------------------------------------------------------</font>
+<font color=#008000>// XMIT_stream_CB( )</font>
+<font color=#008000>// ---------------------------------------------------------------------------</font>
+
+<a href='S32.html' class='paragraph'>S32</a> CALLBACK XMIT_stream_CB(<a href='U32.html' class='paragraph'>U32</a>       user,
+                            void FAR *dest,
+                            <a href='S32.html' class='paragraph'>S32</a>       bytes_requested,
+                            <a href='S32.html' class='paragraph'>S32</a>       offset)
+{
+   <font color=#008000>//</font>
+   <font color=#008000>// Block transmission thread in this routine until specified</font>
+   <font color=#008000>// number of bytes available from input, or disconnection occurs</font>
+   <font color=#008000>//</font>
+
+   <a href='S32.html' class='paragraph'>S32</a> bytes_sent = 0;
+
+   while (bytes_requested &gt; 0)
+   {
+      <font color=#008000>//</font>
+      <font color=#008000>// Allow other threads to run</font>
+      <font color=#008000>//</font>
+
+      Sleep(3);
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Exit if transmit thread killed by main thread</font>
+      <font color=#008000>//</font>
+      <font color=#008000>// Returning 0 here will cause transmit_thread_procedure() to exit</font>
+      <font color=#008000>// when its ASI_stream_process( ) call fails</font>
+      <font color=#008000>//</font>
+
+      if (!threads_active)
+      {
+         return 0;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Get input buffer to send</font>
+      <font color=#008000>//</font>
+
+      if ((input_buffer_tail == -1) ||
+          (input_buffer_tail == input_buffer_head))
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// No input buffers available</font>
+         <font color=#008000>//</font>
+
+         continue;
+      }
+
+      <font color=#008000>//</font>
+      <font color=#008000>// Transmit data from input buffer at queue tail</font>
+      <font color=#008000>//</font>
+
+      C8 FAR *src       = &amp;input_buffer [input_buffer_tail] [input_read_offset];
+      <a href='S32.html' class='paragraph'>S32</a>     src_avail = INPUT_BUFFER_SIZE - input_read_offset;
+
+      <a href='S32.html' class='paragraph'>S32</a> send_amount = min(bytes_requested,
+                            src_avail);
+
+      memcpy(dest,
+             src,
+             send_amount);
+
+      dest               = ((C8 *) dest) + send_amount;
+      input_read_offset += send_amount;
+      bytes_requested   -= send_amount;
+      bytes_sent        += send_amount;
+
+      if (input_read_offset == INPUT_BUFFER_SIZE)
+      {
+         <font color=#008000>//</font>
+         <font color=#008000>// Entire buffer has been sent; advance tail pointer</font>
+         <font color=#008000>//</font>
+
+         if (input_buffer_tail == N_INPUT_BUFFERS-1)
+         {
+            input_buffer_tail = 0;
+         }
+         else
+         {
+            ++input_buffer_tail;
+         }
+
+         input_read_offset = 0;
+      }
+   }
+
+   return bytes_sent;
+}
+</pre></div>
+<p>
+</p>
+<p>
+Use of the ASI codec interface in MSSCHTS.CPP is very similar to the above examples in MSSCHTC.CPP. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Accessing_the_Codecs_Directly_with_the_RIB_Interface.html' class='paragraph'>Accessing the Codecs Directly with the RIB Interface</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Implementing_Voice_Chat.html' class='paragraph'>Implementing Voice Chat</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Integrating_the_Codecs_with_your_Networking_Architecture.html' class='paragraph'>Integrating the Codecs with your Networking Architecture</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

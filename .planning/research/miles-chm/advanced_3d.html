@@ -1,0 +1,133 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Adding 3D to event sounds</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Adding 3D to event sounds'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Adding 3D to event sounds</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='advanced_userbuffer.html' class='paragraph'>Using the User Buffer</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='advanced_stop.html' class='paragraph'>Stopping a sound from code</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='advanced_code.html' class='paragraph'>Advanced Topics</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='advanced_3d_one' class='nohover'><b></b></a></div>
+<p>
+For sounds that don't move, you can attach the position when you enqueue the event:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>	<a href='S32.html' class='paragraph'>S32</a> token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+	<a href='AIL_enqueue_event_position.html' class='paragraph'>AIL_enqueue_event_position</a>(&amp;token, x, y, z);
+	<a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a>(token, "Bank/EventName");
+</pre></div>
+<p>
+If the sound moves, you need to track the sound over time and set the position each frame. In order to do this, you'll need
+to tie sounds created by the events with your own game's data. There's are two options:
+</p>
+<p>
+<ol><li> Track the event ID in your game data and when enumerating the active sounds, set the sound's position:
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>    <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>();
+
+    <a href='HMSSENUM.html' class='paragraph'>HMSSENUM</a> Token = MSS_FIRST;
+    <a href='MILESEVENTSOUNDINFO.html' class='paragraph'>MILESEVENTSOUNDINFO</a> Info;
+    while (<a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a>(0, &amp;Token, 0, 0, 0, &amp;Info))
+    {
+    	GameData* Data = GameDataLookup(Info.QueuedID);
+    	if (Data)
+    	{
+            Vector3* Position = (Vector3*)Data-&gt;Position;
+            <a href='AIL_set_sample_3D_position.html' class='paragraph'>AIL_set_sample_3D_position</a>(Info.Sample, Position-&gt;x, Position-&gt;y, Positions-&gt;z);
+        }
+    }
+
+    <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a>();
+</pre></div>
+<p>
+</li><li> Enqueue a reference to your game data in the <a href='advanced_userbuffer.html' class='paragraph'>user buffer</a>.
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>	<a href='S32.html' class='paragraph'>S32</a> token = <a href='AIL_enqueue_event_start.html' class='paragraph'>AIL_enqueue_event_start</a>();
+	<a href='AIL_enqueue_event_buffer.html' class='paragraph'>AIL_enqueue_event_buffer</a>(&amp;token, PtrToGameData, 0, 1);
+	<a href='AIL_enqueue_event_end_named.html' class='paragraph'>AIL_enqueue_event_end_named</a>(token, "Bank/EventName");
+</pre></div>
+<p>
+</p>
+<div class=prototype>
+<pre>    <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>();
+
+    <a href='HMSSENUM.html' class='paragraph'>HMSSENUM</a> Token = MSS_FIRST;
+    <a href='MILESEVENTSOUNDINFO.html' class='paragraph'>MILESEVENTSOUNDINFO</a> Info;
+    while (<a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a>(0, &amp;Token, 0, 0, 0, &amp;Info))
+    {
+    	GameData* PtrToGameData = (GameData*)Info.UserBuffer;
+        Vector3* Position = (Vector3*)PtrToGameData-&gt;Position;
+        <a href='AIL_set_sample_3D_position.html' class='paragraph'>AIL_set_sample_3D_position</a>(Info.Sample, Position-&gt;x, Position-&gt;y, Positions-&gt;z);
+    }
+
+    <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a>();
+</pre></div>
+</li></ol><br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='advanced_userbuffer.html' class='paragraph'>Using the User Buffer</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='advanced_code.html' class='paragraph'>Advanced Topics</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='advanced_stop.html' class='paragraph'>Stopping a sound from code</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

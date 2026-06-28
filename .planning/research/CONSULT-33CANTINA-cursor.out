@@ -1,0 +1,120 @@
+﻿## Verdict (mesh-parse / byte-level)
+
+**No x64-specific IFF width bug found in `.mgn` or `.sht` parse.** All count/size reads go through `Iff::read_int32()` / `read_int16()` / `read_uint16()`, which always pull **fixed 4- or 2-byte fields** via `read_misc(..., isizeof(type))`. `int32`/`int16` are typedef’d to 32/16-bit integers on both x86 and x64 (`Types.h:31-32`). **`isizeof` is `static_cast<int>(sizeof(a))` — not pointer-sized.**
+
+This crash (**0xe06d7363** = unhandled C++ exception) is **not the documented async-`.mgn` race** (that class is **0xc0000005** AV / UAF / driver thread — see `SoftwareBlendSkeletalShaderPrimitive.cpp:827-862` comments). Different exception family.
+
+---
+
+## `.mgn` byte read chain (SKMG v0004 path)
+
+**Header counts** — all fixed-width, identical x86/x64:
+
+```2883:2899:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+			m_maxTransformsPerVertex        = iff.read_int32();   // 4 bytes
+			m_maxTransformsPerShader        = iff.read_int32();   // 4 bytes
+			const int skeletonTemplateNameCount = iff.read_int32();
+			const int transformNameCount        = iff.read_int32();
+			const int positionCount             = iff.read_int32();
+			const int transformWeightDataCount  = iff.read_int32();
+			const int normalCount               = iff.read_int32();
+			const int perShaderDataCount        = iff.read_int32();
+			const int blendTargetCount          = iff.read_int32();
+			occlusionZoneCount              = static_cast<int>(iff.read_int16());  // 2 bytes
+			occlusionZoneCombinationCount   = static_cast<int>(iff.read_int16());
+			zonesThisOccludesCount          = static_cast<int>(iff.read_int16());
+			m_occlusionLayer                = static_cast<int>(iff.read_int16());
+```
+
+First STL resize from those counts:
+
+```2905:2905:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+		ms_perShaderDataScratchpad->resize(static_cast<size_t>(perShaderDataCount), nullptr);
+```
+
+**Per-shader block** (where `shader/shirt_s26_hcs16.sht` is read as a null-terminated C string):
+
+```1524:1530:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+		iff.enterChunk(TAG_PIDX);
+		{
+			m_vertexCount = static_cast<int>(iff.read_int32());   // 4 bytes
+			// ...
+				m_positionIndices.push_back(static_cast<int>(iff.read_int32()));  // 4 bytes each
+```
+
+```1578:1608:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+			textureCoordinateSetCount = static_cast<int>(iff.read_int32());
+			// ...
+			m_textureCoordinateSetData.resize(static_cast<size_t>(textureCoordinateSetCount));
+			// ...
+					const size_t arraySize = static_cast<size_t>(m_vertexCount * m_textureCoordinateSetDimensionality[static_cast<size_t>(i)]);
+					tcSetData.reserve(arraySize);
+					for (size_t j = 0; j < arraySize; ++j)
+						tcSetData.push_back(iff.read_float());   // 4 bytes each
+```
+
+**Triangle indices** (hot throw-adjacent site — unchecked `operator[]`):
+
+```1085:1101:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+		m_triangleCount = static_cast<int>(iff.read_int32());
+		// ...
+			const int index0 = static_cast<int>(iff.read_int32());
+			const int index1 = static_cast<int>(iff.read_int32());
+			const int index2 = static_cast<int>(iff.read_int32());
+			const Vector &v0 = positions[static_cast<VectorVector::size_type>(indexLookup[static_cast<std::vector<int>::size_type>(index0)])];
+			const Vector &v1 = positions[static_cast<VectorVector::size_type>(indexLookup[static_cast<std::vector<int>::size_type>(index1)])];
+			const Vector &v2 = positions[static_cast<VectorVector::size_type>(indexLookup[static_cast<std::vector<int>::size_type>(index2)])];
+```
+
+Nested shader fetch after parse:
+
+```1678:1682:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+	m_shaderTemplate = ShaderTemplateList::fetch(m_shaderTemplateName.c_str());
+```
+
+---
+
+## `.sht` byte reads (CustomizableShaderTemplate, likely type for `*_hcs16.sht`)
+
+Also fixed-width — no pointer/count confusion:
+
+```1480:1483:src/engine/client/library/clientGraphics/src/shared/CustomizableShaderTemplate.cpp
+			iff.enterChunk(TAG_DATA);
+				const int textureCount = static_cast<int>(iff.read_int16());   // 2 bytes
+				m_cachedTextureVector  = new CachedTextureVector(static_cast<CachedTextureVector::size_type>(textureCount));
+```
+
+Base shader nested via `ShaderTemplateList::fetch(iff)` → `read_string(buffer, ...)` (null-terminated, not length-prefixed).
+
+**Not on this path:** Unicode strings use `read_int32()` count + `new unsigned short[count]` (`Iff.cpp:1669-1671`) — `.mgn`/`.sht` use C-string reads only.
+
+---
+
+## x86 vs x64: what actually differs
+
+| Read / cast | x86 | x64 | Can mis-read count? |
+|---|---|---|---|
+| `read_int32()` | 4 bytes → `int32` | same | **No** |
+| `read_int16()` | 2 bytes → `int16` | same | **No** |
+| `static_cast<size_t>(negative int)` | → ~4 GiB | → ~16 EiB | Corrupt **value**, not width; **both throw** on `resize`/`reserve` (`std::length_error` / `std::bad_alloc`) |
+| `std::vector::operator[]` OOB | MSVC Debug: **`std::out_of_range` throw** | same | **Yes — most plausible 0xe06d7363 site** |
+
+There is **no** site reading a count at `sizeof(void*)` or `sizeof(int)` where LP64 would change read width. Packed structs aren’t bulk-`reinterpret_cast`’d for counts in this loader.
+
+---
+
+## Most likely throw for this context
+
+1. **MSVC Debug STL bounds check** on unchecked `vector[]` during tri parse (`1099-1101`, mirror at `1248-1250`) or TC-set dimensionality index (`1604`) if indices/counts are wrong — throws **`std::out_of_range`** → **0xe06d7363**. Latent on good assets; would need corrupt/truncated IFF or chunk/TCSF mismatch, not an x64 width regression.
+
+2. **`std::length_error` / `std::bad_alloc`** from `resize`/`reserve`/`CachedTextureVector(n)` if a count is garbage (negative int → huge `size_t`). Trigger is **bad count value**, not x86-vs-x64 read width; x64 only widens the `size_t` ceiling.
+
+3. **`FatalException`** only if `FatalSetThrowExceptions(true)` (`Fatal.cpp:172-173`) — not normal game boot; `FATAL`/`VALIDATE_RANGE` in `_DEBUG` occlusion paths (`3114`, `3143`, `3165`) otherwise log/break, not STL throw.
+
+**Async race note:** `s_asynchronousLoadIff` is a file-scope singleton (`SkeletalMeshGeneratorTemplate.cpp:227, 3256-3274`); code comments warn it breaks with concurrent mesh creation (`218-219`). Callbacks are serialized on the main thread (`AsynchronousLoader.cpp:571-631`), so this is a nested-load / lifetime issue, not parallel IFF cursor corruption from width.
+
+---
+
+## Bottom line
+
+**Byte-level parse is platform-neutral.** The cantina crash’s **C++ exception** signature points to **Debug STL throwing on out-of-bounds `vector[]` during `.mgn` tri or TC-set indexing**, or to **`resize`/`bad_alloc` from a corrupted count** — not to reading a 32-bit file count as 64 bits. That is a **different failure mode** from the pre-existing intermittent async-`.mgn` **access-violation** race. To confirm: catch `std::out_of_range` vs `std::bad_alloc` in x64 Debug, or dump the SKMG `TAG_INFO` counts + first failing tri indices from `shirt_s26_m_l1.mgn`.

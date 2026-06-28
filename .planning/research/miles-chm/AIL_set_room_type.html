@@ -1,0 +1,145 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_room_type</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_room_type'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_room_type</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ sets the room type that the listener is currently in.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_digital_master_reverb.html#_Discussion' class='paragraph'>AIL_digital_master_reverb: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_digital_master_reverb_levels.html#_Discussion' class='paragraph'>AIL_digital_master_reverb_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_output_filter_driver_property.html#_Discussion' class='paragraph'>AIL_output_filter_driver_property: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_digital_master_reverb.html#_Discussion' class='paragraph'>AIL_set_digital_master_reverb: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_digital_master_reverb_levels.html#_Discussion' class='paragraph'>AIL_set_digital_master_reverb_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_room_type.html#_Discussion' class='paragraph'>AIL_set_room_type: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_2_Properties.html#_Discussion' class='paragraph'>Creative's EAX 2 Properties: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_room_type.html' class='paragraph'>AIL_room_type</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_digital_master_reverb.html' class='paragraph'>AIL_set_digital_master_reverb</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_digital_master_reverb_levels.html' class='paragraph'>AIL_set_digital_master_reverb_levels</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_room_type.html'>AIL_set_room_type</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>driver</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>room_type</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ sets the room type that the listener is currently in.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='driver' class=nohover>driver</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the driver representing the listener.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='room_type' class=nohover>room_type</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the one of the <a href='MILES_ROOM_TYPE.html' class='paragraph'>MILES_ROOM_TYPE</a> constants.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_room_type::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Use <a href='MILES_ROOM_TYPE.html' class='paragraph'>ENVIRONMENT_GENERIC</a> to use the provider's default settings. Use <a href='AIL_set_sample_reverb_levels.html' class='paragraph'>AIL_set_sample_reverb_levels</a> to control the amount of room effects applied to each sample. 
+
+</p>
+<p>
+It's mandatory to use <a href='AIL_set_sample_reverb_levels.html' class='paragraph'>AIL_set_sample_reverb_levels</a> to turn the wet effects level up for any 3D samples that should have reverb.  The per-sample wet level defaults to 0.0, so if you're not hearing  your selected room effects, this is probably why! 
+
+</p>
+<p>
+You can find out if the provider you are using supports room types by querying the current room type with <a href='AIL_room_type.html' class='paragraph'>AIL_room_type</a>. If it returns a -1, then room-type control is unsupported. 
+
+</p>
+<p>
+This function will have no effect with per-voice hardware drivers that don't support reverb in hardware.  Currently, this applies only to the  MSS_MC_DIRECTSOUND3D value from the <a href='MSS_MC_SPEC.html' class='paragraph'>MSS_MC_SPEC</a> list, since the EAX providers handle reverb directly and the software-mixing options emulate EAX. 
+
+</p>
+<p>
+Example files that use this function: examms.cpp <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_digital_master_reverb.html' class='paragraph'>AIL_set_digital_master_reverb</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_digital_master_reverb_levels.html' class='paragraph'>AIL_set_digital_master_reverb_levels</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

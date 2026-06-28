@@ -1,0 +1,231 @@
+# CONSULT-37-sonnet: Lateral "first-run-after-rebuild" crash analysis
+# Date: 2026-06-19
+# Analyst: Fresh Sonnet (lateral, no anchoring to prior hypotheses)
+
+---
+
+## Scope
+
+c0000005 AV during ground-zone load-in (Tatooine / Mos Eisley).
+Reproducibility clue: "usually happens on the FIRST run after a rebuild."
+Breadcrumb: SkeletalMeshGeneratorTemplateAsync: appearance/mesh/armor_marauder_s01_belt_m_l3.mgn
+Pre-existing on both 32-bit and x64, Debug and Release (rarely on warm runs).
+
+---
+
+## What a rebuild changes that a warm run does not
+
+1. **Process-global D3DCompile bytecode cache (`ms_byteCodeCache`) is always cold after rebuild / process restart.**
+   - Source: Direct3d9_VertexShaderData.cpp lines ~103-144, install() line 400
+   - `ms_byteCodeCache = new VsByteCodeCache;` in `Direct3d9_VertexShaderData::install()`.
+   - On the FIRST run after rebuild, every `//hlsl` .vsh compile runs through `D3DCompile` (no cache hit).
+   - D3DCompile is expensive: it temporarily allocates heap for the HlslRewrite buffer + D3DCompile working set.
+   - On 32-bit, this causes fragmentation pressure. But on both bitnesses, it consumes significant wall-clock time on the main/render thread.
+   - **On warm runs** the bytecode cache is populated, so subsequent zone-ins are fast.
+   - NOTE: This is an in-memory cache (no disk persistence). Across process restarts it is always cold — rebuild vs. no-rebuild makes no difference to this cache.
+   - VERDICT: Explains why second run is faster (same process session reuses cache), but does NOT explain "after rebuild" specifically. However it does explain "first zone-in" being slower.
+
+2. **AsynchronousLoader file-manifest (ms_fileMap) is populated from a baked .IFF data file, always cold per process.**
+   - Source: AsynchronousLoader.cpp lines 141-210, `AsynchronousLoader::install(fileName)`.
+   - The fileMap is populated from the async manifest file (e.g. `async.iff` or similar).
+   - `FileRecord::alreadyCached` (AsynchronousLoader.cpp line 56) is a SINGLE BYTE read directly from the IFF binary data via `reinterpret_cast<FileRecord*>(ms_fileData + offset)` (line 197).
+   - Since the binary IFF was freshly written by the build, this byte's value at file scope depends on what was written into the asset. On warm runs that have already gone through zone-in once in the same session, the `alreadyCached` byte in memory will have been set to `true` by the async thread (line 508) for files already loaded, and reset to `false` after the callback (line 646). This per-session caching changes timing.
+   - **On FIRST zone-in of a session**, no .mgn files are pre-warmed in the async preload cache, so the async thread actually reads the files from disk, causing real I/O. On a second zone-in in the same session, some FileRecords may already have `alreadyCached=true`.
+
+3. **TreeFile/OS file cache (cold after reboot or immediately after a rebuild).**
+   - After a rebuild, Windows may have evicted OS file cache for the TRE archives if the build touched them. This makes TRE reads slower on first run, increasing the window where async-loaded resources are pending while the main thread proceeds.
+
+---
+
+## Primary Race Condition Identified: `SkeletalMeshGenerator` destroyed while still in `m_uninitializedMeshGenerators`
+
+This is the most dangerous pattern found and directly relates to the "cold load" exposure.
+
+### The async-load lifecycle for .mgn files
+
+1. `MeshGeneratorTemplateList::fetch(filename, create=true)` is called for a `.mgn` file.
+   - Source: MeshGeneratorTemplateList.cpp lines 377-528
+   - At line 424: `if (AsynchronousLoader::isEnabled() && asyncBindData && asyncBindData->supportsAsynchronousLoading())`
+   - **However:** `SkeletalMeshGeneratorTemplate` registers with tag `TAG_SKMG` via `MeshGeneratorTemplateList::registerMeshGeneratorTemplate(TAG_SKMG, create, false, ...)`. The third parameter `false` means `supportsAsynchronousLoading() == false` for the direct MeshGeneratorTemplateList fetch path.
+   - `LodMeshGeneratorTemplate` registers `TAG_MLOD` also with `supportsAsynchronousLoading=false` (LodMeshGeneratorTemplate.cpp line 54).
+   - So `MeshGeneratorTemplateList::fetch()` does NOT do async loading for .mgn files. Instead it loads synchronously via `s_iff` (lines 440-511).
+   - **BUT:** `AsynchronousLoader::bindFetchReleaseFunctions("mgn", ...)` (MeshGeneratorTemplateList.cpp line 298) binds the `asynchronousLoaderFetchNoCreate` function for the async preloader's `fetchFunction`. This means the async THREAD uses this to check if the resource is already in the MeshGeneratorTemplateList cache BEFORE doing disk I/O.
+
+2. `SkeletalMeshGeneratorTemplate::createMeshGenerator()` is called (lines 1953-1995).
+   - This IS the async path: when `iff == NULL` at construction time, `m_isLoaded = false`.
+   - `m_asynchronousLoadInProgress` is set to true, and `AsynchronousLoader::add(getName(), asynchronousLoadCallback, this)` is submitted.
+   - A `SkeletalMeshGenerator` instance is created and added to `m_uninitializedMeshGenerators`.
+
+3. **THE RACE:** After `AsynchronousLoader::add()` submits the request, the async thread races ahead to preload the file. But the MAIN THREAD continues running. If the `SkeletalAppearance2` that owns this `SkeletalMeshGenerator` is destroyed before `processCallbacks()` fires (e.g., the player zone-in triggers an immediate despawn, or a LOD eviction occurs), the following happens:
+   - `SkeletalMeshGenerator::~SkeletalMeshGenerator()` fires (SkeletalMeshGenerator.cpp line 217-232)
+   - It checks `!mgTemplate.isLoaded()` → true (template not loaded yet)
+   - Calls `mgTemplate.removeAsynchronouslyLoadedMeshGenerator(this)` (line 221)
+   - `removeAsynchronouslyLoadedMeshGenerator` has `NOT_NULL(m_uninitializedMeshGenerators)` at line 3969
+
+   If the template itself gets released (refcount → 0) between the async request submission and the callback firing, then `SkeletalMeshGeneratorTemplate::~SkeletalMeshGeneratorTemplate()` runs (line 2117). It deletes `m_uninitializedMeshGenerators` (line 2120) even if the vector is non-empty, triggering `DEBUG_FATAL` in debug builds but potentially being an AV in Release.
+
+4. **Why cold load makes this WORSE:**
+   - On a cold run, disk I/O is slow. The async thread takes longer to complete. This WIDENS the window in which the main thread can destroy appearance objects (e.g., on zone-in, multiple NPCs may be spawned and their LOD-0 appearances created before the async callbacks fire, but if the client receives a "remove object" packet for a creature that just spawned before its .mgn finished loading, the destructor runs while the callback is still pending).
+   - On a warm run (in-session), TRE files are in OS cache, D3DCompile bytecodes are pre-compiled, so async callbacks fire faster and the race window is narrower.
+
+---
+
+## Secondary Issue: `s_asynchronousLoadIff` global static in SkeletalMeshGeneratorTemplate
+
+Source: SkeletalMeshGeneratorTemplate.cpp, namespace `SkeletalMeshGeneratorTemplateNamespace`, line 227:
+```cpp
+Iff *s_asynchronousLoadIff;
+```
+
+This is a namespace-scope pointer, zero-initialized by C++ static storage rules. However:
+
+- `asynchronousLoadCallback()` at line 3256 does:
+  ```cpp
+  FATAL(s_asynchronousLoadIff != NULL, ("...iff pointer is non-NULL..."));
+  s_asynchronousLoadIff = new Iff();
+  ```
+- The `FATAL` guard protects against re-entrance, but `asynchronousLoadCallback()` runs on the MAIN THREAD (it's called from `processCallbacks()` which is called from the main loop).
+- If `processCallbacks()` fires the callback for MGN_A, and during `load(*s_asynchronousLoadIff)` the load process transitively triggers another `asynchronousLoadCallback()` for MGN_B (possible if loading MGN_A synchronously fetches sub-assets via `MeshGeneratorTemplateList::fetch()` which could trigger another callback somehow), then `s_asynchronousLoadIff` would be non-NULL and trigger the FATAL.
+- In Release builds, FATAL may be compiled to something non-crashing or the iff would be leaked/corrupted.
+- **On first run this is more likely** because more MGN files need loading simultaneously, packing the callback queue.
+- This is a lower probability issue but worth noting.
+
+---
+
+## Hypothesis 3: MeshGeneratorTemplateList `s_iff` global static re-entrance
+
+Source: MeshGeneratorTemplateList.cpp lines 76-77, 439-511:
+```cpp
+Iff *s_iff;
+```
+Also a namespace-scope static (zero-initialized).
+
+At line 439:
+```cpp
+FATAL(s_iff != NULL, ("MeshGeneratorTemplateList: static Iff pointer is not NULL but should be..."));
+s_iff = new Iff();
+```
+
+- Identical re-entrance guard to `s_asynchronousLoadIff`.
+- If MeshGeneratorTemplateList::fetch() is called re-entrantly during the synchronous load of another template (e.g., loading one template's constructor calls fetch() for a sub-template), the `s_iff` FATAL fires in Debug but in Release this could corrupt state.
+- **On cold first-run** the entire zone-in triggers a cascade of template loads. The synchronous path holds `s_criticalSection` (a Mutex) from line 384 to 525. Any re-entrance from the SAME THREAD during this critical section would deadlock... unless the Mutex is non-recursive. Actually, with a non-recursive Mutex a re-entrant lock attempt from the same thread would deadlock, not AV. But if it's a recursive mutex or if the lock is not held during the creation function calls, re-entrance is possible.
+- Looking at the code: `s_criticalSection.enter()` at line 384, and the mesh generator creation function is called at line 507 while still inside the critical section. If `creationFunction(s_iff, filename)` internally calls `MeshGeneratorTemplateList::fetch()`, it would re-enter at line 384 and attempt to acquire `s_criticalSection` again — deadlock if non-recursive, silent corruption if recursive.
+- This is a pre-existing latent bug, not first-run specific, but cold loads bring more paths through this code simultaneously.
+
+---
+
+## Hypothesis 4 (Strong): The `asynchronousLoaderFetchNoCreate` + `alreadyCached` flag interaction
+
+When the async thread processes a .mgn FileRecord:
+1. Calls `extensionFunctions.fetchFunction(fileRecord->fileName)` = `asynchronousLoaderFetchNoCreate(fileName)` (AsynchronousLoader.cpp line 479)
+2. This calls `MeshGeneratorTemplateList::fetch(cfn, false)` — returns NULL if not in cache (no create)
+3. Returns NULL, so falls through to open the file from TreeFile (lines 487-510)
+4. Sets `fileRecord->alreadyCached = true` (line 508)
+
+Later, when `processCallbacks()` runs:
+- Adds the preloaded file to TreeFile cache (line 624)
+- Fires the callback (line 631: `(*request->callback)(request->data)`)
+- Then clears cached files (line 634)
+- Then releases resources and sets `alreadyCached = false` (line 646)
+
+**The issue:** The `asynchronousLoadCallback()` on the SMGT calls `s_asynchronousLoadIff->open(getName().getString(), true)` (line 3266). If the TreeFile cached file was already cleared (line 634 runs BEFORE the resource release at line 659), then `open()` would re-read from disk. But the sequence is:
+1. Add cached files (line 624)
+2. Fire callback → callback calls `open()` which succeeds because file IS in cache (line 624 added it)
+3. Clear cached files (line 634) — AFTER the callback returns
+
+So the callback fires while the preloaded file IS in the TreeFile cache. This part is correct.
+
+**However:** If the .mgn is NOT in the async preload manifest (ms_fileMap.find() returns end()), `AsynchronousLoader::add()` fires the callback IMMEDIATELY (line 378: `(*callback)(data)`). This means `asynchronousLoadCallback()` runs SYNCHRONOUSLY inside `createMeshGenerator()`, while `s_criticalSection` may or may not be held. Actually looking at the call chain: `createMeshGenerator()` is called from `SkeletalAppearance2`, NOT from inside `MeshGeneratorTemplateList::fetch()`, so the critical section should NOT be held at that point. This is safe.
+
+---
+
+## Ranked Hypotheses
+
+### RANK 1 (Highest probability): Async-loaded SkeletalMeshGenerator destroyed before callback fires — RACE WINDOW wider on cold load
+
+**Location:** SkeletalMeshGenerator.cpp:217-221 + SkeletalMeshGeneratorTemplate.cpp:3966-3984
+
+**Mechanism:**
+- Object A (SkeletalAppearance2 / creature NPC) requests async load of a .mgn via `createMeshGenerator()`
+- The newly created `SkeletalMeshGenerator` instance is enqueued in `m_uninitializedMeshGenerators`
+- Before the async callback fires, the creature object is destroyed (out of frustum LOD eviction, or server sends REMOVE, or the object is in a loading state that gets cancelled)
+- `SkeletalMeshGenerator::~SkeletalMeshGenerator()` fires while `!mgTemplate.isLoaded()` is still true
+- If the TEMPLATE itself has been released (because the last SkeletalAppearanceTemplate dropped its reference), the template is deleted first — deleting `m_uninitializedMeshGenerators` — and THEN the generator destructor runs attempting `removeAsynchronouslyLoadedMeshGenerator()` on a freed template → AV
+- Cold load: the wider disk-I/O window means async callbacks pend longer, maximizing exposure
+
+**First-run-after-rebuild specificity:** On rebuild, ALL shader caches, ALL TreeFile OS caches, and ALL in-process caches are cold. First zone-in triggers maximum parallel disk I/O, which maximizes the time window that async MGN loads are in-flight, which maximizes the probability of a concurrent object removal racing with pending async completion.
+
+**Evidence for armor_marauder_s01_belt_m_l3.mgn breadcrumb:** The `ms_crashReportInfo` is set at line 3262 inside `asynchronousLoadCallback()`:
+```cpp
+snprintf(ms_crashReportInfo, ..., "SkeletalMeshGeneratorTemplateAsync: %s\n", getName().getString());
+```
+This string is set whenever ANY SMGT starts its async load. The breadcrumb shows this MGN was in-flight, but the actual crash may be in any part of the destruction sequence of a DIFFERENT object that was simultaneously pending. The breadcrumb is the last-written crash info string, not necessarily the crashing object.
+
+### RANK 2 (Medium): LOD eviction of an async-pending SkeletalMeshGenerator — `m_uninitializedMeshGenerators` NULL dereference
+
+**Location:** SkeletalAppearance2.cpp:4411 + SkeletalMeshGeneratorTemplate.cpp:3966-3984
+
+**Mechanism:**
+- SkeletalAppearance2 uses a LOD garbage collection path (lines 4410-4412) that calls `MeshGenerator::release()` on all generators in a LOD tier that was evicted.
+- If `release()` drops the refcount to 0 on a `SkeletalMeshGenerator` whose template hasn't loaded yet, the generator destructor fires and calls `removeAsynchronouslyLoadedMeshGenerator(this)`.
+- `NOT_NULL(m_uninitializedMeshGenerators)` at line 3969 will AV if the template was already destroyed.
+- On cold load, multiple LODs may be simultaneously loaded/evicted while async loading is in flight.
+
+### RANK 3 (Lower): D3DCompile compile-time heap pressure on 32-bit causes heap corruption
+
+**Location:** Direct3d9_VertexShaderData.cpp, `compileVertexShaderFpGuarded()`, and `ms_byteCodeCache`
+
+**Mechanism:**
+- On first cold run, ALL `//hlsl` .vsh files must be compiled via D3DCompile. Each compile temporarily allocates a HlslRewrite buffer + D3DCompile internal working set.
+- On 32-bit: the heap fragmentation described in the Phase-32 comments is real. If the bytecode cache isn't fully effective (e.g., a shader with unusual texcoordKey) or if something causes repeated compilation (a cache miss), the transient allocations could push a fragmented 32-bit heap to a state where subsequent `new` returns a block that overlaps with something, or where a vector reallocation corrupts adjacent objects.
+- This would be most likely on the FIRST RUN after a full rebuild when the bytecode cache is cold AND the heap is still unfragmented enough that the allocations succeed but at addresses that trigger latent alignment/pointer bugs.
+- Probability is lower because the bytecode cache was specifically designed to prevent this, and it's a per-session in-memory cache that should be cold equally on any fresh process start.
+
+### RANK 4 (Lateral / Challenge the breadcrumb): Texture renderer bake on cold run
+
+**Location:** SkeletalMeshGeneratorTemplate.cpp:2219 `preloadAssets()` which calls `TextureRendererTemplate::preloadAssets()`
+
+**Mechanism:**
+- `SkeletalMeshGeneratorTemplate::load()` at line 2219 calls `preloadAssets()`, which for entries with TextureRenderer entries will invoke the texture renderer system.
+- Texture renderer bakes are themselves asynchronous/lazy, and on cold runs (where the baked texture is not yet in the GPU/cache), the bake can be triggered under conditions where the owning CustomizationData has already been released.
+- The `TextureRendererShaderPrimitive` and `TextureRenderer` hold pointers to `CustomizationData`. If an NPC's `CustomizationData` is released before the texture bake completes, an AV occurs when the bake callback runs.
+- **Why first run:** Texture bake results can persist in a GPU texture cache across zone transitions in the same session. Cold first run = no cached bakes = more bake tasks queued simultaneously.
+- This is a completely different subsystem from the MGN async load, but would show the same MGN breadcrumb if the crash happens DURING the MGN's `load()` call which triggers `preloadAssets()`.
+
+---
+
+## What to instrument to confirm
+
+1. **Break on `removeAsynchronouslyLoadedMeshGenerator`**: Add a cdb/debugger breakpoint. If it fires with `m_uninitializedMeshGenerators == NULL`, RANK 1/2 is confirmed.
+
+2. **Log template refcount at async callback time**: Add a WARNING if `this` (the SMGT) has been released by the time `asynchronousLoadCallback()` fires. If this triggers, the template's object is being used after partial destruction.
+
+3. **Check if the crash occurs inside `MeshGenerator::release()`** by looking at the full stack: is `release()` being called while a prior release is in progress (i.e., re-entrant destruction)?
+
+4. **Disable async loader entirely** (`ConfigSharedFile::getEnableAsynchronousLoader()` returns false): if the crash disappears on first run, RANK 1 is strongly confirmed. The async loader is skipped when disabled, so all .mgn loads are synchronous and there's no pending-callback window.
+
+5. **Second zone-in same session with same process**: if reproducibility is much lower (not just "rarely"), the cold-cache widening-the-race-window theory is confirmed.
+
+---
+
+## Files and line numbers cited
+
+| File | Lines | Finding |
+|------|-------|---------|
+| SkeletalMeshGeneratorTemplate.cpp | 1953-1994 | createMeshGenerator: async submission + uninit queue |
+| SkeletalMeshGeneratorTemplate.cpp | 3250-3293 | asynchronousLoadCallback: load + fixup uninit list |
+| SkeletalMeshGeneratorTemplate.cpp | 2117-2126 | Destructor: deletes uninitializedMeshGenerators while async in flight |
+| SkeletalMeshGeneratorTemplate.cpp | 3966-3984 | removeAsynchronouslyLoadedMeshGenerator: NOT_NULL(m_uninitializedMeshGenerators) |
+| SkeletalMeshGenerator.cpp | 217-221 | Destructor: calls removeAsynchronouslyLoadedMeshGenerator if !isLoaded() |
+| SkeletalAppearance2.cpp | 4410-4412 | LOD eviction: releases SkeletalMeshGenerator via MeshGenerator::release() |
+| MeshGeneratorTemplateList.cpp | 362-372 | asynchronousLoaderFetchNoCreate: fetch(cfn, false) — no-create pre-check |
+| MeshGeneratorTemplateList.cpp | 384-525 | fetch(filename, create): synchronous load under s_criticalSection |
+| AsynchronousLoader.cpp | 357-379 | add(): if not in fileMap, fires callback IMMEDIATELY (synchronous fallback) |
+| AsynchronousLoader.cpp | 473-510 | threadRoutine: fetchFunction check then raw file I/O |
+| AsynchronousLoader.cpp | 606-634 | processCallbacks: add to TreeFile cache, fire callback, then CLEAR cached files |
+| Direct3d9_VertexShaderData.cpp | 103-144 | ms_byteCodeCache: process-global D3DCompile bytecode cache, always cold per session |
+| Direct3d9_VertexShaderData.cpp | 394-401 | install(): ms_byteCodeCache = new VsByteCodeCache |
+
+---
+
+END CONSULT-37-sonnet.out

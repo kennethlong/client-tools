@@ -1,0 +1,151 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_decompress_ASI</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_decompress_ASI'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_decompress_ASI</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ decompresses a digital sound with the ASI decoder for the passed file extension and returns a standard PCM wave file image.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_decompress_ASI.html#_Discussion' class='paragraph'>AIL_decompress_ASI: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_decompress_ADPCM.html' class='paragraph'>AIL_decompress_ADPCM</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_decompress_ADPCM.html' class='paragraph'>AIL_decompress_ADPCM</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AILLENGTHYCB.html' class='paragraph'>AILLENGTHYCB</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_decompress_ASI.html'>AIL_decompress_ASI</a></span>(</td><td><span class='type'>void const *</span> <span class='parameter'>indata</span>,<br><span class='type'><a href='U32.html' class='blue'>U32</a></span> <span class='parameter'>insize</span>,<br><span class='type'>char const *</span> <span class='parameter'>filename_ext</span>,<br><span class='type'>void**</span> <span class='parameter'>wav</span>,<br><span class='type'><a href='U32.html' class='blue'>U32*</a></span> <span class='parameter'>wavesize</span>,<br><span class='type'><a href='AILLENGTHYCB.html' class='blue'>AILLENGTHYCB</a></span> <span class='parameter'>callback</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ decompresses a digital sound with the ASI decoder for the passed file extension and returns a standard PCM wave file image.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='indata' class=nohover>indata</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ contains the compressed input data.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='insize' class=nohover>insize</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ is the length of the compressed data in bytes.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='filename_ext' class=nohover>filename_ext</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ is a filename whose extension determines what ASI decoder to use. For example, to use the MPEG Layer 3 decoder, you would specify ".mp3". The Miles voice chat codecs use extensions of ".v29", ".v24", and ".v12".  Future decoders will have their own extensions.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='wav' class=nohover>wav</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ should be the address of a " void* " pointer that will return with the pointer to the new wave file image. This parameter can be NULL if you don't need it.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='wavesize' class=nohover>wavesize</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ should be the address of an unsigned 32-bit integer that will return with the size of the new wave file image. This parameter can be NULL if you don't need it.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='callback' class=nohover>callback</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ should be set to the address of the callback function which is invoked at several stages of the decompression process.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ 1, if the call was successful, or 0 if the call failed.</table>
+<div class="discussion_heading"><a name='AIL_decompress_ASI::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ You must free the pointer returned in wav with <a href='AIL_mem_free_lock.html' class='paragraph'>AIL_mem_free_lock</a>. 
+
+</p>
+<p>
+The output wave file image is a standard PCM wave file - you can write it directly to disk and any WAV file player will be able to play it.<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_decompress_ADPCM.html' class='paragraph'>AIL_decompress_ADPCM</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Runtime_Utility_Services.html' class='paragraph'>Runtime Utility Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AILLENGTHYCB.html' class='paragraph'>AILLENGTHYCB</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

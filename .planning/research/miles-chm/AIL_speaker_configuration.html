@@ -1,0 +1,151 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_speaker_configuration</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_speaker_configuration'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_speaker_configuration</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ returns an array of 3D vectors describing the listener-relative locations of the array of speakers associated with the current output format, plus some additional information about the format.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_digital_driver.html#_Discussion' class='paragraph'>AIL_open_digital_driver: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_speaker_configuration.html#_Discussion' class='paragraph'>AIL_set_speaker_configuration: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_speaker_configuration.html#_Discussion' class='paragraph'>AIL_speaker_configuration: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html#_Discussion' class='paragraph'>How do I use multi-channel sound output in Miles?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_speaker_configuration.html' class='paragraph'>AIL_set_speaker_configuration</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_enumerate_output_filter_driver_properties.html' class='paragraph'>AIL_enumerate_output_filter_driver_properties</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='MSSVECTOR3D.html' class='blue'>MSSVECTOR3D*</a></span> <span class='type'><a href='AIL_speaker_configuration.html'>AIL_speaker_configuration</a></span>(</td><td><span class='type'><a href='HDIGDRIVER.html' class='blue'>HDIGDRIVER</a></span> <span class='parameter'>dig</span>,<br><span class='type'><a href='S32.html' class='blue'>S32*</a></span> <span class='parameter'>n_physical_channels</span>,<br><span class='type'><a href='S32.html' class='blue'>S32*</a></span> <span class='parameter'>n_logical_channels</span>,<br><span class='type'><a href='F32.html' class='blue'>F32*</a></span> <span class='parameter'>falloff_power</span>,<br><span class='type'><a href='MSS_MC_SPEC.html' class='blue'>MSS_MC_SPEC</a></span> <span class='parameter'>channel_spec</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ returns an array of 3D vectors describing the listener-relative locations of the array of speakers associated with the current output format, plus some additional information about the format.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='dig' class=nohover>dig</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the HDIGDRIVER whose configuration information is to be returned.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='n_physical_channels' class=nohover>n_physical_channels</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ specifies a pointer to a variable of type S32 which will receive the number of physical output channels.  This may be less than the  number of logical channels used elsewhere by MSS, in the case of a matrix provider such as Dolby or SRS that multiplexes several logical channels onto two physical channels.  It will be zero if a per-voice output filter is in use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='n_logical_channels' class=nohover>n_logical_channels</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ specifies a pointer to a variable of type S32 which will receive the number of output channels the Miles mixer will write to.  It will be zero if a per-voice output filter is in use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='falloff_power' class=nohover>falloff_power</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ specifies a pointer to a variable of type F32 which will receive the falloff power in use by the Miles mixer.  This will not be meaningful if a per-voice output filter is in use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='channel_spec' class=nohover>channel_spec</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ specifies a pointer to a variable of type <a href='MSS_MC_SPEC.html' class='paragraph'>MSS_MC_SPEC</a> which will receive the channel specification that was actually opened by <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ The array of n_logical_channels 3D vectors describing the listener-relative positions of the speakers associated with the  current output format.</table>
+<div class="discussion_heading"><a name='AIL_speaker_configuration::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function lets you retrieve the configuration information resulting from the last successful call to <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>. If you pass MSS_MC_USE_SYSTEM_CONFIG to these functions, you can call <a href='AIL_speaker_configuration.html' class='paragraph'>AIL_speaker_configuration</a> to discover what  was actually chosen by the system. 
+
+</p>
+<p>
+<table border> <tr> <th><a href='MSS_MC_SPEC.html' class='paragraph'>MSS_MC_SPEC</a> enum</th> <th>Physical/logical channels</th> <th>Logical SPEAKER_ array</th> </tr> <tr><td>MSS_MC_DIRECTSOUND3D</td> <td>0/0</td> <td>NA</td></tr>    <tr><td>MSS_MC_EAX2</td> <td>0/0</td> <td>NA</td></tr>    <tr><td>MSS_MC_EAX3</td> <td>0/0</td> <td>NA</td></tr>    <tr><td>MSS_MC_EAX4</td> <td>0/0</td> <td>NA</td></tr>    
+
+</p>
+<p>
+<tr><td>MSS_MC_MONO</td> <td>1/1</td> <td>FL</td></tr>    <tr><td>MSS_MC_STEREO</td> <td>2/2</td> <td>FL,FR</td></tr>    <tr><td>MSS_MC_HEADPHONES</td> <td>2/2</td> <td>FL,FR</td></tr>    <tr><td>MSS_MC_40_DISCRETE</td> <td>4/4</td> <td>FL,FR,BL,BR</td></tr>    <tr><td>MSS_MC_DOLBY_SURROUND</td> <td>2/3</td> <td>FL,FR,BC</td></tr>    <tr><td>MSS_MC_SRS_CIRCLE_SURROUND</td> <td>2/7</td> <td>FL,FR,FC,LF,BL,BR,BC</td></tr>    <tr><td>MSS_MC_51_DISCRETE</td> <td>6/6</td> <td>FL,FR,FC,LF,BL,BR</td></tr>    <tr><td>MSS_MC_61_DISCRETE</td> <td>7/7</td> <td>FL,FR,FC,LF,BL,BR,BC</td></tr>    <tr><td>MSS_MC_71_DISCRETE</td> <td>8/8</td> <td>FL,FR,FC,LF,BL,BR,SL,SR</td></tr>    <tr><td>MSS_MC_81_DISCRETE</td> <td>9/9</td> <td>FL,FR,FC,LF,BL,BR,BC,SL,SR</td></tr>    </table> 
+
+</p>
+<p>
+You can obtain the number of physical and logical channels in use by calling <a href='AIL_speaker_configuration.html' class='paragraph'>AIL_speaker_configuration</a>, as well as the  <a href='MSS_MC_SPEC.html' class='paragraph'>MSS_MC_SPEC</a> value passed to (or chosen by) <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>.  As can be seen in the table above, these will be identical for all  conventional (non-matrix) discrete formats, while matrix formats such as Dolby and SRS Circle Surround(r) can map three or  more logical channels onto two physical channels.  DirectSound3D and EAX will report zero physical channels and zero logical channels,  since Windows insulates the application from these details. 
+
+</p>
+<p>
+For a detailed understanding of per-channel level control, you should carefully review the <i>How do I use multi-channel sound output in Miles? </i><a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html' class='paragraph'>FAQ</a>  before attempting to use this function. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_speaker_configuration.html' class='paragraph'>AIL_set_speaker_configuration</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_enumerate_output_filter_driver_properties.html' class='paragraph'>AIL_enumerate_output_filter_driver_properties</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

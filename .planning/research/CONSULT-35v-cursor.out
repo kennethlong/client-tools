@@ -1,0 +1,169 @@
+﻿# Miles 9.3b vs 9.3v: idle stream feeding — evidence report
+
+Honoring **CONSULT-35v-AXIOMS.md** (L1–L5 locked; ordinal/relink framing banned).
+
+---
+
+## (a) What the 9.3b docs say drives an idle stream
+
+The decompiled CHM is **9.3b only** (`changelog.html:50` — *"This documentation is for Miles version 9.3b"*). There is **no 9.3v help or changelog on disk**.
+
+### Default model: background auto-service via a secondary thread
+
+**`AIL_open_stream` discussion** (`AIL_open_stream.html:133–141`):
+
+> *"Streams are automatically serviced in the background by default. You can service the buffers manually with the `AIL_service_stream` and `AIL_auto_service_stream` functions."*
+
+> *"This function doesn't actually load any of the streaming buffers — the only routine in the streaming API that performs the file reading is `AIL_service_stream`."*
+
+(Initial open still does a synchronous header read — consistent with axiom in `CONSULT-35v-AXIOMS.md:51–52`.)
+
+**`AIL_auto_service_stream` discussion** (`AIL_auto_service_stream.html:19–20, 68–70, 95–99`):
+
+> *"turns auto-servicing on or off for a stream handle (it's turned on by default)."*
+
+> *"On most platforms, auto-streaming is accomplished with a secondary thread."*
+
+> *"The only real reason you should ever have to turn off auto-streaming is if you want exact control of when file reading should take place."*
+
+### Who calls the read callback
+
+**`AIL_set_file_callbacks` discussion** (`AIL_set_file_callbacks.html:112–113`):
+
+> *"On most platforms, these functions can be called from a background thread. So, you must make sure you IO callbacks are thread-safe."*
+
+**Packed-file FAQ** (`How_do_I_access_files_from_a_big_packed_file_.html:48`):
+
+> *"Miles uses synchronous IO from a background thread to do its IO."*
+
+**`AIL_service_stream` discussion** (`AIL_service_stream.html:94–95`):
+
+> *"If you are having trouble with streams skipping, you can try sprinkling calls to this function to give the background IO thread a little extra breathing room."*
+
+### IO thread + foreground starvation fallback
+
+**`AIL_IO_thread_handle` discussion** (`AIL_IO_thread_handle.html:19–20, 59–60, 78–79`):
+
+> *"retrieves the platform specific thread handle that Miles uses for it's IO reading."*
+
+**`AIL_serve` description + discussion** (`AIL_serve.html:19–20, 70–71, 80–81`):
+
+> *"provides periodic foreground service to the Miles Sound System to avoid 'starvation' during periods when the application does not yield control frequently."*
+
+> *"This function can be used to manually pump the Miles background processing - it's useful if the background thread is liable to become starved. It's normally only called in unusual situations…"*
+
+**Windows CPU sharing** (`Sharing_the_CPU_under_Windows.html:52–56`):
+
+> *"Under Windows, Miles does most of its work in a background thread. This means that Miles usually does its work without you even having to worry about it."*
+
+> *"The only time you may need to specifically give Miles CPU time is if the system thread scheduler starts performing badly and the background Miles thread starves."*
+
+### Doc summary (idle / low-I/O)
+
+| Mechanism | Doc claim |
+|---|---|
+| **Default idle feeder** | Secondary thread auto-services streams (`AIL_auto_service_stream`, ON by default) |
+| **Actual file reads** | Only `AIL_service_stream` reads into stream buffers (after open's initial chunk) |
+| **Read callback thread** | File callbacks may be invoked from the background/IO thread |
+| **Manual override** | `AIL_service_stream` / `AIL_serve` for explicit control or starvation recovery |
+| **Dedicated IO thread** | `AIL_IO_thread_handle` exposes the Miles IO thread |
+
+The docs do **not** say idle feeding depends on application I/O load. They describe a **background thread that should run independently** of main-thread activity.
+
+---
+
+## (b) Binary / export delta: 9.3v vs 9.3b touching streaming/threading
+
+### PE metadata (from export dumps)
+
+| Property | 9.3v (`CONSULT-35v-exports-9.3v.txt`) | 9.3b (`CONSULT-35v-exports-9.3b.txt`) |
+|---|---|---|
+| Size | 483,328 B (axiom L1 context) | 504,320 B |
+| Timestamp | `555A6C7A` — Mon May 18 2015 (`:12`) | `50C9F167` — Thu Dec 13 2012 (`:12`) |
+| Named exports | 395 (`:15–16`) | 393 (`:15–16`) |
+
+### Streaming API exports — **present in both, same names**
+
+All symbols our exe imports for streaming exist in **both** DLLs (`CONSULT-35v-ourexe-imports.txt`):
+
+| Symbol | 9.3v ordinal/RVA | 9.3b ordinal/RVA |
+|---|---|---|
+| `AIL_open_stream` | 149 / `00011AF0` | 148 / `00014030` |
+| `AIL_start_stream` | 300 / `00011D80` | 298 / `00014450` |
+| `AIL_close_stream` | 43 / `00011BC0` | 44 / `00014170` |
+| `AIL_service_stream` | 215 / `00011CD0` | 214 / `00014330` |
+| `AIL_auto_service_stream` | **33** / `000124B0` | **33** / `00014F40` |
+| `AIL_serve` | 214 / `00011AA0` | 213 / `00013FB0` |
+| `AIL_set_file_callbacks` | 227 / `0002B180` | 225 / `0002EDD0` |
+| `AIL_IO_thread_handle` | **4** / `0002B5A0` | **4** / `0002F1F0` |
+| `AIL_set_async_callbacks` | 219 / `0002B500` | 218 / `0002F150` |
+| `MilesAsyncFileRead/Status/Cancel/Startup/Shutdown` | present (`:354–359`) | present (`:352–357`) |
+
+RVAs differ (rebuilt binary), but the **API surface for stream feeding is unchanged**.
+
+### Export-set delta — **not stream-feeding related**
+
+Per axioms L3 (`CONSULT-35v-AXIOMS.md:22–24`):
+
+- **9.3v adds:** `AIL_event_system_break_on_mem_error`, `AIL_event_system_dump_handles`, `AIL_set_event_sample_functions`
+- **9.3v removes:** `AIL_background`
+- **Our exe imports none of these four**
+
+`AIL_background` (`AIL_background.html:19–20, 66`) is a **callback-context detector** (*"determine if it is currently running in 'background' mode from a thread, or … 'foreground'"*), not a stream feeder.
+
+### Embedded strings — streaming/IO/threading
+
+Both DLLs share identical operational strings (strings scan, 2026-06-18):
+
+| String | 9.3v | 9.3b |
+|---|---|---|
+| `Miles IO` | ✓ | ✓ |
+| `Miles IO mutex` / `Miles IO mutex block` | ✓ | ✓ |
+| `Miles background processing` | ✓ | ✓ |
+| `Waiting for IO request` | ✓ | ✓ |
+| `Waiting on Miles IO` | ✓ | ✓ |
+| `C:\devel\projects\mss\src\sdk\shared\io.cpp` | ✓ | ✓ |
+| `C:\devel\projects\mss\src\sdk\shared\milesasync.cpp` | ✓ | ✓ |
+| `Miles/Streams/Stream %d %%` | ✓ | ✓ |
+| All `@AIL_open_stream` / `@AIL_service_stream` / `@AIL_auto_service_stream` debug formats | ✓ | ✓ |
+
+**Version banners differ (expected):**
+
+- 9.3v: `Miles Sound System usage script generated by MSS V9.3v`
+- 9.3b: `Miles Sound System usage script generated by MSS V9.3b`
+
+**Stream/thread-related strings unique to one build:**
+
+| Only in 9.3v | Only in 9.3b |
+|---|---|
+| Event-system audition strings (not streaming) | `AIL_background` (export name string) |
+
+No string in either DLL describes a **different** idle auto-service model, thread priority change, or alternate read-driver path.
+
+### Changelog
+
+`changelog.html` ends at **9.3b** (`:59` — *"Changes from 9.3a to 9.3b (12-12-2012)"*). **No 9.3a→9.3v or 9.3b→9.3v entry exists** anywhere under `.planning/research/`.
+
+The last major streaming architecture note in the changelog is **8.0g→8.0h** (`changelog.html:105`):
+
+> *"All new IO and streaming system … uses background thread loading on all platforms"*
+
+That predates both DLLs and applies to the architecture both builds inherit.
+
+---
+
+## (c) Calibrated verdict
+
+**Does the evidence support "9.3v changes idle stream servicing"? → NO. Evidence is neutral-to-against.**
+
+| Evidence class | Finding |
+|---|---|
+| **Documentation** | Only 9.3b docs exist. They already specify: auto-service ON by default, secondary thread feeds streams, IO thread handles reads. No 9.3v delta documented. |
+| **Export table** | Full stream-feeding API (`AIL_auto_service_stream`, `AIL_service_stream`, `AIL_serve`, `AIL_IO_thread_handle`, `AIL_set_file_callbacks`, `AIL_set_async_callbacks`, `MilesAsync*`) present in **both**. Delta is event-debug additions + `AIL_background` removal — none imported by our exe, none describing a different feed model. |
+| **Embedded strings** | Identical IO/thread/stream infrastructure strings in both DLLs; only meaningful diff is version banner + non-streaming event strings. |
+| **Changelog** | No 9.3v release notes on disk. |
+| **Measured 9.3b behavior** (axiom, not a version comparison) | With auto-service OFF + main-thread `AIL_service_stream` loop: 542 calls → **0** sync read-callback invocations; stream got only open's 8 KB read (`CONSULT-35v-AXIOMS.md:51–52`, `35-04-LOGIN-MUSIC-FOLLOWUP.md:22–25`). That proves **our 9.3b integration starves**, but says nothing about 9.3v being different. |
+
+**What the evidence does *not* establish:** that Restoration's 9.3v build fixes login music. Restoration working on 9.3v is an **observation outside this diff** — it could reflect Debug-vs-Release, provider set, build flags, or integration paths we have not compared here. The L5 RIB crash on our Debug exe with a 9.3v swap also blocks direct runtime A/B of idle stream behavior.
+
+**Bottom line:** There is **no documented or binary-evidenced difference** in *how* `AIL_open_stream` streams are fed at idle between 9.3b and 9.3v. Both expose the same streaming auto-service architecture (secondary/IO background thread, `AIL_service_stream` as the read pump). Adopting 9.3v purely to fix idle stream starvation is **not supported by available evidence**; the measured starvation on 9.3b points at engine/Miles interaction (custom `AIL_set_file_callbacks` + opaque async stream path per `35-04-LOGIN-MUSIC-FOLLOWUP.md:16–25`), not a evidenced point-release servicing change.

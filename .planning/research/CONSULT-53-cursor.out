@@ -1,0 +1,87 @@
+﻿## CONSULT-53 / Cursor — State-translation parity verdict
+
+**Locked axioms respected:** EID 8080, PS 2136, alpha-test **OFF**, fragment **(0.193, 0.351, 0.377, 0.229)**, blended to RT.
+
+**Authored asset (decoded from TRE):** `shader/uicanvas_filtered.sht` pass0/pass1 both have `alphaBlendEnable=1` (SrcAlpha / InvSrcAlpha), `alphaTestEnable=0`, `zEnable=0`. That matches RenderDoc (test OFF, blend ON). Frame widgets (`ui_space_gauge_square`) use this shader via `CuiLayer_TextureCanvas.cpp:28–37`.
+
+---
+
+### 1. Alpha-test
+
+| | D3D9 | D3D11 |
+|---|---|---|
+| Enable from pass | `Direct3d9_ShaderImplementationData.cpp:263` → `RSB(D3DRS_ALPHATESTENABLE, m_alphaTestEnable)` | `Direct3d11_StaticShaderData.cpp:1703–1705` → `setAlphaTest(engPass->m_alphaTestEnable, ref/255)` |
+| Reference resolution | `Direct3d9_StaticShaderData.cpp:743–766` (only when enable) | `Direct3d11_StaticShaderData.cpp:1693–1701` (same TAG_A* logic) |
+| ALPHAREF at draw | `Direct3d9.cpp:4101` always writes `ms_alphaTestReferenceValue` | PS cbuffer only; enable=0 → PS skips discard |
+
+**Verdict:** For this pass (`m_alphaTestEnable=false`), both paths disable alpha-test. D3D11 PS trace (enable=0) is correct per asset. D3D9 does **not** spuriously enable alpha-test for this pass. Stale `ALPHAREF` on D3D9 when test is off is harmless because `ALPHATESTENABLE=false`.
+
+**No enable divergence** explains frame invisible (D3D9) vs visible (D3D11) given the locked OFF test on D3D11 and authored OFF in `.sht`.
+
+---
+
+### 2. Blend
+
+| | D3D9 | D3D11 |
+|---|---|---|
+| Per-pass enable | `Direct3d9_ShaderImplementationData.cpp:343` + `259–261` | `Direct3d11_StaticShaderData.cpp:1664–1682` |
+| At draw flush | `Direct3d9.cpp:4099–4100` re-applies `ALPHABLENDENABLE` from `ms_alphaBlendEnable` **every draw** | `Direct3d11_StateCache.cpp:2154–2172` + `applyPreDrawState` OM bind |
+
+Both read the same `engPass->m_alphaBlendEnable` and factors. Authored pass has blend **ON**; RenderDoc shows blended composite.
+
+**Verdict:** No blend enable/factor divergence for this UI pass when `apply()` runs. Both caches skip re-apply on cache hit (`Direct3d9_StaticShaderData.cpp:1050–1059`, `Direct3d11_StaticShaderData.cpp:913–915`), but D3D9 still pushes `ALPHABLENDENABLE` every draw from the shadow — D3D11 does not re-push OM on cache hit (relies on prior `apply()` / `applyPreDrawState`). That can cause **ordering bugs** in general, but with blend ON in the asset it would make D3D9 *more* likely to show the frame, not hide it.
+
+---
+
+### 3. Alpha-FADE override
+
+| | D3D9 | D3D11 |
+|---|---|---|
+| Override | `Direct3d9.cpp:4087–4094` | `Direct3d11_StaticShaderData.cpp:1752–1764` |
+
+Both only engage when fade is active. HUD quads are not mesh-fade draws; `getAlphaFadeEnabled()` should be false. Fade override also **forces blend ON**, which would increase visibility, not hide the frame on D3D9.
+
+**Verdict:** Not the discriminator.
+
+---
+
+### 4. Compare[] swap (`d3d9_compare_table_swap`)
+
+- D3D9 alpha-test func: `Direct3d9_ShaderImplementationData.cpp:31–41` + `264` (`RSM(D3DRS_ALPHAFUNC, m_alphaTestFunction, Compare)`).
+- D3D11 depth uses swap: `Direct3d11_StaticShaderData.cpp:185–186`.
+- D3D11 alpha-test in PS **ignores** `m_alphaTestFunction`; always `clip(col.a - ref)` (GE semantics): `Direct3d11_PixelShaderProgramData.cpp:627–629,686`.
+
+**Verdict:** Irrelevant here — alpha-test is **OFF** at EID 8080 and in the asset. Swap only matters when test is enabled with a non-GE compare mode.
+
+---
+
+## Single most likely cause (dissent from “state translation” consensus)
+
+**This is not a D3D9-vs-D3D11 OM/state-translation diff for this draw.** Authored pass state is blend ON + alpha-test OFF; both apply paths mirror that when `StaticShaderData::apply()` runs; locked RenderDoc confirms D3D11 matches the asset.
+
+The discriminator is **pixel-shader output parity**, not rasterizer state:
+
+| | D3D9 | D3D11 |
+|---|---|---|
+| PS source | Asset `pixel_program/ui.psh` bound via pass0 PPSH in `uicanvas_filtered.sht` | Auto-generated PS 2136: `tex × vtxColor`, optional cbuffer test (`Direct3d11_PixelShaderProgramData.cpp:681–686`) |
+| Frame texel | Asset PS (or its constant uploads) likely drives **~0 effective coverage** for gray panel × teal vtx | Generated PS faithfully emits **α = 0.229** (locked) |
+| OM state | Blend ON + test OFF (same pass) | Blend ON + test OFF → **0.229 composites** → visible cyan frame |
+
+**Proof pair (PS path, not state):**
+
+- D3D9: `Direct3d9_StaticShaderData.cpp:1058–1059` → `Pass::apply()` binds asset PS from PPSH; pass DATA shows PPSH → `pixel_program/ui.psh`.
+- D3D11: `Direct3d11_PixelShaderProgramData.cpp:681–686` → generated `col = t.Sample(...) * input.color; if (alphaTest.x > 0.5) clip(...)` — matches RenderDoc PS 2136 disasm in evidence.
+
+**“Correct D3D11 value”** if you forced a state-only fix (not recommended — wrong layer): you’d need `alphaTestEnable=true`, `ref≥0.229` (e.g. TAG_A128 → 128/255), and PS discard — but the **asset says test OFF**, so that would break parity with authored intent and might kill the legit ring in the same batch.
+
+---
+
+## If you must name one state gap (latent, not this EID)
+
+The real state parity hole is **`m_alphaTestFunction` not translated on D3D11** (`Direct3d11_StaticShaderData.cpp:1703–1705` vs `Direct3d9_ShaderImplementationData.cpp:264` + compare swap). It does **not** explain EID 8080 because test is OFF. It would matter only for passes with `alphaTestEnable=true` and compare ≠ GE.
+
+---
+
+## Bottom line
+
+For the teal frame @ α=0.229: **D3D9 and D3D11 apply the same pass flags** (blend ON, alpha-test OFF). D3D9 invisibility + D3D11 visibility come from **different PS behavior on identical OM state**, not from alpha-test, blend, fade override, or compare-table swap on this draw. Fix belongs in **PS/asset parity** (make generated PS match `ui.psh` masking, or bind/compile the asset PS on D3D11), not in toggling OM alpha-test for this pass.

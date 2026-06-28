@@ -1,0 +1,98 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Sound under the Sony PSP</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Sound under the Sony PSP'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Sound under the Sony PSP</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Sound_under_the_Sony_PSP.html#_Discussion' class='paragraph'>Sound under the Sony PSP: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Distributing_Miles_with_Sony_PSP_Applications.html' class='paragraph'>Distributing Miles with Sony PSP Applications</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Memory_management_under_the_Sony_PSP.html' class='paragraph'>Memory management under the Sony PSP</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='The_Sony_Playstation_Portable__PSP__Platform.html' class='paragraph'>The Sony Playstation Portable (PSP) Platform</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Sound under the Sony PSP::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ For sound support on the Sony PSP, Miles supplies interfaces to both the libwave and the simple audio APIs.  
+
+</p>
+<p>
+If you use libwave, then Miles can play its audio tracks at the same time your game is playing audio (but this uses a little more CPU). The simple audio API talks directly to the hardware, so it's a little faster, but you can't play any other audio while Miles is playing.  
+
+</p>
+<p>
+By default, libwave is used.  However, if you desire simple audio, pass AIL_OPEN_DIGITAL_USE_SIMPLEAUDIO in the flags for your <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a> call. 
+
+</p>
+<p>
+Miles pre-mixes all of its audio together and then passes it down in one audio channel. For example, when you play multiple sound effects with Miles, it will still just use a single output sound channel. This sound mixing step also does sound format conversion, so you can use whatever frequency and format of audio in your Miles files, and we will automatically convert it to the PSP's hardware format of 44,100 Hz, 16-bit, stereo output.  
+
+</p>
+<p>
+This conversion and mixing uses CPU, of course, and we don't have a lot to begin with, so in general, try to premix your sound together and always use a 44.1Khz audio format.  <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Distributing_Miles_with_Sony_PSP_Applications.html' class='paragraph'>Distributing Miles with Sony PSP Applications</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='The_Sony_Playstation_Portable__PSP__Platform.html' class='paragraph'>The Sony Playstation Portable (PSP) Platform</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Memory_management_under_the_Sony_PSP.html' class='paragraph'>Memory management under the Sony PSP</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

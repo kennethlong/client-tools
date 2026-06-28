@@ -1,0 +1,2007 @@
+OpenAI Codex v0.137.0
+--------
+workdir: D:\Code\swg-client-v2
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019ece14-c9e5-7e12-9b02-647eee884a98
+--------
+user
+# CONSULT-44 — SSE skinning __asm → _mm_* port: resolve the transform-stride contradiction
+
+Treat the following as GIVEN (do not re-derive). I need ONE thing: confirm or refute the
+transform memory layout the asm assumes, so a `_mm_*` intrinsic port is lane-faithful.
+
+## File
+`src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp`
+Two `__asm` blocks: `_fillVertexBufferHard_sse` (~line 2044) and `_fillDot3VertexBufferHard_sse` (~1739).
+They are SSE peers of the SCALAR `fill_vb_work::fillVertexBufferHard()` (~2278) /
+`fillDot3VertexBufferHard()` (~2240). Both run on the SAME `transformArray`
+(`const PoseModelTransform *`), selected only by `s_useSSE` at the dispatch site (~1568/1591).
+`PoseModelTransform` is a typedef of `Transform`.
+
+## GIVEN facts
+1. `Transform::matrix` is `typedef real matrix_t[3][4]` = `float[3][4]` = 48 bytes, ROW-major.
+   `Transform` has NO `align(16)`, so `sizeof(Transform) == 48`.
+2. Scalar `Transform::rotate_l2p(v).x = m[0][0]*x + m[0][1]*y + m[0][2]*z` (dot of ROW 0).
+   `.y`=row1, `.z`=row2. `rotateTranslate_l2p` adds `m[r][3]`.
+3. The asm loads 4 aligned 16-byte blocks at `[eax+0/16/32/48]`, calls them "column 0..3",
+   broadcasts source x/y/z, does `col0*x + col1*y + col2*z + col3`, then stores lanes 0/1/2.
+   So asm result.x = `f0*x + f4*y + f8*z + f12` where f0=float[0], f4=float[4], etc.
+   In row-major terms asm result.x = `m[0][0]*x + m[1][0]*y + m[2][0]*z + float[12]`.
+4. The asm computes the transform index offset as `transformIndex << 6` = ×64 bytes.
+   The scalar path uses `transformArray + transformIndex` = ×`sizeof(Transform)` = ×48 bytes.
+5. The `[eax+48]` (col3) read goes 16 bytes past the 48-byte matrix.
+
+## The contradiction to resolve
+- asm result (col-dot, ×64 stride, reads 64 bytes/transform) vs scalar (row-dot, ×48 stride).
+  These give DIFFERENT numeric results AND different element strides on the SAME array — yet
+  both paths must produce identical skinning on the same `transformArray`.
+
+## Questions (answer each, cite file:line)
+Q1. Is `sizeof(PoseModelTransform)` actually 48, or is the transform passed to skinData a
+    DIFFERENT, pre-transposed / 64-byte-stride layout built somewhere before dispatch? Trace
+    `getBindPoseModelToRootTransforms()` / how `transformArray` reaching skinData is built.
+Q2. Given the row-major matrix, what is the asm ACTUALLY computing per output lane — is it the
+    transpose of `rotate_l2p` (i.e. the array is transposed), or does it coincidentally equal
+    `rotate_l2p` under some property?
+Q3. Is the SSE path even reachable at runtime today (is `s_useSSE` ever true; is
+    `m_skinningMode==SM_hardSkinning` the only caller), or is this dead on modern builds?
+Q4. For a faithful `_mm_loadu_ps`-based port: should I (a) replicate the asm's col-dot +
+    64-byte stride EXACTLY (bug-for-bug), or (b) match the SCALAR row-dot semantics (the
+    visually-correct reference)? Which is the ground truth the renderer depends on?
+
+codex
+I’ll trace the actual call chain and type definitions first, then cross-check the SSE dispatch gates. Since this repo has handoff rules, I’m reading the active handoff index before digging into the file.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content .planning/handoff/README.md' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"getBindPoseModelToRootTransforms|s_useSSE|_fillVertexBufferHard_sse|_fillDot3VertexBufferHard_sse|fillVertexBufferHard\\(|fillDot3VertexBufferHard\\(|PoseModelTransform|typedef.*PoseModelTransform|SM_hardSkinning\" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp src/engine -g\"*.h\" -g\"*.cpp\"" in D:\Code\swg-client-v2
+ succeeded in 203ms:
+# Session handoffs
+
+## Active handoffs
+
+_None currently active._ (Completed-work handoffs remain in this directory as historical records.)
+
+ succeeded in 1053ms:
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:38:#include "clientSkeletalAnimation/PoseModelTransform.h"
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:107:	bool              s_useSSE;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:189:void _fillDot3VertexBufferHard_sse(const fill_vb_work *w);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:190:void _fillVertexBufferHard_sse(const fill_vb_work *w);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:198:		const PoseModelTransform *i_transformArray,
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:227:	void fillDot3VertexBufferHard() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:228:	void fillVertexBufferHard() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:231:	void fillDot3VertexBufferHard_sse() const { _fillDot3VertexBufferHard_sse(this); }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:232:	void fillVertexBufferHard_sse() const { _fillVertexBufferHard_sse(this); }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:235:	PoseModelTransform identity;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:242:	mutable const PoseModelTransform *xf;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:250:	const PoseModelTransform *transformArray;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:365:	s_useSSE = SseMath::canDoSseMath();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:367:	s_useSSE = false;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:563:	const PoseModelTransform *transformArray = skeleton.getBindPoseModelToRootTransforms();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:716:	const PoseModelTransform *const transformArray = skeleton.getBindPoseModelToRootTransforms();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:731:		const PoseModelTransform &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:742:			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:766:	skinData(skeleton.getTransformCount(), skeleton.getBindPoseModelToRootTransforms(), writeIterator);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:927:	const PoseModelTransform *const transformArray  = skeleton.getBindPoseModelToRootTransforms();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:944:		const PoseModelTransform  &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:955:			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1497:void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1537:		case SM_hardSkinning:
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1569:				if (s_useSSE)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1576:					w->fillDot3VertexBufferHard();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1592:				if (s_useSSE)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1599:					w->fillVertexBufferHard();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1617:void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1649:			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1662:				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1698:			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1710:				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1735:void _fillDot3VertexBufferHard_sse(const fill_vb_work *const w)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2040:void _fillVertexBufferHard_sse(const fill_vb_work *const w)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2240:void fill_vb_work::fillDot3VertexBufferHard() const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2278:void fill_vb_work::fillVertexBufferHard() const
+src/engine\shared\library\sharedMath\src\win32\SseMath.cpp:38:// Transform::install's selector (Transform.cpp:76-78) and s_useSSE in the
+src/engine\shared\library\sharedMath\src\win32\SseMath.cpp:89:	//   selector + s_useSSE branch and must not be deleted -- Pitfall 4).
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:37:class PoseModelTransform;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:107:	void skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:109:	void fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:38:#include "clientSkeletalAnimation/PoseModelTransform.h"
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:107:	bool              s_useSSE;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:189:void _fillDot3VertexBufferHard_sse(const fill_vb_work *w);
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:190:void _fillVertexBufferHard_sse(const fill_vb_work *w);
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:198:		const PoseModelTransform *i_transformArray,
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:227:	void fillDot3VertexBufferHard() const;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:228:	void fillVertexBufferHard() const;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:231:	void fillDot3VertexBufferHard_sse() const { _fillDot3VertexBufferHard_sse(this); }
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:232:	void fillVertexBufferHard_sse() const { _fillVertexBufferHard_sse(this); }
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:235:	PoseModelTransform identity;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:242:	mutable const PoseModelTransform *xf;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:250:	const PoseModelTransform *transformArray;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:365:	s_useSSE = SseMath::canDoSseMath();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:367:	s_useSSE = false;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:563:	const PoseModelTransform *transformArray = skeleton.getBindPoseModelToRootTransforms();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:716:	const PoseModelTransform *const transformArray = skeleton.getBindPoseModelToRootTransforms();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:731:		const PoseModelTransform &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:742:			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:766:	skinData(skeleton.getTransformCount(), skeleton.getBindPoseModelToRootTransforms(), writeIterator);
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:927:	const PoseModelTransform *const transformArray  = skeleton.getBindPoseModelToRootTransforms();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:944:		const PoseModelTransform  &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:955:			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1497:void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1537:		case SM_hardSkinning:
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1569:				if (s_useSSE)
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1576:					w->fillDot3VertexBufferHard();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1592:				if (s_useSSE)
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1599:					w->fillVertexBufferHard();
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1617:void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1649:			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1662:				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1698:			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1710:				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1735:void _fillDot3VertexBufferHard_sse(const fill_vb_work *const w)
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:2040:void _fillVertexBufferHard_sse(const fill_vb_work *const w)
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:2240:void fill_vb_work::fillDot3VertexBufferHard() const
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:2278:void fill_vb_work::fillVertexBufferHard() const
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.h:28:class PoseModelTransform;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.h:79:	const PoseModelTransform *getBindPoseModelToRootTransforms() const;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.h:137:	mutable PoseModelTransform   *m_bindPoseModelToRootTransforms;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:23:#include "clientSkeletalAnimation/PoseModelTransform.h"
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:1536:			PoseModelTransform &destTransform                   = m_bindPoseModelToRootTransforms[modelTransformIndex];
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:1696:const PoseModelTransform *Skeleton::getBindPoseModelToRootTransforms() const
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:1700:	NP_PROFILER_AUTO_BLOCK_DEFINE("Skeleton::getBindPoseModelToRootTransforms");
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:1892:	const size_t poseDataSize = static_cast<size_t>(transformCount) * sizeof(PoseModelTransform) + 31;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\Skeleton.cpp:1895:	m_bindPoseModelToRootTransforms = reinterpret_cast<PoseModelTransform*>(POINTER_ALIGN_32(m_bindPoseModelToRootTransformBackingStore));
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\SkeletalAppearance2.cpp:1740:					skinningMode = ShaderPrimitive::SM_hardSkinning;
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:3:// PoseModelTransform.h
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:9:#ifndef INCLUDED_PoseModelTransform_H
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:10:#define INCLUDED_PoseModelTransform_H
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:39:class __declspec(align(16)) PoseModelTransform
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:43:	PoseModelTransform() {}
+src/engine\client\library\clientSkeletalAnimation\src\shared\appearance\PoseModelTransform.h:44:	PoseModelTransform(const Transform &x) 
+src/engine\client\library\clientSkeletalAnimation\include\private\clientSkeletalAnimation\PoseModelTransform.h:1:#include "../../src/shared/appearance/PoseModelTransform.h"
+src/engine\client\library\clientGraphics\src\shared\ShaderPrimitive.h:30:		SM_hardSkinning,
+
+codex
+The first pass already found the key discrepancy: in this checkout `PoseModelTransform` is not a typedef in the private header, it is an aligned wrapper class. I’m reading that header and the skeleton allocation/build code now, because that decides whether the asm’s 64-byte stride is intentional or stale.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp'; "'$lines=Get-Content $p; $ranges=@(1510..1565)+@(1688..1710)+@(1878..1902); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$lines=Get-Content $p; $ranges=@(340..372)+@(1488..1605)+@(1728..1805)+@(2034..2115)+@(2234..2308); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}' in D:\Code\swg-client-v2
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp'; "'$lines=Get-Content $p; $ranges=@(1510..1565)+@(1688..1710)+@(1878..1902); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}'` rejected: blocked by policy
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$lines=Get-Content $p; $ranges=@(340..372)+@(1488..1605)+@(1728..1805)+@(2034..2115)+@(2234..2308); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}'` rejected: blocked by policy
+2026-06-16T01:39:19.445053Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp'; "'$lines=Get-Content $p; $ranges=@(1510..1565)+@(1688..1710)+@(1878..1902); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}'` rejected: blocked by policy
+2026-06-16T01:39:19.445498Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp'; "'$lines=Get-Content $p; $ranges=@(340..372)+@(1488..1605)+@(1728..1805)+@(2034..2115)+@(2234..2308); foreach($i in $ranges){ if($i -le $lines.Length){ '"'{0}:{1}: {2}' -f "'$p,$i,$lines[$i-1] }}'` rejected: blocked by policy
+ succeeded in 202ms:
+// ======================================================================
+//
+// PoseModelTransform.h
+// Copyright 2005 Sony Online Entertainment Inc.
+// All Rights Reserved.
+// 
+// ======================================================================
+
+#ifndef INCLUDED_PoseModelTransform_H
+#define INCLUDED_PoseModelTransform_H
+
+#include "sharedMath/Vector.h"
+#include "sharedMath/Transform.h"
+
+//-----------------------------------
+#undef POINTER_ALIGN_16
+#define POINTER_ALIGN_16(x) ((byte *)((UINT_PTR(x)+15) & -16))
+
+#undef STACK_ALLOC_ALIGN_16
+#define STACK_ALLOC_ALIGN_16(_size_) POINTER_ALIGN_16(_alloca(_size_+15))
+
+#undef POINTER_ALIGN_32
+#define POINTER_ALIGN_32(x) ((byte *)((UINT_PTR(x)+31) & -32))
+
+#undef STACK_ALLOC_ALIGN_32
+#define STACK_ALLOC_ALIGN_32(_size_) POINTER_ALIGN_32(_alloca(_size_+31))
+
+#undef POINTER_BYTE_DISTANCE
+#define POINTER_BYTE_DISTANCE(_x_, _y_) (((uint8 *)_y_) - ((uint8 *)_x_))
+//-----------------------------------
+
+// ===========================================================================
+// Matrix is stored in column-major form.
+//
+// This is sort of a temporary "quickie" implementation of a real column-major
+// 4x4 homogenous matrix class.  
+//
+// align(16) is to help with SSE compatibility
+class __declspec(align(16)) PoseModelTransform
+{
+public:
+
+	PoseModelTransform() {}
+	PoseModelTransform(const Transform &x) 
+	{
+		const Transform::matrix_t &xm = x.getMatrix();
+
+		// row 0
+		matrix[0][0] = xm[0][0];
+		matrix[1][0] = xm[0][1];
+		matrix[2][0] = xm[0][2];
+		matrix[3][0] = xm[0][3];
+
+		// row 1
+		matrix[0][1] = xm[1][0];
+		matrix[1][1] = xm[1][1];
+		matrix[2][1] = xm[1][2];
+		matrix[3][1] = xm[1][3];
+
+		// row 2
+		matrix[0][2] = xm[2][0];
+		matrix[1][2] = xm[2][1];
+		matrix[2][2] = xm[2][2];
+		matrix[3][2] = xm[2][3];
+
+		// row 3
+		matrix[0][3] = 0;
+		matrix[1][3] = 0;
+		matrix[2][3] = 0;
+		matrix[3][3] = 1;
+	}
+
+	void makeIdentity()
+	{
+		// row 0
+		matrix[0][0] = 1;
+		matrix[1][0] = 0;
+		matrix[2][0] = 0;
+		matrix[3][0] = 0;
+
+		// row 1
+		matrix[0][1] = 0;
+		matrix[1][1] = 1;
+		matrix[2][1] = 0;
+		matrix[3][1] = 0;
+
+		// row 2
+		matrix[0][2] = 0;
+		matrix[1][2] = 0;
+		matrix[2][2] = 1;
+		matrix[3][2] = 0;
+
+		// row 3
+		matrix[0][3] = 0;
+		matrix[1][3] = 0;
+		matrix[2][3] = 0;
+		matrix[3][3] = 1;
+	}
+
+	const Vector rotateTranslate_l2p(const Vector &i_vec3) const
+	{
+		return Vector (
+			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z + matrix[3][0],
+			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z + matrix[3][1],
+			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z + matrix[3][2]
+			);
+	}
+
+	const Vector rotate_l2p(const Vector &i_vec3) const
+	{
+		return Vector (
+			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z,
+			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z,
+			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z
+			);
+	}
+
+	float matrix[4][4];
+};
+
+#endif
+
+
+codex
+The shell policy rejected my inline range formatter, so I’m switching to simpler reads with `Select-Object` ranges. No edits are needed for this consult; I’m only collecting line-cited evidence.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp | Select-Object -Skip 1877 -First 27' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp | Select-Object -Skip 1687 -First 25' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp | Select-Object -Skip 1487 -First 120' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp | Select-Object -Skip 1509 -First 57' in D:\Code\swg-client-v2
+ succeeded in 334ms:
+	// this caches values for frame
+	calculateJointToRootTransforms();
+
+	return m_jointToRootTransforms;
+}
+
+// ----------------------------------------------------------------------
+
+const PoseModelTransform *Skeleton::getBindPoseModelToRootTransforms() const
+{
+	NOT_NULL(m_bindPoseModelToRootTransforms);
+
+	NP_PROFILER_AUTO_BLOCK_DEFINE("Skeleton::getBindPoseModelToRootTransforms");
+
+#if PRODUCTION == 0
+	++s_calculateBindPoseModelToRootTransformsCallCount;
+#endif
+
+	// this caches values for frame
+	calculateBindPoseModelToRootTransforms();
+
+	return m_bindPoseModelToRootTransforms;
+}
+
+// ----------------------------------------------------------------------
+
+ succeeded in 316ms:
+	const int frameNumber = Os::getNumberOfUpdates();
+	if (m_frameLastBindPoseModelToRootCalculate == frameNumber)
+	{
+		// we've already calculated this
+		return;
+	}
+
+#if PRODUCTION == 0
+	++s_calculateBindPoseModelToRootTransformsEvalCount;
+#endif
+
+	//-- make sure JointToRootTransforms are calculated already
+	calculateJointToRootTransforms();
+
+	//-- sweep through the skeleton segments
+	const size_t segmentCount = m_skeletonSegments->size();
+	for (size_t segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex)
+	{
+		const Segment *const    segment                = NON_NULL((*m_skeletonSegments)[segmentIndex]);
+		const int               jointCount             = segment->getSkeletonTemplate().getJointCount();
+		const TransformVector  &modelToJointTransforms = segment->getBindPoseModelToJointTransforms();
+
+		for (int localJointIndex = 0; localJointIndex < jointCount; ++localJointIndex)
+		{
+			//-- build the bindPoseModel -> Animated Joint
+			const size_t        modelTransformIndex             = static_cast<size_t>(segment->getFirstTransformIndex() + localJointIndex);
+			PoseModelTransform &destTransform                   = m_bindPoseModelToRootTransforms[modelTransformIndex];
+			const Transform    &bindPoseModelToJointTransform   = modelToJointTransforms[static_cast<size_t>(localJointIndex)];
+			const Transform    &jointToRootTransform            = m_jointToRootTransforms[modelTransformIndex];
+
+			Transform tempXF(Transform::IF_none);
+			tempXF.multiply(jointToRootTransform, bindPoseModelToJointTransform);
+			destTransform=tempXF;
+		}
+	}
+
+	//-- sweep through the hardpoints
+	// -TRF- to do
+
+	//-- remember we calculated this already for this frame
+	m_frameLastBindPoseModelToRootCalculate = frameNumber;
+}
+
+// ----------------------------------------------------------------------
+
+void Skeleton::addShaderPrimitives(const SkeletalAppearance2 &appearance) const
+{
+	//-- ensure shader primitive exists
+	if (!m_shaderPrimitive)
+	{
+		//-- we assume there is a fixed 1-1 correspondence between skeleton and SkeletalAppearance
+		m_shaderPrimitive = new LocalShaderPrimitive(appearance, *this);
+	}
+
+	ShaderPrimitiveSorter::add(*m_shaderPrimitive);
+}
+
+
+ succeeded in 337ms:
+		m_bindPoseModelToRootTransformBackingStore = 0;
+		m_bindPoseModelToRootTransforms            = 0;
+	}
+
+	//-------------------------------------------------------
+	//-- Create new storage, aligned to 32 bytes.
+	// jointToRoot
+	const size_t dataSize = static_cast<size_t>(transformCount) * sizeof(Transform) + 31;
+	m_jointToRootTransformBackingStore = new uint8[dataSize];
+
+	m_jointToRootTransforms = reinterpret_cast<Transform*>(POINTER_ALIGN_32(m_jointToRootTransformBackingStore));
+
+	//-------------------------------------------------------
+	// bindPoseModelToRoot
+	const size_t poseDataSize = static_cast<size_t>(transformCount) * sizeof(PoseModelTransform) + 31;
+	m_bindPoseModelToRootTransformBackingStore = new uint8[poseDataSize];
+
+	m_bindPoseModelToRootTransforms = reinterpret_cast<PoseModelTransform*>(POINTER_ALIGN_32(m_bindPoseModelToRootTransformBackingStore));
+	//-------------------------------------------------------
+
+	m_frameLastExtentCalculate              = -1;
+	m_frameLastJointToRootCalculate         = -1;
+	m_frameLastBindPoseModelToRootCalculate = -1;
+}
+
+//----------------------------------------------------------------------
+
+
+ succeeded in 337ms:
+			default:
+				DEBUG_FATAL(true, ("not supported."));
+			}
+		}
+	}
+}
+
+// ===========================================================================
+
+void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+{
+	//-- Initialize doSkinning to true only on the first render.
+	bool doSkinning = true;
+
+	if (m_hasBeenSkinned && m_everyOtherFrameSkinningEnabled)	
+	{
+		// We're doing every other frame skinning.  Figure out if 
+		// we should skin for this appearance this frame.
+
+		//-- If last bit of object id and frame number both are even 
+		//   or both are odd, do the skinning.
+		Object *const owner = m_appearance.getOwner();
+		if (owner)
+		{
+			uint32 const ownerId     = static_cast<uint32>(owner->getNetworkId().getValue());
+			uint32 const frameNumber =  static_cast<uint32>(Os::getNumberOfUpdates());
+
+			doSkinning = (((ownerId & 0x01) ^ (frameNumber & 0x01)) == 0);
+		}
+	}
+
+	if (!doSkinning)
+	{
+		return;
+	}
+
+	if (m_skinningMode==SM_noSkinning && m_hasBeenSkinned)
+	{
+		return;
+	}
+
+	//-- Handle skinning if we're going to do it.
+	switch (m_skinningMode)
+	{
+		case SM_softSkinning:
+		{
+			fillVertexBuffer(transformCount, transformArray, iterator);
+		} break;
+
+		case SM_hardSkinning:
+		case SM_noSkinning:
+		{
+			const VertexBufferDescriptor *vbi = iterator.getDescriptor();
+			DEBUG_FATAL(!vbi, ("Vertex buffer iterator has no descriptor"));
+		#ifdef _DEBUG
+			DEBUG_FATAL(vbi->offsetPosition!=0, ("Vertex buffer has an unsupported format."));
+			DEBUG_FATAL(vbi->offsetNormal!=12, ("Vertex buffer has an unsupported format."));
+		#endif
+			const int vertexSize = vbi->vertexSize;
+			byte *viter = (byte *)iterator.getDataPointer();
+
+			fill_vb_work *w = (fill_vb_work *)STACK_ALLOC_ALIGN_16(sizeof(fill_vb_work));
+			memset(w, 0, sizeof(*w));
+
+			if (m_hasDot3Vector)
+			{
+				NOT_NULL(m_sourceDot3Vectors);
+				const int dot3Offset = vbi->offsetTextureCoordinateSet[m_dot3TextureCoordinateSetIndex];
+				DEBUG_FATAL(dot3Offset<=0, ("Vertex buffer has an unsupported format."));
+
+				w->construct(
+					m_vertexCount, 
+					m_sourceVectors, 
+					m_sourceDot3Vectors, 
+					transformArray, 
+					vertexSize, 
+					viter, 
+					viter + dot3Offset
+				);
+
+			#if TRY_FOR_SSE
+				if (s_useSSE)
+				{
+					w->fillDot3VertexBufferHard_sse();
+				}
+				else
+			#endif
+				{
+					w->fillDot3VertexBufferHard();
+				}
+			}
+			else
+			{
+				w->construct(
+					m_vertexCount, 
+					m_sourceVectors, 
+					0, 
+					transformArray, 
+					vertexSize, 
+					viter, 
+					0
+				);
+
+			#if TRY_FOR_SSE
+				if (s_useSSE)
+				{
+					w->fillVertexBufferHard_sse();
+				}
+				else
+			#endif
+				{
+					w->fillVertexBufferHard();
+				}
+			}
+
+			const Vector &minVector=w->minVector;
+			const Vector &maxVector=w->maxVector;
+			m_boxExtent.set(minVector, maxVector, (maxVector + minVector) * 0.5f, (maxVector - minVector).magnitude() * 0.5f);
+		} break;
+	}
+
+codex
+The layout evidence is now clear: `Skeleton` allocates `sizeof(PoseModelTransform)` and assigns a `Transform` into each element, invoking a transposing constructor/assignment path. I’m checking the surrounding macro gates and asm operands next so the reachability and port recommendation are tied to exact code, not just the type definition.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 4 \"shl.*6|movaps|\\+48|fillVertexBufferHard_sse|fillDot3VertexBufferHard_sse|rotateTranslate_l2p|rotate_l2p|m_skinningMode==SM_noSkinning|case SM_hardSkinning|s_useSSE\" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 4 \"TRY_FOR_SSE|s_useSSE =|SseMath::canDoSseMath|class __declspec\\(align\\(16\\)\\) PoseModelTransform|matrix\\[4\\]\\[4\\]|PoseModelTransform\\(const Transform|operator|rotateTranslate_l2p|rotate_l2p\" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp src/engine/shared/library/sharedMath/src/win32/SseMath.cpp src/engine/shared/library/sharedMath/src/shared/Transform.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 5 \"calculateBindPoseModelToRootTransforms|getBindPoseModelToRootTransforms|sizeof\\(PoseModelTransform\\)|m_bindPoseModelToRootTransforms|destTransform=tempXF|PoseModelTransform &destTransform\" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h" in D:\Code\swg-client-v2
+ succeeded in 206ms:
+src/engine/shared/library/sharedMath/src/shared/Transform.h-87-	const Vector   getParentFrameI_l(void) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-88-	const Vector   getParentFrameJ_l(void) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-89-	const Vector   getParentFrameK_l(void) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-90-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:91:	const Vector   rotate_l2p(const Vector &vec) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h:92:	const Vector   rotateTranslate_l2p(const Vector &vec) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-93-	const Vector   rotate_p2l(const Vector &vec) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-94-	const Vector   rotateTranslate_p2l(const Vector &vec) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-95-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:96:	const Transform rotateTranslate_l2p(const Transform &t) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-97-	const Transform rotateTranslate_p2l(const Transform &t) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-98-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:99:	void           rotate_l2p(const Vector *source, Vector *result, int count) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h:100:	void           rotateTranslate_l2p(const Vector *source, Vector *result, int count) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-101-	void           rotate_p2l(const Vector *source, Vector *result, int count) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-102-	void           rotateTranslate_p2l(const Vector *source, Vector *result, int count) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-103-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:104:	bool           operator== (const Transform& rhs) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h:105:	bool           operator!= (const Transform& rhs) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-106-	bool           approximates(const Transform &rhs, float rotDelta=0.001f, float posEpsilon=0.001f) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-107-
+src/engine/shared/library/sharedMath/src/shared/Transform.h-108-	bool           validate(bool allowFail=false) const;
+src/engine/shared/library/sharedMath/src/shared/Transform.h-109-	bool           isNaN() const;
+--
+src/engine/shared/library/sharedMath/src/shared/Transform.h-434- * normals.
+src/engine/shared/library/sharedMath/src/shared/Transform.h-435- * 
+src/engine/shared/library/sharedMath/src/shared/Transform.h-436- * @param vec  Vector to rotate
+src/engine/shared/library/sharedMath/src/shared/Transform.h-437- * @return The vector in parent space
+src/engine/shared/library/sharedMath/src/shared/Transform.h:438: * @see Transform::rotateTranslate_l2p(), Transform::rotate_p2l()
+src/engine/shared/library/sharedMath/src/shared/Transform.h-439- */
+src/engine/shared/library/sharedMath/src/shared/Transform.h-440-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:441:inline const Vector Transform::rotate_l2p(const Vector &vec) const
+src/engine/shared/library/sharedMath/src/shared/Transform.h-442-{
+src/engine/shared/library/sharedMath/src/shared/Transform.h-443-	return Vector(
+src/engine/shared/library/sharedMath/src/shared/Transform.h-444-		matrix[0][0] * vec.x + matrix[0][1] * vec.y + matrix[0][2] * vec.z,
+src/engine/shared/library/sharedMath/src/shared/Transform.h-445-		matrix[1][0] * vec.x + matrix[1][1] * vec.y + matrix[1][2] * vec.z,
+--
+src/engine/shared/library/sharedMath/src/shared/Transform.h-456- * vertex data.
+src/engine/shared/library/sharedMath/src/shared/Transform.h-457- * 
+src/engine/shared/library/sharedMath/src/shared/Transform.h-458- * @param vec  Vector to rotate and translate
+src/engine/shared/library/sharedMath/src/shared/Transform.h-459- * @return The vector in parent space
+src/engine/shared/library/sharedMath/src/shared/Transform.h:460: * @see Transform::rotate_l2p(), Transform::rotateTranslate_p2l()
+src/engine/shared/library/sharedMath/src/shared/Transform.h-461- */
+src/engine/shared/library/sharedMath/src/shared/Transform.h-462-
+src/engine/shared/library/sharedMath/src/shared/Transform.h:463:inline const Vector Transform::rotateTranslate_l2p(const Vector &vec) const
+src/engine/shared/library/sharedMath/src/shared/Transform.h-464-{
+src/engine/shared/library/sharedMath/src/shared/Transform.h-465-	return Vector (
+src/engine/shared/library/sharedMath/src/shared/Transform.h-466-		matrix[0][0] * vec.x + matrix[0][1] * vec.y + matrix[0][2] * vec.z + matrix[0][3],
+src/engine/shared/library/sharedMath/src/shared/Transform.h-467-		matrix[1][0] * vec.x + matrix[1][1] * vec.y + matrix[1][2] * vec.z + matrix[1][3],
+--
+src/engine/shared/library/sharedMath/src/shared/Transform.h-478- * normals.
+src/engine/shared/library/sharedMath/src/shared/Transform.h-479- * 
+src/engine/shared/library/sharedMath/src/shared/Transform.h-480- * @param vec  Vector to rotate
+src/engine/shared/library/sharedMath/src/shared/Transform.h-481- * @return The vector in local space
+src/engine/shared/library/sharedMath/src/shared/Transform.h:482: * @see Transform::rotateTranslate_p2l(), Transform::rotate_l2p()
+src/engine/shared/library/sharedMath/src/shared/Transform.h-483- */
+src/engine/shared/library/sharedMath/src/shared/Transform.h-484-
+src/engine/shared/library/sharedMath/src/shared/Transform.h-485-inline const Vector Transform::rotate_p2l(const Vector &vec) const
+src/engine/shared/library/sharedMath/src/shared/Transform.h-486-{
+--
+src/engine/shared/library/sharedMath/src/shared/Transform.h-499- * Rotation and translation is most useful for vectors that are position, such as
+src/engine/shared/library/sharedMath/src/shared/Transform.h-500- * vertex data.
+src/engine/shared/library/sharedMath/src/shared/Transform.h-501- * 
+src/engine/shared/library/sharedMath/src/shared/Transform.h-502- * @return The vector in local space
+src/engine/shared/library/sharedMath/src/shared/Transform.h:503: * @see Transform::rotate_p2l(), Transform::rotateTranslate_l2p()
+src/engine/shared/library/sharedMath/src/shared/Transform.h-504- */
+src/engine/shared/library/sharedMath/src/shared/Transform.h-505-
+src/engine/shared/library/sharedMath/src/shared/Transform.h-506-inline const Vector Transform::rotateTranslate_p2l(const Vector &vec) const
+src/engine/shared/library/sharedMath/src/shared/Transform.h-507-{
+--
+src/engine/shared/library/sharedMath/src/shared/Transform.h-528- */
+src/engine/shared/library/sharedMath/src/shared/Transform.h-529-
+src/engine/shared/library/sharedMath/src/shared/Transform.h-530-inline void Transform::move_l(const Vector &vec)
+src/engine/shared/library/sharedMath/src/shared/Transform.h-531-{
+src/engine/shared/library/sharedMath/src/shared/Transform.h:532:	move_p(rotate_l2p(vec));
+src/engine/shared/library/sharedMath/src/shared/Transform.h-533-}
+src/engine/shared/library/sharedMath/src/shared/Transform.h-534-
+src/engine/shared/library/sharedMath/src/shared/Transform.h-535-// ----------------------------------------------------------------------
+src/engine/shared/library/sharedMath/src/shared/Transform.h-536-// Returns true if the rotation component of a transform is yaw-only 
+--
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-80- *
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-81- * @return  true if SSE math processing is available; false otherwise.
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-82- */
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-83-
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:84:bool SseMath::canDoSseMath()
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-85-{
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-86-	//-- Query CPUID leaf 1. EDX bit 25 = SSE, bit 24 = FXSR (FXSAVE/FXRSTOR).
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-87-	//   On x64 SSE2 is architecturally guaranteed so this is effectively always
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-88-	//   true there -- that is fine; the function stays (it drives the install
+--
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-207-//
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-208-// Boot smoke + the compile-only harness BOTH miss a transposed lane / wrong
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-209-// w-lane / wrong lane-count. This static-init self-test runs each of the 4
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-210-// *_l2p routines on a fixed input vector + matrix and compares the intrinsic
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:211:// result against the SCALAR reference (Transform::rotateTranslate_l2p /
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:212:// rotate_l2p) within an epsilon, DEBUG_FATAL on mismatch -- so a lane error is
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-213-// caught deterministically at startup. It deliberately exercises the verified
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-214-// asymmetries: rotateTranslateScale 4-lane vs rotateScale 3-lane, and the skin
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-215-// position-4-lane vs normal-3-lane split.
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-216-//
+--
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-241-
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-242-			//-- rotateTranslateScale_l2p: w=1, 4 lanes (translate included, scaled).
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-243-			{
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-244-				const Vector got = SseMath::rotateTranslateScale_l2p(xf, v, scale);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:245:				const Vector ref = xf.rotateTranslate_l2p(v) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-246-				DEBUG_FATAL(!nearlyEqual(got.x, ref.x) || !nearlyEqual(got.y, ref.y) || !nearlyEqual(got.z, ref.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-247-					("SseMath oracle: rotateTranslateScale_l2p mismatch (got %g,%g,%g ref %g,%g,%g)",
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-248-						got.x, got.y, got.z, ref.x, ref.y, ref.z));
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-249-			}
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-250-
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-251-			//-- rotateScale_l2p: w=0, 3 lanes (NO translate).
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-252-			{
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-253-				const Vector got = SseMath::rotateScale_l2p(xf, v, scale);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:254:				const Vector ref = xf.rotate_l2p(v) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-255-				DEBUG_FATAL(!nearlyEqual(got.x, ref.x) || !nearlyEqual(got.y, ref.y) || !nearlyEqual(got.z, ref.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-256-					("SseMath oracle: rotateScale_l2p mismatch (got %g,%g,%g ref %g,%g,%g)",
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-257-						got.x, got.y, got.z, ref.x, ref.y, ref.z));
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-258-			}
+--
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-260-			//-- skinPositionNormal_l2p: position w=1 4-lane, normal w=1 3-lane.
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-261-			{
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-262-				Vector gotP, gotN;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-263-				SseMath::skinPositionNormal_l2p(xf, v, n, scale, gotP, gotN);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:264:				const Vector refP = xf.rotateTranslate_l2p(v) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:265:				const Vector refN = xf.rotate_l2p(n) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-266-				DEBUG_FATAL(!nearlyEqual(gotP.x, refP.x) || !nearlyEqual(gotP.y, refP.y) || !nearlyEqual(gotP.z, refP.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-267-					("SseMath oracle: skinPositionNormal_l2p POSITION mismatch"));
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-268-				DEBUG_FATAL(!nearlyEqual(gotN.x, refN.x) || !nearlyEqual(gotN.y, refN.y) || !nearlyEqual(gotN.z, refN.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-269-					("SseMath oracle: skinPositionNormal_l2p NORMAL mismatch"));
+--
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-273-			{
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-274-				Vector gotP(10.0f, 20.0f, 30.0f);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-275-				Vector gotN(1.0f, 2.0f, 3.0f);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-276-				SseMath::skinPositionNormalAdd_l2p(xf, v, n, scale, gotP, gotN);
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:277:				const Vector refP = Vector(10.0f, 20.0f, 30.0f) + xf.rotateTranslate_l2p(v) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:278:				const Vector refN = Vector(1.0f, 2.0f, 3.0f) + xf.rotate_l2p(n) * scale;
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-279-				DEBUG_FATAL(!nearlyEqual(gotP.x, refP.x) || !nearlyEqual(gotP.y, refP.y) || !nearlyEqual(gotP.z, refP.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-280-					("SseMath oracle: skinPositionNormalAdd_l2p POSITION mismatch"));
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-281-				DEBUG_FATAL(!nearlyEqual(gotN.x, refN.x) || !nearlyEqual(gotN.y, refN.y) || !nearlyEqual(gotN.z, refN.z),
+src/engine/shared/library/sharedMath/src/win32/SseMath.cpp-282-					("SseMath oracle: skinPositionNormalAdd_l2p NORMAL mismatch"));
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-59-#include <vector>
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-60-#include <malloc.h>
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-61-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-62-//-----------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:63:#undef TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:64:#define TRY_FOR_SSE WIN32
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-65-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:66:#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-67-#include "sharedMath/SseMath.h"
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-68-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-69-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-70-// ==============================================================================
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-79-	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-80-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-81-	struct __declspec(align(16)) PaddedVector : public Vector
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-82-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:83:		PaddedVector &operator=(const PaddedVector &o) { x=o.x; y=o.y; z=o.z; return *this; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:84:		PaddedVector &operator=(const Vector &o) { x=o.x; y=o.y; z=o.z; return *this; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-85-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-86-		float pad;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-87-	};
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-88-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-226-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-227-	void fillDot3VertexBufferHard() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-228-	void fillVertexBufferHard() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-229-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:230:#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-231-	void fillDot3VertexBufferHard_sse() const { _fillDot3VertexBufferHard_sse(this); }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-232-	void fillVertexBufferHard_sse() const { _fillVertexBufferHard_sse(this); }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-233-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-234-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-360-			gap6MaxStreamCount, (gap6MaxStreamCount > 1) ? 1 : 0, gap6StreamOffsets ? 1 : 0, gap6DisableCfg ? 1 : 0, ms_useMultiStreamVertexBuffers ? 1 : 0);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-361-		fclose(gap6Log);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-362-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-363-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:364:#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:365:	s_useSSE = SseMath::canDoSseMath();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-366-#else
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:367:	s_useSSE = false;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-368-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-369-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-370-	ms_installed = true;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-371-	ExitChain::add(remove, "SoftwareBlendSkeletalShaderPrimitive");
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-729-		VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-730-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-731-		const PoseModelTransform &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-732-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:733:		Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-734-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-735-		//-- apply remaining transforms
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-736-		for (int j=sourceVertex.m_extraTransformDataCount;j>0;j--, transformData++)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-737-		{
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-740-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-741-			// apply it
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-742-			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-743-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:744:			blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-745-		}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-746-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-747-		//-- apply blended position to min/max
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-748-		minVector.set(std::min(minVector.x, blendPosition.x), std::min(minVector.y, blendPosition.y), std::min(minVector.z, blendPosition.z));
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-942-		const TransformData &firstTransformData = sourceVertex.m_firstTransformData;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-943-		VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-944-		const PoseModelTransform  &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-945-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:946:		Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-947-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-948-		// apply remaining transforms
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-949-		for (int j=sourceVertex.m_extraTransformDataCount;j>0;j--, transformData++)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-950-		{
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-952-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, transformData->m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-953-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-954-			// apply it
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-955-			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:956:			blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-957-		}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-958-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-959-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-960-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1260-		indeces[1]=i_i1;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1261-		indeces[2]=i_i2;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1262-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1263-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1264:	bool operator<(const IndexedTriangle &o) const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1265-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1266-		if (indeces[0]<o.indeces[0])
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1267-		{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1268-			return true;
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1564-					viter, 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1565-					viter + dot3Offset
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1566-				);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1567-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1568:			#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1569-				if (s_useSSE)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1570-				{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1571-					w->fillDot3VertexBufferHard_sse();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1572-				}
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1587-					viter, 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1588-					0
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1589-				);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1590-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1591:			#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1592-				if (s_useSSE)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1593-				{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1594-					w->fillVertexBufferHard_sse();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1595-				}
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1647-			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1648-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1649-			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1650-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1651:			Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1652:			Vector blendNormal   = firstTransform.rotate_l2p(sourceNormal)            * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1653:			Vector blendDot3     = firstTransform.rotate_l2p(sourceDot3.m_dot3Vector) * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1654-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1655-			// apply remaining transforms
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1656-			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1657-			{
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1660-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1661-				// apply it
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1662-				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1663-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1664:				blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1665:				blendNormal   += transform.rotate_l2p(sourceNormal)            * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1666:				blendDot3     += transform.rotate_l2p(sourceDot3.m_dot3Vector) * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1667-			}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1668-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1669-			//-- Write out render geometry.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1670-			destVertexIt.setPosition(blendPosition);
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1696-			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1697-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1698-			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1699-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1700:			Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1701:			Vector blendNormal   = firstTransform.rotate_l2p(sourceNormal)            * firstTransformData.m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1702-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1703-			// apply remaining transforms
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1704-			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1705-			{
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1707-				VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, transformData->m_transformIndex, transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1708-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1709-				// apply it
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1710-				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1711:				blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1712:				blendNormal   += transform.rotate_l2p(sourceNormal)            * transformData->m_transformWeight;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1713-			}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1714-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1715-			//-- Write out render geometry.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1716-			destVertexIt.setPosition(blendPosition);
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1729-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1730-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1731-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1732-// ============================================================================
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1733:#if TRY_FOR_SSE
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1734-// ============================================================================
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1735-void _fillDot3VertexBufferHard_sse(const fill_vb_work *const w)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1736-{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1737-	uint32 mxcsrSave, mxcsrTemp;
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1869-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1870-			///////////////////////////////////////////////////////////////
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1871-			// rotateTranslate the source position
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1872-			//----------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1873:			// rotateTranslate_l2p
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1874-			// eax -> 4x4 column-major float transform (16 byte aligned).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1875-			// ebx -> source vertex
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1876-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1877-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1907-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1908-			///////////////////////////////////////////
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1909-			// rotate the source normal
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1910-			//----------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1911:			// rotate_l2p
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1912-			// eax -> 4x4 column-major float transform (16 byte aligned).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1913-			// ebx -> source vertex
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1914-			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1915-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1935-			///////////////////////////////////////////////////////////////
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1936-			// rotate the source dot3 vector
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1937-			mov	ebx, [esi]fill_vb_work.m_sourceDot3Vectors
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1938-			//----------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1939:			// rotate_l2p
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1940-			// eax -> 4x4 column-major float transform (16 byte aligned).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1941-			// ebx -> 3 float source vector
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1942-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-1943-			movss  xmm4, [ebx +  0]Dot3Vector.m_dot3Vector   // source vector x
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2123-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2124-			///////////////////////////////////////////////////////////////
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2125-			// rotateTranslate the source position
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2126-			//----------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2127:			// rotateTranslate_l2p
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2128-			// eax -> 4x4 column-major float transform (16 byte aligned).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2129-			// ebx -> source vertex
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2130-			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2131-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2161-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2162-			///////////////////////////////////////////
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2163-			// rotate the source normal
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2164-			//----------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2165:			// rotate_l2p
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2166-			// eax -> 4x4 column-major float transform (16 byte aligned).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2167-			// ebx -> source vertex
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2168-			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2169-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2246-		// Initialize first position and normal.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2247-		const TransformData &firstTransformData = m_sourceVectors->m_firstTransformData;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2248-		xf = transformArray + firstTransformData.m_transformIndex;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2249-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2250:		position = xf->rotateTranslate_l2p(m_sourceVectors->m_position);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2251:		normal   = xf->rotate_l2p(m_sourceVectors->m_normal);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2252:		dot3     = xf->rotate_l2p(m_sourceDot3Vectors->m_dot3Vector);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2253-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2254-		if (position.x>maxVector.x) { maxVector.x=position.x; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2255-		if (position.y>maxVector.y) { maxVector.y=position.y; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2256-		if (position.z>maxVector.z) { maxVector.z=position.z; }
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2284-		// Initialize first position and normal.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2285-		const TransformData &firstTransformData = m_sourceVectors->m_firstTransformData;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2286-		xf = transformArray + firstTransformData.m_transformIndex;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2287-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2288:		position = xf->rotateTranslate_l2p(m_sourceVectors->m_position);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2289:		normal   = xf->rotate_l2p(m_sourceVectors->m_normal);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2290-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2291-		if (position.x>maxVector.x) { maxVector.x=position.x; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2292-		if (position.y>maxVector.y) { maxVector.y=position.y; }
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp-2293-		if (position.z>maxVector.z) { maxVector.z=position.z; }
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-35-// This is sort of a temporary "quickie" implementation of a real column-major
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-36-// 4x4 homogenous matrix class.  
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-37-//
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-38-// align(16) is to help with SSE compatibility
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:39:class __declspec(align(16)) PoseModelTransform
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-40-{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-41-public:
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-42-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-43-	PoseModelTransform() {}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:44:	PoseModelTransform(const Transform &x) 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-45-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-46-		const Transform::matrix_t &xm = x.getMatrix();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-47-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-48-		// row 0
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-96-		matrix[2][3] = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-97-		matrix[3][3] = 1;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-98-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-99-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:100:	const Vector rotateTranslate_l2p(const Vector &i_vec3) const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-101-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-102-		return Vector (
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-103-			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z + matrix[3][0],
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-104-			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z + matrix[3][1],
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-105-			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z + matrix[3][2]
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-106-			);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-107-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-108-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:109:	const Vector rotate_l2p(const Vector &i_vec3) const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-110-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-111-		return Vector (
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-112-			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z,
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-113-			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z,
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-114-			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-115-			);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-116-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-117-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:118:	float matrix[4][4];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-119-};
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-120-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-121-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h-122-
+
+ succeeded in 209ms:
+103-
+104-	PackedArgbVector  s_hueColors;
+105-	StringVector      s_hueVariableNames;
+106-
+107:	bool              s_useSSE;
+108-}
+109-
+110-using namespace SofwareBlendSkeletalShaderPrimitiveNamespace;
+111-
+--
+185-
+186-// ======================================================================
+187-struct fill_vb_work;
+188-
+189:void _fillDot3VertexBufferHard_sse(const fill_vb_work *w);
+190:void _fillVertexBufferHard_sse(const fill_vb_work *w);
+191-
+192-struct fill_vb_work
+193-{
+194-	void construct(
+--
+227-	void fillDot3VertexBufferHard() const;
+228-	void fillVertexBufferHard() const;
+229-
+230-#if TRY_FOR_SSE
+231:	void fillDot3VertexBufferHard_sse() const { _fillDot3VertexBufferHard_sse(this); }
+232:	void fillVertexBufferHard_sse() const { _fillVertexBufferHard_sse(this); }
+233-#endif
+234-
+235-	PoseModelTransform identity;
+236-
+--
+361-		fclose(gap6Log);
+362-	}
+363-
+364-#if TRY_FOR_SSE
+365:	s_useSSE = SseMath::canDoSseMath();
+366-#else
+367:	s_useSSE = false;
+368-#endif
+369-
+370-	ms_installed = true;
+371-	ExitChain::add(remove, "SoftwareBlendSkeletalShaderPrimitive");
+--
+729-		VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+730-
+731-		const PoseModelTransform &firstTransform = transformArray[firstTransformData.m_transformIndex];
+732-
+733:		Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+734-
+735-		//-- apply remaining transforms
+736-		for (int j=sourceVertex.m_extraTransformDataCount;j>0;j--, transformData++)
+737-		{
+--
+740-
+741-			// apply it
+742-			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+743-
+744:			blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+745-		}
+746-
+747-		//-- apply blended position to min/max
+748-		minVector.set(std::min(minVector.x, blendPosition.x), std::min(minVector.y, blendPosition.y), std::min(minVector.z, blendPosition.z));
+--
+942-		const TransformData &firstTransformData = sourceVertex.m_firstTransformData;
+943-		VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+944-		const PoseModelTransform  &firstTransform = transformArray[firstTransformData.m_transformIndex];
+945-
+946:		Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+947-
+948-		// apply remaining transforms
+949-		for (int j=sourceVertex.m_extraTransformDataCount;j>0;j--, transformData++)
+950-		{
+--
+952-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, transformData->m_transformIndex, transformCount);
+953-
+954-			// apply it
+955-			const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+956:			blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+957-		}
+958-	}
+959-}
+960-
+--
+1520-	{
+1521-		return;
+1522-	}
+1523-
+1524:	if (m_skinningMode==SM_noSkinning && m_hasBeenSkinned)
+1525-	{
+1526-		return;
+1527-	}
+1528-
+--
+1533-		{
+1534-			fillVertexBuffer(transformCount, transformArray, iterator);
+1535-		} break;
+1536-
+1537:		case SM_hardSkinning:
+1538-		case SM_noSkinning:
+1539-		{
+1540-			const VertexBufferDescriptor *vbi = iterator.getDescriptor();
+1541-			DEBUG_FATAL(!vbi, ("Vertex buffer iterator has no descriptor"));
+--
+1565-					viter + dot3Offset
+1566-				);
+1567-
+1568-			#if TRY_FOR_SSE
+1569:				if (s_useSSE)
+1570-				{
+1571:					w->fillDot3VertexBufferHard_sse();
+1572-				}
+1573-				else
+1574-			#endif
+1575-				{
+--
+1588-					0
+1589-				);
+1590-
+1591-			#if TRY_FOR_SSE
+1592:				if (s_useSSE)
+1593-				{
+1594:					w->fillVertexBufferHard_sse();
+1595-				}
+1596-				else
+1597-			#endif
+1598-				{
+--
+1647-			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+1648-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+1649-			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+1650-
+1651:			Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+1652:			Vector blendNormal   = firstTransform.rotate_l2p(sourceNormal)            * firstTransformData.m_transformWeight;
+1653:			Vector blendDot3     = firstTransform.rotate_l2p(sourceDot3.m_dot3Vector) * firstTransformData.m_transformWeight;
+1654-
+1655-			// apply remaining transforms
+1656-			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+1657-			{
+--
+1660-
+1661-				// apply it
+1662-				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+1663-
+1664:				blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+1665:				blendNormal   += transform.rotate_l2p(sourceNormal)            * transformData->m_transformWeight;
+1666:				blendDot3     += transform.rotate_l2p(sourceDot3.m_dot3Vector) * transformData->m_transformWeight;
+1667-			}
+1668-
+1669-			//-- Write out render geometry.
+1670-			destVertexIt.setPosition(blendPosition);
+--
+1696-			const TransformData &firstTransformData = sourceVectors->m_firstTransformData;
+1697-			VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, firstTransformData.m_transformIndex, transformCount);
+1698-			const PoseModelTransform     &firstTransform = transformArray[firstTransformData.m_transformIndex];
+1699-
+1700:			Vector blendPosition = firstTransform.rotateTranslate_l2p(sourcePosition) * firstTransformData.m_transformWeight;
+1701:			Vector blendNormal   = firstTransform.rotate_l2p(sourceNormal)            * firstTransformData.m_transformWeight;
+1702-
+1703-			// apply remaining transforms
+1704-			for (int j=sourceVectors->m_extraTransformDataCount;j>0;j--, transformData++)
+1705-			{
+--
+1707-				VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, transformData->m_transformIndex, transformCount);
+1708-
+1709-				// apply it
+1710-				const PoseModelTransform &transform = transformArray[transformData->m_transformIndex];
+1711:				blendPosition += transform.rotateTranslate_l2p(sourcePosition) * transformData->m_transformWeight;
+1712:				blendNormal   += transform.rotate_l2p(sourceNormal)            * transformData->m_transformWeight;
+1713-			}
+1714-
+1715-			//-- Write out render geometry.
+1716-			destVertexIt.setPosition(blendPosition);
+--
+1731-
+1732-// ============================================================================
+1733-#if TRY_FOR_SSE
+1734-// ============================================================================
+1735:void _fillDot3VertexBufferHard_sse(const fill_vb_work *const w)
+1736-{
+1737-	uint32 mxcsrSave, mxcsrTemp;
+1738-
+1739-	_asm {
+--
+1861-
+1862-			// ----------------------------------------------------
+1863-			// Initialize first position and normal.
+1864-			mov         edi, [ebx]TransformData.m_transformIndex    // current vertex transform index
+1865:			shl         edi, 6                                      // current vertex transform offset
+1866-			mov         edx, [esi]fill_vb_work.transformArray       // transfrom array
+1867-			lea         eax, [edx + edi]
+1868-			// ----------------------------------------------------
+1869-
+1870-			///////////////////////////////////////////////////////////////
+1871-			// rotateTranslate the source position
+1872-			//----------------------------------------------------------
+1873:			// rotateTranslate_l2p
+1874-			// eax -> 4x4 column-major float transform (16 byte aligned).
+1875-			// ebx -> source vertex
+1876:			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+1877-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
+1878:			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
+1879-			movss  xmm5, [ebx +  4]SourceVertex.m_position   // source vector y
+1880:			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
+1881-			movss  xmm6, [ebx +  8]SourceVertex.m_position   // source vector z
+1882:			movaps xmm3, [eax + 48]                          // column 3 (O_)
+1883-
+1884-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
+1885-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
+1886-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
+--
+1892-			addps  xmm0, xmm1         // col0*x + col1*y
+1893-			addps  xmm2, xmm3         // col2*z + col3
+1894-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z + col3
+1895-
+1896:			movaps [esi]fill_vb_work.position, xmm0           // save result out
+1897-			///////////////////////////////////////////////////////////////
+1898-
+1899-			///////////////////////////////////////////////////////////////
+1900-			// update the bounding box with the position currently in xmm0
+1901:			movaps	xmm1, xmm0      // save off a copy of the position for the "min" test
+1902-			maxps		xmm0, [esi]fill_vb_work.maxVector
+1903-			minps		xmm1, [esi]fill_vb_work.minVector
+1904:			movaps	[esi]fill_vb_work.maxVector, xmm0
+1905:			movaps	[esi]fill_vb_work.minVector, xmm1
+1906-			///////////////////////////////////////////////////////////////
+1907-
+1908-			///////////////////////////////////////////
+1909-			// rotate the source normal
+1910-			//----------------------------------------------------------
+1911:			// rotate_l2p
+1912-			// eax -> 4x4 column-major float transform (16 byte aligned).
+1913-			// ebx -> source vertex
+1914:			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
+1915-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
+1916:			movaps xmm1, [eax + 16]                        // column 1 (Cy_)
+1917-			movss  xmm5, [ebx +  4]SourceVertex.m_normal   // source vector y
+1918:			movaps xmm2, [eax + 32]                        // column 2 (Cz_)
+1919-			movss  xmm6, [ebx +  8]SourceVertex.m_normal   // source vector z
+1920-
+1921-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
+1922-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
+--
+1928-
+1929-			addps  xmm0, xmm1         // col0*x + col1*y
+1930-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
+1931-
+1932:			movaps [esi]fill_vb_work.normal, xmm0           // save result out
+1933-			///////////////////////////////////////////////////////////////
+1934-
+1935-			///////////////////////////////////////////////////////////////
+1936-			// rotate the source dot3 vector
+1937-			mov	ebx, [esi]fill_vb_work.m_sourceDot3Vectors
+1938-			//----------------------------------------------------------
+1939:			// rotate_l2p
+1940-			// eax -> 4x4 column-major float transform (16 byte aligned).
+1941-			// ebx -> 3 float source vector
+1942:			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+1943-			movss  xmm4, [ebx +  0]Dot3Vector.m_dot3Vector   // source vector x
+1944:			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
+1945-			movss  xmm5, [ebx +  4]Dot3Vector.m_dot3Vector   // source vector y
+1946:			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
+1947-			movss  xmm6, [ebx +  8]Dot3Vector.m_dot3Vector   // source vector z
+1948-
+1949-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
+1950-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
+--
+1956-
+1957-			addps  xmm0, xmm1         // col0*x + col1*y
+1958-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
+1959-
+1960:			movaps [esi]fill_vb_work.dot3, xmm0           // save result out
+1961-			///////////////////////////////////////////////////////////////
+1962-
+1963-			///////////////////////////////////////////////////////////////
+1964-			//-- Write out render geometry.
+--
+2036-	}
+2037-	//--------------------------------------------------------------------------------------------
+2038-}
+2039-// ============================================================================
+2040:void _fillVertexBufferHard_sse(const fill_vb_work *const w)
+2041-{
+2042-	uint32 mxcsrSave, mxcsrTemp;
+2043-
+2044-	_asm {
+--
+2115-
+2116-			// ----------------------------------------------------
+2117-			// Initialize first position and normal.
+2118-			mov         edi, [ebx]TransformData.m_transformIndex    // current vertex transform index
+2119:			shl         edi, 6                                      // current vertex transform offset
+2120-			mov         edx, [esi]fill_vb_work.transformArray       // transfrom array
+2121-			lea         eax, [edx + edi]
+2122-			// ----------------------------------------------------
+2123-
+2124-			///////////////////////////////////////////////////////////////
+2125-			// rotateTranslate the source position
+2126-			//----------------------------------------------------------
+2127:			// rotateTranslate_l2p
+2128-			// eax -> 4x4 column-major float transform (16 byte aligned).
+2129-			// ebx -> source vertex
+2130:			movaps xmm0, [eax +  0]                          // column 0 (Cx_)
+2131-			movss  xmm4, [ebx +  0]SourceVertex.m_position   // source vector x
+2132:			movaps xmm1, [eax + 16]                          // column 1 (Cy_)
+2133-			movss  xmm5, [ebx +  4]SourceVertex.m_position   // source vector y
+2134:			movaps xmm2, [eax + 32]                          // column 2 (Cz_)
+2135-			movss  xmm6, [ebx +  8]SourceVertex.m_position   // source vector z
+2136:			movaps xmm3, [eax + 48]                          // column 3 (O_)
+2137-
+2138-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
+2139-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
+2140-			shufps xmm6, xmm6, 0      // z -> z.z.z.z
+--
+2146-			addps  xmm0, xmm1         // col0*x + col1*y
+2147-			addps  xmm2, xmm3         // col2*z + col3
+2148-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z + col3
+2149-
+2150:			movaps [esi]fill_vb_work.position, xmm0           // save result out
+2151-			///////////////////////////////////////////////////////////////
+2152-
+2153-			///////////////////////////////////////////////////////////////
+2154-			// update the bounding box with the position currently in xmm0
+2155:			movaps	xmm1, xmm0      // save off a copy of the position for the "min" test
+2156-			maxps		xmm0, [esi]fill_vb_work.maxVector
+2157-			minps		xmm1, [esi]fill_vb_work.minVector
+2158:			movaps	[esi]fill_vb_work.maxVector, xmm0
+2159:			movaps	[esi]fill_vb_work.minVector, xmm1
+2160-			///////////////////////////////////////////////////////////////
+2161-
+2162-			///////////////////////////////////////////
+2163-			// rotate the source normal
+2164-			//----------------------------------------------------------
+2165:			// rotate_l2p
+2166-			// eax -> 4x4 column-major float transform (16 byte aligned).
+2167-			// ebx -> source vertex
+2168:			movaps xmm0, [eax +  0]                        // column 0 (Cx_)
+2169-			movss  xmm4, [ebx +  0]SourceVertex.m_normal   // source vector x
+2170:			movaps xmm1, [eax + 16]                        // column 1 (Cy_)
+2171-			movss  xmm5, [ebx +  4]SourceVertex.m_normal   // source vector y
+2172:			movaps xmm2, [eax + 32]                        // column 2 (Cz_)
+2173-			movss  xmm6, [ebx +  8]SourceVertex.m_normal   // source vector z
+2174-
+2175-			shufps xmm4, xmm4, 0      // x -> x.x.x.x
+2176-			shufps xmm5, xmm5, 0      // y -> y.y.y.y
+--
+2182-
+2183-			addps  xmm0, xmm1         // col0*x + col1*y
+2184-			addps  xmm0, xmm2         // col0*x + col1*y + col2*z
+2185-
+2186:			movaps [esi]fill_vb_work.normal, xmm0           // save result out
+2187-			///////////////////////////////////////////////////////////////
+2188-
+2189-			///////////////////////////////////////////////////////////////
+2190-			//-- Write out render geometry.
+--
+2246-		// Initialize first position and normal.
+2247-		const TransformData &firstTransformData = m_sourceVectors->m_firstTransformData;
+2248-		xf = transformArray + firstTransformData.m_transformIndex;
+2249-
+2250:		position = xf->rotateTranslate_l2p(m_sourceVectors->m_position);
+2251:		normal   = xf->rotate_l2p(m_sourceVectors->m_normal);
+2252:		dot3     = xf->rotate_l2p(m_sourceDot3Vectors->m_dot3Vector);
+2253-
+2254-		if (position.x>maxVector.x) { maxVector.x=position.x; }
+2255-		if (position.y>maxVector.y) { maxVector.y=position.y; }
+2256-		if (position.z>maxVector.z) { maxVector.z=position.z; }
+--
+2284-		// Initialize first position and normal.
+2285-		const TransformData &firstTransformData = m_sourceVectors->m_firstTransformData;
+2286-		xf = transformArray + firstTransformData.m_transformIndex;
+2287-
+2288:		position = xf->rotateTranslate_l2p(m_sourceVectors->m_position);
+2289:		normal   = xf->rotate_l2p(m_sourceVectors->m_normal);
+2290-
+2291-		if (position.x>maxVector.x) { maxVector.x=position.x; }
+2292-		if (position.y>maxVector.y) { maxVector.y=position.y; }
+2293-		if (position.z>maxVector.z) { maxVector.z=position.z; }
+
+ succeeded in 212ms:
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-74-	CrcString const        &getTransformName(int transformIndex) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-75-	const TransformNameMap &getTransformNameMap() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-76-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-77-	int                       getTransformCount() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-78-	const Transform          *getJointToRootTransformArray() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h:79:	const PoseModelTransform *getBindPoseModelToRootTransforms() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-80-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-81-	void                    addShaderPrimitives(const SkeletalAppearance2 &appearance) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-82-	void                    drawNow(const Transform &skeletonToWorld, const Vector &scale) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-83-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-84-	const BoxExtent        *getExtent() const;
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-119-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-120-	void                    rebuildLinkedSkeletonDefinition();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-121-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-122-	void                    drawJointFramesNow(const Transform &skeletonToWorld, const Vector &scale) const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-123-	void                    calculateJointToRootTransforms() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h:124:	void                    calculateBindPoseModelToRootTransforms() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-125-	void                    calculateExtent() const;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-126-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-127-	void                    allocateTransformArrays(int transformCount);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-128-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-129-private:
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-132-	int                           m_transformCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-133-	SegmentVector                *m_skeletonSegments;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-134-	uint8                        *m_jointToRootTransformBackingStore;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-135-	mutable Transform            *m_jointToRootTransforms;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-136-	uint8                        *m_bindPoseModelToRootTransformBackingStore;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h:137:	mutable PoseModelTransform   *m_bindPoseModelToRootTransforms;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-138-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-139-	mutable int                   m_frameLastJointToRootCalculate;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-140-	mutable int                   m_frameLastBindPoseModelToRootCalculate;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-141-	mutable int                   m_frameLastExtentCalculate;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.h-142-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-62-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-63-#if PRODUCTION == 0
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-64-	bool  s_reportStatistics;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-65-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-66-	int   s_calculateJointToRootTransformsCallCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:67:	int   s_calculateBindPoseModelToRootTransformsCallCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-68-	int   s_calculateExtentCallCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-69-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-70-	int   s_calculateJointToRootTransformsEvalCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:71:	int   s_calculateBindPoseModelToRootTransformsEvalCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-72-	int   s_calculateExtentEvalCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-73-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-74-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-75-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-76-}
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-85-{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-86-	//-- Report.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-87-	REPORT_PRINT(true, ("Skeleton:(called/evaluated): extent=[%d/%d],jointToRoot=[%d/%d],bindPoseModelToRoot=[%d/%d]\n", 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-88-		s_calculateExtentCallCount, s_calculateExtentEvalCount, 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-89-		s_calculateJointToRootTransformsCallCount, s_calculateJointToRootTransformsEvalCount, 
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:90:		s_calculateBindPoseModelToRootTransformsCallCount, s_calculateBindPoseModelToRootTransformsEvalCount));
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-91-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-92-	//-- Print.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-93-	s_calculateExtentCallCount                        = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-94-	s_calculateJointToRootTransformsCallCount         = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:95:	s_calculateBindPoseModelToRootTransformsCallCount = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-96-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-97-	s_calculateExtentEvalCount                        = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-98-	s_calculateJointToRootTransformsEvalCount         = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:99:	s_calculateBindPoseModelToRootTransformsEvalCount = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-100-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-101-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-102-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-103-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-104-// ======================================================================
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-770-	m_transformCount(rootSkeletonTemplate.getJointCount()),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-771-	m_skeletonSegments(new SegmentVector()),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-772-	m_jointToRootTransformBackingStore(0),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-773-	m_jointToRootTransforms(0),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-774-	m_bindPoseModelToRootTransformBackingStore(0),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:775:	m_bindPoseModelToRootTransforms(0),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-776-	m_frameLastJointToRootCalculate(-1),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-777-	m_frameLastBindPoseModelToRootCalculate(-1),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-778-	m_frameLastExtentCalculate(-1),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-779-	m_transformNameMap(0),
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-780-	m_extent(new BoxExtent()),
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-815-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-816-	delete m_extent;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-817-	delete m_transformNameMap;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-818-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-819-	delete [] m_bindPoseModelToRootTransformBackingStore;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:820:	m_bindPoseModelToRootTransforms = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-821-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-822-	delete [] m_jointToRootTransformBackingStore;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-823-	m_jointToRootTransforms = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-824-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-825-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1493-	m_frameLastJointToRootCalculate = frameNumber;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1494-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1495-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1496-// ----------------------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1497-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1498:void Skeleton::calculateBindPoseModelToRootTransforms() const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1499-{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1500-	// -TRF- NOTE: we do not support bind pose model to root calculation for
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1501-	//             hardpoints yet (these potentially require per-skeleton
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1502-	//             bindPoseModelToJoint transforms).
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1503-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1504-	NOT_NULL(m_skeletonSegments);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1505:	NOT_NULL(m_bindPoseModelToRootTransforms);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1506-	NOT_NULL(m_jointToRootTransforms);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1507-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1508:	NP_PROFILER_AUTO_BLOCK_DEFINE("Skeleton::calculateBindPoseModelToRootTransforms");
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1509-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1510-	const int frameNumber = Os::getNumberOfUpdates();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1511-	if (m_frameLastBindPoseModelToRootCalculate == frameNumber)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1512-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1513-		// we've already calculated this
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1514-		return;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1515-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1516-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1517-#if PRODUCTION == 0
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1518:	++s_calculateBindPoseModelToRootTransformsEvalCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1519-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1520-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1521-	//-- make sure JointToRootTransforms are calculated already
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1522-	calculateJointToRootTransforms();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1523-
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1531-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1532-		for (int localJointIndex = 0; localJointIndex < jointCount; ++localJointIndex)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1533-		{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1534-			//-- build the bindPoseModel -> Animated Joint
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1535-			const size_t        modelTransformIndex             = static_cast<size_t>(segment->getFirstTransformIndex() + localJointIndex);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1536:			PoseModelTransform &destTransform                   = m_bindPoseModelToRootTransforms[modelTransformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1537-			const Transform    &bindPoseModelToJointTransform   = modelToJointTransforms[static_cast<size_t>(localJointIndex)];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1538-			const Transform    &jointToRootTransform            = m_jointToRootTransforms[modelTransformIndex];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1539-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1540-			Transform tempXF(Transform::IF_none);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1541-			tempXF.multiply(jointToRootTransform, bindPoseModelToJointTransform);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1542:			destTransform=tempXF;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1543-		}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1544-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1545-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1546-	//-- sweep through the hardpoints
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1547-	// -TRF- to do
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1691-	return m_jointToRootTransforms;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1692-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1693-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1694-// ----------------------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1695-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1696:const PoseModelTransform *Skeleton::getBindPoseModelToRootTransforms() const
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1697-{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1698:	NOT_NULL(m_bindPoseModelToRootTransforms);
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1699-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1700:	NP_PROFILER_AUTO_BLOCK_DEFINE("Skeleton::getBindPoseModelToRootTransforms");
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1701-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1702-#if PRODUCTION == 0
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1703:	++s_calculateBindPoseModelToRootTransformsCallCount;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1704-#endif
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1705-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1706-	// this caches values for frame
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1707:	calculateBindPoseModelToRootTransforms();
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1708-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1709:	return m_bindPoseModelToRootTransforms;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1710-}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1711-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1712-// ----------------------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1713-/**
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1714- *
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1874-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1875-	if (m_bindPoseModelToRootTransformBackingStore)
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1876-	{
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1877-		delete [] m_bindPoseModelToRootTransformBackingStore;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1878-		m_bindPoseModelToRootTransformBackingStore = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1879:		m_bindPoseModelToRootTransforms            = 0;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1880-	}
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1881-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1882-	//-------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1883-	//-- Create new storage, aligned to 32 bytes.
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1884-	// jointToRoot
+--
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1887-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1888-	m_jointToRootTransforms = reinterpret_cast<Transform*>(POINTER_ALIGN_32(m_jointToRootTransformBackingStore));
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1889-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1890-	//-------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1891-	// bindPoseModelToRoot
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1892:	const size_t poseDataSize = static_cast<size_t>(transformCount) * sizeof(PoseModelTransform) + 31;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1893-	m_bindPoseModelToRootTransformBackingStore = new uint8[poseDataSize];
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1894-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1895:	m_bindPoseModelToRootTransforms = reinterpret_cast<PoseModelTransform*>(POINTER_ALIGN_32(m_bindPoseModelToRootTransformBackingStore));
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1896-	//-------------------------------------------------------
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1897-
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1898-	m_frameLastExtentCalculate              = -1;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1899-	m_frameLastJointToRootCalculate         = -1;
+src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp-1900-	m_frameLastBindPoseModelToRootCalculate = -1;
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/shared/library/sharedMath/src/win32/SseMath.cpp | Select-Object -Skip 80 -First 35' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"SM_hardSkinning|setSkinningMode|skinData\\(|fillVertexBuffer\\(\" src/engine/client/library/clientSkeletalAnimation src/engine/client/library/clientGraphics -g\"*.cpp\" -g\"*.h\"" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "#define WIN32|<PreprocessorDefinitions>|SoftwareBlendSkeletalShaderPrimitive.cpp|Platform.*Win32|Platform.*x64" src/build/win32/swg.sln src/engine/client/library/clientSkeletalAnimation -g"*.vcxproj" -g"*.props" -g"*.sln"' in D:\Code\swg-client-v2
+ succeeded in 243ms:
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:66:	virtual void                setSkinningMode(SkinningMode skinningMode);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:107:	void skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const;
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.h:109:	void fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const;
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:573:		skinData(transformCount, transformArray, writeIterator);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:595:				skinData(transformCount, transformArray, writeIterator);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:607:			skinData(transformCount, transformArray, writeIterator);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:766:	skinData(skeleton.getTransformCount(), skeleton.getBindPoseModelToRootTransforms(), writeIterator);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:968:void SoftwareBlendSkeletalShaderPrimitive::setSkinningMode(SkinningMode skinningMode)
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1497:void SoftwareBlendSkeletalShaderPrimitive::skinData(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &iterator) const
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1534:			fillVertexBuffer(transformCount, transformArray, iterator);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1537:		case SM_hardSkinning:
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp:1617:void SoftwareBlendSkeletalShaderPrimitive::fillVertexBuffer(int transformCount, const PoseModelTransform *transformArray, VertexBufferWriteIterator &destVertexIt) const
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitive.cpp:162:void ShaderPrimitive::setSkinningMode(SkinningMode /* skinningMode */)
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitive.h:30:		SM_hardSkinning,
+src/engine/client/library/clientGraphics\src\shared\ShaderPrimitive.h:51:	virtual void                setSkinningMode(SkinningMode skinningMode);
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SkeletalAppearance2.cpp:1740:					skinningMode = ShaderPrimitive::SM_hardSkinning;
+src/engine/client/library/clientSkeletalAnimation\src\shared\appearance\SkeletalAppearance2.cpp:1769:					sbsShaderPrimitive->setSkinningMode(skinningMode);
+
+ succeeded in 234ms:
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:6:      <Platform>Win32</Platform>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:10:      <Platform>Win32</Platform>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:14:      <Platform>Win32</Platform>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:23:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:29:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="Configuration">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:35:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:44:  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:47:  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'" Label="PropertySheets">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:50:  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:57:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:61:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:65:  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:69:  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:74:      <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=2;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:100:      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:104:  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:112:      <PreprocessorDefinitions>WIN32;_DEBUG;_MBCS;DEBUG_LEVEL=1;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:137:      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:141:  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:149:      <PreprocessorDefinitions>WIN32;NDEBUG;_MBCS;DEBUG_LEVEL=0;_CRT_SECURE_NO_DEPRECATE=1;_USE_32BIT_TIME_T=1;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:174:      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:180:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:183:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:186:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:189:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:192:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:195:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:198:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:201:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:204:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:207:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:210:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:213:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:216:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:219:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:222:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:225:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:228:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:231:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:234:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:237:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:240:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:243:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:246:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:249:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:252:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:255:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:258:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:261:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:264:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:267:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:270:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:273:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:276:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:279:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:282:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:285:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:288:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:291:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:294:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:297:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:300:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:303:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:306:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:309:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:312:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:315:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:318:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:321:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:324:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:327:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:330:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:333:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:336:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:339:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:342:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:345:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:348:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:350:    <ClCompile Include="..\..\src\shared\appearance\SoftwareBlendSkeletalShaderPrimitive.cpp">
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:351:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:354:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:357:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:360:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:363:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:366:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:369:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:372:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:375:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:378:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:381:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:384:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:387:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:390:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:393:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:396:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:399:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:402:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:405:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:408:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:411:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:414:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:417:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:420:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:423:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:426:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:429:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:432:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:435:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:438:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:441:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:444:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:447:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:450:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:453:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:456:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:459:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:462:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:465:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:468:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:471:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:474:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:477:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:480:      <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:483:      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:484:      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">Create</PrecompiledHeader>
+src/engine/client/library/clientSkeletalAnimation\build\win32\clientSkeletalAnimation.vcxproj:485:      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+
+ succeeded in 299ms:
+ * @return  true if SSE math processing is available; false otherwise.
+ */
+
+bool SseMath::canDoSseMath()
+{
+	//-- Query CPUID leaf 1. EDX bit 25 = SSE, bit 24 = FXSR (FXSAVE/FXRSTOR).
+	//   On x64 SSE2 is architecturally guaranteed so this is effectively always
+	//   true there -- that is fine; the function stays (it drives the install
+	//   selector + s_useSSE branch and must not be deleted -- Pitfall 4).
+	int cpuInfo[4] = { 0, 0, 0, 0 };
+	__cpuid(cpuInfo, 1);
+
+	const unsigned int featureBits = static_cast<unsigned int>(cpuInfo[3]);   // EDX
+
+	const bool cpuHasSse         = ((featureBits & 0x02000000u) != 0);   // bit 25
+	const bool cpuHasSaveRestore = ((featureBits & 0x01000000u) != 0);   // bit 24
+
+	return cpuHasSse && cpuHasSaveRestore;
+}
+
+// ----------------------------------------------------------------------
+
+Vector SseMath::rotateTranslateScale_l2p(const Transform &transform, const Vector &vector, float scale)
+{
+	__m128 row0, row1, row2;
+	loadMatrixRows(transform, row0, row1, row2);
+
+	// Source w = 1.0 -> the translate column (a4/b4/c4) participates.
+	const __m128 src = _mm_set_ps(1.0f, vector.z, vector.y, vector.x);   // {x,y,z,1}
+	const __m128 s   = _mm_set1_ps(scale);
+
+	// Per row: (src * row) * scale, then sum ALL 4 lanes (translate scaled too).
+	const __m128 r0 = _mm_mul_ps(_mm_mul_ps(src, row0), s);
+	const __m128 r1 = _mm_mul_ps(_mm_mul_ps(src, row1), s);
+	const __m128 r2 = _mm_mul_ps(_mm_mul_ps(src, row2), s);
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"matrix\\[[0-3]\\]\\[[0-3]\\] = xm|float matrix|class __declspec|PoseModelTransform\\(const Transform|return Vector|matrix\\[0\\]\\[0\\] \\* i_vec3|matrix\\[0\\]\\[1\\] \\* i_vec3|matrix\\[0\\]\\[2\\] \\* i_vec3\" src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h" in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp | Select-Object -Skip 960 -First 20' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalAppearance2.cpp | Select-Object -Skip 1728 -First 48' in D:\Code\swg-client-v2
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp | Select-Object -Skip 552 -First 60' in D:\Code\swg-client-v2
+ succeeded in 238ms:
+39:class __declspec(align(16)) PoseModelTransform
+44:	PoseModelTransform(const Transform &x) 
+49:		matrix[0][0] = xm[0][0];
+50:		matrix[1][0] = xm[0][1];
+51:		matrix[2][0] = xm[0][2];
+52:		matrix[3][0] = xm[0][3];
+55:		matrix[0][1] = xm[1][0];
+56:		matrix[1][1] = xm[1][1];
+57:		matrix[2][1] = xm[1][2];
+58:		matrix[3][1] = xm[1][3];
+61:		matrix[0][2] = xm[2][0];
+62:		matrix[1][2] = xm[2][1];
+63:		matrix[2][2] = xm[2][2];
+64:		matrix[3][2] = xm[2][3];
+102:		return Vector (
+103:			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z + matrix[3][0],
+104:			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z + matrix[3][1],
+105:			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z + matrix[3][2]
+111:		return Vector (
+112:			matrix[0][0] * i_vec3.x + matrix[1][0] * i_vec3.y + matrix[2][0] * i_vec3.z,
+113:			matrix[0][1] * i_vec3.x + matrix[1][1] * i_vec3.y + matrix[2][1] * i_vec3.z,
+114:			matrix[0][2] * i_vec3.x + matrix[1][2] * i_vec3.y + matrix[2][2] * i_vec3.z
+118:	float matrix[4][4];
+
+ succeeded in 335ms:
+// ----------------------------------------------------------------------
+/**
+ * Switch between soft skinning (multiple weights per vertex) and hard skinning (100% weighting to a single vertex).
+ *
+ * @useSoftSkinning  if true, soft skinning will be used; otherwise, hard skinning will be used.
+ */
+
+void SoftwareBlendSkeletalShaderPrimitive::setSkinningMode(SkinningMode skinningMode)
+{
+	m_skinningMode = skinningMode;
+}
+
+// ======================================================================
+// class SoftwareBlendSkeletalShaderPrimitive: private member functions
+// ======================================================================
+
+void SoftwareBlendSkeletalShaderPrimitive::_initialize(const MeshConstructionHelper &mesh, int shaderIndex, bool multiStream)
+{
+	/*
+		NOTES
+
+ succeeded in 346ms:
+				fclose(fp);
+			}
+		}
+	}
+
+	//-- Get skeleton.
+	const Skeleton &skeleton = m_appearance.getSkeleton(m_lodIndex);
+
+	//-- Get transforms
+	const int                 transformCount = skeleton.getTransformCount();
+	const PoseModelTransform *transformArray = skeleton.getBindPoseModelToRootTransforms();
+
+	//-- Setup which vertex buffers will be used for rendering and compute vertex buffer data.
+	if (ms_useMultiStreamVertexBuffers)
+	{
+		// STATE: Using multi streaming.
+
+		// Perform skinning on the system vertex buffer.  Collision and shadows require CPU
+		// access to the position info.
+		VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+		skinData(transformCount, transformArray, writeIterator);
+
+		m_dynamicStream->lock(m_vertexCount);
+		{
+			VertexBufferWriteIterator outIt = m_dynamicStream->begin();
+			outIt.copy(m_systemStream->beginReadOnly(), m_systemStream->getNumberOfVertices());
+		}
+		m_dynamicStream->unlock();
+	}
+	else
+	{
+		// STATE: Not using multi streaming.
+		// @todo -TRF- look at this: the following code path should not be legal.
+		if (!m_systemStream)
+		{
+			// STATE: There's only skinned data for this primitive.  Skin directly to the dynamic
+			//        vertex buffer.
+
+			// Compute and fill the dynamic vertex buffer.
+			m_dynamicStream->lock(m_vertexCount);
+			{
+				VertexBufferWriteIterator writeIterator = m_dynamicStream->begin();
+				skinData(transformCount, transformArray, writeIterator);
+			}
+			m_dynamicStream->unlock();
+		}
+		else
+		{
+			// STATE: Not multi streaming and there's both constant and skinned data to be used
+			//        for rendering.
+
+			// Compute and fill the system vertex buffer with skinned data.  The system vertex buffer
+			// also stores any non-skinned (static) data (e.g. UVs, color).
+			VertexBufferWriteIterator  writeIterator = m_systemStream->beginWriteOnly();
+			skinData(transformCount, transformArray, writeIterator);
+
+			// Copy the system vertex buffer in one chunk into the dynamic vertex buffer that we render with.
+			// This is how the geometry gets into a buffer readable by the GPU.  We can't render out of system
+			// VBs, we don't want to store a GPU-renderable VB for every shader prim, and we do want a fast
+			// single mem copy into the destination dynamic VB.  This is the solution: tradeoff memory by using
+
+ succeeded in 359ms:
+				}
+
+				//-- Figure out skinning mode for shader primitives.
+				SkeletalAppearanceTemplate const &appearanceTemplate = getSkeletalAppearanceTemplate();
+				ShaderPrimitive::SkinningMode  skinningMode;
+
+				bool const mustUseSoftSkinning = appearanceTemplate.mustUseSoftSkinning();
+
+				if (screenDiameterFraction <= ConfigClientSkeletalAnimation::getNoSkinningScreenFraction())
+					skinningMode = ShaderPrimitive::SM_noSkinning;
+				else if (!mustUseSoftSkinning && (m_forceHardSkinningEnabled || (screenDiameterFraction <= ConfigClientSkeletalAnimation::getHardSkinningScreenFraction())))
+					skinningMode = ShaderPrimitive::SM_hardSkinning;
+				else
+					skinningMode = ShaderPrimitive::SM_softSkinning;
+
+#if PRODUCTION == 0
+				//-- Track # characters rendered in each skinning mode (separate batched from standard rendering).
+				++s_perSkinningModeCharacterCount[(useBatcher ? cs_skinningModeCount : 0) + static_cast<int>(skinningMode)];
+
+				//-- Track # characters rendered at each LOD (separate batched from standard rendering).
+				++s_perLodRenderedCharacterCount[(useBatcher ? cs_maxLodCount : 0) + m_displayLodIndex];
+#endif
+
+				//-- Tell each shader primitive about the skinning mode.  Render if not batching.
+				const ShaderPrimitiveVector &shaderPrimitives = getDisplayLodShaderPrimitives();
+
+				const ShaderPrimitiveVector::const_iterator itEnd = shaderPrimitives.end();
+				for (ShaderPrimitiveVector::const_iterator it = shaderPrimitives.begin(); it != itEnd; ++it)
+				{
+					//-- Get the shader primitive.
+					ShaderPrimitive *const shaderPrimitive = (*it);
+					NOT_NULL(shaderPrimitive);
+
+					//-- NOTE: do not sned the sbsShaderPrimitive directly to the ShaderPrimitiveSorter.  That
+					//   will screw up and bypass the TextureRendererShaderPrimitives that sometimes piggyback
+					//   on top of a SBSSP.
+					SoftwareBlendSkeletalShaderPrimitive *const sbsShaderPrimitive = shaderPrimitive->asSoftwareBlendSkeletalShaderPrimitive();
+					NOT_NULL(sbsShaderPrimitive);
+
+					//-- Set the skinning parameters.
+					sbsShaderPrimitive->setSkinningMode(skinningMode);
+					sbsShaderPrimitive->setEveryOtherFrameSkinningEnabled(m_everyOtherFrameSkinningEnabled);
+
+					if (!useBatcher)
+					{
+						if (m_fadeState == FS_notFading)
+							ShaderPrimitiveSorter::add(*shaderPrimitive);
+						else
+
+codex
+**Bottom line:** the contradiction is resolved by [PoseModelTransform.h](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:39). In this checkout, `PoseModelTransform` is **not** `typedef Transform`; it is a 16-byte-aligned, 64-byte `float[4][4]` wrapper stored as column-major-for-SSE.
+
+**Q1. Layout / build path**
+
+`PoseModelTransform` is `class __declspec(align(16)) PoseModelTransform` with `float matrix[4][4]`, so its element stride is 64 bytes, not 48: [PoseModelTransform.h:39](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:39), [PoseModelTransform.h:118](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:118).
+
+It is built from `Transform` by transposing the row-major `Transform` rows into `PoseModelTransform` columns: [PoseModelTransform.h:44](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:44), [PoseModelTransform.h:49](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:49). `Skeleton` allocates `transformCount * sizeof(PoseModelTransform)` and 32-byte-aligns the backing store: [Skeleton.cpp:1892](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1892), [Skeleton.cpp:1895](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1895).
+
+`getBindPoseModelToRootTransforms()` returns that array after `calculateBindPoseModelToRootTransforms()`: [Skeleton.cpp:1696](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1696), [Skeleton.cpp:1707](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1707). The builder assigns a `Transform tempXF` into `PoseModelTransform`: [Skeleton.cpp:1540](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1540), [Skeleton.cpp:1542](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1542).
+
+**Q2. What the asm computes**
+
+The asm computes the same formula as `PoseModelTransform::rotateTranslate_l2p`, not `Transform::rotateTranslate_l2p` on a raw 48-byte `Transform`.
+
+`PoseModelTransform::rotateTranslate_l2p` is:
+
+`matrix[0][lane] * x + matrix[1][lane] * y + matrix[2][lane] * z + matrix[3][lane]`
+
+for lanes 0, 1, 2: [PoseModelTransform.h:100](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:100), [PoseModelTransform.h:103](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:103). The asm does exactly that with `[eax+0/16/32/48]` as columns: [SoftwareBlendSkeletalShaderPrimitive.cpp:2127](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2127), [SoftwareBlendSkeletalShaderPrimitive.cpp:2130](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2130), [SoftwareBlendSkeletalShaderPrimitive.cpp:2136](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2136).
+
+So it equals scalar because the array is pre-transposed into `PoseModelTransform`, not because of any matrix property.
+
+**Q3. Reachability**
+
+Yes, reachable in Win32 builds. `TRY_FOR_SSE` is `WIN32`: [SoftwareBlendSkeletalShaderPrimitive.cpp:63](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:63). The Win32 project defines `WIN32`: [clientSkeletalAnimation.vcxproj:74](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/build/win32/clientSkeletalAnimation.vcxproj:74). Install sets `s_useSSE = SseMath::canDoSseMath()`: [SoftwareBlendSkeletalShaderPrimitive.cpp:365](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:365). That returns true when CPU has SSE and FXSR: [SseMath.cpp:84](/D:/Code/swg-client-v2/src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:84).
+
+It is reached through the `SM_hardSkinning` / `SM_noSkinning` shared case, not soft skinning: [SoftwareBlendSkeletalShaderPrimitive.cpp:1537](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1537), [SoftwareBlendSkeletalShaderPrimitive.cpp:1569](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1569), [SoftwareBlendSkeletalShaderPrimitive.cpp:1592](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1592).
+
+**Q4. Port ground truth**
+
+Use **asm lane semantics over the actual `PoseModelTransform` layout**: 64-byte stride, four 16-byte column loads, column-linear-combination lanes. That is not bug-for-bug wrong here; it is the intended scalar-equivalent path for `PoseModelTransform`.
+
+For an intrinsic port, `_mm_loadu_ps` or `_mm_load_ps` should load:
+
+`&xf->matrix[0][0]`, `&xf->matrix[1][0]`, `&xf->matrix[2][0]`, `&xf->matrix[3][0]`
+
+then compute `c0*x + c1*y + c2*z + c3` for positions, and omit `c3` for normals/dot3. The renderer ground truth is scalar `PoseModelTransform::rotateTranslate_l2p` / `rotate_l2p`, not raw `Transform` row-dot over a 48-byte stride.
+tokens used
+83,969
+**Bottom line:** the contradiction is resolved by [PoseModelTransform.h](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:39). In this checkout, `PoseModelTransform` is **not** `typedef Transform`; it is a 16-byte-aligned, 64-byte `float[4][4]` wrapper stored as column-major-for-SSE.
+
+**Q1. Layout / build path**
+
+`PoseModelTransform` is `class __declspec(align(16)) PoseModelTransform` with `float matrix[4][4]`, so its element stride is 64 bytes, not 48: [PoseModelTransform.h:39](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:39), [PoseModelTransform.h:118](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:118).
+
+It is built from `Transform` by transposing the row-major `Transform` rows into `PoseModelTransform` columns: [PoseModelTransform.h:44](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:44), [PoseModelTransform.h:49](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:49). `Skeleton` allocates `transformCount * sizeof(PoseModelTransform)` and 32-byte-aligns the backing store: [Skeleton.cpp:1892](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1892), [Skeleton.cpp:1895](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1895).
+
+`getBindPoseModelToRootTransforms()` returns that array after `calculateBindPoseModelToRootTransforms()`: [Skeleton.cpp:1696](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1696), [Skeleton.cpp:1707](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1707). The builder assigns a `Transform tempXF` into `PoseModelTransform`: [Skeleton.cpp:1540](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1540), [Skeleton.cpp:1542](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/Skeleton.cpp:1542).
+
+**Q2. What the asm computes**
+
+The asm computes the same formula as `PoseModelTransform::rotateTranslate_l2p`, not `Transform::rotateTranslate_l2p` on a raw 48-byte `Transform`.
+
+`PoseModelTransform::rotateTranslate_l2p` is:
+
+`matrix[0][lane] * x + matrix[1][lane] * y + matrix[2][lane] * z + matrix[3][lane]`
+
+for lanes 0, 1, 2: [PoseModelTransform.h:100](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:100), [PoseModelTransform.h:103](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/PoseModelTransform.h:103). The asm does exactly that with `[eax+0/16/32/48]` as columns: [SoftwareBlendSkeletalShaderPrimitive.cpp:2127](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2127), [SoftwareBlendSkeletalShaderPrimitive.cpp:2130](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2130), [SoftwareBlendSkeletalShaderPrimitive.cpp:2136](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:2136).
+
+So it equals scalar because the array is pre-transposed into `PoseModelTransform`, not because of any matrix property.
+
+**Q3. Reachability**
+
+Yes, reachable in Win32 builds. `TRY_FOR_SSE` is `WIN32`: [SoftwareBlendSkeletalShaderPrimitive.cpp:63](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:63). The Win32 project defines `WIN32`: [clientSkeletalAnimation.vcxproj:74](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/build/win32/clientSkeletalAnimation.vcxproj:74). Install sets `s_useSSE = SseMath::canDoSseMath()`: [SoftwareBlendSkeletalShaderPrimitive.cpp:365](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:365). That returns true when CPU has SSE and FXSR: [SseMath.cpp:84](/D:/Code/swg-client-v2/src/engine/shared/library/sharedMath/src/win32/SseMath.cpp:84).
+
+It is reached through the `SM_hardSkinning` / `SM_noSkinning` shared case, not soft skinning: [SoftwareBlendSkeletalShaderPrimitive.cpp:1537](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1537), [SoftwareBlendSkeletalShaderPrimitive.cpp:1569](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1569), [SoftwareBlendSkeletalShaderPrimitive.cpp:1592](/D:/Code/swg-client-v2/src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SoftwareBlendSkeletalShaderPrimitive.cpp:1592).
+
+**Q4. Port ground truth**
+
+Use **asm lane semantics over the actual `PoseModelTransform` layout**: 64-byte stride, four 16-byte column loads, column-linear-combination lanes. That is not bug-for-bug wrong here; it is the intended scalar-equivalent path for `PoseModelTransform`.
+
+For an intrinsic port, `_mm_loadu_ps` or `_mm_load_ps` should load:
+
+`&xf->matrix[0][0]`, `&xf->matrix[1][0]`, `&xf->matrix[2][0]`, `&xf->matrix[3][0]`
+
+then compute `c0*x + c1*y + c2*z + c3` for positions, and omit `c3` for normals/dot3. The renderer ground truth is scalar `PoseModelTransform::rotateTranslate_l2p` / `rotate_l2p`, not raw `Transform` row-dot over a 48-byte stride.

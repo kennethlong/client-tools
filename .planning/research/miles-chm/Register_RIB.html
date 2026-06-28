@@ -1,0 +1,137 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Register_RIB</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Register_RIB'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Register_RIB</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ registers a RIB interface on static library platforms such as Wii, PS3, PSP, or Xbox 360.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_startup.html#_Discussion' class='paragraph'>AIL_startup: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_initialize_the_Miles_Sound_System_for_use_.html#_Discussion' class='paragraph'>How do I initialize the Miles Sound System for use?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Nintendo_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Nintendo Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Nintendo_Wii_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Nintendo Wii Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Nintendo_Wii_U_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Nintendo Wii-U Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_PlayStation_3_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a PlayStation 3 Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Sony_NGP_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Sony NGP Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Sony_PSP_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Sony PSP Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_a_Xbox_360_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into a Xbox 360 Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Integrating_Miles_into_an_Apple_iOS_Build_Environment.html#_Discussion' class='paragraph'>Integrating Miles into an Apple iOS Build Environment: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Register_RIB.html#_Discussion' class='paragraph'>Register_RIB: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_redist_directory.html' class='paragraph'>AIL_set_redist_directory</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_startup.html' class='paragraph'>AIL_startup</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='System_Services.html' class='paragraph'>System Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='Register_RIB.html'>Register_RIB</a></span>(</td><td><span class='type'>void*</span> <span class='parameter'>static_lib_name</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ registers a RIB interface on static library platforms such as Wii, PS3, PSP, or Xbox 360.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='static_lib_name' class=nohover>static_lib_name</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Name of the static RIB library to load.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='Register_RIB::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ On the static library versions of Miles (Xbox 360, Wii, PS3, PSP), you must manually load the ASI decompressors that you want to use. 
+
+</p>
+<p>
+This function (macro actually) takes a single parameter - the static library to load.   Currently, the available static libraries include MP3Dec, BinkADec, OggDec, Voice, SRS, DolbySurround, and DSP.  To  load any or all of these libraries, you use this function before <a href='AIL_startup.html' class='paragraph'>AIL_startup</a>.   For example: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre><a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(BinkADec);
+<a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(MP3Dec);
+<a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(DSP);
+<a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(Voice);
+<a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(XMADec);
+<a href='Register_RIB.html' class='paragraph'>Register_RIB</a>(OggDec);
+
+<a href='AIL_startup.html' class='paragraph'>AIL_startup</a>();
+</pre></div>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_redist_directory.html' class='paragraph'>AIL_set_redist_directory</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='System_Services.html' class='paragraph'>System Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_startup.html' class='paragraph'>AIL_startup</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

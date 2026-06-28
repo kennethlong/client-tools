@@ -1,0 +1,194 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Miles MIDI Studio</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Miles MIDI Studio'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Miles MIDI Studio</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_MIDI_Studio.html#_Discussion' class='paragraph'>Miles MIDI Studio: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_Sound_Player.html' class='paragraph'>Miles Sound Player</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='WavMux.html' class='paragraph'>WavMux</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Miles_Sound_Player.html' class='paragraph'>Miles Sound Player</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Miles MIDI Studio::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The Miles MIDI Studio is a utility capable of all of the common tasks that a Miles Sound System user will require. It contains tools for digital sound files, MIDI files, and DLS files.  
+
+</p>
+<p>
+All of the neat things that the Miles MIDI Studio can do are available from the buttons along the bottom of the window.  In Windows, you simply highlight a file, and then click one of the buttons.  We'll describe each button next. 
+
+</p>
+<p>
+<br><b>The Compress button:</b> this option will compress either a digital wave file, a DLS file, or DLS data embedded in an XMIDI file with IMA ADPCM or MPEG Layer 3 compression. ADPCM compression provides a 4-to-1 space-savings with very little quality loss, MP3 provides 11-to-1 space-saving with no quality loss. ADPCM and MP3 compressed wave files can be played back directly by the Miles Sound System. 
+
+</p>
+<p>
+Note that compressed DLS files generally have the extension ".MLS". 
+
+</p>
+<p>
+<br><b>The Decompress button:</b> this option will decompress either a digital wave file, a MLS file, or MLS data embedded in an XMIDI file that was previously compressed with the Compress option.  Note that this isn't a lossless operation - compressing and then decompressing a file will result in different sound data. 
+
+</p>
+<p>
+<br><b>The Merge XMI with DLS button:</b>  this option will merge together a DLS or MLS file into a MIDI or XMIDI file.  This allows you distribute your MIDI files with built-in instruments - kind of like a high-rent MOD file!  For further space-savings, you can also choose to remove the instruments that aren't used in the MIDI sequence.  You can even compress the instrument data as it is merged into the new file.  You must highlight both a DLS and a MIDI file for this option.  To highlight more than one file at a time, hold the 'Control' key down as you click on the files. 
+
+</p>
+<p>
+Note that XMIDI files with embedded DLS data generally have the extension ".MSS". 
+
+</p>
+<p>
+<br><b>The Unmerge XMI and DLS button:</b> this option will unmerge the XMIDI and DLS pieces of a merged-XMIDI file into two separate files.  This is useful when you need to edit the DLS instruments that were previously embedded into a merged-XMIDI file. 
+
+</p>
+<p>
+<br><b>The Filter DLS with MIDI button:</b>  this option will use one or more MIDI or XMIDI files to filter out unused instruments in a DLS or MLS file.  This option allows you to shrink huge DLS files (General MIDI sets, for example) into smaller DLS files that include only the instruments that are used by the specified MIDI files.  You can highlight as many MIDI files as you want to filter with, so you can even create perfect 'application-wide' DLS files (DLS files that can play any MIDI file in your application).  If the data is uncompressed, you can also choose to compress it as it is filtered. You must highlight both a DLS and at least one MIDI file for this option.  To highlight more than one file at a time, hold the 'Control' key down as you click on the files. 
+
+</p>
+<p>
+<br><b>The Convert to XMIDI button:</b>  this option will convert Standard MIDI Format 0 and Format 1 sequence files to the Extended MIDI (XMIDI) format used by the Miles Sound System's Version 2.0 and Version 3.0 drivers. This conversion preserves all of the information needed to faithfully reproduce the sequence's original sound, while discarding elements of the MIDI storage format that are redundant, inefficient, or otherwise unnecessary for real-time playback. 
+
+</p>
+<p>
+An XMIDI file containing a single translated MIDI sequence often requires from 10% to 30% less storage space, and can be performed with substantially less background processing time. The MIDI data track is compressed mostly by the elimination of all Note Off messages, which is made possible by appending each note's duration in quantization intervals to its original Note On event.  Track-specific MIDI meta-events (such as Sequence/Track Name, Instrument Name, and End of Track events) are stripped from the data stream, while a single End of Track meta-event (FF 2F 00) is placed at the end of the XMIDI sequence. 
+
+</p>
+<p>
+In addition to the prequantized MIDI event stream, the XMIDI sequence format also includes information such as master lists of Global Timbre Library entries needed by the sequence and target offsets for any Sequence Branch Index controllers present in the sequence.  To aid developers with specialized needs, XMIDI files are stored in accordance with Electronic Arts' Interchange File Format (EA IFF 85) standard .  For example, using conventional IFF access routines, MSS applications may load and interpret XMIDI timbre list (TIMB) chunks manually, using the data to prepare the synthesizer for immediate playback of sequences at a later time. 
+
+</p>
+<p>
+Refer to the Extended MIDI (XMIDI) Specification  Section for a detailed description of the XMIDI IFF structure. 
+
+</p>
+<p>
+Note that XMIDI files generally have the extension ".XMI". 
+
+</p>
+<p>
+<br><b>The Convert to RAW button:</b>  this option will convert a highlighted digital wave file into a RAW file.  A raw file is a digital sound file that has no header or trailer information (sometimes useful in low-level streaming sound playback). 
+
+</p>
+<p>
+Note that RAW sound files generally have the extension ".RAW". 
+
+</p>
+<p>
+<br><b>The File Type Button:</b>  this option will display the file type of the highlighted file.  It's handy when you can't remember if you already embedded DLS data into a file, or whether you compressed it, etc, etc.  It can detect PCM wave files, IMA ADPCM wave files, other wave files, standard MIDI files, XMIDI files, XMIDI files with embedded uncompressed DLS data, XMIDI files with embedded compressed DLS data, uncompressed DLS files, and compressed DLS files. 
+
+</p>
+<p>
+<br><b>The MIDI List button:</b> this option will display the contents of the selected MIDI file.  This list file will display every MIDI event in the file.  It is useful for trouble-shooting problem MIDI files.  You can also choose to view the Roland MT-32 / LAPC-1 Programmer's Reference Guide with the MIDI listing.  In addition to all standard MIDI file events, this option also recognizes and displays each Miles Sound System-specific meta-event and Extended MIDI Control Change event. 
+
+</p>
+<p>
+Below is a sample MIDI list: 
+
+</p>
+<p>
+</p>
+<div class=prototype>
+<pre>MIDI Listing version 4.0a         Copyright (C) 1991-98 RAD Game Tools, Inc.
+-------------------------------------------------------------------------------
+
+Offset 0000: Chunk MThd, length 0006
+    MIDI file format: 1
+    # of tracks: 2
+    MIDI division: 120 delta-time ticks per quarter-note
+Offset 000E: Chunk MTrk, length 0019
+    DTime 0000: meta-event: key signature 0 0
+    DTime 0000: meta-event: tempo in uS/MIDI quarter-note = 666666
+    DTime 0000: meta-event: time signature 4/4, c = 024, b = 008
+    DTime 0000: meta-event: end of track
+Offset 002F: Chunk MTrk, length 0048
+    DTime 0000: meta-event: sequence/track name "PIANO"
+    DTime 0000: meta-event: instrument name "Acou Piano 2"
+    DTime 0000: Ch 02 program change to 001
+    DTime 0000: Ch 02 main volume MSB = 127
+    DTime 0000: Ch 02 note 048 on, attack velocity 091
+    DTime 0092: Ch 02 note 048 off
+    DTime 0028: Ch 02 note 048 on, attack velocity 088
+    DTime 0106: Ch 02 note 048 off
+    DTime 0014: Ch 02 note 048 on, attack velocity 098
+    DTime 0079: Ch 02 note 048 off
+    DTime 0001: Ch 02 note 050 on, attack velocity 088
+    DTime 0035: Ch 02 note 050 off
+    DTime 0007: Ch 02 note 052 on, attack velocity 090
+    DTime 0091: Ch 02 note 052 off
+    DTime 0027: Ch 02 MSS callback trigger controller 000
+    DTime 0000: meta-event: end of track
+</pre></div>
+<p>
+</p>
+<p>
+<br><b>The DLS List button:</b>  this option will display the contents of the selected DLS file.  This list file will display all of the instrument information inside the DLS file. You can also choose whether to view the articulation data for each instrument. Refer to the Downloadable Sounds Level 1 Version 1.0 specification, available at the M.M.A. <a href='http://www.midi.org'>web-site</a>, for guidelines on the interpretation of DLS data files. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='WavMux.html' class='paragraph'>WavMux</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Other_Miles_Sound_System_Tools.html' class='paragraph'>Other Miles Sound System Tools</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Miles_Sound_Player.html' class='paragraph'>Miles Sound Player</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

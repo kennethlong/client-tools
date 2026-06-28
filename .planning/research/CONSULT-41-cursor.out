@@ -1,0 +1,211 @@
+﻿# Adversarial line-by-line review — CONSULT-41 door-snap fix
+
+Scope: mechanical correctness only (not narrow-gap / blast-radius for Change A).
+
+---
+
+## Change A — `FloorMesh.cpp` `continue` on `PWR_WalkOk`
+
+**Verdict: Mechanically correct** (given the locked invariant `centerWalk == PWR_WalkOk` ⇒ spurious seam contact).
+
+### `continue` target
+The `continue` sits inside the per-triangle **edge** loop (`for (int i = 0; i < 3; i++)`), in the `else` of `canExitEdge(...)` (uncrossable branch):
+
+```2855:2866:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+			else
+			{
+				// ---- Door-snap fix (avatar floor-seam rubberband) ----
+				// ...
+				if(centerWalkResult == PWR_WalkOk)
+				{
+					continue;
+				}
+```
+
+`continue` advances to the **next edge** of the same triangle, not the outer `while (!unprocessed.empty())` — correct for “skip recording this edge’s circle contact, keep scanning.”
+
+### `centerWalkResult` scope / validity
+Declared and assigned before the queue walk; early returns prevent use uninitialized:
+
+```2731:2756:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+	PathWalkResult centerWalkResult;
+	float centerHitTime = REAL_MAX;
+	// ...
+	{
+		centerWalkResult = pathWalkPoint( startLoc, delta, centerHitTriId, centerHitEdge, centerHitTime );
+
+		if(    (centerWalkResult == PWR_MissedStartTri) 
+			|| (centerWalkResult == PWR_CantEnter) 
+			|| (centerWalkResult == PWR_WalkFailed) 
+			|| (centerWalkResult == PWR_StartLocInvalid) )
+		{
+			return centerWalkResult;
+		}
+		else if( centerWalkResult == PWR_InContact )
+		{
+			// ...
+			return PWR_CenterInContact;
+		}
+```
+
+By the time the edge loop runs (2793+), `centerWalkResult` is always defined. `PWR_WalkOk` is a stable scalar for the whole call — not per-edge.
+
+### Line-level logic
+- Only runs when `canExitEdge(...)` is **false** (uncrossable) — crossable edges take the neighbor-push branch at 2844–2853, never hit this `continue`.
+- Suppressed edges do not set `circleHitTime` / `hitAnything`; other edges and triangles are still evaluated — no accidental early exit from the walk.
+- Consistent with downstream `!hitAnything` + `centerWalkResult == PWR_WalkOk` → `PWR_WalkOk` at 3044–3053.
+
+**No line-level bug found** under the locked seam-contact model.
+
+---
+
+## Change B — pull-in rate limit (`FreeChaseCamera.cpp`)
+
+**Verdict: Correct for the measured door-snap (stable `m_zoom`, collision-only drop); incorrect as written for general third-person zoom-in.**
+
+### `zoomAtFrameStart` capture point
+
+```603:605:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+	float const zoomAtFrameStart = m_currentZoom; // door-snap fix: last frame's rendered zoom, for the inward pull-in rate limit below
+
+	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
+```
+
+- Captured **before** recovery lerp — matches comment (“last frame’s rendered zoom”).
+- Nothing writes `m_currentZoom` between 603 and 605.
+- `zoomAtFrameStart` itself is never mutated.
+
+### Uses of `m_currentZoom` between capture and clamp
+
+| Line | Op | Notes |
+|------|-----|-------|
+| 605 | write | recovery lerp toward `m_zoom` |
+| 661 | read | shoulder-ray gate (`>= scaledFirstPersonDistance`) — pre-collision |
+| 679 | read | early first-person branch — pre-collision |
+| 698 / 746 | write | collision pull-in (the snap being fixed) |
+| 756–759 | read/write | rate limit |
+
+Nothing **reads** the unlimited post-collision value before the clamp runs. Shoulder block and early first-person use pre-collision zoom only (pre-existing ordering, not introduced by this diff).
+
+### Interaction with first-person checks
+
+Two checks:
+
+```679:682:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+	if (m_currentZoom < scaledFirstPersonDistance)
+	{
+		setFirstPerson (true);
+	}
+```
+
+```762:765:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+		if (m_currentZoom < scaledFirstPersonDistance)
+			setFirstPerson (true);
+		else
+			move_o (Vector::negativeUnitZ * m_currentZoom);
+```
+
+- Rate limit runs **after** collision, **before** the second check — correct ordering for “ease pull-in, then decide first-person.”
+- Rate limit can **delay** first-person entry when collision would have snapped below threshold in one frame — intentional per locked trade-off.
+- Early check at 679 can still force first-person **before** collision/rate-limit run; that path pre-dates this fix.
+
+### Bug: baseline includes recovery lerp, not just collision
+
+Rate limit:
+
+```756:759:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+			float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
+			if (m_currentZoom < zoomAtFrameStart - maxPullIn)
+				m_currentZoom = zoomAtFrameStart - maxPullIn;
+```
+
+It runs **every third-person frame** (inside the `else` of 679), **whether or not** collision fired.
+
+Default `ms_cameraZoomSpeed = 0.2` (`ConfigClientGame.cpp:1122`). When `m_zoom < m_currentZoom` (user zooming in), recovery lerp at 605 often pulls in **far more** than `8 m/s × dt`:
+
+- Example: `zoomAtFrameStart = 10`, `m_zoom = 3`, `dt = 0.016`  
+  - After lerp: `8.6` (−1.4 m)  
+  - Rate-limit floor: `10 − 0.128 = 9.872`  
+  - **`m_currentZoom` is raised to 9.872`** — recovery lerp partially undone.
+
+For any `zoomAtFrameStart > ~3.6 m` with default lerp, inward recovery exceeds 8 m/s and the clamp triggers **every frame**. Net effect: **all third-person zoom-in is capped at 8 m/s**, not just collision pull-in. Pop-out is unaffected (condition only fires on decrease below baseline).
+
+Door-snap case (stable zoom, lerp ≈ no-op, big collision drop): works as intended.
+
+**Suggested fix:** anchor to pre-collision zoom, not pre-lerp:
+
+```cpp
+// After line 605 (or immediately before the collision block at ~687):
+float const zoomBeforeCollision = m_currentZoom;
+
+// ... collision assigns m_currentZoom ...
+
+float const maxPullIn = elapsedTime * cs_cameraPullInSpeed;
+if (m_currentZoom < zoomBeforeCollision - maxPullIn)
+    m_currentZoom = zoomBeforeCollision - maxPullIn;
+```
+
+Optionally skip the clamp when `!m_colliding && !hit` if you only want to ease wall hits.
+
+### `elapsedTime` spike (e.g. 0.5 s hitch)
+
+`maxPullIn = 0.5 × 8 = 4.0 m` — a measured ~2.1 m door snap passes through unclamped. Same frame, Change C’s shoulder alpha also hits `1.0` (instant zero).
+
+Acceptable as a hitch edge case if hitches are rare; if not, cap delta:
+
+```cpp
+float const maxPullIn = std::min(elapsedTime * cs_cameraPullInSpeed, cs_cameraPullInSpeed * 0.05f); // e.g. 0.4 m max
+```
+
+---
+
+## Change C — shoulder offset ease
+
+**Verdict: Mechanically correct for replacing instant snap; pre-existing `move_o` + new lerp is redundant but not a new regression; steady-state offset fight with line 643 is real but bounded.**
+
+### Block in context
+
+```643:645:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+		m_offset = Vector::linearInterpolate(m_offset, m_desiredOffset, elapsedTime);
+
+		move_o(Vector(m_offset.x, m_offset.y + ms_vehicleCameraOffsetY, m_offset.z));
+```
+
+```667:674:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+		if(ClientWorld::collide(...))
+		{
+			move_o(Vector(-m_offset.x * elapsedTime, 0.0f, 0.0f));
+			m_offset.x = linearInterpolate (m_offset.x, 0.0f, clamp (0.f, elapsedTime * cs_cameraPullInSpeed, 1.f));
+		}
+```
+
+### Double correction (`move_o` + lerp)?
+- `move_o(-m_offset.x * elapsedTime)` **predates** the fix; only `m_offset.x = 0` became a lerp.
+- Old code also had both: instant zero **and** `move_o` — the snap was from zeroing `m_offset.x` while line 645 had already applied full offset.
+- New code: lerp dominates (~8 m/s on ~0.4 m); `move_o` adds ~0.4×0.016 ≈ 6 mm/frame at entry — minor extra pull, not a second full snap.
+
+### Fight with `m_offset` recovery at 643
+Order every frame while shoulder ray hits:
+
+1. **643:** `m_offset.x` → `m_desiredOffset.x` at rate ~`elapsedTime` (≈1.6%/frame at 60 Hz).
+2. **645:** apply offset to transform.
+3. **673–674:** nudge transform + ease `m_offset.x` → 0 at ~8 m/s.
+
+They oppose on X. Fixed-point (dt=0.016): `m_offset.x` stabilizes ≈ **0.04 m**, not 0 — ray keeps firing, block keeps running. Camera sits slightly offset while colliding; accepted per locked wall-peek trade-off.
+
+**Not a snap bug** — a small equilibrium. To reach true zero while colliding, you’d need to disable 643’s X pull during shoulder clip or run shoulder handling before 643.
+
+### Hitch
+`clamp(0, elapsedTime * 8, 1)` → `1.0` on large `elapsedTime` → instant `m_offset.x = 0` (same class of hitch bypass as Change B).
+
+---
+
+## Summary table
+
+| Change | Line-level verdict | Bug? | Suggested fix |
+|--------|-------------------|------|---------------|
+| **A** | `continue` → next edge; `centerWalkResult` in scope | **No** (under locked invariant) | — |
+| **B** | Door-snap path OK; general zoom-in path wrong | **Yes** — caps **all** third-person zoom-in to 8 m/s via pre-lerp baseline | Anchor to `zoomBeforeCollision`; optional hitch cap on `maxPullIn` |
+| **C** | Ease replaces snap; steady-state ~4 cm offset while clipped | **Minor** — 643 vs 674 tug-of-war; hitch instant zero | Optional: shoulder block before 643 or skip 643 X while shoulder-colliding |
+
+The highest-severity line-level issue is **Change B’s baseline**: the comment says “rate-limit the inward PULL-IN” from collision, but the code limits net decrease from **pre-recovery-lerp** zoom on **every** third-person frame, silently overriding `ms_cameraZoomSpeed` zoom-in behavior whenever `m_zoom < m_currentZoom`.

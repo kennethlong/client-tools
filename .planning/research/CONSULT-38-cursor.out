@@ -1,0 +1,272 @@
+﻿## Verdict (short)
+
+**Primary locus: spurious / over-aggressive detection**, not broken slide math. `pathWalkCircle` **truncates only** (no tangential slide). `CollisionResolve` **does** project the remaining `(1 − t)` step via `SingleSlide`, but that only runs after a contact is recorded — and face-B captures are almost all **center `PWR_WalkOk` + circle-only boundary grazes** that should not become blocking `RR_Resolved` events.
+
+The visible 0.10–0.23 m per-frame clip is **`step × (1 − circleHitTime)` short of intended end** (lost forward motion), **not** a reversal past the frame start. It matches **“truncate at contact + no effective slide replay”** when resolution stops at the contact waypoint.
+
+---
+
+## 1. `pathWalkCircleGetIds` → `pathWalkCircle`: truncate, no slide
+
+After a blocking circle contact, `pathWalkCircleGetIds` stores `circleHitTime = hitRange.getMin()` (FWD branch, no `wallEpsilon`):
+
+```2909:2916:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+				else
+				{
+					// Non-crossable edge hit - record the hit
+
+					circleHitTime = hitRange.getMin();
+					circleHitTriId = currentTriId;
+					circleHitEdge = i;
+					hitAnything = true;
+```
+
+For `PWR_HitEdge`, `pathWalkCircle` calls `makeHitResult2`, which sets position to **linear truncation** along `delta` — no edge-aligned slide vector:
+
+```1688:1714:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+void FloorMesh::makeHitResult2 ( Vector const & begin, Vector const & delta, int centerTriId, int hitTriId, int hitEdgeId, float hitTime, FloorLocator & result ) const
+{
+	Segment3d edge = getTriangle(hitTriId).getEdgeSegment(hitEdgeId);
+
+	Vector endPoint = begin + delta * hitTime;
+
+	Vector contactPoint = Distance2d::ClosestPointSeg(endPoint,edge);
+	Vector contactNormal = endPoint - contactPoint;
+
+	contactNormal.y = 0.0f;
+
+	IGNORE_RETURN(contactNormal.normalize());
+
+	// ----------
+
+	result = FloorLocator(this,endPoint);
+	// ...
+	result.setTime(hitTime);
+	result.setContactNormal(contactNormal);
+```
+
+`pathWalkCircle` dispatch for circle hits:
+
+```2556:2562:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+	else if((walkResult == PWR_HitEdge) || (walkResult == PWR_InContact))
+	{
+		makeHitResult2( begin, delta, centerTriId, hitId, hitEdgeId, hitTime, result );
+
+		result.setRadius(radius);
+
+		return walkResult;
+```
+
+**Post-contact delta returned to callers:** `delta × hitTime` implicitly (position = `begin + delta × hitTime`). Normal is radial (center → edge), not edge tangent.
+
+---
+
+## 2. `CollisionResolve` replay: slide exists, but only after contact
+
+### Waypoint construction (`CollisionResolve.cpp:364+`)
+
+On first resolvable contact:
+
+```421:463:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+		Vector contactPoint = moveSeg.atParam(contactCell,contact.m_time);
+
+		outList.push_back( CellPosition(contactCell,contactPoint) );
+
+		MoveSegment secondSeg;
+
+		secondSeg.m_cellA = contactCell;
+		secondSeg.m_pointA = contactPoint;
+
+		secondSeg.m_cellB = moveSeg.m_cellB;
+		secondSeg.m_pointB = moveSeg.m_pointB;
+
+		if(contact.m_time != 0.0f)
+		{
+			translateEverything(cellA,extentA,floorContactsA,moveSeg,contact.m_time,ms_ignoreTriId,ms_ignoreEdge);
+		}
+
+		// ----------
+
+		int contactCount = ms_contactList.size() + 1;
+
+		if(contactCount == 1)
+		{
+			Vector delta = secondSeg.getDelta(contactCell);
+
+			Vector slidDelta = Collision3d::SingleSlide(delta,contact.m_normal);
+
+			// Stop resolution if the velocity starts to move backwards
+
+			Vector localStartDelta = CollisionUtils::rotateToCell(startCell,startDelta,contactCell);
+
+			if(slidDelta.dot(localStartDelta) <= 0.0f)
+			{
+				return RR_Resolved;
+			}
+
+			ms_contactList.push_back(contact);
+
+			moveSeg.m_cellA = contactCell;
+			moveSeg.m_pointA = contactPoint;
+
+			moveSeg.m_cellB = contactCell;
+			moveSeg.m_pointB = contactPoint + slidDelta;
+```
+
+- **Contact waypoint:** `begin + delta × circleHitTime` (`atParam`, `CollisionResolve.cpp:65-70`).
+- **Remaining motion:** `secondSeg.getDelta()` = `delta × (1 − circleHitTime)`.
+- **Slide:** `SingleSlide(remaining, normal)` projects off the inward normal component (`CollisionUtils.cpp:249-315`).
+- **Next iteration** (no further hit): pushes final `moveSeg.m_pointB` (`:391`).
+
+### Rewind + replay
+
+```320:339:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+		Vector resetPos = moveSeg.getBegin(moveSeg.m_cellB);
+		// ...
+		objectA->setPosition_p(resetPos);
+
+		moveObjectAlong(objectA,positions);
+```
+
+`moveObjectAlong` is a straight teleport chain:
+
+```214:228:src/engine/shared/library/sharedCollision/src/shared/core/CollisionResolve.cpp
+void moveObjectAlong ( Object * object, CellPositionList const & positions )
+{
+	int count = positions.size();
+
+	for(int i = 0; i < count; i++)
+	{
+		// ...
+		object->setPosition_p( localEnd );
+	}
+}
+```
+
+### Same-cell horizontal contact — two outcomes
+
+| Path | `positions` | Net vs intended end `begin + delta` |
+|------|-------------|----------------------------------------|
+| **Slide succeeds** (`slidDelta·startDelta > 0`, 2nd iter clean) | `[contact, contact + SingleSlide(δ(1−t), n)]` | ≈ full step along wall (for a legitimate block) |
+| **Slide aborted** (`slidDelta·startDelta ≤ 0`, `:452-454`) | `[contact]` only | **`δ × (1 − t)` short** — stuck at contact |
+
+Floor contact enters resolution via `findContactWithFloor` → `canMove` → `pathWalkCircle`, using `result.getTime()` as `contact.m_time` (`:788-805`).
+
+### Center-cleared asymmetry (face-B smoking gun)
+
+When `centerWalkResult == PWR_WalkOk`, the filter that would clip circle hits past center exit time **does not run**:
+
+```2838:2841:src/engine/shared/library/sharedCollision/src/shared/core/FloorMesh.cpp
+			if( (centerWalkResult == PWR_ExitedMesh) || (centerWalkResult == PWR_HitPortalEdge) || (centerWalkResult == PWR_HitEdge) )
+			{
+				if(hitRange.getMin() > centerHitTime) continue;
+			}
+```
+
+161/162 avatar captures have center `PWR_WalkOk` but still return `PWR_HitEdge`/`PWR_InContact` from the **offset circle**. Resolution has **no** “center cleared → don’t block” branch; any non-`WalkOk` from `canMove` becomes a floor contact (`CollisionResolve.cpp:788-790`).
+
+**For face-B: the stutter is “spurious detection → resolution pipeline runs → often ends at truncate (missing slide),” not “bad `SingleSlide` geometry” on legitimate center blocks.**
+
+---
+
+## 3. Reconciling 0.10–0.23 m backward clip with code
+
+LOCKED evidence: net forward across frames, per-frame backward clip vs intended end.
+
+**Not reversal past frame start (normal case).** Same-cell `resetPos = begin` (last frame). FWD contacts have `circleHitTime ≥ 0`, so `contactPoint = begin + δ×t` is **forward of** `begin`. Replay never ends behind `begin` unless the rare PEN branch fires with negative `t` and `|step×t| ≤ wallEpsilon` (`:2880-2903`, `:69`).
+
+**Backward clip magnitude = lost forward motion:**
+
+\[
+|\text{intended} - \text{resolved}| \approx \|\delta\| \times (1 - \text{circleHitTime})
+\]
+
+when resolution stops at contact (`:452-454`, one waypoint).
+
+Examples from LOCKED data:
+- `step ≈ 0.08–0.44`, `circleHitTime` spans `<0.01` to `>0.4`
+- `step=0.20`, `t=0.45` → loss `0.11 m` ✓
+- `step=0.30`, `t=0.30` → loss `0.21 m` ✓
+
+The CORNERSNAP rewind log (`posBefore → resetPos`) is the **full-step rewind-then-replay** pattern (`:337-339`), not the net visible clip. Visible jitter is **resolved ≪ intended**, not **resolved < last frame**.
+
+---
+
+## 4. Numerical / step-size tipping points (detection)
+
+`IntersectCircleSeg` itself has **no wall thickness epsilon** — pure FP range math:
+
+```330:350:src/engine/shared/library/sharedCollision/src/shared/core/Intersect2d.cpp
+Range IntersectCircleSeg ( Circle const & A, Vector const & V, Segment3d const & S )
+{
+	// ...
+	Range slabRange = Intersect1d::IntersectFloatRange( c, v, Range(0.0f,1.0f) );
+	Range tubeRange = IntersectCircleLine(A,V,L);
+	Range innerRange = Intersect1d::IntersectRanges(tubeRange,slabRange);
+	Range beginRange = Intersect2d::IntersectCirclePoint(A,V,S.getBegin());
+	Range endRange = Intersect2d::IntersectCirclePoint(A,V,S.getEnd());
+	Range outerRange = Containment1d::EncloseRanges(beginRange,innerRange,endRange);
+	return outerRange;
+}
+```
+
+**Step-sensitive comparisons in `pathWalkCircleGetIds` (not in `IntersectCircleSeg` itself):**
+
+| Site | Comparison | Step / FP sensitivity |
+|------|------------|----------------------|
+| `:2874-2878` | `hitRange.getMin() == hitRange.getMax()` | **Exact FP equality** — grazing contact appears/disappears with rounding/toolchain |
+| `:2869-2871` | `contactNormal.dot(V) >= 0.0f` | Grazing angle — tiny FP flip records/loses contact |
+| `:2886` | PEN: `contactDistance < wallEpsilon` where `contactDistance = step × \|min\|` | **Scales with step** — larger step accepts more past contacts |
+| `:2909-2916` | FWD: **no epsilon gate** | Any forward graze while center walks OK → hard block |
+| `:2956-2965` | `contactDist = step × \|circleHitTime\| ≤ wallEpsilon` → `PWR_InContact` | Larger step → more `HitEdge` vs `InContact` at same `t` |
+| `:2836` | `hitRange.getMin() > circleHitTime` early-out | Competing hits — order depends on FP min ordering |
+
+`canExitEdge` for `FET_Uncrossable` is a hard `false` (`:1923-1925`) — mesh-boundary edges always block once detected. `intersectEdge` uses the same `IntersectCircleSeg` with `[0,1]` time clip (`:3513-3519`).
+
+**FPS correlation (LOCKED fact 7):** larger per-frame `step` → more/larger-magnitude `PWR_HitEdge` events → larger `(1−t)×step` loss when slide aborts. Retail on identical assets likely **never enters resolution** for these center-OK circle grazes (returns `PWR_WalkOk`), not because `SingleSlide` differs.
+
+---
+
+## Classification
+
+| Hypothesis | Fit |
+|------------|-----|
+| **Spurious detection** | **Best fit** — center OK + circle graze on `FET_Uncrossable` boundary (`portalId=-1`), FWD branch unguarded, center filter skipped when `PWR_WalkOk` |
+| **Missing slide** | **Secondary amplifier** — `:452-454` leaves avatar at truncate; one-waypoint replay |
+| **Bad slide** | **Unlikely for parallel wall walk** — `SingleSlide` is standard; would need wrong normal or dot-test false negative |
+
+---
+
+## Recommended fix locus
+
+**Narrowest safe change: detection in `FloorMesh::pathWalkCircleGetIds`**, not `CollisionResolve` replay.
+
+**Primary site:** `FloorMesh.cpp:2909-2930` (FWD forward-graze record branch) — gate symmetrically to PEN (`:2886`) and/or **suppress circle-only blocks when `centerWalkResult == PWR_WalkOk`** and graze depth ≤ `wallEpsilon` (or equivalent “center cleared” rule at `:2937-3019`).
+
+**Do not** relax `CollisionResolve.cpp:452-454` globally — that widens blast radius for real center blocks.
+
+**Secondary hardening:** `:2874` degenerate graze — replace `min == max` with epsilon band.
+
+---
+
+## Probes if still undecidable at runtime
+
+Add to existing CORNERSNAP probes:
+
+**In `CollisionResolve.cpp` after `:446`:**
+```cpp
+// LOG: circleHitTime=contact.m_time, step=|delta|, lost=(1-t)*step,
+// slidDelta=..., dot=slidDelta.dot(localStartDelta),
+// waypoints=positions.size()+1, branch=(dot<=0?"NO_SLIDE":"SLIDE")
+```
+
+**In `pathWalkCircleGetIds` at `:2937` when `hitAnything`:**
+```cpp
+// LOG: centerWalkResult, circleHitTime, contactDist=step*|t|,
+// branch FWD/PEN, wouldSuppress=(centerWalk==WalkOk && contactDist<=wallEpsilon)
+```
+
+**Decisive split:**
+- **`NO_SLIDE` + legitimate contact** → resolution dot-test (`:452`)
+- **`SLIDE` + large `(1−t)×step` loss** → bad normal (log `result.getContactNormal()` from `makeHitResult2`)
+- **High `wouldSuppress` rate on stutter frames** → detection fix at `:2909` / center-OK gate confirmed

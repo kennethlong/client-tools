@@ -1,0 +1,138 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_obstruction</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_obstruction'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_obstruction</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ sets the obstruction for the specified 3D sample.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_obstruction.html#_Discussion' class='paragraph'>AIL_set_sample_obstruction: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_2_Properties.html#_Discussion' class='paragraph'>Creative's EAX 2 Properties: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_obstruction.html' class='paragraph'>AIL_sample_obstruction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_exclusion.html' class='paragraph'>AIL_set_sample_exclusion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_occlusion.html' class='paragraph'>AIL_set_sample_occlusion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_set_sample_occlusion.html' class='paragraph'>AIL_set_sample_occlusion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_sample_exclusion.html' class='paragraph'>AIL_set_sample_exclusion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'>void</span> <span class='type'><a href='AIL_set_sample_obstruction.html'>AIL_set_sample_obstruction</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='F32.html' class='blue'>F32</a></span> <span class='parameter'>obstruction</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ sets the obstruction for the specified 3D sample.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the sample handle to control.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='obstruction' class=nohover>obstruction</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ is the amount that the sample is obstructed.  This is a linear value from completely non-obstructed (0.0) to completely obstructed (1.0).</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+  </table>
+<div class="discussion_heading"><a name='AIL_set_sample_obstruction::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ Obstructions mean that the direct path of the sound is blocked, but an indirect path is still available - a sound playing from behind a crate, for example. 
+
+</p>
+<p>
+By default, samples are completely non-obstructed. 
+
+</p>
+<p>
+With most output options, obstructions are emulated with volume control. On the EAX 2/3/4 providers, however, obstructions are performed in hardware and sound really cool (you can still hear reflections because they bounce around the obstruction). 
+
+</p>
+<p>
+Example files that use this function: examms.cpp<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_set_sample_occlusion.html' class='paragraph'>AIL_set_sample_occlusion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Reverb_Services.html' class='paragraph'>Reverb Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_sample_exclusion.html' class='paragraph'>AIL_set_sample_exclusion</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

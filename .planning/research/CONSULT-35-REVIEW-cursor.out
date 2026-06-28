@@ -1,0 +1,210 @@
+﻿# Phase 35 Cross-AI Plan Review — Miles 9.3b Audio Port
+
+Reviewed the four PLAN files, `35-PATTERNS.md`, `35-CONTEXT.md`, `35-RESEARCH.md`, `35-VALIDATION.md`, and the live targets (`Audio.cpp`, `SoundObject3d.cpp`, `SwgClient.vcxproj`, `clientAudio.vcxproj`, `setup-client.ps1`). Assessment below treats your locked facts and decisions as given.
+
+---
+
+## Phase Overview
+
+### Summary
+
+This is a **well-researched, mechanically scoped phase** with correct wave decomposition (vendor → source port → link/stage → human UAT), strong alignment to locked decisions D-01–D-06, and unusually good executor guidance via `35-PATTERNS.md`. The plans should deliver AUDIO-01/AUDIO-02 and preserve the boot gate **if wave discipline holds**. Residual risk is not “wrong API” but **operational brittleness**: grep-count gates that can false-fail, Wave 1 parallel execution that weakens the compile smoke on x64, an **overstated Win32 sentinel auto-repair claim**, and a few unstaged ancillary paths (`setup-client.ps1`, Optimized config, editor vcxprojs).
+
+### Strengths
+
+- **Correct critical path**: vendor → room_type + probe + stub removal → `mss64.lib` + PostBuild → D-06 UAT matches the actual failure modes (silent half-dead audio, warning flood, x64 disable scaffolding).
+- **Pitfall 1 explicitly defused**: codec probe repoint from `.m3d` to platform-aware `.flt`/`.asi`/`.dll` is the highest-value runtime edit; plans call it out clearly in 35-02 Task 2.
+- **D-03/D-04 separation is precise**: remove Phase-33 x64 disables while preserving legacy `disableMiles` cfg — matches live code structure at `Audio.cpp:1298–1319`.
+- **/FORCE link gate is correctly applied** in 35-03 (grep `unresolved external symbol`, not exit code; force relink by deleting exe).
+- **Stale-state awareness**: 35-03 Task 3 mandates deleting `stage/miles/` and `stage-x64/miles/` before first 9.3b build — this is the *real* Win32 stale repair, not the sentinel alone.
+- **35-04 human checkpoint is appropriate**: four named UAT dimensions + warning-flood bar is the only honest AUDIO-02 runtime proof.
+
+### Concerns
+
+| Severity | Plan | Mechanism |
+|----------|------|-----------|
+| **HIGH** | 35-02 Task 3 | **`grep -c "_M_X64" ... == 2` is brittle and likely wrong.** Live `Audio.cpp` has `_M_X64` in Phase-33 **comments** (e.g. lines 245, 1309, 1504) that survive stub removal. After Task 3, only the codec-probe `#if defined(_M_X64)` should remain — expected count is **1**, not 2. Comments containing `!_M_X64` will also match. This gate can false-fail a correct port or false-pass if executor “fixes” the count by deleting the wrong thing. |
+| **HIGH** | 35-01 Task 2 / Wave 1 | **Compile-only smoke on x64 is blind while Phase-33 macro stubs remain.** On x64, `#define AIL_set_room_type(dig,rt)` and `#define AIL_room_type(dig)` at lines 268–287 **shadow** the 9.3b header prototypes, so 35-01 can “pass” with unported 2-arg call sites. Win32 (no stubs) will catch the mismatch; x64 will not until 35-02 removes the block. Parallel Wave 1 (35-01 ∥ 35-02, both `depends_on: []`) makes this worse if 01’s SUMMARY is read as “x64 header-clean.” |
+| **HIGH** | 35-03 Task 2 / PATTERNS §4 | **“9.3b-only sentinel auto-repairs stale 7.2e Win32 stage” is overstated.** Both 7.2e and 9.3b ship `mssds3d.flt` / `msseax.flt` under the same names. A populated 7.2e `stage/miles/` with those files will **skip** the new xcopy guard. x64 is fine (`mss64ds3d.flt` is genuinely 9.3b-only naming). Win32 repair depends on Task 3’s explicit directory delete, not the sentinel. |
+| **MEDIUM** | 35-03 Task 1 | **`Optimized|Win32` link blocks list `mss32.lib` + old `miles/` / `miles-7.2e/` lib dirs** (SwgClient.vcxproj ~212–214) but plan Task 2 only updates PostBuild for **Debug + Release Win32**, not Optimized. Optimized has **no PostBuild miles staging at all**. Low impact if UAT uses Debug, but inconsistent with D-01 “both platforms on 9.3b.” |
+| **MEDIUM** | 35-02 / 35-03 | **Wave 1 parallelism lacks an explicit merge gate.** 35-02 explicitly does not link; if 35-02 lands before 35-01 include repoint, intermediate builds compile against old `miles/include` with 3-arg calls → different failure surface. Recommend sequential 01→02 or a Wave 1 completion gate: “both SUMMARYs exist before 03 starts.” |
+| **MEDIUM** | 35-03 Task 3 | **`unresolved external symbol == 0` is necessary but not sufficient.** With `/FORCE`, you won’t get a masked *unresolved* if the wrong-arch `.lib` is picked up — linker usually hard-fails that. Residual risk is **stale `clientAudio` .obj** after header/signature change without full rebuild. Plan deletes exe but doesn’t explicitly `/t:Rebuild` or `Clean` clientAudio. |
+| **MEDIUM** | 35-04 Task 1 | **Warning-flood threshold is subjective** (“handful tolerable; 5,327x fail”) with no numeric executor gate. Pre-UAT census could false-pass a degraded session. |
+| **MEDIUM** | Phase (out of plan scope) | **`tools/setup/setup-client.ps1` still validates `.m3d` filenames and references `miles-7.2e/redist`** (lines 120–129). Fresh dev setup will emit misleading warnings post-port. Doesn’t block SwgClient PostBuild path but erodes D-05/D-06 diagnostics. |
+| **LOW** | 35-01 Task 2 | **Win32 Debug `TreatWarningAsError=true`** on clientAudio (PATTERNS §2) — 9.3b header W4 warnings could fail 35-01 compile smoke on Win32 even when port is otherwise fine. Plan mentions risk but has no remediation branch. |
+| **LOW** | 35-02 | **Probe set (5 files) ⊂ D-05 staged set** — doesn’t verify `binkawin*.asi`, `mssdolby.flt`, `msssrs.flt`. Acceptable for UAT checklist but partial xcopy could pass probe yet miss parity files; 35-03 file-exists list partially covers this. |
+| **LOW** | 35-04 | **`stage-x64/client_d.cfg` may not exist** unless manually mirrored from `stage/`. Plan says “confirm disableMiles false” but setup script only writes `stage/`. Executor needs explicit cfg bootstrap for x64 UAT. |
+| **LOW** | PATTERNS §3 | **Editor vcxprojs** (SoundEditor, Viewer, Turf, etc.) still link `mss32.lib` from `miles\lib\win`. Correctly deferred from boot gate; latent break if someone builds an editor expecting 7.2e. |
+
+### Suggestions
+
+1. **Fix the `_M_X64` gate (35-02 Task 3)**: Replace exact count with semantic checks:
+   - `grep -c "Phase 33: Miles disabled"` == 0 (already present — good)
+   - `grep -c "#if defined(_M_X64)"` == 1 (codec probe only)
+   - Optionally: `grep "_M_X64" Audio.cpp` and assert each hit is either the probe `#if` or a comment explicitly marked “intentional”
+   - **Delete or rewrite** Phase-33 banner comments (lines 228–245) as part of Task 3 so they don’t pollute future greps.
+
+2. **Reorder Wave 1**: Make **35-02 `depends_on: [35-01]`** OR add explicit note: “35-01 Task 2 x64 compile smoke is expected to pass only because stubs mask API delta; do not treat x64 smoke as A4-complete until 35-02 Task 3 removes stubs and a compile is run.” Better: run compile smoke **after 35-02** (move to 35-03 preamble).
+
+3. **Correct sentinel documentation (35-03 / PATTERNS)**: State clearly:
+   - **x64**: `mss64ds3d.flt` sentinel works for stale detection.
+   - **Win32**: sentinel alone does **not** distinguish 7.2e vs 9.3b; **mandatory first-build delete** of `stage/miles/` (already in Task 3 — elevate to MUST, not “delete to be certain”).
+
+4. **Extend 35-03 Task 2** to cover **`Optimized|Win32` link lib-dir repoint** (Task 1 already mentions Optimized for lib dirs — verify PostBuild gap is acknowledged as intentional or add staging).
+
+5. **Harden 35-03 Task 3 build**:
+   - Add `/t:Clean` on `clientAudio` or delete `clientAudio` output dirs before link.
+   - Optionally grep link verbose output for `mss64.lib` / `mss32.lib` actually consumed.
+
+6. **35-04 Task 1**: Add numeric flood gate (e.g. `"Unable to create a valid sample id"` count `< 10` in first 60s at char select) and verify `stage-x64/miles/mss64.dll` exists before boot.
+
+7. **Follow-up ticket** (not blocking): update `setup-client.ps1` miles check to 9.3b `.flt` set and `miles-9.3b/redist` path.
+
+8. **bus_index A1**: UAT #4 (cantina cell-entry reverb) is the right validation for `bus_index=0`; consider adding debug log in 35-04 pre-flight: grep boot log for `AIL_set_room_type` success / room-type string from existing `REPORT_LOG` at install.
+
+### Risk Assessment
+
+**Overall: MEDIUM**
+
+Justification: The plans cover the verified API delta, the `.m3d` landmine, x64 disable removal, and link/staging closure — the four things that actually matter for this phase. Nothing appears fundamentally missing for AUDIO-01/AUDIO-02 on the SwgClient boot path. Risk is elevated by **automation gates that can lie** (x64 compile smoke with stubs present, `_M_X64` count, overstated sentinel repair), plus **unstaged ancillary scripts/configs** that won’t block the executor but can waste a UAT cycle. The human D-06 checkpoint is correctly positioned as the real runtime proof for reverb/bus_index and 3D positional behavior.
+
+---
+
+## Plan 35-01 — Vendor SDK + Include Repoint
+
+### Summary
+
+Solid foundation plan mirroring `miles-7.2e`, with correct `git add -f` handling, `rrcore.h` inclusion, and D-05 three-tree redist gather. The pre-API compile smoke is a good idea on Win32 but **misleading on x64** while Phase-33 stubs remain.
+
+### Strengths
+
+- Exact vendoring layout, byte-copy discipline (bash `cp`), no `.m3d` carryover.
+- Include repoint scoped to one token × 5 configs — minimal blast radius.
+- Distinguishes header-internal errors vs call-site arg-count errors (expected pre-35-02).
+
+### Concerns
+
+- **HIGH** — x64 compile smoke false confidence (stubs mask room_type mismatch); see phase concerns.
+- **MEDIUM** — Hard-coded SDK path `D:/Code/milesss-v9.3b/` — executor environment dependency; no fallback if path differs (acceptable if machine-specific per AGENTS.md).
+- **LOW** — Win32 Debug W4-as-error may block 35-01 before 35-02 even starts.
+
+### Suggestions
+
+- Move “both platforms compile clean” gate to post-35-02, or scope 35-01 smoke to **“no errors in mss.h/rrcore.h” only** (already partially stated — make x64 call-site success explicitly **out of scope** for 35-01).
+- Add optional `MILESVERSION` string grep for `"9.3b"` not just `MILESVERSION` symbol presence.
+
+### Risk: **MEDIUM** (x64 smoke semantics)
+
+---
+
+## Plan 35-02 — Source Port (Audio.cpp / SoundObject3d.cpp)
+
+### Summary
+
+Excellent surgical port plan: 26+1 room_type sites match live code, codec probe fix targets the actual silent-audio mechanism, D-03 removal shapes match verified line ranges. Primary weakness is **brittle grep acceptance criteria** and **no compile/link verification** within the plan.
+
+### Strengths
+
+- Middle-arg vs trailing-arg distinction for setter/getter (Pitfall 2) is explicit and correct.
+- Codec probe `#if _M_X64` documented as intentional survivor — good for future maintainers.
+- D-04 preservation called out with separate grep gate.
+- Scope limited to two TUs (verified: only `Audio.cpp` and `SoundObject3d.cpp` emit Miles calls).
+
+### Concerns
+
+- **HIGH** — `_M_X64 == 2` gate (Task 3 acceptance) conflicts with surviving comments; likely should be `== 1` or semantic.
+- **MEDIUM** — No compile step after stub removal; first compile that proves x64 no longer uses macro shims is deferred to 35-03 — long feedback loop if Task 1 room_type count drifts (e.g. only 25 setters if one case uses different formatting).
+- **LOW** — `FirstClientAudio.h` / `#include <mss.h>` needs no edit (include path drives it) — CONTEXT.md mentions FirstClientAudio.h in AUDIO-01 but plans correctly omit it; harmless doc drift.
+
+### Suggestions
+
+- Add negative grep: `AIL_set_room_type(s_digitalDevice2d, ENVIRONMENT` == 0 **and** no 2-arg form with different device variable.
+- After Task 3, add **compile-only** `clientAudio` both platforms (doesn’t need link) — catches errors before SwgClient.vcxproj edits.
+- Rewrite/delete Phase-33 comment block at lines 228–245 as part of Task 3.
+
+### Risk: **MEDIUM** (grep brittleness + deferred compile)
+
+---
+
+## Plan 35-03 — Link, PostBuild Staging, Build Gate
+
+### Summary
+
+Correct closure plan for AUDIO-01 link half and AUDIO-02 staging half. Repoint both old lib-dir tokens, add `mss64.lib` to x64, mirror Phase-24 PostBuild for `stage-x64/miles`. Build verification aligns with AGENTS.md /FORCE trap.
+
+### Strengths
+
+- Explicit stale directory delete before first build.
+- 9.3b sentinel replaces `.m3d` guards (fixes per-build forced copy on 9.3b stages).
+- File-exists checks cover D-05 core providers including EAX/DS3D filters.
+- Win32 + x64 link both gated — supports D-01 regression.
+
+### Concerns
+
+- **HIGH** — Win32 sentinel auto-repair claim is wrong for same-named `.flt` files; delete step is doing the real work.
+- **MEDIUM** — Optimized|Win32 link repoint in Task 1 but no Optimized PostBuild in Task 2.
+- **MEDIUM** — No explicit rebuild/clean of `clientAudio` after signature change.
+- **LOW** — `grep -c "miles-9.3b\\lib\\win" >= 1 per relevant config` is loose; could pass with only one config repointed if executor misreads “>= 1”.
+
+### Suggestions
+
+- Tighten acceptance: `grep -c "miles-9.3b\\lib\\win"` == **5** (Win32 Debug/Optimized/Release + x64 Debug/Release) or count per platform group explicitly.
+- Win32 sentinel: consider **`if not exist ...\mss64.dll`** trick won’t work on Win32 — stick with mandatory delete + document no auto-repair.
+- Add PostBuild comment update removing `miles-7.2e` rationale text (lines 170–172) to prevent future executor confusion.
+- Optional: stage **Release** exes too if Release UAT ever needed (currently Debug-only build — fine for phase).
+
+### Risk: **MEDIUM** (staging stale-state semantics)
+
+---
+
+## Plan 35-04 — Pre-flight Boot + Human UAT
+
+### Summary
+
+Appropriate verification plan for a subsystem with no automated audio harness. Automated log census + blocking human D-06 checklist correctly implements AUDIO-02 runtime acceptance and D-01 Win32 smoke.
+
+### Strengths
+
+- Fail-fast on “redist missing” before human UAT — saves time.
+- Four UAT dimensions map directly to probe/staging/room_type edits (music → mp3/ogg; 3D → ds3d.flt; reverb → eax.flt + `AIL_set_room_type(..., 0, ...)`).
+- Preserves boot gate framing (reach char select; Miles init failure should degrade gracefully via existing install() error paths once stubs are gone).
+- cfg safety note (no PS `Set-Content`) — critical for Release.
+
+### Concerns
+
+- **MEDIUM** — Warning-flood count threshold subjective.
+- **MEDIUM** — Cantina 3D/reverb UAT requires in-world access — human checkpoint assumes working login/zone; acceptable but note dependency on unrelated systems.
+- **LOW** — `stage-x64/client_d.cfg` bootstrap not specified.
+- **LOW** — Win32 smoke is music + UI only — reasonable for D-01 but won’t catch Win32 reverb regression.
+
+### Suggestions
+
+- Pre-flight: copy or symlink `stage/client_d.cfg` → `stage-x64/client_d.cfg` if missing; confirm `disableMiles` absent/false.
+- Record **Miles version string** from debug overlay or boot log (`AIL_MSS_version` / existing `getMilesVersion()`) — confirms 9.3b linked, not silent stub path.
+- Add explicit **fail-closed** resume signal examples in 35-HUMAN-UAT.md template (silent music vs flood vs crash).
+- Numeric flood gate: e.g. sample-id warning count ≤ N in boot-to-char-select window.
+
+### Risk: **LOW–MEDIUM** (manual UAT inherent variance)
+
+---
+
+## Requirements Traceability
+
+| Requirement | Covered by | Gap |
+|-------------|------------|-----|
+| **AUDIO-01** — vendored 9.3b, ported call sites, link | 35-01 + 35-02 + 35-03 | Minor: no FirstClientAudio.h edit needed (OK) |
+| **AUDIO-02** — x64 redist staged, working audio | 35-03 staging + 35-04 UAT | Runtime proof is manual by design |
+| **Boot gate** | Preserved — audio failure modes are silent/flood, not crash-by-design in `install()` | If link is broken (/FORCE), boot could AV in Miles — 35-03 grep gate mitigates |
+| **D-01 both platforms** | Win32 relink + smoke in 35-03/04 | Optimized config edge |
+| **D-06 four dimensions** | 35-04 Task 2 | bus_index=0 validated only by reverb UAT (A1 — acceptable) |
+
+---
+
+## Bottom Line
+
+**Approve with revisions** to automation gates and Wave 1 ordering semantics. The plans are executable and should reach working x64 audio if the executor:
+
+1. Treats **Win32 `stage/miles/` delete** as mandatory, not optional.
+2. Does **not** trust `_M_X64 == 2` or x64-only 35-01 compile smoke.
+3. Runs link gate only after **35-01 + 35-02** both land.
+4. Uses D-06 human UAT as the authoritative test for reverb/bus_index and 3D positional — which the plans already do.

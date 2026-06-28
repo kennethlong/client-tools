@@ -1,0 +1,174 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_begin_event_queue_processing</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_begin_event_queue_processing'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_begin_event_queue_processing</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ Begin execution of all of the enqueued events.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_3d.html#advanced_3d_one' class='paragraph'>Adding 3D to event sounds: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_add_event_system.html#_Discussion' class='paragraph'>AIL_add_event_system: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_begin_event_queue_processing.html#_Discussion' class='paragraph'>AIL_begin_event_queue_processing: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_complete_event_queue_processing.html#_Discussion' class='paragraph'>AIL_complete_event_queue_processing: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event.html#_Discussion' class='paragraph'>AIL_enqueue_event: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enqueue_event_end_named.html#_Discussion' class='paragraph'>AIL_enqueue_event_end_named: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_enumerate_sound_instances.html#_Discussion' class='paragraph'>AIL_enumerate_sound_instances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Miles_High_Level_Event_System.html#_Discussion' class='paragraph'>High Level Event System: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_I_trigger_a_High_Level_Sound_Event_that_was_made_in_the_Miles_Sound_Studio_.html#_Discussion' class='paragraph'>How do I trigger a High-Level Sound Event that was made in the Miles Sound Studio?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='integrating_events.html#integrating_overview' class='paragraph'>Integrating The Miles Event System: Using the Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='advanced_userbuffer.html#advanced_userbuffer_one' class='paragraph'>Using the User Buffer: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_set_variable_int.html' class='paragraph'>AIL_set_variable_int</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_begin_event_queue_processing.html'>AIL_begin_event_queue_processing</a></span>(</td><td>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ Begin execution of all of the enqueued events.</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Return 0 on failure. The only failures are unrecoverable errors in the queued events  (out of memory, bank file not found, bad data, etc).  You can get the specific error by calling <a href='AIL_last_error.html' class='paragraph'>AIL_last_error</a>.</table>
+<div class="discussion_heading"><a name='AIL_begin_event_queue_processing::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function executes all the events currently in the queue. This is where all major processing takes place in the event system. 
+
+</p>
+<p>
+Once you execute this functions, then sound instances will be in one of three states: 
+
+</p>
+<p>
+<a href='MILESEVENTSOUNDSTATUS.html#MILESEVENT_SOUND_STATUS_PENDING' class='paragraph'>MILESEVENT_SOUND_STATUS_PENDING</a> - these are new sound instances that were created by events that had a "Start Sound Step". Note that these instances aren't audible yet, so that you have a chance to modify game driven properties (like the 3D position) on the sound before Miles begins to play it.   
+
+</p>
+<p>
+<a href='MILESEVENTSOUNDSTATUS.html#MILESEVENT_SOUND_STATUS_PLAYING' class='paragraph'>MILESEVENT_SOUND_STATUS_PLAYING</a> - these are sound instances that were previously started and are continuing to play (you might update the 3D position for these, for example). 
+
+</p>
+<p>
+<a href='MILESEVENTSOUNDSTATUS.html#MILESEVENT_SOUND_STATUS_COMPLETE' class='paragraph'>MILESEVENT_SOUND_STATUS_COMPLETE</a> - these are sound instances that finished playing since the last this frame (you might use this status to free any game related memory, for example). 
+
+</p>
+<p>
+You will normally enumerate the active sound instances in-between calls to <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a> and <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a> with <a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a>. 
+
+</p>
+<p>
+<a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a> must be called after this function to commit all the changes. 
+
+</p>
+<p>
+Example usage: </p>
+<div class=prototype>
+<pre>            <font color=#008000>// enqueue an event</font>
+            <a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a>( EventThatStartsSounds, game_data_ptr, 0, MILESEVENT_ENQUEUE_BUFFER_PTR, 0 );
+
+            <font color=#008000>// now process that event</font>
+            <a href='AIL_begin_event_queue_processing.html' class='paragraph'>AIL_begin_event_queue_processing</a>( );
+
+            <font color=#008000>// next, enumerate the pending and complete sounds for game processing</font>
+            <a href='MILESEVENTSOUNDINFO.html' class='paragraph'>MILESEVENTSOUNDINFO</a> Info;
+
+            <a href='HMSSENUM.html' class='paragraph'>HMSSENUM</a> SoundEnum = MSS_FIRST;
+            while ( <a href='AIL_enumerate_sound_instances.html' class='paragraph'>AIL_enumerate_sound_instances</a>( &amp;SoundEnum, MILESEVENT_SOUND_STATUS_PENDING | MILESEVENT_SOUND_STATUS_COMPLETE, 0, &amp;Info ) )    
+            {
+                game_type * game_data = (game_type*) Info.UserBuffer; <font color=#008000>// returns the game_data pointer from the enqueue</font>
+
+                if ( Info.Status == MILESEVENT_SOUND_STATUS_PENDING )
+                {
+                    <font color=#008000>// setup initial state</font>
+                    <a href='AIL_set_sample_3D_position.html' class='paragraph'>AIL_set_sample_3D_position</a>( Info.Sample, game_data-&gt;x, game_data-&gt;y, game_data-&gt;z );
+                }
+                else if ( Info.Status == MILESEVENT_SOUND_STATUS_COMPLETE )
+                {
+                    <font color=#008000>// Free some state we have associated with the sound now that its done.</font>
+                    game_free( game_data );
+                }
+            }
+
+            <a href='AIL_complete_event_queue_processing.html' class='paragraph'>AIL_complete_event_queue_processing</a>( ); 
+  </pre></div>
+<p>
+</p>
+<p>
+Note that if any event step drastically fails, the rest of the command queue is  skipped, and this function returns 0! For this reason, you shouldn't assume that a start sound event will always result in a completed sound later. 
+
+</p>
+<p>
+Therefore, you should allocate memory that you want associated with a sound instance during the enumeration loop, rather than at enqueue time.  Otherwise, you need to detect that the sound didn't start and then free the memory (which can be complicated).<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_enqueue_event.html' class='paragraph'>AIL_enqueue_event</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Miles_High_Level_Event_System.html' class='paragraph'>High Level Event System</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_set_variable_int.html' class='paragraph'>AIL_set_variable_int</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

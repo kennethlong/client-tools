@@ -1,0 +1,254 @@
+﻿## Diagnosis (from LOCKED facts + trace)
+
+The door lurch is an **asymmetric zoom update**: instant pull-in on ray hit (691/739), then per-frame recovery toward `m_zoom` (602). At door edges the 4-ray diamond flickers hit/miss; each miss lets 602 expand zoom before the next hit snaps it back. At 120 FPS you get **the same per-frame recovery fraction applied 4× more often**, so pop-out is faster in real time and oscillation frequency is higher — exactly matching the observed sharp pop-in/pop-out.
+
+`m_currentZoom` is **not** clamped or reset elsewhere in a way that fights time-scaling — only written at 602, 691, 739, and init (135). Lines 672/743 only **read** it for first-person threshold; `setTarget`/`setFirstPerson` do not touch it.
+
+---
+
+## (i) Time-scale recovery (line 602)
+
+**Current (frame-rate dependent):**
+
+```602:602:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
+```
+
+Default `ms_cameraZoomSpeed = 0.2f` (`ConfigClientGame.cpp:1122`) = 20% of remaining error **per frame**, not per second.
+
+**Adjacent time-scaled precedent (offset):**
+
+```640:640:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+		m_offset = Vector::linearInterpolate(m_offset, m_desiredOffset, elapsedTime);
+```
+
+**Same-camera precedent (CockpitCamera — zoom recovery already time-scaled):**
+
+```815:815:src/engine/client/library/clientGame/src/shared/camera/CockpitCamera.cpp
+	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, std::min(1.0f, elapsedTime * 5.0f));
+```
+
+**Exact replacement preserving ~30 FPS feel:**
+
+```cpp
+m_currentZoom = linearInterpolate(
+    m_currentZoom, m_zoom,
+    std::min(1.0f, elapsedTime * ms_cameraZoomSpeed * 30.0f));
+```
+
+**Why `* 30.0f`:** at 30 FPS (`elapsedTime ≈ 0.0333`), `t = 0.2` — identical to today. At 120 FPS (`≈ 0.0083`), `t ≈ 0.05` — same **per-second** convergence rate (~6.0/sec effective, matching CockpitCamera's pattern).
+
+**Side effects:** None for wall safety (recovery only expands zoom). Slider semantics become “rate per second calibrated to 30 FPS design point” instead of “fraction per frame”; at 30 FPS behavior is unchanged.
+
+**Must move this block to after collision (see below)** — otherwise 602 expands zoom on the same frame before 739 pulls it back, adding extra wobble even on hit frames.
+
+---
+
+## (ii) Smooth/rate-limit pull-in (691 / 739)
+
+**Current (instant):**
+
+```687:692:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+			if (ClientWorld::collide (getParentCell (), start_w, end_w, CollideParameters::cms_default, result, ClientWorld::CF_allCamera))
+			{
+				const float lineDistance = start_w.magnitudeBetween (end_w);
+				const float t = clamp (0.f, (start_w.magnitudeBetween (result.getPoint ()) / lineDistance) - (0.25f / lineDistance), 1.f);
+				m_currentZoom = Vector::linearInterpolate (start_w, end_w, t).magnitudeBetween (start_w);
+				m_colliding = true;
+```
+
+```738:739:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+				if (hit)
+					m_currentZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
+```
+
+Near plane is **0.25 m** (`ConfigClientGame.cpp:972`). Simple path already backs off by 0.25 m (690); default 4-ray path does not.
+
+**Slow pull-in analysis:** if `m_currentZoom > collisionZoom` and you lerp with `t < 1`, the camera stays **farther than the safe distance for that frame** → near plane can show geometry through the wall. Example: need 2 m pull-in, `t = 0.5` → camera sits 1 m inside the safe point for ~8 ms at 120 FPS. **Unacceptable.**
+
+**Safe partial variant** (only if you ever touch pull-in):
+
+```cpp
+const float collisionZoom = /* existing computation */;
+m_currentZoom = std::min(m_currentZoom, collisionZoom);  // instant when too far — wall-safe
+```
+
+That is equivalent to the current assignment when `m_currentZoom ≥ collisionZoom` (the normal door case). A lerp **without** `std::min` clips; a lerp **with** `std::min` is still instant on first contact.
+
+**Side effects of slow pull-in:** visible wall bleed; worse at high FPS + fast turn at door angles. **Do not include in minimal fix.**
+
+---
+
+## (iii) Hysteresis on hit→miss
+
+`m_colliding` is reset every frame at 655 and only reflects **this frame's** hit — no memory across flicker:
+
+```655:655:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+	m_colliding = false;
+```
+
+**Minimal hysteresis:** two new members (`m_wallClampZoom`, `m_wallCollisionHoldTimer`), hold last collision distance for ~50 ms after last hit:
+
+```cpp
+// anonymous namespace (~line 106)
+static const float cs_wallCollisionHoldSeconds = 0.05f;
+```
+
+On hit (691/739): compute `collisionZoom`, assign `m_wallClampZoom = collisionZoom`, refresh timer, **`m_currentZoom = std::min(m_currentZoom, collisionZoom)`** (keep instant pull-in).
+
+After collision block, before `move_o`:
+
+```cpp
+if (m_wallClampZoom >= 0.f)
+{
+    m_currentZoom = std::min(m_currentZoom, m_wallClampZoom);
+    if (!hit)
+    {
+        m_wallCollisionHoldTimer -= elapsedTime;
+        if (m_wallCollisionHoldTimer <= 0.f)
+            m_wallClampZoom = -1.f;
+    }
+    else
+        m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
+}
+
+if (m_wallClampZoom < 0.f)
+    m_currentZoom = linearInterpolate(m_currentZoom, m_zoom,
+        std::min(1.0f, elapsedTime * ms_cameraZoomSpeed * 30.0f));
+```
+
+**Side effects:** ~50 ms linger with camera still pulled in after geometry clears (minor “sticky” feel at door); `m_colliding` can stay true during hold (351 offset path) — desirable. Eliminates pop-out on sub-frame ray misses.
+
+---
+
+## Recommended combination
+
+| Fix | Include? | Reason |
+|-----|----------|--------|
+| (i) Time-scale recovery | **Yes** | Fixes FR-dependent pop-out rate; matches retail ~30 FPS feel |
+| (iii) Hysteresis hold | **Yes** | Kills hit/miss flicker — root cause of oscillation at door edges |
+| (ii) Slow pull-in | **No** | Cannot be slow without near-plane clip; instant/`std::min` is required |
+
+Also: **delete early line 602**; run recovery only after collision so recovery and hold see the same frame's hit result.
+
+---
+
+## Recommended minimal patch
+
+**`FreeChaseCamera.h`** — add after `m_colliding` (~125):
+
+```cpp
+float                  m_wallClampZoom;           // < 0 = inactive
+float                  m_wallCollisionHoldTimer;
+```
+
+**`FreeChaseCamera.cpp` constructor** (~149):
+
+```cpp
+m_wallClampZoom(-1.f),
+m_wallCollisionHoldTimer(0.f),
+```
+
+**Diff sketch (core logic):**
+
+```diff
+--- a/FreeChaseCamera.cpp
++++ b/FreeChaseCamera.cpp
+@@ -105,6 +105,7 @@ namespace
+ 	}
+ 
+ 	static const float cs_cameraSnapBackSpeedModifier = 6.5f; // <-- this is arbitrary
++	static const float cs_wallCollisionHoldSeconds = 0.05f;
+@@ -147,6 +148,8 @@ FreeChaseCamera::FreeChaseCamera () :
+ 	m_spinning (false),
+-	m_colliding (false)
++	m_colliding (false),
++	m_wallClampZoom (-1.f),
++	m_wallCollisionHoldTimer (0.f)
+ {
+@@ -599,8 +602,6 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 		m_zoom *= zoomMultiplier;
+ 	}
+ 
+-	m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, ms_cameraZoomSpeed);
+-
+ 	//-- move camera to the avatar's cell and position
+@@ -676,6 +677,7 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 	else
+ 	{
+ 		setFirstPerson (false);
++		bool hit = false;
+ 
+ 		if (ms_cameraSimpleCollision)
+ 		{
+@@ -688,7 +690,11 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			{
+ 				const float lineDistance = start_w.magnitudeBetween (end_w);
+ 				const float t = clamp (0.f, (start_w.magnitudeBetween (result.getPoint ()) / lineDistance) - (0.25f / lineDistance), 1.f);
+-				m_currentZoom = Vector::linearInterpolate (start_w, end_w, t).magnitudeBetween (start_w);
++				const float collisionZoom = Vector::linearInterpolate (start_w, end_w, t).magnitudeBetween (start_w);
++				m_wallClampZoom = collisionZoom;
++				m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++				m_currentZoom = std::min (m_currentZoom, collisionZoom);
++				hit = true;
+ 				m_colliding = true;
+ 			}
+ 		}
+@@ -707,7 +713,6 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			const Vector start_w   = getPosition_w ();
+ 			const Vector end_w     = start_w + rotate_o2w (cameraZ_p);
+ 
+-			bool hit = false;
+ 			CollisionInfo result;
+ 			float minimumT = 1.f;
+@@ -736,10 +741,28 @@ float FreeChaseCamera::alter (float elapsedTime)
+ 			if(!shipObject)
+ 			{
+ 				if (hit)
+-					m_currentZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
++				{
++					const float collisionZoom = Vector::linearInterpolate (start_w, end_w, minimumT).magnitudeBetween (start_w);
++					m_wallClampZoom = collisionZoom;
++					m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++					m_currentZoom = std::min (m_currentZoom, collisionZoom);
++				}
+ 			}
+ 		}
+ 
++		if (m_wallClampZoom >= 0.f)
++		{
++			m_currentZoom = std::min (m_currentZoom, m_wallClampZoom);
++			if (!hit)
++			{
++				m_wallCollisionHoldTimer -= elapsedTime;
++				if (m_wallCollisionHoldTimer <= 0.f)
++					m_wallClampZoom = -1.f;
++			}
++			else
++				m_wallCollisionHoldTimer = cs_wallCollisionHoldSeconds;
++		}
++
++		if (m_wallClampZoom < 0.f)
++			m_currentZoom = linearInterpolate (m_currentZoom, m_zoom, std::min (1.0f, elapsedTime * ms_cameraZoomSpeed * 30.0f));
++
+ 		if (m_currentZoom < scaledFirstPersonDistance)
+ 			setFirstPerson (true);
+ 		else
+```
+
+*(Simple-collision branch needs the same `bool hit` wiring — declare `hit` before the `if (ms_cameraSimpleCollision)` split.)*
+
+---
+
+## Risk note
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| `cs_wallCollisionHoldSeconds` too short | Low | Flicker persists; tune 0.05–0.10 s at cantina door |
+| Hold too long | Low | Camera stays pulled in briefly after clearing frame; reduce to ~0.05 s |
+| Slow pull-in (if added later) | **High** | Near-plane wall bleed; keep `std::min` instant pull-in |
+| `* 30.0f` scale | Low | Correct at 30 FPS; user slider still works, semantics shift to per-second |
+| First-person threshold timing | Low | Post-collision recovery preserves existing 672/743 structure |
+| Scope | Info | `ShipTurretCamera.cpp:181,195` has the same per-frame pattern — out of scope |
+
+**Verify:** cantina door at 30 / 120 / 144 FPS — sharp-angle approach should lose pop-out; wall-riding in third person should not show near-plane bleed; first-person test should still show no snap (collision block skipped).

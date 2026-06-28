@@ -1,0 +1,190 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>Creative's EAX 4 Properties</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='Creative's EAX 4 Properties'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>Creative's EAX 4 Properties</td>
+  </tr>
+  <tr><td width=100% class=biline></td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='Creative_s_EAX_4_Properties.html#_Discussion' class='paragraph'>Creative's EAX 4 Properties: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Creative_s_EAX_3_Properties.html' class='paragraph'>Creative's EAX 3 Properties</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='Creative_EAX_2__3__and_4_Providers.html#_Discussion' class='paragraph'>Creative EAX 2, 3, and 4 Providers: Discussion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class="discussion_heading"><a name='Creative's EAX 4 Properties::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+  The EAX 4 provider publishes many driver-level and sample-level properties that allow game developers to set interesting room styles. These properties include all  of the EAX 3 properties too. 
+
+</p>
+<p>
+But more interesting are the new EAX 4 features, which provide hardware  support for many common DSP filters. EAX does this by providing multiple  "slots" that you can load a DSP filter into. You then direct your  sound effects into one of these slots to hear the filtered sound. 
+
+</p>
+<p>
+There are currently four of these slots, but the first two are fixed-function: slot 0 is environmental reverb, and slot 1 is a chorus filter.  You can load other filters into slots 2 and 3.  You can even have multiple environmental reverbs, one in slot 0, one is slot 2 or 3, for example. 
+
+</p>
+<p>
+Each 3D sound can only be routed to either no slots, one slot, or two slots at a time.  That means you can have a single sound being flanged and ring modulated at once, for example. 
+
+</p>
+<p>
+Miles massively refactors the EAX 4 API (which is otherwise quite complicated). To load a filter, you simply set the parameters for that filter - this will first load the filter, and then set the  parameters.  To activate a filter, you simply set the volume - this will send the sound to the  filter and then set the volume level. 
+
+</p>
+<p>
+All of the filters are loaded by passing a particular structure to the <a href='AIL_output_filter_driver_property.html' class='paragraph'>AIL_output_filter_driver_property</a> function.  Each structure is specific to the filter that you are trying to load.  We don't change these structures at all from the EAX versions, so you can also read the EAX docs for more info on each filter. 
+
+</p>
+<p>
+The best way to learn how to use the EAX 4 features is to check out the <b>EAX4EXAM.CPP</b> demo program - it is an extremely simple and clear example that shows how to use each of the EAX 4 filters. Also, be sure to review the <i>How do I use multi-channel sound output in Miles? </i><a href='How_do_I_use_multi_channel_sound_output_in_Miles_.html' class='paragraph'>FAQ</a> in conjunction with the material below. 
+
+</p>
+<p>
+When an HDIGDRIVER is opened with MSS_MC_EAX4 as the output channel specification, the following driver-level properties  are accessible via <a href='AIL_output_filter_driver_property.html' class='paragraph'>AIL_output_filter_driver_property</a>: 
+
+</p>
+<p>
+<b><i>All of the EAX driver-level properties.</i></b> 
+
+</p>
+<p>
+<b><i>All of the EAX 2 driver-level properties.</i></b> 
+
+</p>
+<p>
+<b><i>All of the EAX 3 driver-level properties.</i></b> 
+
+</p>
+<p>
+<b>"EAX4 Reverb parameters": </b> this preference takes a pointer to a <a href='EAX_REVERB.html' class='paragraph'>EAX_REVERB</a> structure.  When you set this preference, it first loads the Reverb filter (if it hasn't already been loaded), and then it updates each of your settings.  The Reverb filter can be loaded into slots 0, 2 and/or 3 - it is the basic EAX environmental reverb filter.  See the EAX 4 documentation for more details on this complicated filter.  
+
+</p>
+<p>
+<b>"EAX4 Auto Gain parameters": </b> this preference takes a pointer to a <a href='EAX_AUTOGAIN.html' class='paragraph'>EAX_AUTOGAIN</a> structure.  When you set this preference, it first loads the Auto Gain filter (if it hasn't already been loaded), and then it updates each of your settings.  The Auto Gain filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this simple filter. 
+
+</p>
+<p>
+<b>"EAX4 Autowah parameters": </b> this preference takes a pointer to a <a href='EAX_AUTOWAH.html' class='paragraph'>EAX_AUTOWAH</a> structure.  When you set this preference, it first loads the Autowah filter (if it hasn't already been loaded), and then it updates each of your settings.  The Autowah filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this basic filter. 
+
+</p>
+<p>
+<b>"EAX4 Chorus parameters": </b> this preference takes a pointer to a <a href='EAX_CHORUS.html' class='paragraph'>EAX_CHORUS</a> structure.  When you set this preference, it first loads the Chorus filter (if it hasn't already been loaded), and then it updates each of your settings.  The Chorus filter can be loaded into slots 1, 2 and/or 3.  See the EAX 4 documentation for more details on this common filter. 
+
+</p>
+<p>
+<b>"EAX4 Distortion parameters": </b> this preference takes a pointer to a <a href='EAX_DISTORTION.html' class='paragraph'>EAX_DISTORTION</a> structure.  When you set this preference, it first loads the Distortion filter (if it hasn't already been loaded), and then it updates each of your settings.  The Distortion filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter. 
+
+</p>
+<p>
+<b>"EAX4 Echo parameters": </b> this preference takes a pointer to a <a href='EAX_ECHO.html' class='paragraph'>EAX_ECHO</a> structure.  When you set this preference, it first loads the Echo filter (if it hasn't already been loaded), and then it updates each of your settings.  The Echo filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>"EAX4 Equalizer parameters": </b> this preference takes a pointer to a <a href='EAX_EQUALIZER.html' class='paragraph'>EAX_EQUALIZER</a> structure.  When you set this preference, it first loads the Equalizer filter (if it hasn't already been loaded), and then it updates each of your settings.  The Equalizer filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>"EAX4 Flanger parameters": </b> this preference takes a pointer to a <a href='EAX_FLANGER.html' class='paragraph'>EAX_FLANGER</a> structure.  When you set this preference, it first loads the Flanger filter (if it hasn't already been loaded), and then it updates each of your settings.  The Flanger filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>"EAX4 FShifter parameters": </b> this preference takes a pointer to a <a href='EAX_FSHIFTER.html' class='paragraph'>EAX_FSHIFTER</a> structure.  When you set this preference, it first loads the Frequency shifter filter (if it hasn't already been loaded), and then it updates each of your settings.  The Frequency shifter filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>"EAX4 VMorpher parameters": </b> this preference takes a pointer to a <a href='EAX_VMORPHER.html' class='paragraph'>EAX_VMORPHER</a> structure.  When you set this preference, it first loads the Vocal Morpher filter (if it hasn't already been loaded), and then it updates each of your settings.  The Vocal Morpher filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter. 
+
+</p>
+<p>
+<b>"EAX4 PShifter parameters": </b> this preference takes a pointer to a <a href='EAX_PSHIFTER.html' class='paragraph'>EAX_PSHIFTER</a> structure.  When you set this preference, it first loads the Pitch Shifter filter (if it hasn't already been loaded), and then it updates each of your settings.  The Pitch Shifter filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>"EAX4 RModulator parameters": </b> this preference takes a pointer to a <a href='EAX_RMODULATOR.html' class='paragraph'>EAX_RMODULATOR</a> structure.  When you set this preference, it first loads the Ring Modulator filter (if it hasn't already been loaded), and then it updates each of your settings.  The Ring Modulator filter can be loaded into slots 2 and/or 3.  See the EAX 4 documentation for more details on this filter.  
+
+</p>
+<p>
+<b>The EAX 4 sample-level properties include:</b> 
+
+</p>
+<p>
+<b><i>All of the EAX 2 sample-level properties.</i></b> 
+
+</p>
+<p>
+<b><i>All of the EAX 3 sample-level properties.</i></b> 
+
+</p>
+<p>
+<b>"EAX4 slot volumes":</b> this preference takes a pointer to a <a href='EAX_SAMPLE_SLOT_VOLUMES.html' class='paragraph'>EAX_SAMPLE_SLOT_VOLUMES</a> structure.  It  will both activate the filter for this sample and set your volume levels. 
+
+</p>
+<p>
+<b>"Get EAX4 slot volumes":</b> this preference takes a pointer to a <a href='EAX_SAMPLE_SLOT_VOLUMES.html' class='paragraph'>EAX_SAMPLE_SLOT_VOLUMES</a> structure and fills it with the current hardware settings. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Creative_s_EAX_3_Properties.html' class='paragraph'>Creative's EAX 3 Properties</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Creative_EAX_2__3__and_4_Providers.html' class='paragraph'>Creative EAX 2, 3, and 4 Providers</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='Creative_EAX_2__3__and_4_Providers.html#_Discussion' class='paragraph'>Creative EAX 2, 3, and 4 Providers: Discussion</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

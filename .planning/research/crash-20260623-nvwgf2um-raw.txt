@@ -1,0 +1,636 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.046 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.26100.7627 X86
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [D:\Code\swg-client-v2\stage\SwgClient_r.exe-unknown.0-20260623120326.mdmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             stage
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             stage
+Symbol search path is: stage
+Executable search path is: stage
+Windows 8 Version 9200 MP (12 procs) Free x86 compatible
+Product: WinNt, suite: SingleUserTS Personal
+Debug session time: Tue Jun 23 07:03:27.000 2026 (UTC - 5:00)
+System Uptime: not available
+Process Uptime: 0 days 0:00:38.000
+................................................................
+................................................................
+..........
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr.
+(10ae4.c040): Access violation - code c0000005 (first/second chance not available)
+For analysis of this file, run !analyze -v
+eax=00000000 ebx=00001134 ecx=00000000 edx=00000000 esi=0c84eaf0 edi=230ef2bc
+eip=777daa7c esp=230ee538 ebp=230ee544 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+ntdll!ZwGetContextThread+0xc:
+777daa7c c20800          ret     8
+0:041> cdb: Reading initial command '
+.echo ====ANALYZE====;
+!analyze -v;
+.echo ====ECXR_FAULTING_THREAD====;
+.ecxr; kP 40;
+.echo ====THREAD0_MAIN====;
+~0 s; kP 40;
+.echo ====MODVER_DRIVER====;
+lmv m nvwgf2um;
+.echo ====MODVER_GL11====;
+lmv m gl11_r;
+.echo ====MODVER_GL05====;
+lmv m gl05_r;
+.echo ====MODVER_UTINNI====;
+lmDv m UtinniCore;
+.echo ====MODVER_D3D11====;
+lmv m d3d11;
+.echo ====THREADCOUNT====;
+~;
+q'
+====ANALYZE====
+*******************************************************************************
+*                                                                             *
+*                        Exception Analysis                                   *
+*                                                                             *
+*******************************************************************************
+
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: $ntdllsym!_CONTEXT                            ***
+***                                                                   ***
+*************************************************************************
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: nt!_KTHREAD                                   ***
+***                                                                   ***
+*************************************************************************
+***** OS symbols are WRONG. Please fix symbols to do analysis.
+
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: nt!_KTHREAD                                   ***
+***                                                                   ***
+*************************************************************************
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: nt!IMAGE_NT_HEADERS32                         ***
+***                                                                   ***
+*************************************************************************
+*************************************************************************
+***                                                                   ***
+***                                                                   ***
+***    Either you specified an unqualified symbol, or your debugger   ***
+***    doesn't have full symbol information.  Unqualified symbol      ***
+***    resolution is turned off by default. Please either specify a   ***
+***    fully qualified symbol module!symbolname, or enable resolution ***
+***    of unqualified symbols by typing ".symopt- 100". Note that     ***
+***    enabling unqualified symbol resolution with network symbol     ***
+***    server shares in the symbol path may cause the debugger to     ***
+***    appear to hang for long periods of time when an incorrect      ***
+***    symbol name is typed or the network symbol server is down.     ***
+***                                                                   ***
+***    For some commands to work properly, your symbol path           ***
+***    must point to .pdb files that have full type information.      ***
+***                                                                   ***
+***    Certain .pdb files (such as the public OS symbols) do not      ***
+***    contain the required information.  Contact the group that      ***
+***    provided you with these symbols if you need this command to    ***
+***    work.                                                          ***
+***                                                                   ***
+***    Type referenced: nt!_KTHREAD                                   ***
+***                                                                   ***
+*************************************************************************
+PDB symbol for clr.dll not loaded
+Failed to request MethodData, not in JIT code range
+
+KEY_VALUES_STRING: 1
+
+    Key  : Analysis.CPU.mSec
+    Value: 265
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 449
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 5
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 0
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 218
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 528
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 146
+
+    Key  : CLR.BuiltBy
+    Value: NET481REL1LAST_25H2_C
+
+    Key  : CLR.Engine
+    Value: CLR
+
+    Key  : CLR.Version
+    Value: 4.8.9325.0
+
+    Key  : Failure.Bucket
+    Value: WRONG_SYMBOLS_X86_10.0.26100.8521_(WinBuild.160101.0800)_TIMESTAMP_830412-024127_D511F2D7_ntdll.wrong.symbols.dll!D511F2D71BF000
+
+    Key  : Failure.Hash
+    Value: {378940ed-442c-5a67-c9e4-311f127f73a2}
+
+    Key  : Timeline.Process.Start.DeltaSec
+    Value: 38
+
+
+FILE_IN_CAB:  SwgClient_r.exe-unknown.0-20260623120326.mdmp
+
+CONTEXT:  (.ecxr)
+eax=00000000 ebx=00011778 ecx=00000000 edx=12e7ac18 esi=22b28020 edi=00000000
+eip=56c98b3c esp=230ef8b0 ebp=230ef8f0 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010297
+nvwgf2um!NVAPI_DirectMethods+0x9f81c:
+56c98b3c 8b00            mov     eax,dword ptr [eax]  ds:002b:00000000=????????
+Resetting default scope
+
+EXCEPTION_RECORD:  (.exr -1)
+ExceptionAddress: 56c98b3c (nvwgf2um!NVAPI_DirectMethods+0x0009f81c)
+   ExceptionCode: c0000005 (Access violation)
+  ExceptionFlags: 00000000
+NumberParameters: 2
+   Parameter[0]: 00000000
+   Parameter[1]: 00000000
+Attempt to read from address 00000000
+
+WRONG_SYMBOLS_TIMESTAMP: d511f2d7
+
+WRONG_SYMBOLS_SIZE: 1bf000
+
+FAULTING_MODULE: 77760000 ntdll
+
+MISSING_CLR_SYMBOL: 0
+
+ADDITIONAL_DEBUG_TEXT:  
+You can run '.symfix; .reload' to try to fix the symbol path and load symbols. ; Followup set based on attribute [Is_ChosenCrashFollowupThread] from Frame:[0] on thread:[PSEUDO_THREAD]
+
+FAULTING_THREAD:  ffffffff
+
+STACK_TEXT:  
+00000000 00000000 WRONG_SYMBOLS!WRONG_SYMBOLS+0x0
+
+
+STACK_COMMAND:  ** Pseudo Context ** ManagedPseudo ** Value: ffffffff ** ; kb
+
+BUGCHECK_CODE:  d511f2d7
+
+EXCEPTION_CODE_STR:  D511F2D7
+
+EXCEPTION_STR:  WRONG_SYMBOLS
+
+PROCESS_NAME:  ntdll.wrong.symbols.dll
+
+IMAGE_NAME:  ntdll.wrong.symbols.dll
+
+MODULE_NAME: ntdll_wrong_symbols
+
+SYMBOL_NAME:  ntdll_wrong_symbols!D511F2D71BF000
+
+FAILURE_BUCKET_ID:  WRONG_SYMBOLS_X86_10.0.26100.8521_(WinBuild.160101.0800)_TIMESTAMP_830412-024127_D511F2D7_ntdll.wrong.symbols.dll!D511F2D71BF000
+
+OSPLATFORM_TYPE:  x86
+
+OSNAME:  Windows 8
+
+FAILURE_ID_HASH:  {378940ed-442c-5a67-c9e4-311f127f73a2}
+
+Followup:     MachineOwner
+---------
+
+====ECXR_FAULTING_THREAD====
+eax=00000000 ebx=00011778 ecx=00000000 edx=12e7ac18 esi=22b28020 edi=00000000
+eip=56c98b3c esp=230ef8b0 ebp=230ef8f0 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010297
+nvwgf2um!NVAPI_DirectMethods+0x9f81c:
+56c98b3c 8b00            mov     eax,dword ptr [eax]  ds:002b:00000000=????????
+ChildEBP RetAddr      
+WARNING: Stack unwind information not available. Following frames may be wrong.
+230ef8f0 56dc5f72     nvwgf2um!NVAPI_DirectMethods+0x9f81c
+230ef948 570085cc     nvwgf2um!NVENCODEAPI_Thunk+0xd1832
+230ef970 5700849f     nvwgf2um!SetDependencyInfo+0x55a3c
+230ef994 574a6315     nvwgf2um!SetDependencyInfo+0x5590f
+230ef9a0 577e0a77     nvwgf2um!NVDEV_Thunk+0x1587b5
+230ef9d8 75d05d49     nvwgf2um!NVDEV_Thunk+0x492f17
+230ef9e8 777ce12b     kernel32!BaseThreadInitThunk+0x19
+230efa40 777ce0b1     ntdll!RtlInitializeExceptionChain+0x6b
+230efa50 00000000     ntdll!RtlGetAppContainerNamedObjectPath+0x231
+====THREAD0_MAIN====
+eax=c000003a ebx=00000001 ecx=00000000 edx=00000000 esi=00000000 edi=0261aab8
+eip=754f2dcc esp=0261a930 ebp=0261a988 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200216
+win32u!NtGdiDdDDICreateAllocation+0xc:
+754f2dcc c20400          ret     4
+ChildEBP RetAddr      
+WARNING: Stack unwind information not available. Following frames may be wrong.
+0261a988 60816946     win32u!NtGdiDdDDICreateAllocation+0xc
+0261a9c8 6082e9a9     d3d11!D3D11CoreCreateLayeredDevice+0xa8f6
+0261ab14 57112990     d3d11!D3D11CoreCreateLayeredDevice+0x22959
+0261ab24 571131be     nvwgf2um!OpenAdapter10+0x79b00
+0261ab30 56cabad9     nvwgf2um!OpenAdapter10+0x7a32e
+0261ad90 575908e5     nvwgf2um!NVAPI_DirectMethods+0xb27b9
+0261adc0 56c4edbc     nvwgf2um!NVDEV_Thunk+0x242d85
+0261b090 56c53908     nvwgf2um!NVAPI_DirectMethods+0x55a9c
+0261b36c 56cccc01     nvwgf2um!NVAPI_DirectMethods+0x5a5e8
+0261c10c 56c3ff63     nvwgf2um!NVAPI_Thunk+0x16541
+0261ca68 56c0d534     nvwgf2um!NVAPI_DirectMethods+0x46c43
+0261cab8 56c0d811     nvwgf2um!NVAPI_DirectMethods+0x14214
+0261cb70 5700ac3a     nvwgf2um!NVAPI_DirectMethods+0x144f1
+0261ce94 570031c1     nvwgf2um!SetDependencyInfo+0x580aa
+0261d16c 570bab6f     nvwgf2um!SetDependencyInfo+0x50631
+0261d1e8 5710d710     nvwgf2um!OpenAdapter10+0x21cdf
+0261d214 6082a2e3     nvwgf2um!OpenAdapter10+0x74880
+0261d340 6082a078     d3d11!D3D11CoreCreateLayeredDevice+0x1e293
+0261d360 608293a8     d3d11!D3D11CoreCreateLayeredDevice+0x1e028
+0261d3c8 6080d3cc     d3d11!D3D11CoreCreateLayeredDevice+0x1d358
+0261d6b8 6080d252     d3d11!D3D11CoreCreateLayeredDevice+0x137c
+0261d6d8 6080dc61     d3d11!D3D11CoreCreateLayeredDevice+0x1202
+0261d728 6080cbeb     d3d11!D3D11CoreCreateLayeredDevice+0x1c11
+0261d7dc 6080c992     d3d11!D3D11CoreCreateLayeredDevice+0xb9b
+0261d7fc 607fb0ad     d3d11!D3D11CoreCreateLayeredDevice+0x942
+0261d8dc 60845e52     d3d11+0x2b0ad
+0261db08 608444e6     d3d11!D3D11CoreCreateDevice+0x14ef2
+*** WARNING: Unable to verify checksum for gl11_r.dll
+0261db7c 60a02e52     d3d11!D3D11CoreCreateDevice+0x13586
+0261e050 609ddbdb     gl11_r!Direct3d11_TextureData::Direct3d11_TextureData(
+			class Texture * newEngineTexture = 0x0261aab8, 
+			TextureFormat * runtimeFormats = 0x02273dd0, 
+			int numberOfRuntimeFormats = 0n3)+0x322 [D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11_TextureData.cpp @ 374]
+*** WARNING: Unable to verify checksum for SwgClient_r.exe
+0261e078 012be874     gl11_r!Direct3d11Namespace::createTextureData_impl(
+			class Texture * texture = 0x3e960a58, 
+			TextureFormat * runtimeFormats = 0x02273dd0, 
+			int numberOfRuntimeFormats = 0n3)+0x4b [D:\Code\swg-client-v2\src\engine\client\application\Direct3d11\src\win32\Direct3d11.cpp @ 380]
+0261e12c 012bd97c     SwgClient_r!Texture::load(
+			char * fileName = 0x3190b130 "--- memory read error at address 0x3190b130 ---")+0x524 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\Texture.cpp @ 720]
+0261e154 012acb57     SwgClient_r!Texture::Texture(
+			class CrcString * fileName = 0x0261e1e4)+0x8c [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\Texture.cpp @ 196]
+0261e190 012accee     SwgClient_r!TextureList::create(
+			class CrcString * filename = 0x0261e1e4, 
+			bool createTexture = true)+0xb7 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\TextureList.cpp @ 299]
+0261e1cc 012acf12     SwgClient_r!TextureList::fetch(
+			class CrcString * filename = 0x0261e1e4, 
+			bool createTexture = true)+0xbe [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\TextureList.cpp @ 276]
+0261e3fc 012ace82     SwgClient_r!TextureList::fetch(
+			char * filename = 0x0261e40c "texture/spaceport_metl_panel3.dds")+0x52 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\TextureList.cpp @ 327]
+0261e50c 012c80ef     SwgClient_r!TextureList::fetch(
+			class Iff * iff = 0x0261eec0)+0x62 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\TextureList.cpp @ 349]
+0261e580 012c7d76     SwgClient_r!StaticShaderTemplate::load_texture_0001(
+			class Iff * iff = 0x0261eec0)+0x19f [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 769]
+0261e590 012c6988     SwgClient_r!StaticShaderTemplate::load_texture(
+			class Iff * iff = 0x0261eec0)+0x56 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 694]
+0261e690 012c6651     SwgClient_r!StaticShaderTemplate::load_0000(
+			class Iff * iff = 0x0261eec0)+0x318 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 357]
+0261e6a0 012c53de     SwgClient_r!StaticShaderTemplate::load(
+			class Iff * iff = 0x0261eec0)+0x51 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 297]
+0261e6dc 012c6298     SwgClient_r!StaticShaderTemplate::StaticShaderTemplate(
+			class CrcString * name = 0x0261ef48, 
+			class Iff * iff = 0x0261eec0)+0x8e [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 123]
+0261e700 012ab65c     SwgClient_r!StaticShaderTemplate::create(
+			class CrcString * name = 0x0261ef48, 
+			class Iff * iff = 0x0261eec0)+0x48 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\StaticShaderTemplate.cpp @ 102]
+0261e84c 012ab7e3     SwgClient_r!ShaderTemplateList::create(
+			class CrcString * name = 0x0261ef48, 
+			class Iff * iff = 0x0261eec0)+0x18c [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 576]
+0261ee9c 012ab9b0     SwgClient_r!ShaderTemplateList::fetch(
+			class CrcString * name = 0x0261ef48, 
+			class Iff * iff = 0x0261eec0, 
+			bool * error = 0x0261f59f)+0xc3 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 513]
+0261eef4 012ababf     SwgClient_r!ShaderTemplateList::fetch(
+			class CrcString * name = 0x0261ef48, 
+			bool create = true, 
+			bool * error = 0x0261f59f)+0xe0 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 230]
+0261ef04 012ab7c8     SwgClient_r!ShaderTemplateList::fetch(
+			class CrcString * name = 0x0261ef48, 
+			bool * error = 0x0261f59f)+0xf [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 201]
+0261f554 012aba5e     SwgClient_r!ShaderTemplateList::fetch(
+			class CrcString * name = 0x0261f570, 
+			class Iff * iff = 0x0261fafc, 
+			bool * error = 0x0261f59f)+0xa8 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 506]
+0261f58c 012aba04     SwgClient_r!ShaderTemplateList::fetch(
+			class Iff * iff = 0x0261fafc, 
+			bool * error = 0x0261f59f)+0x4e [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 251]
+0261f59c 012b3a23     SwgClient_r!ShaderTemplateList::fetch(
+			class Iff * iff = 0x0261fafc)+0x14 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderTemplateList.cpp @ 263]
+0261f5dc 012b37d9     SwgClient_r!ShaderPrimitiveSetTemplate::load_sps_0001(
+			char * owner = 0x3d165620 "--- memory read error at address 0x3d165620 ---", 
+			class Iff * iff = 0x0261fafc)+0x93 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp @ 1551]
+0261f7f8 012b3024     SwgClient_r!ShaderPrimitiveSetTemplate::load_sps(
+			char * owner = 0x3d165620 "--- memory read error at address 0x3d165620 ---", 
+			class Iff * iff = 0x0261fafc)+0x69 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp @ 1471]
+0261fa14 012b141a     SwgClient_r!ShaderPrimitiveSetTemplate::load(
+			char * owner = 0x3d165620 "--- memory read error at address 0x3d165620 ---", 
+			class Iff * iff = 0x0261fafc)+0x54 [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp @ 1455]
+0261fa24 012e2ea9     SwgClient_r!ShaderPrimitiveSetTemplate::ShaderPrimitiveSetTemplate(
+			char * owner = 0x3d165620 "--- memory read error at address 0x3d165620 ---", 
+			class Iff * iff = 0x0261fafc)+0x3a [D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\ShaderPrimitiveSetTemplate.cpp @ 1435]
+0261fa4c 012e2b00     SwgClient_r!MeshAppearanceTemplate::load_0005(
+			class Iff * iff = 0x0261fafc)+0x79 [D:\Code\swg-client-v2\src\engine\client\library\clientObject\src\shared\appearance\MeshAppearanceTemplate.cpp @ 402]
+0261fae0 012e270a     SwgClient_r!MeshAppearanceTemplate::load(
+			class Iff * iff = 0x0261fafc)+0x70 [D:\Code\swg-client-v2\src\engine\client\library\clientObject\src\shared\appearance\MeshAppearanceTemplate.cpp @ 274]
+0261fb24 01528915     SwgClient_r!MeshAppearanceTemplate::asynchronousLoadCallback(void)+0x7a [D:\Code\swg-client-v2\src\engine\client\library\clientObject\src\shared\appearance\MeshAppearanceTemplate.cpp @ 233]
+0261fb48 00fe264e     SwgClient_r!AsynchronousLoader::processCallbacks(void)+0xe5 [D:\Code\swg-client-v2\src\engine\shared\library\sharedFile\src\shared\AsynchronousLoader.cpp @ 631]
+0261fb8c 00fe24cd     SwgClient_r!Game::runGameLoopOnce(
+			bool presentToWindow = false, 
+			struct HWND__ * hwnd = 0x00000000, 
+			int width = 0n0, 
+			int height = 0n0)+0x14e [D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\core\Game.cpp @ 1122]
+0261fba0 00faf410     SwgClient_r!Game::run(void)+0x2d [D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\core\Game.cpp @ 1041]
+0261fd34 00fb0233     SwgClient_r!ClientMain(
+			struct HINSTANCE__ * hInstance = 0x008b0000, 
+			struct HINSTANCE__ * hPrevInstance = 0x00000000, 
+			char * lpCmdLine = 0x0271950d "--- memory read error at address 0x0271950d ---", 
+			int nCmdShow = 0n10)+0x610 [D:\Code\swg-client-v2\src\game\client\application\SwgClient\src\win32\ClientMain.cpp @ 387]
+0261fd48 01a8076c     SwgClient_r!WinMain(
+			struct HINSTANCE__ * hInstance = 0x008b0000, 
+			struct HINSTANCE__ * hPrevInstance = 0x00000000, 
+			char * lpCmdLine = 0x0271950d "--- memory read error at address 0x0271950d ---", 
+			int nCmdShow = 0n10)+0x23 [D:\Code\swg-client-v2\src\game\client\application\SwgClient\src\win32\WinMain.cpp @ 121]
+(Inline) --------     SwgClient_r!invoke_main(void)+0x1a [D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl @ 102]
+0261fd94 75d05d49     SwgClient_r!__scrt_common_main_seh(void)+0xfb [D:\a\_work\1\s\src\vctools\crt\vcstartup\src\startup\exe_common.inl @ 288]
+0261fda4 777ce12b     kernel32!BaseThreadInitThunk+0x19
+====MODVER_DRIVER====
+start    end        module name
+56b60000 59fea000   nvwgf2um   (export symbols)       nvwgf2um.dll
+    Loaded symbol image file: nvwgf2um.dll
+    Mapped memory image file: C:\Windows\System32\DriverStore\FileRepository\nv_dispig.inf_amd64_f4c7a2fd13e0f763\nvwgf2um.dll
+    Image path: C:\Windows\System32\DriverStore\FileRepository\nv_dispig.inf_amd64_f4c7a2fd13e0f763\nvwgf2um.dll
+    Image name: nvwgf2um.dll
+    Timestamp:        Tue Jan 20 01:38:37 2026 (696F30FD)
+    CheckSum:         034C3677
+    ImageSize:        0348A000
+    File version:     32.0.15.9186
+    Product version:  32.0.15.9186
+    File flags:       8 (Mask 3F) Private
+    File OS:          40004 NT Win32
+    File type:        3.4 Driver
+    File date:        00000000.00000000
+    Translations:     0409.04e4
+    Information from resource tables:
+        CompanyName:      NVIDIA Corporation
+        ProductName:      NVIDIA D3D10 drivers
+        InternalName:     nvwgf2um
+        OriginalFilename: nvwgf2um.dll
+        ProductVersion:   32.0.15.9186
+        FileVersion:      32.0.15.9186
+        FileDescription:  NVIDIA D3D10 Driver, Version 591.86 
+        LegalCopyright:   (C) 2026 NVIDIA Corporation. All rights reserved.
+====MODVER_GL11====
+start    end        module name
+609d0000 60acd000   gl11_r   C (private pdb symbols)  stage\gl11_r.pdb
+    Loaded symbol image file: gl11_r.dll
+    Mapped memory image file: stage\gl11_r.dll
+    Image path: D:\Code\swg-client-v2\stage\gl11_r.dll
+    Image name: gl11_r.dll
+    Timestamp:        Mon Jun 22 16:33:34 2026 (6A39AA2E)
+    CheckSum:         00000000
+    ImageSize:        000FD000
+    Translations:     0000.04b0 0000.04e4 0409.04b0 0409.04e4
+    Information from resource tables:
+====MODVER_GL05====
+start    end        module name
+====MODVER_UTINNI====
+Browse full module list
+start    end        module name
+62320000 62490000   UtinniCore   (deferred)             
+    Mapped memory image file: D:\Code\Utinni\bin\Release\UtinniCore.dll
+    Image path: D:\Code\Utinni\bin\Release\UtinniCore.dll
+    Image name: UtinniCore.dll
+    Browse all global symbols  functions  data
+    Timestamp:        Tue Jun 23 06:58:30 2026 (6A3A74E6)
+    CheckSum:         00000000
+    ImageSize:        00170000
+    File version:     1.0.0.0
+    Product version:  1.0.0.0
+    File flags:       0 (Mask 3F)
+    File OS:          40004 NT Win32
+    File type:        2.0 Dll
+    File date:        00000000.00000000
+    Translations:     0409.04b0
+    Information from resource tables:
+        CompanyName:      Philip Klatt
+        ProductName:      Utinni
+        InternalName:     UtinniCore.dll
+        OriginalFilename: UtinniCore.dll
+        ProductVersion:   1.0.0.0
+        FileVersion:      1.0.0.0
+        FileDescription:  Utinni
+        LegalCopyright:   Copyright (C) 2020, Philip Klatt
+====MODVER_D3D11====
+start    end        module name
+607d0000 609c1000   d3d11      (export symbols)       d3d11.dll
+    Loaded symbol image file: d3d11.dll
+    Mapped memory image file: C:\Windows\System32\d3d11.dll
+    Image path: C:\Windows\System32\d3d11.dll
+    Image name: d3d11.dll
+    Image was built with /Brepro flag.
+    Timestamp:        0A0BBD17 (This is a reproducible build file hash, not a timestamp)
+    CheckSum:         001F6B11
+    ImageSize:        001F1000
+    File version:     6.2.26100.8521
+    Product version:  10.0.26100.8521
+    File flags:       0 (Mask 3F)
+    File OS:          40004 NT Win32
+    File type:        2.0 Dll
+    File date:        00000000.00000000
+    Translations:     0409.04b0
+    Information from resource tables:
+        CompanyName:      Microsoft Corporation
+        ProductName:      Microsoft® Windows® Operating System
+        InternalName:     D3D11.dll
+        OriginalFilename: D3D11.dll
+        ProductVersion:   10.0.26100.8521
+        FileVersion:      10.0.26100.8521 (WinBuild.160101.0800)
+        FileDescription:  Direct3D 11 Runtime
+        LegalCopyright:   © Microsoft Corporation. All rights reserved.
+====THREADCOUNT====
+.  0  Id: 10ae4.10478 Suspend: 0 Teb: 00665000 Unfrozen
+   1  Id: 10ae4.d044 Suspend: 0 Teb: 00669000 Unfrozen
+   2  Id: 10ae4.1033c Suspend: 0 Teb: 0066d000 Unfrozen
+   3  Id: 10ae4.105c8 Suspend: 0 Teb: 00671000 Unfrozen
+   4  Id: 10ae4.10268 Suspend: 0 Teb: 00675000 Unfrozen
+   5  Id: 10ae4.10908 Suspend: 0 Teb: 00679000 Unfrozen
+   6  Id: 10ae4.b4f8 Suspend: 0 Teb: 00681000 Unfrozen
+   7  Id: 10ae4.10900 Suspend: 0 Teb: 00685000 Unfrozen
+   8  Id: 10ae4.3128 Suspend: 0 Teb: 00689000 Unfrozen
+   9  Id: 10ae4.2ad8 Suspend: 0 Teb: 0068d000 Unfrozen
+  10  Id: 10ae4.15f8 Suspend: 0 Teb: 00691000 Unfrozen
+  11  Id: 10ae4.ea0c Suspend: 0 Teb: 00695000 Unfrozen
+  12  Id: 10ae4.10838 Suspend: 0 Teb: 00699000 Unfrozen
+  13  Id: 10ae4.1584 Suspend: 0 Teb: 0069d000 Unfrozen
+  14  Id: 10ae4.6db8 Suspend: 0 Teb: 006a1000 Unfrozen
+  15  Id: 10ae4.74b4 Suspend: 0 Teb: 006a5000 Unfrozen
+  16  Id: 10ae4.10bf4 Suspend: 0 Teb: 006a9000 Unfrozen
+  17  Id: 10ae4.10798 Suspend: 0 Teb: 006ad000 Unfrozen
+  18  Id: 10ae4.8a50 Suspend: 0 Teb: 006b1000 Unfrozen
+  19  Id: 10ae4.4854 Suspend: 0 Teb: 006b5000 Unfrozen
+  20  Id: 10ae4.2954 Suspend: 0 Teb: 006b9000 Unfrozen
+  21  Id: 10ae4.9b0c Suspend: 0 Teb: 006bd000 Unfrozen
+  22  Id: 10ae4.526c Suspend: 0 Teb: 006c1000 Unfrozen
+  23  Id: 10ae4.1084c Suspend: 0 Teb: 006c5000 Unfrozen
+  24  Id: 10ae4.10834 Suspend: 0 Teb: 006c9000 Unfrozen
+  25  Id: 10ae4.d18c Suspend: 0 Teb: 006cd000 Unfrozen
+  26  Id: 10ae4.cb7c Suspend: 0 Teb: 006d1000 Unfrozen
+  27  Id: 10ae4.e294 Suspend: 0 Teb: 006dd000 Unfrozen
+  28  Id: 10ae4.10864 Suspend: 0 Teb: 006e1000 Unfrozen
+  29  Id: 10ae4.3c60 Suspend: 0 Teb: 006e5000 Unfrozen
+  30  Id: 10ae4.10b30 Suspend: 0 Teb: 006e9000 Unfrozen
+  31  Id: 10ae4.d588 Suspend: 0 Teb: 006ed000 Unfrozen
+  32  Id: 10ae4.47e0 Suspend: 0 Teb: 006f1000 Unfrozen
+  33  Id: 10ae4.105c0 Suspend: 0 Teb: 006f9000 Unfrozen
+  34  Id: 10ae4.f0d0 Suspend: 0 Teb: 006fd000 Unfrozen
+  35  Id: 10ae4.fbec Suspend: 0 Teb: 00701000 Unfrozen
+  36  Id: 10ae4.107f0 Suspend: 1 Teb: 00705000 Unfrozen
+  37  Id: 10ae4.9014 Suspend: 1 Teb: 00709000 Unfrozen
+  38  Id: 10ae4.3504 Suspend: 1 Teb: 0070d000 Unfrozen
+  39  Id: 10ae4.10548 Suspend: 1 Teb: 00711000 Unfrozen
+  40  Id: 10ae4.10a74 Suspend: 1 Teb: 00715000 Unfrozen
+# 41  Id: 10ae4.c040 Suspend: 0 Teb: 00719000 Unfrozen
+  42  Id: 10ae4.10868 Suspend: 0 Teb: 0071d000 Unfrozen
+  43  Id: 10ae4.6d30 Suspend: 0 Teb: 00721000 Unfrozen
+  44  Id: 10ae4.472c Suspend: 0 Teb: 00725000 Unfrozen
+  45  Id: 10ae4.c108 Suspend: 0 Teb: 00729000 Unfrozen
+  46  Id: 10ae4.10840 Suspend: 0 Teb: 0072d000 Unfrozen
+  47  Id: 10ae4.108ec Suspend: 0 Teb: 00731000 Unfrozen
+  48  Id: 10ae4.88e4 Suspend: 0 Teb: 00735000 Unfrozen
+  49  Id: 10ae4.10944 Suspend: 0 Teb: 00739000 Unfrozen
+  50  Id: 10ae4.a6fc Suspend: 0 Teb: 0073d000 Unfrozen
+  51  Id: 10ae4.f5d8 Suspend: 0 Teb: 00741000 Unfrozen
+  52  Id: 10ae4.1eb8 Suspend: 0 Teb: 00745000 Unfrozen
+  53  Id: 10ae4.10694 Suspend: 0 Teb: 00749000 Unfrozen
+  54  Id: 10ae4.104a0 Suspend: 0 Teb: 0074d000 Unfrozen
+  55  Id: 10ae4.15a0 Suspend: 0 Teb: 00751000 Unfrozen
+  56  Id: 10ae4.108d4 Suspend: 0 Teb: 00755000 Unfrozen
+  57  Id: 10ae4.9eac Suspend: 0 Teb: 00759000 Unfrozen
+  58  Id: 10ae4.10d14 Suspend: 0 Teb: 0075d000 Unfrozen
+  59  Id: 10ae4.10d28 Suspend: 0 Teb: 00761000 Unfrozen
+  60  Id: 10ae4.10c38 Suspend: 0 Teb: 00765000 Unfrozen
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\Visualizers\winrt.natvis'

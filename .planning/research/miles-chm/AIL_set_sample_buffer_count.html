@@ -1,0 +1,131 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>AIL_set_sample_buffer_count</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='AIL_set_sample_buffer_count'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>AIL_set_sample_buffer_count</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ sets the number of low-level streaming buffers available for use with a given sample handle.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_minimum_sample_buffer_size.html#_Discussion' class='paragraph'>AIL_minimum_sample_buffer_size: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html#_Discussion' class='paragraph'>AIL_sample_buffer_available: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_count.html#_Discussion' class='paragraph'>AIL_sample_buffer_count: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_buffer_count.html#_Discussion' class='paragraph'>AIL_set_sample_buffer_count: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td>
+      <div class=menu id=dropmenu1>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_load_sample_buffer.html' class='paragraph'>AIL_load_sample_buffer</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_buffer_available.html' class='paragraph'>AIL_sample_buffer_available</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu1"); return false'><b><a href='' class='paragraph'>Functions</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='AIL_sample_buffer_count.html' class='paragraph'>AIL_sample_buffer_count</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='AIL_sample_channel_count.html' class='paragraph'>AIL_sample_channel_count</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='AIL_set_sample_buffer_count.html'>AIL_set_sample_buffer_count</a></span>(</td><td><span class='type'><a href='HSAMPLE.html' class='blue'>HSAMPLE</a></span> <span class='parameter'>S</span>,<br><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='parameter'>n_buffers</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ sets the number of low-level streaming buffers available for use with a given sample handle.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='S' class=nohover>S</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the sample for which the specified number of low-level streaming buffers are to be allocated.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='n_buffers' class=nohover>n_buffers</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ indicates the number of desired low-level streaming buffers.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Nonzero if the allocation succeeded; 0 if the allocation failed.</table>
+<div class="discussion_heading"><a name='AIL_set_sample_buffer_count::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ All HSAMPLEs have at least 2 low-level streaming buffer pointers by default.  Additional streaming buffer pointers  may be allocated with this function.  (Note that these are only internal descriptors, not the buffers themselves.  The actual data buffers used for low-level streaming are owned by the application. 
+
+</p>
+<p>
+Most applications should use high-level (<a href='HSTREAM.html' class='paragraph'>HSTREAM</a>) functions instead of low-level streaming. <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='AIL_sample_buffer_count.html' class='paragraph'>AIL_sample_buffer_count</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Advanced_Digital_Audio_Services.html' class='paragraph'>Advanced Digital Audio Services</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='AIL_sample_channel_count.html' class='paragraph'>AIL_sample_channel_count</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

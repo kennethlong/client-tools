@@ -1,0 +1,193 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MILES_PREFERENCES</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MILES_PREFERENCES'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MILES_PREFERENCES</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ describes the Miles Sound System Preferences.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_allocate_sample_handle.html#_Discussion' class='paragraph'>AIL_allocate_sample_handle: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_get_timer_highest_delay.html#_Discussion' class='paragraph'>AIL_get_timer_highest_delay: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_open_digital_driver.html#_Discussion' class='paragraph'>AIL_open_digital_driver: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_sample_output_levels.html#_Discussion' class='paragraph'>AIL_sample_output_levels: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_digital_master_reverb.html#_Discussion' class='paragraph'>AIL_set_digital_master_reverb: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_sample_3D_distances.html#_Discussion' class='paragraph'>AIL_set_sample_3D_distances: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_timer_frequency.html#_Discussion' class='paragraph'>AIL_set_timer_frequency: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='AIL_set_timer_period.html#_Discussion' class='paragraph'>AIL_set_timer_period: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_much_latency_does_Miles_have_.html#_Discussion' class='paragraph'>How much latency does Miles have?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='My_3D_sound_is_not_falling_off_like_I_expected___what_is_going_on_.html#_Discussion' class='paragraph'>My 3D sound is not falling off like I expected - what is going on?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='My_sound_is_skipping___what_can_I_do_.html#_Discussion' class='paragraph'>My sound is skipping - what can I do?: </a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='Preferences.html#_Discussion' class='paragraph'>Preferences: Discussion</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='Preferences.html' class='paragraph'>Preferences</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Type Definition:</span>
+<span class='type'>typedef <a href='UINTa.html' class='blue'>UINTa</a></span> <a href='MILES_PREFERENCES.html'>MILES_PREFERENCES</a>;
+</pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ describes the Miles Sound System Preferences.</table>
+<div class="discussion_heading">Predefined values</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_MAX_PREDELAY_MS' class=nohover>DIG_MAX_PREDELAY_MS</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference controls the maximum predelay you can use when applying 2D digital reverb. The longer the predelay, the more memory is required (4 bytes * the output frequency). <br><br> This preference value must be changed before calling <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>. <br><br> Units: Milliseconds. <br><br> Default Value: 500 (ms).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_ENABLE_RESAMPLE_FILTER' class=nohover>DIG_ENABLE_RESAMPLE_FILTER</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference determines the whether the MSS mixer should perform sound filtering when upsampling or downsampling a sound effect.  This is a very low overhead operation, so you should generally just leave this preference turned on. <br><br> Units: Boolean ( YES / NO ). <br><br> Default Value: YES.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_MIXER_CHANNELS' class=nohover>DIG_MIXER_CHANNELS</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  DIG_MIXER_CHANNELS determines the number of HSAMPLE sample handles which may be allocated with the <a href='AIL_allocate_sample_handle.html' class='paragraph'>AIL_allocate_sample_handle</a>  function.  At any moment in time, each instance of a playing digital sound effect requires one HSAMPLE handle. <br><br> The value of this preference may be increased if desired, but system performance may be degraded if too many samples are played simultaneously. The practical limit depends on the hardware DMA data rate in use and the system's capabilities.  For example, it may be possible to play hundreds of samples simultaneously with an 11- kHz 8-bit mono driver configuration running on a high-end PC system, while only one or two simultaneous samples should be played on a 386-class system whose sound driver is configured for 16-bit stereo 44 Khz DMA transfers.  Because scaling source sample data to a given hardware configuration consumes a relatively small amount of CPU time, the hardware (DMA) data rate being used affects system performance to a much greater extent than does the playback rate, number of channels, and word size of the source sample data. <br><br> Any changes made to the DIG_MIXER_CHANNELS preference value must be made prior to installing the digital driver in question. <br><br> Units: # of simultaneous digital sound effects permitted. <br><br> Default Value: 64.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_RESAMPLING_TOLERANCE' class=nohover>DIG_RESAMPLING_TOLERANCE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  When the playback rate of a sample passed to MSS differs from the hardware sample rate in use (as defined by the DIG_HARDWARE_SAMPLE_RATE preference), the data must be resampled to play at its normal speed and pitch.  This resampling process requires a minute amount of CPU time beyond that required to play data which does not need to be resampled.  By setting the DIG_RESAMPLING_TOLERANCE preference prior to initializing a digital audio driver, the application can specify that no resampling is to occur if the source sample data does not vary from the hardware data rate by more than a certain percentage. <br><br> Units: Tolerance percentage expressed as (n / 65536). <br><br> Default Value: 0% (0).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='AIL_TIMERS' class=nohover>AIL_TIMERS</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference value determines how many HTIMER handles may be allocated with <a href='AIL_register_timer.html' class='paragraph'>AIL_register_timer</a>.  Any changes to this preference value must be made immediately after <a href='AIL_startup.html' class='paragraph'>AIL_startup</a> is called. <br><br> AIL_TIMERS should not normally need to be changed by the application, except in cases where more than 16 timer service clients, including XMIDI drivers and application callback functions, must be serviced. <br><br> Units: Number of timers which can be allocated with <a href='AIL_register_timer.html' class='paragraph'>AIL_register_timer</a>. <br><br> Default Value: 16.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='AIL_ENABLE_MMX_SUPPORT' class=nohover>AIL_ENABLE_MMX_SUPPORT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  By default, Intel MMX support is enabled to provide a CPU performance increase.  Most applications should not need to alter this preference value. <br><br> This preference value may be altered on demand at runtime. <br><br> Environment: x86 platforms. <br><br> Units: Boolean (YES / NO). <br><br> Default Value: YES.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_USE_WAVEOUT' class=nohover>DIG_USE_WAVEOUT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference is used under Windows if the <a href='MILES_OPEN_DIGITAL_FLAGS.html' class='paragraph'>AIL_OPEN_DIGITAL_FORCE_PREFERENCE</a> flag is used with <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>.  It determines whether MSS will use DirectSound or the low-level Windows multimedia extensions (MME). <br><br> By default, MSS tries to load DirectSound and only falls back to waveOut if DirectSound fails to load or if DirectSound is using emulation mode.  This preference allows you to control specifically which technology Miles uses. <br><br> Environment: Windows. <br><br> Units: Boolean ( YES / NO ). <br><br> Default Value: NO.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_PREFERRED_WO_DEVICE' class=nohover>DIG_PREFERRED_WO_DEVICE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  When the Windows version uses waveOut for output, this preference determines the waveOut device ID it opens. <br><br> Environment: Windows. <br><br> Units: A DWORD device ID. <br><br> Default Value: WAVE_MAPPER.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_PREFERRED_DS_DEVICE' class=nohover>DIG_PREFERRED_DS_DEVICE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  When the Windows version uses DirectSound for output, this preference determines the LPGUID it passes to DirectSoundCreate. <br><br> Environment: Windows. <br><br> Units: A pointer to a DirectSound device GUID. <br><br> Default Value: NULL.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='AIL_MM_PERIOD' class=nohover>AIL_MM_PERIOD</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference value determines the shortest possible timer period which may be requested with <a href='AIL_set_timer_period.html' class='paragraph'>AIL_set_timer_period</a> or <a href='AIL_set_timer_frequency.html' class='paragraph'>AIL_set_timer_frequency</a>. <br><br> AIL_MM_PERIOD should not normally need to be changed by the application, except in cases where background timer services at rates faster than 200 Hz are required. <br><br> Units: Milliseconds. <br><br> Default Value: 5 (200 Hz).</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_3D_MUTE_AT_MAX' class=nohover>DIG_3D_MUTE_AT_MAX</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference value determines what happens to the volume of 3D-spatialized sounds when they exceed their specified maximum distance from the listener.  By default, on the software-mixed platforms, such sounds are muted altogether.  If you set DIG_3D_MUTE_AT_MAX to NO before calling <a href='AIL_open_digital_driver.html' class='paragraph'>AIL_open_digital_driver</a>, sounds played under that driver will simply stop decreasing in volume once their maximum distance is reached. <br><br> On hardware-mixed 3D providers such as EAX and DirectSound3D, this behavior can be altered as desired for all subsequently-triggered  voices, but it's necessary to use the "Mute at Maximum" property with <a href='AIL_output_filter_driver_property.html' class='paragraph'>AIL_output_filter_driver_property</a> rather than the DIG_3D_MUTE_AT_MAX preference.  Not all hardware providers support this property at all, so if you plan to support hardware-mixed output modes, it's better to implement mute-at-maximum behavior in your own code. <br><br> Units: Boolean (YES/NO). <br><br> Default Value: YES.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_LEVEL_RAMP_SAMPLES' class=nohover>DIG_LEVEL_RAMP_SAMPLES</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference value determines the number of samples in each software-mixing buffer over which  sample volume level changes (including 3D attenuation) take effect.  Smaller values may exacerbate "zipper noise" under some conditions, while larger values take (slightly) more CPU time.  The default value of 128 represents  a good performance-versus-quality compromise for most applications. <br><br> Environment: All software-mixed platforms. <br><br> Units: An integer number of samples. <br><br> Default value: 128.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_DS_FRAGMENT_SIZE' class=nohover>DIG_DS_FRAGMENT_SIZE</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference determines the big each Miles mixer fragment is. <br><br> This preference and DIG_DS_MIX_FRAGMENT_COUNT control how far ahead the MSS mixer will mix when replacing the DirectSound mixer. Decreasing this value may lower latency, but can cause skipping problems on some sound cards. <br><br> Units: Milliseconds. <br><br> Default Value: 8.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_DS_FRAGMENT_CNT' class=nohover>DIG_DS_FRAGMENT_CNT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference determines the maximum buffer fragments that the MSS mixer uses when it replaces the DirectSound mixer. This preference doesn't have any effect on latency - it just controls the maximum value that the DIG_DS_MIX_FRAGMENT_CNT can be set to. <br><br> Units: Buffer fragments. <br><br> Default Value: 96.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='DIG_DS_MIX_FRAGMENT_CNT' class=nohover>DIG_DS_MIX_FRAGMENT_CNT</a>&nbsp</td>
+    <td class=paramdesc>
+<p>
+  This preference determines the number of buffer fragments that the MSS mixer mixes ahead when it replaces the DirectSound mixer. This preference multiplied by the DIG_DS_FRAGMENT_SIZE determines the current digital latency. <br><br> You can change this preference at runtime, so if you are getting skipping during a CPU intensive operation, you can bump up this preference, call <a href='AIL_serve.html' class='paragraph'>AIL_serve</a> to fill the digital buffers, run the CPU intensive operation, and then set this preference back to its default.  This will eliminate virtually all skipping problems. <br><br> This value must be less than DIG_DS_FRAGMENT_CNT. <br><br> Units: Buffer fragments. <br><br> Default Value: 8.</td>
+  </tr>
+</table>
+<br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='Preferences.html#_Discussion' class='paragraph'>Preferences: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='Preferences.html' class='paragraph'>Preferences</a></td>
+    <td width=33% align=right>&nbsp;</td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

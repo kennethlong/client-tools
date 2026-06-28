@@ -1,0 +1,130 @@
+<!-- This page was created with CRAPI. -->
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
+<html>
+<head>
+<title>MilesStartAsyncThread</title>
+<meta http-equiv='content-type' content='text/html; charset=iso8859-1'>
+<meta name='ms.locale' content='en-us'>
+<meta name='description' content=''>
+<meta name='ms-hkwd' content='MilesStartAsyncThread'>
+<link rel='stylesheet' title='default' href='reference.css' type='text/css'>
+<script src='reference.js' type='text/javascript'></script>
+</head>
+<body onClick='HandleClick(event, null); return true'>
+<table class=bar>
+  <tr>
+    <td rowspan=2><img src='smallproduct.png'></td>
+    <td width=100% class=title>MilesStartAsyncThread</td>
+  </tr>
+  <tr><td width=100% class=biline><p>
+ starts one of the background Miles SPU workers.</td></tr>
+</table>
+
+<table class=bar>
+  <tr>
+    <td>Related:</td>
+    <td>
+      <div class=menu id=dropmenu0>
+        <table class=spacer><tr><td>&nbsp;</td></tr></table>
+        <table class=dropmenu>
+          <tr><td><img src='reference.png'>&nbsp;<a href='How_do_offload_processing_onto_the_SPU_on_the_PS3_.html#_Discussion' class='paragraph'>How do offload processing onto the SPU on the PS3?: </a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MilesRequestStopAsyncThread.html#_Discussion' class='paragraph'>MilesRequestStopAsyncThread: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MilesStartAsyncThread.html#_Discussion' class='paragraph'>MilesStartAsyncThread: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='MilesWaitStopAsyncThread.html#_Discussion' class='paragraph'>MilesWaitStopAsyncThread: Discussion</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='SPU_Usage_on_the_PlayStation_3.html#_Discussion' class='paragraph'>SPU Usage on the PlayStation 3: Discussion</a></td></tr>
+        </table>
+      </div>
+      <span onClick='HandleClick(event, "dropmenu0"); return false'><b><a href='' class='paragraph'>Text</a></b></span>
+    </td>
+    <td width=100% align=right>
+       <span onClick='HandleClick(event, "backmenu"); return false'><b><a href='' class='paragraph'>Navigation</a></b></span>
+    </td>
+  </tr>
+</table>
+<div class=rightmenuouter>
+  <div class=rightmenu id=backmenu>
+    <table class=dropmenu>
+          <tr><td><img src='arrowleft.png'>&nbsp;<a href='SPU_Thread_Control_API.html#_Discussion' class='paragraph'>SPU Thread Control API: Discussion</a></td></tr>
+          <tr><td><img src='arrowright.png'>&nbsp;<a href='MilesRequestStopAsyncThread.html' class='paragraph'>MilesRequestStopAsyncThread</a></td></tr>
+          <tr><td><img src='arrowup.png'>&nbsp;<a href='SPU_Thread_Control_API.html' class='paragraph'>SPU Thread Control API</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='index.html' class='paragraph'>Introduction</a></td></tr>
+          <tr><td><img src='reference.png'>&nbsp;<a href='changelog.html' class='paragraph'>Changelog</a></td></tr>
+    </table>
+  </div>
+</div>
+<div class=prototype>
+<pre><span class='header'>// Function prototype:</span>
+<table><tr valign=top><td><span class='type'><a href='S32.html' class='blue'>S32</a></span> <span class='type'><a href='MilesStartAsyncThread.html'>MilesStartAsyncThread</a></span>(</td><td><span class='type'><a href='U32.html' class='blue'>U32</a></span> <span class='parameter'>spu_index</span>,<br><span class='type'>void const *</span> <span class='parameter'>spu_info</span>);</td></tr></table></pre>
+  </div>
+</div>
+<div class="discussion_heading">Description</div>
+<table>
+<p>
+ starts one of the background Miles SPU workers.</table>
+<div class="discussion_heading">Parameters</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='spu_index' class=nohover>spu_index</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Specifies the SPU index to use.</td>
+  </tr>
+  <tr valign=top>
+    <td class=paramname><a name='spu_info' class=nohover>spu_info</a>&nbsp[in]</td>
+    <td class=paramdesc>
+<p>
+ Specifies the SPU library specific data.</td>
+  </tr>
+</table>
+<div class="discussion_heading">Return value</div>
+<table>
+  <tr valign=top>
+    <td class=paramname><a name='return' class=nohover>return</a>&nbsp[out]</td>
+    <td class=paramdesc>
+<p>
+ Returns one on success, zero if there was an error.</table>
+<div class="discussion_heading"><a name='MilesStartAsyncThread::_Discussion' class='nohover'><b>Discussion</b></a></div>
+<p>
+ This function starts up a background SPU worker that Miles can use to perform its background tasks. 
+
+</p>
+<p>
+The spu_index is SPU library specific.  For SPU threads, this number is from 0 to 5 and returns to one of 6 SPU threads that Miles can create. For RAW SPUs, this number is from 0 to one less than the number of RAW threads you left over in the sys_spu_initialize function call. For a SPURs task, this number is from 0 to 5 refers to one of the 6 SPUR task ids that Bink can create. 
+
+</p>
+<p>
+On SPU threads and RAW, the spu_image is a pointer to a <i>sys_spu_image_t</i> structure that you get from loading an SPU image file (an elf) with the sys_spu_image_open function - this elf should be built from the <b>binkspu.a</b> library.  The sys_spu_image_t pointer can be free upon return from this function, since the system caches the spu_image data itself. 
+
+</p>
+<p>
+With SPURs tasks, the spu_info is a pointer to a buffer containing <b>two</b> values.  The first value should be a pointer to your global CellSpurs structure.  The second value should be a pointer the ELF image itself.   Just load the elf into a memory buffer (or use objcopy to build it directly into your PPU application), and then pass a pointer to the start.  These pointers must remain valid until you close the Miles async thread (since SPURs will copy the read-only parts of the image down to the SPU whenever it starts running). <br>&nbsp;<br>
+<table class=bar>
+  <tr>
+    <td width=33%><img src='arrowleft.png'><a href='SPU_Thread_Control_API.html#_Discussion' class='paragraph'>SPU Thread Control API: Discussion</a></td>
+    <td width=33% align=center><img src='arrowup.png'><a href='SPU_Thread_Control_API.html' class='paragraph'>SPU Thread Control API</a></td>
+    <td width=33% align=right><img src='arrowright.png'><a href='MilesRequestStopAsyncThread.html' class='paragraph'>MilesRequestStopAsyncThread</a></td>
+  </tr>
+</table>
+<br>
+<table cellpadding=8 width=100%>
+  <tr align=left valign=bottom>
+    <td>
+      <a href='http://radgametools.com/miles.htm'><img src='product.jpg'></a>
+    </td>
+    <td width=100%>
+      <a href='changelog.html'>Miles Sound System 9.3b</a>
+      <br>
+      <a href='mailto:miles3@radgametools.com'>E-mail miles3@radgametools.com for technical support.</a>
+      <br>
+      <a href='http://radgametools.com/miles.htm'>Copyright &#169; 1991-2012 by RAD Game Tools, Inc.</a>
+      <br>
+      All Rights Reserved.
+    </td>
+    <td>
+      <a href='radgametools.com'><img src='company.png'></a>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
