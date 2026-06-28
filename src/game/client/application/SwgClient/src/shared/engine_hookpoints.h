@@ -95,8 +95,13 @@
 // actionPerformAction, cuiHud::update, cuiLoginScreen::activate, debugCamera::alter ->
 // consumer vtable-resolves) -- documented in engine_advertise.cpp + the handback, NOT in
 // this required-name set.
+// Bumped 9 -> 10 in Bucket A-2 (world-pick / HUD-target): 2 NAME ADDs --
+// cuiHud::getTarget (was a Bucket A OMIT; now the real entry of SwgCuiHud::
+// getLastSelectedObject() const via a __fastcall MI thunk -- the world-picked object) +
+// cuiHud::g_instance (static SwgCuiHudFactory::findMediatorForCurrentHud -> the LIVE
+// ground/space hud the consumer calls getTarget on, mirroring cuiIo::g_instance). 113 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 9
+#define ENGINE_HOOKPOINTS_VERSION 10
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

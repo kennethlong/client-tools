@@ -272,3 +272,10 @@ ENGINE_HOOKPOINT(systemMessageManager, receiveMessage)     // static &fn CuiSyst
 ENGINE_HOOKPOINT(creatureObject,       setTarget)          // pmfRealEntry CreatureObject::setLookAtTarget (MI)
 ENGINE_HOOKPOINT(messageQueue,         appendMessage)      // pmfToVoid MessageQueue::appendMessage(int,float,uint32)
 ENGINE_HOOKPOINT(messageQueue,         appendMessageData)  // pmfToVoid MessageQueue::appendMessage(int,float,Data*,uint32)
+
+// -- Bucket A-2 (v9->v10): world-pick / HUD-target (the §2.A getTarget gap) ----
+// getTarget was OMIT in Bucket A (no SwgCuiHud::getTarget exists). Now advertised
+// as the real entry of SwgCuiHud::getLastSelectedObject() const via a __fastcall MI
+// thunk, plus the live-instance accessor (the hud the consumer calls getTarget on).
+ENGINE_HOOKPOINT(cuiHud,              getTarget)            // __fastcall thunk -> SwgCuiHud::getLastSelectedObject (MI; CALLED)
+ENGINE_HOOKPOINT(cuiHud,              g_instance)           // static accessor SwgCuiHudFactory::findMediatorForCurrentHud

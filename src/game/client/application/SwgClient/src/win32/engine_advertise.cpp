@@ -67,6 +67,8 @@
 #include "clientUserInterface/CuiSystemMessageManager.h" // CuiSystemMessageManager::receiveSystemMessage (static &fn)
 #include "utinni_creatureObject_forward.h"               // utinni_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
+#include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
+#include "swgClientUserInterface/SwgCuiHudFactory.h"     // Bucket A-2: SwgCuiHudFactory::findMediatorForCurrentHud (static active-hud accessor)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -352,6 +354,24 @@ static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 }
 
 // ----------------------------------------------------------------------
+// Bucket A-2 (2026-06-28) -- world-pick / HUD-target real-entry thunk.
+// cuiHud::getTarget -> SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95]
+// (m_lastSelectedObject = the world-picked object). SwgCuiHud is MULTIPLE-INHERITANCE
+// (CuiMediator + UIEventCallback [SwgCuiHud.h:41-43]) -> a raw PMF is inflated and trips
+// the pmfToVoid sizeof guard (C2338). This is a CALLED row (the consumer invokes it on the
+// live hud to READ the pick), so a __fastcall(pThis /*ECX*/, int /*EDX*/) == __thiscall
+// call-through thunk is correct (NOT pmfRealEntry -- that is for DETOURED rows). The consumer
+// passes the live SwgCuiHud* from cuiHud::g_instance (SwgCuiHudFactory::findMediatorForCurrentHud)
+// in ECX; getLastSelectedObject is SwgCuiHud's OWN method so `this` is the SwgCuiHud subobject
+// (no adjustment). PUBLIC method -> named directly (no friend). Consumer typedef:
+//   Object*(__thiscall*)(SwgCuiHud*)
+// ----------------------------------------------------------------------
+static Object * __fastcall utinni_hudGetLastSelectedObject(SwgCuiHud * pThis, int /*edx*/)
+{
+	return pThis->getLastSelectedObject();                          // public const [SwgCuiHud.h:95]
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -603,13 +623,17 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
 	{ "messageQueue::appendMessageData", 0 },   // MISMATCH name: no appendMessageData exists; maps to the DATA overload appendMessage(int,float,Data*,uint32) [MessageQueue.h:52], flat class -> pmfToVoid. dyn[] below. INPUT-path diag.
 
+	// -- Bucket A-2 (2026-06-28): world-pick / HUD-target (closes the §2.A getTarget gap) --
+	{ "cuiHud::getTarget",  (void *)&utinni_hudGetLastSelectedObject },           // MISMATCH name + REAL ENTRY of SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (m_lastSelectedObject = world-picked object). SwgCuiHud is MI -> __fastcall call-through thunk (CALLED row -- consumer READS the pick on the live hud). Supersedes the Bucket A OMIT. World-object pick.
+	{ "cuiHud::g_instance", (void *)&SwgCuiHudFactory::findMediatorForCurrentHud }, // ACCESSOR: static SwgCuiHud* findMediatorForCurrentHud() [SwgCuiHudFactory.h:24] -- resolves the LIVE ground/space hud (concrete HudGround/HudSpace, both : SwgCuiHud). The instance the consumer calls cuiHud::getTarget on (mirrors cuiIo::g_instance -> CuiManager::getIoWin). constant &fn.
+
 	// ----------------------------------------------------------------------
-	// BUCKET A OMIT/SKIP ledger -- the 8 §2.A rows NOT advertised (each accounted for;
+	// BUCKET A OMIT/SKIP ledger -- the §2.A rows NOT advertised (each accounted for;
 	// none silently dropped; consumer alternatives -> HANDBACK):
 	//   OMIT ctor     -- cuiChatWindow::ctor: cannot take &Class::Class; the SOLE construction funnel (createNewWindow, sole `new SwgCuiChatWindow` @ SwgCuiChatWindow.cpp:1549; createInto routes through it) is ALREADY advertised (cuiChatWindow::createNewWindow, friend accessor). Detour that to cover construction.
 	//   OMIT ctor     -- cuiLoginScreen::ctor [SwgCuiLoginScreen.h:34]: un-addressable ctor AND no construction funnel -- 0 `new SwgCuiLoginScreen`; built only via the generic CuiMediatorFactory::Constructor<T> template (`new T(page)` CuiMediatorFactory_Constructor.h:49). Consumer resolves via RVA (already DEFER'd, see the 24 ctor note). A login-specific placement-new __fastcall thunk + injector-supplied UIPage& is the only source hook -- not justified now.
-	//   OMIT absent   -- cuiManager::findObjectUnderCursor: NO such member on the all-static CuiManager [CuiManager.h:26] (retail collapses this + cuiHud::getTarget onto one world-pick RVA with no 1:1 named twin here). Nearest = SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (MI -> would need a __fastcall thunk). Offered, not bound on spec faith.
-	//   OMIT absent   -- cuiHud::getTarget: NO such member on SwgCuiHud (shares the retail world-pick RVA with findObjectUnderCursor). Nearest = SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95]. Offered, not bound.
+	//   OMIT absent   -- cuiManager::findObjectUnderCursor: NO such member on the all-static CuiManager [CuiManager.h:26] (retail collapses this + cuiHud::getTarget onto one world-pick RVA with no 1:1 named twin here). The world-pick value is delivered by the Bucket A-2 cuiHud::getTarget + cuiHud::g_instance rows above (SwgCuiHud::getLastSelectedObject on the live hud); no separate findObjectUnderCursor symbol exists, so this name stays OMIT.
+	//   ADVERTISED A-2 -- cuiHud::getTarget: was OMIT in Bucket A (no SwgCuiHud::getTarget); NOW advertised as a __fastcall thunk over SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] + the cuiHud::g_instance accessor (rows above). Closes the §2.A world-pick gap.
 	//   SKIP virtual  -- cuiHud::actionPerformAction -> SwgCuiHudAction::performAction [SwgCuiHudAction.h:24 `virtual bool performAction(...) const`] -> consumer vtable-resolves; &fn would be a vtable stub.
 	//   SKIP virtual  -- cuiHud::update -> SwgCuiHud::update [SwgCuiHud.h:63 `virtual void update(float)`, overrides CuiMediator::update CuiMediator.h:186] -> consumer vtable-resolves.
 	//   SKIP virtual  -- cuiLoginScreen::activate -> the login-specific work is SwgCuiLoginScreen::performActivate [SwgCuiLoginScreen.h:42 `virtual void performActivate()`] -> consumer vtable-resolves. The non-virtual CuiMediator::activate [CuiMediator.h:100] is generic (all mediators), not login-specific -- not bound.
