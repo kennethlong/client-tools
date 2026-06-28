@@ -45,8 +45,10 @@
 #include "sharedMessageDispatch/Receiver.h"
 #include "sharedNetworkMessages/ClientEffectMessages.h"
 #include "sharedObject/Appearance.h"
+#include "sharedObject/AppearanceTemplateList.h"   // Utinni Bucket B: retrigger template refresh
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/NetworkIdManager.h"
+#include "sharedObject/Object.h"                    // Utinni Bucket B: getAppearance() in the retrigger walk
 #include "sharedObject/ObjectTemplateList.h"
 #include "sharedTerrain/TerrainObject.h"
 
@@ -1342,3 +1344,64 @@ void ClientEffectManager::createClientTrackingProjectileLocationToObject(const s
 }
 
 // ======================================================================
+
+// ======================================================================
+// Utinni Bucket B (2026-06-26) -- Effects-editor live-preview retrigger.
+//
+// Advertised to the injected Utinni overlay as "particlePreview::retrigger"
+// (engine_advertise.cpp / engine_hookpoints.inc). The Effects editor's basic
+// edit+save is pure managed I/O and already works on the advertised client; what
+// was dark is the live "Preview in client" path -- hot-reloading a just-saved
+// particle template and seeing live scene instances restart. The reachability
+// spike found ClientEffectManager owns the live instances (m_particleSystems) but
+// its add/remove/list surface is PRIVATE with no public enumerate-and-restart
+// entry, so the provider exposes this friend free function.
+//
+// CONTRACT (matches the consumer's utinni::ParticlePreview seam):
+//   * GAME-THREAD ONLY; called ONCE per editor save/reload (NEVER per frame).
+//   * ALLOCATION-FREE on any per-frame path: this is a read-only walk of the
+//     existing vector -- no container growth, no per-call heap (the
+//     project_rh_snapshot_no_heap_alloc lesson: a per-frame reserve() once
+//     fragmented SWG's allocator and crashed scene change at 0x0051fb0a).
+//   * Matches live PARTICLE instances by their appearance-template name (the .prt);
+//     case-insensitive. .cef-level re-play is out of scope (re-play via the public
+//     playClientEffect path if needed) -- flagged in the handback.
+//
+// 32-bit-only: mirrors the whole engine_advertise.cpp Win32-only export body.
+// ======================================================================
+#if !defined(_WIN64)
+void utinni_retriggerClientEffect(char const * const logicalName)
+{
+	if (!logicalName || !*logicalName)
+		return;
+
+	// Refresh the (timed-)template cache so an auto-reloading TimedTemplate re-reads the
+	// just-saved content. fetch(name, found) is the SAFE overload -- found=false instead
+	// of FATAL if the name is not a known appearance template. Balanced release below;
+	// the live instances keep their own references, so this never dangles them.
+	bool found = false;
+	AppearanceTemplate const * const refreshed = AppearanceTemplateList::fetch(logicalName, found);
+
+	// Restart every live particle instance whose appearance template matches.
+	for (ClientEffectManager::ParticleList::const_iterator it = ClientEffectManager::m_particleSystems.begin(); it != ClientEffectManager::m_particleSystems.end(); ++it)
+	{
+		ClientEffectManager::ManagedParticleSystem const * const mps = *it;
+		if (!mps || !mps->particleSystem)
+			continue;
+		Object * const obj = mps->particleSystem;              // Watcher<Object> -> Object*
+		Appearance * const appearance = obj ? obj->getAppearance() : 0;
+		if (!appearance)
+			continue;
+		ParticleEffectAppearance * const pea = ParticleEffectAppearance::asParticleEffectAppearance(appearance);
+		if (!pea)
+			continue;
+		char const * const name = appearance->getAppearanceTemplateName();
+		if (!name || _stricmp(name, logicalName) != 0)
+			continue;
+		pea->restart();                                        // re-fire from m_age=0; rewinds all emitter groups
+	}
+
+	if (refreshed)
+		AppearanceTemplateList::release(refreshed);
+}
+#endif

@@ -55,6 +55,13 @@
 #include "sharedFile/TreeFile.h"                   // TreeFile::open (static)
 #include "sharedDebug/Report.h"                    // Report::puts (static)
 
+// -- 24-§2.B Bucket B includes (Effects editor live preview) ----------------
+#include "clientSkeletalAnimation/SkeletalAppearance2.h" // SkeletalAppearance2::getDisplayLodSkeleton (non-virtual LOD read, bit_cast PMF)
+#include "clientGraphics/RenderWorld.h"            // RenderWorld::addObjectNotifications (static)
+#include "clientGame/Bloom.h"                       // Bloom::preSceneRender/postSceneRender (static)
+#include "utinni_clientEffect_forward.h"            // utinni_retriggerClientEffect (friend free fn over m_particleSystems; exe-local)
+class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
+
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
 // conditions the ClCompile item to Platform=Win32; this guard is the source-
 // side belt-and-suspenders so an x64 config can never export GetEngineHookPoints.
@@ -555,6 +562,33 @@ static EngineHookPoint s_engineHookPoints[] =
 	//   NONE  (absent)   -- memory::deallocateString / math::vectorNormalize / network idManager* / crcString::calculateCrc / client::writeCrashLog / client::setupStartDataInstall: 0 source twin in this tree (MemoryManager has free() not deallocate; the rest grep to 0). NONEXISTENT -> OMIT, flagged for EPA-08.
 	// (No new #include / no new vcxproj include dir needed this pass -- zero adds.)
 	// ======================================================================
+	// 24-§2.B BUCKET B (Effects editor live preview) -- render/appearance group +
+	// the cooperative particle retrigger. v6 -> v7 (5 NAME ADDs). Source-confirmed
+	// this wave via parallel subsystem reads. Requested-but-NOT-advertisable rows are
+	// OMITTED/SKIPPED in the ledger below (a wrong & is worse than a missing row; a
+	// skipped virtual is consumer-vtable-resolved, NOT missing -- handoff §2.C).
+	// ----------------------------------------------------------------------
+	// -- skeletalAppearance (clientSkeletalAnimation; SkeletalAppearance2.h) --
+	{ "skeletalAppearance::getDisplayLodSkeleton", 0 }, // bit_cast PMF (non-virtual, single-inheritance SkeletalAppearance2 -- name +2); overload-disambiguated (const) in dyn[] below
+	// -- renderWorld (clientGraphics, all static; RenderWorld.h) --
+	{ "renderWorld::addObjectNotifications", (void *)&RenderWorld::addObjectNotifications }, // static void addObjectNotifications(Object&) [RenderWorld.h:62] -- constant &fn
+	// -- bloom (clientGame post-processing, all static; Bloom.h) --
+	{ "bloom::preSceneRender",  (void *)&Bloom::preSceneRender },  // static void preSceneRender()  [Bloom.h:25] -- constant &fn
+	{ "bloom::postSceneRender", (void *)&Bloom::postSceneRender }, // static void postSceneRender() [Bloom.h:26] -- constant &fn
+	// -- particlePreview (Utinni cooperative retrigger; ClientEffectManager.cpp friend) --
+	{ "particlePreview::retrigger", (void *)&utinni_retriggerClientEffect }, // 24-§2.B-ii: friend free fn over the PRIVATE m_particleSystems -> enumerate + ParticleEffectAppearance::restart() matching live particle instances (+ a balanced AppearanceTemplateList::fetch refresh). __cdecl(const char*) -> constant &fn (NOT a dyn[] row). Game-thread, once-per-save, allocation-free.
+
+	// ----------------------------------------------------------------------
+	// 24-§2.B OMIT/SKIP ledger -- handoff §2.B-i rows that are NOT advertisable in this
+	// tree (each accounted for; none silently dropped; offered alternatives -> HANDBACK):
+	//   SKIP virtual  -- particleEffectAppearance::render [ParticleEffectAppearance.h:77 `virtual void render() const`] -> consumer vtable-resolves (handoff §2.C); &fn would be a vtable-dispatch stub, not the impl.
+	//   SKIP virtual  -- skeletalAppearance::render [SkeletalAppearance2.h:120 `virtual void render() const`] -> consumer vtable-resolves.
+	//   OMIT ctor     -- particleEffectAppearance::ctor [ParticleEffectAppearance.h:61]: cannot take &Class::Class and there is NO single construction funnel (only inline `new ParticleEffectAppearance(tmpl)`); a placement-new thunk is detour-dead (same disposition as cuiChatWindow::ctor). The §2.B-ii retrigger supplies the editor's live-preview value instead.
+	//   OMIT absent   -- skeletalAppearance::addShaderPrimitives: NOT a member of SkeletalAppearance2 (the name is Skeleton::addShaderPrimitives(const SkeletalAppearance2&) / CompositeMesh -- different class+signature). Never guessed; FLAGGED for the handback.
+	//   OMIT absent   -- renderWorld::render: NO such method on the all-static RenderWorld. Nearest = RenderWorld::drawScene(const RenderWorldCamera&) [RenderWorld.h:97]; offered in the handback, not bound on spec faith.
+	//   OMIT wildcard -- shaderPrimitiveSorter::* : the handoff names no concrete method. Canonical submission funnel = ShaderPrimitiveSorter::add(const ShaderPrimitive&) [ShaderPrimitiveSorter.h:82] (static, overloaded). Offered in the handback for the consumer to name a concrete slot; not bound speculatively.
+	//   COORDINATE    -- render globals (static-shader/transform/scale/extent SWGEmu RVAs): consumer drives the draw via the already-advertised graphics::* statics (handoff's PREFERRED shape). No raw private-global rows added (§8 #3: never take a private-member address).
+	// ----------------------------------------------------------------------
 	// PINNED: NO null-pair sentinel -- count is sizeof/sizeof, the static_assert has NO -1.
 };
 
@@ -671,6 +705,10 @@ static void ensureDynamicRowsFilled()
 		{ "camera::setFarPlane",                     pmfToVoid(&Camera::setFarPlane) },
 		{ "camera::setHorizontalFieldOfView",        pmfToVoid(&Camera::setHorizontalFieldOfView) },
 		{ "camera::reverseProjectInViewportSpace",   pmfToVoid(static_cast<const Vector (Camera::*)(int, int) const>(&Camera::reverseProjectInViewportSpace)) },
+		// 24-§2.B Bucket B: non-virtual single-inheritance member PMF (4-byte; SkeletalAppearance2
+		// is single-inheritance so pmfToVoid's sizeof guard passes). OVERLOADED [SkeletalAppearance2.h
+		// :137 const / :138 non-const] -> disambiguate to the const "LOD read" overload.
+		{ "skeletalAppearance::getDisplayLodSkeleton", pmfToVoid(static_cast<const Skeleton * (SkeletalAppearance2::*)() const>(&SkeletalAppearance2::getDisplayLodSkeleton)) },
 	};
 
 	const unsigned int dynCount = (unsigned int)(sizeof dyn / sizeof dyn[0]);
