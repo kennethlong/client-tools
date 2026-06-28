@@ -60,6 +60,13 @@
 #include "clientGraphics/RenderWorld.h"            // RenderWorld::addObjectNotifications (static)
 #include "clientGame/Bloom.h"                       // Bloom::preSceneRender/postSceneRender (static)
 #include "utinni_clientEffect_forward.h"            // utinni_retriggerClientEffect (friend free fn over m_particleSystems; exe-local)
+
+// -- Bucket A includes (per-editor real-entry rows; v8 -> v9) ----------------
+#include "clientUserInterface/CuiRadialMenuManager.h"   // CuiRadialMenuManager::update (static &fn)
+#include "clientUserInterface/CuiMenuInfoTypes.h"        // Cui::MenuInfoTypes::findDefaultCursor (namespace free fn)
+#include "clientUserInterface/CuiSystemMessageManager.h" // CuiSystemMessageManager::receiveSystemMessage (static &fn)
+#include "utinni_creatureObject_forward.h"               // utinni_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
+#include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -580,6 +587,35 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- particlePreview B-2 (Utinni cooperative re-PLAY; ClientEffectManager.cpp free fn, public APIs only) --
 	{ "particlePreview::replayClientEffect", (void *)&utinni_replayClientEffect }, // B-2 (v7->v8): re-plays a .cef FRESH on Game::getPlayer() via the public ClientEffectManager::playClientEffect (transient muzzle/hit/explosion case -- restart() above only covers sustained live instances). A not-currently-cached .cef is a guaranteed cache-MISS -> ClientEffectTemplateList::fetch reloads it from disk + re-fetches referenced .prt/appearance/sound templates -> edit visible. __cdecl(const char*)->bool -> constant &fn (NOT a dyn[] row; not a friend -- public APIs only). Game-thread, once-per-preview, allocation-free. false (no crash) if no player/scene.
 
+	// ======================================================================
+	// BUCKET A (2026-06-28) -- per-editor real-entry detour rows (ledger §2.A). v8 -> v9.
+	// 6 ADVERTISED of 14 requested; the other 8 are OMIT (nonexistent / un-addressable
+	// ctor) or SKIP (virtual -> consumer vtable-resolves) in the Bucket A ledger below.
+	// Source-mapped this wave via parallel subsystem reads. A wrong & is worse than a
+	// missing row -- nonexistent/virtual rows are NOT guessed.
+	// ----------------------------------------------------------------------
+	// -- constant &fn rows (static methods / free fn; no dyn[] needed) --
+	{ "cuiRadialMenuManager::update", (void *)&CuiRadialMenuManager::update }, // static void update() [CuiRadialMenuManager.h:46] -- all-static facade. Radial-menu editing.
+	{ "cuiMenu::infoTypesFindDefaultCursor", (void *)&Cui::MenuInfoTypes::findDefaultCursor }, // FREE FN UICursor* const findDefaultCursor(ClientObject&) in namespace Cui::MenuInfoTypes [CuiMenuInfoTypes.h:199 / .cpp:404] -- NOT a CuiMenu member (no such class); constant &fn (resolves the ledger's confirm-or-OMIT). Menu cursor behavior.
+	{ "systemMessageManager::receiveMessage", (void *)&CuiSystemMessageManager::receiveSystemMessage }, // MISMATCH name: static void receiveSystemMessage(const ChatSystemMessage&) [CuiSystemMessageManager.h:36] -- the real handle-system-message static (the file-local Listener::receiveMessage virtual just forwards here). constant &fn. System-message editor/diag.
+	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
+	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
+	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
+	{ "messageQueue::appendMessageData", 0 },   // MISMATCH name: no appendMessageData exists; maps to the DATA overload appendMessage(int,float,Data*,uint32) [MessageQueue.h:52], flat class -> pmfToVoid. dyn[] below. INPUT-path diag.
+
+	// ----------------------------------------------------------------------
+	// BUCKET A OMIT/SKIP ledger -- the 8 §2.A rows NOT advertised (each accounted for;
+	// none silently dropped; consumer alternatives -> HANDBACK):
+	//   OMIT ctor     -- cuiChatWindow::ctor: cannot take &Class::Class; the SOLE construction funnel (createNewWindow, sole `new SwgCuiChatWindow` @ SwgCuiChatWindow.cpp:1549; createInto routes through it) is ALREADY advertised (cuiChatWindow::createNewWindow, friend accessor). Detour that to cover construction.
+	//   OMIT ctor     -- cuiLoginScreen::ctor [SwgCuiLoginScreen.h:34]: un-addressable ctor AND no construction funnel -- 0 `new SwgCuiLoginScreen`; built only via the generic CuiMediatorFactory::Constructor<T> template (`new T(page)` CuiMediatorFactory_Constructor.h:49). Consumer resolves via RVA (already DEFER'd, see the 24 ctor note). A login-specific placement-new __fastcall thunk + injector-supplied UIPage& is the only source hook -- not justified now.
+	//   OMIT absent   -- cuiManager::findObjectUnderCursor: NO such member on the all-static CuiManager [CuiManager.h:26] (retail collapses this + cuiHud::getTarget onto one world-pick RVA with no 1:1 named twin here). Nearest = SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (MI -> would need a __fastcall thunk). Offered, not bound on spec faith.
+	//   OMIT absent   -- cuiHud::getTarget: NO such member on SwgCuiHud (shares the retail world-pick RVA with findObjectUnderCursor). Nearest = SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95]. Offered, not bound.
+	//   SKIP virtual  -- cuiHud::actionPerformAction -> SwgCuiHudAction::performAction [SwgCuiHudAction.h:24 `virtual bool performAction(...) const`] -> consumer vtable-resolves; &fn would be a vtable stub.
+	//   SKIP virtual  -- cuiHud::update -> SwgCuiHud::update [SwgCuiHud.h:63 `virtual void update(float)`, overrides CuiMediator::update CuiMediator.h:186] -> consumer vtable-resolves.
+	//   SKIP virtual  -- cuiLoginScreen::activate -> the login-specific work is SwgCuiLoginScreen::performActivate [SwgCuiLoginScreen.h:42 `virtual void performActivate()`] -> consumer vtable-resolves. The non-virtual CuiMediator::activate [CuiMediator.h:100] is generic (all mediators), not login-specific -- not bound.
+	//   SKIP virtual  -- debugCamera::alter -> FreeCamera::alter [FreeCamera.h:61] / GameCamera::alter [GameCamera.h:40] / Object::alter [Object.h:135], virtual at every level; no non-virtual real-entry helper (per-frame body is in the virtual FreeCamera::alter FreeCamera.cpp:254). Consumer vtable-resolves off the live FreeCamera instance. Free-cam target class = FreeCamera.
+	// ----------------------------------------------------------------------
+
 	// ----------------------------------------------------------------------
 	// 24-§2.B OMIT/SKIP ledger -- handoff §2.B-i rows that are NOT advertisable in this
 	// tree (each accounted for; none silently dropped; offered alternatives -> HANDBACK):
@@ -711,6 +747,14 @@ static void ensureDynamicRowsFilled()
 		// is single-inheritance so pmfToVoid's sizeof guard passes). OVERLOADED [SkeletalAppearance2.h
 		// :137 const / :138 non-const] -> disambiguate to the const "LOD read" overload.
 		{ "skeletalAppearance::getDisplayLodSkeleton", pmfToVoid(static_cast<const Skeleton * (SkeletalAppearance2::*)() const>(&SkeletalAppearance2::getDisplayLodSkeleton)) },
+		// Bucket A (2026-06-28) per-editor real-entry / PMF rows:
+		// creatureObject::setTarget -> setLookAtTarget (MISMATCH name). CreatureObject is MI (TangibleObject : ClientObject,
+		// CallbackReceiver) -> inflated PMF -> real entry via the CreatureObject.cpp accessor (delta==0 gated inside). The exe
+		// TU cannot include CreatureObject.h (sharedSkillSystem not on its path), so the address provider lives in the class's TU.
+		{ "creatureObject::setTarget",         utinni_creatureSetTargetRealEntry() },
+		// messageQueue::appendMessage[Data] -- MessageQueue is a flat single-inheritance class -> pmfToVoid (4-byte PMF == real entry); overloaded -> static_cast to disambiguate.
+		{ "messageQueue::appendMessage",       pmfToVoid(static_cast<void (MessageQueue::*)(int, float, uint32)>(&MessageQueue::appendMessage)) },
+		{ "messageQueue::appendMessageData",   pmfToVoid(static_cast<void (MessageQueue::*)(int, float, MessageQueue::Data *, uint32)>(&MessageQueue::appendMessage)) },
 	};
 
 	const unsigned int dynCount = (unsigned int)(sizeof dyn / sizeof dyn[0]);
