@@ -2,7 +2,17 @@
 
 **Date:** 2026-06-25 · **Purpose:** single "where are we now" snapshot across the EngineHook provider work
 this session. Per-request detail is in the individual handbacks below; this is the index + open-items list.
-**All work is committed + pushed to `origin/master` (clean tree, 0/0 vs origin). Nothing pending on our side.**
+
+> **UPDATE 2026-06-26 — provider work REOPENED.** The "nothing pending on our side" below was true as of
+> 2026-06-25 but is now stale. The consolidated ledger
+> [`2026-06-26-utinni-provider-outstanding-editor-unlock.md`](2026-06-26-utinni-provider-outstanding-editor-unlock.md)
+> (Utinni Phase 24) reopens per-editor provider work in buckets A–F.
+> **Bucket B (Effects editor live preview) is DONE** — `ENGINE_HOOKPOINTS_VERSION` **6 → 7, 104 names**,
+> commit `db3ca5895`, build-gated + staged, maintainer-smoke pending. See
+> [`2026-06-26-effects-render-retrigger-HANDBACK.md`](2026-06-26-effects-render-retrigger-HANDBACK.md).
+> **Remaining (priority order, one wave per smoke):** A (per-editor real-entry rows: chat ctor, free-cam,
+> world-pick/HUD, sys-msg/input) · C (virtual vtable — consumer-side) · D (mid-function joint toggles) ·
+> E (WS-5 scene-ready callback) · F (crash-log setter).
 
 ## Where the contract stands
 
