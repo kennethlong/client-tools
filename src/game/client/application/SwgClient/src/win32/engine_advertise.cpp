@@ -577,6 +577,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "bloom::postSceneRender", (void *)&Bloom::postSceneRender }, // static void postSceneRender() [Bloom.h:26] -- constant &fn
 	// -- particlePreview (Utinni cooperative retrigger; ClientEffectManager.cpp friend) --
 	{ "particlePreview::retrigger", (void *)&utinni_retriggerClientEffect }, // 24-§2.B-ii: friend free fn over the PRIVATE m_particleSystems -> enumerate + ParticleEffectAppearance::restart() matching live particle instances (+ a balanced AppearanceTemplateList::fetch refresh). __cdecl(const char*) -> constant &fn (NOT a dyn[] row). Game-thread, once-per-save, allocation-free.
+	// -- particlePreview B-2 (Utinni cooperative re-PLAY; ClientEffectManager.cpp free fn, public APIs only) --
+	{ "particlePreview::replayClientEffect", (void *)&utinni_replayClientEffect }, // B-2 (v7->v8): re-plays a .cef FRESH on Game::getPlayer() via the public ClientEffectManager::playClientEffect (transient muzzle/hit/explosion case -- restart() above only covers sustained live instances). A not-currently-cached .cef is a guaranteed cache-MISS -> ClientEffectTemplateList::fetch reloads it from disk + re-fetches referenced .prt/appearance/sound templates -> edit visible. __cdecl(const char*)->bool -> constant &fn (NOT a dyn[] row; not a friend -- public APIs only). Game-thread, once-per-preview, allocation-free. false (no crash) if no player/scene.
 
 	// ----------------------------------------------------------------------
 	// 24-§2.B OMIT/SKIP ledger -- handoff §2.B-i rows that are NOT advertisable in this

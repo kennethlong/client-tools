@@ -31,4 +31,13 @@
 // Friend of ClientEffectManager; defined in ClientEffectManager.cpp.
 void utinni_retriggerClientEffect(char const * logicalName);
 
+// Bucket B-2 (2026-06-28): re-plays a .cef fresh on the local player (with the
+// just-saved edit) for live .cef authoring preview -- restart() only covers
+// sustained, currently-playing instances; transient .cef effects are gone before
+// save. Uses only public APIs (Game::getPlayer / ClientEffectManager::playClientEffect
+// / ClientEffectTemplateList::fetch), so NOT a friend. Defined (32-bit only) in
+// ClientEffectManager.cpp; advertised as "particlePreview::replayClientEffect".
+// Returns playClientEffect's result; false (no crash) if there is no player/scene.
+bool utinni_replayClientEffect(char const * clientEffectName);
+
 #endif
