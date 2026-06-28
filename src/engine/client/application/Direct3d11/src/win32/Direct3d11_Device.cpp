@@ -415,6 +415,19 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed, 
 	// Step 1: Create ID3D11Device + immediate context.
 
 	UINT createDeviceFlags = 0;
+
+	// CONSULT-51 (2026-06-27): DEFEAT THE NV DRIVER WORKER-THREAD RACE.
+	// The nvwgf2um/nvwgf2umx SetDependencyInfo null-deref at zone-in is a RACE in the NV UMD's
+	// internal worker-thread pool: the fault fires on a driver worker thread (NVDEV_Thunk, 0 engine
+	// frames) while servicing the rapid Map(WRITE_DISCARD) churn the scene submits. DECISIVE PROOF:
+	// enabling the D3D11 debug layer -- which forces synchronous, serialized driver work -- makes the
+	// crash vanish on BOTH Win32 AND x64, with ZERO validation errors logged. So it is neither a bad
+	// asset nor an API-contract violation; it is the driver racing on its own threads. This flag asks
+	// the runtime NOT to create those internal driver worker threads, giving the debug layer's
+	// race-immunity in production at a fraction of the cost (no validation, no log). gl05/D3D9 is
+	// immune because it has no such async resource-dependency worker model.
+	createDeviceFlags |= D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
+
 #ifdef _DEBUG
 	if (ConfigDirect3d11::getEnableDebugLayer())
 		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;  // Pitfall 8: handled below

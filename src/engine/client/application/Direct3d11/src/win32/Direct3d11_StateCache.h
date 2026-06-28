@@ -164,6 +164,13 @@ public:
 	// resolves the engine's TAG-based reference to a uint8 before normalizing.
 	static void setAlphaTest(bool enabled, float reference);
 
+	// CONSULT-53 (2026-06-28): per-pass premultiply-alpha flag (PS cbuffer slot 1
+	// alphaTest.z). The generated PS does `col.rgb *= col.a` when set, so additive
+	// (One-dest, SrcColor) glow passes with straight-alpha textures don't leak
+	// masked-region RGB into the additive sum (mirrors D3D9's premultiplied feed).
+	// Caller (StaticShaderData::apply) sets it for additive passes only.
+	static void setAlphaPremultiply(bool enabled);
+
 	// Detail-blend fix 2026-06-11: per-pass texture factor for the FFP
 	// combiner-cascade generated PS (TA_textureFactor = D3D9 TFACTOR).
 	// Shares the b1 cbuffer with alpha-test (Direct3d11_PSAlphaTestCB).

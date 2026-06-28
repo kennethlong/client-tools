@@ -150,7 +150,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "25" });   // Phase 19: 24 -> 25 (Rule F specular-pow NaN guard for interiors/NPCs). Plan 17-08 GAP-5: 23 -> 24 (wrapper now USES VS COLOR0 with NaN guard, not hard 0). 22->23 was the COLOR-zero beachhead. Prior: Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "26" });   // CONSULT-53: 25 -> 26 (additive-glow alphaTest.z premultiply in generated PS). Phase 19: 24 -> 25 (Rule F specular-pow NaN guard for interiors/NPCs). Plan 17-08 GAP-5: 23 -> 24 (wrapper now USES VS COLOR0 with NaN guard, not hard 0). 22->23 was the COLOR-zero beachhead. Prior: Plan 17-07 Round-5 item 5: bump 21 -> 22 (live tree already carried 21 from Plan 17-02; a 20->21 re-bump would be a NO-OP) to invalidate stale .cso caches for the per-VS rewrite lane + VS-output-signature-hash salt. MUST stay in lockstep with the non-fatal helper's define below so the FATAL + non-fatal helpers share one .cso hash. Plan 17-02 (20->21) + Iter-29B notes preserved in version history.
 		defines.push_back({ nullptr,                  nullptr });
 
 		uint64_t const hash = Direct3d11_ShaderCache::hashSource(
@@ -301,7 +301,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 		defines.push_back({ "POSITION",               "SV_POSITION" });
 		defines.push_back({ "D3D11",                  "1" });
 		defines.push_back({ "D3D11_PROFILE",          kPixelShaderProfile });
-		defines.push_back({ "D3D11_REWRITE_VERSION",  "25" });  // Phase 19: 24 -> 25 (Rule F specular-pow NaN guard); must match the FATAL helper (above) so the .cso cache hash is shared.
+		defines.push_back({ "D3D11_REWRITE_VERSION",  "26" });  // CONSULT-53: 25 -> 26 (additive-glow premultiply); must match the FATAL helper (above) so the .cso cache hash is shared. Phase 19: 24 -> 25 (Rule F specular-pow NaN guard).
 		// Plan 17-07 MEDIUM: per-VS rewrite lane salt. saltStr must outlive the
 		// D3DCompile call below (D3D_SHADER_MACRO holds char const*), so it is a
 		// stack buffer scoped to this function body. Native ctor lane passes 0 ->
@@ -680,7 +680,17 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			// per-pass alpha-test (state from PSAlphaTest cbuffer) can discard sub-ref pixels.
 			hlsl += "    float4 col = t.Sample(s, input.";
 			hlsl += texField;
-			hlsl += ".xy) * input.";
+			hlsl += ".xy);\n";
+			// CONSULT-53 (2026-06-28): premultiply the texture sample by its own alpha for
+			// additive (One-dest, SrcColor) passes (alphaTest.z flag), BEFORE the vertex-color
+			// modulate. Straight-alpha UI atlases keep full RGB where alpha==0; the additive
+			// SrcColor blend ignores alpha and adds that masked RGB -> solid cyan fill on the
+			// space-HUD gauge backgrounds (gl11), where gl05 shows only the thin arc. D3D9
+			// effectively feeds premultiplied data; mirror it here. Over-blend
+			// (SrcAlpha/InvSrcAlpha) passes leave the flag 0 (premultiplying them would
+			// double-apply alpha). col.a is preserved for the alpha-test below.
+			hlsl += "    if (alphaTest.z > 0.5) col.rgb *= col.a;\n";
+			hlsl += "    col = col * input.";
 			hlsl += colField;
 			hlsl += ";\n";
 			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
@@ -703,6 +713,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			hlsl += "    float4 col = t.Sample(s, input.";
 			hlsl += field;
 			hlsl += ".xy);\n";
+			hlsl += "    if (alphaTest.z > 0.5) col.rgb *= col.a;\n";   // CONSULT-53: additive-glow premultiply parity (no vtx-color branch)
 			hlsl += "    if (alphaTest.x > 0.5) clip(col.a - alphaTest.y);\n";
 			hlsl += fogStmt;   // fog fix 2026-06-11
 			hlsl += "    return col;\n";

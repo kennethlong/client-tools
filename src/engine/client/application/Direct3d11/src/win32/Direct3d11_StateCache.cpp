@@ -158,7 +158,14 @@ namespace Direct3d11_StateCacheNamespace
 	VertexBufferFormat const *    ms_currentVBVectorFormats[kMaxVBStreams] = {};
 
 	// IB tracking.
-	ID3D11Buffer *  ms_currentIB         = nullptr;
+	// CONSULT-51 (2026-06-27): ComPtr, was a raw ID3D11Buffer*. The raw cache dangled
+	// when the owning mesh's static IB (data->getIndexBuffer()) was freed on LOD/object
+	// eviction while ms_currentIB still pointed at it; the defensive IASetIndexBuffer
+	// rebind in drawTriangleFan/drawQuadList/drawPartialTriangleFan then handed the freed
+	// buffer to the D3D runtime -> use-after-free / heap corruption (page-heap caught a
+	// c0000005 in IASetIndexBuffer during space-scene object churn). Holding a ref keeps
+	// the bound IB alive until the cache is reassigned by the next setIndexBuffer.
+	ComPtr<ID3D11Buffer> ms_currentIB;
 	UINT            ms_currentIBOffset   = 0;
 	int             ms_currentIBIndexCount = 0;
 	DXGI_FORMAT     ms_currentIBFormat   = DXGI_FORMAT_R16_UINT;
@@ -1341,7 +1348,7 @@ namespace Direct3d11_StateCacheNamespace
 		// 4. IB (only for indexed draws -- caller passes topology that
 		// implies indexed; we always bind if valid to avoid driver state).
 		if (ms_currentIBValid && ms_currentIB)
-			ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+			ctx->IASetIndexBuffer(ms_currentIB.Get(), ms_currentIBFormat, ms_currentIBOffset);
 
 		// 5. VS + PS (Plan 11-09 Iter-2 / 11-09.13 Iter-3 / 17-04 Task 1:
 		// VS<->PS signature pair validation gates the asset-PS bind so D3D11
@@ -1685,7 +1692,7 @@ void Direct3d11_StateCache::remove()
 	for (int i = 0; i < kMaxSamplers; ++i)
 		ms_boundSampler[i] = nullptr;
 	ms_currentVB = nullptr;
-	ms_currentIB = nullptr;
+	ms_currentIB.Reset();
 	ms_currentInputLayout = nullptr;
 	ms_currentVSData = nullptr;
 	ms_currentVSKey  = 0;   // Plan 17-09
@@ -2243,6 +2250,25 @@ void Direct3d11_StateCache::setAlphaTest(bool enabled, float reference)
 
 // ----------------------------------------------------------------------
 
+void Direct3d11_StateCache::setAlphaPremultiply(bool enabled)
+{
+	// CONSULT-53 (2026-06-28): per-pass premultiply-alpha flag in PS cbuffer slot 1
+	// (alphaTest.z). The generated PS does `col.rgb *= col.a` when set, so additive
+	// (One-dest, SrcColor) glow shaders with STRAIGHT-alpha textures don't add their
+	// masked-region RGB (alpha==0, RGB present) into the additive sum -- the space-HUD
+	// gauge cyan-fill bug. Mirrors D3D9's premultiplied feed. Same shadow + dirty-skip
+	// model as setAlphaTest; uploads the full slot-1 struct (WRITE_DISCARD discipline).
+	float const newVal = enabled ? 1.0f : 0.0f;
+	if (ms_psSlot1CB.alphaTest.z == newVal)
+		return;
+	ms_psSlot1CB.alphaTest.z = newVal;
+
+	Direct3d11_ConstantBuffer::updatePS(1, &ms_psSlot1CB, sizeof(ms_psSlot1CB));
+	Direct3d11_ConstantBuffer::bindPS(1);
+}
+
+// ----------------------------------------------------------------------
+
 void Direct3d11_StateCache::setPsTextureFactor(float r, float g, float b, float a)
 {
 	// Detail-blend fix 2026-06-11: per-pass TFACTOR for the FFP combiner-
@@ -2517,7 +2543,7 @@ void Direct3d11_StateCache::setVertexBufferVectorBindState(
 void Direct3d11_StateCache::setIndexBuffer(HardwareIndexBuffer const &ib)
 {
 	ms_currentIBValid = false;
-	ms_currentIB = nullptr;
+	ms_currentIB.Reset();
 	ms_currentIBOffset = 0;
 	ms_currentIBIndexCount = 0;
 
@@ -2766,7 +2792,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 				"VBVectorActive=%d VBVectorStreamCount=%d",
 				s_diagFanCallsTotal, vertCount, triCount,
 				(void *)ms_currentVB, ms_currentVBStride, ms_currentVBOffset, ms_currentVBValid ? 1 : 0,
-				(void *)ms_currentIB, ms_currentIBValid ? 1 : 0,
+				(void *)ms_currentIB.Get(), ms_currentIBValid ? 1 : 0,
 				static_cast<int>(ms_currentIBFormat), ms_currentIBOffset, ms_currentIBIndexCount,
 				ms_currentVBVectorActive ? 1 : 0, ms_currentVBVectorStreamCount);
 			if (ID3D11InfoQueue *iq = Direct3d11_Device::getInfoQueue())
@@ -3121,7 +3147,7 @@ void Direct3d11_StateCache::drawTriangleFan()
 	// wrong; the bug is something else). Keep the rebind as defensive
 	// hygiene; harmless ~50ns/call.
 	if (ms_currentIBValid && ms_currentIB)
-		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+		ctx->IASetIndexBuffer(ms_currentIB.Get(), ms_currentIBFormat, ms_currentIBOffset);
 }
 
 void Direct3d11_StateCache::drawQuadList()
@@ -3219,7 +3245,7 @@ void Direct3d11_StateCache::drawQuadList()
 	// caller assumes its prior setIndexBuffer is still bound on the
 	// device, restore the StateCache shadow's IB.
 	if (ms_currentIBValid && ms_currentIB)
-		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+		ctx->IASetIndexBuffer(ms_currentIB.Get(), ms_currentIBFormat, ms_currentIBOffset);
 }
 
 void Direct3d11_StateCache::drawIndexedPointList()
@@ -3362,7 +3388,7 @@ void Direct3d11_StateCache::drawPartialTriangleFan(int startVertex, int primitiv
 
 	// Plan 11-09.15 Iter-1 follow-up: defensive IB rebind (see drawTriangleFan).
 	if (ms_currentIBValid && ms_currentIB)
-		ctx->IASetIndexBuffer(ms_currentIB, ms_currentIBFormat, ms_currentIBOffset);
+		ctx->IASetIndexBuffer(ms_currentIB.Get(), ms_currentIBFormat, ms_currentIBOffset);
 }
 
 // ------------------------------------------------------------------

@@ -1705,6 +1705,19 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 							static_cast<float>(refUint) / 255.0f);
 					}
 
+					// CONSULT-53 (2026-06-28): additive-glow premultiplied-alpha parity.
+					// shader/ui_shader_add.sht (space-HUD gauge/radar backgrounds) blends
+					// SrcColor/One over STRAIGHT-alpha UI atlases. The additive SrcColor
+					// factor uses source RGB and ignores alpha, so masked texels (alpha==0,
+					// RGB still present) get added -> a solid translucent cyan fill in gl11,
+					// where gl05 shows only the thin arc. Flag the generated PS to premultiply
+					// (col.rgb *= col.a) for additive (One-dest) SrcColor passes ONLY -- this
+					// mirrors D3D9's premultiplied feed; over-blend (SrcAlpha/InvSrcAlpha)
+					// passes keep the flag 0 (premultiplying them would double-apply alpha).
+					Direct3d11_StateCache::setAlphaPremultiply(
+						engPass->m_alphaBlendDestination == ShaderImplementationPass::B_One
+						&& engPass->m_alphaBlendSource == ShaderImplementationPass::B_SourceColor);
+
 					// Plan 11-09.15 Iter-44A: per-pass DEPTH state. Mirrors
 					// D3D9's RSB/RSM writes for ZENABLE/ZWRITEENABLE/ZFUNC
 					// (Direct3d9_ShaderImplementationData.cpp:255-257). Pre-
