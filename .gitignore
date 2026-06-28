@@ -98,6 +98,11 @@ stage/*
 # is safe (unlike stage/, which needs the override negation above).
 stage-x64/
 
+# Local throwaway staging-dir baselines (exe/dll/pdb copies kept for A/B
+# comparison while debugging). Hundreds of MB of binaries -- never commit.
+stage-deferral-fix/
+stage-revert-baseline/
+
 # ============================================================
 # Phase 11+ runtime / harness / tooling cruft (added 2026-05-21)
 # ============================================================
