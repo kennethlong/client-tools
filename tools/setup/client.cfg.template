@@ -31,8 +31,14 @@
 [Station]
 	# CONFIG-01 / D-05: The SOE Station SSO key is INTENTIONALLY OMITTED.
 	# Adding it activates LoginConnection's dead SOE Station SSO branch.
-	# CONFIG-02: gameFeatures bits = Base + JTL + RotW + ToOW (15 = 0b1111)
-	gameFeatures=15
+	# CONFIG-02 (CORRECTED 2026-06-28): gameFeatures gates which SKUs TreeFile::install
+	# loads (ClientMain.cpp maps feature bits -> skuBits -> searchTOC_NN_P). The OLD value
+	# 15 (0b1111) was WRONG -- it is Base(1)+CollectorsEdition(2)+SpaceExpansionBETA(4)+
+	# SpaceExpansionPREORDER(8), NOT the retail expansions. SpaceExpansionRetail(16) was
+	# UNSET, so sku1 (JTL) searchTOC never loaded -> all space shaders/content missing ->
+	# empty/magenta space. Correct retail bits (sharedGame PlatformFeatureBits.h):
+	#   Base 1 + SpaceExpansionRetail 16 + Episode3ExpansionRetail 512 + TrialsOfObiwanRetail 32768 = 33297
+	gameFeatures=33297
 	subscriptionFeatures=1
 
 [ClientGraphics]
@@ -102,5 +108,6 @@
 	# cells; on = unconditional; off = none (Phase 10 Option alpha). Debug devs get auto here to preserve
 	# the Phase-23 posture; the _DEBUG F11 force-disable still wins on top (D-04).
 	occlusionMode=@OCCLUSION_MODE@
-	# Phase 10 DPVS profiling overlay (CSV writer + DebugMonitor + F10/F11 keybinds). Phase 26 removes this.
-	reportInstrumentation=true
+	# DPVS profiling overlay RETIRED 2026-06-28: DpvsProfileInstrumentation removed from source
+	# (Phases 23/26 complete, grep-zero), so this key is now a no-op.
+	# reportInstrumentation=true
