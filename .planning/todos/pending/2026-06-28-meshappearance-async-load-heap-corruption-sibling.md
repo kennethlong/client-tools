@@ -52,3 +52,36 @@ an A/B (inject vs not) to confirm whether the consumer widens the window or it's
    create()).
 
 Full skeletal-fix context + accepted limitations: `.planning/handoff/gl11-x64-tatooine-zonein-crash.md`.
+
+---
+
+## Sighting 2 — Tatooine spaceport zone-in, C++-throw flavor (2026-06-29)
+
+Another intermittent zone-in crash, almost certainly the SAME root (StaticShaderTemplate /
+`"SSHT"` corruption), surfacing as a **C++ throw** rather than the free-list AV:
+
+- Dump `stage/SwgClient_r.exe-unknown.0-20260629152448.txt` (**`.txt` only — no `.mdmp`**): primary
+  exception `e06d7363` (MSVC `_CxxThrowException`) thrown ~1s into loading a Tatooine spaceport,
+  while pulling `ilm_extract/shader/spaceport_*_cs8_tato.sht` + `intr_tech_*_cs8_tato.sht`
+  (`SwitchTextureShaderTemplate` / `StaticShaderTemplate` load path).
+- The `0xC0000005 READ 0x4A2550A5 @ +0xC850B4` reported alongside it was a **nested AV inside the
+  crash handler** (`SetupSharedFoundationNamespace::MyUnhandledExceptionFilter+0x2e4`) while it was
+  writing the breadcrumb report — which is why the `.txt` is truncated (no footer) and **no `.mdmp`
+  was produced**. So the handler itself faults on a bad pointer when it crashes mid-shader-load.
+
+### Repro attempts (2026-06-29) — could NOT reproduce
+- 2× clean zone-ins under **cdb** (no Utinni — and **Utinni refuses to inject while a debugger is
+  attached**: `IsDebuggerPresent`/`CheckRemoteDebuggerPresent`, so cdb-attach and Utinni-injected are
+  mutually exclusive; can't catch it with a pre-attached debugger).
+- **20+ scene changes under Utinni, no debugger → no crash.**
+- Conclusion: rare intermittent (the documented "retry usually succeeds" flake), NOT a deterministic
+  regression, and NOT the Utinni contract waves (A/A-2/A-3, B/B-2 are sound). PARKED 2026-06-29.
+
+### Decision / plan
+- **Passive capture:** when it next crashes naturally, the client's own handler usually writes a full
+  `mdmp` (e.g. the clean `135512.mdmp`) — symbolize that. If it again produces `.txt`-only, the handler
+  nested-AV is itself worth hardening (it dereferences a bad asset-name pointer while building the report).
+- **Active trap (when prioritized):** light page-heap on `SwgClient_r.exe` (a process-image flag, NOT a
+  debugger → Utinni still injects) + `EmptyStandbyList` cold cache + a zonein loop, to force the
+  StaticShaderTemplate corruption deterministic and trap the corrupter. Light (not full) to avoid the
+  32-bit 2 GB OOM.
