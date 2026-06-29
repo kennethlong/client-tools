@@ -67,6 +67,7 @@
 // (CuiSystemMessageManager.h include REMOVED v10->v11 -- systemMessageManager::receiveMessage reverted as wrong-& world-load crash; see the A-2.1 OMIT note)
 #include "utinni_creatureObject_forward.h"               // utinni_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
+#include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
 #include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
 #include "swgClientUserInterface/SwgCuiHudFactory.h"     // Bucket A-2: SwgCuiHudFactory::findMediatorForCurrentHud (static active-hud accessor)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
@@ -626,6 +627,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- Bucket A-2 (2026-06-28): world-pick / HUD-target (closes the §2.A getTarget gap) --
 	{ "cuiHud::getTarget",  (void *)&utinni_hudGetLastSelectedObject },           // MISMATCH name + REAL ENTRY of SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (m_lastSelectedObject = world-picked object). SwgCuiHud is MI -> __fastcall call-through thunk (CALLED row -- consumer READS the pick on the live hud). Supersedes the Bucket A OMIT. World-object pick.
 	{ "cuiHud::g_instance", (void *)&SwgCuiHudFactory::findMediatorForCurrentHud }, // ACCESSOR: static SwgCuiHud* findMediatorForCurrentHud() [SwgCuiHudFactory.h:24] -- resolves the LIVE ground/space hud (concrete HudGround/HudSpace, both : SwgCuiHud). The instance the consumer calls cuiHud::getTarget on (mirrors cuiIo::g_instance -> CuiManager::getIoWin). constant &fn.
+
+	// -- Bucket A-3 (2026-06-28): network id->Object resolver (unblocks the creatureObject::setTarget callback) --
+	{ "network::getObjectById", (void *)&NetworkIdManager::getObjectById }, // static Object* NetworkIdManager::getObjectById(const NetworkId&) [NetworkIdManager.h:22 / .cpp:72] -- the real NetworkId->Object* lookup (SWGEmu idManagerGetObjectById 0x00B380E0). Consumer typedef Object*(__cdecl*)(const NetworkId&) -> constant &fn (true static; no instance accessor needed -- the singleton ms_instance is internal). Without this the consumer's hkSetTarget resolved id->Object* via a stale hardcoded RVA and crashed (same class as the A-2.1 wrong-&). Group is "network" to match the consumer's Network::getObjectById wrapper.
 
 	// ----------------------------------------------------------------------
 	// BUCKET A OMIT/SKIP ledger -- the §2.A rows NOT advertised (each accounted for;
