@@ -44,6 +44,7 @@
 
 class GroundScene;
 class CreatureObject;
+class MessageQueue;   // free-cam wave (v13): return type of utinni_groundSceneGetDebugPortalCameraMessageQueue
 struct IoEvent;   // IoEvent is a struct in-tree (sharedIoWin) -- match the tag to silence C4099
 
 // ----------------------------------------------------------------------
@@ -68,6 +69,17 @@ void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 // ----------------------------------------------------------------------
 void * utinni_groundSceneUpdateRealEntry();
 void * utinni_groundSceneHandleInputMapEventRealEntry();
+
+// ----------------------------------------------------------------------
+// FREE-CAM wave (v13): CALLED accessor for the debug-portal-camera input MessageQueue.
+// m_debugPortalCameraInputMap is PRIVATE [GroundScene.h:111], so this friend forwarder is
+// DEFINED in GroundScene.cpp (member access + InputMap already included there) and only
+// DECLARED here. Returns m_debugPortalCameraInputMap->getMessageQueue() -- the MQ the
+// consumer previously read at the hardcoded InputMap+0xC. __fastcall(GroundScene* /*ECX*/,
+// int /*EDX*/) == __thiscall (GroundScene is MI -> dummy EDX). Utinni-side typedef:
+//   MessageQueue*(__thiscall*)(GroundScene*)
+// ----------------------------------------------------------------------
+MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
 
 // ======================================================================
 

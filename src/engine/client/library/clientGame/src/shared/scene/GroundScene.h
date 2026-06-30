@@ -70,6 +70,10 @@ class GroundScene : public NetworkScene
 	// ABI-neutral (no member/vtable change; no plugin cascade).
 	friend void * utinni_groundSceneUpdateRealEntry();
 	friend void * utinni_groundSceneHandleInputMapEventRealEntry();
+	// FREE-CAM wave (v13): CALLED accessor over the PRIVATE m_debugPortalCameraInputMap [:111]
+	// so the consumer stops reading the hardcoded InputMap+0xC. ABI-neutral friend (no member /
+	// no vtable change -> no plugin cascade). Defined in GroundScene.cpp (#if !defined(_WIN64)).
+	friend class MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
 #endif
 
 public:

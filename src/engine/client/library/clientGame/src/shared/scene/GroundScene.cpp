@@ -3899,6 +3899,20 @@ void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 	pThis->handleInputMapUpdate();                         // private [GroundScene.h:170]
 }
 
+// FREE-CAM wave (v13): CALLED accessor over the PRIVATE m_debugPortalCameraInputMap
+// [GroundScene.h:111]. Returns the debug-portal-camera input MessageQueue (the consumer's
+// "free camera" is OUR DebugPortalCamera -- cm_Free == CI_debugPortal) that the consumer
+// previously read at the hardcoded InputMap+0xC; now encapsulated so the offset cannot drift.
+// The InputMap-output MQ aliases the camera's drained m_queue (init wires
+// camera->setMessageQueue(inputMap->getMessageQueue()), GroundScene.cpp:803), so this is the
+// SAME pointer gameCamera::getMessageQueue returns while free-cam is active. Null-safe (the
+// input maps are only constructed in init(), GroundScene.cpp:775). __fastcall == __thiscall
+// (MI class -> dummy EDX). Declared extern in utinni_groundScene_forward.h.
+MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/)
+{
+	return pThis->m_debugPortalCameraInputMap ? pThis->m_debugPortalCameraInputMap->getMessageQueue() : 0;
+}
+
 // NOTE (38-05): the call-through forwarders for update / handleInputMapEvent were
 // REMOVED -- those two rows are DETOURED by Utinni and now advertise the REAL engine
 // entry via the utinni_groundScene*RealEntry() accessors below (a detour on a

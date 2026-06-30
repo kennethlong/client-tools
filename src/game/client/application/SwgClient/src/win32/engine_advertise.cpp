@@ -70,6 +70,9 @@
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
 #include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
 #include "swgClientUserInterface/SwgCuiHudFactory.h"     // Bucket A-2: SwgCuiHudFactory::findMediatorForCurrentHud (static active-hud accessor)
+
+#include "clientObject/GameCamera.h"                     // FREE-CAM (v13): gameCamera::getMessageQueue thunk (via Object::getController)
+#include "sharedObject/Controller.h"                     // FREE-CAM (v13): Controller::getMessageQueue (the camera's movement MQ)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -373,6 +376,50 @@ static Object * __fastcall utinni_hudGetLastSelectedObject(SwgCuiHud * pThis, in
 }
 
 // ----------------------------------------------------------------------
+// FREE-CAM editor-unlock wave (2026-06-29, v12->v13). Six CALLED accessors that
+// encapsulate fragile NGE struct byte-offsets so the consumer stops hardcoding offsets
+// that drift vs our layout (the particlePreview::retrigger / config::setModalChat shim
+// principle). The consumer's "free camera" is OUR DebugPortalCamera: consumer cm_Free == 5
+// == GroundScene::CI_debugPortal (cm_FreeChase == 2 == CI_freeChase). These three are
+// public-method __fastcall thunks (CALLED, not detoured -> a call-through thunk is correct;
+// __fastcall(pThis /*ECX*/, int /*EDX*/) == __thiscall, MSVC v145 forbids __thiscall on a
+// free function, C3865). The two messageQueue read-side rows are flat-class PMFs (dyn[]),
+// and groundScene::getDebugPortalCameraMessageQueue is a friend forwarder (GroundScene.cpp,
+// private member) declared in utinni_groundScene_forward.h.
+// ----------------------------------------------------------------------
+
+// groundScene::isFreeCameraActive -- replaces the consumer's currentView field read.
+// getCurrentView() is PUBLIC [GroundScene.h:207] so no friend is needed; CI_debugPortal is the
+// PUBLIC CameraIds enumerator [GroundScene.h:84-95] == 5 == consumer cm_Free. Consumer typedef:
+//   bool(__thiscall*)(GroundScene*)
+static bool __fastcall utinni_groundSceneIsFreeCameraActive(GroundScene * pThis, int /*edx*/)
+{
+	return pThis->getCurrentView() == GroundScene::CI_debugPortal;  // cm_Free (5) == CI_debugPortal
+}
+
+// gameCamera::getMessageQueue -- the camera's movement MessageQueue that the camera's alter()
+// drains (the consumer read it at the hardcoded GameCamera+0x248). The camera's m_queue is wired
+// to its CameraController's MQ (GroundScene.cpp:776,803), so the controller's MQ IS that pointer;
+// reaching it via the base Object::getController() [Object.h:190] + Controller::getMessageQueue()
+// [Controller.h:67] is layout-independent and works for any camera (no subclass m_queue offset).
+// While free-cam is active this aliases groundScene::getDebugPortalCameraMessageQueue. Cameras are
+// single-inheritance, so the GameCamera* (from the already-advertised getCurrentCamera) needs no
+// adjustment. Consumer typedef: MessageQueue*(__thiscall*)(GameCamera*)
+static MessageQueue * __fastcall utinni_gameCameraGetMessageQueue(GameCamera * pThis, int /*edx*/)
+{
+	Controller * const c = pThis->getController();                  // non-const this -> non-const overload [Object.h:190]
+	return c ? c->getMessageQueue() : 0;                            // [Controller.h:67]
+}
+
+// object::isActive -- Object::isActive() is NON-VIRTUAL but INLINE [Object.h:158 decl / :1328 def],
+// so &Object::isActive has NO ODR-emitted address (the g_mainLoopCounter inline-accessor Pitfall).
+// A CALLED external-linkage shim supplies the address. Consumer typedef: bool(__thiscall*)(const Object*)
+static bool __fastcall utinni_objectIsActive(const Object * pThis, int /*edx*/)
+{
+	return pThis->isActive();                                       // public inline [Object.h:1328]
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -631,6 +678,20 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- Bucket A-3 (2026-06-28): network id->Object resolver (unblocks the creatureObject::setTarget callback) --
 	{ "network::getObjectById", (void *)&NetworkIdManager::getObjectById }, // static Object* NetworkIdManager::getObjectById(const NetworkId&) [NetworkIdManager.h:22 / .cpp:72] -- the real NetworkId->Object* lookup (SWGEmu idManagerGetObjectById 0x00B380E0). Consumer typedef Object*(__cdecl*)(const NetworkId&) -> constant &fn (true static; no instance accessor needed -- the singleton ms_instance is internal). Without this the consumer's hkSetTarget resolved id->Object* via a stale hardcoded RVA and crashed (same class as the A-2.1 wrong-&). Group is "network" to match the consumer's Network::getObjectById wrapper.
 
+	// ======================================================================
+	// FREE-CAM editor-unlock wave (2026-06-29) -- v12 -> v13. 6 NAME ADDs, all CALLED accessors
+	// that encapsulate fragile NGE byte-offsets (consumer will not hardcode offsets that drift).
+	// Consumer "free camera" == OUR DebugPortalCamera (cm_Free 5 == CI_debugPortal). NONE detoured.
+	// ----------------------------------------------------------------------
+	// -- constant &thunk / &fn rows (no dyn[] needed) --
+	{ "groundScene::isFreeCameraActive",               (void *)&utinni_groundSceneIsFreeCameraActive },               // __fastcall thunk: getCurrentView()==CI_debugPortal (==5==consumer cm_Free) [GroundScene.h:84-95,207]. Replaces the currentView field read.
+	{ "groundScene::getDebugPortalCameraMessageQueue", (void *)&utinni_groundSceneGetDebugPortalCameraMessageQueue },  // friend forwarder (GroundScene.cpp): m_debugPortalCameraInputMap->getMessageQueue() [GroundScene.h:111] -- the MQ the consumer read at the hardcoded InputMap+0xC. __fastcall == __thiscall.
+	{ "gameCamera::getMessageQueue",                   (void *)&utinni_gameCameraGetMessageQueue },                   // __fastcall thunk: getController()->getMessageQueue() [Object.h:190 / Controller.h:67] -- the camera's movement MQ (was GameCamera+0x248). ALIASES the debugPortal MQ while free-cam active (init wires camera->setMessageQueue(inputMap->getMessageQueue()), GroundScene.cpp:803).
+	{ "object::isActive",                              (void *)&utinni_objectIsActive },                             // external-linkage __fastcall shim: Object::isActive() is NON-virtual but INLINE [Object.h:158/1328] -> no PMF address. CALLED. Consumer typedef bool(__thiscall*)(const Object*).
+	// -- read-side messageQueue PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
+	{ "messageQueue::getCount",   0 },          // MISMATCH name: no MessageQueue::getCount exists; the real entry is int getNumberOfMessages() const [MessageQueue.h:42]. Flat single-inheritance class -> pmfToVoid (4-byte PMF == real entry); non-overloaded. dyn[] below. (appendMessage is already advertised; this is the read-COUNT side.)
+	{ "messageQueue::getMessage", 0 },          // the 4-arg READ overload getMessage(int index,int* message,float* value,uint32* flags=0) const [MessageQueue.h:43] -- EXACTLY the consumer's requested (i,outType,outValue,outFlags) signature (they pass nullptr for flags). Overloaded with the Data** variant [:44] -> static_cast to disambiguate. Flat class -> pmfToVoid. dyn[] below. (The consumer's stale io_win.h declares a 3-arg wrapper; their paired wave aligns it to this 4-arg real entry.)
+
 	// ----------------------------------------------------------------------
 	// BUCKET A OMIT/SKIP ledger -- the §2.A rows NOT advertised (each accounted for;
 	// none silently dropped; consumer alternatives -> HANDBACK):
@@ -784,6 +845,9 @@ static void ensureDynamicRowsFilled()
 		// messageQueue::appendMessage[Data] -- MessageQueue is a flat single-inheritance class -> pmfToVoid (4-byte PMF == real entry); overloaded -> static_cast to disambiguate.
 		{ "messageQueue::appendMessage",       pmfToVoid(static_cast<void (MessageQueue::*)(int, float, uint32)>(&MessageQueue::appendMessage)) },
 		{ "messageQueue::appendMessageData",   pmfToVoid(static_cast<void (MessageQueue::*)(int, float, MessageQueue::Data *, uint32)>(&MessageQueue::appendMessage)) },
+		// FREE-CAM wave (v13) read-side MessageQueue rows (flat single-inheritance class -> pmfToVoid):
+		{ "messageQueue::getCount",            pmfToVoid(&MessageQueue::getNumberOfMessages) },                                                            // MISMATCH name -> getNumberOfMessages [MessageQueue.h:42]; non-overloaded const member.
+		{ "messageQueue::getMessage",          pmfToVoid(static_cast<void (MessageQueue::*)(int, int *, float *, uint32 *) const>(&MessageQueue::getMessage)) }, // 4-arg overload [MessageQueue.h:43]; static_cast disambiguates from the Data** overload [:44].
 	};
 
 	const unsigned int dynCount = (unsigned int)(sizeof dyn / sizeof dyn[0]);
