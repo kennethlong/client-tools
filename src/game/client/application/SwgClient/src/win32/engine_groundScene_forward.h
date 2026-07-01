@@ -1,6 +1,6 @@
 // ======================================================================
 //
-// utinni_groundScene_forward.h -- exe-local declarations for the PRIVATE
+// engine_groundScene_forward.h -- exe-local declarations for the PRIVATE
 // GroundScene methods advertised to Utinni (Phase 38-01, EPA-05; 38-05 split).
 //
 // GroundScene::{init,update,handleInputMapUpdate,handleInputMapEvent} are PRIVATE
@@ -11,7 +11,7 @@
 //   * CALLED/forwarder rows (init, handleInputMapUpdate): __fastcall call-through
 //     forwarders -- Utinni invokes them, they forward.
 //   * DETOURED rows (update, handleInputMapEvent): NO forwarder. They are advertised
-//     by their REAL engine code entry via the utinni_groundScene*RealEntry() address
+//     by their REAL engine code entry via the engine_groundScene*RealEntry() address
 //     providers below (a detour on a call-through forwarder is silently dead -- the
 //     Utinni review finding). delta==0 verified inside each accessor.
 //
@@ -37,23 +37,23 @@
 // GroundScene.cpp, matching the whole Win32-only advertise body.
 // ======================================================================
 
-#ifndef INCLUDED_utinni_groundScene_forward_H
-#define INCLUDED_utinni_groundScene_forward_H
+#ifndef INCLUDED_engine_groundScene_forward_H
+#define INCLUDED_engine_groundScene_forward_H
 
 // ======================================================================
 
 class GroundScene;
 class CreatureObject;
-class MessageQueue;   // free-cam wave (v13): return type of utinni_groundSceneGetDebugPortalCameraMessageQueue
+class MessageQueue;   // free-cam wave (v13): return type of engine_groundSceneGetDebugPortalCameraMessageQueue
 struct IoEvent;   // IoEvent is a struct in-tree (sharedIoWin) -- match the tag to silence C4099
 
 // ----------------------------------------------------------------------
 // extern declarations of the four __fastcall groundScene private-method
 // forwarders defined in GroundScene.cpp.
 // ----------------------------------------------------------------------
-void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
+void __fastcall engine_groundSceneInit(GroundScene * pThis, int /*edx*/,
 	const char * terrainFilename, CreatureObject * player, float timeInSeconds);
-void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
+void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
 // (38-05) the update / handleInputMapEvent CALL-THROUGH forwarder decls were REMOVED
 // -- those two rows are DETOURED and now advertise the REAL engine entry via the
 // real-entry accessors below.
@@ -67,8 +67,8 @@ void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 // detour placed on a forwarder is silently dead (the engine never calls it). These
 // take no args -- they are pure address providers, not call-throughs.
 // ----------------------------------------------------------------------
-void * utinni_groundSceneUpdateRealEntry();
-void * utinni_groundSceneHandleInputMapEventRealEntry();
+void * engine_groundSceneUpdateRealEntry();
+void * engine_groundSceneHandleInputMapEventRealEntry();
 
 // ----------------------------------------------------------------------
 // FREE-CAM wave (v13): CALLED accessor for the debug-portal-camera input MessageQueue.
@@ -79,7 +79,7 @@ void * utinni_groundSceneHandleInputMapEventRealEntry();
 // int /*EDX*/) == __thiscall (GroundScene is MI -> dummy EDX). Utinni-side typedef:
 //   MessageQueue*(__thiscall*)(GroundScene*)
 // ----------------------------------------------------------------------
-MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
+MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
 
 // ======================================================================
 

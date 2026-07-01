@@ -12,12 +12,6 @@
 #include "FirstDirect3d9.h"
 #include "Direct3d9.h"
 
-// ===== UTINNI D3D9 VTABLE PROBE (one-shot diagnostic; sidequest for the Utinni overlay project) =====
-// Calibrates Utinni's vtable scanner against this user's d3d9.dll so the same vtable can be located
-// when injected into the stock SWGEmu client (which we cannot recompile). Probe writes one text file
-// to CWD (or %TEMP% on failure) and self-disables after the first call. Safe to keep; revert by
-// removing this include block, the namespace-scope function below, and the call site marked with the
-// matching UTINNI PROBE comment.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -98,129 +92,6 @@ WINUSERAPI BOOL WINAPI GetMonitorInfoW(HMONITOR hMonitor, LPMONITORINFO lpmi);
 #endif // !UNICODE
 
 }
-
-// ======================================================================
-// UTINNI PROBE: one-shot d3d9.dll vtable dump. Pull in Win32 version-info
-// APIs (GetFileVersionInfo* / VerQueryValue) + ensure version.lib gets
-// linked even if the .vcxproj AdditionalDependencies edit gets missed.
-#include <winver.h>
-#pragma comment(lib, "version.lib")
-
-namespace UtinniProbe
-{
-	void DumpD3D9Vtable(IDirect3DDevice9 *pDevice)
-	{
-		static bool s_done = false;
-		if (s_done || !pDevice) return;
-		s_done = true;
-
-		FILE *f = nullptr;
-		fopen_s(&f, "d3d9_vtable_probe.txt", "w");
-		if (!f)
-		{
-			char tmp[MAX_PATH] = { 0 };
-			GetTempPathA(MAX_PATH, tmp);
-			strcat_s(tmp, MAX_PATH, "d3d9_vtable_probe.txt");
-			fopen_s(&f, tmp, "w");
-			if (!f) { OutputDebugStringA("[Utinni Probe] FAILED to open log file\n"); return; }
-			OutputDebugStringA("[Utinni Probe] wrote to %TEMP%\\d3d9_vtable_probe.txt\n");
-		}
-
-		HMODULE hD3d9 = GetModuleHandleA("d3d9.dll");
-
-		fprintf(f, "=== UTINNI D3D9 VTABLE PROBE ===\n");
-		fprintf(f, "schema_version: 1\n");
-
-		char d3d9Path[MAX_PATH] = { 0 };
-		if (hD3d9) GetModuleFileNameA(hD3d9, d3d9Path, MAX_PATH);
-		fprintf(f, "d3d9_path: %s\n", d3d9Path);
-		fprintf(f, "d3d9_base: %p\n", static_cast<void const*>(hD3d9));
-
-		DWORD vsLen = GetFileVersionInfoSizeA(d3d9Path, nullptr);
-		if (vsLen)
-		{
-			BYTE *buf = (BYTE *)malloc(vsLen);
-			if (buf && GetFileVersionInfoA(d3d9Path, 0, vsLen, buf))
-			{
-				VS_FIXEDFILEINFO *ffi = nullptr;
-				UINT ffiLen = 0;
-				if (VerQueryValueA(buf, "\\", (LPVOID *)&ffi, &ffiLen) && ffi)
-				{
-					fprintf(f, "d3d9_version: %u.%u.%u.%u\n",
-						HIWORD(ffi->dwFileVersionMS), LOWORD(ffi->dwFileVersionMS),
-						HIWORD(ffi->dwFileVersionLS), LOWORD(ffi->dwFileVersionLS));
-				}
-			}
-			free(buf);
-		}
-
-		HANDLE hFile = CreateFileA(d3d9Path, GENERIC_READ, FILE_SHARE_READ, nullptr,
-			OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-		if (hFile != INVALID_HANDLE_VALUE)
-		{
-			LARGE_INTEGER sz;
-			if (GetFileSizeEx(hFile, &sz))
-				fprintf(f, "d3d9_filesize: %lld\n", sz.QuadPart);
-			CloseHandle(hFile);
-		}
-
-		if (hD3d9)
-		{
-			IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)hD3d9;
-			IMAGE_NT_HEADERS *nt  = (IMAGE_NT_HEADERS *)((BYTE *)hD3d9 + dos->e_lfanew);
-			fprintf(f, "d3d9_timestamp: 0x%08X\n", nt->FileHeader.TimeDateStamp);
-			fprintf(f, "d3d9_image_size: 0x%08X\n", nt->OptionalHeader.SizeOfImage);
-			IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
-			for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i)
-			{
-				char name[9] = { 0 };
-				memcpy(name, sec[i].Name, 8);
-				fprintf(f, "section: %-8s rva=0x%08X vsize=0x%08X chars=0x%08X\n",
-					name, sec[i].VirtualAddress, sec[i].Misc.VirtualSize, sec[i].Characteristics);
-			}
-		}
-
-		fprintf(f, "device_ptr: %p\n", static_cast<void const*>(pDevice));
-		void **vtbl = *(void ***)pDevice;
-		fprintf(f, "vtable_addr: %p\n", static_cast<void const*>(vtbl));
-		if (hD3d9)
-			fprintf(f, "vtable_rva_in_d3d9: 0x%08X\n", (DWORD)((BYTE *)vtbl - (BYTE *)hD3d9));
-
-		fprintf(f, "\n=== VTABLE ENTRIES ===\n");
-		fprintf(f, "index | abs_addr   | rva_in_d3d9\n");
-		int insideImage = 0;
-		DWORD imgSize = 0;
-		if (hD3d9)
-		{
-			IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)hD3d9;
-			IMAGE_NT_HEADERS *nt  = (IMAGE_NT_HEADERS *)((BYTE *)hD3d9 + dos->e_lfanew);
-			imgSize = nt->OptionalHeader.SizeOfImage;
-		}
-		for (int i = 0; i < 119; ++i)
-		{
-			void *entry = vtbl[i];
-			DWORD rva = hD3d9 ? (DWORD)((BYTE *)entry - (BYTE *)hD3d9) : 0;
-			fprintf(f, "%3d | %p | 0x%08X\n", i, static_cast<void const*>(entry), rva);
-			if (hD3d9 && rva < imgSize) ++insideImage;
-		}
-		fprintf(f, "\nentries_inside_d3d9: %d/119\n", insideImage);
-
-		fprintf(f, "\n=== BYTES AROUND VTABLE (for signature derivation) ===\n");
-		BYTE *p = (BYTE *)vtbl;
-		fprintf(f, "before_64:");
-		for (int i = -64; i < 0; ++i) fprintf(f, " %02X", p[i]);
-		fprintf(f, "\nafter_476:");
-		for (int i = 119 * 4; i < 119 * 4 + 64; ++i) fprintf(f, " %02X", p[i]);
-		fprintf(f, "\n");
-
-		fprintf(f, "\n=== END ===\n");
-		fflush(f);
-		fclose(f);
-
-		OutputDebugStringA("[Utinni Probe] d3d9_vtable_probe.txt written\n");
-	}
-}
-// ======================================================================
 
 #if !defined(FFP) && !defined(VSPS)
 #error must define FFP, VSPS, or both
@@ -1497,8 +1368,6 @@ bool Direct3d9::install(Gl_install *gl_install)
 
 					if (SUCCEEDED(hresult))
 					{
-						// UTINNI PROBE: one-shot d3d9.dll vtable dump (Utinni sidequest; safe to keep).
-						UtinniProbe::DumpD3D9Vtable(ms_device);
 
 						IDirect3DSurface9 *depthStencilSurface = NULL;
 						hresult = ms_device->GetDepthStencilSurface(&depthStencilSurface);

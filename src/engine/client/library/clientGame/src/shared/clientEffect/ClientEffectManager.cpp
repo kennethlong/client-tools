@@ -1372,7 +1372,7 @@ void ClientEffectManager::createClientTrackingProjectileLocationToObject(const s
 // 32-bit-only: mirrors the whole engine_advertise.cpp Win32-only export body.
 // ======================================================================
 #if !defined(_WIN64)
-void utinni_retriggerClientEffect(char const * const logicalName)
+void engine_retriggerClientEffect(char const * const logicalName)
 {
 	if (!logicalName || !*logicalName)
 		return;
@@ -1392,7 +1392,7 @@ void utinni_retriggerClientEffect(char const * const logicalName)
 	int particleAppearanceCount = 0;
 	int matchCount = 0;
 	int restartCount = 0;
-	REPORT_LOG(true, ("[utinni.retrigger] BEGIN logicalName=\"%s\" templateRefreshed=%s m_particleSystems.size=%d\n",
+	REPORT_LOG(true, ("[effect.retrigger] BEGIN logicalName=\"%s\" templateRefreshed=%s m_particleSystems.size=%d\n",
 		logicalName, (refreshed ? "yes" : "no"), totalInstances));
 
 	// Restart every live particle instance whose appearance template matches.
@@ -1411,7 +1411,7 @@ void utinni_retriggerClientEffect(char const * const logicalName)
 		++particleAppearanceCount;
 		char const * const name = appearance->getAppearanceTemplateName();
 		bool const isMatch = (name && _stricmp(name, logicalName) == 0);
-		REPORT_LOG(true, ("[utinni.retrigger]   candidate #%d name=\"%s\" match=%s\n",
+		REPORT_LOG(true, ("[effect.retrigger]   candidate #%d name=\"%s\" match=%s\n",
 			particleAppearanceCount, (name ? name : "<null>"), (isMatch ? "YES" : "no")));
 		if (!isMatch)
 			continue;
@@ -1420,7 +1420,7 @@ void utinni_retriggerClientEffect(char const * const logicalName)
 		++restartCount;
 	}
 
-	REPORT_LOG(true, ("[utinni.retrigger] END particleAppearances=%d matches=%d restarted=%d (of %d total instances)\n",
+	REPORT_LOG(true, ("[effect.retrigger] END particleAppearances=%d matches=%d restarted=%d (of %d total instances)\n",
 		particleAppearanceCount, matchCount, restartCount, totalInstances));
 
 	if (refreshed)
@@ -1462,12 +1462,12 @@ void utinni_retriggerClientEffect(char const * const logicalName)
 // 32-bit-only: mirrors the whole engine_advertise.cpp Win32-only export body.
 // ======================================================================
 // NOTE: parameter is plain `char const *` (NO top-level const) to match the
-// forward-header declaration's mangling exactly. Unlike utinni_retriggerClientEffect
+// forward-header declaration's mangling exactly. Unlike engine_retriggerClientEffect
 // (a friend of ClientEffectManager, so its decl is visible here and reconciles the
 // name), this free fn has no declaration visible in this TU -- and MSVC mangles a
 // standalone definition's top-level-const param into the symbol (QBD vs PBD),
 // producing an LNK2001 against the advertise TU's PBD reference.
-bool utinni_replayClientEffect(char const * clientEffectName)
+bool engine_replayClientEffect(char const * clientEffectName)
 {
 	if (!clientEffectName || !*clientEffectName)
 		return false;
@@ -1476,7 +1476,7 @@ bool utinni_replayClientEffect(char const * clientEffectName)
 	Object * const player = Game::getPlayer();
 	if (!player)
 	{
-		REPORT_LOG(true, ("[utinni.replay] BEGIN name=\"%s\" -> NO PLAYER (no scene); bailing played=no\n", clientEffectName));
+		REPORT_LOG(true, ("[effect.replay] BEGIN name=\"%s\" -> NO PLAYER (no scene); bailing played=no\n", clientEffectName));
 		return false;
 	}
 
@@ -1491,13 +1491,13 @@ bool utinni_replayClientEffect(char const * clientEffectName)
 	if (cet)
 		cet->release();
 
-	REPORT_LOG(true, ("[utinni.replay] BEGIN name=\"%s\" target=player(%p) templateRefreshed=%s\n",
+	REPORT_LOG(true, ("[effect.replay] BEGIN name=\"%s\" target=player(%p) templateRefreshed=%s\n",
 		clientEffectName, static_cast<void *>(player), (templateRefreshed ? "yes" : "no")));
 
 	// Play the effect fresh, attached to the player object at its origin.
 	bool const played = ClientEffectManager::playClientEffect(effectName, player, CrcLowerString::empty);
 
-	REPORT_LOG(true, ("[utinni.replay] END name=\"%s\" played=%s\n", clientEffectName, (played ? "yes" : "no")));
+	REPORT_LOG(true, ("[effect.replay] END name=\"%s\" played=%s\n", clientEffectName, (played ? "yes" : "no")));
 	return played;
 }
 #endif

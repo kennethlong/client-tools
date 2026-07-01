@@ -56,9 +56,9 @@ class GroundScene : public NetworkScene
 	// shared-header plugin cascade; AGENTS.md). Win32-only: the whole advertise
 	// body + the forwarder definitions are #if !defined(_WIN64).
 	// ------------------------------------------------------------------
-	friend void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
+	friend void __fastcall engine_groundSceneInit(GroundScene * pThis, int /*edx*/,
 		const char * terrainFilename, CreatureObject * player, float timeInSeconds);
-	friend void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
+	friend void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
 	// (38-05) the update / handleInputMapEvent CALL-THROUGH forwarder friends were
 	// REMOVED -- those two are DETOURED, so they are advertised by the REAL engine
 	// entry via the real-entry accessor friends below, not a forwarder.
@@ -68,12 +68,12 @@ class GroundScene : public NetworkScene
 	// (delta==0 verified) for Utinni to detour directly -- NOT the call-through
 	// forwarder above (a detour on a forwarder is silently dead). friend decls are
 	// ABI-neutral (no member/vtable change; no plugin cascade).
-	friend void * utinni_groundSceneUpdateRealEntry();
-	friend void * utinni_groundSceneHandleInputMapEventRealEntry();
+	friend void * engine_groundSceneUpdateRealEntry();
+	friend void * engine_groundSceneHandleInputMapEventRealEntry();
 	// FREE-CAM wave (v13): CALLED accessor over the PRIVATE m_debugPortalCameraInputMap [:111]
 	// so the consumer stops reading the hardcoded InputMap+0xC. ABI-neutral friend (no member /
 	// no vtable change -> no plugin cascade). Defined in GroundScene.cpp (#if !defined(_WIN64)).
-	friend class MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
+	friend class MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
 #endif
 
 public:

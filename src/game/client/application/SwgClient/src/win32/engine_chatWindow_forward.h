@@ -1,6 +1,6 @@
 // ======================================================================
 //
-// utinni_chatWindow_forward.h -- exe-local declaration for the PRIVATE
+// engine_chatWindow_forward.h -- exe-local declaration for the PRIVATE
 // SwgCuiChatWindow construction-funnel address provider (24-§4 4d).
 //
 // The engine-hookpoint advertisement contract wants to expose the chat-window
@@ -17,7 +17,7 @@
 // createNewWindow is PRIVATE, so &SwgCuiChatWindow::createNewWindow cannot be
 // named from engine_advertise.cpp (C2248). The accessor below is DEFINED in
 // SwgCuiChatWindow.cpp (the class's own TU, friend-granted member access -- exactly
-// the GroundScene private-method real-entry pattern in utinni_groundScene_forward.h)
+// the GroundScene private-method real-entry pattern in engine_groundScene_forward.h)
 // and returns the REAL function entry. createNewWindow is STATIC, so its address is
 // a plain function pointer (no multiple-inheritance PMF inflation, no delta) -- the
 // accessor just returns (void *)&createNewWindow.
@@ -29,12 +29,12 @@
 // SwgCuiChatWindow.cpp, matching the whole Win32-only advertise body.
 // ======================================================================
 
-#ifndef INCLUDED_utinni_chatWindow_forward_H
-#define INCLUDED_utinni_chatWindow_forward_H
+#ifndef INCLUDED_engine_chatWindow_forward_H
+#define INCLUDED_engine_chatWindow_forward_H
 
 // Real-entry address provider for the PRIVATE static SwgCuiChatWindow::createNewWindow
 // funnel. Defined in SwgCuiChatWindow.cpp (friend access to take the private &fn);
 // returns the engine code entry Utinni DETOURS. Takes no args -- pure address provider.
-void * utinni_chatWindowCreateNewWindowEntry();
+void * engine_chatWindowCreateNewWindowEntry();
 
 #endif

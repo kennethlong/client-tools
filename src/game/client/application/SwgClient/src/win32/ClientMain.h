@@ -15,13 +15,13 @@ int ClientMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, in
 // ----------------------------------------------------------------------
 // Utinni engine entry-point advertisement (37-01): a distinctly-named,
 // external-linkage forwarding shim that calls the file-local crash-fixer
-// ClientMainNamespace::installConfigFileOverride(). Named utinni_* so it
+// ClientMainNamespace::installConfigFileOverride(). Named engine_* so it
 // does NOT collide with the unqualified installConfigFileOverride() callers
 // inside ClientMain.cpp (which compile under `using namespace
 // ClientMainNamespace;`). engine_advertise.cpp wraps this in the
 // config::loadOverrideConfig thunk row (EPA-02 crash-fixer).
 // ----------------------------------------------------------------------
-void utinni_installConfigFileOverride();
+void engine_installConfigFileOverride();
 
 // ----------------------------------------------------------------------
 // Utinni hookpoint coverage self-check (37-01, EPA-04 seed). Defined in
@@ -32,7 +32,7 @@ void utinni_installConfigFileOverride();
 // out (#if !defined(_WIN64)), so the ClientMain.cpp call site is likewise
 // !_WIN64-gated.
 // ----------------------------------------------------------------------
-bool utinni_verifyNoNullNoDup();
+bool engine_verifyNoNullNoDup();
 
 // ======================================================================
 

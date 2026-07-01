@@ -28,7 +28,7 @@
 #include <cstring>  // std::memcpy (pmfRealEntry MI-PMF code-component extraction, 38-05)
 
 #include "engine_hookpoints.h"
-#include "ClientMain.h"                            // utinni_installConfigFileOverride() + ClientMain()
+#include "ClientMain.h"                            // engine_installConfigFileOverride() + ClientMain()
 #include "sharedFoundation/ConfigFile.h"           // ConfigFile::loadFile / loadFromBuffer (static)
 #include "clientGame/Game.h"                       // Game::* (static) + isOver accessor
 #include "clientGraphics/Graphics.h"               // Graphics::* (static)
@@ -38,9 +38,9 @@
 #include "sharedCommandParser/CommandParser.h"     // CommandParser::addSubCommand (member PMF)
 #include "clientGame/GroundScene.h"                 // GroundScene MI thunks + ctor (38-01)
 #include "clientGame/Scene.h"                        // Scene complete type for the game::setupScene MI upcast (2026-06-25 re-map)
-#include "utinni_groundScene_forward.h"             // utinni_groundScene* private-method forwarders (38-01; exe-local)
-#include "utinni_clientShims_forward.h"             // utinni_osWindowProc / utinni_writeMiniDump shims (38-02; exe-local)
-#include "utinni_chatWindow_forward.h"              // utinni_chatWindowCreateNewWindowEntry() PRIVATE-funnel real-entry (24-4d; exe-local)
+#include "engine_groundScene_forward.h"             // engine_groundScene* private-method forwarders (38-01; exe-local)
+#include "engine_clientShims_forward.h"             // engine_osWindowProc / engine_writeMiniDump shims (38-02; exe-local)
+#include "engine_chatWindow_forward.h"              // engine_chatWindowCreateNewWindowEntry() PRIVATE-funnel real-entry (24-4d; exe-local)
 #include "clientUserInterface/CuiPreferences.h"     // CuiPreferences::setModalChat/getModalChat (38-02; 37-02 CORRECTION -- NOT ConfigFile)
 #include "swgClientUserInterface/SwgCuiChatWindow.h" // SwgCuiChatWindow MI thunks (38-03; TRIPLE-MI -> __fastcall thunks, never pmfToVoid)
 
@@ -59,13 +59,13 @@
 #include "clientSkeletalAnimation/SkeletalAppearance2.h" // SkeletalAppearance2::getDisplayLodSkeleton (non-virtual LOD read, bit_cast PMF)
 #include "clientGraphics/RenderWorld.h"            // RenderWorld::addObjectNotifications (static)
 #include "clientGame/Bloom.h"                       // Bloom::preSceneRender/postSceneRender (static)
-#include "utinni_clientEffect_forward.h"            // utinni_retriggerClientEffect (friend free fn over m_particleSystems; exe-local)
+#include "engine_clientEffect_forward.h"            // engine_retriggerClientEffect (friend free fn over m_particleSystems; exe-local)
 
 // -- Bucket A includes (per-editor real-entry rows; v8 -> v9) ----------------
 #include "clientUserInterface/CuiRadialMenuManager.h"   // CuiRadialMenuManager::update (static &fn)
 #include "clientUserInterface/CuiMenuInfoTypes.h"        // Cui::MenuInfoTypes::findDefaultCursor (namespace free fn)
 // (CuiSystemMessageManager.h include REMOVED v10->v11 -- systemMessageManager::receiveMessage reverted as wrong-& world-load crash; see the A-2.1 OMIT note)
-#include "utinni_creatureObject_forward.h"               // utinni_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
+#include "engine_creatureObject_forward.h"               // engine_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
 #include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
@@ -120,7 +120,7 @@ inline void * pmfToVoid(PMF pmf)
 // Utinni's __thiscall trampoline reaches with `this` in ECX. If delta != 0 the
 // entry is a secondary-base method whose `this` needs adjustment and is NOT
 // directly detour-able with the raw `this`; we MUST NOT advertise it. We return
-// nullptr (after a DEBUG_FATAL) so utinni_verifyNoNullNoDup() catches it as a
+// nullptr (after a DEBUG_FATAL) so engine_verifyNoNullNoDup() catches it as a
 // null row and FAILS loudly -- never advertise a wrong / silent-dead entry.
 //
 // NOTE: this is for DETOURED rows only. CALLED rows keep their call-through
@@ -136,7 +136,7 @@ inline void * pmfRealEntry(PMF pmf)
 	std::memcpy(&m, &pmf, sizeof(MiPmf));
 	if (m.delta != 0)
 	{
-		DEBUG_FATAL(true, ("utinni: non-zero PMF delta for a real-entry (detoured) row -- secondary-base method is NOT directly detour-able"));
+		DEBUG_FATAL(true, ("engine: non-zero PMF delta for a real-entry (detoured) row -- secondary-base method is NOT directly detour-able"));
 		return 0;
 	}
 	return m.pfn;
@@ -147,13 +147,13 @@ inline void * pmfRealEntry(PMF pmf)
 // config::loadOverrideConfig typedef is int(__cdecl*)() (zero-arg orchestrator;
 // D:/Code/Utinni/UtinniCore/swg/misc/config.cpp). The spec's best-guess
 // buffer-loader is the INNER call, NOT the hooked function. This thunk wraps
-// the distinctly-named forwarding shim utinni_installConfigFileOverride()
+// the distinctly-named forwarding shim engine_installConfigFileOverride()
 // (ClientMain.h), which forwards to ClientMainNamespace::installConfigFileOverride().
 // Do NOT advertise the buffer-loader symbol here (EPA-02 correction).
 // ----------------------------------------------------------------------
-static int __cdecl utinni_loadOverrideConfig()
+static int __cdecl engine_loadOverrideConfig()
 {
-	utinni_installConfigFileOverride();
+	engine_installConfigFileOverride();
 	return 0;
 }
 
@@ -180,13 +180,13 @@ static int __cdecl utinni_loadOverrideConfig()
 // OMIT/DEFER block below and 37-03-SUMMARY (same MI-inflation rationale that
 // deferred them in 37-02; they also require a live UIPage& arg).
 // ----------------------------------------------------------------------
-static CommandParser * __fastcall utinni_commandParserCtor1(CommandParser * pThis, int /*edx*/,
+static CommandParser * __fastcall engine_commandParserCtor1(CommandParser * pThis, int /*edx*/,
 	const char * command, size_t argCount, const char * args, const char * helpInfo, CommandParser * delegate)
 {
 	return ::new (static_cast<void *>(pThis)) CommandParser(command, argCount, args, helpInfo, delegate);
 }
 
-static CommandParser * __fastcall utinni_commandParserCtor2(CommandParser * pThis, int /*edx*/,
+static CommandParser * __fastcall engine_commandParserCtor2(CommandParser * pThis, int /*edx*/,
 	const CommandParser::CmdInfo & commandData, CommandParser * delegate)
 {
 	return ::new (static_cast<void *>(pThis)) CommandParser(commandData, delegate);
@@ -214,7 +214,7 @@ static CommandParser * __fastcall utinni_commandParserCtor2(CommandParser * pThi
 // only) so `this` needs no most-derived adjustment.
 // UTINNI-SIDE TYPEDEF TO MATCH: bool(__thiscall*)(CuiConsoleHelper*, const Unicode::String&).
 // ----------------------------------------------------------------------
-static bool __fastcall utinni_consoleHelperSendInput(CuiConsoleHelper * pThis, int /*edx*/,
+static bool __fastcall engine_consoleHelperSendInput(CuiConsoleHelper * pThis, int /*edx*/,
 	const Unicode::String & istr)
 {
 	return pThis->processInput(istr, CuiConsoleHelper::getRecurseStackForCommandBeingParsed());
@@ -232,21 +232,21 @@ static bool __fastcall utinni_consoleHelperSendInput(CuiConsoleHelper * pThis, i
 //
 // These three target PUBLIC GroundScene methods, so they can be named directly
 // here (the four PRIVATE methods are reached via the GroundScene.cpp forwarders
-// declared in utinni_groundScene_forward.h -- a free thunk in this TU cannot
+// declared in engine_groundScene_forward.h -- a free thunk in this TU cannot
 // name a private member, C2248).
 // ----------------------------------------------------------------------
-static void __fastcall utinni_groundSceneReloadTerrain(GroundScene * pThis, int /*edx*/)
+static void __fastcall engine_groundSceneReloadTerrain(GroundScene * pThis, int /*edx*/)
 {
 	pThis->reloadTerrain();                                          // public [GroundScene.h:215]
 }
 
-static void __fastcall utinni_groundSceneChangeCamera(GroundScene * pThis, int /*edx*/,
+static void __fastcall engine_groundSceneChangeCamera(GroundScene * pThis, int /*edx*/,
 	int newView, float value)
 {
 	pThis->setView(newView, value);                                 // public [GroundScene.h:207] (contract name changeCamera -> ours setView)
 }
 
-static GameCamera * __fastcall utinni_groundSceneGetCurrentCamera(GroundScene * pThis, int /*edx*/)
+static GameCamera * __fastcall engine_groundSceneGetCurrentCamera(GroundScene * pThis, int /*edx*/)
 {
 	return pThis->getCurrentCamera();                               // public, non-const this -> non-const overload, no cast [GroundScene.h:212]
 }
@@ -256,7 +256,7 @@ static GameCamera * __fastcall utinni_groundSceneGetCurrentCamera(GroundScene * 
 // most-derived pointer; ::new(pThis) constructs the full object via the
 // (const char*, const char*, CreatureObject*) overload [GroundScene.h:199] -- NOT
 // the (const char*, const NetworkId&, ...) overload at :200.
-static GroundScene * __fastcall utinni_groundSceneCtor(GroundScene * pThis, int /*edx*/,
+static GroundScene * __fastcall engine_groundSceneCtor(GroundScene * pThis, int /*edx*/,
 	const char * terrainFilename, const char * playerFilename, CreatureObject * customizedPlayer)
 {
 	return ::new (static_cast<void *>(pThis)) GroundScene(terrainFilename, playerFilename, customizedPlayer);
@@ -281,7 +281,7 @@ static GroundScene * __fastcall utinni_groundSceneCtor(GroundScene * pThis, int 
 // applies the correct this-adjustment; a raw reinterpret to Scene* would pass the wrong
 // subobject. __cdecl(void*) matches Utinni's swg::game::setupScene typedef void(__cdecl*)(GroundScene*).
 // ----------------------------------------------------------------------
-static void __cdecl utinni_gameSetupScene(void * groundScene)
+static void __cdecl engine_gameSetupScene(void * groundScene)
 {
 	Game::_setScene(static_cast<Scene *>(reinterpret_cast<GroundScene *>(groundScene)));
 }
@@ -306,7 +306,7 @@ static void __cdecl utinni_gameSetupScene(void * groundScene)
 // single-player path; matches SwgCuiLocations / SwgCuiCommandParserScene which pass 0).
 // REQUIREMENT: playerFilename must be a loadable object template or the ctor FATALs (GroundScene.cpp:942).
 // ----------------------------------------------------------------------
-static void __cdecl utinni_gameLoadScene(const char * terrainFilename, const char * playerFilename)
+static void __cdecl engine_gameLoadScene(const char * terrainFilename, const char * playerFilename)
 {
 	// SINGLE-PLAYER (2026-06-25 loading-screen-stuck consult, Option A): the advertised editor client
 	// has NO connection, so the server-driven PlayerObject (ghost) never arrives. GroundScene's
@@ -337,7 +337,7 @@ static void __cdecl utinni_gameLoadScene(const char * terrainFilename, const cha
 //     so pmfRealEntry returns the real body the engine detours). A call-through thunk would
 //     be SILENTLY DEAD for a detour (the engine calls the real method, not the thunk) --
 //     the Utinni review finding (2026-06-22-utinni-detour-vs-call-followup.md). The two
-//     38-03 call-through chat thunks (utinni_chatWindowAcceptTextInput / ...PerformEnterKey)
+//     38-03 call-through chat thunks (engine_chatWindowAcceptTextInput / ...PerformEnterKey)
 //     are therefore REMOVED here (38-05) -- they had no other referencer.
 //
 // The contract names are the SPEC names (enableTextInput/writeToAllTabs/writeToCurrentTab/
@@ -345,13 +345,13 @@ static void __cdecl utinni_gameLoadScene(const char * terrainFilename, const cha
 // appendToAllTabs/appendTextToCurrentTab/performEnterKey) -- the NAME MISMATCH is baked
 // into each row comment, the contract names stay.
 // ----------------------------------------------------------------------
-static void __fastcall utinni_chatWindowAppendToAllTabs(SwgCuiChatWindow * pThis, int /*edx*/,
+static void __fastcall engine_chatWindowAppendToAllTabs(SwgCuiChatWindow * pThis, int /*edx*/,
 	const Unicode::String & str)
 {
 	pThis->appendToAllTabs(str);                                    // public [SwgCuiChatWindow.h:172] (contract writeToAllTabs -> ours appendToAllTabs)
 }
 
-static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow * pThis, int /*edx*/,
+static void __fastcall engine_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow * pThis, int /*edx*/,
 	const Unicode::String & str)
 {
 	pThis->appendTextToCurrentTab(str);                             // public [SwgCuiChatWindow.h:174] (contract writeToCurrentTab -> ours appendTextToCurrentTab)
@@ -370,7 +370,7 @@ static void __fastcall utinni_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 // (no adjustment). PUBLIC method -> named directly (no friend). Consumer typedef:
 //   Object*(__thiscall*)(SwgCuiHud*)
 // ----------------------------------------------------------------------
-static Object * __fastcall utinni_hudGetLastSelectedObject(SwgCuiHud * pThis, int /*edx*/)
+static Object * __fastcall engine_hudGetLastSelectedObject(SwgCuiHud * pThis, int /*edx*/)
 {
 	return pThis->getLastSelectedObject();                          // public const [SwgCuiHud.h:95]
 }
@@ -385,14 +385,14 @@ static Object * __fastcall utinni_hudGetLastSelectedObject(SwgCuiHud * pThis, in
 // __fastcall(pThis /*ECX*/, int /*EDX*/) == __thiscall, MSVC v145 forbids __thiscall on a
 // free function, C3865). The two messageQueue read-side rows are flat-class PMFs (dyn[]),
 // and groundScene::getDebugPortalCameraMessageQueue is a friend forwarder (GroundScene.cpp,
-// private member) declared in utinni_groundScene_forward.h.
+// private member) declared in engine_groundScene_forward.h.
 // ----------------------------------------------------------------------
 
 // groundScene::isFreeCameraActive -- replaces the consumer's currentView field read.
 // getCurrentView() is PUBLIC [GroundScene.h:207] so no friend is needed; CI_debugPortal is the
 // PUBLIC CameraIds enumerator [GroundScene.h:84-95] == 5 == consumer cm_Free. Consumer typedef:
 //   bool(__thiscall*)(GroundScene*)
-static bool __fastcall utinni_groundSceneIsFreeCameraActive(GroundScene * pThis, int /*edx*/)
+static bool __fastcall engine_groundSceneIsFreeCameraActive(GroundScene * pThis, int /*edx*/)
 {
 	return pThis->getCurrentView() == GroundScene::CI_debugPortal;  // cm_Free (5) == CI_debugPortal
 }
@@ -405,7 +405,7 @@ static bool __fastcall utinni_groundSceneIsFreeCameraActive(GroundScene * pThis,
 // While free-cam is active this aliases groundScene::getDebugPortalCameraMessageQueue. Cameras are
 // single-inheritance, so the GameCamera* (from the already-advertised getCurrentCamera) needs no
 // adjustment. Consumer typedef: MessageQueue*(__thiscall*)(GameCamera*)
-static MessageQueue * __fastcall utinni_gameCameraGetMessageQueue(GameCamera * pThis, int /*edx*/)
+static MessageQueue * __fastcall engine_gameCameraGetMessageQueue(GameCamera * pThis, int /*edx*/)
 {
 	Controller * const c = pThis->getController();                  // non-const this -> non-const overload [Object.h:190]
 	return c ? c->getMessageQueue() : 0;                            // [Controller.h:67]
@@ -414,7 +414,7 @@ static MessageQueue * __fastcall utinni_gameCameraGetMessageQueue(GameCamera * p
 // object::isActive -- Object::isActive() is NON-VIRTUAL but INLINE [Object.h:158 decl / :1328 def],
 // so &Object::isActive has NO ODR-emitted address (the g_mainLoopCounter inline-accessor Pitfall).
 // A CALLED external-linkage shim supplies the address. Consumer typedef: bool(__thiscall*)(const Object*)
-static bool __fastcall utinni_objectIsActive(const Object * pThis, int /*edx*/)
+static bool __fastcall engine_objectIsActive(const Object * pThis, int /*edx*/)
 {
 	return pThis->isActive();                                       // public inline [Object.h:1328]
 }
@@ -430,7 +430,7 @@ static bool __fastcall utinni_objectIsActive(const Object * pThis, int /*edx*/)
 static EngineHookPoint s_engineHookPoints[] =
 {
 	// -- config (sharedFoundation, all static; ConfigFile.h) -------------------
-	{ "config::loadOverrideConfig",   (void *)&utinni_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
+	{ "config::loadOverrideConfig",   (void *)&engine_loadOverrideConfig },        // EPA-02 crash-fixer thunk (installConfigFileOverride, not the buffer-loader)
 	{ "config::loadConfigFileBuffer", (void *)&ConfigFile::loadFromBuffer },       // static bool loadFromBuffer(char const*,int) [ConfigFile.h:136]
 	{ "config::loadConfigFileString", (void *)&ConfigFile::loadFile },             // static bool loadFile(char const*) [ConfigFile.h:135] (MISMATCH: spec "loadFromString" -> ours is loadFile)
 	{ "config::setModalChat",         (void *)&CuiPreferences::setModalChat },     // 38-02 (37-02 CORRECTION): plain &fn -- a PUBLIC CuiPreferences static, NOT config/ConfigFile [CuiPreferences.h:95, def CuiPreferences.cpp:1267]; contract name stays config::setModalChat
@@ -438,16 +438,16 @@ static EngineHookPoint s_engineHookPoints[] =
 
 	// -- client (exe entry + win32 exe-statics; ClientMain.h / Os.cpp / DebugHelp.cpp) --
 	{ "client::clientMain",           (void *)&ClientMain },                       // int ClientMain(HINSTANCE,HINSTANCE,LPSTR,int) __cdecl [ClientMain.h:13]
-	{ "client::wndProc",              (void *)&utinni_osWindowProc },              // 38-02: external __stdcall/CALLBACK shim in Os.cpp over the PRIVATE Os::WindowProc [Os.h:138] (friend-granted member access); CALLBACK preserved
-	{ "client::writeMiniDump",        (void *)&utinni_writeMiniDump },             // 38-02: external shim in DebugHelp.cpp over DebugHelp::writeMiniDump [DebugHelp.h:36] (win32-private header not on the exe include path)
+	{ "client::wndProc",              (void *)&engine_osWindowProc },              // 38-02: external __stdcall/CALLBACK shim in Os.cpp over the PRIVATE Os::WindowProc [Os.h:138] (friend-granted member access); CALLBACK preserved
+	{ "client::writeMiniDump",        (void *)&engine_writeMiniDump },             // 38-02: external shim in DebugHelp.cpp over DebugHelp::writeMiniDump [DebugHelp.h:36] (win32-private header not on the exe include path)
 	// OMIT (38-02, D-04 / Pitfall 5): client::writeCrashLog + client::setupStartDataInstall are NONEXISTENT in this tree (grep = 0 source hits). The crash .txt is written INLINE by SetupSharedFoundation's exception handler [SetupSharedFoundation.cpp:92 sprintf] -- no named writeCrashLog function; setupStartDataInstall is a SWGEmu Pre-CU concept with no from-source twin. NOT advertised (never guessed); FLAGGED for the EPA-08 handback.
 
 	// -- game (clientGame, all static; Game.h) ---------------------------------
 	{ "game::install",                (void *)&Game::install },                    // static void install(Application) [Game.h:94]
 	{ "game::quit",                   (void *)&Game::quit },                       // static void quit() [Game.h:98]
 	{ "game::mainLoop",               (void *)&Game::runGameLoopOnce },            // 24-4a RE-POINT (was &Game::run): Game::run [Game.h:96] is the OUTER once-per-process loop (`while(!isOver()) runGameLoopOnce(false,NULL,0,0)` Game.cpp:1029); the PER-FRAME tick is static void runGameLoopOnce(bool presentToWindow,HWND,int width,int height) [Game.h:103/Game.cpp:1059] -- EXACT __cdecl signature match to Utinni hkMainLoop. (Game::run available as a separate row on request.)
-	{ "game::setupScene",             (void *)&utinni_gameSetupScene },             // 2026-06-25 RE-MAP (was the strings-overload &Game::setScene): __cdecl(void*) thunk over Game::_setScene(Scene*) -- the editor's build-then-set path passes a groundScene::ctor GroundScene*, NOT filenames; the old overload crashed (0xC0000005 in GroundScene::GroundScene). Same name -> address re-map only, no version bump.
-	{ "game::loadScene",              (void *)&utinni_gameLoadScene },             // CONSULT 2026-06-25 NAME ADD: __cdecl(const char* terrain, const char* player) FULL scene-load via the SceneCreator lifecycle -> Game::setScene(true, terrain, player, nullptr). The editor passes FILENAMES (not a pre-built GroundScene); fixes the half-integrated-scene next-frame throw that setupScene/_setScene(Scene*) leaves. immediately=true + customizedPlayer=nullptr mirror the engine's own by-name loaders (SwgCuiSceneSelection/Locations/CommandParserScene).
+	{ "game::setupScene",             (void *)&engine_gameSetupScene },             // 2026-06-25 RE-MAP (was the strings-overload &Game::setScene): __cdecl(void*) thunk over Game::_setScene(Scene*) -- the editor's build-then-set path passes a groundScene::ctor GroundScene*, NOT filenames; the old overload crashed (0xC0000005 in GroundScene::GroundScene). Same name -> address re-map only, no version bump.
+	{ "game::loadScene",              (void *)&engine_gameLoadScene },             // CONSULT 2026-06-25 NAME ADD: __cdecl(const char* terrain, const char* player) FULL scene-load via the SceneCreator lifecycle -> Game::setScene(true, terrain, player, nullptr). The editor passes FILENAMES (not a pre-built GroundScene); fixes the half-integrated-scene next-frame throw that setupScene/_setScene(Scene*) leaves. immediately=true + customizedPlayer=nullptr mirror the engine's own by-name loaders (SwgCuiSceneSelection/Locations/CommandParserScene).
 	{ "game::cleanupScene",           (void *)&Game::cleanupScene },               // static void cleanupScene() [Game.h:101]
 	{ "game::getPlayer",              (void *)&Game::getPlayer },                  // static Object* getPlayer() [Game.h:150]
 	{ "game::getPlayerCreatureObject",(void *)&Game::getPlayerCreature },          // static CreatureObject* getPlayerCreature() [Game.h:157] (MISMATCH name)
@@ -481,14 +481,14 @@ static EngineHookPoint s_engineHookPoints[] =
 	// so NONE of these use pmfToVoid(&GroundScene::member) (would trip the C2338
 	// sizeof guard). 3 PUBLIC methods + 1 ctor are __fastcall thunks defined above;
 	// the 4 PRIVATE methods are __fastcall forwarders defined in GroundScene.cpp
-	// (member access) and declared in utinni_groundScene_forward.h.
-	{ "groundScene::ctor",                 (void *)&utinni_groundSceneCtor },                    // placement-new MI ctor thunk -> GroundScene(const char*,const char*,CreatureObject*) [GroundScene.h:199] (NOT the NetworkId overload :200)
-	{ "groundScene::init",                 (void *)&utinni_groundSceneInit },                    // PRIVATE [GroundScene.h:173] -> in-TU GroundScene.cpp forwarder (member access)
-	{ "groundScene::reloadTerrain",        (void *)&utinni_groundSceneReloadTerrain },           // public [GroundScene.h:215] -> MI __fastcall thunk
-	{ "groundScene::changeCamera",         (void *)&utinni_groundSceneChangeCamera },            // public [GroundScene.h:207] MISMATCH: ours setView(int,float) -> MI __fastcall thunk
-	{ "groundScene::getCurrentCamera",     (void *)&utinni_groundSceneGetCurrentCamera },        // public [GroundScene.h:212] (non-const overload; const sibling :213) -> MI __fastcall thunk
+	// (member access) and declared in engine_groundScene_forward.h.
+	{ "groundScene::ctor",                 (void *)&engine_groundSceneCtor },                    // placement-new MI ctor thunk -> GroundScene(const char*,const char*,CreatureObject*) [GroundScene.h:199] (NOT the NetworkId overload :200)
+	{ "groundScene::init",                 (void *)&engine_groundSceneInit },                    // PRIVATE [GroundScene.h:173] -> in-TU GroundScene.cpp forwarder (member access)
+	{ "groundScene::reloadTerrain",        (void *)&engine_groundSceneReloadTerrain },           // public [GroundScene.h:215] -> MI __fastcall thunk
+	{ "groundScene::changeCamera",         (void *)&engine_groundSceneChangeCamera },            // public [GroundScene.h:207] MISMATCH: ours setView(int,float) -> MI __fastcall thunk
+	{ "groundScene::getCurrentCamera",     (void *)&engine_groundSceneGetCurrentCamera },        // public [GroundScene.h:212] (non-const overload; const sibling :213) -> MI __fastcall thunk
 	{ "groundScene::update", 0 },               // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::update(float) [GroundScene.h:103]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
-	{ "groundScene::handleInputMapUpdate", (void *)&utinni_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder (CALLED/unused row -- forwarder is correct here, NOT detoured)
+	{ "groundScene::handleInputMapUpdate", (void *)&engine_groundSceneHandleInputMapUpdate },    // PRIVATE [GroundScene.h:170] -> in-TU GroundScene.cpp forwarder (CALLED/unused row -- forwarder is correct here, NOT detoured)
 	{ "groundScene::handleInputMapEvent", 0 },  // REAL ENTRY (detoured by Utinni; delta==0 verified) -- 38-05. PRIVATE GroundScene::handleInputMapEvent(IoEvent*) [GroundScene.h:194]; real-entry accessor in GroundScene.cpp (was a call-through forwarder -> silently dead for a detour)
 	// SKIP: groundScene::draw -- VIRTUAL [GroundScene.h:204] (also in the VIRTUAL SKIPS block); Utinni resolves off the live vtable. Not advertised.
 	// OMIT: groundScene::g_instance -- no dedicated GroundScene singleton; reached via INLINE Game::getScene() [Game.h:306] (no ODR address) cast to GroundScene, and Game::ms_scene is private [Game.h:271]. OMITTED (graceful degradation); FLAGGED for the EPA-08 handback -- if Utinni's groundScene editor strictly needs the raw singleton pointer, add a non-inline Game accessor in a follow-up.
@@ -501,10 +501,10 @@ static EngineHookPoint s_engineHookPoints[] =
 	// they are reached directly by the __fastcall thunks defined above (no friend decl).
 	// Contract names are the SPEC names; the in-tree method NAME MISMATCH is in each comment.
 	{ "cuiChatWindow::enableTextInput", 0 },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
-	{ "cuiChatWindow::writeToAllTabs",    (void *)&utinni_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
-	{ "cuiChatWindow::writeToCurrentTab", (void *)&utinni_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
+	{ "cuiChatWindow::writeToAllTabs",    (void *)&engine_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
+	{ "cuiChatWindow::writeToCurrentTab", (void *)&engine_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
 	{ "cuiChatWindow::chatEnterHandler", 0 },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
-	{ "cuiChatWindow::createNewWindow", 0 },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (utinni_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
+	{ "cuiChatWindow::createNewWindow", 0 },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (engine_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
 
 	// -- cui::manager (clientUserInterface, all static; CuiManager.h) -----------
 	{ "cuiManager::render",           (void *)&CuiManager::render },               // static void render() [CuiManager.h:88]
@@ -522,7 +522,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "cuiIo::g_instance",            (void *)&CuiManager::getIoWin },             // ACCESSOR: the CuiIoWin singleton accessor (CuiManager owns ms_theIoWin) [CuiManager.h:100]
 
 	// -- consoleHelper (clientUserInterface; CuiConsoleHelper.h) ----------------
-	{ "consoleHelper::sendInput",     (void *)&utinni_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent)
+	{ "consoleHelper::sendInput",     (void *)&engine_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent)
 
 	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
 	{ "commandParser::addSubCommand", 0 },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
@@ -589,8 +589,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "report::print",                (void *)&Report::puts },                     // static void puts(const char*) [Report.h:41] (spec "Report::print" -> ours puts; printf is variadic)
 
 	// -- commandParser ctors (free-function __thiscall thunks; NEVER &Class::Class) --
-	{ "commandParser::ctor1",         (void *)&utinni_commandParserCtor1 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const char*,size_t,const char*,const char*,CommandParser*) [CommandParser.h:130] (matches UtinniCore pCtor1)
-	{ "commandParser::ctor2",         (void *)&utinni_commandParserCtor2 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const CmdInfo&,CommandParser*) [CommandParser.h:128] (matches UtinniCore pCtor2)
+	{ "commandParser::ctor1",         (void *)&engine_commandParserCtor1 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const char*,size_t,const char*,const char*,CommandParser*) [CommandParser.h:130] (matches UtinniCore pCtor1)
+	{ "commandParser::ctor2",         (void *)&engine_commandParserCtor2 },        // __fastcall(pThis,edx,..)==__thiscall thunk -> CommandParser(const CmdInfo&,CommandParser*) [CommandParser.h:128] (matches UtinniCore pCtor2)
 
 	// ======================================================================
 	// VIRTUAL SKIPS (37-03) -- advertised as NOTHING. &fn on a virtual yields a
@@ -651,9 +651,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "bloom::preSceneRender",  (void *)&Bloom::preSceneRender },  // static void preSceneRender()  [Bloom.h:25] -- constant &fn
 	{ "bloom::postSceneRender", (void *)&Bloom::postSceneRender }, // static void postSceneRender() [Bloom.h:26] -- constant &fn
 	// -- particlePreview (Utinni cooperative retrigger; ClientEffectManager.cpp friend) --
-	{ "particlePreview::retrigger", (void *)&utinni_retriggerClientEffect }, // 24-§2.B-ii: friend free fn over the PRIVATE m_particleSystems -> enumerate + ParticleEffectAppearance::restart() matching live particle instances (+ a balanced AppearanceTemplateList::fetch refresh). __cdecl(const char*) -> constant &fn (NOT a dyn[] row). Game-thread, once-per-save, allocation-free.
+	{ "particlePreview::retrigger", (void *)&engine_retriggerClientEffect }, // 24-§2.B-ii: friend free fn over the PRIVATE m_particleSystems -> enumerate + ParticleEffectAppearance::restart() matching live particle instances (+ a balanced AppearanceTemplateList::fetch refresh). __cdecl(const char*) -> constant &fn (NOT a dyn[] row). Game-thread, once-per-save, allocation-free.
 	// -- particlePreview B-2 (Utinni cooperative re-PLAY; ClientEffectManager.cpp free fn, public APIs only) --
-	{ "particlePreview::replayClientEffect", (void *)&utinni_replayClientEffect }, // B-2 (v7->v8): re-plays a .cef FRESH on Game::getPlayer() via the public ClientEffectManager::playClientEffect (transient muzzle/hit/explosion case -- restart() above only covers sustained live instances). A not-currently-cached .cef is a guaranteed cache-MISS -> ClientEffectTemplateList::fetch reloads it from disk + re-fetches referenced .prt/appearance/sound templates -> edit visible. __cdecl(const char*)->bool -> constant &fn (NOT a dyn[] row; not a friend -- public APIs only). Game-thread, once-per-preview, allocation-free. false (no crash) if no player/scene.
+	{ "particlePreview::replayClientEffect", (void *)&engine_replayClientEffect }, // B-2 (v7->v8): re-plays a .cef FRESH on Game::getPlayer() via the public ClientEffectManager::playClientEffect (transient muzzle/hit/explosion case -- restart() above only covers sustained live instances). A not-currently-cached .cef is a guaranteed cache-MISS -> ClientEffectTemplateList::fetch reloads it from disk + re-fetches referenced .prt/appearance/sound templates -> edit visible. __cdecl(const char*)->bool -> constant &fn (NOT a dyn[] row; not a friend -- public APIs only). Game-thread, once-per-preview, allocation-free. false (no crash) if no player/scene.
 
 	// ======================================================================
 	// BUCKET A (2026-06-28) -- per-editor real-entry detour rows (ledger §2.A). v8 -> v9.
@@ -672,7 +672,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "messageQueue::appendMessageData", 0 },   // MISMATCH name: no appendMessageData exists; maps to the DATA overload appendMessage(int,float,Data*,uint32) [MessageQueue.h:52], flat class -> pmfToVoid. dyn[] below. INPUT-path diag.
 
 	// -- Bucket A-2 (2026-06-28): world-pick / HUD-target (closes the §2.A getTarget gap) --
-	{ "cuiHud::getTarget",  (void *)&utinni_hudGetLastSelectedObject },           // MISMATCH name + REAL ENTRY of SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (m_lastSelectedObject = world-picked object). SwgCuiHud is MI -> __fastcall call-through thunk (CALLED row -- consumer READS the pick on the live hud). Supersedes the Bucket A OMIT. World-object pick.
+	{ "cuiHud::getTarget",  (void *)&engine_hudGetLastSelectedObject },           // MISMATCH name + REAL ENTRY of SwgCuiHud::getLastSelectedObject() const [SwgCuiHud.h:95] (m_lastSelectedObject = world-picked object). SwgCuiHud is MI -> __fastcall call-through thunk (CALLED row -- consumer READS the pick on the live hud). Supersedes the Bucket A OMIT. World-object pick.
 	{ "cuiHud::g_instance", (void *)&SwgCuiHudFactory::findMediatorForCurrentHud }, // ACCESSOR: static SwgCuiHud* findMediatorForCurrentHud() [SwgCuiHudFactory.h:24] -- resolves the LIVE ground/space hud (concrete HudGround/HudSpace, both : SwgCuiHud). The instance the consumer calls cuiHud::getTarget on (mirrors cuiIo::g_instance -> CuiManager::getIoWin). constant &fn.
 
 	// -- Bucket A-3 (2026-06-28): network id->Object resolver (unblocks the creatureObject::setTarget callback) --
@@ -684,10 +684,10 @@ static EngineHookPoint s_engineHookPoints[] =
 	// Consumer "free camera" == OUR DebugPortalCamera (cm_Free 5 == CI_debugPortal). NONE detoured.
 	// ----------------------------------------------------------------------
 	// -- constant &thunk / &fn rows (no dyn[] needed) --
-	{ "groundScene::isFreeCameraActive",               (void *)&utinni_groundSceneIsFreeCameraActive },               // __fastcall thunk: getCurrentView()==CI_debugPortal (==5==consumer cm_Free) [GroundScene.h:84-95,207]. Replaces the currentView field read.
-	{ "groundScene::getDebugPortalCameraMessageQueue", (void *)&utinni_groundSceneGetDebugPortalCameraMessageQueue },  // friend forwarder (GroundScene.cpp): m_debugPortalCameraInputMap->getMessageQueue() [GroundScene.h:111] -- the MQ the consumer read at the hardcoded InputMap+0xC. __fastcall == __thiscall.
-	{ "gameCamera::getMessageQueue",                   (void *)&utinni_gameCameraGetMessageQueue },                   // __fastcall thunk: getController()->getMessageQueue() [Object.h:190 / Controller.h:67] -- the camera's movement MQ (was GameCamera+0x248). ALIASES the debugPortal MQ while free-cam active (init wires camera->setMessageQueue(inputMap->getMessageQueue()), GroundScene.cpp:803).
-	{ "object::isActive",                              (void *)&utinni_objectIsActive },                             // external-linkage __fastcall shim: Object::isActive() is NON-virtual but INLINE [Object.h:158/1328] -> no PMF address. CALLED. Consumer typedef bool(__thiscall*)(const Object*).
+	{ "groundScene::isFreeCameraActive",               (void *)&engine_groundSceneIsFreeCameraActive },               // __fastcall thunk: getCurrentView()==CI_debugPortal (==5==consumer cm_Free) [GroundScene.h:84-95,207]. Replaces the currentView field read.
+	{ "groundScene::getDebugPortalCameraMessageQueue", (void *)&engine_groundSceneGetDebugPortalCameraMessageQueue },  // friend forwarder (GroundScene.cpp): m_debugPortalCameraInputMap->getMessageQueue() [GroundScene.h:111] -- the MQ the consumer read at the hardcoded InputMap+0xC. __fastcall == __thiscall.
+	{ "gameCamera::getMessageQueue",                   (void *)&engine_gameCameraGetMessageQueue },                   // __fastcall thunk: getController()->getMessageQueue() [Object.h:190 / Controller.h:67] -- the camera's movement MQ (was GameCamera+0x248). ALIASES the debugPortal MQ while free-cam active (init wires camera->setMessageQueue(inputMap->getMessageQueue()), GroundScene.cpp:803).
+	{ "object::isActive",                              (void *)&engine_objectIsActive },                             // external-linkage __fastcall shim: Object::isActive() is NON-virtual but INLINE [Object.h:158/1328] -> no PMF address. CALLED. Consumer typedef bool(__thiscall*)(const Object*).
 	// -- read-side messageQueue PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "messageQueue::getCount",   0 },          // MISMATCH name: no MessageQueue::getCount exists; the real entry is int getNumberOfMessages() const [MessageQueue.h:42]. Flat single-inheritance class -> pmfToVoid (4-byte PMF == real entry); non-overloaded. dyn[] below. (appendMessage is already advertised; this is the read-COUNT side.)
 	{ "messageQueue::getMessage", 0 },          // the 4-arg READ overload getMessage(int index,int* message,float* value,uint32* flags=0) const [MessageQueue.h:43] -- EXACTLY the consumer's requested (i,outType,outValue,outFlags) signature (they pass nullptr for flags). Overloaded with the Data** variant [:44] -> static_cast to disambiguate. Flat class -> pmfToVoid. dyn[] below. (The consumer's stale io_win.h declares a 3-arg wrapper; their paired wave aligns it to this 4-arg real entry.)
@@ -759,7 +759,7 @@ static const char * const s_requiredNames[] =
 // returns false / logs on ANY of: a null addr, a duplicate name, OR a name-set
 // mismatch vs s_requiredNames[] (every required name present exactly once and
 // no extras -- the zero-missing check the count static_assert cannot provide).
-static bool utinni_strEq(const char * a, const char * b)
+static bool engine_strEq(const char * a, const char * b)
 {
 	if (a == b)
 		return true;
@@ -804,11 +804,11 @@ static void ensureDynamicRowsFilled()
 	struct DynRow { const char * name; void * addr; };
 	const DynRow dyn[] =
 	{
-		{ "groundScene::update",                     utinni_groundSceneUpdateRealEntry() },
-		{ "groundScene::handleInputMapEvent",        utinni_groundSceneHandleInputMapEventRealEntry() },
+		{ "groundScene::update",                     engine_groundSceneUpdateRealEntry() },
+		{ "groundScene::handleInputMapEvent",        engine_groundSceneHandleInputMapEventRealEntry() },
 		{ "cuiChatWindow::enableTextInput",          pmfRealEntry(&SwgCuiChatWindow::acceptTextInput) },
 		{ "cuiChatWindow::chatEnterHandler",         pmfRealEntry(&SwgCuiChatWindow::performEnterKey) },
-		{ "cuiChatWindow::createNewWindow",          utinni_chatWindowCreateNewWindowEntry() },
+		{ "cuiChatWindow::createNewWindow",          engine_chatWindowCreateNewWindowEntry() },
 		{ "cuiIo::setKeyboardInputActive",           pmfToVoid(&CuiIoWin::setKeyboardInputActive) },
 		{ "cuiIo::requestKeyboard",                  pmfToVoid(&CuiIoWin::requestKeyboard) },
 		{ "commandParser::addSubCommand",            pmfToVoid(&CommandParser::addSubCommand) },
@@ -841,7 +841,7 @@ static void ensureDynamicRowsFilled()
 		// creatureObject::setTarget -> setLookAtTarget (MISMATCH name). CreatureObject is MI (TangibleObject : ClientObject,
 		// CallbackReceiver) -> inflated PMF -> real entry via the CreatureObject.cpp accessor (delta==0 gated inside). The exe
 		// TU cannot include CreatureObject.h (sharedSkillSystem not on its path), so the address provider lives in the class's TU.
-		{ "creatureObject::setTarget",         utinni_creatureSetTargetRealEntry() },
+		{ "creatureObject::setTarget",         engine_creatureSetTargetRealEntry() },
 		// messageQueue::appendMessage[Data] -- MessageQueue is a flat single-inheritance class -> pmfToVoid (4-byte PMF == real entry); overloaded -> static_cast to disambiguate.
 		{ "messageQueue::appendMessage",       pmfToVoid(static_cast<void (MessageQueue::*)(int, float, uint32)>(&MessageQueue::appendMessage)) },
 		{ "messageQueue::appendMessageData",   pmfToVoid(static_cast<void (MessageQueue::*)(int, float, MessageQueue::Data *, uint32)>(&MessageQueue::appendMessage)) },
@@ -854,7 +854,7 @@ static void ensureDynamicRowsFilled()
 	const unsigned int rowCount = (unsigned int)(sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]);
 	for (unsigned int d = 0; d < dynCount; ++d)
 		for (unsigned int i = 0; i < rowCount; ++i)
-			if (utinni_strEq(s_engineHookPoints[i].name, dyn[d].name))
+			if (engine_strEq(s_engineHookPoints[i].name, dyn[d].name))
 			{
 				s_engineHookPoints[i].addr = dyn[d].addr;
 				break;
@@ -863,7 +863,7 @@ static void ensureDynamicRowsFilled()
 	s_filled = true;
 }
 
-bool utinni_verifyNoNullNoDup()
+bool engine_verifyNoNullNoDup()
 {
 	ensureDynamicRowsFilled();   // complete the call-rows before checking (verify runs at static-init, after the consumer's early read)
 
@@ -875,7 +875,7 @@ bool utinni_verifyNoNullNoDup()
 	{
 		if (s_engineHookPoints[i].addr == 0)
 		{
-			REPORT_LOG(true, ("utinni_verifyNoNullNoDup: NULL addr for '%s'\n",
+			REPORT_LOG(true, ("engine_verifyNoNullNoDup: NULL addr for '%s'\n",
 				s_engineHookPoints[i].name ? s_engineHookPoints[i].name : "(null)"));
 			ok = false;
 		}
@@ -886,9 +886,9 @@ bool utinni_verifyNoNullNoDup()
 	{
 		for (unsigned int j = i + 1; j < count; ++j)
 		{
-			if (utinni_strEq(s_engineHookPoints[i].name, s_engineHookPoints[j].name))
+			if (engine_strEq(s_engineHookPoints[i].name, s_engineHookPoints[j].name))
 			{
-				REPORT_LOG(true, ("utinni_verifyNoNullNoDup: DUPLICATE name '%s'\n",
+				REPORT_LOG(true, ("engine_verifyNoNullNoDup: DUPLICATE name '%s'\n",
 					s_engineHookPoints[i].name ? s_engineHookPoints[i].name : "(null)"));
 				ok = false;
 			}
@@ -903,12 +903,12 @@ bool utinni_verifyNoNullNoDup()
 		unsigned int hits = 0;
 		for (unsigned int i = 0; i < count; ++i)
 		{
-			if (utinni_strEq(s_requiredNames[r], s_engineHookPoints[i].name))
+			if (engine_strEq(s_requiredNames[r], s_engineHookPoints[i].name))
 				++hits;
 		}
 		if (hits != 1)
 		{
-			REPORT_LOG(true, ("utinni_verifyNoNullNoDup: required name '%s' present %u times (expected 1)\n",
+			REPORT_LOG(true, ("engine_verifyNoNullNoDup: required name '%s' present %u times (expected 1)\n",
 				s_requiredNames[r], hits));
 			ok = false;
 		}
@@ -920,7 +920,7 @@ bool utinni_verifyNoNullNoDup()
 		bool found = false;
 		for (unsigned int r = 0; r < requiredCount; ++r)
 		{
-			if (utinni_strEq(s_engineHookPoints[i].name, s_requiredNames[r]))
+			if (engine_strEq(s_engineHookPoints[i].name, s_requiredNames[r]))
 			{
 				found = true;
 				break;
@@ -928,13 +928,13 @@ bool utinni_verifyNoNullNoDup()
 		}
 		if (!found)
 		{
-			REPORT_LOG(true, ("utinni_verifyNoNullNoDup: table name '%s' not in required set\n",
+			REPORT_LOG(true, ("engine_verifyNoNullNoDup: table name '%s' not in required set\n",
 				s_engineHookPoints[i].name ? s_engineHookPoints[i].name : "(null)"));
 			ok = false;
 		}
 	}
 
-	REPORT_LOG(true, ("utinni_verifyNoNullNoDup: %s (%u rows, %u required)\n",
+	REPORT_LOG(true, ("engine_verifyNoNullNoDup: %s (%u rows, %u required)\n",
 		ok ? "PASS" : "FAIL", count, requiredCount));
 	return ok;
 }

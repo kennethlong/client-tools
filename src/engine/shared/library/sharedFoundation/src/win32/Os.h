@@ -145,7 +145,7 @@ private:
 	// layout is byte-identical and no gl0X plugin cascade). Win32-only, matching
 	// the shim's #if !defined(_WIN64) guard.
 #if !defined(_WIN64)
-	friend LRESULT CALLBACK utinni_osWindowProc(HWND, UINT, WPARAM, LPARAM);
+	friend LRESULT CALLBACK engine_osWindowProc(HWND, UINT, WPARAM, LPARAM);
 #endif
 
 private:

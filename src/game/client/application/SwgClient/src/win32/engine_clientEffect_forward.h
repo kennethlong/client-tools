@@ -1,6 +1,6 @@
 // ======================================================================
 //
-// utinni_clientEffect_forward.h -- exe-local declaration for the Utinni
+// engine_clientEffect_forward.h -- exe-local declaration for the Utinni
 // Bucket B (2026-06-26) particle-effect live-preview retrigger.
 //
 // The Effects/ClientEffect editor's basic edit+save already works on the
@@ -8,7 +8,7 @@
 // client" retrigger -- hot-reloading a just-saved particle template and seeing
 // live scene instances restart. ClientEffectManager owns the live instances
 // (the private static m_particleSystems) but has no public enumerate-and-restart
-// surface, so the provider exposes utinni_retriggerClientEffect(), a friend of
+// surface, so the provider exposes engine_retriggerClientEffect(), a friend of
 // ClientEffectManager defined (32-bit only) in ClientEffectManager.cpp. It is
 // advertised to Utinni as "particlePreview::retrigger" -- a plain free function,
 // so its address is a compile-time constant (a constant table row, NOT a
@@ -23,13 +23,13 @@
 // #if !defined(_WIN64) in ClientEffectManager.cpp, matching the whole advertise body.
 // ======================================================================
 
-#ifndef INCLUDED_utinni_clientEffect_forward_H
-#define INCLUDED_utinni_clientEffect_forward_H
+#ifndef INCLUDED_engine_clientEffect_forward_H
+#define INCLUDED_engine_clientEffect_forward_H
 
 // Walks ClientEffectManager::m_particleSystems and restarts every live particle
 // instance whose appearance-template name matches logicalName (case-insensitive).
 // Friend of ClientEffectManager; defined in ClientEffectManager.cpp.
-void utinni_retriggerClientEffect(char const * logicalName);
+void engine_retriggerClientEffect(char const * logicalName);
 
 // Bucket B-2 (2026-06-28): re-plays a .cef fresh on the local player (with the
 // just-saved edit) for live .cef authoring preview -- restart() only covers
@@ -38,6 +38,6 @@ void utinni_retriggerClientEffect(char const * logicalName);
 // / ClientEffectTemplateList::fetch), so NOT a friend. Defined (32-bit only) in
 // ClientEffectManager.cpp; advertised as "particlePreview::replayClientEffect".
 // Returns playClientEffect's result; false (no crash) if there is no player/scene.
-bool utinni_replayClientEffect(char const * clientEffectName);
+bool engine_replayClientEffect(char const * clientEffectName);
 
 #endif

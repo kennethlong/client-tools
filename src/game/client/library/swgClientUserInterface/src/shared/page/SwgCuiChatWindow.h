@@ -64,8 +64,8 @@ public MessageDispatch::Receiver
 	// construction funnel is advertised as a DETOUR target (the ctor itself is
 	// unaddressable in C++). This friend lets the address provider in
 	// SwgCuiChatWindow.cpp take &createNewWindow. Adds NO struct ABI change; the
-	// accessor is exe-local + 32-bit-only. See utinni_chatWindow_forward.h.
-	friend void * utinni_chatWindowCreateNewWindowEntry();
+	// accessor is exe-local + 32-bit-only. See engine_chatWindow_forward.h.
+	friend void * engine_chatWindowCreateNewWindowEntry();
 
 public:
  	//----------------------------------------------------------------------

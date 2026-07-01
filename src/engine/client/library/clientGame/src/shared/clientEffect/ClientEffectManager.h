@@ -44,7 +44,7 @@ friend PositionClientEffect;
 // ManagedParticleSystem, so it must be a friend to name them. ABI-neutral (a friend
 // declaration changes no object layout / vtable). Defined (32-bit only) in
 // ClientEffectManager.cpp; advertised to Utinni as particlePreview::retrigger.
-friend void utinni_retriggerClientEffect(char const * logicalName);
+friend void engine_retriggerClientEffect(char const * logicalName);
 
 private:
 

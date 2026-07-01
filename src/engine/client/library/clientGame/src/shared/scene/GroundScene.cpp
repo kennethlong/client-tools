@@ -3857,13 +3857,13 @@ void GroundScene::turnOffOverheadMap()
 // handleInputMapUpdate,handleInputMapEvent} are PRIVATE [GroundScene.h:173,103,170,194],
 // so a free thunk authored in engine_advertise.cpp would hit C2248. These helpers are
 // compiled HERE -- inside GroundScene.cpp, the class's own TU, where the private
-// members are visible -- exactly as utinni_installConfigFileOverride() lives in
+// members are visible -- exactly as engine_installConfigFileOverride() lives in
 // ClientMain.cpp to reach a file-local target (the 37-01 shim pattern).
 //
 // TWO MECHANISMS (38-05): init + handleInputMapUpdate are CALLED/unused rows -> kept
 // as call-through __fastcall forwarders (Utinni invokes them, they forward). update +
 // handleInputMapEvent are DETOURED by Utinni -> their call-through forwarders were
-// REMOVED and replaced by the utinni_groundScene*RealEntry() address providers below,
+// REMOVED and replaced by the engine_groundScene*RealEntry() address providers below,
 // which return the REAL engine code entry (delta==0 verified) the engine's own call
 // path reaches. A detour on a call-through forwarder is silently dead -- the engine
 // calls the real method directly, never the forwarder (the Utinni review finding,
@@ -3877,7 +3877,7 @@ void GroundScene::turnOffOverheadMap()
 // function (MSVC v145 forbids __thiscall on a free function, C3865; a dummy EDX
 // makes __fastcall byte-identical to __thiscall). One function is therefore BOTH
 // in-TU (member access) AND the correct MI-class thunk in a single definition.
-// Declared extern in the exe-local utinni_groundScene_forward.h (NOT pulled by
+// Declared extern in the exe-local engine_groundScene_forward.h (NOT pulled by
 // any gl0X plugin TU -- no shared-header ABI cascade); advertised in the table.
 //
 // 32-bit-only scope: the whole advertise body is Win32-only, so these compile to
@@ -3888,13 +3888,13 @@ void GroundScene::turnOffOverheadMap()
 
 #include <cstring>   // memcpy -- 38-05 real-entry MI-PMF code-component extraction
 
-void __fastcall utinni_groundSceneInit(GroundScene * pThis, int /*edx*/,
+void __fastcall engine_groundSceneInit(GroundScene * pThis, int /*edx*/,
 	const char * terrainFilename, CreatureObject * player, float timeInSeconds)
 {
 	pThis->init(terrainFilename, player, timeInSeconds);   // private [GroundScene.h:173]; legal in this TU
 }
 
-void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/)
+void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/)
 {
 	pThis->handleInputMapUpdate();                         // private [GroundScene.h:170]
 }
@@ -3907,15 +3907,15 @@ void __fastcall utinni_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 // camera->setMessageQueue(inputMap->getMessageQueue()), GroundScene.cpp:803), so this is the
 // SAME pointer gameCamera::getMessageQueue returns while free-cam is active. Null-safe (the
 // input maps are only constructed in init(), GroundScene.cpp:775). __fastcall == __thiscall
-// (MI class -> dummy EDX). Declared extern in utinni_groundScene_forward.h.
-MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/)
+// (MI class -> dummy EDX). Declared extern in engine_groundScene_forward.h.
+MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/)
 {
 	return pThis->m_debugPortalCameraInputMap ? pThis->m_debugPortalCameraInputMap->getMessageQueue() : 0;
 }
 
 // NOTE (38-05): the call-through forwarders for update / handleInputMapEvent were
 // REMOVED -- those two rows are DETOURED by Utinni and now advertise the REAL engine
-// entry via the utinni_groundScene*RealEntry() accessors below (a detour on a
+// entry via the engine_groundScene*RealEntry() accessors below (a detour on a
 // call-through forwarder is silently dead). init + handleInputMapUpdate stay as
 // forwarders (CALLED/unused rows -- a forwarder is correct there).
 
@@ -3939,7 +3939,7 @@ MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(Gro
 // IS the real engine entry Utinni's __thiscall trampoline reaches with `this` in
 // ECX. The delta==0 hard gate is the safety check: if delta != 0 (a secondary-base
 // method whose `this` needs adjustment, NOT directly detour-able) we return nullptr
-// so the exe-side utinni_verifyNoNullNoDup() catches it as a null row and FAILS
+// so the exe-side engine_verifyNoNullNoDup() catches it as a null row and FAILS
 // loudly -- never advertise a wrong / silent-dead entry. (This mirrors the exe-side
 // pmfRealEntry() helper in engine_advertise.cpp; inlined here because the PRIVATE
 // PMF can only be taken in this TU.)
@@ -3947,25 +3947,25 @@ MessageQueue * __fastcall utinni_groundSceneGetDebugPortalCameraMessageQueue(Gro
 // 32-bit-only: matches the whole advertise body (#if !defined(_WIN64)).
 //----------------------------------------------------------------------
 
-void * utinni_groundSceneUpdateRealEntry()
+void * engine_groundSceneUpdateRealEntry()
 {
 	void (GroundScene::* pmf)(float) = &GroundScene::update;   // private [GroundScene.h:103]; legal in this TU
 	static_assert(sizeof(pmf) >= sizeof(void *) + sizeof(int), "PMF smaller than expected MI layout");
 	struct MiPmf { void * pfn; int delta; };
 	MiPmf m{};
 	std::memcpy(&m, &pmf, sizeof(MiPmf));
-	DEBUG_FATAL(m.delta != 0, ("utinni: non-zero PMF delta for GroundScene::update real-entry row -- not directly detour-able"));
+	DEBUG_FATAL(m.delta != 0, ("engine: non-zero PMF delta for GroundScene::update real-entry row -- not directly detour-able"));
 	return (m.delta != 0) ? 0 : m.pfn;
 }
 
-void * utinni_groundSceneHandleInputMapEventRealEntry()
+void * engine_groundSceneHandleInputMapEventRealEntry()
 {
 	void (GroundScene::* pmf)(IoEvent *) = &GroundScene::handleInputMapEvent;   // private [GroundScene.h:194]; legal in this TU
 	static_assert(sizeof(pmf) >= sizeof(void *) + sizeof(int), "PMF smaller than expected MI layout");
 	struct MiPmf { void * pfn; int delta; };
 	MiPmf m{};
 	std::memcpy(&m, &pmf, sizeof(MiPmf));
-	DEBUG_FATAL(m.delta != 0, ("utinni: non-zero PMF delta for GroundScene::handleInputMapEvent real-entry row -- not directly detour-able"));
+	DEBUG_FATAL(m.delta != 0, ("engine: non-zero PMF delta for GroundScene::handleInputMapEvent real-entry row -- not directly detour-able"));
 	return (m.delta != 0) ? 0 : m.pfn;
 }
 

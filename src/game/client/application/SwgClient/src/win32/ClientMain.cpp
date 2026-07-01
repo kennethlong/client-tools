@@ -119,7 +119,7 @@ using namespace ClientMainNamespace;
 // ambiguity under the using-namespace above. engine_advertise.cpp wraps this
 // in the config::loadOverrideConfig thunk row (EPA-02). Declared in ClientMain.h.
 // ----------------------------------------------------------------------
-void utinni_installConfigFileOverride()
+void engine_installConfigFileOverride()
 {
 	ClientMainNamespace::installConfigFileOverride();
 }
@@ -282,7 +282,7 @@ int ClientMain(
 		// not the plan's literal _PRODUCTION (which is never defined here and
 		// would wrongly run in production) -- [Rule 1] corrected to PRODUCTION == 0.
 #if PRODUCTION == 0 && !defined(_WIN64)
-		IGNORE_RETURN(utinni_verifyNoNullNoDup());
+		IGNORE_RETURN(engine_verifyNoNullNoDup());
 #endif
 
 		//-- math

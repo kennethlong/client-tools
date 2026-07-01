@@ -1,7 +1,7 @@
 // ======================================================================
 //
 // engine_hookpoints.inc -- canonical X-macro name list for the
-// Utinni engine entry-point advertisement contract. SHARED VERBATIM with
+// engine entry-point advertisement contract. SHARED VERBATIM with
 // D:/Code/Utinni (re-copied at each catalog wave so the two repos cannot
 // drift). This file is the single source of truth for the set of advertised
 // endpoint NAMES.
@@ -28,7 +28,7 @@
 // cui::manager, cui::io, consoleHelper, commandParser. Each name here has a
 // source-confirmed, signature-checked row in engine_advertise.cpp (the table
 // BODY stays hand-written: rows are heterogeneous -- static fn / bit_cast PMF /
-// accessor). The runtime utinni_verifyNoNullNoDup() name-set-equality check
+// accessor). The runtime engine_verifyNoNullNoDup() name-set-equality check
 // bridges this list to that body (EPA-04). Re-copied verbatim into D:/Code/Utinni
 // at wave close. MISMATCH corrections (RESEARCH "Spec best-guesses that are WRONG")
 // are baked into the table rows, NOT here -- this list carries CONTRACT names.
@@ -42,7 +42,7 @@
 //   is MULTIPLE-INHERITANCE via NetworkScene -> inflated PMFs fail the sizeof guard;
 //   even reloadTerrain/getCurrentCamera/setView need a __thiscall thunk, 37-03),
 //   cui::io::processEvent
-//   (VIRTUAL -> Utinni resolves off the live vtable), cui::chatWindow::* +
+//   (VIRTUAL -> the consumer resolves off the live vtable), cui::chatWindow::* +
 //   chatWindow::ctor (MULTIPLE-INHERITANCE class -> inflated PMF fails the
 //   sizeof(PMF)==sizeof(void*) guard -> needs __thiscall thunks, 37-03),
 //   commandParser::{ctor1,ctor2}(thunk) + createDelegateCommands(PROTECTED).
@@ -193,7 +193,7 @@ ENGINE_HOOKPOINT(objectTemplate, getClientDataFile)
 
 // -- worldSnapshot (clientGame; WorldSnapshot.h) -- ALL STATIC in this tree --
 // (the plan's instance methods openFile/saveFile/getNodeByIndex/... are the
-//  Utinni OFFLINE WorldSnapshot, not our runtime scene loader; OMITTED.)
+//  consumer OFFLINE WorldSnapshot, not our runtime scene loader; OMITTED.)
 ENGINE_HOOKPOINT(worldSnapshot, load)
 ENGINE_HOOKPOINT(worldSnapshot, addObject)
 ENGINE_HOOKPOINT(worldSnapshot, removeObject)
@@ -248,11 +248,11 @@ ENGINE_HOOKPOINT(renderWorld,    addObjectNotifications)
 ENGINE_HOOKPOINT(bloom,          preSceneRender)
 ENGINE_HOOKPOINT(bloom,          postSceneRender)
 
-// -- particlePreview (Utinni cooperative retrigger; ClientEffectManager) ------
+// -- particlePreview (consumer cooperative retrigger; ClientEffectManager) ------
 // The Effects-editor live-preview hot-reload entry (handoff §2.B-ii). Friend free
-// function utinni_retriggerClientEffect over the private m_particleSystems.
+// function engine_retriggerClientEffect over the private m_particleSystems.
 ENGINE_HOOKPOINT(particlePreview, retrigger)
-// Bucket B-2 (v7->v8): live .cef RE-PLAY. Free function utinni_replayClientEffect
+// Bucket B-2 (v7->v8): live .cef RE-PLAY. Free function engine_replayClientEffect
 // re-plays a .cef FRESH on the local player via the public ClientEffectManager::
 // playClientEffect -- the transient (muzzle/hit/explosion) case restart() above
 // cannot cover. Public APIs only (not a friend); constant &fn (not a dyn[] row).

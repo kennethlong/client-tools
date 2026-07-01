@@ -112,9 +112,17 @@ Read the fields directly; do NOT read `type` at offset 0 (that's `next`). No IoE
 
 ## RE-SYNC (maintainer)
 Copy the v13 working-tree (LF) `engine_hookpoints.{h,inc}` byte-identical into
-`D:/Code/Utinni/UtinniCore/swg/`, then rebuild `UtinniCore.dll`. **v13 sha256:**
-- `engine_hookpoints.h`   `bbd02175e820f12294e56d339afbc639ad6072c3bc6a3d814d2f7785d8aaf5ec`
-- `engine_hookpoints.inc` `2fdd77c523658cb13f17edbe5822282a42a124ffacea8359e1744545668fd96d`
+`D:/Code/Utinni/UtinniCore/swg/`, then rebuild `UtinniCore.dll`. **v13 sha256** (updated by the
+2026-06-30 de-brand pass below — comment-only change, name set unchanged at 119/v13):
+- `engine_hookpoints.h`   `1f09fff7658909cc7d78a1ecdf0bd127348913e8fa674364cd4b540f0d08072b`
+- `engine_hookpoints.inc` `a4fb865cd562ca3757a75d5fe6649aba077a7f670cce45735aecc36037973b68`
+
+> **De-brand follow-up (2026-06-30):** all `utinni_*` identifiers → `engine_*`, the 5 `utinni_*_forward.h`
+> files → `engine_*_forward.h`, log tags `[utinni.retrigger]/[utinni.replay]` → `[effect.*]`,
+> `DEBUG_FATAL("utinni:…")` → `"engine:…"`, and the Direct3d9 `[Utinni Probe]` diagnostic removed
+> entirely. The `.h/.inc` name set + version are unchanged (still v13/119) — only comments moved, hence
+> the new sha256 above. Factual `Utinni` references (the `D:/Code/Utinni` sync path, the `UtinniCore` DLL
+> name, handoff filenames, consumer-namespace `utinni::*` mentions) are intentionally kept.
 
 Consumer paired wave (your court, no provider action): re-source the live GroundScene without `get()`,
 rework `processIoEvent`/`FreeCamImpl`, widen `io_win.h` `getMessage` to 4-arg. Mouse-wheel speed stays

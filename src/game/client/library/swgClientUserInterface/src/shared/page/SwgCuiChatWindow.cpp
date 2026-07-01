@@ -3357,13 +3357,13 @@ void SwgCuiChatWindow::setGroundHudChatWindowOpacities(float val)
 // STATIC -> &fn is a plain function pointer (no multiple-inheritance PMF inflation,
 // no this-adjust delta), so unlike the GroundScene MI real-entry accessors this needs
 // no MI-PMF decode -- just return the address. Declared extern in the exe-local
-// utinni_chatWindow_forward.h (NOT pulled by any gl0X plugin TU -- no shared-header
+// engine_chatWindow_forward.h (NOT pulled by any gl0X plugin TU -- no shared-header
 // ABI cascade). 32-bit-only: matches the whole advertise body.
 //----------------------------------------------------------------------
 
 #if !defined(_WIN64)
 
-void * utinni_chatWindowCreateNewWindowEntry()
+void * engine_chatWindowCreateNewWindowEntry()
 {
 	return (void *)&SwgCuiChatWindow::createNewWindow;   // private static [SwgCuiChatWindow.h:258]; legal in this TU (friend)
 }

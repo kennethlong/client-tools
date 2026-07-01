@@ -6919,7 +6919,7 @@ void CreatureObject::appearanceWearablesOnChanged ()
 // engine_advertise.cpp cannot #include CreatureObject.h (it transitively pulls
 // sharedSkillSystem/SkillObjectArchive.h, whose include dir is not on the exe project's
 // path), so the PMF real-entry is computed HERE -- CreatureObject's own TU, where the
-// header builds -- mirroring the utinni_groundScene*RealEntry() accessors in GroundScene.cpp.
+// header builds -- mirroring the engine_groundScene*RealEntry() accessors in GroundScene.cpp.
 //
 // The contract row creatureObject::setTarget maps (MISMATCH name) to the PUBLIC non-virtual
 // setLookAtTarget(const NetworkId&) [CreatureObject.h:311] -- the "current target" setter
@@ -6928,22 +6928,22 @@ void CreatureObject::appearanceWearablesOnChanged ()
 // PMF { void* pfn; int delta; }. It is an OWN method of the most-derived class -> primary
 // base at offset 0 -> delta MUST be 0 and pfn IS the real engine entry the engine's own call
 // reaches with `this` in ECX (the address Utinni detours). delta!=0 -> return nullptr so the
-// exe-side utinni_verifyNoNullNoDup() fails loudly (never advertise a wrong/silent-dead entry).
-// Declared in the exe-local utinni_creatureObject_forward.h. PUBLIC method -> no friend grant,
+// exe-side engine_verifyNoNullNoDup() fails loudly (never advertise a wrong/silent-dead entry).
+// Declared in the exe-local engine_creatureObject_forward.h. PUBLIC method -> no friend grant,
 // CreatureObject.h unchanged (no shared-header ABI cascade). 32-bit-only: matches the advertise body.
 // ======================================================================
 #if !defined(_WIN64)
 
 #include <cstring>   // memcpy -- MI-PMF real-entry code-component extraction
 
-void * utinni_creatureSetTargetRealEntry()
+void * engine_creatureSetTargetRealEntry()
 {
 	void (CreatureObject::* pmf)(const NetworkId &) = &CreatureObject::setLookAtTarget;   // PUBLIC [CreatureObject.h:311]
 	static_assert(sizeof(pmf) >= sizeof(void *) + sizeof(int), "PMF smaller than expected MI layout");
 	struct MiPmf { void * pfn; int delta; };
 	MiPmf m{};
 	std::memcpy(&m, &pmf, sizeof(MiPmf));
-	DEBUG_FATAL(m.delta != 0, ("utinni: non-zero PMF delta for CreatureObject::setLookAtTarget real-entry row -- not directly detour-able"));
+	DEBUG_FATAL(m.delta != 0, ("engine: non-zero PMF delta for CreatureObject::setLookAtTarget real-entry row -- not directly detour-able"));
 	return (m.delta != 0) ? 0 : m.pfn;
 }
 

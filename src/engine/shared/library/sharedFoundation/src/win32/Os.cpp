@@ -1607,11 +1607,11 @@ bool Os::launchBrowser(std::string const & website)
 // typedef: LRESULT(__stdcall*)(HWND,UINT,WPARAM,LPARAM).
 //
 // Win32-only: matches the whole !_WIN64 advertise body. The forwarder is declared
-// in the exe-local utinni_clientShims_forward.h (SwgClient/src/win32) -- NOT in a
+// in the exe-local engine_clientShims_forward.h (SwgClient/src/win32) -- NOT in a
 // shared header, so no gl0X plugin pulls it (no ABI cascade; AGENTS.md).
 // ======================================================================
 #if !defined(_WIN64)
-LRESULT CALLBACK utinni_osWindowProc(HWND h, UINT m, WPARAM w, LPARAM l)
+LRESULT CALLBACK engine_osWindowProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
 	return Os::WindowProc(h, m, w, l);   // member access to the private static; __stdcall preserved
 }

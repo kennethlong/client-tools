@@ -1,16 +1,16 @@
 // ======================================================================
 //
-// engine_hookpoints.h -- Utinni engine entry-point advertisement
+// engine_hookpoints.h -- engine entry-point advertisement
 // contract (handoff 2026-06-20). The exe-side game-logic twin of the
 // shipped graphics gl11_r.dll!GetHookPoints (Direct3d11.cpp:856-888).
 //
 // Defines the name->pointer table structs an injected modding overlay
-// (Utinni) reads via GetProcAddress(hExe, "GetEngineHookPoints") to detour
+// reads via GetProcAddress(hExe, "GetEngineHookPoints") to detour
 // / call / read engine functions and globals by NAME rather than by a
 // hardcoded SWGEmu RVA. Pure read-only contract: each row is { name, addr },
 // every address taken at compile time by &EngineSymbol so it is correct by
-// construction and survives every rebuild. The client stays Utinni-agnostic;
-// if Utinni is not injected, nothing reads this table and it is inert.
+// construction and survives every rebuild. The client stays consumer-agnostic;
+// if the consumer is not injected, nothing reads this table and it is inert.
 //
 // This header is SHARED VERBATIM with D:/Code/Utinni (copied at each catalog
 // wave so the two repos cannot drift -- see ENGINE_HOOKPOINTS_VERSION note).
@@ -71,7 +71,7 @@
 // skeletalAppearance::getDisplayLodSkeleton (non-virtual LOD read, bit_cast PMF),
 // renderWorld::addObjectNotifications (static &fn), bloom::preSceneRender +
 // bloom::postSceneRender (static &fn), particlePreview::retrigger (friend free fn
-// utinni_retriggerClientEffect over ClientEffectManager::m_particleSystems -- the
+// engine_retriggerClientEffect over ClientEffectManager::m_particleSystems -- the
 // cooperative particle hot-reload entry). 104 names. The requested-but-NOT-advertisable
 // rows are OMITTED/SKIPPED (documented in engine_advertise.cpp + the HANDBACK): the
 // VIRTUAL render methods particleEffectAppearance::render + skeletalAppearance::render
@@ -81,7 +81,7 @@
 // (no concrete method named). Render globals: consumer drives the draw via the already-
 // advertised graphics::* statics (handoff's preferred shape) -- no raw-global rows added.
 // Bumped 7 -> 8 in Bucket B-2 (live .cef RE-PLAY): 1 NAME ADD --
-// particlePreview::replayClientEffect (free fn utinni_replayClientEffect; re-plays a .cef
+// particlePreview::replayClientEffect (free fn engine_replayClientEffect; re-plays a .cef
 // FRESH on Game::getPlayer() via the public ClientEffectManager::playClientEffect, the
 // transient muzzle/hit/explosion case the retrigger's restart() cannot cover). Constant
 // &fn, public APIs only (not a friend). 105 names.
@@ -138,7 +138,7 @@ struct EngineHookPoint
 
 // ----------------------------------------------------------------------
 // The advertised table. Returned by GetEngineHookPoints() as a pointer to
-// a process-lifetime static; Utinni only reads it. No NUL-name sentinel --
+// a process-lifetime static; the consumer only reads it. No NUL-name sentinel --
 // count is sizeof/sizeof of the row array (see engine_advertise.cpp).
 // ----------------------------------------------------------------------
 struct EngineHookPoints

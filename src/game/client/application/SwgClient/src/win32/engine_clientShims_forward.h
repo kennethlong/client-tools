@@ -1,24 +1,24 @@
 // ======================================================================
 //
-// utinni_clientShims_forward.h -- exe-local forwarder declarations for the
+// engine_clientShims_forward.h -- exe-local forwarder declarations for the
 // two client::* external-linkage shims advertised to Utinni (Phase 38-02,
 // EPA-06).
 //
-//   client::wndProc       -> utinni_osWindowProc   (DEFINED in Os.cpp; an
+//   client::wndProc       -> engine_osWindowProc   (DEFINED in Os.cpp; an
 //                            external __stdcall/CALLBACK shim over the PRIVATE
 //                            Os::WindowProc [Os.h:138]). The exe cannot name the
 //                            private static, and Os.h is in sharedFoundation/
 //                            src/win32 (not a public include dir), so the shim
 //                            lives in Os.cpp and the exe sees only this decl.
 //
-//   client::writeMiniDump -> utinni_writeMiniDump  (DEFINED in DebugHelp.cpp; an
+//   client::writeMiniDump -> engine_writeMiniDump  (DEFINED in DebugHelp.cpp; an
 //                            external shim over DebugHelp::writeMiniDump
 //                            [DebugHelp.h:36], whose win32 header is not on the
 //                            exe include path). The exe sees only this decl.
 //
-// CALLING CONVENTION: utinni_osWindowProc is __stdcall (CALLBACK) -- a real
+// CALLING CONVENTION: engine_osWindowProc is __stdcall (CALLBACK) -- a real
 // window-proc convention, preserved exactly (NOT the __fastcall/__thiscall
-// member-call emulation). utinni_writeMiniDump is a plain free function.
+// member-call emulation). engine_writeMiniDump is a plain free function.
 // Utinni-side typedefs:
 //   LRESULT(__stdcall*)(HWND,UINT,WPARAM,LPARAM)        // client::wndProc
 //   bool(*)(char const*, PEXCEPTION_POINTERS)           // client::writeMiniDump
@@ -35,8 +35,8 @@
 // PEXCEPTION_POINTERS type used in the writeMiniDump signature.
 // ======================================================================
 
-#ifndef INCLUDED_utinni_clientShims_forward_H
-#define INCLUDED_utinni_clientShims_forward_H
+#ifndef INCLUDED_engine_clientShims_forward_H
+#define INCLUDED_engine_clientShims_forward_H
 
 // ======================================================================
 
@@ -46,8 +46,8 @@
 // extern declarations of the two client::* shims defined in their respective
 // engine TUs (Os.cpp / DebugHelp.cpp).
 // ----------------------------------------------------------------------
-extern LRESULT CALLBACK utinni_osWindowProc(HWND, UINT, WPARAM, LPARAM);
-extern bool utinni_writeMiniDump(char const *, PEXCEPTION_POINTERS);
+extern LRESULT CALLBACK engine_osWindowProc(HWND, UINT, WPARAM, LPARAM);
+extern bool engine_writeMiniDump(char const *, PEXCEPTION_POINTERS);
 
 // ======================================================================
 
