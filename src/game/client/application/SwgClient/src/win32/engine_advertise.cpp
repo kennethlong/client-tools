@@ -738,12 +738,12 @@ static const EngineHookPoints s_table =
 // Mirrors the Direct3d11_ConstantBuffer.h static_assert table-validation idiom.
 enum
 {
-	UTINNI_REQUIRED_COUNT = 0
+	ENGINE_REQUIRED_COUNT = 0
 #define ENGINE_HOOKPOINT(g, n) + 1
 #include "engine_hookpoints.inc"
 #undef ENGINE_HOOKPOINT
 };
-static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) == UTINNI_REQUIRED_COUNT,
+static_assert((sizeof s_engineHookPoints / sizeof s_engineHookPoints[0]) == ENGINE_REQUIRED_COUNT,
               "hookpoint table row count != .inc required-set count (drift)");
 
 // (b) Name-set source-of-truth: the machine-generated required-name set,
