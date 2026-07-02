@@ -1,0 +1,162 @@
+# CONSULT-55 (fresh Sonnet 5) — Rebuild-timing angle: findings
+
+## Verdict up front
+
+The rebuild correlation is real, but it is **not** primarily a cross-thread race in
+`AsynchronousLoader`/`TreeFile::cachedFilesMap` (those ARE correctly mutex-guarded, and the
+single dedicated `FileStreamerThread` serializes all disk I/O — no concurrent seeks on the same
+`HANDLE`, so that whole family of hypotheses is a dead end). The actual defect is a **silent
+short-read-into-uninitialized-buffer bug** in the low-level TRE decompression path, three
+independent swallowed-failure points deep, that is exercised identically by the async loader
+thread and the main thread's synchronous fallback. A rebuild doesn't change the *logic* — it
+changes the odds of tripping it, because a rebuild forces a fresh process with a **cold OS file
+cache**, which is exactly the condition under which a single un-retried Win32 `ReadFile()` call is
+most likely to return fewer bytes than requested.
+
+## The mechanism, file:line
+
+1. **`TreeFile::SearchTree::open`** (`TreeFile_SearchNode.cpp:528-534`) and its twin
+   **`TreeFile::SearchTOC::open`** (`TreeFile_SearchNode.cpp:940-946`) — the code paths that
+   actually serve a compressed asset out of a `.tre`/TOC set (this is how `ILM_visuals.tre`
+   content, including `spaceport_luma_lightstrip3_cs8_tato.sht`, gets read — see project memory
+   `project_jtl_space_ship_data_ilm_exclusive.md`, JTL ship/visual data is ILM-exclusive):
+   ```cpp
+   byte * compressedBuffer = new byte[entry.compressedLength];   // UNINITIALIZED heap
+   const int bytesRead = m_treeFile->read(entry.offset, compressedBuffer, entry.compressedLength, priority);
+   DEBUG_FATAL(bytesRead != entry.compressedLength, ("error reading compressed data into buffer"));
+   UNREF(bytesRead);
+   return new ZlibFile(entry.length, compressedBuffer, entry.compressedLength, true);
+   ```
+   `DEBUG_FATAL` is a **no-op outside `_DEBUG`**. In Release, if `bytesRead < entry.compressedLength`,
+   the code proceeds anyway, handing `ZlibFile` a `compressedBuffer` whose tail is raw, never-written
+   heap memory.
+
+2. **`OsFile::read`** (`src\engine\shared\library\sharedFile\src\win32\OsFile.cpp:157-193`) makes
+   exactly **one** `ReadFile()` call and returns whatever `amountReadDword` the OS gives back — no
+   retry/accumulate loop for a short read. `ReadFile` is documented to be able to return fewer
+   bytes than requested for local files (filter-driver interception — AV real-time scanning is the
+   obvious everyday one — page-in stalls, large-request fragmentation), it's just rare when the
+   data is already resident in the OS cache. `FileStreamerThread::processRead`'s "fulfill entire
+   read request" branch for requests ≤128KB (`FileStreamerThread.cpp:255-269`) also does **not**
+   check `amountRead == request->bytesToBeRead` before completing the request and opening the
+   gate — only the >128KB chunking branch checks for a short read (and only to decide whether to
+   keep looping, not to raise an error).
+
+3. **`ZlibFile::decompress`** (`ZlibFile.cpp:148-154`) is the final and most damning link:
+   ```cpp
+   byte * uncompressedBuffer = new byte[m_uncompressedLength];
+   static_cast<void>(ZlibCompressor().expand(m_compressedBuffer, m_compressedBufferLength, uncompressedBuffer, m_uncompressedLength));
+   return uncompressedBuffer;
+   ```
+   `ZlibCompressor::expand` (`ZlibCompressor.cpp:187-224`) **does** correctly detect a truncated/
+   corrupt stream (`inflate(...) != Z_STREAM_END` → returns `-1`) — but the caller explicitly casts
+   the return value to `void` and discards it unconditionally. Even when zlib itself flags the
+   failure, `decompress()` hands back `uncompressedBuffer` — a `new byte[]` that inflate may have
+   written **zero or partial** bytes into — as if it were valid file data.
+
+That buffer becomes `Iff::data` via `Iff::open(AbstractFile&, name)` →
+`data = file.readEntireFileAndClose()` (`Iff.cpp:384`). Its first bytes are read as the FORM tag by
+`ShaderTemplateList::create` (`ShaderTemplateList.cpp:546`, `targetTag = iff.getCurrentName()`),
+land on `"??]'"` — plausible-looking garbage from uninitialized heap — and hit the `FATAL(...,
+"Unknown shader template tag ...")` at `ShaderTemplateList.cpp:567`.
+
+## Why this correlates with "after a rebuild" specifically
+
+- A rebuild forces a fresh process. The OS file-cache for the byte ranges inside `ILM_visuals.tre`
+  (JTL/space content — a TRE that's touched far less often than the everyday Tatooine/ground
+  archives) is **cold**. The read at step 2 is therefore a genuine physical disk transfer instead
+  of an instant page-cache hit.
+- Cold, larger, physically-serviced reads are the exact conditions where a single un-retried
+  `ReadFile()` is most exposed to being short-counted (filter-driver interception being the classic
+  cause — and AV real-time scanners are disproportionately active in the seconds after a build
+  just wrote a fresh `.exe`/`.dll`, adding filter-stack contention right when the freshly launched
+  client starts doing its own big reads).
+- A long-running, not-just-rebuilt client has almost certainly already warmed this exact byte
+  range (or already has the named `ShaderTemplate` resident in `ShaderTemplateList::ms_shaderTemplateMap`,
+  `ShaderTemplateList.cpp:213-218`, which is a pure cache hit with **zero I/O** — no chance to
+  trip the bug at all). Post-rebuild is precisely the moment every one of these lazy caches is
+  empty and the *first* touch of `spaceport_luma_lightstrip3_cs8_tato.sht` this boot has to go all
+  the way to disk.
+- This also explains why it's *intermittent* rather than deterministic: it needs an actual short
+  read from the OS, which is probabilistic, not a fixed logic bug that would fire every time.
+
+## Ruled out / de-prioritized (checked directly, with evidence)
+
+- **TreeFile cache eviction mid-parse** (`TreeFile::clearCachedFiles`, `TreeFile.cpp:949-966`) —
+  real mechanism exists (global `cachedFilesMap`, not request-scoped) but every access is under
+  `TreeFile::ms_criticalSection`, and `TreeFile::open`'s cache-hit path (`TreeFile.cpp:677-682`)
+  nulls the map entry the instant it's consumed, before the caller ever gets a chance to be raced.
+  Reentrant `clearCachedFiles()` (e.g. via a nested pump inside a slow callback) could theoretically
+  delete another batch's still-unconsumed entries, but that would produce a **cache miss → clean
+  disk fallback**, not corrupted bytes — it can't explain garbage content on its own. Kept as a
+  weak secondary contributor at best.
+- **zlib scratch-buffer reuse** — checked `ZlibFile::decompress()` and `ZlibCompressor::expand()`:
+  every decompress allocates a fresh `new byte[m_uncompressedLength]`; no shared/static scratch
+  buffer anywhere in this path. Not the mechanism (but see above — the bug is adjacent: the
+  fresh buffer is real, it's just never fully written and its failure is discarded).
+- **`Iff::open(name, true)` semantics** — `optional=true` just means "return false instead of
+  fataling on a missing file" (`Iff.cpp:335-351`); irrelevant to corruption, only to file-not-found
+  handling.
+- **Dependent named-shader preload race** — plausible-looking (the TAG_NAME redirect at
+  `ShaderTemplateList.cpp:496-507` opens a brand-new local `Iff` independent of the outer mesh's
+  Iff, so there's no shared-buffer hazard there), but doesn't need to be a race at all once you
+  have a silent short-read bug that fires on ANY first cold touch of that file, sync or async path
+  alike.
+- **`suspendAsynchronousLoaderThread` debug flag** (`AsynchronousLoader.cpp:104,225,574-582`,
+  `_DEBUG`-only) — a weak discriminator for this hypothesis specifically, because the defective
+  code (`SearchTree::open`/`SearchTOC::open`/`OsFile::read`/`ZlibFile::decompress`) is shared by
+  the async loader thread's preload reads AND the main thread's ordinary synchronous
+  `TreeFile::open` fallback. Suspending the async thread would route the same file through the
+  same buggy functions on the main thread instead — so under this theory, **suspending it should
+  NOT make the crash disappear** (see confirming experiment below; that's exactly the point of
+  running it).
+- **Direct3d9/11_ShaderCache (`.cso` disk cache, Phase 32/CONSULT-45)** — this is the **compiled
+  GPU shader bytecode** cache (`Direct3d9_ShaderCache.cpp`), a completely different subsystem from
+  `ShaderTemplateList` (which parses `.sht` **template assets**, not HLSL). It's keyed by a
+  content hash of the compile inputs, not by binary version, so a source rebuild doesn't
+  invalidate it. It can't directly cause this crash. It may be a *secondary* contributor to "system
+  is slower/busier right after a rebuild" (cold `.cso` cache → extra synchronous D3DCompile stalls
+  on the main thread during zone-in) but that's a load-time/perf effect, not a memory-corruption
+  mechanism, and shouldn't be the headline explanation.
+- **`TreeFile::SearchCache`** (`TreeFile_SearchNode.cpp:966-1205`) — a distinct, separate
+  in-memory file cache layer from `TreeFile::cachedFilesMap`. Confirmed by grep: nothing in
+  gameplay code ever calls `TreeFile::SearchCache::addCachedFile`/`TreeFile::addSearchCacheFile`
+  outside its own installer — it's effectively dead/empty in normal play. Ruled out.
+
+## Cheapest confirming experiments, ranked
+
+1. **Free, zero-diff:** reproduce the crash scenario in the existing Debug client
+   (`SwgClient_d.exe` / `client_d.cfg`) right after a fresh Debug rebuild, cold cache, heading
+   straight for JTL/space content that touches `ILM_visuals.tre`. The `DEBUG_FATAL` at
+   `TreeFile_SearchNode.cpp:531` and its twin at `:943` are **already live** in Debug. If the
+   theory is right, you should see `"error reading compressed data into buffer"` fire — either
+   instead of, or immediately before, the `ShaderTemplateList` FATAL. This costs nothing but a
+   repro attempt.
+2. **One-line, non-invasive, works in Release too:** promote those two existing checks from a
+   silent `DEBUG_FATAL` to an always-on `WARNING`, e.g.
+   ```cpp
+   const int bytesRead = m_treeFile->read(entry.offset, compressedBuffer, entry.compressedLength, priority);
+   WARNING(bytesRead != entry.compressedLength, ("TreeFile short read: got %d of %d bytes for offset %d in %s", bytesRead, entry.compressedLength, entry.offset, m_treeFileName));
+   DEBUG_FATAL(bytesRead != entry.compressedLength, ("error reading compressed data into buffer"));
+   ```
+   at both `TreeFile_SearchNode.cpp:530-531` and `:942-943`. This directly answers the question
+   without changing behavior (no crash risk, no perf cost — it's one integer compare on a path
+   that already reads `entry.compressedLength`) and gives file/offset/TRE evidence that should
+   line up with `spaceport_luma_lightstrip3_cs8_tato.sht`'s `.sht` right before/at the crash.
+3. **Structural cross-check (not primary):** flip the `suspendAsynchronousLoaderThread` DebugFlag
+   on and try to reproduce. Under this theory the crash should still be reproducible (just via the
+   main-thread synchronous fallback instead of the async preload path) because the bug lives one
+   layer below the async/sync split. If suspending the thread makes the crash *disappear
+   entirely*, that would falsify this theory and point back toward something batching/
+   reentrancy-specific in `AsynchronousLoader`/`TreeFile::cachedFilesMap` instead.
+
+## The actual fix (once confirmed)
+
+Two independent, cheap, correct fixes — do both:
+- `OsFile::read` (or `FileStreamerThread::processRead`'s ≤128KB branch): loop `ReadFile` until
+  the full requested count is read or a genuine error/EOF occurs, same as the >128KB branch
+  already does implicitly via resubmission.
+- `ZlibFile::decompress` / `ZlibFile::readEntireFileAndClose`: stop discarding
+  `ZlibCompressor::expand`'s return value; on `-1`, treat it as a hard file-load failure
+  (propagate up through `Iff::open`'s existing `optional`/`DEBUG_FATAL` contract) instead of
+  silently handing back an uninitialized buffer.

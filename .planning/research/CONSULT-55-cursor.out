@@ -1,0 +1,257 @@
+﻿## Verdict: cross-thread preload-cache raid (not `clearCachedFiles` mid-parse)
+
+The most concrete defect is that **`TreeFile::open()`’s async preload cache is global and shared with the background loader thread**, while the completed-request block treats it as a **single-consumer, main-thread staging area**. That mismatch is real, file:line identifiable, and consistent with intermittent timing + “worse after rebuild.”
+
+`clearCachedFiles()` mid-parse via main-thread re-entrancy is **not** the crash mechanism for this stack: the FATAL is inside the callback **before** line 634 runs, and `processCallbacks()` is not re-entered from the game loop during a callback.
+
+---
+
+## What each actor does
+
+### Background thread (`AsynchronousLoader.cpp:429–567`)
+
+Under `ms_mutex`, it pops a pending request, loads each `FileRecord` into `request->cachedFiles`, then pushes the request to `ms_completedRequests`. It does **not** touch `cachedFilesMap` directly.
+
+The important part is how it loads bytes:
+
+```488:502:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+						AbstractFile *file = TreeFile::open(fileRecord->fileName, AbstractFile::PriorityLow, true);
+						if (file)
+						{
+							if (file->isZlibCompressed())
+							{
+								bytes += file->getZlibCompressedLength();
+								cachedFile.file = file;
+							}
+							else
+							{
+								bytes += file->length();
+								MemoryFile *memoryFile = new MemoryFile(file);
+								cachedFile.file = memoryFile;
+								delete file;
+							}
+```
+
+So the background thread **also calls `TreeFile::open()`**, with `PriorityLow`.
+
+### Main thread completed-request block (`AsynchronousLoader.cpp:609–634`)
+
+```611:634:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+				if (request->cachedFiles)
+				{
+					// ... add all preloaded files into the TreeFile cache
+							TreeFile::addCachedFile(cachedFile.fileRecord->fileName, cachedFile.file);
+							cachedFile.file = NULL;
+				}
+
+				(*request->callback)(request->data);
+
+				TreeFile::clearCachedFiles();
+```
+
+Contract implied by this sequence:
+
+1. Publish all preloaded `AbstractFile*` into `cachedFilesMap`
+2. Callback consumes them only via `TreeFile::open()` (which **steals** ownership)
+3. `clearCachedFiles()` deletes anything still in the map with non-null `second`
+
+That window is **only safe if nothing else participates in `cachedFilesMap`**.
+
+---
+
+## The defect: background `TreeFile::open()` joins the preload cache
+
+There is no separate `getCachedFile()` API. The “get cached file” logic **is** the first half of `TreeFile::open()`:
+
+```668:684:src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp
+	ms_criticalSection.enter();
+		const bool haveCachedFiles = ms_haveCachedFiles;
+	ms_criticalSection.leave();
+
+	if (haveCachedFiles)
+	{
+		ms_criticalSection.enter();
+			CachedFilesMap::iterator cachedIterator = cachedFilesMap.find(fixedFileName);
+			if (cachedIterator != cachedFilesMap.end())
+			{
+				file = cachedIterator->second;
+				cachedIterator->second = NULL;
+			}
+		ms_criticalSection.leave();
+```
+
+While the main thread is inside step 2 above (`ms_haveCachedFiles == true`), the background thread can call this **same path** from `threadRoutine()` line 488.
+
+Effect:
+
+| Step | Main (callback in flight) | Background |
+|------|---------------------------|------------|
+| 1 | `addCachedFile(sht, F)` | — |
+| 2 | Parsing mesh, hasn’t opened `.sht` yet | `TreeFile::open(sht)` **steals F**, stores in another request’s `cachedFiles` |
+| 3 | `iff.open(sht)` → cache entry exists but `second==NULL` → **cache miss** | Keeps F alive elsewhere |
+| 4 | Falls through to TRE/disk open + decompress | May also be loading same asset |
+
+The engine authors already treated main-thread cache misses during async as suspicious — debug-only logging exists **only for the main thread**:
+
+```686:691:src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp
+		if (!file && Os::isMainThread())
+		{
+			DEBUG_REPORT_LOG(true, ("unexpected cache miss %d %s\n", ms_unexpectedCacheMisses, fixedFileName));
+			++ms_unexpectedCacheMisses;
+		}
+```
+
+That is strong circumstantial evidence this interleaving is known-bad behavior, not an intended fallback.
+
+---
+
+## Why that yields a garbage IFF tag (not just a slow miss)
+
+Once `Iff` owns its buffer, `clearCachedFiles()` cannot invalidate it — `Iff::open(name)` copies bytes via `readEntireFileAndClose()` then deletes the `AbstractFile`:
+
+```335:345:src/engine/shared/library/sharedFile/src/shared/Iff.cpp
+	AbstractFile * const file = TreeFile::open(newFileName, AbstractFile::PriorityData, optional);
+	// ...
+	open(*file, newFileName);
+	delete file;
+```
+
+```382:384:src/engine/shared/library/sharedFile/src/shared/Iff.cpp
+	data = file.readEntireFileAndClose();
+```
+
+So the garbage tag at `ShaderTemplateList::create()` line 546 means **`iff.data` was already bad at open time**, not that `clearCachedFiles()` freed an in-use parse buffer.
+
+The corruption path tied to the cache raid:
+
+1. Preloaded `.sht` was meant to be consumed from the published cache (deterministic buffer identity).
+2. Background steals it → main forced onto the **concurrent miss/reload/decompress path** mid-callback.
+3. Under load (many parallel async requests after rebuild / cold cache), that widens the race window.
+4. **`ZlibFile::decompress()` ignores expand failure** — a bad compressed payload still becomes `iff.data`:
+
+```148:154:src/engine/shared/library/sharedFile/src/shared/ZlibFile.cpp
+byte * ZlibFile::decompress() const
+{
+	byte * uncompressedBuffer = new byte[m_uncompressedLength];
+	static_cast<void>(ZlibCompressor().expand(m_compressedBuffer, m_compressedBufferLength, uncompressedBuffer, m_uncompressedLength));
+	return uncompressedBuffer;
+}
+```
+
+A failed/partial inflate can leave uninitialized or wrong bytes; `getCurrentName()` at stack depth 0 then reads four bytes of heap garbage (`"??]'"`-class tags). That matches “valid on disk, corrupt at runtime, intermittent, timing-sensitive.”
+
+---
+
+## Questions from the brief — direct answers
+
+### Can `clearCachedFiles()` delete a file an in-progress parse still reads?
+
+**Not via the intended ownership model**, and **not for this crash site**:
+
+- Consumed files: stolen from map (`second = NULL`), owned by `Iff::open()` caller, copied into `iff.data`, then `AbstractFile` deleted — all before `create()`.
+- Unconsumed files: still in map with non-null `second`; `clearCachedFiles()` at `:634` deletes them — but only **after** the callback returns. Your stack dies **inside** the callback, before `:634`.
+
+Re-entrant `clearCachedFiles()` mid-parse would require nested `processCallbacks()`. In-game that is only called from `Game.cpp:1128` once per frame; not from the mesh/shader load path. **Refuted for normal gameplay.**
+
+### `const char*` map keys — who owns them?
+
+Keys are `fileRecord->fileName`, a flexible-array member whose storage lives in the immortal `ms_fileData` blob loaded at install:
+
+```53:58:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+	struct FileRecord
+	{
+		int8          alreadyCached;
+		const int8    extensionFunctionsIndex;
+		const char    fileName[2];
+```
+
+```165:165:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+				ms_fileData = iff.read_char(iff.getChunkLengthTotal());
+```
+
+`clearCachedFiles()` clears the map but **does not free key strings**. Key lifetime is **not** the bug.
+
+### TOCTOU at `:669–671` / pointer invalidation after unlock?
+
+The split lock (read `ms_haveCachedFiles`, then re-lock for find/steal) is sloppy but not the corruption source:
+
+- After steal, the caller owns the `AbstractFile*`; `clearCachedFiles()` only deletes map entries where `second != NULL`.
+- `Iff` copies bytes before deleting the file object.
+
+The real issue is **who is allowed to steal**, not invalidation after unlock.
+
+### `Iff::open(name, true)` — what does `true` mean?
+
+**Optional** (allow clean failure), **not** “read from cache.” Caching is entirely inside `TreeFile::open()`.
+
+---
+
+## Named-template redirect (`ShaderTemplateList.cpp:506`)
+
+That path opens a **fresh** `Iff` and copies bytes before `create()`:
+
+```496:506:src/engine/client/library/clientGraphics/src/shared/ShaderTemplateList.cpp
+	if (iff.getCurrentName() == TAG_NAME)
+	{
+		iff.enterChunk(TAG_NAME);
+			char filename[1024];
+			iff.read_string(filename, sizeof(filename) - 1);
+		iff.exitChunk(TAG_NAME);
+		return fetch(TemporaryCrcString(filename, true), error);
+```
+
+So the bad bytes are in the **newly opened `.sht` buffer**, not the parent mesh `Iff` — consistent with preload-cache / open-path corruption, not map-key corruption.
+
+---
+
+## Confirming test: `suspendAsynchronousLoaderThread`
+
+Registered at `AsynchronousLoader.cpp:225`; enforced at the top of each `processCallbacks()`:
+
+```573:581:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+	if (ms_suspendThread != ms_threadIsSuspended)
+	{
+		if (ms_suspendThread)
+			ms_threadHandle->suspend();
+```
+
+With the flag **on**, the background thread cannot run `threadRoutine()` → cannot call `TreeFile::open(:488)` during the publish→callback window.
+
+**Expected if this is the root cause:** crash rate drops sharply (not necessarily zero if other heap bugs exist).
+
+| Flag | Effect |
+|------|--------|
+| `suspendAsynchronousLoaderThread` | Stops background `TreeFile::open` during callback — **best confirmation** |
+| `suspendAsynchronousLoaderCallbacks` | Disables all callback processing — stronger, tests less |
+
+Also watch debug builds for rising `ms_unexpectedCacheMisses` during repro — that directly measures main-thread preload theft.
+
+---
+
+## Minimal correct fix (guidance only — Ask mode)
+
+Smallest fix aligned with the existing contract:
+
+**Restrict preload-cache lookup to the main thread** (or to `PriorityData` consumers), e.g. guard the block at `TreeFile.cpp:673`:
+
+```cpp
+if (haveCachedFiles && Os::isMainThread())
+```
+
+Background loads at `PriorityLow` would always go straight to TRE/disk and never raid the callback stash.
+
+Alternatives: request-scoped cache token, refcount/handoff on publish, or defer `clearCachedFiles()` — all heavier; the thread-affinity guard is minimal and matches how the cache is actually used (`MeshAppearanceTemplate::asynchronousLoadCallback` → `iff.open(getName())` on the main thread only).
+
+Secondary hardening worth doing after the race fix: make `ZlibFile::decompress()` fatal on expand failure so garbage tags fail fast at open instead of at `create()`.
+
+---
+
+## Summary table
+
+| Hypothesis | Verdict |
+|------------|---------|
+| `clearCachedFiles()` mid-parse (re-entrancy) | **Refuted** for in-game path; crash is before `:634` |
+| Background steals preload cache during callback | **Confirmed design bug** (`:488` + `:673–681`) |
+| Garbage tag mechanism | Bad bytes at `Iff::open` time, likely miss-path decompress + ignored expand failure |
+| `const char*` key UAF | **Refuted** — keys live in `ms_fileData` |
+| `suspendAsynchronousLoaderThread` as confirmation | **Yes** — should suppress the cross-thread window |

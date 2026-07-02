@@ -1,0 +1,252 @@
+# CONSULT-55 (fresh Opus) — Concurrency/lifetime verdict
+
+## TL;DR
+
+The leading suspicion in the brief — that the `AsynchronousLoader` frees/recycles/decompresses-in-place
+the cached `.sht` buffer out from under the main-thread `Iff` parse (via `cachedFilesMap`) — **does not
+hold up under this client's configuration.** I traced every cross-thread and re-entrant interleaving
+through that arena and each one resolves to either a *clean ownership handoff* or a *cache-miss that
+reloads correct bytes from disk*. That path is airtight.
+
+The garbage tag comes from a **different, genuinely unsynchronized shared structure that both threads
+touch: the `TreeFile::SearchCache` red-black-tree map (`m_cachedFileMap`).** The main thread mutates it
+(`std::map::insert`) across many frames during zone-in via `CachedFileManager::preloadSomeAssets()`
+(and, for space, `SpacePreloadedAssetManager`), while the **loader thread concurrently reads it**
+(`std::map::find`) via `TreeFile::open` — and the entire search-node traversal in `TreeFile::open`
+runs **outside** `TreeFile::ms_criticalSection`. `SearchCache::open/exists/addCachedFile` take **no lock
+at all**. Concurrent `find` vs `insert` on a node-based tree is UB: `find` follows a pointer that
+`insert` is rotating/rebalancing and lands on the wrong node (or a torn insert leaves the tree
+*persistently* malformed). The wrong `CachedFile` yields the wrong file's bytes (or a wild
+`m_buffer`) → the `.sht` gets a garbage/wrong buffer → `iff.getCurrentName()` returns `"??]'"`.
+
+`ZlibFile::decompress()` **discards `expand()`'s return value** (ZlibFile.cpp:152), so any upstream
+glitch degrades into "valid-length buffer full of garbage" rather than a clean error — this is the
+amplifier that turns the race into *"Unknown shader template tag"* instead of an AV or a load failure.
+
+---
+
+## Source assumptions I rely on (all verified in-tree unless flagged)
+
+- **A1** Shipping client installs the file layer with the streamer thread ON:
+  `SwgClient/.../ClientMain.cpp:274 SetupSharedFile::install(true, skuBits)` → `FileStreamer::ms_useThread == true`.
+- **A2** `cachedFilesMap` add/open/clear are all under `TreeFile::ms_criticalSection`
+  (TreeFile.cpp:669-705, 937-944, 951-965).
+- **A3** The **search-node traversal** in `TreeFile::open` (TreeFile.cpp:707-751) runs **outside**
+  `ms_criticalSection` — the lock covers only the `cachedFilesMap` lookup (675-684).
+- **A4** `SearchCache::open` / `exists` / `getFileSize` / `addCachedFile` (TreeFile_SearchNode.cpp:1103-1205)
+  hold **no lock** while doing `m_cachedFileMap->find/insert`.
+- **A5** The loader thread calls `TreeFile::open(..., PriorityLow, true)` (AsynchronousLoader.cpp:488),
+  and that call is **not** inside any `ms_mutex` scope.
+- **A6** `CachedFileManager::preloadSomeAssets()` runs on the **main thread, in 1-second slices spread
+  across frames** (CachedFileManager.cpp:183-227), pumped from `GroundScene.cpp:2087` in the *loading*
+  branch — i.e., concurrent with active async loading. It calls `TreeFile::cacheFile` →
+  `SearchCache::addCachedFile` → `m_cachedFileMap->insert`.
+- **A7** `SearchCache` entries are **never evicted** (added only; freed only in `~SearchCache`,
+  TreeFile_SearchNode.cpp:1090-1099). So a `CachedFile*` obtained from the map stays valid — the fix can
+  drop the map lock before `createAbstractFile()`.
+- **A8** An `Iff` **owns its parse buffer** (`data` is transferred out of `MemoryFile::readEntireFileAndClose`
+  which nulls `m_buffer`, or is a fresh `new byte[]` from `ZlibFile::decompress`). `clearCachedFiles()`
+  frees `cachedFilesMap` entries, never the Iff's `data`. (Iff.cpp:335-392, MemoryFile.cpp:170-175.)
+- **A9** `ZlibFile::decompress()` casts away `ZlibCompressor().expand(...)`'s result (ZlibFile.cpp:152)
+  and returns a `new byte[]` that is garbage/partially-written if expansion fails or the source is short.
+- **A10 (to confirm at repro, see §4)** The crashing `.sht` is *preloaded by the loader thread* and
+  published through `cachedFilesMap`, so the loader-thread `find()` is the race victim. If instead a torn
+  `insert` leaves the tree persistently malformed, even a later main-thread `find` mis-navigates — so the
+  mechanism holds either way; A10 only decides *which* thread first observes the damage.
+
+---
+
+## 1. The interleaving that produces a garbage IFF tag
+
+**Actors:** MAIN thread (frame loop: `CachedFileManager::preloadSomeAssets` + `AsynchronousLoader::processCallbacks`
++ the async callback that opens the `.sht`), LOADER thread (`AsynchronousLoaderNamespace::threadRoutine`,
+which calls `TreeFile::open`).
+
+**Shared unsynchronized state:** `SearchCache::m_cachedFileMap` (a `std::map`, i.e. a red-black tree).
+
+```
+MAIN (preloadSomeAssets, frame N..N+k)          LOADER (threadRoutine, servicing a request)
+------------------------------------            ------------------------------------------
+TreeFile::cacheFile("...")                       ...
+  SearchCache::addCachedFile(name)               TreeFile::open("shader/..._cs8_tato.sht", PriorityLow)
+    abstractFile = TreeFile::open(...)             [line 488; NOT under ms_mutex]
+    cf = new CachedFile(name, abstractFile)        for (node : ms_searchNodes)   [UNLOCKED, 707-751]
+    m_cachedFileMap->insert(cf)  <== TREE            file = SearchCache::open(name)
+      ...rotate/recolor/relink nodes...  <=========>   m_cachedFileMap->find(&crc)  <== TREE TRAVERSAL
+      (rebalance in progress)                          follows a child pointer mid-rewrite
+                                                        → lands on WRONG node OR a half-linked node
+                                                      returns iter->second = WRONG CachedFile* (or garbage)
+                                                      return cf->createAbstractFile()
+                                                        compressed: new ZlibFile(wrongLen, wrongBuf, .., false)
+                                                        plain:      memcpy(new[wrongLen], wrongBuf, wrongLen)
+                                                    // loader now holds a buffer that is the WRONG file's
+                                                    // bytes (or wild memory) but labeled as the .sht
+                                                  cachedFile.file = <that buffer>
+                                                  request->cachedFiles.push_back(cachedFile)
+```
+
+Then on the MAIN thread, later, in `AsynchronousLoader::processCallbacks` (AsynchronousLoader.cpp:600-635):
+
+```
+TreeFile::addCachedFile(".../_cs8_tato.sht", <wrong buffer>)   // publish, keyed by the correct name
+(*request->callback)(...)                                       // MeshAppearanceTemplate → ShaderPrimitiveSetTemplate
+  → ShaderTemplateList::fetch(iff) → named-redirect → fetch(TemporaryCrcString(filename))
+    → Iff iff; iff.open("..._cs8_tato.sht", true)               // TreeFile::open hits cachedFilesMap → the WRONG buffer
+      → open(*file): data = file.readEntireFileAndClose()       // Iff now owns the wrong bytes
+    → create(name, iff): targetTag = iff.getCurrentName()       // = "??]'"  → FATAL (ShaderTemplateList.cpp:546→567)
+```
+
+**Why the byte buffer is garbage and not just "a different valid file":** `find()` traversing during an
+`insert` rebalance can (a) return a node whose `CachedFile*` slot is being relinked → a stale/garbage
+pointer → `createAbstractFile` reads a wild `m_buffer`/`m_length`; or (b) return a *valid but wrong*
+`CachedFile` → the `.sht` slot receives some other asset's bytes whose leading tag is not `FORM/SSHT`.
+Case (a) with a compressed entry runs `expand()` over a wild source and **silently ignores failure**
+(A9) → the fresh `new byte[len]` is left partly uninitialized → the classic 4-byte garbage tag `"??]'"`.
+
+**Single-thread re-entrant variant (also covered, and stronger for "persistent" repros):** a data-race
+`insert` is not merely a transient window. If the rotation is torn (one thread's write to a child/parent
+link is lost), the red-black tree is left **permanently malformed**. From that point on, *every* `find`
+— including main-thread finds in later frames — can mis-navigate. That removes the need for the loader
+to be the specific victim (relaxes A10) and explains why a session, once it goes bad, can crash even on
+a main-thread cold open of the `.sht`.
+
+**Why the classic `cachedFilesMap` interleavings are NOT the cause (refutation of the brief's lead):**
+
+- *Cross-thread steal.* While the main callback holds request R1's files in `cachedFilesMap`, the loader
+  can `TreeFile::open` the same file and **detach** it (`file = it->second; it->second = NULL;`,
+  TreeFile.cpp:680-681, under the lock). The detach is atomic, so only one consumer ever gets the
+  non-NULL pointer. The main thread then sees NULL → **cache miss → correct disk reload.** No corruption.
+- *Re-entrant `clearCachedFiles()`.* Even if a nested `processCallbacks` clears the whole cache mid-callback,
+  the outer callback's next open is a cache miss → correct disk reload. `clearCachedFiles` only deletes
+  *non-NULL* map values, and detach/clear/add are mutually exclusive under `ms_criticalSection`, so there
+  is no double-free and no free of a pointer a consumer already holds (A2, A8).
+- *Torn buffer fill.* The loader fully fills each buffer before pushing the request to `ms_completedRequests`
+  under `ms_mutex`; the main thread reads it only after acquiring `ms_mutex` — a happens-before edge, so
+  no torn read.
+- *Seek/read race on a shared handle.* Ruled out: `ms_useThread == true` (A1), so **every** read
+  (`FileStreamer::File::read`) is marshaled to the single `FileStreamerThread` worker, which does
+  `seek()+read()` atomically (FileStreamerThread.cpp:165-270, 283-353). Loose files additionally get a
+  fresh `OsFile` per open (SearchPath/SearchAbsolute::open → `FileStreamer::open`). No shared file position.
+- *Pool allocator race.* `MemoryBlockManager::allocate/free` are guarded by `ms_globalCriticalSection`
+  (MemoryBlockManager.cpp:584-634). Not a source.
+
+So a cache-miss reload always returns correct bytes, and a cache hit is a clean single-owner handoff.
+The only remaining producer of *garbage-labeled-as-this-file* is the unlocked `SearchCache` tree.
+
+---
+
+## 2. Ranking by consistency with "intermittent, worse after a rebuild (cold caches → slower loads)"
+
+1. **SearchCache `find`-vs-`insert` data race (PRIMARY).** *Perfect* fit. After a rebuild the disk/OS
+   file cache is cold, so `CachedFileManager`/`SpacePreloadedAssetManager` preloading is *slow* and its
+   `insert` stream stretches across **many more frames of zone-in** — precisely when the async loader is
+   busiest opening meshes/shaders → the concurrent `find`/`insert` overlap window is far wider. Warm
+   caches → preload finishes in a frame or two → tiny window → rare repro. The crashing asset is a
+   *space/spaceport* shader, and the space path runs `SpacePreloadedAssetManager::preloadSomeAssets` +
+   `CachedFileManager::preloadSomeAssets` concurrently with async loads (GroundScene.cpp:2081-2088).
+2. **`expand()`-return discarded (AMPLIFIER, not root).** Explains the *form* of the symptom (garbage
+   tag vs AV/clean-fail) for compressed entries. Consistent with intermittency because it only bites
+   when an upstream glitch (from #1) corrupts the compressed source.
+3. **`cachedFilesMap` steal / re-entrant `clearCachedFiles`.** *Refuted* as a garbage source (→ cache
+   miss → correct reload). Listed only so it isn't chased again.
+4. **Seek/read race / pool race.** *Refuted* (streamer-thread serialization; mutex-guarded pool).
+
+---
+
+## 3. Minimal correct fix
+
+**Add one dedicated leaf `Mutex` to `SearchCache` guarding only the `std::map` operations. Do NOT extend
+`TreeFile::ms_criticalSection` over the traversal** (that would serialize all cross-thread I/O dispatch —
+"serialize the loader into uselessness"). Scope the lock so it never wraps a nested `TreeFile::open`.
+
+In `TreeFile_SearchNode.cpp`, add `Mutex m_mapMutex;` to `SearchCache`, and:
+
+```cpp
+// open(): lock ONLY the find; copy the pointer out (valid — no eviction, A7); build outside the lock.
+AbstractFile * TreeFile::SearchCache::open(char const * const fileName, AbstractFile::PriorityType, bool & deleted)
+{
+    deleted = false;
+    TemporaryCrcString const crcString(fileName, true);
+    CachedFile const * cf = 0;
+    {
+        Mutex::ScopedLock lock(m_mapMutex);
+        CachedFileMap::iterator iter = m_cachedFileMap->find(&crcString);
+        if (iter != m_cachedFileMap->end())
+            cf = iter->second;
+    }
+    return cf ? cf->createAbstractFile() : 0;   // decompress/memcpy OUTSIDE the lock
+}
+
+// exists()/getFileSize(): wrap only the find in the same lock.
+
+// addCachedFile(): keep TreeFile::open + `new CachedFile(...)` OUTSIDE the lock; wrap ONLY the insert.
+int TreeFile::SearchCache::addCachedFile(char const * const fileName)
+{
+    ... AbstractFile * abstractFile = TreeFile::open(fileName, PriorityData, false);   // OUTSIDE lock
+    CachedFile * const cachedFile = new CachedFile(fileName, abstractFile);            // OUTSIDE lock
+    int const fileSize = cachedFile->getCompressedLength();
+    delete abstractFile;
+    bool result;
+    {
+        Mutex::ScopedLock lock(m_mapMutex);
+        result = m_cachedFileMap->insert(CachedFileMap::value_type(cachedFile->getCrcString(), cachedFile)).second;
+    }
+    if (!result) delete cachedFile;   // dup — drop (outside lock)
+    return result ? fileSize : 0;
+}
+```
+
+**Deadlock proof (against `RecursiveMutex` `ShaderTemplateList::ms_criticalSection`, `TreeFile::ms_criticalSection`,
+and `AsynchronousLoader::ms_mutex`):** `m_mapMutex` is a strict leaf.
+
+- It is acquired only inside `SearchCache` methods, and the critical region calls **nothing that locks**
+  (the `TreeFile::open` in `addCachedFile` and `createAbstractFile` in `open` are moved *outside* it). So
+  `m_mapMutex` is never held while any other lock is taken → it cannot be the *first* lock in a cycle.
+- Every caller reaches `SearchCache` via `TreeFile::open`'s traversal, which by A3 runs **after**
+  `TreeFile::ms_criticalSection` has been released, and by A5 the loader is **not** holding `ms_mutex`.
+  On the main thread the order is `ShaderTemplateList::ms_criticalSection` → (`TreeFile::ms_criticalSection`
+  briefly, released) → `m_mapMutex`; no `SearchCache` code ever acquires the other three, so the ordering
+  is strictly one-directional (X → `m_mapMutex`, never `m_mapMutex` → X). No cycle exists → deadlock-free.
+
+**No useless serialization:** the lock is held only for an O(log n) tree `find`/`insert` (sub-microsecond).
+Decompression (`ZlibFile::decompress`), `memcpy`, and all disk I/O happen **outside** it. `find`/`find`
+concurrency (the common case) is uncontended except during the rare `insert`. The async loader's throughput
+(I/O + decompress) is unaffected.
+
+**Belt-and-suspenders (cheap, independent):** in `ZlibFile::decompress()` stop discarding the result —
+`if (!ZlibCompressor().expand(...)) { WARNING/return-fail }` — so a corrupt source becomes a diagnosable
+failure instead of a silent garbage buffer. This closes the amplifier regardless of the map fix.
+
+*(If profiling ever shows `find`/`find` contention matters, swap `Mutex` for a shared/read-write lock —
+many concurrent readers, exclusive writer. Not needed for correctness.)*
+
+---
+
+## 4. Cheap detection instrument to confirm on the next repro
+
+Ordered cheapest-first; #1 needs zero code.
+
+1. **Turn on `validateIff` (already wired).** `Iff::open` FATALs via `IffNamespace::isValid` when
+   `ConfigSharedFile::getValidateIff()` is set (Iff.cpp:386). Add `validateIff=1` to the client `.cfg`.
+   This trips **at the `.sht` open** with the filename + size + CRC — i.e., at the *source* of the bad
+   buffer instead of downstream at the tag lookup, and tells you the corrupt length/CRC.
+
+2. **Provenance + thread tag in `TreeFile::open`.** When `validateIff` trips (or unconditionally under a
+   debug flag), log `Os::isMainThread()`, and *which search node* served the file (cachedFilesMap hit vs
+   `SearchCache::open` vs a TRE/dir node), plus the first 16 bytes of the buffer. If the bad `.sht` buffer
+   was produced on the **loader thread via `SearchCache::open`**, that confirms A10/the primary mechanism.
+
+3. **SearchCache race canary (5 lines, temporary).** Add `volatile long s_inInsert;` incremented around the
+   `m_cachedFileMap->insert` in `addCachedFile` and decremented after; in `SearchCache::open`, if a `find`
+   observes `s_inInsert != 0`, `REPORT_LOG` "SearchCache find overlapped insert (thread=%d, file=%s)". A
+   single hit during a zone-in that later crashes is direct evidence of the concurrent window. (Remove once
+   the lock lands; the lock makes it impossible.)
+
+4. **Tree-integrity check (optional, heavier).** Under a debug flag, after each `addCachedFile` insert run
+   a quick `std::distance(begin,end) == recorded_count` / ordering sanity walk of `m_cachedFileMap`; a
+   mismatch proves a torn/lost rebalance from a racing `find`.
+
+Expected signature if the hypothesis is right: instrument #2 shows the corrupt `.sht` buffer originating on
+the **loader thread** through a **`SearchCache` hit**, temporally coincident with a main-thread
+`CachedFileManager`/`SpacePreloadedAssetManager` preload slice (instrument #3 canary firing) — and the
+whole thing disappears once `m_mapMutex` is in place.

@@ -1,0 +1,60 @@
+﻿**Finding:** I do **not** see a free/reuse window in the async `TreeFile` cached-file path between `TreeFile::open()` returning the `.sht` and `ShaderTemplateList::create()` reading `iff.getCurrentName()`.
+
+The byte lifetime is:
+
+1. Loader thread builds `request->cachedFiles`
+   [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:467)
+
+   - Non-zlib file: `TreeFile::open()` returns an `AbstractFile*`; loader wraps it in `new MemoryFile(file)`, whose ctor takes ownership of a full `readEntireFileAndClose()` buffer.
+     [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:488)
+     [MemoryFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/MemoryFile.cpp:71)
+
+   - Zlib file: loader keeps the `ZlibFile` object directly.
+     [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:491)
+
+   - TRE compressed entries allocate their own compressed buffer and return `new ZlibFile(..., ownsCompressedBuffer=true)`.
+     [TreeFile_SearchNode.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode.cpp:528)
+
+2. Main thread publishes the cached file into `TreeFile`
+   [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:624)
+   [TreeFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:935)
+
+3. `Iff::open(name, true)` opens it. The `true` is only `optional/allowFail`, not a cache flag.
+   [Iff.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/Iff.cpp:335)
+
+4. On a cache hit, `TreeFile::open()` transfers the `AbstractFile*` out of the global cache by setting the map value to `NULL` before returning.
+   [TreeFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:677)
+
+   That matters because later `clearCachedFiles()` only deletes non-null map values.
+   [TreeFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:949)
+
+5. `Iff::open(AbstractFile&)` then detaches the actual bytes via `file.readEntireFileAndClose()` and stores that pointer in `Iff::data`.
+   [Iff.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/Iff.cpp:375)
+
+   - `MemoryFile::readEntireFileAndClose()` returns its owned `m_buffer` and nulls it, so deleting the `MemoryFile` cannot free those bytes.
+     [MemoryFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/MemoryFile.cpp:170)
+
+   - `ZlibFile::readEntireFileAndClose()` allocates a fresh uncompressed buffer, decompresses into it, closes itself, and returns that fresh buffer.
+     [ZlibFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/ZlibFile.cpp:148)
+     [ZlibFile.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/ZlibFile.cpp:168)
+
+   - zlib uses a local `z_stream`, not a shared scratch buffer.
+     [ZlibCompressor.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedCompression/src/shared/ZlibCompressor.cpp:187)
+
+6. `ShaderTemplateList::create()` reads `iff.getCurrentName()` from that `Iff::data` buffer.
+   [ShaderTemplateList.cpp](D:/Code/swg-client-v2/src/engine/client/library/clientGraphics/src/shared/ShaderTemplateList.cpp:546)
+   [Iff.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/Iff.cpp:520)
+
+So: `TreeFile::clearCachedFiles()` can clean the cache map after the callback, but it should not be able to free the `.sht` bytes being parsed by `ShaderTemplateList::create()`. By then the bytes are owned by the local `Iff`.
+
+**Refuted suspects in this trace:**
+
+- No shared zlib decompression buffer.
+- No cache-key lifetime issue: async file names point into `ms_fileData`, allocated from the manifest at install and freed only at async loader removal.
+  [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:165)
+- No direct `clearCachedFiles()` runtime caller except async completed-request cleanup.
+  [AsynchronousLoader.cpp](D:/Code/swg-client-v2/src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp:634)
+
+**Conclusion:** if `targetTag` is garbage at `ShaderTemplateList::create()`, the overwrite is not from the cached `AbstractFile` being freed out from under `Iff`. It is either an unrelated heap overwrite of `Iff::data`, corruption of the `Iff` stack fields, or a bad write during/nested under shader template creation after `Iff::open()` has detached the bytes.
+
+A correct fix probably does **not** live in `TreeFile` refcounting or lock scope. The next useful narrowing step is instrumentation/page-heap around the `Iff::data` allocation for the redirected `.sht`: log pointer/size/CRC immediately after `Iff::open()`, then validate the first 12 bytes again right before `ShaderTemplateList::create()` reads `getCurrentName()`.
