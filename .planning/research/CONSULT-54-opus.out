@@ -1,0 +1,110 @@
+# CONSULT-54 (fresh Opus) — verdict: NOT a geometric edge in the shared ray-trace. The divergence is OUR inward pull-in rate-limit.
+
+## Bottom line
+With the camera ray-trace byte-identical in both trees and both trees loading the same
+collidable interior data, **no pure-geometry candidate can make OURS diverge from REFERENCE** —
+any geometric edge in `ClientWorld::collide` fires identically in both binaries. The only place
+identical rays + identical geometry can produce different camera placement is in **how the ray
+result is consumed**, and that is exactly one of our two documented additions:
+
+**The inward pull-in rate-limit at `FreeChaseCamera.cpp:782-787` holds `m_currentZoom` larger
+than the collision-limited (wall-safe) value for the frames it takes to ease in. A larger zoom =
+a longer boom = the camera end-point sits on the far side of the wall during the ease. That IS
+the see-through.** The interior zoom cap (`ms_interiorMaximumZoom`, :80/:613-617) masks it by
+keeping the indoor boom < 3 m so it never reaches a far wall.
+
+Confirmed on disk: `D:\Code\client-tools\...\FreeChaseCamera.cpp` contains **zero** occurrences of
+`cs_cameraPullInSpeed`, `zoomAtFrameStart`, `interiorMaximumZoom`, or `maxPullIn`. Reference goes
+straight from the diamond result (`m_currentZoom = ...minimumT...`, our line 770) to `move_o`, with
+**no rate-limit** → instant pull-in → the boom is always at-or-inside the wall → no see-through.
+
+## Why each pure-geometry candidate is NOT the cause of the OURS-vs-REFERENCE divergence
+All five live in byte-identical code exercised on identical collidable data, so they cannot
+differentially affect our build. (They may each be a real property of the shared algorithm — they
+just can't explain a divergence, which is what we must explain.)
+
+1. **Pivot within ~0.25 m of the wall.** Real edge of the shared algorithm, but it degrades REFERENCE
+   equally. In reference the instant pull-in still parks the boom at the hit point; only our rate-limit
+   turns "pivot near wall" into a visible see-through by lagging the boom outward. → symptom of the
+   rate-limit, not an independent cause.
+2. **Segment shorter than the `0.25/lineDistance` near-plane bias.** That bias exists **only in the
+   `ms_cameraSimpleCollision` single-ray path (:721)**. The default indoor path is the 4-ray diamond,
+   which applies **no** near-plane bias (:754 uses `t` raw). So this can't be driving the default case,
+   and where it applies it is identical in both trees.
+3. **`getParentCell()` scoping the query to the camera's cell, excluding the wall's cell.** Identical
+   call in both trees (`:718/:752`), identical portal graph from the same TREs → identical result in
+   both binaries. Cannot diverge. (If it mis-scoped, reference would see through the same wall.)
+4. **Back-face culling of the wall's collidable normal.** `CollisionWorld.cpp`/`CollideParameters.cpp`
+   are 0-diff; back-face behavior is identical in both. Cannot diverge.
+5. **Thin pillar/edge slipping between the ±0.25 diamond rays.** A genuine property of a 4-ray probe,
+   but again identical spacing, identical geometry → identical in both trees. And it fails toward a
+   *thin* occluder (pillar/doorframe), not the broad flat *back wall* in the symptom.
+
+Net: the shared ray-trace **cannot** be the source of a divergence. The source is our post-trace
+consumption. Verdict = **not-a-shared-geometry-edge**; named cause = **our inward pull-in rate-limit**.
+
+## Exact mechanism (why "rotate to point AWAY from the wall" triggers it)
+Per-frame the rate-limit enforces `m_currentZoom >= zoomAtFrameStart - elapsedTime*cs_cameraPullInSpeed`
+(`:785-786`). When you yaw the camera so the boom swings *through* the wall, the collision-limited
+zoom (`:770`) drops by a large amount in a single frame (∝ the boom's angular velocity). The rate-limit
+refuses to follow faster than `cs_cameraPullInSpeed` (8 m/s), so for the ~N frames of the ease the boom
+stays near its old, long length = **end-point beyond the wall = see-through**, clearing as the ease
+completes or as you pitch (which re-shortens the boom / re-triggers the borderline cell-cull flip noted
+in the zoom-cap comment). Fast rotation → large lag → gross see-through; the 3 m cap simply prevents the
+boom from ever being long enough to reach a far wall, hiding the whole effect.
+
+## Minimal fix (preserves BOTH door-snap fixes; lets you delete the zoom-cap band-aid)
+Bound the *penetration*, not the *pull-in rate*. Keep the ease exactly as-is, but never let the eased
+boom sit more than a near-clip-sized margin **beyond** the wall-safe distance the rays just reported.
+
+New tunable next to the others (near `:108`):
+```cpp
+static const float cs_cameraMaxCollisionLag = 0.25f; // max metres the eased camera may sit BEYOND a colliding wall (see-through guard); = diamond half-width / near-plane bias
+```
+
+Replace the block at `FreeChaseCamera.cpp:782-787`:
+```cpp
+if (m_colliding)
+{
+    float const collisionZoom = m_currentZoom;               // wall-safe distance from THIS frame's rays (:770 / :722)
+    float const maxPullIn     = elapsedTime * cs_cameraPullInSpeed;
+
+    // --- door-snap rate-limit (UNCHANGED): don't yank inward faster than cs_cameraPullInSpeed ---
+    if (m_currentZoom < zoomAtFrameStart - maxPullIn)
+        m_currentZoom = zoomAtFrameStart - maxPullIn;
+
+    // --- see-through guard (NEW): the eased boom may never sit more than cs_cameraMaxCollisionLag
+    //     beyond the wall-safe distance. The ease still runs inside [collisionZoom, +lag] at the
+    //     capped velocity, so a doorframe graze (transient, 1-2 frames) never reaches the cap ->
+    //     no reintroduced yank; a SUSTAINED wall drives the eased zoom onto the cap and converges
+    //     within ~one frame to wall-safe+0.25 -> no gross see-through, and because the wall hit is
+    //     stable there is no in/out flicker to yank on.
+    m_currentZoom = std::min (m_currentZoom, collisionZoom + cs_cameraMaxCollisionLag);
+}
+```
+
+Then retire the band-aid: default `ms_interiorMaximumZoom` to `0.f` (`:80`) or set
+`[ClientGame] freeChaseCameraInteriorMaximumZoom=0` in the active `.cfg`, restoring full indoor zoom.
+
+### Why this does not regress the door-snap fixes
+- `cs_seamGrazeEpsilon` is avatar-side (`FloorMesh.cpp`) — untouched.
+- The `cs_cameraPullInSpeed` rate-limit is **fully retained**; the guard only clamps the FAR bound, so
+  the inward velocity is still capped — it does not out-run or remove the rate-limit, and it never
+  re-introduces an instant snap: within the lag band the pull-in is still eased. A transient doorframe
+  collision resolves before the eased zoom ever reaches `collisionZoom + lag`, so the cap stays inactive
+  for exactly the case the rate-limit was added to smooth.
+- The shoulder-offset ease (`:698`) is untouched.
+- Pop-OUT / recovery (no collision, or collisionZoom ≥ zoomAtFrameStart) is untouched — block is gated
+  on `m_colliding` and the `min()` is a no-op when not pulling in.
+
+`cs_cameraMaxCollisionLag = 0.25 m` matches the diamond half-width and the simple-path near-plane bias,
+i.e. the boom can poke past the wall by at most a near-clip-sized sliver — the same tolerance reference
+already lives with. Tune down toward 0.1 m if any residual sliver shows; that trades a hair more
+doorframe firmness for zero visible see-through.
+
+### Tighter alternative if a fixed 0.25 m poke is unacceptable (persistence gate)
+Add a `bool m_wasColliding` member. If colliding **this frame AND last frame** (sustained wall, no
+flicker) → hard-set `m_currentZoom = collisionZoom` (instant, but stable ⇒ no yank). If colliding this
+frame **only** (transient / doorframe graze) → apply the existing rate-limit ease. Yields **zero**
+steady-state see-through on walls while still easing genuine transients. Costs one bool + one branch;
+slightly larger diff than the penetration-cap, so I recommend the cap as the primary, this as fallback.

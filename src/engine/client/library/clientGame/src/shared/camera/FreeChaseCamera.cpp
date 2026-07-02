@@ -77,7 +77,6 @@ namespace
 	int   ms_currentSetting = -1;
 	float ms_pitch;
 	float ms_cameraZoomSpeed;
-	float ms_interiorMaximumZoom = 3.0f; // retail/SWGEmu parity: cap chase-cam zoom-out (meters) while inside a cell so it never reaches interior back walls (portal see-through) or lets props occlude the avatar; matched to SWGEmu's indoor framing. <=0 disables. cfg override: [ClientGame] freeChaseCameraInteriorMaximumZoom
 	bool  ms_cameraSimpleCollision;
 	bool  ms_useCameraOffset;
 	bool  ms_cameraOffsetChanged = false;
@@ -159,7 +158,6 @@ FreeChaseCamera::FreeChaseCamera () :
 	{
 		ms_spinYawPerSecond = convertDegreesToRadians (ConfigFile::getKeyFloat ("ClientGame", "spinYawDegreesPerSecond", convertRadiansToDegrees (ms_spinYawPerSecond)));
 		ms_cameraZoomSpeed = ConfigClientGame::getFreeChaseCameraZoomSpeed ();
-		ms_interiorMaximumZoom = ConfigFile::getKeyFloat ("ClientGame", "freeChaseCameraInteriorMaximumZoom", ms_interiorMaximumZoom);
 
 		const char * const section = "ClientGame/FreeChaseCamera";
 		LocalMachineOptionManager::registerOption (ms_cameraMode,      section, "cameraMode", 1);
@@ -600,21 +598,6 @@ float FreeChaseCamera::alter (float elapsedTime)
 		const float settingPercent = static_cast<float>(ms_currentSetting) / (m_numberOfSettings - 1);
 		float zoomMultiplier = 1.0f + settingPercent * m_zoomMultiplier;
 		m_zoom *= zoomMultiplier;
-	}
-
-	// Interior zoom cap (retail / SWGEmu parity): hold the chase camera close to the avatar while inside
-	// a cell so it never reaches far interior walls. Pressed against a back wall, gl05/32-bit re-triggers
-	// the borderline portal cell-cull flip (exterior shows through the wall, clears on look up/down -- the
-	// same artifact the D3DCREATE_FPU_PRESERVE fix addresses) AND interior props end up between the camera
-	// and the avatar. SWGEmu/retail avoid all of this by simply not letting the indoor camera zoom out to
-	// the walls. Caps the desired zoom only (the persistent zoom SETTING is untouched, so the camera
-	// restores to the player's chosen distance on leaving the building). <=0 disables. Tunable live via
-	// [ClientGame] freeChaseCameraInteriorMaximumZoom.
-	if (ms_interiorMaximumZoom > 0.f)
-	{
-		CellProperty const * const cameraTargetCell = m_target ? m_target->getParentCell () : 0;
-		if (cameraTargetCell && cameraTargetCell != CellProperty::getWorldCellProperty ())
-			m_zoom = std::min (m_zoom, ms_interiorMaximumZoom);
 	}
 
 	// door-snap / back-room fix: baseline for the inward pull-in rate limit is LAST frame's final zoom,

@@ -81,7 +81,9 @@ Direct3d11_StaticVertexBufferData::Direct3d11_StaticVertexBufferData(const Stati
 	m_descriptor(Direct3d11_VertexBufferDescriptorMap::getDescriptor(vertexBuffer.getFormat())),
 	m_d3dBuffer(),
 	m_lockBuffer(nullptr),
-	m_lockedReadOnly(false)
+	m_lockedReadOnly(false),
+	m_shadow(nullptr),
+	m_shadowBytes(0)
 {
 	ID3D11Device * const device = Direct3d11_Device::getDevice();
 	NOT_NULL(device);
@@ -110,6 +112,11 @@ Direct3d11_StaticVertexBufferData::~Direct3d11_StaticVertexBufferData()
 		operator delete[](m_lockBuffer);
 		m_lockBuffer = nullptr;
 	}
+	if (m_shadow)
+	{
+		operator delete[](m_shadow);
+		m_shadow = nullptr;
+	}
 	m_d3dBuffer.Reset();
 }
 
@@ -131,15 +138,17 @@ void *Direct3d11_StaticVertexBufferData::lock(bool readOnly)
 	m_lockBuffer = operator new[](byteWidth);
 	m_lockedReadOnly = readOnly;
 
-	// Engine writes vertex data into the returned pointer; on unlock we
-	// UpdateSubresource into the GPU buffer. For readOnly locks the data
-	// is undefined (D3D11 USAGE_DEFAULT buffers cannot be read back from
-	// the GPU directly -- the codebase only locks for write).
-	if (readOnly)
-	{
-		// Zero so callers don't read stale memory.
-		memset(m_lockBuffer, 0, byteWidth);
-	}
+	// Seed the scratch buffer from the CPU shadow so read-only consumers see the REAL
+	// vertex positions (a DEFAULT VB can't be Map-read back from the GPU). This is what
+	// ShaderPrimitiveSetTemplate::collisionSplit() locks read-only at load time to build
+	// the CPU collision triangle list -- without the shadow it read all-zero positions,
+	// collapsing every mesh's collision geometry to the origin (interior-wall camera
+	// collision silently absent on gl11 -> chase-cam saw through walls). Mirrors the
+	// StaticIndexBufferData CPU-shadow fix (the cape-spike collide() IB corruption).
+	if (m_shadow && m_shadowBytes == byteWidth)
+		memcpy(m_lockBuffer, m_shadow, byteWidth);
+	else
+		memset(m_lockBuffer, 0, byteWidth); // no shadow yet -> zero so callers don't read stale heap
 
 	return m_lockBuffer;
 }
@@ -156,6 +165,24 @@ void Direct3d11_StaticVertexBufferData::unlock()
 		ID3D11DeviceContext * const context = Direct3d11_Device::getContext();
 		NOT_NULL(context);
 		context->UpdateSubresource(m_d3dBuffer.Get(), 0, nullptr, m_lockBuffer, 0, 0);
+
+		// Persist the uploaded vertex bytes as the CPU shadow so a later read-only lock
+		// (collisionSplit) sees real positions rather than the zeroed scratch heap.
+		UINT const byteWidth = static_cast<UINT>(m_descriptor.vertexSize * m_vertexBuffer.getNumberOfVertices());
+		if (byteWidth > 0)
+		{
+			if (m_shadow && m_shadowBytes != byteWidth)
+			{
+				operator delete[](m_shadow);
+				m_shadow = nullptr;
+			}
+			if (!m_shadow)
+			{
+				m_shadow      = operator new[](byteWidth);
+				m_shadowBytes = byteWidth;
+			}
+			memcpy(m_shadow, m_lockBuffer, byteWidth);
+		}
 	}
 
 	operator delete[](m_lockBuffer);

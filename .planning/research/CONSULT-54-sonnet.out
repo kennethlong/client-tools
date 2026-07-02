@@ -1,0 +1,114 @@
+# CONSULT-54 (fresh Sonnet 5) — verdict: renderer/config mismatch (Thread A via config), not camera code, not game data
+
+## Bottom line
+
+The best-supported explanation is a **config-driven renderer mismatch**, not a render-side portal bug
+in the old sense, and not different game data. Concretely: **our currently-staged Release cfg forces
+`rasterMajor=11` (D3D11/gl11), while the actual reference binary the user played is physically incapable
+of running D3D11 at all** (it ships no gl11 DLL). If the "OUR client see-through" repro was run via
+`SwgClient_r.exe` (very likely — it's the freshly-rebuilt exe, `stage/SwgClient_r.exe` timestamped
+2026-07-01 08:04, same day), the user was comparing **D3D9 (reference) against D3D11 (ours)**, not
+same-renderer behavior. That reframes the whole question: this isn't necessarily "our camera goes
+through the wall" at all — it may be a still-undiagnosed **gl11-specific portal/depth render bug**,
+cosmetically resembling the old (already-fixed, D3D9/32-bit-only) cull-flip but mechanically unrelated.
+
+## Evidence
+
+### 1. Found the actual reference binary — and it can't run D3D11
+`D:\Code\client-tools-koogie\stage\` is a fully staged, playable build from the client-tools lineage
+(CMake-generated cfg, `SwgClient_d.exe` dated 2026-05-09). Its DLL set:
+```
+gl05_d.dll gl05_o.dll gl05_r.dll
+gl06_d.dll gl06_o.dll gl06_r.dll
+gl07_d.dll gl07_o.dll gl07_r.dll
+```
+**No gl11 DLL at all.** Its `client.cfg` has no `rasterMajor` key
+(`D:\Code\client-tools-koogie\stage\client.cfg`), so it falls through to the engine default —
+`src\engine\client\library\clientGraphics\src\win32\SetupClientGraphics.cpp:255/303` (`data.rasterMajor = 5`)
+— i.e. **gl05 (D3D9)**, and that's the *only* family it could load even if configured otherwise.
+
+### 2. Our Release cfg is currently forced to D3D11 with a self-contradicting comment
+`D:\Code\swg-client-v2\stage\client.cfg:77`:
+```
+rasterMajor=11   # gl05/D3D9 32-bit: D3DCREATE_FPU_PRESERVE fix verify at the cantina portal spot
+```
+The **value is 11 (D3D11/gl11)** but the **comment describes a gl05/D3D9 verify** — this is leftover
+state from an earlier RenderDoc diagnostic session (RenderDoc can't capture D3D9, so gl11 gets forced
+for captures — see AGENTS.md) that was never reverted. `stage\client_d.cfg:41` (Debug) is `rasterMajor=5`.
+So **Release and Debug currently point at two different renderer families on this machine.**
+`stage/SwgClient_r.exe` was rebuilt today (2026-07-01 08:04) — i.e. whatever repro used the Release exe
+most recently ran gl11.
+
+### 3. The old "portal cull flip" fix is explicitly proven NOT to apply here
+`src\engine\client\application\Direct3d9\src\win32\Direct3d9.cpp:1355-1361` (our tree, comment on the
+`D3DCREATE_FPU_PRESERVE` fix):
+> "x64 (SSE, no x87 mode) and D3D11 (never touches the FPU) are immune — which is exactly why the
+> see-through reproduced ONLY on gl05/32-bit."
+
+This is a **self-falsifying banner for the naive "same old bug resurfaced" theory** on two fronts:
+x64 is the active milestone platform, AND D3D11 is explicitly immune by construction. If today's
+symptom is happening on x64 and/or gl11, it is **not** a recurrence of the documented/fixed mechanism —
+it's either (a) a new, undiagnosed gl11 render bug, or (b) genuine camera-position penetration with an
+unrelated cause. Either way, "port more collision code" (banned framing) was never going to fix it,
+and neither is re-applying the FPU_PRESERVE lesson — that lesson doesn't transfer to D3D11.
+
+### 4. Portal/cell visibility is engine-side, not renderer-plugin code — but that cuts both ways
+`grep -rn "portal" src/engine/client/library/clientGraphics/src/win32/Direct3d9/` and the `Direct3d11/`
+equivalent both return **zero hits** in both trees. Portal/cell traversal lives in
+`sharedObject/src/shared/portal/{CellProperty,PortalProperty}.cpp` (renderer-agnostic). That means a
+renderer swap can't change *which cells are logically visible* — but it absolutely can change **how a
+visible cell's contents are drawn relative to depth/near-plane**, which is a distinct failure mode from
+cull logic: e.g. a wrong/missing depth-clear, a stale bound depth-stencil view, or a per-cell draw-order
+issue on the gl11 path could make exterior geometry paint over an interior wall **that IS correctly
+culled/visible** — indistinguishable from "see-through" to the eye, zero relation to camera collision.
+This project's own memory has a long tail of exactly these gl11-only symptoms with no D3D9 analog:
+additive-UI premultiply cyan fill, black bump walls from a cache-skip-zero-tail bug, blue face tint from
+a bake tombstone, an IB-cache use-after-free that corrupted rendering ~14s into a scene, and terrain
+blend-factor loss. A gl11-only depth/draw-order bug at building interior walls would fit this pattern
+precisely and would require **zero** change to camera or collision code — consistent with the given fact
+that FreeChaseCamera/ClientWorld::collide/CollisionWorld/CollideParameters are byte-identical.
+
+### 5. Game data is NOT a plausible differentiator — ruled out
+Thread B asked whether the reference ships different `camera/freechasecamera.iff` data or points at
+different TRE data. It doesn't need to: `client-tools-koogie\stage\client.cfg` points
+`TOCTreePath`/`searchTOC_*` at **the exact same `D:/Code/SWGSource Client v3.0/`** install we use. Same
+TRE archives → same `camera/freechasecamera.iff` bytes, same building/POB collision-mesh data, for both
+"OURS" and "the reference binary the user actually played." This kills the "different install/different
+collision data" hypothesis outright — it is provably the same data.
+
+### 6. Config defaults that DO transfer are identical, not a factor
+- `cameraSimpleCollision` (`ms_cameraSimpleCollision`, `FreeChaseCamera.cpp:81`/`166`): a
+  `LocalMachineOptionManager` option, zero-initialized `false` in both trees identically (declaration is
+  identical in both trees) → both use the 4-ray diamond path unless a user profile overrides it. Neither
+  `stage*/client*.cfg` nor `client-tools-koogie/stage/client.cfg` set it (it's a *LocalMachineOption*, not
+  a `.cfg` key at all, actually — registered per-user via the options file/registry, not `ConfigFile`).
+- `freeChaseCameraMaximumZoom` (`KEY_FLOAT(freeChaseCameraMaximumZoom, 1.f)`) and `cameraNearPlane`
+  (`KEY_FLOAT(cameraNearPlane, 0.25f)`) in `ConfigClientGame.cpp` are byte-identical defaults in both
+  trees, and neither is overridden in any of the three `.cfg` files inspected.
+- `FloatingPointModel` (`/fp:fast` vs `/fp:precise`) is **not set explicitly** in either tree's `.vcxproj`
+  files (checked `src/build/win32` in both) — both default to MSVC's `/fp:precise`. So there's no
+  compiler-FP-mode analog of the old device-FPU-mode bug either.
+
+## Recommended next diagnostic (concrete, ordered)
+
+1. **Pin down which exe/cfg produced the "OUR client see-through" repro.** Check `rasterMajor` in
+   whichever of `stage/client.cfg` (Release) / `stage/client_d.cfg` (Debug) was actually loaded. Given
+   `stage/client.cfg:77` currently reads `rasterMajor=11` and `SwgClient_r.exe` was rebuilt today, the
+   default assumption should be **gl11 was active**, not gl05.
+2. **Re-run the exact repro forcing `rasterMajor=5`** (edit `stage/client.cfg` back to 5 — BOM-safe via
+   Edit/Write, not PowerShell `Set-Content`) against `SwgClient_r.exe`. If the see-through **disappears**
+   on gl05, this is conclusively a gl11 render bug — drop the camera-collision framing entirely, drop the
+   interior-zoom-cap band-aid investigation, and open a RenderDoc D3D11 capture of the repro instead
+   (`renderdoc-cli.exe … pixel_history` at the wall pixel, and `debug pixel --trace` to see what's
+   actually driving the color — same tool used to root-cause the additive-premultiply cyan bug).
+3. **If it still reproduces on gl05** (ruling out gl11-only render bug), the remaining candidates are (a)
+   genuine camera-endpoint penetration from a subtle geometric edge case in the *shared* algorithm (the
+   brief allows this) or (b) an interior-geometry portal/collision-mesh boundary condition specific to
+   the building being tested. Next step there: log `ClientWorld::collide(...)`'s returned `result.getPoint()`
+   each frame next to the wall polygon plane distance, to directly distinguish "camera position crossed
+   the plane" (real penetration) from "camera stayed on the room side but the far side rendered anyway"
+   (still a render artifact, just not gl11-specific).
+4. Either way, **stop treating the 2026-06-20 `D3DCREATE_FPU_PRESERVE` fix and its cantina writeup as
+   evidence for the current bug** — its own comment proves it's inert on both D3D11 and x64/SSE, which
+   covers essentially every config this investigation would run under going forward (x64 is the active
+   platform per AGENTS.md).

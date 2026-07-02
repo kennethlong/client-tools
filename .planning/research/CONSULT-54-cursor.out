@@ -1,0 +1,148 @@
+﻿# CONSULT-54 (Cursor) — File:line findings
+
+## Task 1 — Geometric case in `FreeChaseCamera::alter`
+
+### Transform chain (pivot placement)
+
+```630:677:D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\camera\FreeChaseCamera.cpp
+	//-- move camera to the avatar's cell and position
+	{
+		const CellProperty* const targetCell = m_target->getParentCell ();
+		if (getParentCell () != targetCell)
+			setParentCell (const_cast<CellProperty*> (targetCell));
+		// ...
+		setTransform_o2p (targetObject->getTransform_o2c ());
+		// ...
+		yaw_o (m_yaw_w + (ms_cameraMode == CM_chase ? m_offsetYaw_w : 0.f));
+		m_offset = Vector::linearInterpolate(m_offset, m_desiredOffset, elapsedTime);
+		move_o(Vector(m_offset.x, m_offset.y + ms_vehicleCameraOffsetY, m_offset.z));
+		pitch_o (ms_pitch);
+	}
+```
+
+- **Pivot** = `getPosition_w()` after this block: avatar cell origin + shoulder/height offset, with camera yaw/pitch applied.
+- **Camera parent cell** is forced to the **player’s cell** (632–634). It is **never** updated to wherever the zoomed-out camera actually ends up.
+
+### Shoulder side-ray (above collision block)
+
+```683:699:D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\camera\FreeChaseCamera.cpp
+	// prevent shoulder cam from clipping geometry (due to near plane)
+	if (creatureObject && m_currentZoom >= scaledFirstPersonDistance)
+	{
+		CollisionInfo result;
+		Vector startPos_w = creatureObject->getPosition_w();
+		startPos_w.y += m_desiredOffset.y;
+		Vector endPos_w = startPos_w + (creatureObject->rotate_o2w(Vector::unitX) * (m_desiredOffset.x + 0.25f));
+		if(ClientWorld::collide(getParentCell(),startPos_w,endPos_w,...))
+		{
+			m_offset.x = linearInterpolate (m_offset.x, 0.0f, clamp (0.f, elapsedTime * cs_cameraPullInSpeed, 1.f));
+		}
+	}
+```
+
+This ray is **avatar-frame +X**, not camera-frame. It only eases shoulder offset; it does **not** constrain backward zoom.
+
+### Main collision block (diamond default)
+
+```711:792:D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\camera\FreeChaseCamera.cpp
+		const Vector cameraZ_p = Vector::negativeUnitZ * m_zoom;   // desired zoom, NOT m_currentZoom
+		const Vector start_w   = getPosition_w ();                  // pivot
+		const Vector end_w     = start_w + rotate_o2w (cameraZ_p); // desired camera endpoint
+
+		// 4 rays: pivot±0.25 in camera-local ±X/±Y → same endpoint offset
+		// ...
+		if (hit)
+			m_currentZoom = Lerp(start_w, end_w, minimumT).distance(start_w);
+		// ...
+		move_o (Vector::negativeUnitZ * m_currentZoom);  // actual placement
+```
+
+### Concrete geometry: “near wall, look away from wall”
+
+Assume player stands close to interior wall **W**, camera yaw rotated so view direction **V** points **away from W** (into the room).
+
+| Element | Location |
+|---|---|
+| **Pivot** (`start_w`) | ~0.5–1.5 m inside the cell, near W (player + `m_offset`) |
+| **Desired endpoint** (`end_w`) | `start_w + rotate_o2w(-Z * m_zoom)` — **behind the view axis**, i.e. opposite **V**, which points **toward W** |
+| **Actual camera** | Pivot + `rotate_o2w(-Z * m_currentZoom)` via `move_o` at line 792 |
+
+The 4 diamond rays (728–763) are parallel to the main segment, each offset ±0.25 m in camera-local X/Y. They test a **0.5 m cross-section tube** from pivot to desired endpoint. They do **not** test from the final camera position back toward the pivot.
+
+All queries use `getParentCell()` = **player’s interior cell** (718/752). In a non-world cell, `ClientWorld::internalCollide` hits only the **cell owner structure** plus portal recursion:
+
+```1609:1641:D:\Code\client-tools\src\engine\client\library\clientGame\src\shared\core\ClientWorld.cpp
+	else
+	{
+		Object const & object = cellProperty->getOwner ();
+		if (internalCollideObject (flags, &object, startPosition_w, result.getPoint (), ...))
+			{ collided = true; result = info; }
+	}
+	// portal crossing recurses into destinationCellProperty at truncated t
+```
+
+### Why wall W might not stop the camera — ranked
+
+| Mechanism | Likelihood | Lines |
+|---|---|---|
+| **A. Ray miss → no `m_colliding` → full zoom placement** | **Highest for “on far side”** | 741–742, 766–771, 792 |
+| **B. Camera extruded outside cell; render uses player cell for DPVS** | **High for visual see-through** (may not require true geometric pass-through) | 632–634, 872–889 `RenderWorld.cpp` |
+| **C. OUR rate-limit + recovery fight leaves camera outside despite hits** | **High in OUR only** (REFERENCE snaps instantly) | OUR 620–628, 774–786 vs REF 602, 666–667, 746 |
+| **D. Diamond path lacks 0.25 m near-plane pullback** | Low–medium (penetration, not full pass-through) | Diamond 754 vs simple 721 |
+| **E. `CF_interiorGeometry` is a no-op** | Explains data-dependent misses, not tree delta | Flag defined `ClientWorld.h:47,59`; **never read** in `ClientWorld.cpp` |
+| **F. Wrong cell for query** | Unlikely as primary cause | Cell is player cell; portal recursion handles crossings |
+| **G. Back-face / one-sided mesh** | Possible data issue | Inside `appearance->collide()` via `internalCollideObjectTest` |
+
+**Most likely miss path for “camera on far side”:** **A** — the segment `start_w → end_w` does not register a hit on the structure owner mesh (missing/thin collidable shell, portal traversal continuing the ray — `ClientWorld.cpp:1621–1641`), so `m_colliding` stays false and line 792 places the camera at full `m_currentZoom` through W.
+
+**Most likely for the symptom as observed (see exterior through wall):** **B** — camera world position is outside the cell hull while `getParentCell()` remains the interior cell:
+
+```872:889:D:\Code\client-tools\src\engine\client\library\clientGraphics\src\shared\RenderWorld.cpp
+	ms_cameraCell = camera.getParentCell();
+	ms_dpvsCameraCell = ms_cameraCell->getDpvsCell();
+	ms_cameraToWorld = camera.getTransform_o2w();
+	// ...
+	ms_dpvsCamera->setCell(ms_dpvsCameraCell);
+	ms_dpvsCamera->setCameraToCellMatrix(convertToDpvsTransform(camera.getTransform_o2c(), ...));
+```
+
+DPVS visibility is resolved from the **player cell**, not from “which cell actually contains the camera world position.” Pressing the chase camera against a back wall (large `m_currentZoom`, no interior cap) is exactly when this mismatch bites — matching the zoom-cap comment at lines 605–612.
+
+---
+
+## Task 2 — REFERENCE extra keep-visible paths
+
+**Result: No additional indoor wall keep-visible mechanism in REFERENCE that OUR lacks.**
+
+### Searched and ruled out
+
+| Area | Finding |
+|---|---|
+| **`FreeChaseCamera.cpp`** | Collision block byte-identical; REFERENCE has **instant** shoulder snap (666–667), no `cs_cameraPullInSpeed`, no interior zoom cap |
+| **`DebugPortalCamera.cpp`** | Debug fly camera only; **no** `ClientWorld::collide` |
+| **`CockpitCamera.cpp` / `FlyByCamera.cpp`** | **No** camera-wall collision |
+| **`GameCamera::alter`** | Jitter/flash only; **no** wall push (`GameCamera.cpp:163–198`) |
+| **`GroundScene.cpp`** | Normal play uses `CI_freeChase` (761); `ClientWorld::collide` at 2244 is **`#ifdef _DEBUG` only** |
+| **`CollisionWorld.cpp`** | **No** camera-specific queries |
+| **`ConfigClientGame.cpp`** | Identical defaults: `cameraNearPlane=0.25f` (972), `freeChaseCameraMaximumZoom=1.f` (1052), `freeChaseCameraZoomSpeed=0.2f` (1122) |
+| **`cameraSimpleCollision`** | Default `false` (`FreeChaseCamera.cpp:960–962`); UI checkbox in `SwgCuiOptGraphics.cpp:218` only — same in both trees |
+| **`CF_interiorGeometry`** | Defined in `ClientWorld.h:47,59` but **never consumed** in collide implementation |
+
+### Only tangential camera–collision touchpoints (not keep-visible)
+
+- `GlowAppearance.cpp:369–370` — glow occlusion test, not camera placement
+- `ShipTurretCamera.cpp:191` — ship turret only
+- `CelestialObject.cpp:202` — sun/moon line-of-sight
+
+**Indoor ground chase = `FreeChaseCamera` collision + render portal cull. No hidden REFERENCE path.**
+
+---
+
+## Single best root-cause hypothesis
+
+**The chase camera is placed by shared collision code that can fail to constrain position when (1) the pivot→endpoint ray misses the structure collidable shell, or (2) OUR post-collision `cs_cameraPullInSpeed` rate-limiting lets `m_currentZoom` sit beyond the wall while recovery lerp pushes outward — a delta REFERENCE avoids by instant snap. The visible “see-through” is compounded by a render-side cell mismatch: the camera’s world position exits the player cell volume while `getParentCell()` / DPVS still treat it as inside (`RenderWorld.cpp:872–889`), flipping portal visibility at back-wall zoom distances — which is why the 3 m interior zoom cap works as a band-aid without touching the collision algorithm itself.**
+
+**Where to investigate next (not porting camera code):**
+1. Runtime probe: log `getPosition_w()`, `getParentCell()`, and `PortalProperty::findContainingCell(cameraPos)` when symptom occurs — confirms B vs A.
+2. Compare structure collision mesh / portal layout for the repro POB between OUR and REFERENCE game data (not source).
+3. Re-evaluate OUR `cs_cameraPullInSpeed` gating (774–786) against REFERENCE instant response — OUR-only effective behavioral delta adjacent to the identical collision block.

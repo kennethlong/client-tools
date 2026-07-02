@@ -66,6 +66,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer>       m_d3dBuffer;
 	void                                      *m_lockBuffer;  // CPU staging for lock/unlock
 	bool                                       m_lockedReadOnly;
+	void                                      *m_shadow;      // CPU shadow of uploaded vertex bytes (read-back for collide)
+	unsigned int                               m_shadowBytes; // byte size of m_shadow (0 = none)
 };
 
 // ======================================================================
