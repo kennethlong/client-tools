@@ -1,0 +1,29 @@
+(applied) overlaps classified: 991, parked: 624
+
+  JUDGE shared-particle-fx     1
+  KEEP  ship-asset             224
+  KEEP  ship-clientdata        38
+  KEEP  space-blast-shader     4
+  KEEP  space-combat-cef       14
+  KEEP  space-combat-fx        40
+  KEEP  space-datatable        9
+  KEEP  space-named            38
+  PARK  character-texture      32
+  PARK  default-shader         2
+  PARK  force-jedi-fx          3
+  PARK  ground-vehicle         1
+  PARK  interior-datatable     1
+  PARK  interior-shader        6
+  PARK  interior-texture       15
+  PARK  intro-texture          3
+  PARK  palette                6
+  PARK  pixel-program          5
+  PARK  shared-base-effect     1
+  PARK  sky-planet-visual      26
+  PARK  spaceport-interior     16
+  PARK  starport-mesh          16
+  PARK  terrain-def            7
+  PARK  terrain-texture        483
+
+JUDGE files (parked by default, restore-first candidates if space regresses):
+  shader/pt_add_smoke.sht  [shared-particle-fx]
