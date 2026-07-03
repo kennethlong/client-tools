@@ -123,8 +123,15 @@
 //   messageQueue::getMessage                      -- the 4-arg (int,int*,float*,uint32*) overload (read side; appendMessage already advertised)
 //   object::isActive                              -- bool; NON-virtual but INLINE -> external-linkage shim (no ODR address)
 // All constant &thunk / &fn or pmfToVoid rows (no detours). 119 names.
+// Bumped 13 -> 14 in the sysmsg-SEND provider request (2026-07-02): 1 NAME ADD --
+// systemMessageManager::sendMessage -> &CuiSystemMessageManager::sendFakeSystemMessage (all-static class;
+// plain constant &fn, no MI/virtual/thunk). The INJECT half of the sysmsg pair: a CALLED endpoint (the consumer
+// injects a system message into the chat/system feed), byte-exact ABI match to the consumer typedef
+// void(__cdecl*)(const Unicode::String&, bool). SEND ONLY -- the RECEIVE half stays OMIT (the reverted Bucket
+// A-2.1 receiveMessage that AV'd world-load; the real inbound receiver is a file-local anonymous
+// MessageDispatch::Receiver Listener, un-advertisable -- receiveSystemMessage next to the static is NOT it). 120 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 13
+#define ENGINE_HOOKPOINTS_VERSION 14
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

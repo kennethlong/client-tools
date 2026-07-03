@@ -64,7 +64,7 @@
 // -- Bucket A includes (per-editor real-entry rows; v8 -> v9) ----------------
 #include "clientUserInterface/CuiRadialMenuManager.h"   // CuiRadialMenuManager::update (static &fn)
 #include "clientUserInterface/CuiMenuInfoTypes.h"        // Cui::MenuInfoTypes::findDefaultCursor (namespace free fn)
-// (CuiSystemMessageManager.h include REMOVED v10->v11 -- systemMessageManager::receiveMessage reverted as wrong-& world-load crash; see the A-2.1 OMIT note)
+#include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND (v13->v14): CuiSystemMessageManager::sendFakeSystemMessage (static &fn). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half (advertisable static), NOT the reverted receive half (see the A-2.1 OMIT note); Unicode::String already in the TU via SwgCuiChatWindow.h above.
 #include "engine_creatureObject_forward.h"               // engine_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
@@ -665,7 +665,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- constant &fn rows (static methods / free fn; no dyn[] needed) --
 	{ "cuiRadialMenuManager::update", (void *)&CuiRadialMenuManager::update }, // static void update() [CuiRadialMenuManager.h:46] -- all-static facade. Radial-menu editing.
 	{ "cuiMenu::infoTypesFindDefaultCursor", (void *)&Cui::MenuInfoTypes::findDefaultCursor }, // FREE FN UICursor* const findDefaultCursor(ClientObject&) in namespace Cui::MenuInfoTypes [CuiMenuInfoTypes.h:199 / .cpp:404] -- NOT a CuiMenu member (no such class); constant &fn (resolves the ledger's confirm-or-OMIT). Menu cursor behavior.
-	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load.)
+	// -- systemMessageManager SEND (v13->v14): the INJECT half of the sysmsg pair (2026-07-02 provider request) --
+	{ "systemMessageManager::sendMessage", (void *)&CuiSystemMessageManager::sendFakeSystemMessage }, // static void sendFakeSystemMessage(const Unicode::String& msg, bool chatBoxOnly=false) [CuiSystemMessageManager.h:38] -- byte-exact ABI match to the consumer typedef void(__cdecl*)(const Unicode::String&, bool); plain constant &fn (all-static class, no pThis, no MI, no thunk). CALLED endpoint (consumer INJECTS a sysmsg), NOT detoured. The default arg is irrelevant to the pointer ABI (consumer passes both). This is the SEND half ONLY -- the RECEIVE half stays OMIT (see the A-2.1 OMIT note below: the reverted receiveMessage row that AV'd world-load; receiveSystemMessage sitting next to this static is NOT the real inbound Listener, so receive is NOT mapped).
+	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load. SEND (above) is unaffected -- it is an advertisable static.)
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

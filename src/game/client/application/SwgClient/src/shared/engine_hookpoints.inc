@@ -302,3 +302,11 @@ ENGINE_HOOKPOINT(gameCamera,         getMessageQueue)                  // __fast
 ENGINE_HOOKPOINT(messageQueue,       getCount)                         // MISMATCH: real entry MessageQueue::getNumberOfMessages (pmfToVoid)
 ENGINE_HOOKPOINT(messageQueue,       getMessage)                       // 4-arg overload getMessage(int,int*,float*,uint32*) const (pmfToVoid, static_cast disambig)
 ENGINE_HOOKPOINT(object,             isActive)                         // external-linkage shim (Object::isActive is NON-virtual but INLINE -> no PMF address)
+
+// -- systemMessageManager SEND (v13->v14): the INJECT half of the sysmsg pair (2026-07-02 provider request) --
+// 1 NAME ADD -- systemMessageManager::sendMessage -> &CuiSystemMessageManager::sendFakeSystemMessage (all-static
+// class; plain constant &fn, no MI/virtual/thunk). CALLED endpoint (consumer injects a sysmsg into the chat/system
+// feed), byte-exact ABI match to the consumer typedef void(__cdecl*)(const Unicode::String&, bool). This is the SEND
+// half ONLY -- the RECEIVE half stays OMIT (the reverted Bucket A-2.1 receiveMessage that AV'd world-load; the
+// real inbound receiver is a file-local anonymous MessageDispatch::Receiver Listener, un-advertisable).
+ENGINE_HOOKPOINT(systemMessageManager, sendMessage)
