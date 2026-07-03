@@ -64,7 +64,8 @@
 // -- Bucket A includes (per-editor real-entry rows; v8 -> v9) ----------------
 #include "clientUserInterface/CuiRadialMenuManager.h"   // CuiRadialMenuManager::update (static &fn)
 #include "clientUserInterface/CuiMenuInfoTypes.h"        // Cui::MenuInfoTypes::findDefaultCursor (namespace free fn)
-#include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND (v13->v14): CuiSystemMessageManager::sendFakeSystemMessage (static &fn). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half (advertisable static), NOT the reverted receive half (see the A-2.1 OMIT note); Unicode::String already in the TU via SwgCuiChatWindow.h above.
+#include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND: CuiSystemMessageManager::sendFakeSystemMessage, reached via the utinni_sendFakeSystemMessage utf8 shim (v15). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half, NOT the reverted receive half (see the A-2.1 OMIT note).
+#include "UnicodeUtils.h"                                // sysmsg SEND rev-2 (v14->v15): Unicode::narrowToWide for the utf8->Unicode::String widen inside the shim (widen on OUR side -- our CRT, our string layout)
 #include "engine_creatureObject_forward.h"               // engine_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
@@ -420,6 +421,31 @@ static bool __fastcall engine_objectIsActive(const Object * pThis, int /*edx*/)
 }
 
 // ----------------------------------------------------------------------
+// systemMessageManager::sendMessageUtf8 -- sysmsg SEND rev-2 (2026-07-03, v14 -> v15).
+// extern "C" utf8 shim over CuiSystemMessageManager::sendFakeSystemMessage(const
+// Unicode::String&, bool) [CuiSystemMessageManager.h:38].
+//
+// WHY A SHIM (the v14 lesson): the v14 direct-&fn row systemMessageManager::sendMessage
+// CRASHED live smoke (WRITE-AV). The signature matched but the PARAMETER is a C++ string
+// object passed by reference: the consumer's swg::WString models the 2002 SWGEmu 3-pointer
+// string layout (begin/end/allocEnd, 12 bytes), while this build's Unicode::String is a v145
+// SSO basic_string (24 bytes) -- the engine read _Mysize past the end of the consumer's
+// object -> garbage size -> wild write. ABI RULE (rev-2 handoff, both repos): only PRIMITIVES
+// and POINTERS cross the advertised boundary on CALLED endpoints; any class-type parameter
+// (strings above all) needs a provider-side extern "C" shim -- the utinni_replayClientEffect
+// precedent. The widen happens HERE, on OUR side (our CRT, our string layout).
+// narrowToWide is a per-byte widen -- correct for the ASCII editor text the consumer sends
+// (rev-2 defers real UTF-8 decoding as unnecessary).
+// Threading: consumer calls game-thread-only (main-loop marshaled), never per-frame.
+// ----------------------------------------------------------------------
+extern "C" void __cdecl utinni_sendFakeSystemMessage(const char * utf8Msg, bool chatBoxOnly)
+{
+	if (!utf8Msg)
+		return;
+	CuiSystemMessageManager::sendFakeSystemMessage(Unicode::narrowToWide(utf8Msg), chatBoxOnly);
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -501,8 +527,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	// they are reached directly by the __fastcall thunks defined above (no friend decl).
 	// Contract names are the SPEC names; the in-tree method NAME MISMATCH is in each comment.
 	{ "cuiChatWindow::enableTextInput", 0 },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
-	{ "cuiChatWindow::writeToAllTabs",    (void *)&engine_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
-	{ "cuiChatWindow::writeToCurrentTab", (void *)&engine_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk (call-through correct here; Utinni CALLS it)
+	{ "cuiChatWindow::writeToAllTabs",    (void *)&engine_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk. ABI-UNSAFE TO CALL from the consumer (const Unicode::String& param -- the rev-2 sysmsg crash class); consumer-blocked on advertised (rev-2 §3, latent). utf8 shim (utinni_chatWriteToAllTabsUtf8) on request.
+	{ "cuiChatWindow::writeToCurrentTab", (void *)&engine_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk. ABI-UNSAFE TO CALL (same rev-2 crash class as writeToAllTabs above); utf8 shim on request.
 	{ "cuiChatWindow::chatEnterHandler", 0 },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
 	{ "cuiChatWindow::createNewWindow", 0 },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (engine_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
 
@@ -522,7 +548,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "cuiIo::g_instance",            (void *)&CuiManager::getIoWin },             // ACCESSOR: the CuiIoWin singleton accessor (CuiManager owns ms_theIoWin) [CuiManager.h:100]
 
 	// -- consoleHelper (clientUserInterface; CuiConsoleHelper.h) ----------------
-	{ "consoleHelper::sendInput",     (void *)&engine_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent)
+	{ "consoleHelper::sendInput",     (void *)&engine_consoleHelperSendInput },     // WR-05 fix: __fastcall(pThis,edx,istr)==__thiscall thunk -> processInput(istr, getRecurseStackForCommandBeingParsed()) [CuiConsoleHelper.h:76]; a raw &processInput would fault on the missing recursion-stack arg2 (spec "sendInput" -> SwgCuiConsoleHelper::sendInput has no from-source twin; engine-layer processInput is the equivalent). ABI-UNSAFE TO CALL from the consumer (const Unicode::String& istr param -- the rev-2 sysmsg crash class); flagged in the rev-2 audit, utf8 shim on request.
 
 	// -- commandParser (sharedCommandParser; CommandParser.h) -------------------
 	{ "commandParser::addSubCommand", 0 },  // bit_cast member PMF, __thiscall [CommandParser.h:149]
@@ -558,13 +584,13 @@ static EngineHookPoint s_engineHookPoints[] =
 
 	// -- objectTemplate (sharedObject base static + sharedGame SharedObjectTemplate) --
 	{ "objectTemplate::createObject", (void *)static_cast<Object * (*)(const char *)>(&ObjectTemplate::createObject) }, // OVERLOADED: static createObject(const char*) [ObjectTemplate.h:32] vs virtual createObject() const [:50]
-	{ "objectTemplate::getAppearanceFilename", 0 },   // const std::string& (bool=false) const NON-virtual [SharedObjectTemplate.h:353]
-	{ "objectTemplate::getPortalLayoutFilename", 0 }, // [SharedObjectTemplate.h:354]
-	{ "objectTemplate::getClientDataFile", 0 },       // [SharedObjectTemplate.h:355]
+	{ "objectTemplate::getAppearanceFilename", 0 },   // const std::string& (bool=false) const NON-virtual [SharedObjectTemplate.h:353]. ABI-UNSAFE RETURN for the consumer (returns our v145 std::string by const& -- rev-2 audit; consumer must not read its fields); const char* shim on request.
+	{ "objectTemplate::getPortalLayoutFilename", 0 }, // [SharedObjectTemplate.h:354] -- same ABI-UNSAFE RETURN as getAppearanceFilename above
+	{ "objectTemplate::getClientDataFile", 0 },       // [SharedObjectTemplate.h:355] -- same ABI-UNSAFE RETURN as getAppearanceFilename above
 
 	// -- worldSnapshot (clientGame; WorldSnapshot.h) -- ALL STATIC in this tree -
 	{ "worldSnapshot::load",          (void *)&WorldSnapshot::load },              // static void load(char const*) [WorldSnapshot.h:44]
-	{ "worldSnapshot::addObject",     (void *)&WorldSnapshot::addObject },         // static Object* addObject(...) [WorldSnapshot.h:33]
+	{ "worldSnapshot::addObject",     (void *)&WorldSnapshot::addObject },         // static Object* addObject(int64,int64,CrcString const&,Transform const&,float,uint32,int,std::string const&="") [WorldSnapshot.h:33]. ABI-UNSAFE TO CALL from the consumer (CrcString const& + std::string const& params -- rev-2 audit; the consumer cannot construct either with our layout); POD shim on request.
 	{ "worldSnapshot::removeObject",  (void *)&WorldSnapshot::removeObject },      // static void removeObject(int64) [WorldSnapshot.h:49]
 	{ "worldSnapshot::moveObject",    (void *)&WorldSnapshot::moveObject },        // static void moveObject(int64,Transform const&) [WorldSnapshot.h:48]
 	{ "worldSnapshot::getLoadingPercent",   (void *)&WorldSnapshot::getLoadingPercent },   // static int getLoadingPercent() [WorldSnapshot.h:52]
@@ -665,9 +691,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- constant &fn rows (static methods / free fn; no dyn[] needed) --
 	{ "cuiRadialMenuManager::update", (void *)&CuiRadialMenuManager::update }, // static void update() [CuiRadialMenuManager.h:46] -- all-static facade. Radial-menu editing.
 	{ "cuiMenu::infoTypesFindDefaultCursor", (void *)&Cui::MenuInfoTypes::findDefaultCursor }, // FREE FN UICursor* const findDefaultCursor(ClientObject&) in namespace Cui::MenuInfoTypes [CuiMenuInfoTypes.h:199 / .cpp:404] -- NOT a CuiMenu member (no such class); constant &fn (resolves the ledger's confirm-or-OMIT). Menu cursor behavior.
-	// -- systemMessageManager SEND (v13->v14): the INJECT half of the sysmsg pair (2026-07-02 provider request) --
-	{ "systemMessageManager::sendMessage", (void *)&CuiSystemMessageManager::sendFakeSystemMessage }, // static void sendFakeSystemMessage(const Unicode::String& msg, bool chatBoxOnly=false) [CuiSystemMessageManager.h:38] -- byte-exact ABI match to the consumer typedef void(__cdecl*)(const Unicode::String&, bool); plain constant &fn (all-static class, no pThis, no MI, no thunk). CALLED endpoint (consumer INJECTS a sysmsg), NOT detoured. The default arg is irrelevant to the pointer ABI (consumer passes both). This is the SEND half ONLY -- the RECEIVE half stays OMIT (see the A-2.1 OMIT note below: the reverted receiveMessage row that AV'd world-load; receiveSystemMessage sitting next to this static is NOT the real inbound Listener, so receive is NOT mapped).
-	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load. SEND (above) is unaffected -- it is an advertisable static.)
+	// -- systemMessageManager SEND (v15): the INJECT half of the sysmsg pair (2026-07-02 request, rev-2 2026-07-03) --
+	{ "systemMessageManager::sendMessageUtf8", (void *)&utinni_sendFakeSystemMessage }, // rev-2 REPLACE (v14->v15): extern "C" void __cdecl(const char* utf8Msg, bool chatBoxOnly) shim -> widens on OUR side -> sendFakeSystemMessage [CuiSystemMessageManager.h:38]. The v14 direct-&fn row sendMessage is REMOVED (name-REPLACE, not re-point, so a version-skewed pairing misses by name and degrades instead of mis-calling across a changed ABI): it passed const Unicode::String& across the boundary and CRASHED live smoke -- consumer WString models the 2002 3-pointer layout, ours is v145 SSO (see the shim comment). CALLED endpoint, game-thread-only. SEND half ONLY -- RECEIVE stays OMIT (A-2.1 note below).
+	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load. SEND (above) is unaffected -- it is an advertisable static behind a POD-only shim.)
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
