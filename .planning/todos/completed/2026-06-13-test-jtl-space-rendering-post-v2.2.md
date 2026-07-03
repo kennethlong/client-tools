@@ -9,7 +9,10 @@ files:
 references:
   - .planning/todos/pending/2026-05-15-swgsource-vs-whitengold-tre-asset-diff.md  (the data-vs-code space investigation; this is its validation counterpart)
   - .planning/phases/11-d3d11-renderer-plugin/11-SPEC.md  (Phase 11 explicitly EXCLUDED space)
-status: research
+status: COMPLETED (retired 2026-07-03) — superseded by the 2026-06-26→28 JTL arc, which went far
+  beyond a test pass: space made reachable and FIXED (gameFeatures=33297 SKU load, ILM extract
+  wiring, NV driver flag, IB UAF, HUD additive premultiply). JTL verdict: revivable — it loads,
+  flies, and renders. Space-rendering work confirmed complete 2026-07-03.
 priority: low (not blocking; informational — gauges whether JTL is revivable)
 ---
 

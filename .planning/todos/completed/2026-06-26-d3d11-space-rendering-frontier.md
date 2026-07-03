@@ -12,7 +12,10 @@ references:
   - memory: project_d3d11_multitexture_srv_slot_swap, project_d3d11_world_view_anomalies_phase19  (asset-PS pipeline patterns)
   - .planning/todos/pending/2026-06-13-test-jtl-space-rendering-post-v2.2.md  (the predicted JTL render-test pass — this IS it)
   - feedback: renderdoc_d3d9_vs_d3d11_is_the_diagnostic
-status: research
+status: COMPLETED (retired 2026-07-03) — space rendering parity work done. The 2026-06-28 arc
+  root-caused the real blockers (gameFeatures=33297 SKU load, NV driver device flag, IB UAF,
+  additive-UI premultiply for the HUD cyan fills) and Kenny confirmed the space-rendering frontier
+  complete 2026-07-03.
 priority: medium (space now reachable via the cfg fix + Utinni; visuals broadly broken)
 ---
 

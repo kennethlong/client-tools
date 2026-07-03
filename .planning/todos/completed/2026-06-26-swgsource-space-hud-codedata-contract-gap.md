@@ -13,7 +13,10 @@ references:
   - memory: project_space_hud_buttonenterspace_tre_shadow  (corrected root-cause + CONSULT-47)
   - .planning/research/CONSULT-47-*  (4-AI crew: codex/cursor/sonnet/opus + EVIDENCE + ground-truth)
   - .planning/todos/pending/2026-06-13-test-jtl-space-rendering-post-v2.2.md  (JTL render-test counterpart)
-status: research
+status: COMPLETED (retired 2026-07-03) — the space-HUD FATAL is long resolved: the searchPath_00_9
+  loose-override layer is live-verified (space loads + plays since 2026-06-28, memory
+  `project_space_hud_buttonenterspace_tre_shadow`), and the deeper JTL root cause was the
+  [Station] gameFeatures SKU-load fix (33297). Space work confirmed complete 2026-07-03.
 priority: medium (cfg fix applied + unverified live; nebula root-cause still open)
 ---
 

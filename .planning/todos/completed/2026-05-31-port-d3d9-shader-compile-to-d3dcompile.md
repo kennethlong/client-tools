@@ -15,7 +15,10 @@ references:
     VS2003 client renders the same shader/asset/spot clean; ours crashes. Same unfixed code exists
     in client-tools-koogie (PlatformToolset v145). Fix A (SEH guard) shipped as the immediate fix.
   - memory: D3D9 crash diagnosis (modern-toolchain compiled-D3DX FP fault)
-status: deferred_cleanup
+status: COMPLETED (retired 2026-07-03) — delivered by Phase 32 (D3DX → d3dcompiler_47: D3DCompile
+  HLSL path + D3DAssemble asm path + VS bytecode cache) and Phase 33 (D3DX fully removed from the
+  x64 build). On 32-bit, Fix-A (SEH guard) is intentionally RETAINED per the Phase-27 decision
+  (memory `project_hard05_d3dcompile_deferred_to_x64`) — that retention is a decision, not a gap.
 priority: low (Fix A — the SEH guard — already stops the crash and keeps the compiled bytecode; this
   is the principled long-term replacement that removes the D3DX dependency on the compile path)
 ---

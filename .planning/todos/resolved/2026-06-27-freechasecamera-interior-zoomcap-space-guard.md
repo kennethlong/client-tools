@@ -3,7 +3,10 @@ created: 2026-06-27
 title: FreeChaseCamera interior zoom-cap mis-fires in walkable ship interiors (space)
 area: client / camera (FreeChaseCamera)
 priority: low
-status: backlog
+status: OBSOLETE (retired 2026-07-03) — the interior zoom-cap band-aid itself was REMOVED on
+  2026-07-02 (the gl11 VB-readback collision fix `a976f81e2` restored real camera collision and
+  `freeChaseCameraInteriorMaximumZoom` was deleted with it). The code this todo guards no longer
+  exists; nothing to fix.
 files:
   - src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp  (alter, ~line 610)
 references:
