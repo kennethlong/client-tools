@@ -53,6 +53,8 @@ namespace
 	bool  ms_staticNonCollidableFloraEnabled;
 
 	int   ms_maximumNumberOfChunksAllowed;
+
+	float ms_blendedShaderEvictionIdleSeconds;
 }
 
 //===================================================================
@@ -211,6 +213,13 @@ bool ConfigClientTerrain::getEnableLightScaling ()
 
 //----------------------------------------------------------------------
 
+float ConfigClientTerrain::getBlendedShaderEvictionIdleSeconds ()
+{
+	return ms_blendedShaderEvictionIdleSeconds;
+}
+
+//----------------------------------------------------------------------
+
 bool  ConfigClientTerrain::getDynamicFarFloraEnabled     ()
 {
 	return ms_dynamicFarFloraEnabled;
@@ -298,6 +307,11 @@ void ConfigClientTerrain::install()
 	KEY_BOOL   (dynamicNearFloraEnabled,             true);
 	KEY_BOOL   (staticNonCollidableFloraEnabled,     true);
 	KEY_INT    (maximumNumberOfChunksAllowed,        10 * 1024);
+
+	// CONSULT-57 follow-up: idle seconds before ShaderCache::alter evicts an unreferenced
+	// blended terrain shader. 0 (or negative) disables eviction entirely -- the pre-2026-07-03
+	// behavior (bounded leak, zero recreate churn). Runtime A/B lever for stutter triage.
+	KEY_FLOAT  (blendedShaderEvictionIdleSeconds,    5.f);
 }
 
 //===================================================================

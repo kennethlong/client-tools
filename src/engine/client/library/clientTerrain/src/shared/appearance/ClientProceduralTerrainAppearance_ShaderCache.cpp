@@ -482,6 +482,15 @@ void ClientProceduralTerrainAppearance::ShaderCache::destroyShader (const Shader
 
 void ClientProceduralTerrainAppearance::ShaderCache::alter (const float elapsedTime)
 {
+	// CONSULT-57 follow-up: the eviction idle threshold is configurable
+	// ([ClientTerrain] blendedShaderEvictionIdleSeconds; 0 or negative = eviction
+	// DISABLED, the pre-2026-07-03 behavior: bounded leak, zero recreate churn).
+	// Runtime A/B lever for stutter triage and a tuning knob if blended-shader
+	// recreate churn ever costs more than the leak it prevents.
+	float const evictionIdleSeconds = ConfigClientTerrain::getBlendedShaderEvictionIdleSeconds ();
+	if (evictionIdleSeconds <= 0.f)
+		return;
+
 	Guard guard(m_nodeListLock);   // main thread; the ClientTerrain thread adds nodes concurrently
 
 	//-- clean blended shaders
@@ -494,7 +503,7 @@ void ClientProceduralTerrainAppearance::ShaderCache::alter (const float elapsedT
 		if (node.referenceCount == 0)
 		{
 			node.timeout += elapsedTime;
-			if (node.timeout > 5.0f)
+			if (node.timeout > evictionIdleSeconds)
 			{
 				nodeList [i].shader->release();
 				nodeList [i].shader = 0;

@@ -45,6 +45,7 @@ public:
 	static bool  getDisableClouds ();
 
 	static bool  getEnableLightScaling ();
+	static float getBlendedShaderEvictionIdleSeconds ();
 
 	static bool  getDynamicFarFloraEnabled          ();
 	static bool  getDynamicNearFloraEnabled         ();

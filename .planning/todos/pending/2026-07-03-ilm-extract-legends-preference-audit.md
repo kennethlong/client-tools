@@ -2,7 +2,14 @@
 created: 2026-07-03
 title: Audit stage/ilm_extract for more Legends preference-changes shadowing retail data
 area: client data / TRE layering / ilm_extract
-status: backlog
+status: SCOPE-DOWN APPLIED 2026-07-03 (bb20cc5b5) — VERIFY PENDING. The audit became a full
+  classification: 990 diffs → 367 space KEEP (stay in ilm_extract) / 624 ground preference-changes
+  PARKED to stage/ilm_extract_parked/ (reversible; manifest =
+  .planning/research/ILM-SCOPEDOWN-manifest.csv; SWGSource optional-TRE proposal =
+  docs/research/ilm-visuals-legends-preference-changes.md). Remaining: Kenny ground pass
+  (cantina haze + retail terrain/skins/palettes) + space smoke (ship visuals; restore-first on
+  regression: pt_add_smoke.sht, e_particle_emisadd.eft, the sky-planet-visual group). Close this
+  todo when both pass.
 priority: medium (one confirmed hit with wide blast radius; unknown residue)
 references:
   - the confirmed hit: interior fog OFF in ~124 interiors via ILM's datatables/interior/interior.iff
