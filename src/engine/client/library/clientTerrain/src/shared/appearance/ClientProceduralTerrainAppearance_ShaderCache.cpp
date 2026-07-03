@@ -18,6 +18,7 @@
 #include "clientTerrain/ClientProceduralTerrainAppearance_ShaderData.h"
 #include "clientTerrain/ConfigClientTerrain.h"
 #include "sharedMath/VectorArgb.h"
+#include "sharedSynchronization/Guard.h"
 #include "sharedUtility/FileName.h"
 
 #include <algorithm>
@@ -350,6 +351,8 @@ void ClientProceduralTerrainAppearance::ShaderCache::preloadShaders () const
 
 Shader const * ClientProceduralTerrainAppearance::ShaderCache::findCachedShader(ShaderData const & shaderData) const
 {
+	Guard guard(m_nodeListLock);   // nodeList: ClientTerrain thread vs main-thread alter/destroyShader (see header note)
+
 	for (int i = 0; i < nodeList.getNumberOfElements (); i++)
 	{
 		BlendedShaderCacheNode& node = nodeList [i];
@@ -387,6 +390,10 @@ Shader const * ClientProceduralTerrainAppearance::ShaderCache::findCachedShader(
 
 const Shader* ClientProceduralTerrainAppearance::ShaderCache::createBlendedShader (const ShaderData& shaderData) const
 {
+	// Hold the lock across the WHOLE find-or-create so a concurrent creator/alter cannot run
+	// between the find miss and the add (RecursiveMutex -- findCachedShader re-enters it).
+	Guard guard(m_nodeListLock);
+
 	//-- is shader already in list?
 
 	{
@@ -437,6 +444,8 @@ const Shader* ClientProceduralTerrainAppearance::ShaderCache::createBlendedShade
 
 void ClientProceduralTerrainAppearance::ShaderCache::destroyShader (const Shader* shader) const
 {
+	Guard guard(m_nodeListLock);
+
 	int i;
 	for (i = 0; i < nodeList.getNumberOfElements (); i++)
 	{
@@ -452,6 +461,8 @@ void ClientProceduralTerrainAppearance::ShaderCache::destroyShader (const Shader
 
 void ClientProceduralTerrainAppearance::ShaderCache::alter (const float elapsedTime)
 {
+	Guard guard(m_nodeListLock);   // main thread; the ClientTerrain thread adds nodes concurrently
+
 	//-- clean blended shaders
 	int n = nodeList.getNumberOfElements ();
 	int i = 0;
@@ -481,6 +492,8 @@ void ClientProceduralTerrainAppearance::ShaderCache::alter (const float elapsedT
 
 void ClientProceduralTerrainAppearance::ShaderCache::flushCache()
 {
+	Guard guard(m_nodeListLock);
+
 	nodeList.clear ();
 }
 
