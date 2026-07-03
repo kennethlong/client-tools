@@ -2285,7 +2285,13 @@ ShaderImplementationPassVertexShader::~ShaderImplementationPassVertexShader()
 
 void ShaderImplementationPassVertexShader::fetch() const
 {
-	++m_referenceCount;
+	using namespace ShaderImplementationPassVertexShaderNamespace;
+
+	// CONSULT-56 follow-up: release() already serializes on this mutex; an unlocked
+	// fetch racing a last-release can corrupt the count. Lock both sides.
+	ms_criticalSection.enter();
+		++m_referenceCount;
+	ms_criticalSection.leave();
 }
 
 // ----------------------------------------------------------------------
@@ -2803,7 +2809,13 @@ char const * ShaderImplementationPassPixelShaderProgram::getFileName() const
 
 void ShaderImplementationPassPixelShaderProgram::fetch() const
 {
-	++m_referenceCount;
+	using namespace ShaderImplementationPassPixelShaderProgramNamespace;
+
+	// CONSULT-56 follow-up: release() already serializes on this mutex; an unlocked
+	// fetch racing a last-release can corrupt the count. Lock both sides.
+	ms_criticalSection.enter();
+		++m_referenceCount;
+	ms_criticalSection.leave();
 }
 
 // ----------------------------------------------------------------------
