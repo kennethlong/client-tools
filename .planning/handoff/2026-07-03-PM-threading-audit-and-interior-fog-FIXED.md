@@ -67,6 +67,22 @@ table — 227 retail rows with retail values + ILM's 38 genuinely-new rows (Must
 blackwing POBs). Live-verified by Kenny (haze back). **Lesson: ilm_extract's "real updates"
 bucket is a Legends-preference vector** — audit todo filed.
 
+## Evening addendum — gl11 stutter triage + a baseline WIN
+
+Kenny reported gl11 frame-rate pressure. A/B kit built + run: **eviction knob
+([ClientTerrain] blendedShaderEvictionIdleSeconds=0) ✗, pre-885 binary ✗, x64 ✗** — this week's
+threading work AND 32-bit memory pressure exonerated. Last suspect standing: the CONSULT-51 NV
+flag, now config-gated (`04c6cee6a`, [Direct3d11] preventDriverInternalThreading; false = perf
+A/B ONLY, re-exposes the nvwgf2um zone-in crash). **Test 4 (flag off) PENDING.** If the flag is
+convicted, the follow-up is reducing gl11's Map(WRITE_DISCARD) churn so driver threading can
+come back safely.
+
+**Baseline validation (2026-07-03 evening):** head-to-head on the same machine, same VirtualBox
+server load — retail SWGSource client: smooth but DOOR-SNAPS and shows redraw anomalies; **our
+gl05: no stutter, no snap, no redraw anomalies — strictly better than retail on retail's own
+renderer** (door-snap fix + FPU_PRESERVE + WDDM present/allowTearing work all validated against
+the reference). The remaining gap is gl11-only.
+
 ## OPEN / next
 
 - **Two follow-up todos filed 2026-07-03** (plans being drafted):
