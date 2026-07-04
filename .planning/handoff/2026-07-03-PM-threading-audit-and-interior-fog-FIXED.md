@@ -73,9 +73,13 @@ Kenny reported gl11 frame-rate pressure. A/B kit built + run: **eviction knob
 ([ClientTerrain] blendedShaderEvictionIdleSeconds=0) ✗, pre-885 binary ✗, x64 ✗** — this week's
 threading work AND 32-bit memory pressure exonerated. Last suspect standing: the CONSULT-51 NV
 flag, now config-gated (`04c6cee6a`, [Direct3d11] preventDriverInternalThreading; false = perf
-A/B ONLY, re-exposes the nvwgf2um zone-in crash). **Test 4 (flag off) PENDING.** If the flag is
-convicted, the follow-up is reducing gl11's Map(WRITE_DISCARD) churn so driver threading can
-come back safely.
+A/B ONLY, re-exposes the nvwgf2um zone-in crash). **Test 4 RESULT: CONVICTED** — flag off =
+"almost buttery"; the gl11 micro-stutter (1-2 frame hangs) IS the flag's serialization cost.
+cfg reverted to flag=true (the crash race must stay defeated for daily use). Follow-up phase
+filed: `2026-07-03-gl11-map-discard-churn-reduction.md` — census + reduce Map(WRITE_DISCARD)
+churn (dynamic VB/IB ring NO_OVERWRITE strategy, cbuffer batching), then soak with driver
+threading re-enabled. Separate residual characterized: first-visit cantina-door pause (~5-6
+frames, gone on revisit) = cold-load hitch, NOT the flag, low priority.
 
 **Baseline validation (2026-07-03 evening):** head-to-head on the same machine, same VirtualBox
 server load — retail SWGSource client: smooth but DOOR-SNAPS and shows redraw anomalies; **our
