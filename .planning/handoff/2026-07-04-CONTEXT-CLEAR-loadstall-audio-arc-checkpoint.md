@@ -213,3 +213,132 @@ freeze era — flag if he wants the 4-5s overlap restored deliberately). If the 
 ever goes SILENT at login: handle fix has a hole → re-arm titleMusicStreamFix.
 If crackle persists: it's the pre-existing class — next probes = ring-underrun
 instrumentation or Sonnet's 22050-vs-44100 provider matrix (NOT volume).
+
+---
+
+## 8. ROUND 4 (07-04 ~2 PM) — 1:32 build verdict GOOD + the timer-resolution conviction
+
+**Kenny's 1:32-build verdict:** title LOOPS ✅, in-game audio CLEAN on gl11 ✅, movement
+smooth ✅. Residual: crackle at charselect entry + load-in screen; "weird volume
+increase right before the title fades". THEN the discriminator: **gl05 in-game sound
+MUCH worse than gl11, same charselect crackle** — with only ONE >100ms watchdog stall
+in the whole gl05 in-game window (sub-threshold crackle).
+
+**Committed at Kenny's word** (before round 4): `1d5d522f1` wave A (WorldSnapshot
+phased load), `ec74e0434` wave B (audio arc incl. round 3), `45b21d9d2` docs.
+NOT pushed. CONSULT-56/57 .out leftovers intentionally untracked.
+
+**THE UNIFYING CONVICTION — Windows timer resolution:** the client's ONLY
+timeBeginPeriod call was `timeBeginPeriod(10)` in the ui lib. Miles' MSSTimer mixer
+thread (vendored genericmss.cpp:741, boosted prio, core 1) waits via
+`rrSemaphoreDecrementOrWait(AIL_MM_PERIOD)` — subject to system timer granularity
+exactly like Sleep. Without 1ms resolution (per-process since Win10 2004), its
+service cadence stretches 15.6→100ms+ under coalescing; mix-ahead is only 64ms →
+ring underrun = crackle. EXPLAINS: gl05-much-worse (NV D3D11/DXGI stack raises timer
+resolution as a side effect; D3D9 doesn't), charselect crackle on BOTH renderers
+(stall-loop663 gl05 + stall-loop16805 gl11 both symbolize to Clock::limitFrameRate
+oversleeping ~100ms at a 144fps cap ⇒ coarse/coalesced Sleep), and crackle-without-
+stalls. Watchdog "total stall" figures include dump-write time (~150-400ms each) —
+subtract before reading.
+
+**Round-4 fixes (built clean, staged 2:18 PM, AWAITING Kenny):**
+1. `ClientMain.cpp`: `timeBeginPeriod(1)` for process lifetime (+timeEndPeriod at
+   exit; winmm). THE fix for charselect/gl05 crackle if the theory holds.
+2. `EnvironmentBlockManager.{h,cpp}` (clientTerrain): **lazy block realization** —
+   load() parses name/weather → pending row map, retains the DataTable;
+   EnvironmentBlock::setData (sky/cloud shader + env texture fetch + 256px color-ramp
+   decode per row) now runs on FIRST getEnvironmentBlock hit per key. Kills the ~0.7s
+   `EnvironmentBlockManager::load` GroundScene-ctor stall (stall-loop31674-s1).
+   Public include is a stub → the real header is src/shared/environment/.
+3. `SwgCuiManager.cpp` SCENE_CHANGED pump loop: dt fed to Audio::alter clamped to
+   50ms (dump-write hitches fed 400ms+ steps → VOLSTEP 0.329→0.750 title snap
+   mid-fade = Kenny's "weird volume increase").
+
+**Verify next session:** (a) gl05 in-game clean now? (b) charselect crackle gone?
+(c) volume blip gone? (d) zone-in stall burst shrunk (EnvironmentBlock class gone
+from dumps)? If gl05 still crackles with 1ms timers → CPU-saturation angle on the
+MSSTimer thread (core-1 pin contention) = crew-consult question with the MSSTimer
+facts as locked axioms. Remaining known stalls: SCENE_CHANGED deliberate 1s fade pump
+(by design), 100-900ms load-in burst tail (async-loader budget already caps
+callbacks; residual = first-draw creates), charselect avatar 371ms first-draw
+(parked), late-sample-start wave (checkpoint §4 item 3, still queued).
+
+---
+
+## 9. ROUND 5 (07-04 ~3 PM) — 2:18 verdict + CONSULT-62 crew round + fix wave
+
+**Kenny's 2:18-build verdict:** charselect crackle GONE both renderers; D3D9 in-game
+"much better", couple of minor crackles left; zone-in ~1-2s minor crackle BOTH
+renderers. Kenny green-lit the CPU-contention crew round.
+
+**CONSULT-62** (4 consultants, EVIDENCE/SYNTHESIS/.out files in .planning/research/):
+- **PRIMARY CONVICTION (Codex+Cursor+Opus convergent):** app-thread Miles-mutex
+  holds > mix-ahead cushion. Engine held AIL_lock across the ENTIRE queued-sound
+  start batch (Audio.cpp:2594-2611) incl. stream opens + whole sample loads + codec
+  inits; Miles ThreadProc SKIPS its whole mix pass on a failed 0+10ms mutex wait;
+  Opus: cushion C IS the tolerance (hold H clicks iff H>C), in-game C=16ms sat inside
+  the 20-100ms D3D9 compile-hitch band = the rare in-game click.
+- **KILLED:** core-1 pin (PSP2/WiiU-only #if — Cursor caught the evidence-pack
+  error); scheduling/priority starvation (HIGHEST preempts in µs); SMT math moot.
+- **Secondary (reserve):** stream compressed-refill starvation during loader disk
+  storms (repeated STARVED edges on live ambient loops in the log — partially
+  re-open artifacts, needs per-stream ids to disambiguate).
+- **Orthogonal (backlog):** Sonnet's rampless-gain zipper is REAL (VOLSTEP ~0.5→1.0
+  snaps on EVERY interior ambient fade-in) but fires identically on both renderers
+  while Kenny hears D3D9 only → not the primary audible class. Fix = engine volume
+  lerp, backlogged.
+
+**Round-5 fixes (Audio.cpp, built clean, staged 3:24 PM, AWAITING Kenny):**
+1. Start batch now cycles the Miles lock PER SOUND (was one batch-wide hold).
+2. In-game mix-ahead 16 → 32ms (s_bufferFragmentsMin).
+3. Load mix-ahead 64 → 192ms (setLargePreMixBuffer; ring stays 256 — do NOT exceed
+   ~192 without enlarging the ring at open).
+
+**Expected:** D3D9 in-game clicks gone or near-zero; zone-in crackle greatly reduced.
+If zone-in residue survives → stream-refill wave (SYNTHESIS "if residue survives"
+list, in order). Still-open oddities: theme 0.750→0.000 VOLSTEP cut at load-end
+every zone-in (untraced, inaudible per Kenny so far); interior-ambient fade-in
+zipper; late-sample-start wave still queued. UNCOMMITTED: rounds 4+5 code
+(ClientMain timeBeginPeriod, EnvironmentBlockManager lazy, SwgCuiManager dt clamp,
+Audio.cpp round-5 trio) + CONSULT-62 docs — commit when Kenny confirms the build.
+
+---
+
+## 10. ROUND 6 (07-04 ~5 PM) — round-5 trio REGRESSED; REVERTED; theory updated
+
+**Kenny's 3:24-build verdict: NET REGRESSION.** Zone-in crackle unchanged both
+renderers; D3D9 in-game WORSE ("a lot of crackling"); sound effects audibly behind
+the action (footsteps, even keyboard clicks). NEW report: our client sounds ~2x
+louder than a stock SWGSource client.
+
+**REVERTED all three round-5 changes** (build staged 5:07 PM = 2:18 baseline +
+one new config gate). Mechanism of the regression (recorded in code comments):
+- Per-sound lock cycling made main WAIT behind a full mixer pass (incl. MP3 decode,
+  which runs under the same mutex) between EVERY start → start batch smeared over
+  many ms = the effect lag; extra main-thread blocking on D3D9's hitchy frames =
+  more crackle. Batch-wide hold restored.
+- Mix-ahead raises ARE the lag: in-game 32ms crossed Kenny's perception threshold;
+  16ms is the responsiveness ceiling. Load 192ms did NOT reduce zone-in crackle.
+
+**THEORY UPDATE (the valuable negative result):** zone-in crackle SURVIVED a 192ms
+cushion ⇒ it is NOT a ≤192ms service-gap/mutex-hold class ⇒ **Opus path B (stream
+compressed-refill starvation) is now the PRIME zone-in suspect** (mix-ahead protects
+mixed output, not a source-empty voice; audio-diag shows repeated STARVED edges on
+live ambient loops). The mutex-hold math still stands for the rare 2:18-baseline
+D3D9 in-game clicks (C=16ms vs 20-100ms compile hitches) but any fix must not add
+start latency — per-sound cycling and bigger cushions are both DISPROVEN remedies.
+Remaining candidate for those clicks: kill the D3D9 in-game compiles themselves
+(gl05 bytecode-cache port, long-planned) rather than touch the audio path.
+
+**Volume-vs-SWGSource investigation (new):** two candidates before assuming a gain
+bug: (1) per-install user volume sliders (masterVolume etc. are
+LocalMachineOptionManager options — compare Options→Sound in both clients FIRST);
+(2) our 35-05 DIG_3D_MUTE_AT_MAX=0 change deliberately keeps distant 3D sources
+audible that stock hard-mutes → denser/louder soundscape. NEW config gate for A/B:
+`[ClientAudio] disable3dMuteAtMax=false` restores stock muting (default true).
+
+**NEXT:** (1) Kenny confirms 5:07 build == 2:18 baseline feel; (2) volume A/B
+(sliders, then the new gate); (3) stream-refill wave for zone-in: disambiguate
+STARVED re-open artifacts vs live starvation (add stream-id/open-count to the diag
+line), then modest streamBufferBytes bump (mind 7/8-prime latency) or MSSAsync
+boost; (4) gl05 bytecode-cache port for the in-game click tail.

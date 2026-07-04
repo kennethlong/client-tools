@@ -1,0 +1,255 @@
+# CONSULT-62 — Residual audio crackle: TIMING / BUDGET MATH (Opus)
+
+Angle: quantitative real-time-audio budget analysis. Code-tracing is covered by the other
+consultants. Everything here is arithmetic derived from the LOCKED evidence file plus constants
+pinned directly from the vendored Miles source.
+
+---
+
+## 0. Pinned constants (verified in source, not re-derived)
+
+| Symbol | Value | Source |
+|---|---|---|
+| Sample rate `f` | 22050 Hz | Audio.cpp getFrequency() hardcoded |
+| Sample width | 16-bit = 2 B | evidence |
+| Channels | 2 (stereo) | evidence |
+| **Byte rate `B`** | 2 × 2 × 22050 = **88 200 B/s = 88.2 B/ms** | genericdig.cpp:125 `2*DMA_rate*phys_ch` |
+| Fragment size | 1 ms | DEFAULT_DDFS=1, mss.h:783 |
+| Fragment count | 256 | DEFAULT_DDFC=256, mss.h:787 |
+| **Ring `T`** | 256 × 1 ms = **256 ms = 22 579 B** | genericdig.cpp:339, read once at open |
+| **Mix-ahead cushion `C`** | game **16 ms** / load **64 ms** | Audio.cpp:5511/5518 (s_bufferFragmentsMin=16) |
+| **Fill chunk** | 32 samples/ch = 128 B = **1.451 ms** | genericdig.cpp:342-349 ((22→32)×2ch×2) |
+| **Per-pass mix cap** | Limiter≥6 → 6 × 1.451 = **8.71 ms** | genericdig.cpp:137-139 |
+| Service wake | `WaitForSingleObject(close_sem, 1 ms)` | win32_rrthreads.c:1413 |
+| Mutex per wake | try 0 ms, else block 10 ms, else **skip pass** | genericmss.cpp:454-484 |
+| Mixer thread (Win32) | **THREAD_PRIORITY_HIGHEST**, **NOT core-pinned** (see §4 correction) | genericmss.cpp:743-744 (two cumulative bumps); :747 pin is PSP2/WiiU-only |
+
+### The servicing model (this drives every number below)
+
+`SS_serve` (genericdig.cpp:122-149) computes `DesiredRemainderBytes = (T − C)`. It mixes fill-chunks
+**while `GetReadyBytes ≥ (T − C)`** — i.e. while the DAC-drained free space is ≥ (256−C) ms. It
+stops once free space drops below that, i.e. once **queued (mixed-but-unplayed) audio ≥ C ms**.
+
+**Therefore the mix-ahead cushion `C` IS, to first order, the amount of already-mixed audio the
+ring holds ahead of the play cursor.** The 256 ms ring is merely the container; the live safety
+cushion between the mix frontier and the DAC read pointer is `C` ms (topped to ~C + up to one
+1.45 ms chunk each pass, then draining at 1 ms/ms). This is the single fact that makes all four
+questions tractable.
+
+**Underrun failure mode (what the listener hears):** RadSS is a plain ring. When service is starved
+> C ms, the DAC play cursor crosses the mix frontier and re-reads **stale ring bytes (up to 256 ms
+old)** — there is no zero-fill. The waveform discontinuity at the frontier is a **click**; a longer
+gap plays a brief garbled/repeated fragment of old ring content. Because the per-pass catch-up cap
+is 8.71 ms and net refill once service resumes is +7.71 ms of audio per wall-ms (8.71 mixed − 1.0
+drained), a drained cushion is restored in ~2 ms (game) / ~8 ms (load). So **each starvation event
+is a short click, not a sustained dropout** — exactly matching "minor crackle," and it means the
+goal is to reduce the *frequency* of starvation events, not their depth.
+
+---
+
+## 1. UNDERRUN BUDGET
+
+**Guaranteed budget = C ms** (the cushion floor between successful passes; add up to +1.45 ms for a
+just-topped ring — ignored as slack).
+
+| Mode | C | Budget before DAC reads stale data | What is heard |
+|---|---|---|---|
+| In-game | 16 ms | **~16 ms** | one click at the frontier; self-heals in ~2 ms |
+| Scene load | 64 ms | **~64 ms** | one click; self-heals in ~8 ms |
+
+**Consecutive skipped 1 ms passes to exhaust the budget** — depends on *why* passes are skipped,
+because the two skip causes burn wall-time at different rates:
+
+**(a) Scheduling-delay skips** (thread simply not run — SMT/affinity/preemption). Each missed period
+= 1 ms of undrained cushion:
+- Game: **> 16 consecutive missed 1 ms passes** (≈16 ms) → click.
+- Load: **> 64 consecutive missed passes** (≈64 ms) → click.
+
+**(b) Mutex-hold skips** (genericmss.cpp:454-484: each contended wake burns a 10 ms blocking retry
+before giving up). Each skipped pass costs ~10 ms of wall time, so the cushion drains ~10 ms per
+skipped pass:
+- Game: `ceil(16 / 10)` = **2 consecutive mutex-blocked wakes** (2 × 10 = 20 ms > 16) → click.
+  Effectively **~1.6 passes** — two colliding wakes in a row is already an underrun at 16 ms.
+- Load: `ceil(64 / 10)` = **7 consecutive mutex-blocked wakes** (7 × 10 = 70 ms > 64) → click
+  (~6.4 passes).
+
+**Continuous-hold reduction.** Whether an app thread holds the mutex continuously for `H` ms or the
+service collides repeatedly, the 10 ms retry granularity only chunks the starvation — it does not
+change the threshold. A continuously-held mutex starves the mixer for the full hold (a blocked
+waiter acquires the instant the holder releases, `goto gotit`). Net rule for the whole report:
+
+> **A single continuous mutex hold of `H` ms causes an underrun click iff `H > C`.**
+
+---
+
+## 2. MUTEX-HOLD TOLERANCE
+
+**Max single hold guaranteed inaudible = C ms** (conservative floor; the cushion can be as low as C
+at the instant just before a would-be service that the hold blocks).
+
+| Window | C (active mix-ahead) | Guaranteed-inaudible single hold `H_crit` |
+|---|---|---|
+| Scene load (zone-in uses the 64 buffer) | 64 ms | **H ≤ 64 ms** |
+| In-game (64→16 restored) | 16 ms | **H ≤ 16 ms** |
+
+This directly explains the **rare D3D9-only in-game crackle**: any main-thread call that holds the
+Miles mutex (a sound start, `Audio::alter`, a volume/3D update inside `AIL_lock_mutex`) for longer
+than **16 ms** starves the service thread past its cushion → one click. The evidence's "rare
+20-100 ms main-thread hitches via mutex-held calls" are all **> 16 ms → every one that holds the
+mutex is an audible click.** gl05's synchronous main-thread D3DX shader compile is the classic
+source of a >16 ms main-thread hitch; it only crackles when it overlaps a held Miles lock (or starves
+core 1 — see §4). gl11 has no in-game compile → clean in-game, matching the matrix.
+
+### Zone-in burst model (10-30 starts in ~2 s, each holding `H` ms; C = 64 during load)
+
+Because the mutex is *released* between starts (main thread does other work), the service recovers
+the cushion it lost in ~0.13·H ms of freed time (restore H ms of audio at +7.71 ms/ms → H/7.71 ≈
+0.13·H). Recovery is trivially fast, so the **binding case is the single worst hold**, not the sum:
+
+**Audible-crackle threshold curve for H (single hold):**
+
+```
+P(click per start) ≈ 0        for H <  C          (cushion absorbs it)
+P(click per start) ≈ 1        for H >= C          (frontier overrun)
+Expected clicks in burst ≈ N * P(H >= C),  N = 10..30 starts
+```
+
+- Zone-in (C=64): a start clicks only if its own hold **≥ 64 ms**. So the zone-in crackle count ≈
+  the number of the 10-30 starts whose individual mutex hold exceeds 64 ms — typically a *stream
+  open* (`AIL_open_stream`: allocs + first 8-chunk prime) or a decode-init, which can plausibly hold
+  the lock 50-150 ms.
+- **Back-to-back degenerate case:** only if starts are contiguous with ~zero mutex-free gaps does the
+  cumulative occupancy matter — underrun when contiguous occupancy > 64 ms, i.e. with N truly
+  contiguous starts the per-start ceiling drops to `H > 64/N` (e.g. 30 contiguous starts → 2.1 ms
+  each). Real starts are interleaved with non-locked main-thread work, so in practice the single-hold
+  `H ≥ 64 ms` rule dominates. **The 100-900 ms bursts the evidence attributes to OTHER threads are
+  the more likely zone-in driver** (see §4) — they are far past 64 ms and no single sound start
+  should hold the lock that long.
+
+---
+
+## 3. OPTIMAL MIX-AHEAD
+
+Mix-ahead is a **latency tax**: every sound start/stop/volume/3D change is inaudible until the
+already-mixed cushion drains, so each audio event is delayed by **up to C ms**. C is therefore the
+responsiveness cost, one-for-one.
+
+**The 2× margin requirements collide with hard ceilings:**
+
+- To make a hitch of duration `D` inaudible with 2× margin needs `C ≥ 2D`.
+- But `C` cannot exceed the ring: `C ≤ T = 256 ms` (and practically `C ≤ ~192-224 ms`; as C→T,
+  DesiredRemainder→0 and the mixer never has headroom to burst-catch-up — unstable).
+- The ring `T` is read **once at device open** (genericdig.cpp:339) — not runtime-adjustable. So
+  within the current architecture the absolute cushion ceiling is ~224 ms.
+
+### (a) Normal gameplay — target the 20-100 ms mutex-held hitches
+
+- Full 2× coverage of the **100 ms** worst case → `C ≥ 200 ms`. **Rejected:** 200 ms latency on
+  every footstep / UI click / combat SFX (~12 frames at 60 Hz) is unacceptably sluggish for action.
+- The distribution is dominated by the low end (~15-30 ms). Covering a typical ~15 ms hitch at 2× →
+  `C ≥ 30 ms`.
+- **Recommend gameplay `DIG_DS_MIX_FRAGMENT_CNT = 32` (32 ms).** Doubles the current 16 ms cushion;
+  absorbs all holds ≤ 32 ms (2× margin on the common ~16 ms hitch); **responsiveness cost = ≤ 32 ms
+  audio latency (~2 frames) — barely perceptible.** This removes the frequent low-amplitude in-game
+  clicks. The 100 ms outliers are NOT covered by any acceptable C and **must be fixed at the source**
+  (do not hold the Miles mutex across a >16 ms main-thread op — narrow the lock or move the compile
+  off the audio-locked path). Buffering is the wrong tool for the tail.
+
+### (b) Load window — bursts 100-900 ms on other threads
+
+- 2× on the 900 ms worst case → `C ≥ 1800 ms`. Impossible: 7× the 256 ms ring.
+- Even 2× on a *median* ~300 ms burst → `C ≥ 600 ms` > 256 ms ring. **No mix-ahead value inside the
+  256 ms ring can mask a 300 ms starvation, let alone 900 ms.**
+- What *is* achievable: raise the load cushion toward the ring ceiling.
+  - **Recommend load `DIG_DS_MIX_FRAGMENT_CNT = 192` (192 ms)**, up from 64. Absorbs all starvation
+    ≤ 192 ms outright; gives 2× margin for bursts ≤ 96 ms. Cost during the loading screen: **none
+    perceptible** — no interactive SFX during load; music lagging 192 ms is harmless. This alone
+    kills every zone-in click whose gap is < 192 ms (the entire lower half of the 100-900 ms range).
+  - To reach the 300-500 ms bursts you must **enlarge the ring at device open**: bump
+    `DIG_DS_FRAGMENT_CNT` from 256 → **512 or 1024** (0.5-1.0 s ring) *before* `AIL_open_digital_driver`,
+    then a load cushion of ~400-500 ms becomes possible. This is a one-line preference set at init,
+    but it permanently costs the extra ring RAM (512 ms ≈ 45 KB — negligible) and raises the *max*
+    achievable latency (only paid if you also raise MixFragmentCnt).
+  - The **900 ms tail cannot be buffered away** in any reasonable ring; it must be prevented — the
+    loader threads must not starve the mixer's core (§4) for ~1 s. Buffering buys margin; the pin/
+    priority fix removes the cause.
+
+---
+
+## 4. SMT / SCHEDULING — can loader bursts delay the (floating, HIGHEST) mixer wake?
+
+**Evidence correction applied.** The `rrThreadSetCPUCore(&s_TimerThread, 1)` pin at genericmss.cpp:747
+is inside `#if defined(IS_PSP2) || defined(IS_WIIU)` — **dead on Win32.** The MSSTimer thread is
+therefore **not pinned to any core** and floats under the OS scheduler. The two cumulative
+`rrThreadOneHigherThanCurrent` calls (743-744) raise it NORMAL→ABOVE_NORMAL→**THREAD_PRIORITY_HIGHEST**
+(base priority 15 in the NORMAL class). The prior "hard pin to SMT sibling" theory is **withdrawn.**
+
+The residual question is: on 6 P-cores / 12 logical, can 20-100 ms main-thread D3DX-compile bursts and
+loader threads delay a **floating HIGHEST** thread's 1 ms `WaitForSingleObject` wake by > C (16/64 ms)?
+
+**Preemption arithmetic says essentially no — for the scheduling path.**
+- Loader/worker threads and the main thread run at **NORMAL (8)** or thereabouts. The mixer at **15**
+  strictly preempts them. On Windows a ready priority-15 thread displaces a running priority-8 thread
+  within one preemption/dispatch latency — **tens of µs**, not ms. It does not wait in the run queue
+  behind NORMAL work even when all 12 logical processors are busy: one NORMAL thread is evicted.
+- So neither a 100 ms D3DX compile nor 12 saturating zlib loaders (all ≤ NORMAL) can starve the wake
+  by anywhere near 16 ms. The scheduling-starvation budget from NORMAL contention is **< 0.1 ms** —
+  three orders below the smallest cushion. The theory is quantitatively dead.
+- SMT sibling *compute* stretch of the pass itself is likewise irrelevant: an ≤ 8.71 ms fill across
+  ~10-30 voices costs tens-to-hundreds of µs; even 1.8× under a hot sibling is < 0.4 ms ≪ 16 ms.
+- Residual scheduling risks that COULD reach ms: (a) `WaitForSingleObject(1 ms)` granularity — with
+  `timeBeginPeriod(1)` already set (fix #1), the timeout resolves to ~1-1.5 ms, so wakes land every
+  ~1-2 ms — fine; (b) DPC/ISR storms or GPU-driver threads at ≥ 15 during first-draw resource
+  creation — these can round-robin with the mixer but for sub-ms slices, not a sustained > 16 ms hold.
+  None plausibly sustains > 16 ms. **The ring-service thread is well protected by its HIGHEST float.**
+
+**Consequence — reframe the zone-in mechanism.** Because the ring service is *not* scheduling-starvable,
+the renderer-agnostic zone-in crackle is NOT a mixer-wake-latency problem. It reduces to the two paths
+the budget math already isolates, both renderer-independent:
+
+1. **Mutex-hold starvation (ring level).** App threads that take `s_MilesMutex` for > C ms make the
+   HIGHEST mixer *skip* passes regardless of its priority (priority does not help — the mutex is a
+   lock, and Windows CRITICAL_SECTION/SRW give no priority inheritance; the ThreadProc just blocks
+   10 ms then skips). This is §1/§2's `H > C` rule. Zone-in stream opens and the 1 s `Audio::alter`
+   `Sleep(5)` pump loop are the prime > C holders. **Priority cannot fix a lock — only shorter holds can.**
+
+2. **Stream data starvation (voice level) — the strongest renderer-agnostic candidate.** The mix-ahead
+   cushion C protects the *mixed output* ring; it does **nothing** if a stream voice has no decoded
+   source to mix. The planet-theme MP3 + ambient WAV loops refill their ~1 s / 8-chunk compressed
+   buffers via the Miles async-IO thread through TreeFile file callbacks. During zone-in the disk +
+   zlib loaders saturate I/O and CPU; if the async-IO thread is only NORMAL priority it competes on
+   equal footing with the loaders, and a late compressed-chunk refill leaves `SS_fill` with an empty
+   stream buffer for that voice → a per-voice gap = crackle. (Decode itself runs in `stream_background`
+   on the HIGHEST mixer thread with the mutex released — genericdig.cpp:1047-1049 — so decode is
+   protected; the exposed link is the **compressed refill I/O**, not decode.) This is independent of
+   renderer and independent of C — which is exactly why bumping the load buffer (rec #3) will only
+   *partly* help and the real lever is stream-buffer depth / async-IO-thread priority.
+
+**Spec-level verdict:** unpinning/repinning is **moot** (already unpinned on Win32) and raising mixer
+priority is a **no-op** (already HIGHEST). Redirect the effort to (1) narrowing app-thread mutex holds
+and (2) protecting the stream compressed-refill path — see recommendations.
+
+---
+
+## RECOMMENDATION BLOCK (ranked by expected effect ÷ risk)
+
+The §4 correction reorders this. The mixer thread is already unpinned + HIGHEST, so priority/affinity
+changes are moot. Underruns come from only two math-supported paths: **(A)** app-thread mutex holds
+> C (§1/§2), and **(B)** stream compressed-refill starvation that C does not protect against (§4).
+
+| # | Change | Where | Expected effect | Risk | Cost |
+|---|---|---|---|---|---|
+| **1** | **Narrow app-thread Miles mutex holds to < 16 ms** — audit every `AIL_lock_mutex`/`InMilesMutex` span reachable from the main thread (sound start, `Audio::alter`, the 1 s `Sleep(5)` music-fade pump in the SCENE_CHANGED handler, volume/3D updates); ensure no > C op runs while holding it, and that the fade-pump yields the lock between iterations | Audio.cpp / clientGame SCENE_CHANGED | Removes the **confirmed in-game D3D9 tail** (20-100 ms mutex-held hitches, §2) and the zone-in path-A holds. Priority can't fix a lock — only this can. | Med (needs the code trace the other consultants own) | none |
+| **2** | **Protect the stream compressed-refill I/O** — raise the Miles **async-IO thread priority** above the disk/zlib loaders (ABOVE_NORMAL/HIGHEST), and/or **deepen the stream buffer** (more than the ~1 s / 8-chunk preroll, or larger chunks) so a disk-saturated zone-in can't leave a stream voice source-empty | Audio.cpp stream open / Miles async-IO thread create | Directly targets the **renderer-agnostic zone-in crackle** (path B, §4) — the mechanism the cushion cannot touch. Highest-leverage zone-in fix. | Low-med | slightly more compressed buffer RAM |
+| **3** | **Load-window cushion 64 → 192** (`AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT, 192)` in setLargePreMixBuffer) | Audio.cpp:5511 | Absorbs path-A ring-service gaps < 192 ms during load (2× margin ≤ 96 ms). **Does NOT help path-B stream starvation** — pair with #2. | Low (music lag ≤ 192 ms during load only; no interactive SFX then) | ~13 KB queued; none perceptible |
+| **4** | **Gameplay cushion 16 → 32** (`s_bufferFragmentsMin = 32`) | Audio.cpp:216 | Halves frequent low-amplitude in-game clicks (absorbs mutex holds ≤ 32 ms; 2× on the common ~16 ms hitch). Complements #1 for the sub-32 ms tail. | Low | ≤ 32 ms (~2 frame) SFX latency |
+| **5** | **Enlarge ring at open 256 → 512** (`AIL_set_preference(DIG_DS_FRAGMENT_CNT, 512)` *before* `AIL_open_digital_driver`) so #3 can be pushed to ~400 ms and reach mid-range path-A bursts | Audio.cpp ~1454 (before open) | Raises the buffering ceiling for the 300-500 ms path-A range | Low-med (verify open still succeeds) | ~45 KB ring RAM |
+
+**Bottom line of the math:** the live safety cushion is exactly `C` ms (16 game / 64 load); any
+**mutex-hold** longer than C produces one self-healing click (two colliding wakes already exceed 16 ms
+in-game). The mixer thread floats at HIGHEST and is **not** scheduling-starvable by NORMAL loader
+bursts (< 0.1 ms scheduling budget — three orders under C), so the SMT/pin theory is withdrawn and
+priority tuning is moot. That leaves two renderer-agnostic causes the arithmetic supports: mutex holds
+> C (fix by **#1**, buffer-pad with **#3-#5**) and **stream compressed-refill starvation**, which no
+mix-ahead value protects against (fix by **#2**). Rank **#1 and #2 first** — #1 kills the in-game
+D3D9 tail, #2 is the only lever that reaches the both-renderers zone-in crackle the cushion can't.

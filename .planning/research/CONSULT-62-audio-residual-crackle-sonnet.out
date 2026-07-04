@@ -1,0 +1,182 @@
+# CONSULT-62 — Sonnet lateral pass: alternative mechanisms for residual audio crackle
+
+Scope discipline: every mechanism below is explicitly NOT "a thread got starved/preempted by
+the OS scheduler." Where a main-thread stall is part of the causal chain, it is used only as an
+*input* (a gap during which no update happened) — the actual crackle-producing step is a
+different-domain effect (DSP zipper noise, kernel-mode DPC preemption of a pinned thread, or
+codec/decoder-boundary artifacts), not scheduler contention on the mixer thread itself.
+
+## Top 3, ranked by fit-to-evidence
+
+### #1 (strongest fit) — Gain-parameter step discontinuity ("zipper noise") from Miles' rampless volume assignment, triggered by any main-thread gap during which `Audio::alter` isn't called at all
+
+**Causal chain.** `AIL_set_sample_volume_levels` in the vendored Miles 9.3b source is a bare
+scalar assignment with no interpolation:
+
+```
+D:\Code\milesss-v9.3b\win\sdk\src\sdk\wavefile.cpp:5168-5169
+  S->left_volume = left_level;      // These are already linear scalars
+  S->right_volume = right_level;
+```
+
+and the 3D-positional volume path (pan/distance -> left/right) at wavefile.cpp:5860-5861 and
+5928-5929 is the same pattern: whatever gain the engine computes on a given call is applied
+**instantly** to the very next mixed sample block — there is no ramp/crossfade across the gap
+since the previous call. `Sound3d::alter()` (`src/engine/client/library/clientAudio/src/win32/Sound3d.cpp:120-125`)
+calls `Audio::setSamplePosition_w()` every frame, which feeds Miles' pan/distance -> volume
+recompute, then falls into `Sound2d::alter()`'s volume path (`Sound2d.cpp:551-559`), which
+itself only ramps if `getVolumeInterpolationRate() > 0` — many `.snd` templates use
+`interpolationRate==0` (instant/"snap"), per the existing engine comment at
+`Audio.cpp:2137-2141`.
+
+Critically: **this mechanism is not "thread starvation"** — it does not require Miles' mixer
+tick to be late. It requires only that the *game's own* per-frame call to `Audio::alter()` be
+skipped entirely for a stretch of real wall-clock time (because the main thread was doing
+something else — GPU resource creation, or a D3DX compile), during which a sound's
+distance/occlusion/pan continued to change in the world. The next `Audio::alter()` call after
+the gap recomputes the *current* target gain from *current* game state and Miles slams it in
+one step — a real, audible zipper click — regardless of any deltaTime clamp applied to that
+call (a deltaTime clamp only bounds *integrated* ramps like fades; it does nothing for a
+position/distance-driven target that is recomputed from scratch every call).
+
+**This exact class is already caught once, in-tree, and fixed** — direct proof the mechanism is
+real in this codebase:
+
+```
+src/game/client/library/swgClientUserInterface/src/shared/core/SwgCuiManager.cpp:356-365
+  // Clamp the step fed to Audio::alter: this loop runs inside the
+  // zone-in stall window, so an iteration can measure a huge dt
+  // (watchdog dump writes, GroundScene work) and one oversized
+  // alter() snaps sound volumes audibly mid-fade (VOLSTEP
+  // 0.329->0.750 on the fading title music, 2026-07-04). Mirrors
+  // the main loop's minFrameRate elapsed-time clamp.
+```
+
+That fix clamps the deltaTime *value* passed into the deliberate SCENE_CHANGED fade-pump loop
+(so the fade integrates smoothly) — but it does nothing for the *other two* stall classes still
+open per the CONSULT-62 evidence file, because in both of those, `Audio::alter()` is not called
+at all during the stall (the main thread is blocked inside GPU resource creation or D3DX
+compile, not inside an audio pump loop):
+
+- **Zone-in, both renderers:** first-draw GPU resource creation (textures/VBs/IBs for newly
+  streamed zone geometry) blocks the main thread 100-900ms in bursts. Any 3D/2D sound whose
+  attenuation, occlusion, or pan is a function of listener/source position (not of elapsed
+  time) has its "last known" gain go stale during the block; the frame right after the stall
+  ends recomputes a big-delta target and Miles snaps to it. This is renderer-agnostic because
+  GPU-resource creation is a generic driver-facing cost paid by *both* backends when new zone
+  geometry first appears — it explains the clustered "1-2 seconds of minor crackle" as several
+  of these snap events landing close together as the first few chunks of geometry allocate.
+- **In-game, D3D9-only:** `Win32 gl05 compiles shaders through D3DX synchronously on the MAIN
+  thread when new shaders appear in-game` (evidence file, "Renderer difference facts"). D3D11
+  never does this in-game (VS bytecode disk cache). Every time D3D9 hits a never-before-seen
+  shader combination mid-play, the main thread — and therefore `Audio::alter()` — freezes for
+  the compile; whatever 3D sound's distance/occlusion moved during that freeze snaps on the
+  next call. D3D11 has no analogous in-game stall class, so no analogous snap — matching the
+  observed renderer split exactly.
+
+**What this does NOT explain:** anything that doesn't correlate with a stall boundary — e.g. if
+a crackle is heard while frame times are nominal (10-30ms, no watchdog entry, no D3DX compile
+event), this mechanism has no trigger and should be ruled out for that instance.
+
+**Cheap decisive probe:** the `VOLSTEP` instrumentation already exists
+(`Audio.cpp:2137-2156`, threshold 0.05). Correlate `VOLSTEP` log timestamps in
+`stage/audio-diag.log` against (a) the stall-watchdog's dump timestamps during zone-in, and (b)
+a D3DX-compile log/breakpoint hit in gl05's shader-creation path during an in-game session.
+Confirmation = every heard crackle has a temporally adjacent VOLSTEP line *and* a temporally
+adjacent stall/compile event; a VOLSTEP line with no adjacent gap event, or a heard crackle with
+no VOLSTEP line, falsifies this mechanism for that instance. If confirmed, the fix is cheap:
+give `Sound2d`/`Sound3d`'s gain path a max-step-per-frame clamp (a poor-man's ramp) independent
+of `getVolumeInterpolationRate()`, so a stale target is approached over a few frames instead of
+applied in one step — exactly the "VolRamp RIB filter... never wired" fix already named in the
+CONSULT-61 synthesis.
+
+---
+
+### #2 — GPU-driver DPC/kernel-mode preemption of the core-1-pinned Miles timer thread (OS/HAL layer, not scheduler-thread-priority)
+
+**Causal chain.** This is deliberately NOT "the OS scheduler starved MSSTimer." A DPC
+(Deferred Procedure Call) queued by a GPU kernel-mode driver (`nvlddmkm.sys`) runs at
+`DISPATCH_LEVEL`, which preempts *any* thread executing on that logical core regardless of the
+thread's priority or the scheduler's fairness policy — it is an interrupt-driven mechanism, a
+different failure class entirely from priority-based scheduling. `MSSTimer` is explicitly
+core-pinned: `rrThreadSetCPUCore(&s_TimerThread, 1)` (genericmss.cpp:747, evidence file). Its
+`ThreadProc` loop has a hard skip-on-contention design: if the wake happens during a busy
+window it just doesn't service that tick (evidence file lines 21-38) — so *any* mechanism that
+steals enough of core 1's cycles for >1ms at the wrong moment reproduces exactly a missed
+service window, with no scheduler involvement at all.
+
+- **Zone-in, both renderers:** first-draw GPU resource creation (surface/texture/buffer
+  allocation, VRAM residency changes) generates KMD activity and DPC bursts from the *same*
+  underlying `nvlddmkm.sys` regardless of whether the calling UMD is `nvd3dum.dll` (D3D9) or
+  `nvwgf2um.dll` (D3D11) — so the DPC cost is renderer-agnostic, matching (a).
+- **In-game, D3D9-only:** D3D9 on modern WDDM typically presents through the legacy
+  blit-model swapchain path (extra kernel-mode copy + synchronization per `Present()`), while
+  D3D11 with a proper flip-model swapchain does far fewer kernel-mode transitions per frame.
+  If D3D9's steady-state presentation generates a persistently higher baseline rate of
+  kernel-mode/DPC activity than D3D11's, then core 1 would occasionally have a
+  >1ms-DPC-execution moment line up with an MSSTimer tick under D3D9 that essentially never
+  happens under D3D11 — reproducing the observed "D3D9 occasional rare click, D3D11 clean"
+  split without invoking OS thread scheduling at all.
+
+**What this does NOT explain:** it doesn't explain why crackles cluster specifically at *sound
+start/fade* moments (Mechanism #1's VOLSTEP correlation) rather than being uniformly distributed
+over time; if the DPC-storm theory is right, crackle timing should correlate with driver/DPC
+activity, not with a sound's volume-envelope state. It's also weaker than #1 on specificity —
+"D3D9 presents more expensively at the kernel level" is plausible but not confirmed in this
+codebase (no direct evidence read; this is a general WDDM/driver-architecture fact, not
+something found in the vendored source).
+
+**Cheap decisive probe:** run Windows Performance Recorder (or the free "LatencyMon" tool) with
+DPC/ISR execution-time tracing during (a) a zone-in and (b) an in-game D3D9 session, filtering
+to `nvlddmkm.sys` and to logical core 1 specifically. Cross-reference DPC execution spans >1ms
+against `audio-diag.log` `STARVED`/`VOLSTEP` timestamps. Confirmation = spikes on core 1 land at
+the same instants as diag-log anomalies, and a repeat under D3D11 in-game shows materially
+fewer/no such spikes. If confirmed, the fix is a config-level workaround: move `MSSTimer`'s
+pinned core off whatever core coincides with the GPU driver's default IRQ/DPC affinity (often
+core 0 or the first core after the OS's own housekeeping cores), or unpin it and let it float
+(re-test whether `rrThreadSetCPUCore` pinning is even still beneficial post-`timeBeginPeriod(1)`).
+
+---
+
+### #3 — MP3 stream-(re)open decode-priming artifact clustered at zone-in's simultaneous stream starts (codec/decoder-domain, not Miles engine-internals or threading)
+
+**Causal chain.** MP3 (a lossy, frame-based, overlap-add codec with encoder look-ahead/bit-
+reservoir dependency between frames) has a well-documented startup transient: the first
+decoded frame(s) after any `AIL_open_stream` often need to pull bit-reservoir data from
+*subsequent* frames, and consumer/LAME-style encoders commonly emit encoder-delay padding
+samples at the start of the compressed stream that a naive player does not trim — both produce
+a small audible artifact right at stream-open, independent of any threading or timing issue.
+Zone-in is precisely the moment several compressed streams open in quick succession (the planet
+theme MP3, per evidence file: "starts many sounds... planet theme MP3 stream, 1-2 ambient WAV
+loop streams, one-shot UI/object samples") — the only point in normal play where multiple
+stream-opens cluster together, since ambient loops are WAV (raw PCM, not frame-coded, so no
+equivalent artifact) and music tracks don't normally restart mid-play. Several small,
+independent per-stream open-transients landing within the same ~1-2s window would read
+perceptually as the reported "1-2 seconds of minor crackle" even though each individual event is
+a single-frame blip, not a sustained fault.
+
+**What this does NOT explain:** it has **no plausible D3D9-vs-D3D11 differentiator** — MP3
+decode-priming is pure codec math with zero GPU/renderer interaction, so it cannot by itself
+account for symptom (b) (rare isolated D3D9-only in-game crackles). It also would not explain
+why the observed clicks correlate with the loading-screen-to-world transition specifically
+*if* it turns out multiple stream-opens are actually staggered (not simultaneous) in the
+zone-in sequence — that would spread the (already-small) artifact outside the 1-2s window and
+weaken this theory. Rank this third precisely because it is architecturally incapable of
+covering symptom (b); it is offered as a possible *partial contributor* to (a) only, layered on
+top of #1/#2, not a unifying explanation.
+
+**Cheap decisive probe:** add a one-line log at every `AIL_open_stream` call (path + timestamp)
+next to the existing `audio-diag.log` instrumentation, and check whether any `STARVED`/`VOLSTEP`
+or a manually-marked "heard crackle" timestamp falls within ~50-100ms of a stream-open event
+that is *not* already explained by mechanism #1's stall correlation. If zone-in crackle
+instances survive after #1 and #2 are ruled in/out and *still* line up tightly with stream-open
+timestamps with no coincident stall/DPC event, that isolates this mechanism. If crackle timing
+never lines up with stream-open independent of a stall, this is dead.
+
+## Summary table
+
+| # | Mechanism | Explains (a) zone-in both renderers | Explains (b) D3D9-only in-game | Confirmed in-tree already? |
+|---|---|---|---|---|
+| 1 | Rampless Miles gain assignment snapping after an `Audio::alter`-skipped gap | Yes (GPU-resource-creation stall gaps, renderer-agnostic) | Yes (D3DX sync-compile stall gap, D3D9-only) | Yes — VOLSTEP 0.329->0.750 already caught + partially fixed (pump-loop clamp) |
+| 2 | GPU-driver DPC preemption of the core-1-pinned MSSTimer tick | Yes (shared KMD, both UMDs) | Plausible (D3D9 blit-model vs D3D11 flip-model kernel-transition cost) | No — architectural inference, not yet probed |
+| 3 | MP3 stream-open decode-priming transient | Partial (only for the one MP3 stream, not the WAV loops) | No | No — plausible codec-domain artifact, unverified |
