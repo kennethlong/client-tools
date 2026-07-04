@@ -27,6 +27,7 @@
 #include "Direct3d11.h"
 #include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_StateCache.h"   // CONSULT-58 resource-creation census
 #include "Direct3d11_HlslRewrite.h"
 #include "Direct3d11_ShaderCache.h"
 #include "Direct3d11_VertexShaderData.h"   // Iter-4: getBytecodeHash / getReflectedOutputs
@@ -259,6 +260,7 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			nullptr,
 			outComPtr.GetAddressOf());
 		FATAL_DX_HR("Direct3d11_PixelShaderProgramData::CreatePixelShader failed: %s", hr);
+		Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_shader);   // CONSULT-58 census
 		return true;
 	}
 
@@ -375,6 +377,8 @@ namespace Direct3d11_PixelShaderProgramDataNamespace
 			blob->GetBufferSize(),
 			nullptr,
 			outComPtr.GetAddressOf());
+		if (SUCCEEDED(createHr))
+			Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_shader);   // CONSULT-58 census
 		if (FAILED(createHr))
 		{
 			// HIGH-1: NON-FATAL. Magenta tombstone owns the draw.

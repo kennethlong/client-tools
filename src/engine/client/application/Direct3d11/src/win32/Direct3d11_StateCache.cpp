@@ -227,6 +227,9 @@ namespace Direct3d11_StateCacheNamespace
 	int ms_skippedDrawsNullVS = 0;
 	int ms_skippedDrawsNullLayout = 0;
 
+	// CONSULT-58 resource-creation census (reset in beginFrame, read by present()).
+	int s_censusCreates[Direct3d11_StateCache::CCK_COUNT] = {};
+
 	// Plan 11-09.14: lifetime count of applyPreDrawState flushes where
 	// ms_boundSRV[0] != nullptr at the PSSetShaderResources call. Pairs
 	// with the StaticShaderData-side per-pass counters to attribute id=353
@@ -1735,6 +1738,9 @@ void Direct3d11_StateCache::beginFrame()
 	ms_drawCallCount = 0;
 	ms_skippedDrawsNullVS = 0;
 	ms_skippedDrawsNullLayout = 0;
+
+	for (int i = 0; i < CCK_COUNT; ++i)
+		s_censusCreates[i] = 0;   // CONSULT-58 creation census
 }
 
 // ----------------------------------------------------------------------
@@ -1750,6 +1756,20 @@ void Direct3d11_StateCache::endFrame()
 int Direct3d11_StateCache::getDrawCallCount()
 {
 	return ms_drawCallCount;
+}
+
+// ----------------------------------------------------------------------
+// CONSULT-58 resource-creation census.
+
+void Direct3d11_StateCache::countCreate(CensusCreateKind kind)
+{
+	++s_censusCreates[kind];
+}
+
+void Direct3d11_StateCache::getCreateCensus(int (&counts)[CCK_COUNT])
+{
+	for (int i = 0; i < CCK_COUNT; ++i)
+		counts[i] = s_censusCreates[i];
 }
 
 // ======================================================================

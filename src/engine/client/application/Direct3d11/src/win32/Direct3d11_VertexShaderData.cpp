@@ -77,6 +77,7 @@
 #include "Direct3d11.h"
 #include "Direct3d11_CompileIncludeHandler.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_StateCache.h"   // CONSULT-58 resource-creation census
 #include "Direct3d11_HlslRewrite.h"
 #include "Direct3d11_ShaderCache.h"
 
@@ -512,6 +513,7 @@ static void finalizeVariantFromBytecode(Direct3d11_VertexShaderData::Variant &va
 		nullptr,
 		variant.d3dVS.GetAddressOf());
 	FATAL_DX_HR("Direct3d11_VertexShaderData::CreateVertexShader failed: %s", hr);
+	Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_shader);   // CONSULT-58 census
 
 	// Plan 11-09.8 / 11-09.13 Iter-3: capture VS input + output signatures via
 	// D3DReflect. Reflection failure is treated as defensive non-fatal; both

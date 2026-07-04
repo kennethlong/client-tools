@@ -25,6 +25,7 @@
 
 #include "Direct3d11.h"
 #include "Direct3d11_Device.h"
+#include "Direct3d11_StateCache.h"   // CONSULT-58 resource-creation census
 
 #include "clientGraphics/TextureFormatInfo.h"
 #include "sharedFoundation/ExitChain.h"
@@ -372,7 +373,10 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 			ComPtr<ID3D11Texture3D> tex3d;
 			lastResult = device->CreateTexture3D(&desc, nullptr, &tex3d);
 			if (SUCCEEDED(lastResult))
+			{
 				m_texture = tex3d;
+				Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_texture);   // CONSULT-58 census
+			}
 		}
 		else
 		{
@@ -392,7 +396,10 @@ Direct3d11_TextureData::Direct3d11_TextureData(const Texture &newEngineTexture,
 			ComPtr<ID3D11Texture2D> tex2d;
 			lastResult = device->CreateTexture2D(&desc, nullptr, &tex2d);
 			if (SUCCEEDED(lastResult))
+			{
 				m_texture = tex2d;
+				Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_texture);   // CONSULT-58 census
+			}
 		}
 	}
 
@@ -704,6 +711,7 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 		ID3D11Texture3D *staging = nullptr;
 		HRESULT hr = device->CreateTexture3D(&desc, nullptr, &staging);
 		FATAL_DX_HR("Direct3d11_TextureData::lock CreateTexture3D (staging) failed: %s", hr);
+		Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_staging);   // CONSULT-58 census
 
 		D3D11_MAPPED_SUBRESOURCE mapped = {};
 		hr = context->Map(staging, 0,
@@ -766,6 +774,7 @@ void Direct3d11_TextureData::lock(LockData &lockData)
 		ID3D11Texture2D *staging = nullptr;
 		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
 		FATAL_DX_HR("Direct3d11_TextureData::lock CreateTexture2D (staging) failed: %s", hr);
+		Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_staging);   // CONSULT-58 census
 
 		D3D11_MAPPED_SUBRESOURCE mapped = {};
 		hr = context->Map(staging, 0,
@@ -836,6 +845,7 @@ void Direct3d11_TextureData::unlock(LockData &lockData)
 		ID3D11Texture2D *staging = nullptr;
 		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &staging);
 		FATAL_DX_HR("Direct3d11_TextureData::unlock (bridge) CreateTexture2D failed: %s", hr);
+		Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_staging);   // CONSULT-58 census
 
 		D3D11_MAPPED_SUBRESOURCE mapped = {};
 		hr = context->Map(staging, 0, D3D11_MAP_WRITE, 0, &mapped);

@@ -1177,7 +1177,7 @@ bool Direct3d11_Device::present()
 		if (!s_censusFile)
 		{
 			if (fopen_s(&s_censusFile, "gl11-census.csv", "w") == 0 && s_censusFile)
-				fprintf(s_censusFile, "frameMs,draws,vsB0,vsB1,vsB2,vsB3,psB0,psB1,psB2,psB3,vbLocks,vbDiscards,ibLocks,ibDiscards\n");
+				fprintf(s_censusFile, "frameMs,draws,vsB0,vsB1,vsB2,vsB3,psB0,psB1,psB2,psB3,vbLocks,vbDiscards,ibLocks,ibDiscards,texCreates,stagingCreates,shaderCreates,layoutCreates\n");
 			QueryPerformanceFrequency(&s_censusQpf);
 			QueryPerformanceCounter(&s_censusLast);
 		}
@@ -1194,11 +1194,15 @@ bool Direct3d11_Device::present()
 			int vbLocks = 0, vbDiscards = 0, ibLocks = 0, ibDiscards = 0;
 			Direct3d11_DynamicVertexBufferData::getFrameCensus(vbLocks, vbDiscards);
 			Direct3d11_DynamicIndexBufferData::getFrameCensus(ibLocks, ibDiscards);
+			int creates[Direct3d11_StateCache::CCK_COUNT];
+			Direct3d11_StateCache::getCreateCensus(creates);
 
-			fprintf(s_censusFile, "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+			fprintf(s_censusFile, "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 				frameMs, Direct3d11_StateCache::getDrawCallCount(),
 				vs[0], vs[1], vs[2], vs[3], ps[0], ps[1], ps[2], ps[3],
-				vbLocks, vbDiscards, ibLocks, ibDiscards);
+				vbLocks, vbDiscards, ibLocks, ibDiscards,
+				creates[Direct3d11_StateCache::CCK_texture], creates[Direct3d11_StateCache::CCK_staging],
+				creates[Direct3d11_StateCache::CCK_shader], creates[Direct3d11_StateCache::CCK_inputLayout]);
 			fflush(s_censusFile);
 		}
 	}

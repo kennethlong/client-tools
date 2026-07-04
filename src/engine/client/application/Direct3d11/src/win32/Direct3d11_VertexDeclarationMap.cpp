@@ -11,6 +11,7 @@
 
 #include "Direct3d11.h"               // FATAL_DX_HR
 #include "Direct3d11_Device.h"
+#include "Direct3d11_StateCache.h"   // CONSULT-58 resource-creation census
 #include "Direct3d11_VertexBufferDescriptorMap.h"
 #include "Direct3d11_VertexShaderData.h"
 
@@ -204,6 +205,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreate(
 		return nullptr;
 	}
 
+	Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_inputLayout);   // CONSULT-58 census
 	auto inserted = ms_cache->emplace(key, layout);
 	DEBUG_FATAL(!inserted.second, ("Direct3d11_VertexDeclarationMap: cache insert collision"));
 	return inserted.first->second.Get();
@@ -330,6 +332,7 @@ ID3D11InputLayout *Direct3d11_VertexDeclarationMap::getOrCreateMultiStream(
 		return nullptr;
 	}
 
+	Direct3d11_StateCache::countCreate(Direct3d11_StateCache::CCK_inputLayout);   // CONSULT-58 census
 	auto inserted = ms_multiStreamCache->emplace(key, layout);
 	DEBUG_FATAL(!inserted.second, ("Direct3d11_VertexDeclarationMap: multi-stream cache insert collision"));
 	return inserted.first->second.Get();
