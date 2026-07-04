@@ -213,6 +213,10 @@ namespace AudioNamespace
 	int                          s_nonVoiceoverFadeCount = 0;
 	int                          s_nonBackgroundFadeCount = 0;
 	int                          s_allAudioFadeCount = 0;
+	// CONSULT-62 postscript: keep 16. Raising to 32 was audible as sound-start lag
+	// (keyboard clicks / footsteps behind the action, Kenny 2026-07-04) -- the
+	// mix-ahead delays every start by its own length. 16ms is the responsiveness
+	// ceiling; margin problems must be fixed at the source, not buffered.
 	int const                    s_bufferFragmentsMin = 16;
 	float                        s_averageTimerDelay = 0.0f;
 	PerformanceTimer *           s_audioServePerformanceTimer = NULL;
@@ -1301,6 +1305,11 @@ bool Audio::install()
 	// empty-name path never fires) and harmful with concurrent streams; off unless
 	// explicitly re-armed.
 	s_titleMusicStreamFix = ConfigFile::getKeyBool("ClientAudio", "titleMusicStreamFix", false);
+
+	// CONSULT-62: config gate for the 35-05 distant-3D-sound change so overall
+	// loudness can be A/B'd against a stock client (keeping far 3D sources audible
+	// instead of hard-muted makes the whole soundscape denser/louder).
+	s_disable3dMuteAtMax = ConfigFile::getKeyBool("ClientAudio", "disable3dMuteAtMax", true);
 
 	if (s_disableMiles)
 	{
@@ -2591,6 +2600,10 @@ void Audio::alter(float const deltaTime, Object const *listener)
 
 		// Start the new queued sounds that did not get thrown out
 
+		// CONSULT-62 postscript: leave this as ONE batch-wide lock. Per-sound lock
+		// cycling (tried 2026-07-04) made the main thread wait behind a full mixer
+		// pass (incl. MP3 decode) between every start -- audible sound-start lag
+		// (footsteps/UI clicks) and worse D3D9 frame hitches. Verified regression.
 		Audio::lock();
 
 		QueuedSamplesToStartList::const_iterator iterQueuedSoundsToStartdList = s_queuedSamplesToStartList.begin();
@@ -5502,12 +5515,12 @@ void Audio::setToolApplication(bool const toolApplication)
 //-----------------------------------------------------------------------------
 void Audio::setLargePreMixBuffer()
 {
-	// Stock 64ms. Do NOT enlarge: a mix-ahead >= the DIG_DS_FRAGMENT_CNT ring TotalMs
-	// (default 256ms, read at device open) makes SS_serve's remainder negative and the
-	// fill loop overruns unplayed audio = crackles; and any large mix-ahead delays every
-	// audible start/stop/fade by that much, which smears the login->zone-in music
-	// transition (both convicted 2026-07-04). The load stalls that once justified a big
-	// premix are fixed (CONSULT-59/60 budgeted loads).
+	// Stock 64ms. CONSULT-62 postscript: 192ms was tried and did NOT reduce the
+	// zone-in crackle (which therefore is NOT a <=192ms service-gap/mutex-hold class
+	// during load -- stream compressed-refill starvation is the promoted suspect).
+	// A mix-ahead >= the DIG_DS_FRAGMENT_CNT ring TotalMs (default 256ms, read at
+	// device open) overruns unplayed audio = crackles; any large value also delays
+	// every audible start/stop/fade by its own length during loading.
 	AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT, 64);
 	AIL_serve();
 }

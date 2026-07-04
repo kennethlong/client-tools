@@ -352,9 +352,16 @@ namespace SwgCuiManagerNamespace
 							performanceTimer.stop();
 							float const deltaTime = performanceTimer.getElapsedTime();
 							performanceTimer.start();
-							
-							waitTimer += deltaTime;
-							Audio::alter(deltaTime, NULL);
+
+							// Clamp the step fed to Audio::alter: this loop runs inside the
+							// zone-in stall window, so an iteration can measure a huge dt
+							// (watchdog dump writes, GroundScene work) and one oversized
+							// alter() snaps sound volumes audibly mid-fade (VOLSTEP
+							// 0.329->0.750 on the fading title music, 2026-07-04). Mirrors
+							// the main loop's minFrameRate elapsed-time clamp.
+							float const clampedDeltaTime = deltaTime < 0.05f ? deltaTime : 0.05f;
+							waitTimer += clampedDeltaTime;
+							Audio::alter(clampedDeltaTime, NULL);
 							Sleep(5);
 						}
 					}

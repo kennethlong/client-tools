@@ -9,6 +9,9 @@
 #include "FirstSwgClient.h"
 #include "ClientMain.h"
 
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+
 #include "clientAnimation/SetupClientAnimation.h"
 #include "clientAudio/Audio.h"
 #include "clientAudio/SetupClientAudio.h"
@@ -170,6 +173,15 @@ int ClientMain(
 	UNREF(nCmdShow);
 
 	bootTrace("00 ClientMain entry");
+
+	// 1ms Windows timer resolution for the life of the process (per-process since
+	// Win10 2004). Without it every Sleep()/timed wait -- including Miles' MSSTimer
+	// mixer-service thread and Clock::limitFrameRate -- runs at 15.6ms granularity
+	// and can be coalesced far past that, which underruns the 64ms audio mix-ahead
+	// (charselect/gl05 crackle, stall-loop663/16805 caught oversleeping in the frame
+	// limiter, 2026-07-04). The D3D11 driver stack raised it as a side effect, which
+	// is why gl11 audio sounded fine while gl05 crackled.
+	IGNORE_RETURN(timeBeginPeriod(1));
 
 	//-- thread
 	SetupSharedThread::install();
@@ -435,6 +447,8 @@ int ClientMain(
 
 	SetupSharedFoundation::remove();
 	SetupSharedThread::remove();
+
+	IGNORE_RETURN(timeEndPeriod(1));
 
 	if (semaphore)
 		CloseHandle(semaphore);
