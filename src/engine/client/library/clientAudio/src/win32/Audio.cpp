@@ -55,12 +55,46 @@ namespace
 	// the stream goes silent. Only the STREAM path hits these callbacks (cached samples are in-memory).
 	// We remember the most-recent real stream filename and serve the empty-name re-open from it; track
 	// the sequential read offset so each re-open continues instead of restarting at 0; and close the
-	// prior re-opened handle so the per-chunk re-opens don't leak. (Default on.)
-	bool s_titleMusicStreamFix = true;
+	// prior re-opened handle so the per-chunk re-opens don't leak.
+	//
+	// CONSULT-61 ROOT CAUSE: the empty-name re-opens were never a Miles quirk -- Miles' async IO
+	// treats FileHandle==0 as "not opened yet, open by (empty) name" (milesasync.cpp:440-443), and
+	// our handle counter STARTED AT 0, so the first stream opened after install (the title music)
+	// was poisoned into per-chunk empty-name opens. With handles starting at 1 the empty-name path
+	// never fires. The shim's ONE-SLOT global state is actively harmful with multiple concurrent
+	// in-world streams (cross-stream name/offset swaps -> decoder pops; closing substituted handles
+	// mid-read -> permanently starved streams: the dead mus_theme_tatooine in audio-diag.log), so it
+	// now defaults OFF. [ClientAudio] titleMusicStreamFix=true re-arms it if title music ever
+	// regresses (it should not -- its chunk reads now carry a valid handle).
+	bool s_titleMusicStreamFix = false;
 
 	char                     s_lastAudioOpenName[1024] = { 0 };
 	int                      s_streamResumeOffset = 0;
 	std::map<unsigned, bool> s_substitutedHandleMap;
+
+	// CONSULT-61: the file callbacks run on the MAIN thread (stream opens, one-shot sample
+	// loads) AND Miles' async IO thread (chunk reads) concurrently; s_fileMap /
+	// s_nextFileHandle / the shim state above were completely unsynchronized (the same
+	// unguarded-cross-thread-container class as the CONSULT-56 TreeFile/ShaderCache fixes).
+	// The lock guards the SHARED STATE ONLY -- never hold it across TreeFile I/O: a
+	// main-thread one-shot sample load holding it through a full file read blocks Miles'
+	// IO thread mid-music-stream = audible crackle (convicted 2026-07-04 round 3). Safe
+	// because each file handle has a single consumer sequencing its open/seek/read/close
+	// (Miles synchronizes its IO thread against AIL_close_stream), so only the map and the
+	// shim globals are cross-thread.
+	struct FileCallbackCriticalSection
+	{
+		CRITICAL_SECTION m_criticalSection;
+		FileCallbackCriticalSection()  { InitializeCriticalSection(&m_criticalSection); }
+		~FileCallbackCriticalSection() { DeleteCriticalSection(&m_criticalSection); }
+	};
+	FileCallbackCriticalSection s_fileCallbackCriticalSection;
+
+	struct FileCallbackLock
+	{
+		FileCallbackLock()  { EnterCriticalSection(&s_fileCallbackCriticalSection.m_criticalSection); }
+		~FileCallbackLock() { LeaveCriticalSection(&s_fileCallbackCriticalSection.m_criticalSection); }
+	};
 
 	// Turn OFF Miles' DIG_3D_MUTE_AT_MAX (default YES in 9.3x) so distant 3D sounds attenuate smoothly
 	// instead of hard-muting at their max distance. Applied before AIL_open_digital_driver.
@@ -145,7 +179,12 @@ namespace AudioNamespace
 	int                          s_instantRejectionCount = 0;
 	int                          s_nextSoundId = 1;
 	int                          s_nextSampleId = 1;
-	unsigned int                 s_nextFileHandle = 0;
+	// CONSULT-61: MUST start at 1 -- Miles' async IO treats FileHandle==0 as "not
+	// opened, open by name" (milesasync.cpp:440-443) with an EMPTY name for stream
+	// chunks, so a stream issued handle 0 degenerates into per-chunk empty-name
+	// re-opens (the whole title-music-fix pathology). 0 is also our open-failure
+	// return value, so it must never be a valid handle.
+	unsigned int                 s_nextFileHandle = 1;
 	float                        s_soundCategoryVolumes[Audio::SC_count];
 	float                        s_streamVolume = 1.0f;
 	bool                         s_audioEnabled = true;
@@ -192,6 +231,16 @@ namespace AudioNamespace
 	int s_allocated2dSampleHandles = 0;
 	int s_allocated3dSampleHandles = 0;
 	bool s_disableMiles = false;
+
+	// CONSULT-60 audio diagnostics: [ClientAudio] streamBufferBytes overrides the
+	// Miles default stream buffer (0 = stock: one second of compressed data);
+	// [ClientAudio] audioDiagLog=true samples stream fill/starvation state to
+	// audio-diag.log (working dir) to convict the load-in music skip + in-game
+	// crackle classes. Both default OFF = stock behavior.
+	int   s_streamBufferBytes = 0;
+	bool  s_audioDiagLog = false;
+	FILE* s_audioDiagFile = 0;
+	float s_audioDiagSummaryTimer = 0.0f;
 
 	HSAMPLE s_bufferedSoundSample = 0;
 	HSAMPLE s_bufferedMusicSample = 0;
@@ -628,7 +677,12 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 
 				SampleStream sampleStream;
 
-				sampleStream.m_stream = AIL_open_stream(s_digitalDevice2d, sound.getSamplePath()->getString(), 0);
+				// CONSULT-60: stream_mem 0 = Miles default of exactly ONE SECOND of
+				// compressed data (bufsize = datarate / MSS_STREAM_CHUNKS,
+				// mssstrm.cpp:739). [ClientAudio] streamBufferBytes overrides for the
+				// load-in music-skip A/B (a 1MB first attempt did NOT cure the skips
+				// -- awaiting audio-diag conviction before committing to a value).
+				sampleStream.m_stream = AIL_open_stream(s_digitalDevice2d, sound.getSamplePath()->getString(), s_streamBufferBytes);
 
 				if (sampleStream.m_stream != NULL)
 				{
@@ -1238,6 +1292,15 @@ bool Audio::install()
 	DEBUG_FATAL(s_installed, ("Already installed"));
 
 	s_disableMiles = ConfigFile::getKeyBool("ClientAudio", "disableMiles", false);
+
+	// CONSULT-60 audio diagnostics (see the namespace comment)
+	s_streamBufferBytes = ConfigFile::getKeyInt("ClientAudio", "streamBufferBytes", 0);
+	s_audioDiagLog = ConfigFile::getKeyBool("ClientAudio", "audioDiagLog", false);
+
+	// CONSULT-61: the one-slot empty-name shim is obsolete (handles start at 1 so the
+	// empty-name path never fires) and harmful with concurrent streams; off unless
+	// explicitly re-armed.
+	s_titleMusicStreamFix = ConfigFile::getKeyBool("ClientAudio", "titleMusicStreamFix", false);
 
 	if (s_disableMiles)
 	{
@@ -2026,6 +2089,116 @@ SoundId attachSound(SoundTemplate const * soundTemplate, Object const * object, 
 	return result;
 }
 
+//-----------------------------------------------------------------------------
+// CONSULT-60 audio diagnostic: convict the load-in music-skip / in-game crackle
+// class. Edge-logs every stream starvation transition (SAMPLE::starved -- "buffer
+// stream has run out of data", set by the Miles mixer when it wants data none of
+// the stream's chunk buffers can supply) plus a 500ms summary of each stream's
+// status and buffered-chunk count. Config-gated, no cost when off.
+static void audioDiagUpdate(float const deltaTime)
+{
+	if (!s_audioDiagFile)
+	{
+		fopen_s(&s_audioDiagFile, "audio-diag.log", "at");
+		if (!s_audioDiagFile)
+			return;
+		fprintf(s_audioDiagFile, "---- audio-diag armed (streamBufferBytes=%d) ----\n", s_streamBufferBytes);
+		fflush(s_audioDiagFile);
+	}
+
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+
+	// edge-detect starvation + abrupt volume steps per stream, every call (cheap)
+	static std::map<HSTREAM, S32> s_lastStarved;
+	static std::map<HSTREAM, F32> s_lastVolume;
+	{
+		SampleIdToSampleStreamMap::iterator iter = s_sampleIdToSampleStreamMap.begin();
+		for (; iter != s_sampleIdToSampleStreamMap.end(); ++iter)
+		{
+			HSTREAM const stream = iter->second.m_stream;
+			if (!stream || !stream->samp)
+				continue;
+
+			S32 const starved = stream->samp->starved;
+			std::map<HSTREAM, S32>::iterator last = s_lastStarved.find(stream);
+			S32 const lastStarved = (last != s_lastStarved.end()) ? last->second : 0;
+
+			if (starved && !lastStarved)
+			{
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d STARVED %s\n",
+					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+					iter->second.getPath() ? iter->second.getPath()->getString() : "(null)");
+				fflush(s_audioDiagFile);
+			}
+
+			s_lastStarved[stream] = starved;
+
+			// CONSULT-61 (Sonnet test #2): AIL_set_sample_volume_levels in Miles 9.3
+			// is a bare scalar assignment -- NO ramp -- so a one-frame volume step is
+			// an audible click candidate (the .snd volume-wander path snaps when
+			// interpolationRate=0). Log steps > 0.05 in one frame to correlate with
+			// heard pops.
+			F32 const volume = stream->samp->left_volume;
+			std::map<HSTREAM, F32>::iterator lastVol = s_lastVolume.find(stream);
+			if (lastVol != s_lastVolume.end())
+			{
+				F32 const delta = volume - lastVol->second;
+				if (delta > 0.05f || delta < -0.05f)
+				{
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d VOLSTEP %.3f -> %.3f %s\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						lastVol->second, volume,
+						iter->second.getPath() ? iter->second.getPath()->getString() : "(null)");
+					fflush(s_audioDiagFile);
+				}
+			}
+			s_lastVolume[stream] = volume;
+		}
+	}
+
+	// periodic summary
+	s_audioDiagSummaryTimer += deltaTime;
+	if (s_audioDiagSummaryTimer >= 0.5f)
+	{
+		s_audioDiagSummaryTimer = 0.0f;
+
+		fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d streams=%d playing=%d",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			static_cast<int>(s_sampleIdToSampleStreamMap.size()),
+			static_cast<int>(s_prioritizedPlayingSounds.size()));
+
+		SampleIdToSampleStreamMap::iterator iter = s_sampleIdToSampleStreamMap.begin();
+		for (; iter != s_sampleIdToSampleStreamMap.end(); ++iter)
+		{
+			HSTREAM const stream = iter->second.m_stream;
+			if (!stream)
+				continue;
+
+			// buffered-chunk estimate: chunks queued in the sample right now
+			S32 bufferedChunks = -1;
+			S32 starved = -1;
+			if (stream->samp)
+			{
+				bufferedChunks = stream->samp->head - stream->samp->tail;
+				if (bufferedChunks < 0)
+					bufferedChunks += stream->samp->n_buffers;
+				starved = stream->samp->starved;
+			}
+
+			char const * const path = iter->second.getPath() ? iter->second.getPath()->getString() : "(null)";
+			char const * const shortName = strrchr(path, '/') ? strrchr(path, '/') + 1 : path;
+
+			fprintf(s_audioDiagFile, "  [%s st=%d chunks=%d/%d starved=%d]",
+				shortName, AIL_stream_status(stream), bufferedChunks,
+				stream->samp ? stream->samp->n_buffers : -1, starved);
+		}
+
+		fprintf(s_audioDiagFile, "\n");
+		fflush(s_audioDiagFile);
+	}
+}
+
 // Update all the sounds
 //-----------------------------------------------------------------------------
 void Audio::alter(float const deltaTime, Object const *listener)
@@ -2036,6 +2209,9 @@ void Audio::alter(float const deltaTime, Object const *listener)
 	{
 		return;
 	}
+
+	if (s_audioDiagLog)
+		audioDiagUpdate(deltaTime);
 
 	{
 		NP_PROFILER_AUTO_BLOCK_DEFINE("update listener");
@@ -4054,40 +4230,53 @@ U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle)
 
 	// 35-05 FIX (gated): substitute the remembered stream filename when Miles' background IO thread
 	// re-opens with an empty name; otherwise remember this (real) name for that re-open.
-	char const *effectiveName = fileName;
+	// Shared state is read/updated under the lock; the name is copied to a local so the
+	// TreeFile::open below runs UNLOCKED (see the FileCallbackCriticalSection comment).
+	char effectiveName[1024];
+	effectiveName[0] = '\0';
 	bool substituted = false;
-	if (s_titleMusicStreamFix)
 	{
-		if ((effectiveName == NULL) || (effectiveName[0] == '\0'))
+		FileCallbackLock const lock;
+
+		char const *name = fileName;
+		if (s_titleMusicStreamFix)
 		{
-			if (s_lastAudioOpenName[0] != '\0')
+			if ((name == NULL) || (name[0] == '\0'))
 			{
-				effectiveName = s_lastAudioOpenName;
-				substituted = true;
+				if (s_lastAudioOpenName[0] != '\0')
+				{
+					name = s_lastAudioOpenName;
+					substituted = true;
+				}
+			}
+			else
+			{
+				// A real (non-empty) name == a NEW stream session opening (AIL_open_stream). Reset the
+				// sequential-read tracking so this stream starts streaming from offset 0, and release any
+				// substituted handles left over from a previous session (leak guard).
+				strncpy_s(s_lastAudioOpenName, name, _TRUNCATE);
+				s_streamResumeOffset = 0;
+				for (std::map<unsigned, bool>::iterator it = s_substitutedHandleMap.begin(); it != s_substitutedHandleMap.end(); ++it)
+				{
+					FileMap::iterator fit = s_fileMap.find(it->first);
+					if (fit != s_fileMap.end()) { fit->second->close(); delete fit->second; s_fileMap.erase(fit); }
+				}
+				s_substitutedHandleMap.clear();
 			}
 		}
-		else
-		{
-			// A real (non-empty) name == a NEW stream session opening (AIL_open_stream). Reset the
-			// sequential-read tracking so this stream starts streaming from offset 0, and release any
-			// substituted handles left over from a previous session (leak guard).
-			strncpy_s(s_lastAudioOpenName, effectiveName, _TRUNCATE);
-			s_streamResumeOffset = 0;
-			for (std::map<unsigned, bool>::iterator it = s_substitutedHandleMap.begin(); it != s_substitutedHandleMap.end(); ++it)
-			{
-				FileMap::iterator fit = s_fileMap.find(it->first);
-				if (fit != s_fileMap.end()) { fit->second->close(); delete fit->second; s_fileMap.erase(fit); }
-			}
-			s_substitutedHandleMap.clear();
-		}
+
+		if (name != NULL)
+			strncpy_s(effectiveName, name, _TRUNCATE);
 	}
 
-	AbstractFile *abstractFile = ((effectiveName != NULL) && (effectiveName[0] != '\0'))
+	AbstractFile *abstractFile = (effectiveName[0] != '\0')
 		? TreeFile::open(effectiveName, AbstractFile::PriorityAudioVideo, true)
 		: NULL;
 
 	if (abstractFile != NULL)
 	{
+		FileCallbackLock const lock;
+
 		*fileHandle = s_nextFileHandle;
 		s_fileMap.insert(std::make_pair(s_nextFileHandle, abstractFile));
 		++s_nextFileHandle;
@@ -4134,12 +4323,40 @@ void __stdcall fileCloseCallBack(UINTa const fileHandle)
 		PerThreadData::threadInstall(false);
 	}
 
-	FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
-
-	if (fileMapIter != s_fileMap.end())
+	// Detach from the shared map under the lock; do the close I/O and delete unlocked
+	// (once erased, no other thread can reach this AbstractFile).
+	AbstractFile *abstractFile = NULL;
 	{
-		AbstractFile *abstractFile = fileMapIter->second;
+		FileCallbackLock const lock;
 
+		FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
+
+		if (fileMapIter != s_fileMap.end())
+		{
+			abstractFile = fileMapIter->second;
+
+			// Remove the file from the list
+
+			s_fileMap.erase(fileMapIter);
+
+			// 35-05: stop tracking a closed substituted handle so the per-chunk re-opens don't leak.
+			if (s_titleMusicStreamFix)
+				s_substitutedHandleMap.erase(static_cast<unsigned>(fileHandle));
+
+#ifdef _DEBUG
+			ms_fileCloseHandleSet.insert(fileHandle);
+#endif
+		}
+		else
+		{
+#ifdef _DEBUG
+			determineCallbackError("close", fileHandle);
+#endif
+		}
+	}
+
+	if (abstractFile != NULL)
+	{
 		// Close the file
 
 		abstractFile->close();
@@ -4147,24 +4364,6 @@ void __stdcall fileCloseCallBack(UINTa const fileHandle)
 		// Delete the file pointer
 
 		delete abstractFile;
-
-		// Remove the file from the list
-
-		s_fileMap.erase(fileMapIter);
-
-		// 35-05: stop tracking a closed substituted handle so the per-chunk re-opens don't leak.
-		if (s_titleMusicStreamFix)
-			s_substitutedHandleMap.erase(static_cast<unsigned>(fileHandle));
-
-#ifdef _DEBUG
-		ms_fileCloseHandleSet.insert(fileHandle);
-#endif
-	}
-	else
-	{
-#ifdef _DEBUG
-		determineCallbackError("close", fileHandle);
-#endif
 	}
 }
 
@@ -4177,13 +4376,19 @@ S32 __stdcall fileSeekCallBack(UINTa const fileHandle, S32 const offset, U32 con
 		PerThreadData::threadInstall(false);
 	}
 
-	int result = 0;
-	FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
-
-	if (fileMapIter != s_fileMap.end())
+	// Look up the handle under the lock; seek unlocked (single consumer per handle).
+	AbstractFile *abstractFile = NULL;
 	{
-		AbstractFile *abstractFile = fileMapIter->second;
+		FileCallbackLock const lock;
+		FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
+		if (fileMapIter != s_fileMap.end())
+			abstractFile = fileMapIter->second;
+	}
 
+	int result = 0;
+
+	if (abstractFile != NULL)
+	{
 		switch (type)
 		{
 			case AIL_FILE_SEEK_BEGIN:   // Seek relative to the beginning of the file
@@ -4243,24 +4448,31 @@ U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const b
 		PerThreadData::threadInstall(false);
 	}
 
+	// Look up the handle under the lock; the read I/O itself runs UNLOCKED so a
+	// main-thread one-shot sample load can't stall Miles' IO thread mid-music-stream.
+	AbstractFile *abstractFile = NULL;
+	{
+		FileCallbackLock const lock;
+		FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
+		if (fileMapIter != s_fileMap.end())
+			abstractFile = fileMapIter->second;
+	}
+
 	int bytesRead = 0;
 
-	FileMap::iterator fileMapIter = s_fileMap.find(fileHandle);
-
-	int  filePos = -1;
-	if (fileMapIter != s_fileMap.end())
+	if (abstractFile != NULL)
 	{
-		AbstractFile *abstractFile = fileMapIter->second;
-
 		bytesRead = abstractFile->read(buffer, bytes);
-		filePos = abstractFile->tell();
 
 		// 35-05 FIX (part 2): advance the shared streaming position so the NEXT re-open continues
 		// from here instead of restarting at 0. tell() also captures any seek Miles did on this
 		// handle (e.g. when it loops back), so this naturally follows Miles' own positioning.
-		if (s_titleMusicStreamFix && (s_substitutedHandleMap.find(static_cast<unsigned>(fileHandle)) != s_substitutedHandleMap.end()))
+		if (s_titleMusicStreamFix)
 		{
-			s_streamResumeOffset = filePos;
+			int const filePos = abstractFile->tell();
+			FileCallbackLock const lock;
+			if (s_substitutedHandleMap.find(static_cast<unsigned>(fileHandle)) != s_substitutedHandleMap.end())
+				s_streamResumeOffset = filePos;
 		}
 	}
 	else
@@ -5290,6 +5502,12 @@ void Audio::setToolApplication(bool const toolApplication)
 //-----------------------------------------------------------------------------
 void Audio::setLargePreMixBuffer()
 {
+	// Stock 64ms. Do NOT enlarge: a mix-ahead >= the DIG_DS_FRAGMENT_CNT ring TotalMs
+	// (default 256ms, read at device open) makes SS_serve's remainder negative and the
+	// fill loop overruns unplayed audio = crackles; and any large mix-ahead delays every
+	// audible start/stop/fade by that much, which smears the login->zone-in music
+	// transition (both convicted 2026-07-04). The load stalls that once justified a big
+	// premix are fixed (CONSULT-59/60 budgeted loads).
 	AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT, 64);
 	AIL_serve();
 }

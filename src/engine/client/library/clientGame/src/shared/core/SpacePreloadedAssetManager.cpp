@@ -71,7 +71,10 @@ namespace SpacePreloadedAssetManagerNamespace
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-	float const cms_callbackTime = 1.f;
+	// CONSULT-61: was 1.f -- one-second synchronous preload slices per loading
+	// frame starve the audio mixer's queue (music skips during load-in). Same
+	// treatment as WorldSnapshot/CachedFileManager.
+	float const cms_callbackTime = 0.05f;
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

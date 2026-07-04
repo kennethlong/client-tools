@@ -190,8 +190,10 @@ void CachedFileManager::preloadSomeAssets ()
 		unsigned long const bytesBefore = MemoryManager::getCurrentNumberOfBytesAllocated();
 #endif
 
-		//-- preloading occurs in one second slices
-		while (ms_filenamesCurrentPos < ms_filenamesLength && Clock::timeMs () - startTime < 1000)
+		//-- CONSULT-61: was one-SECOND slices -- multi-hundred-ms loading frames
+		//   starve the audio mixer's queue (music skips during load-in). 50ms
+		//   slices do the same total work across more loading-screen frames.
+		while (ms_filenamesCurrentPos < ms_filenamesLength && Clock::timeMs () - startTime < 50)
 		{
 			char const * const fileName = ms_filenames + ms_filenamesCurrentPos;
 

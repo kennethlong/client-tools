@@ -1088,49 +1088,31 @@ void SwgCuiAvatarCreationHelper::setCreatingJedi(bool b)
 
 void SwgCuiAvatarCreationHelper::restartMusic             (bool onlyIfNotPlaying)
 {
-	PerformanceTimer performanceTimer;
-	performanceTimer.start();
-	float waitTimer = 0.0f;
-
 	if (!onlyIfNotPlaying || !Audio::isSoundPlaying (s_musicId))
 	{
 		Audio::stopSound (s_musicId, 1.0f);
 	}
-	
-	while (waitTimer < 1.0f)
-	{
-		performanceTimer.stop();
-		float const deltaTime = performanceTimer.getElapsedTime();
-		performanceTimer.start();
-		
-		waitTimer += deltaTime;
-		Audio::alter (deltaTime, NULL);
-		Sleep        (5);
-	}
+
+	// CONSULT-61: the original code UNCONDITIONALLY blocked the main thread for a
+	// full second here (Sleep(5)+Audio::alter loop) -- same class as stopMusic
+	// below (watchdog-convicted zone-in freeze). The fade completes via the main
+	// loop's normal Audio::alter pumping.
 }
 
 //----------------------------------------------------------------------
 
 void SwgCuiAvatarCreationHelper::stopMusic                (float fadeout, bool restartMainMusic)
 {
-	PerformanceTimer performanceTimer;
-	performanceTimer.start();
-	float waitTimer = 0.0f;
-
 	Audio::stopSound (s_musicId, fadeout);
 	if (restartMainMusic)
 		CuiManager::restartMusic (true);
 
-	while (waitTimer < fadeout)
-	{
-		performanceTimer.stop();
-		float const deltaTime = performanceTimer.getElapsedTime();
-		performanceTimer.start();
-		
-		waitTimer += deltaTime;
-		Audio::alter (deltaTime, NULL);
-		Sleep        (5);
-	}
+	// CONSULT-61: the original code BLOCKED here for the full fadeout in a
+	// Sleep(5)+Audio::alter loop -- a deliberate ~1s main-thread freeze inside the
+	// scene-change path (watchdog-convicted 2026-07-04 as the "big skip on music
+	// change" at zone-in start, stall-loop1164). The fade completes asynchronously
+	// through the main loop's normal Audio::alter pumping, exactly like the
+	// never-blocking CuiManager::stopMusic.
 }
 
 //----------------------------------------------------------------------
