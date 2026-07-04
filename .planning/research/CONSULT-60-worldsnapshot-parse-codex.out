@@ -1,0 +1,103 @@
+**Findings**
+
+`getLoadedList` does not exist in this tree. `WorldSnapshot::unload` is private and only reached from `WorldSnapshot::remove` and `WorldSnapshot::load`.
+
+**1. Consumer Window**
+
+Callers that can execute between `GroundScene::postload()` returning and `GroundScene::isFinishedLoading()` becoming true:
+
+- `GroundScene.cpp:1830`, `GroundScene.cpp:1867` -> `WorldSnapshot::donePreloading()`
+  Per-frame loading checks. Must be parse-aware, but only needs status/counters.
+
+- `GroundScene.cpp:1938`, `1941`, `1947` -> `WorldSnapshot::update(...)`
+  `GroundScene::update()` calls these before `updateLoading()`. If scene update is pumped while `m_loading` is true, this reads `ms_reader`, `ms_sphereTree`, node lists, and may create/delete snapshot objects. Gate it.
+
+- `GroundScene.cpp:2066` -> `WorldSnapshot::update(...)`
+  Called exactly when loading finishes and before `GameNetwork::setSceneChannel()` at `2067`. Must be gated until parse complete.
+
+- `GroundScene.cpp:2094` -> `WorldSnapshot::preloadSomeAssets()`
+  Loading pump. Reads object-template names from `ms_reader`. Must wait for parse complete.
+
+- `GroundScene.cpp:2101` -> `WorldSnapshot::getLoadingPercent()`
+  Loading UI. Should include parse progress or report not-ready.
+
+- `GroundScene.cpp:2506` -> `WorldSnapshot::removeObject(...)`
+  Network `SceneCreateObject*` path when replacing an existing client-cached object. Can run during loading if server messages dispatch early. Mutates reader/sphere state. Gate/queue.
+
+- `ClientObject.cpp:703` -> `WorldSnapshot::loadIfClientCached(containerId)`
+  Called from `ClientObject::updateContainment()`, driven by `GroundScene::receiveMessage("UpdateContainmentMessage")` at `GroundScene.cpp:2721-2751`. This is the highest-risk early consumer: it reads the reader map, walks parent nodes, creates objects. Must queue until parse complete.
+
+- `ClientObject.cpp:768` -> `WorldSnapshot::isClientCached(...)`
+  Debug-only fatal path in `ClientObject::endBaselines()` for the player missing a containing cell. Can run from `SceneEndBaselines` during loading. Reads reader map. Gate or return conservative false while parsing.
+
+- `ClientObject.cpp:1056` -> `WorldSnapshot::isClientCached(...)`
+  Debug-only logging in `handleContainerChangeWithWorld()`, reachable from containment/baseline changes. Same parse-read hazard.
+
+Potential but less normal during loading:
+
+- `DebugPortalCamera.cpp:209` -> `WorldSnapshot::update(...)`
+  Debug/single-player camera input path. Not a normal multiplayer load consumer, but it reads the same shared data.
+
+- `SwgCuiQuestHelper.cpp:964` -> `findClosestCellIdFromWorldPosition(...)`
+  UI quest helper; not expected before loading screen closes, but reads `ms_sphereTree` and snapshot objects.
+
+- `ClientImageDesignerManager.cpp:240` -> `isClientCached(...)`
+  Image designer ID allocation; not normal zone-in loading.
+
+Editor/tool/external API callers:
+
+- `SwgGodClient/BuildoutAreaListView.cpp:100-102` -> `setExcludeArea`, `load`
+- `SwgGodClient/BuildoutAreaSupport.cpp:528`, `982` -> `addObject`
+- `SwgGodClient/BuildoutAreaSupport.cpp:604`, `614` -> `removeObject`
+- `SwgGodClient/BuildoutAreaSupport.cpp:737` -> `moveObject`
+- `SwgCuiCommandParserScene.cpp:1732` -> `setDetailLevelBias`
+- `engine_advertise.cpp:592-597` exposes `load`, `addObject`, `removeObject`, `moveObject`, `getLoadingPercent`, `detailLevelChanged` to injected consumers. These can be called anytime externally; a deferred parse needs a ready guard around exposed mutators.
+
+**2. Baselines Before Finished Loading**
+
+Client-side trace:
+
+- `GameNetwork::Listener` receives `CmdStartScene` at `GameNetwork.cpp:165-170`.
+- `receiveCmdStartScene()` calls `startScene()` at `GameNetwork.cpp:630-636`.
+- `startScene()` creates the `GroundScene` via `Game::setScene(...)` at `GameNetwork.cpp:480-500`.
+- The multiplayer `GroundScene` constructor creates the local player object from the template before `init()` at `GroundScene.cpp:1040-1065`.
+- After scene setup, `GroundScene` subscribes to scene messages at `GroundScene.cpp:833-854`, including `SceneCreateObjectByCrc`, `SceneEndBaselines`, `BaselinesMessage`, `UpdateContainmentMessage`, and `CmdSceneReady`.
+- During loading, `Game::runGameLoopOnce()` keeps calling `GameNetwork::update()` whenever `Game::isSceneLoading()` is true at `Game.cpp:1323`; `isSceneLoading()` is `GroundScene::isLoading()` at `Game.cpp:2155-2158`.
+- The client only sends `CmdSceneReady` in `GameNetwork::setSceneChannel()` after `isFinishedLoading()` passes, from `GroundScene.cpp:2066-2067`.
+
+So bulk scene streaming should be after `setSceneChannel`, but the client can process any already-sent/queued create, baseline, containment, transform, and end-baseline messages during loading. The definitely relevant early set is player bootstrap and objects needed to make the player valid: player baselines, player `PlayerObject`/ghost state, containing cell/building/container if the player logs in contained, and any object the server sends before `CmdSceneReady`. The code has no client-side filter limiting `BaselinesMessage` to the player.
+
+Yes, these can reach the snapshot path:
+
+`UpdateContainmentMessage` -> `GroundScene.cpp:2721-2751` -> `ClientObject::updateContainment()` at `ClientObject.cpp:700` -> `WorldSnapshot::loadIfClientCached()` at `ClientObject.cpp:703`.
+
+That path must be queued/gated.
+
+**3. Thread-Safety Dependencies**
+
+- `ObjectTemplateList::lookUp(crc)` is a read-only lookup through `ObjectTemplateListNamespace::ms_crcStringTable` at `ObjectTemplateList.cpp:183-186`. `CrcStringTable::lookUp()` binary-searches immutable arrays at `CrcStringTable.cpp:127-144`. No lock, but safe if the table is fully loaded and never concurrently reloaded/removed. Do not call `loadCrcStringTable()` or teardown concurrently.
+
+- `DataTableManager` is not safe off-main concurrently. It has unsynchronized static cache/map state: `m_cachedTable`, `m_cachedTableName`, `m_tables`, `m_reloadCallbacks` at `DataTableManager.cpp:22-27`; `getTable/open/close/reload` mutate/read those without locks at `DataTableManager.cpp:67-151`.
+
+- `DataTable::load()` on a local `DataTable` is mostly local state, but `DataTableColumnType` can call `DataTableManager::getTable()` for `z(...)` enum columns at `DataTableColumnType.cpp:190-204`. So generic `DataTable::load` is not guaranteed off-main safe.
+
+- `SharedBuildoutAreaManager::load()` mutates global current-scene state, `s_currentScene` and `s_buildoutAreasForCurrentScene`, at `SharedBuildoutAreaManager.cpp:241-257`. That state is read by `getBuildoutAreasForCurrentScene()` at `262-265` and by main-thread loading/update users, including `GroundScene.cpp:825`, `GroundScene.cpp:1979-1980`, and waypoint/map code. No lock.
+
+Buildout half has an off-main blocker as currently shaped: `SharedBuildoutAreaManager::load()` must not run on a worker against live main-thread reads. Also, keeping it deferred would break current constructor assumptions because `GroundScene.cpp:825` uses buildout area data after `postload()`.
+
+**4. Teardown / Re-entry**
+
+Current synchronous ordering:
+
+- Quit during loading: `Game::cleanupScene()` calls `ms_scene->quit(); _setScene(0);` at `Game.cpp:988-994`. `Scene::quit()` only marks `isOver` at `Scene.cpp:33-36`; it does not unload `WorldSnapshot`.
+- `GroundScene::~GroundScene()` handles loading cleanup via `_onFinishedLoading()` if `m_loading`, clears `Game::_setScene(0)`, deletes player/cameras, and removes `ClientWorld`, but does not call `WorldSnapshot::unload()` at `GroundScene.cpp:1068-1127`.
+- Start-scene while in a scene: `GameNetwork::startScene()` closes/deletes the old `GroundScene` before creating the new one at `GameNetwork.cpp:480-500`.
+- `WorldSnapshot::load()` itself clears current state, calls `unload()`, then loads the new scene at `WorldSnapshot.cpp:416-456`.
+
+Today there is no mid-flight parse because load is synchronous. With S2/S3, both quit-during-loading and startScene->startScene need an explicit cancel/join/commit-abort point. Otherwise a worker could still be building or publishing `ms_reader` while the scene is gone or a new `WorldSnapshot::load()` begins.
+
+**Verdict**
+
+Must gate or queue: `WorldSnapshot::update`, `preloadSomeAssets`, `loadIfClientCached`, `removeObject`, `addObject`, `moveObject`, `detailLevelChanged`, `findClosestCellIdFromWorldPosition`, `addEventObjects`, `removeEventObjects`, and all externally advertised mutators. `donePreloading/getLoadingPercent/isClientCached` need parse-aware safe responses.
+
+The buildout half has off-main blockers: `SharedBuildoutAreaManager::load` mutates shared current-scene state needed on the main thread, and generic `DataTable::load` can touch unsynchronized `DataTableManager`. The pure `.ws` reader parse is the clean worker candidate; buildout should stay main-thread/chunked or be refactored to use a copied immutable buildout-area list plus no `DataTableManager` side effects.

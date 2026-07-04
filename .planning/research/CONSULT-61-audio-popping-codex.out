@@ -1,0 +1,62 @@
+**Findings**
+
+1. **Multi-stream correctness**
+   The title shim is one-slot global state: `s_lastAudioOpenName`, `s_streamResumeOffset`, `s_substitutedHandleMap` at `Audio.cpp:61-63`. Real opens overwrite the slot and reset the global offset at `Audio.cpp:4195-4202`; empty opens reuse that slot at `Audio.cpp:4182-4187`.
+
+   Precise bad interleaving for a stream whose Miles `fileh == 0`:
+   1. `open(real A)` returns handle `0` because `s_nextFileHandle` starts at 0 (`Audio.cpp:148`, `Audio.cpp:4212-4214`).
+   2. Miles async chunk setup copies `stream->fileh` into `MilesAsyncRead.FileHandle` (`mssstrm.cpp:1042-1045`).
+   3. Async worker treats `FileHandle == 0` as unopened and calls `MSS_open(i_Async->FileName, ...)` (`milesasync.cpp:440-443`). For stream chunks, `FileName` is empty because `mssstrm.cpp` zeroes the request and never fills it (`mssstrm.cpp:1042`).
+   4. Our callback substitutes the last real name (`Audio.cpp:4182-4187`), opens it, seeks to the global resume offset, and marks the substitute handle (`Audio.cpp:4222-4238`).
+   5. If `open(real B)` runs between A’s empty reopen and A’s seek/read, it overwrites `s_lastAudioOpenName`, resets `s_streamResumeOffset`, and closes every substituted handle (`Audio.cpp:4195-4202`).
+   6. A’s pending async then seeks/reads a handle that our map just erased. `fileSeekCallBack` misses and returns 0 (`Audio.cpp:4302-4345`); `fileReadCallBack` misses and returns 0 (`Audio.cpp:4369-4392`). Miles marks the async read as failed/zero-byte (`milesasync.cpp:500-507`; `mssstrm.cpp:73-80`).
+
+   Can A’s empty reopen be served B’s name/offset? **Yes**, but only for streams whose original handle is `0`, or if some other path feeds async reads with `FileHandle == 0`. The name substitution is global (`Audio.cpp:4186`), and the offset is global (`Audio.cpp:4224`, `Audio.cpp:4384`).
+
+   For the measured post-title zone-in specifically, there is a caveat: the title stream likely consumed handle `0` already, and `s_nextFileHandle` is monotonic and not reset in `Audio::remove` (`Audio.cpp:148`, no reset found). If title async substitute opens advanced the counter, `mus_theme_tatooine.mp3` should have a nonzero handle and should not hit empty-name reopen. That makes the one-slot empty-name bug **real**, but not conclusively the measured tatooine killer unless handle allocation was reset/reinstalled or logs prove tatooine got handle 0.
+
+2. **Threading**
+   These callbacks are unsynchronized shared state:
+   `s_fileMap` at `Audio.cpp:138`, `s_nextFileHandle` at `Audio.cpp:148`, and title-fix state at `Audio.cpp:61-63`.
+
+   Threads:
+   - Main/game thread calls `AIL_open_stream` from stream creation (`Audio.cpp:646`), which calls `MSS_open` during stream open (`mssstrm.cpp:697`) and synchronous header reads/seeks.
+   - Miles timer/background callback starts async IO (`mssstrm.cpp:197-216`), but does not directly perform file reads.
+   - Miles IO thread executes async opens/seeks/reads in `DoRead` (`milesasync.cpp:529-607`), calling `MSS_open`, `MSS_seek`, `MSS_read` at `milesasync.cpp:443`, `487`, `500`.
+
+   There is no mutex around `s_lastAudioOpenName`, `s_streamResumeOffset`, `s_substitutedHandleMap`, `s_fileMap`, or `s_nextFileHandle`. So yes: racing string copy/read, map mutation/read, and offset updates are possible.
+
+3. **Seek/read contract**
+   For normal nonzero stream handles, the contract is mostly OK: Miles seeks positioned reads via `MilesAsyncRead.Offset` (`mssstrm.cpp:1048-1057`, `milesasync.cpp:483-489`), and our `fileSeekCallBack` seeks the per-handle `AbstractFile` (`Audio.cpp:4302-4334`).
+
+   For substituted empty-name handles, the resume logic assumes one sequential reader:
+   - open uses global `s_streamResumeOffset` (`Audio.cpp:4224`);
+   - read updates global `s_streamResumeOffset` only if the handle is in one global substituted set (`Audio.cpp:4382-4384`);
+   - real opens reset the global offset and clear/close substitutes (`Audio.cpp:4195-4202`).
+
+   With multiple substituted streams, seeks and reads can advance the wrong stream’s resume offset. Wrong offset into MP3 compressed data can feed partial frames or wrong-file bytes to the decoder: plausible decoder glitch/pop. Wrong-file or EOF reads can produce a permanently starved/dead stream.
+
+4. **Scope of empty-name reopens**
+   Vendored SDK answer: empty-name reopen is **not every stream by design**; it happens when `MilesAsyncRead.FileHandle == 0`.
+
+   `mssstrm.cpp` passes the stream’s existing `fileh` into each async request (`mssstrm.cpp:1044`). `milesasync.cpp` opens by filename only when that handle is zero (`milesasync.cpp:440-443`). Because our handle allocator starts at zero (`Audio.cpp:148`), the first stream opened after audio install is poisoned into per-chunk empty-name opens. Later streams with nonzero handles use the original handle and do not empty-reopen per chunk.
+
+**Verdict**
+
+The one-slot title shim is definitely incorrect and dangerous. It can serve the wrong file, wrong offset, or close a live substituted handle. It is a credible pop source for any stream that goes through the empty-name path.
+
+For the measured `mus_theme_tatooine.mp3` death after title close, I would not call the one-slot name/offset state convicted yet, because SDK tracing says only handle `0` streams empty-reopen, and title likely already consumed handle `0`. The broader callback layer is still unsafe: `s_fileMap` and handle allocation are shared across main and Miles IO threads without synchronization, which is a strong candidate for first-chunk never-completes or wrong read behavior during zone-in concurrency.
+
+**Minimal Correct Shape**
+
+Use a single mutex around all file callback state: `s_fileMap`, handle allocation, substituted state, and debug maps.
+
+Fix handle allocation first: never return `0` as a valid Miles file handle. Start `s_nextFileHandle` at `1` or skip zero. That may remove the empty-name path for normal stream chunks entirely.
+
+If the empty-name shim must remain, make it per stream/handle, not one global slot:
+- key stream state by the original handle returned from `fileOpenCallBack`;
+- store `name`, `resumeOffset`, and substituted handles per original stream;
+- do not close substituted handles globally when unrelated real streams open;
+- update resume offset on seek and read for that stream’s state only.
+
+A per-thread map is the wrong key. The Miles IO thread services many streams, so thread-local state would mix streams in the same way the current global does.

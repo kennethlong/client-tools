@@ -182,6 +182,79 @@ concurrent fill.
   still demand-loads (rare; deliberate — don't move the sync load to spawn time).
 - **D:** stale Plan 17-04.X PSRC dump block deleted (Direct3d11_PixelShaderProgramData.cpp).
 
+## 2026-07-04 PM(2) — CONSULT-60: WorldSnapshot phased load IMPLEMENTED (the ~3s residual)
+
+The loop-16982 class (WorldSnapshot::load IFF parse, ~3s in the GroundScene ctor) is
+fixed the same way as the terrain preload: `load()` is now a cheap prologue; the node
+parse (new WorldSnapshotReaderWriter::beginIncrementalLoad/stepIncrementalLoad, map
+built per-subtree), per-AREA buildout tables, and sphere tree run in budgeted
+`WorldSnapshot::loadStep()` pumped from GroundScene's loading block
+(`[ClientGame] worldSnapshotParseBudgetMs`, default 40, <=0 = old sync behavior).
+Gates: donePreloading/getLoadingPercent parse-aware (counters read as DONE mid-parse
+otherwise — the loading screen would drop over a half-built world); update()/
+preloadSomeAssets held while pending; **force-finish exactness valves** on
+isClientCached/loadIfClientCached (miss-only; the int-max guard filters live ids)/
+removeObject/moveObject/addObject/detailLevelChanged/findClosestCellIdFromWorldPosition
+— any consumer needing complete data mid-parse finishes the parse synchronously (worst
+case = old cost, exactly for the rare POB-interior login whose containment beats the
+pumped parse). unload() cancels in-flight parse (quit-during-load / startScene chain).
+Also: Audio::setLargePreMixBuffer 64→1024 fragments (~1s music mix-ahead during load).
+Crew round CONSULT-60 (synthesis + 4 outputs in .planning/research/): all four
+converged on chunked-main-thread; Codex killed the worker-thread option
+(SharedBuildoutAreaManager/DataTableManager unlocked globals); queue-and-flush was
+REJECTED for the valves (can't save the one-shot player endBaselines cell attach).
+Built clean, staged 10:03 AM. Boot+login watchdog-verified stall-free (zero >100ms
+frames — but that session never zoned in; NO auto-login exists). **UNCOMMITTED.
+REMAINING: one real login + zone-in with watchdog armed** (expectations + regression
+signatures in the CONSULT-60 synthesis §Verification; also in the worldsnapshot todo).
+
+## 2026-07-04 PM(3) — CONSULT-61: the audio arc's ROOT CAUSE found (file-callback layer)
+
+Kenny's next session ("door sound late, footsteps late, still popping in music") +
+the armed audio-diag probe (caught mus_theme_tatooine PERMANENTLY starved from
+zone-in) triggered a 4-crew round. **Codex's decisive find: `s_nextFileHandle`
+started at 0 and Miles' async IO treats FileHandle==0 as "unopened → open by (empty)
+name" — the entire 2026-06-18 title-music empty-name shim was scaffolding over that
+one-character bug, and its one-slot global state corrupts every multi-stream scenario
+(cross-stream offset/name swaps = decoder pops; mid-read substituted-handle closes =
+permanently dead streams).** Full record:
+[CONSULT-61-audio-popping-SYNTHESIS.md](../research/CONSULT-61-audio-popping-SYNTHESIS.md).
+LANDED (staged 11:31 AM, UNCOMMITTED): handles start at 1; shim default OFF
+(`[ClientAudio] titleMusicStreamFix` re-arms); critical section over the four file
+callbacks (they were the CONSULT-56 unguarded-container class across main + Miles IO
+threads); `streamBufferBytes=0` (the 1MB test coupled 18-56s of PRIME latency — Miles
+has no prime cap; that was the "music started late"); probe now also logs VOLSTEP
+lines (one-frame volume steps — Sonnet's code-confirmed pop candidate: 9.3b
+AIL_set_sample_volume_levels has NO ramp and Sound2d volume-wander SNAPS at
+interpolationRate=0; pre-existing, likely newly-dominant). FILED (next wave, Opus's
+anatomy): late door/footsteps = cold synchronous first-touch sample load inside
+playSound + event templates freed between one-shots (fix: keep-alive LRU pin +
+interior pre-warm + drop the redundant duration-probe decode; handle cap formally a
+red herring). NEXT: Kenny session → diag log decides (no starved streams expected;
+VOLSTEP-at-pop = volume-snap conviction → ramp fix).
+
+**ROUND 2 (staged 11:48 AM):** Kenny's session confirmed the dead-stream class CURED
+(theme plays to completion) but zone-in still skipped with a big skip at the music
+change. Watchdog dumps convicted: (1) `SwgCuiAvatarCreationHelper::stopMusic` +
+`restartMusic` = original-SOE DELIBERATE 1s `Sleep(5)` blocking loops on the main
+thread in the scene-change path (stall-loop1164, 1.47s) — now fire-and-forget; (2) the
+loading pumps' own 1-SECOND slice budgets (WorldSnapshot preloadSomeAssets
+cms_callbackTime 1.f, CachedFileManager 1000ms, SpacePreloadedAssetManager 1.f;
+stall-loop1168, 1.38s) — all now 50ms. "3D sounds late 15-20s then settle" = the filed
+cold-first-play wave (unchanged). See synthesis §Round 2.
+
+---
+
+**Kenny's live verify (2026-07-04 ~10:30): "buttery smooth after initial startup" —
+zone-in freeze CONFIRMED FIXED. Residual: "music skipping in load-in screens" →
+root-caused (see synthesis §Audio correction): the premix bump was the wrong layer;
+the MUSIC STREAM buffer is Miles' 1-second default (`AIL_open_stream(...,0)`) and its
+refills go through our TreeFile callbacks, which contend with the loading pumps' file
+opens. FIX: stream buffer 0 → 1 MB (Audio.cpp:631). Rebuilt + staged; awaiting Kenny's
+next load-in for the music verdict. Whole CONSULT-60 wave still uncommitted.**
+
+---
+
 **VERIFIED 2026-07-04 ~9:29 AM (live boot, watchdog armed):** built clean (0 unresolved),
 booted, auto-logged into Mos Eisley end-to-end; loading screen held and dismissed
 correctly (no gate regression, no black terrain); Kenny's felt verdict: **"pretty

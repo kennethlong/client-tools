@@ -1,0 +1,217 @@
+# CONSULT-61 — Miles SDK async-stream internals (byte-level)
+
+Evidence treated as given: `mus_theme_tatooine.mp3` never cleared `starved` (40s, `chunks=0/8`, `st=4`); siblings recovered; `mus_figrin_dan_song_2.mp3` healthy (`starved=0`) but audibly pops; `streamBufferBytes=1048576`.
+
+---
+
+## 1. Dead stream mechanics — paths where `AIL_load_sample_buffer` never fires
+
+`load_buffer_into_Miles` is the only path that calls `AIL_load_sample_buffer` and clears `starved` (`wavefile.cpp:8240`). It requires **all** of:
+
+```115:116:D:\Code\milesss-v9.3b\win\sdk\src\sdk\mssstrm.cpp
+  if (((s->loadedsizes[index]) || (s->alldone==1)) && (s->playcontrol==1) && ( s->asyncs_loaded[ index ] == 2 )) 
+```
+
+Plus `AIL_sample_buffer_available(s->samp) != 0` (`mssstrm.cpp:139-141`).
+
+### Death paths (file:line)
+
+| # | Path | Mechanism | Silent? |
+|---|------|-----------|---------|
+| **A** | `playcontrol != 1` | `AIL_start_stream` not called → gate at `mssstrm.cpp:115` never passes. `playcontrol` init 0 (`mssstrm.cpp:1422-1423` on seek only; open leaves 0 until start). | Yes — `AIL_stream_status` can still return `SMP_PLAYING` (4) once started even with zero buffers (`mssstrm.cpp:944-963`). |
+| **B** | `asyncs_loaded[i]` stuck at **1** | `doread` sets `asyncs_loaded=1` before `MilesAsyncFileRead` (`mssstrm.cpp:1058-1059`). If IO never completes, `handle_asyncs` never promotes to 2 (`mssstrm.cpp:69-75`). `start_IOs_if_we_can` **blocks all further reads** on that slot (`mssstrm.cpp:1187-1189`). | **Yes** — `error` stays 0, `st=4`, `starved=1` forever. **Best match for tatooine.** |
+| **C** | `MilesAsyncFileRead` returns 0 | `asyncs_loaded=1` set but request never enqueued (`milesasync.cpp:348-349` `!Running`). Status stays 0. | Yes — no `error` latch. |
+| **D** | Async completes with **0 bytes** + error status | `DefaultAsyncStatus` → `handle_asyncs`: `amt==0` → `stream->error=1`, `AIL_stop_sample` (`mssstrm.cpp:76-80`). Sources: `MSSIO_STATUS_ERROR_FAILED_READ` (`milesasync.cpp:504-507`), `FAILED_OPEN` (`:443-447`), `MEMORY_ALLOC_FAIL` (`:475-478`), `SHUTDOWN` (`:687`). | Partially — `AIL_stream_status` → **-1** (`mssstrm.cpp:966`), not 4. Tatooine had `st=4` → **rules this out** for that stream. |
+| **E** | `stream->error=1` from sync `doread` | `read != amt` after `MilesAsyncFileRead` (`mssstrm.cpp:1072-1073`). `start_IOs_if_we_can` returns -1 (`:1192-1193`). `service_stream` bails (`:1233-1234`). | `st=-1`; not tatooine. |
+| **F** | `start_IOs_if_we_can` issues **no reads** | `amt==0` from `doread` (`mssstrm.cpp:1194-1195`) — zero `amt` after alignment (`:1021-1035`), empty `bufs`, EOF/subloop. `loadedsizes` stays 0. | Yes if `error` not set. |
+| **G** | `primeleft` never satisfied | Does **not** block `AIL_load_sample_buffer` — only gates `AIL_start_sample` (`mssstrm.cpp:162-170`). Starved clears on load (`wavefile.cpp:8240`). | N/A for permanent starved=1. |
+| **H** | `AIL_sample_buffer_available == 0` | Ring full (`wavefile.cpp:8287-8289`). Blocks load but implies prior loads succeeded. | No for *never*-cleared starved. |
+| **I** | `noback==1` | Background skips stream (`mssstrm.cpp:209-214`). Preload-only path (`mssstrm.cpp:131`). | N/A for normal streams. |
+| **J** | `autostreaming != 2` | `background` only calls `start_IOs_if_we_can` when `autostreaming==2` (`mssstrm.cpp:211-213`). Set by `AIL_start_stream` (`:1464-1465`). | Yes until start called. |
+| **K** | IO thread **paused** | `s_Paused` → `MilesAsyncFileStatus_default` returns 0 for `wait<=1` (`milesasync.cpp:331-332`); reads never complete. | Yes. |
+| **L** | IO thread **per-handle serialization** | Same `FileHandle` cannot run concurrent asyncs (`milesasync.cpp:547-558`). All 8 chunk reads for one stream share `stream->fileh` (`mssstrm.cpp:1044`) — queued sequentially, not parallel. One stuck read wedges that stream's slot 0. | Yes. |
+| **M** | `CANCELLED` async stuck at 1 | `DefaultAsyncStatus` treats cancel as incomplete (`mssstrm.cpp:52`) — `asyncs_loaded` stays 1. | Yes. |
+
+### Priming: does `start_IOs_if_we_can` issue all 8 reads at once?
+
+**Yes, in one timer tick**, until blocked (`mssstrm.cpp:1185-1202`):
+
+- Loop up to `MSS_STREAM_CHUNKS` (8).
+- Stops when `asyncs_loaded[read_IO_index] != 0` **or** `buf[pos]!=buf[len]` (`:1187-1189`).
+- On first open, all slots empty → can queue up to 8 reads in one pass.
+- IO thread executes them **one at a time** per handle (`milesasync.cpp:547-558`).
+
+**If ONE errors:** `handle_asyncs` sets `error=1` (`mssstrm.cpp:76-80`) → `service_stream` stops issuing reads (`:1233`). **Permanent, no retry.** Tatooine's `st=4` implies `error==0`, so this is not the observed failure mode.
+
+### Who sets `stream->error`? Is it silent?
+
+| Setter | Line | Surfaced? |
+|--------|------|-----------|
+| `handle_asyncs` (0-byte async complete) | `mssstrm.cpp:78` | `AIL_stream_status` → -1; `AIL_stream_filled_percent` → 0 |
+| `doread` (queue failure) | `mssstrm.cpp:1073` | Same |
+| — | — | **No callback, no log in SDK.** `AIL_get_error` may have been set on open failures only. |
+
+**Tatooine signature:** `error==0`, `st=4`, `starved=1` permanently → **async wedge (B/C/L)** or **reads never issued (F/J)**, not error latch (D/E).
+
+---
+
+## 2. Recovery — what would un-wedge it?
+
+The 16 Hz timer (`mssstrm.cpp:841-851`) calls per stream:
+
+```211:217:D:\Code\milesss-v9.3b\win\sdk\src\sdk\mssstrm.cpp
+        if (s->autostreaming==2)
+        {
+          start_IOs_if_we_can( s );
+        }
+        while ( load_buffer_into_Miles(s) )
+          ;
+```
+
+| Failure mode | Retries? | Condition to recover |
+|--------------|----------|-------------------|
+| `asyncs_loaded==1`, IO pending | **Yes** — every 62.5 ms | IO thread completes → `handle_asyncs` → 2 → load |
+| `asyncs_loaded==1`, never queued (C) | **No** | Stuck forever |
+| `error==1` | **No** | `service_stream` / `start_IOs` gated (`:1233`, `:1192`) |
+| `playcontrol!=1` | **No** until `AIL_start_stream` | Engine must start |
+| Cancelled async at 1 | **No** unless new read issued | Seek/close resets (`:1385-1419`) |
+
+### API-visible detection signals
+
+| Signal | Usefulness for dead stream |
+|--------|---------------------------|
+| `AIL_stream_status` | **Useless** — returns `SMP_PLAYING` (4) with `error==0` even when starved and never primed (`mssstrm.cpp:963`). Matches log. |
+| `stream->error` | **No public API.** Would need `HSTREAM` introspection or wrapper. |
+| `SAMPLE::starved` | **Best signal** — never cleared = no `AIL_load_sample_buffer` ever (`wavefile.cpp:8240`). |
+| `AIL_stream_position` | Stays 0 if `AIL_start_sample` never fired. |
+| `AIL_stream_filled_percent` | 0 while `primeleft > 0` (`mssstrm.cpp:982-985`); 0 on error. |
+| `head - tail` (chunks in ring) | `0/8` in log for **both** dead and healthy streams — not a reliable death detector (`Audio.cpp:2128-2130`). |
+| `AIL_sample_loaded_len` | 0 = nothing in sample ring. |
+
+**Restart dead stream:** close + re-`AIL_open_stream` + `AIL_start_stream`. No in-place reset of `error` or wedged `asyncs_loaded` in SDK.
+
+---
+
+## 3. Pops in a healthy stream (`mus_figrin_dan_song_2.mp3`, `starved=0`)
+
+### Chunk geometry with `stream_mem=1MB`
+
+```
+bufsize     = stream_mem / 8 = 131072 (128 KB), 4K-aligned (mssstrm.cpp:742,761-762)
+primeamount = bufsize * (8-1) = 917504 (~896 KB) (mssstrm.cpp:791-793)
+```
+
+For ASI MP3 at ~128 kbps → `datarate` ≈ 16 KB/s (`mssstrm.cpp:465-466`):
+
+| Config | Chunk playback span (compressed) | Boundary cadence |
+|--------|----------------------------------|------------------|
+| Stock (`stream_mem=0`) | `datarate/8` ≈ 2 KB/chunk → ~125 ms | ~1 s total pool, boundary ~125 ms |
+| 1 MB pool | 128 KB/chunk | **128/16 ≈ 8 s** (or **4 s** at 32 KB/s) |
+
+**"Pop every few seconds"** aligns with **4–8 s** chunk turnover at 128 KB chunks — not with stock 125 ms boundaries.
+
+### `reset_ASI` / `AIL_request_EOB_ASI_reset` at chunk boundaries
+
+**Normal (non-loop) streaming:** `reset_ASI[cur]` is set only on **loop wrap** in `doread` (`mssstrm.cpp:1095-1107`, `1130-1142`), not per chunk. Routine chunk loads do **not** request EOB ASI reset.
+
+**At load time** (loop chunk only):
+
+```149:155:D:\Code\milesss-v9.3b\win\sdk\src\sdk\mssstrm.cpp
+        if (s->reset_ASI[ index ])
+        {
+          s->loadedsizes[ index ] = s->reset_ASI[ index ] - 1;
+          s->reset_ASI[ index ] = 0;
+          AIL_request_EOB_ASI_reset( s->samp, index, s->reset_seek_pos[ index ] );
+        }
+```
+
+**At playback** (mixer): `reset_asi()` flushes decoder (`wavefile.cpp:759-774`, `11104-11106`, `12230-12233`). Loop-block changes via `AIL_set_stream_loop_block` (`mssstrm.cpp:1559-1585`) set `substart`/`sublen` → loop wraps trigger reset.
+
+For **non-looping** cantina music, chunk-boundary pops are **not** from per-chunk ASI reset.
+
+### Pop mechanisms (ranked)
+
+| Rank | Mechanism | Cadence | Evidence |
+|------|-----------|---------|----------|
+| **1** | **Micro-starvation** — `starved` toggles 1→0 between 500 ms polls (`Audio.cpp:2107`) while mixer inserts silence (`mssds3d.cpp:2480`, `wavefile.cpp:11207-11208`) | Irregular, sub-500 ms | User hears pops; summary shows `starved=0` |
+| **2** | **128 KB chunk turnover** — ring slot reuse; `buf[n].pos` already advanced → brief starved (`wavefile.cpp:11205-11208`) if IO + 16 Hz service lag | **~4–8 s** at 16–32 KB/s MP3 | Matches "every few seconds" with 1 MB pool |
+| **3** | **`OUTPUT_RESERVOIR` / `exhaust_ASI`** — decoder holds tail bytes; pos pulled back (`wavefile.cpp:12255-12266`) | Per buffer end | ASI MP3 path |
+| **4** | **2 KB read alignment** in `doread` (`mssstrm.cpp:1021-1035`) — uneven chunk sizes vs MP3 frame boundaries | Irregular | Theoretical; 128 KB >> frame size |
+| **5** | **Loop-block ASI reset** (`mssstrm.cpp:1095-1142`) | Loop period | N/A for one-shot cantina track |
+| **6** | **IO scheduling** — once `primeleft==0`, `AIL_stream_filled_percent` always 1.0 (`mssstrm.cpp:982-983`); low-buffer priority disabled during play | Steady-state only | Contention under many streams |
+
+Large chunks **reduce** boundary frequency vs stock but **increase** bytes-at-risk per boundary transition — worse audible gap if service slips one tick.
+
+---
+
+## 4. Prime / start latency
+
+### Confirmed formula
+
+```791:793:D:\Code\milesss-v9.3b\win\sdk\src\sdk\mssstrm.cpp
+     stream->primeamount=mini*2;
+     if (stream->primeamount<(stream->bufsize*(MSS_STREAM_CHUNKS-1)))
+       stream->primeamount=stream->bufsize*(MSS_STREAM_CHUNKS-1);
+```
+
+With `stream_mem=1048576`, `bufsize=131072`:
+
+- **`primeamount = 917504` bytes (7 × 128 KB)**
+- `primeleft` init = `primeamount` (`mssstrm.cpp:823`)
+- `AIL_start_sample` fires when `primeleft <= loadedsizes[index]` after a successful load (`mssstrm.cpp:162-165`)
+- Requires **7 full chunk loads** into the sample ring before audible output
+
+### Start latency (compressed-byte priming)
+
+| `datarate` | Stock (`stream_mem=0`) prime | 1 MB pool prime | Wall time @ datarate | Wall time @ 50 KB/s contended |
+|------------|------------------------------|-----------------|----------------------|-------------------------------|
+| 16 KB/s (128 kbps MP3) | ~14 KB (0.875 s) | **896 KB** | **~56 s** | **~18 s** |
+| 24 KB/s (192 kbps MP3) | ~21 KB (0.875 s) | 896 KB | ~37 s | ~18 s |
+| 176 KB/s (WAV) | ~154 KB (0.875 s) | 896 KB | ~5 s | ~18 s |
+
+Emergency early start (`mssstrm.cpp:1171-1174`): if `sample_loaded_len > primeleft`, forces `primeleft=0` and starts — but requires **some** data already in ring (chicken-and-egg for first chunk).
+
+### Independent prime cap?
+
+**No.** `primeamount` is computed once at `AIL_open_stream` (`mssstrm.cpp:791-793`). No preference, no setter, no `STREAM` field exposed via API (`mss.h:4319-4320`). Only levers:
+
+- `stream_mem` (directly scales `bufsize` and thus `primeamount`)
+- `stream_mem=0` → `bufsize = datarate/8` → `primeamount ≈ 7/8 × datarate` ≈ **0.875 s of compressed audio**
+
+---
+
+## Summary tables
+
+### Death paths
+
+| Path | Silent? | Tatooine fit? |
+|------|---------|---------------|
+| `asyncs_loaded` stuck at 1 (IO wedge) | **Yes** | **Best fit** (`st=4`, `starved=1`, 40s) |
+| `playcontrol!=1` | Yes | Unlikely if engine started |
+| `error==1` (async/doread) | `st=-1` | **Ruled out** (`st=4`) |
+| `MilesAsyncFileRead` enqueue fail | Yes | Possible |
+| IO paused | Yes | Possible |
+| No reads issued (`amt==0`) | Yes | Possible at zone-in |
+| `primeleft` blocking start only | — | Not cause of starved=1 |
+
+### Pop mechanisms (ranked)
+
+| Rank | Mechanism | Predicted cadence |
+|------|-----------|-------------------|
+| 1 | Micro-starvation (poll gap) | < 500 ms, irregular |
+| 2 | 128 KB chunk ring turnover + 16 Hz service | **4–8 s** |
+| 3 | ASI `OUTPUT_RESERVOIR` / `exhaust_ASI` | Per buffer end |
+| 4 | 2K alignment splits | Irregular |
+| 5 | Loop-block ASI reset | Loop period |
+
+### Recommended `stream_mem` / prime configuration
+
+| Setting | `stream_mem` | `bufsize` (MP3 ~16 KB/s) | `primeamount` | Start latency | Steady-state |
+|---------|--------------|--------------------------|---------------|---------------|--------------|
+| **Recommended** | **0** (stock default) | ~2 KB | ~14 KB (~0.9 s) | **< 1 s** | 1 s compressed pool (Miles design point) |
+| Current (diag) | 1048576 | 128 KB | 896 KB | **18–56 s** contended | Large pool, fewer boundaries but bigger gaps |
+| Compromise | 65536 | 8 KB | 56 KB | ~3.5 s @ 16 KB/s | Marginal improvement; still scales badly |
+
+**Recommendation:** Set `[ClientAudio] streamBufferBytes=0` (or remove override). The 1 MB pool couples **prime to 7/8 of pool size** with no decoupling API — it trades away start latency and may worsen chunk-boundary pops (larger per-boundary exposure) without fixing the async wedge class that killed tatooine.
+
+**For dead-stream detection in engine:** poll `stream->samp->starved` + `AIL_sample_loaded_len==0` for > N seconds while stream is "playing" → force `AIL_close_stream` / re-open. Do **not** trust `AIL_stream_status==4`.

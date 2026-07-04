@@ -1,0 +1,351 @@
+## CONSULT-60 — Parser-internals angle (S1 chunkability, globals, partial reads, buildout)
+
+Evidence file treated as given. Line refs are to this repo.
+
+---
+
+### 1. CHUNKABILITY (S1 resumable main-thread parse)
+
+#### What must persist across frames
+
+| State | Why | Where |
+|-------|-----|-------|
+| **`Iff` instance** (buffer + parse cursor) | NODS loop is cursor-driven | Today stack-local in `WorldSnapshotReaderWriter::load` `:539-553`; must become owned parse state |
+| **Entered form stack** (`stackDepth`, `stack[]`, `inChunk`) | Resume mid-NODS without re-entering | `Iff.h:67-74`, `Iff.cpp:1132-1220` |
+| **`m_nodeList` partial roots** | Each NODS iteration appends one root subtree | `WorldSnapshotReaderWriter.cpp:860-868` |
+| **Incremental `m_networkIdNodeMap`** (recommended) | Consumers call `find()` during loading | Built today only after full parse `:559-584` |
+| **OTNL parse progress** | Template table comes after NODS | `load_0001` `:873-887` |
+| **Buildout sub-state** (separate phase) | Area/row loop locals | `WorldSnapshot.cpp:459-659` |
+| **`buildoutObjects`** | Container gate + sphere-tree filter | `:453`, `:644-657`, `:679` |
+| **Parse-phase enum** | Gate preload / `donePreloading` / sphere tree | Not present today |
+
+#### Can an `Iff` stay entered-in-a-form across frames?
+
+**Yes, instance-safely.** `Iff` is a self-contained cursor over an owned heap buffer:
+
+```335:351:src/engine/shared/library/sharedFile/src/shared/Iff.cpp
+bool Iff::open(const char *newFileName, bool optional)
+{
+	AbstractFile * const file = TreeFile::open(newFileName, AbstractFile::PriorityData, optional);
+	// ...
+	open(*file, newFileName);
+	delete file;  // handle closed immediately
+	fileName = DuplicateString(newFileName);
+	return true;
+}
+```
+
+```376:384:src/engine/shared/library/sharedFile/src/shared/Iff.cpp
+void Iff::open(AbstractFile & file, char const * const newFileName)
+{
+	close();
+	length = file.length();
+	data = file.readEntireFileAndClose();  // whole file copied into Iff-owned RAM
+	// stack[0] spans entire buffer
+}
+```
+
+- **Not memory-mapped** — full copy via `readEntireFileAndClose()` (`Iff.cpp:318-318`, `:384`).
+- **No long-lived file handle** — deleted at `:345`.
+- **Hazard: RAM lifetime** — `.ws` buffer lives until `Iff::close()` / destructor; tens of MB held for entire chunked parse (matches evidence).
+- **Hazard: no concurrent use** — only one owner may read/advance the instance; no global Iff cursor.
+- **Hazard: suspend granularity** — chunk **only between top-level NODS iterations** (`:858-869`). `Node::load` recursively enters `TAG_NODE`/`TAG_0000`/`TAG_DATA` and child NODE forms (`:395-485`); suspending inside `node->load(iff)` leaves nested stack frames — unsafe without refactoring `Node::load`.
+
+`getNumberOfBlocksLeft()` is valid only when **not in a chunk** (`Iff.cpp:1021-1025`, `:1025` DEBUG_FATAL if `inChunk`). Between NODS iterations that holds.
+
+#### `iff.open(filename, true)` semantics
+
+Second arg is **`optional`** (`Iff.h:115`, `Iff.cpp:330-331`):
+
+- File missing → returns **`false`**, no FATAL (`:338-341`).
+- File found → loads entire file into memory, returns **`true`** (`:344-350`).
+- Re-open discards prior buffer (`Iff.cpp:326-327`, `:377` `close()` first).
+
+Used at `WorldSnapshotReaderWriter.cpp:540` and buildout `WorldSnapshot.cpp:470`.
+
+#### Folding `m_networkIdNodeMap` build into the NODS loop
+
+**Yes — minimal-diff equivalent to `:559-584`.** Today `.ws` path:
+
+1. NODS loop builds tree only (`:860-868`) — **no map inserts**.
+2. Post-pass stack-walk inserts every node (`:559-584`) with `DEBUG_FATAL` on duplicate (`:576-578`).
+
+`addObject()` already inserts per node at insert time (`WorldSnapshotReaderWriter.cpp:733-752`). Extract the stack-walk into `insertSubtreeIntoMap(Node*)` and call it after each root `node->load` + `push_back`.
+
+**Ordering note:** each NODS entry is a full subtree (`Node::load_0000` child loop `:480-485`), so per-root insert populates all descendant networkIds — same as final walk.
+
+**OTNL must complete before any `getObjectTemplateName()`** — indices are read during NODS (`:463`) but names land only in OTNL (`:877-884`). Preload pump uses names (`WorldSnapshot.cpp:726`).
+
+#### Iff/TreeFile globals making long-lived Iff hazardous
+
+| Concern | Verdict |
+|---------|---------|
+| File handle leak | **No** — closed at open |
+| TreeFile search cache | **Side effect only** on open; no shared cursor with Iff |
+| `ConfigSharedFile::getValidateIff()` | One-time CRC check at open (`Iff.cpp:386`) |
+| `Iff::close()` during mid-parse teardown | Must abort parse state in `WorldSnapshot::unload` (`:411`) |
+
+---
+
+### 2. HIDDEN GLOBALS (`.ws` parse path — S2 relevance)
+
+#### Symbols touched that are **not** instance-private on `WorldSnapshotReaderWriter`
+
+| Symbol | Use in parse | Thread-safe read? |
+|--------|--------------|-------------------|
+| **`Crc::calculate`** | OTNL `:882` | Read-only `crctable` (`Crc.cpp:23-57`) |
+| **`MemoryBlockManager` (Node pool)** | Every `new Node` | Main-thread assumed |
+| **`ms_detailLevelBias`** | Not parse; **`setRadius`** in `_DEBUG` uses `ms_overrideUpdateRadius` (`:180-184`) | Written via config at install |
+| **`ms_loadSingleNetworkId`** (`_DEBUG`) | Filters NODS inserts `:863-868` | Debug only |
+| **`DuplicateString` / `new char[]`** | OTNL via `iff.read_string()` (`Iff.cpp:1602-1608`) | Heap allocator |
+| **`TreeFile::open`** | Iff open | Cache mutation; see AsynchronousLoader precedent |
+| **`ConfigSharedFile::getValidateIff()`** | Iff open | Config read |
+| **`LocalMachineOptionManager`** | Node::install only | N/A at parse time |
+
+**`Node::load` / `load_0000` (`:395-505`)** — no engine globals beyond Iff reads and `new Node`; only `Crc::calculate` in OTNL phase.
+
+#### Buildout half (not `.ws`, but same `load()` body) — S2 blockers
+
+| Symbol | Where |
+|--------|-------|
+| **`ObjectTemplateList::lookUp`** | `WorldSnapshot.cpp:557`, `:649` |
+| **`SharedBuildoutAreaManager::load` / static scene state** | `:456-457`, `SharedBuildoutAreaManager.cpp:292-308` |
+| **`DataTable::load(iff)`** | `:474-475` per area |
+| **`ConfigClientGame::getLoadBuildoutOnly()`** | `:442` |
+
+---
+
+### 3. PARTIAL-STATE READS (`isClientCached` / `loadIfClientCached`)
+
+#### Lookup path
+
+```1072:1075:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+bool WorldSnapshot::isClientCached (const int64 networkIdInt)
+{
+	return ms_reader.find (networkIdInt) != 0;
+}
+```
+
+```803:810:src/engine/shared/library/sharedUtility/src/shared/WorldSnapshotReaderWriter.cpp
+WorldSnapshotReaderWriter::Node* WorldSnapshotReaderWriter::find (const int64 networkIdInt)
+{
+	NetworkIdNodeMap::iterator iter = m_networkIdNodeMap->find (networkIdInt);
+	if (iter != m_networkIdNodeMap->end () && !iter->second->isDeleted ())
+		return iter->second;
+	return 0;
+}
+```
+
+Partial map → **`find` returns null** → `isClientCached` = false even if the node will appear later.
+
+#### Downstream when `loadIfClientCached` no-ops
+
+Entry is **`ClientObject::updateContainment`**, not `:655-665` (that block is `applyDeltas`):
+
+```700:706:src/engine/client/library/clientGame/src/shared/object/ClientObject.cpp
+void ClientObject::updateContainment(NetworkId const &containerId, int slotArrangement)
+{
+	if (!NetworkIdManager::getObjectById(containerId))
+		WorldSnapshot::loadIfClientCached(containerId);
+
+	getContainedByProperty()->setContainedBy(containerId, false);
+	ContainerInterface::getSlottedContainmentProperty(*this)->setCurrentArrangement(slotArrangement, false);
+}
+```
+
+```1208:1222:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+void WorldSnapshot::loadIfClientCached(NetworkId const &networkId)
+{
+	// ...
+	WorldSnapshotReaderWriter::Node const *node = ms_reader.find( networkId.getValue() ) ;
+	// walk to root, createObject + addObjectToWorld
+}
+```
+
+**If `find` fails:** `loadIfClientCached` is a silent no-op; **`setContainedBy` still runs** (`ContainedByProperty.cpp:70-77`).
+
+**Containment graph:** `depersistContainedBy` only adds to container if `NetworkIdManager::getObjectById(newParent)` exists (`ClientObject.cpp:999-1028`). Missing snapshot container → property set, **container link skipped**.
+
+**World/cell placement:**
+
+- `handleContainerChangeWithWorld` (`:1036-1077`): if container object missing → `shouldBeInWorld = false` (when `isInitialized()`).
+- **Player `endBaselines`** (`:756-790`): uses `ContainerInterface::getContainedByObject(*this)` for cell fixup; if snapshot cell never instantiated → **no `setParentCell`**. Debug **`DEBUG_FATAL`** if containedBy set but cell missing (`:766-769`) — distinguishes “is/is not client-cached” via `isClientCached`.
+
+#### Recoverable or permanent?
+
+| Scenario | Outcome |
+|----------|---------|
+| **`isClientCached` false negative** | Debug logging only in most paths; **not auto-retried** |
+| **`loadIfClientCached` miss + `setContainedBy`** | **Property persists**; no automatic retry when node later enters map |
+| **Later server `UpdateContainmentMessage`** | Can recover (`GroundScene.cpp:2751`) |
+| **Player first `endBaselines` during partial parse** | **High risk of permanent wrong cell/world** — one-shot path, no flush today |
+
+**Today this window barely exists:** sync parse finishes in `postload` (`GroundScene.cpp:762`) **before** message connect (`:833+`) and loading screen (`:816`). **S1 opens a new window:** messages flow while parse is incomplete. **Mitigation required:** queue `(networkId)` in `loadIfClientCached` and flush at parse complete, **or** return early from `updateContainment` until parse done (behavior change).
+
+**Not a data race** on main thread — **logical incompleteness**, not threading.
+
+---
+
+### 4. BUILDOUT HALF (`WorldSnapshot.cpp:456–689`)
+
+#### Reader mutators
+
+Only **`ms_reader.addObject(...)`** (`:646-654`). That inserts into `m_networkIdNodeMap`, wires parent via `containedByNetworkIdInt`, appends root to `m_nodeList` (`WorldSnapshotReaderWriter.cpp:697-754`).
+
+#### Natural chunk granularity
+
+| Granularity | Persist across frames | Notes |
+|-------------|----------------------|-------|
+| **Per area** | `buildoutAreaIter`, fresh `areaBuildoutTable`, area-local `buildingObjId` / `currentBuilding` / `currentCell` / `objIdBase` (`:480-483`) | `DataTable::load(iff)` loads whole area table (`:474-475`) — good phase boundary |
+| **Per N rows** | Above + `buildoutRow`, same table in memory | Finer budgets; `ObjectTemplateList::lookUp` ×2 per row |
+| **Sphere-tree pass** | Must run **once** after all adds | `:664-689` — uses `buildoutObjects` filter |
+
+#### Ordering: `.ws` vs buildout
+
+Current order is fixed: **`.ws` first** (`:445`), **buildout second** (`:456+`).
+
+**Container gate (easy to miss):**
+
+```644:657:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+if ( !containerId || buildoutObjects.find( containerId ) != buildoutObjects.end() )
+{
+	ms_reader.addObject(...);
+}
+buildoutObjects.insert( objId );
+```
+
+`buildoutObjects` tracks **buildout pass only**, not `.ws` map entries. Rows whose `containerId` points at a **`.ws`-only** container are **silently skipped** (existing behavior). Chunking must **not interleave** buildout before `.ws` completes if data ever cross-references (unlikely but invariant-preserving).
+
+**ObjId collisions:** `.ws` map build `DEBUG_FATAL`s on duplicate (`WorldSnapshotReaderWriter.cpp:576-578`). Buildout `addObject` FATALs duplicate when `cellIndex >= 0` (`:740-742`); server-only dupes (`cellIndex < 0`) ignored.
+
+**Dependency:** buildout v2 container XOR with area index (`:598-610`) must stay consistent within an area — row order matters inside an area.
+
+---
+
+## Minimal-diff S1 sketch (pseudocode)
+
+```cpp
+// WorldSnapshotNamespace — new static state
+enum ParsePhase { ParseIdle, ParseWsNods, ParseWsOtnl, ParseBuildout, ParseSphereTree, ParsePreload, ParseDone };
+ParsePhase ms_parsePhase = ParseIdle;
+Iff        ms_wsIff;              // HAZARD: holds full .ws buffer until ParseDone/abort
+bool       ms_wsFormsEntered;   // WSNP/0001/NODS entered once
+int        ms_buildoutAreaIndex;
+int        ms_buildoutRow;
+int64      ms_buildingObjId, ms_currentBuilding, ms_currentCell, ms_objIdBase;
+std::set<int64> ms_buildoutObjects;
+// HAZARD: queue for partial-parse containment
+std::vector<NetworkId> ms_pendingLoadIfClientCached;
+
+static void insertSubtreeIntoMap(Node* root, NetworkIdNodeMap* map) {
+    // same stack walk as WorldSnapshotReaderWriter.cpp:570-583
+}
+
+bool WorldSnapshot::donePreloading() {
+    // HAZARD: extend gate — today only checks template preload (:760-765)
+    if (ms_parsePhase != ParseDone) return false;
+    return /* existing preload check */;
+}
+
+void WorldSnapshot::load(const char* sceneName) {
+    // ... existing early-out / unload (:428-436) ...
+    ms_parsePhase = ParseWsNods;
+    ms_wsFormsEntered = false;
+    ms_buildoutAreaIndex = 0;
+    ms_buildoutRow = 0;
+    ms_buildoutObjects.clear();
+    ms_pendingLoadIfClientCached.clear();
+    ms_reader.clear();
+    // HAZARD: do NOT call ms_reader.load(sceneName) synchronously
+    if (!ms_wsIff.open("snapshot/<scene>.ws", true)) { ms_parsePhase = ParseBuildout; /* skip ws */ }
+    // defer sphere tree + preload setup until ParsePreload
+}
+
+void WorldSnapshot::loadStep(float budgetMs) {  // pump from GroundScene::updateLoading
+    PerformanceTimer t; t.start();
+    while (t.getElapsedTime() < budgetMs && ms_parsePhase != ParseDone) {
+        switch (ms_parsePhase) {
+
+        case ParseWsNods:
+            if (!ms_wsFormsEntered) {
+                ms_wsIff.enterForm(TAG_WSNP, true);   // HAZARD: must match load():597-607
+                ms_wsIff.enterForm(TAG_0001);
+                ms_wsIff.enterForm(TAG_NODS);
+                ms_wsFormsEntered = true;
+            }
+            // HAZARD: chunk ONLY here — never inside node->load
+            while (ms_wsIff.getNumberOfBlocksLeft() && t.getElapsedTime() < budgetMs) {
+                Node* node = new Node;
+                node->load(ms_wsIff);
+                m_nodeList->push_back(node);
+                insertSubtreeIntoMap(node, m_networkIdNodeMap);  // replaces :559-584
+            }
+            if (ms_wsIff.getNumberOfBlocksLeft() == 0) {
+                ms_wsIff.exitForm(TAG_NODS);
+                ms_parsePhase = ParseWsOtnl;
+            }
+            break;
+
+        case ParseWsOtnl:
+            // OTNL small — can finish in one step; HAZARD: gate preload until done
+            iff.enterChunk(TAG_OTNL); /* existing :874-887 loop */
+            ms_wsIff.exitForm(TAG_0001); ms_wsIff.exitForm(TAG_WSNP, true);
+            ms_wsIff.close();           // HAZARD: release tens-of-MB buffer
+            ms_parsePhase = ParseBuildout;
+            SharedBuildoutAreaManager::load(sceneName);
+            break;
+
+        case ParseBuildout:
+            // HAZARD: per-area or per-row; persist :480-483 + ms_buildoutRow
+            // HAZARD: ObjectTemplateList::lookUp per row (:557, :649)
+            // HAZARD: container gate uses ms_buildoutObjects only (:644)
+            // advance ms_buildoutAreaIndex / ms_buildoutRow until areas exhausted
+            ms_parsePhase = ParseSphereTree;
+            break;
+
+        case ParseSphereTree:
+            // existing :664-689 once
+            ms_numberOfObjectTemplates = ms_reader.getNumberOfObjectTemplateNames();
+            ms_preloadObjectTemplate = 0;
+            ms_parsePhase = ParsePreload;
+            break;
+
+        case ParsePreload:
+            if (/* preload indices exhausted */) {
+                ms_parsePhase = ParseDone;
+                flushPendingLoadIfClientCached();  // HAZARD: required for player cell
+            }
+            return; // let existing preloadSomeAssets() handle budget
+        }
+    }
+}
+
+void WorldSnapshot::loadIfClientCached(NetworkId const& id) {
+    if (ms_parsePhase != ParseDone) {
+        ms_pendingLoadIfClientCached.push_back(id);  // HAZARD: without this, player cell can stick wrong
+        return;
+    }
+    // existing :1208-1222
+}
+
+void WorldSnapshot::unload() {
+    ms_wsIff.close();  // HAZARD: mid-parse teardown (quit during load / startScene chain)
+    ms_parsePhase = ParseIdle;
+    // existing :403-411
+}
+```
+
+### Flagged hazards (checklist)
+
+1. **Chunk boundary** — top-level NODS only; inner `Node::load` is atomic.
+2. **`.ws` RAM** — `Iff` buffer retained until OTNL done; explicit `close()`.
+3. **`donePreloading` / `getLoadingPercent`** — must include parse phase (today `:760-765` is preload-only).
+4. **OTNL before preload / `getObjectTemplateName`**.
+5. **Partial map + `loadIfClientCached`** — player containment can stick wrong without **queue-and-flush** (evidence design note).
+6. **Buildout after full `.ws`** — preserve container gate semantics.
+7. **Mid-parse `unload`** — close Iff, reset phase, clear partial `ms_reader`.
+8. **Incremental map duplicates** — keep `DEBUG_FATAL` on second insert (`:576-578` parity).
+
+---
+
+**Bottom line:** S1 is structurally sound on the Iff side (instance-local cursor, whole-file buffer, no handle leak). The real design work is **phase state on `WorldSnapshot`**, **incremental map insert**, **extended loading gates**, and **containment flush** — not Iff internals. Buildout chunks cleanly per-area (or per-row after table load); sphere-tree insertion stays a single post-pass.
