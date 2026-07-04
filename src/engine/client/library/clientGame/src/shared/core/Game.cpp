@@ -1066,9 +1066,172 @@ void Game::run(void)
 }
 
 //-------------------------------------------------------------------
+// CONSULT-58 cold-load stall watchdog ([ClientGame] stallWatchdogMs, default 0=off).
+// The gl11 census exonerated D3D resource creation for the residual >100ms frames;
+// this instrument convicts what the process is actually doing during one: a watchdog
+// thread watches a per-frame QPC heartbeat, and when the current frame has run past
+// the threshold it writes a whole-process minidump (all thread stacks -- the audio
+// thread rides the same stalls) as stall-loop<N>-s<K>.mdmp in the working directory,
+// plus lines in stall-watchdog.log including the stall's final duration. A second
+// sample fires if the same frame is still stalled at 5x the threshold. Dumps are
+// budgeted ([ClientGame] stallWatchdogMaxDumps, default 6); over-budget or unfocused
+// stalls still get log lines. Loads the SYSTEM dbghelp.dll (not DebugHelp's
+// dbghelp_6.3.17.0.dll instance) so the crash handler's single-use OOM address-space
+// reserve stays armed for a real crash. Logged totals include the dump-write time
+// (MiniDumpWriteDump suspends the process while serializing).
+
+namespace StallWatchdogNamespace
+{
+	LONG64 volatile s_frameStartQpc;   // QPC at the top of the current main-loop frame
+	LONG   volatile s_frameIndex;      // main-loop frame counter
+	LONG64          s_qpcFrequency;
+	int             s_thresholdMs;
+	int             s_maxDumps;
+	int             s_dumpsWritten;
+	FILE *          s_stallLog;
+
+	typedef BOOL (WINAPI *MiniDumpWriteDumpFunction)(HANDLE process, DWORD processId, HANDLE file, int dumpType, void *exceptionParam, void *userStreamParam, void *callbackParam);
+	MiniDumpWriteDumpFunction s_miniDumpWriteDump;
+
+	void stallLog(char const *format, ...)
+	{
+		if (!s_stallLog)
+			return;
+		SYSTEMTIME localTime;
+		GetLocalTime(&localTime);
+		fprintf(s_stallLog, "%02d:%02d:%02d.%03d ", localTime.wHour, localTime.wMinute, localTime.wSecond, localTime.wMilliseconds);
+		va_list va;
+		va_start(va, format);
+		vfprintf(s_stallLog, format, va);
+		va_end(va);
+		fprintf(s_stallLog, "\n");
+		fflush(s_stallLog);
+	}
+
+	void writeStallDump(long frameIndex, int sample, double elapsedMs)
+	{
+		if (!s_miniDumpWriteDump)
+		{
+			HMODULE const dbghelp = LoadLibrary("dbghelp.dll");
+			if (dbghelp)
+				s_miniDumpWriteDump = reinterpret_cast<MiniDumpWriteDumpFunction>(GetProcAddress(dbghelp, "MiniDumpWriteDump"));
+			if (!s_miniDumpWriteDump)
+			{
+				stallLog("dbghelp.dll MiniDumpWriteDump unavailable -- dumps disabled");
+				s_dumpsWritten = s_maxDumps;
+				return;
+			}
+		}
+
+		char fileName[64];
+		snprintf(fileName, sizeof(fileName), "stall-loop%ld-s%d.mdmp", frameIndex, sample);
+		HANDLE const file = CreateFile(fileName, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_ARCHIVE, NULL);
+		if (file == INVALID_HANDLE_VALUE)
+		{
+			stallLog("loop %ld stalled %.0f ms -- could not create %s", frameIndex, elapsedMs, fileName);
+			return;
+		}
+		BOOL const wrote = s_miniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, 0 /* MiniDumpNormal: all thread stacks */, NULL, NULL, NULL);
+		CloseHandle(file);
+		++s_dumpsWritten;
+		stallLog("loop %ld stalled %.0f ms so far -> %s%s (dump %d/%d)", frameIndex, elapsedMs, fileName, wrote ? "" : " (WRITE FAILED)", s_dumpsWritten, s_maxDumps);
+	}
+
+	DWORD WINAPI stallWatchdogThreadProc(LPVOID)
+	{
+		LONG   sampledIndex = 0;   // frame that already got sample 1
+		int    samplesTaken = 0;
+		LONG64 stalledStart = 0;   // heartbeat of the frame being sampled
+		LONG   pendingIndex = 0;   // frame whose end-of-stall total is owed
+
+		for (;;)
+		{
+			Sleep(20);
+
+			LONG64 const frameStart = InterlockedCompareExchange64(&s_frameStartQpc, 0, 0);
+			LONG const frameIndex = s_frameIndex;
+			if (frameStart == 0 || frameIndex < 8)   // boot-install frames are expected-slow
+				continue;
+
+			// the heartbeat moved on: the stalled frame's true duration is the next frame's start minus its own
+			if (pendingIndex != 0 && frameIndex != pendingIndex)
+			{
+				stallLog("loop %ld total stall %.0f ms (incl. dump-write time)", pendingIndex, 1000.0 * static_cast<double>(frameStart - stalledStart) / static_cast<double>(s_qpcFrequency));
+				pendingIndex = 0;
+			}
+
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);
+			double const elapsedMs = 1000.0 * static_cast<double>(now.QuadPart - frameStart) / static_cast<double>(s_qpcFrequency);
+			if (elapsedMs < static_cast<double>(s_thresholdMs))
+				continue;
+
+			// unfocused stalls are message-pump blocks (alt-tab, drag), not load stalls -- log, don't spend a dump
+			bool const focused = GetForegroundWindow() == Os::getWindow();
+
+			if (frameIndex != sampledIndex)
+			{
+				sampledIndex = frameIndex;
+				samplesTaken = 0;
+				stalledStart = frameStart;
+				pendingIndex = frameIndex;
+				if (!focused)
+					stallLog("loop %ld stalled %.0f ms while unfocused -- no dump", frameIndex, elapsedMs);
+				else if (s_dumpsWritten >= s_maxDumps)
+					stallLog("loop %ld stalled %.0f ms (dump budget spent)", frameIndex, elapsedMs);
+				else
+					writeStallDump(frameIndex, ++samplesTaken, elapsedMs);
+			}
+			else if (samplesTaken == 1 && focused && s_dumpsWritten < s_maxDumps && elapsedMs > 5.0 * static_cast<double>(s_thresholdMs))
+				writeStallDump(frameIndex, ++samplesTaken, elapsedMs);
+		}
+	}
+
+	void stallWatchdogFrameTick()
+	{
+		static bool s_initialized;
+		static bool s_enabled;
+		if (!s_initialized)
+		{
+			s_initialized = true;
+			s_thresholdMs = ConfigFile::getKeyInt("ClientGame", "stallWatchdogMs", 0);
+			if (s_thresholdMs > 0)
+			{
+				s_maxDumps = ConfigFile::getKeyInt("ClientGame", "stallWatchdogMaxDumps", 6);
+				LARGE_INTEGER qpcFrequency;
+				QueryPerformanceFrequency(&qpcFrequency);
+				s_qpcFrequency = qpcFrequency.QuadPart;
+				if (fopen_s(&s_stallLog, "stall-watchdog.log", "a") != 0)
+					s_stallLog = NULL;
+				HANDLE const thread = CreateThread(NULL, 0, stallWatchdogThreadProc, NULL, 0, NULL);
+				if (thread)
+				{
+					// keep the sampler responsive while the main thread is busy
+					SetThreadPriority(thread, THREAD_PRIORITY_ABOVE_NORMAL);
+					CloseHandle(thread);
+					s_enabled = true;
+					stallLog("stall watchdog armed: threshold %d ms, budget %d dumps", s_thresholdMs, s_maxDumps);
+				}
+			}
+		}
+		if (!s_enabled)
+			return;
+
+		// watchdog reads start then index; write index first so a torn read pairs a
+		// fresh start with a stale index (harmless) rather than the reverse
+		LARGE_INTEGER now;
+		QueryPerformanceCounter(&now);
+		InterlockedIncrement(&s_frameIndex);
+		InterlockedExchange64(&s_frameStartQpc, now.QuadPart);
+	}
+}
+
+//-------------------------------------------------------------------
 
 void Game::runGameLoopOnce(bool presentToWindow, HWND hwnd, int width, int height)
 {
+	StallWatchdogNamespace::stallWatchdogFrameTick();
+
 	bool result;
 	float elapsedTime = 0.0f;
 
