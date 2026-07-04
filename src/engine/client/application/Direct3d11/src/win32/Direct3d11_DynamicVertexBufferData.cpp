@@ -22,6 +22,7 @@
 
 #include "Direct3d11.h"
 #include "Direct3d11_Device.h"
+#include "ConfigDirect3d11.h"
 
 #include "clientGraphics/VertexBuffer.h"
 #include "sharedFoundation/MemoryBlockManager.h"
@@ -145,11 +146,22 @@ void Direct3d11_DynamicVertexBufferData::remove()
 
 void Direct3d11_DynamicVertexBufferData::beginFrame()
 {
-	// Wrap at the start of each frame so per-frame dynamic uploads don't
-	// stomp on previous-frame data still in-flight.
-	ms_newFrame                = true;
+	// CONSULT-58: mirror the D3D9 plugin -- a frame-start forced discard is a
+	// CONFIG choice (default false: the ring runs continuously, NO_OVERWRITE
+	// appends, discarding only on a true wrap). Also resets the per-frame
+	// census counters. (Historical note: this function had NO callers before
+	// 2026-07-03 -- now wired from Direct3d11_Device::beginScene.)
+	ms_newFrame                = ConfigDirect3d11::getDiscardDynamicBuffersAtBeginningOfFrame();
 	ms_locksSinceBeginFrame    = 0;
 	ms_discardsSinceBeginFrame = 0;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_DynamicVertexBufferData::getFrameCensus(int &locks, int &discards)
+{
+	locks    = ms_locksSinceBeginFrame;
+	discards = ms_discardsSinceBeginFrame;
 }
 
 // ----------------------------------------------------------------------
@@ -281,7 +293,12 @@ void *Direct3d11_DynamicVertexBufferData::lock(int numberOfVertices, bool forceD
 	m_offset           = ms_used / vertexSize;  // VERTEX index (engine sets BaseVertexLocation per draw)
 
 	void * const sliceStart = static_cast<char *>(mapped.pData) + ms_used;
-	ms_used += length;
+	// CONSULT-58 ring fix: numberOfVertices is an UPPER BOUND -- the cursor is
+	// committed with the ACTUAL written count at unlock() (D3D9-plugin parity).
+	// Advancing here by the bound made CuiLayerRenderer (which locks ALL remaining
+	// ring space per UI batch) consume the whole ring in accounting on its first
+	// batch, turning every subsequent dynamic lock into a WRITE_DISCARD rename --
+	// the dominant Map-churn source feeding the NV driver race.
 
 	// Plan 11-09.15 Iter-4 (Test A): stash for unlock-time snapshot.
 	s_lastLockedSliceCPUPtr = sliceStart;
@@ -351,12 +368,13 @@ void Direct3d11_DynamicVertexBufferData::unlock(int numberOfVertices)
 
 	context->Unmap(ms_d3dRingBuffer.Get(), 0);
 
+	// CONSULT-58 ring fix: commit the cursor by the ACTUAL written count (the D3D9
+	// plugin's semantics -- Lock takes an upper bound, Unlock takes the real count).
+	// This lets oversized upper-bound locks pack tightly instead of exhausting the
+	// ring's accounting and forcing a WRITE_DISCARD on every subsequent lock.
+	DEBUG_FATAL(numberOfVertices > m_numberOfVertices, ("unlock count %d exceeds locked reservation %d", numberOfVertices, m_numberOfVertices));
 	m_numberOfVertices = numberOfVertices;
-	// Note: ms_used was already advanced in lock(); we don't re-adjust
-	// here. (D3D9 plugin advances on unlock because Lock takes only an
-	// upper-bound length and Unlock takes the actual used length; D3D11
-	// Map gets a slice pointer and the actual-used count only affects
-	// the draw call, not the buffer accounting.)
+	ms_used = (m_offset + numberOfVertices) * m_vertexBufferDescriptor.vertexSize;
 }
 
 // ----------------------------------------------------------------------

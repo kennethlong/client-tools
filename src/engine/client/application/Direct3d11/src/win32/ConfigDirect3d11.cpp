@@ -27,6 +27,7 @@ namespace ConfigDirect3d11Namespace
 	bool         ms_enableDebugLayer;
 	int          ms_preferredAdapterIndex;
 	bool         ms_preventDriverInternalThreading;
+	bool         ms_censusLog;
 }
 using namespace ConfigDirect3d11Namespace;
 
@@ -68,6 +69,11 @@ void ConfigDirect3d11::install()
 	// zone-in crash race; false is for perf A/B ONLY (the flag throttles the driver's
 	// internal threading and is the prime suspect for gl11 frame-rate pressure, 2026-07-03).
 	KEY_BOOL(preventDriverInternalThreading, true);
+
+	// CONSULT-58 per-frame Map-churn census: writes gl11-census.csv (one row per
+	// frame: frame ms, draws, cbuffer updates per stage/slot, VB/IB ring
+	// locks/discards) from present(). Default off = zero I/O.
+	KEY_BOOL(censusLog, false);
 }
 
 // ----------------------------------------------------------------------
@@ -82,5 +88,6 @@ char const * ConfigDirect3d11::getShaderCacheDir()                    { return m
 bool         ConfigDirect3d11::getEnableDebugLayer()                  { return ms_enableDebugLayer; }
 int          ConfigDirect3d11::getPreferredAdapterIndex()             { return ms_preferredAdapterIndex; }
 bool         ConfigDirect3d11::getPreventDriverInternalThreading()    { return ms_preventDriverInternalThreading; }
+bool         ConfigDirect3d11::getCensusLog()                         { return ms_censusLog; }
 
 // ======================================================================

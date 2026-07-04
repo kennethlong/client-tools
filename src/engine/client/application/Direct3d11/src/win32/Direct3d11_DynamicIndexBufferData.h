@@ -35,6 +35,7 @@ public:
 	static void install();
 	static void remove();
 	static void beginFrame();
+	static void getFrameCensus(int &locks, int &discards);   // CONSULT-58 per-frame churn census
 	static void setSize(int numberOfIndices);
 
 	static ID3D11Buffer *getSharedRingBuffer();

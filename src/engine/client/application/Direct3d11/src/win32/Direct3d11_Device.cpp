@@ -27,6 +27,9 @@
 #include "ConfigDirect3d11.h"
 #include "Direct3d11.h"   // for FATAL_DX_HR + hresultString
 #include "Direct3d11_StateCache.h"   // Plan 11-09.15 Iter-8: route beginScene viewport setup through setViewport so cb0[9] viewportData lands in slot0 before the first draw
+#include "Direct3d11_ConstantBuffer.h"            // CONSULT-58 churn census
+#include "Direct3d11_DynamicVertexBufferData.h"   // CONSULT-58 churn census + ring beginFrame
+#include "Direct3d11_DynamicIndexBufferData.h"    // CONSULT-58 churn census + ring beginFrame
 
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
@@ -913,6 +916,14 @@ void Direct3d11_Device::setWindowedMode(bool windowed)
 
 void Direct3d11_Device::beginScene()
 {
+	// CONSULT-58: per-frame housekeeping the D3D9 plugin does in beginScene but
+	// gl11 never wired -- ring beginFrame (config-driven frame-start discard,
+	// default OFF = continuous ring) + per-frame census counter resets.
+	Direct3d11_DynamicVertexBufferData::beginFrame();
+	Direct3d11_DynamicIndexBufferData::beginFrame();
+	Direct3d11_ConstantBuffer::beginFrame();
+	Direct3d11_StateCache::beginFrame();
+
 	// Plan 11-09.15 Iter-11: clear PS SRV slots before OMSetRenderTargets
 	// to avoid the D3D11 "Resource being set to OM RenderTarget slot 0 is
 	// still bound on input!" warning class. Iter-9/10 diagnostics
@@ -1152,6 +1163,45 @@ bool Direct3d11_Device::present()
 	// the runtime log on the same frame they fire. No-op when ms_infoQueue
 	// is null (debug layer not live).
 	drainInfoQueue();
+
+	// CONSULT-58 churn census: one CSV row per frame ([Direct3d11] censusLog=true;
+	// default off = zero I/O). Written BEFORE Present so the row describes the
+	// frame just built; frameMs is the wall time since the previous census point
+	// (QPC -- self-contained, no engine Clock import). File lands in the CWD
+	// (the staging dir): gl11-census.csv.
+	if (ConfigDirect3d11::getCensusLog())
+	{
+		static FILE          *s_censusFile = nullptr;
+		static LARGE_INTEGER  s_censusQpf  = {};
+		static LARGE_INTEGER  s_censusLast = {};
+		if (!s_censusFile)
+		{
+			if (fopen_s(&s_censusFile, "gl11-census.csv", "w") == 0 && s_censusFile)
+				fprintf(s_censusFile, "frameMs,draws,vsB0,vsB1,vsB2,vsB3,psB0,psB1,psB2,psB3,vbLocks,vbDiscards,ibLocks,ibDiscards\n");
+			QueryPerformanceFrequency(&s_censusQpf);
+			QueryPerformanceCounter(&s_censusLast);
+		}
+		if (s_censusFile)
+		{
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);
+			double const frameMs = 1000.0 * static_cast<double>(now.QuadPart - s_censusLast.QuadPart) / static_cast<double>(s_censusQpf.QuadPart);
+			s_censusLast = now;
+
+			int vs[Direct3d11_ConstantBuffer::kNumSlots];
+			int ps[Direct3d11_ConstantBuffer::kNumSlots];
+			Direct3d11_ConstantBuffer::getFrameCensus(vs, ps);
+			int vbLocks = 0, vbDiscards = 0, ibLocks = 0, ibDiscards = 0;
+			Direct3d11_DynamicVertexBufferData::getFrameCensus(vbLocks, vbDiscards);
+			Direct3d11_DynamicIndexBufferData::getFrameCensus(ibLocks, ibDiscards);
+
+			fprintf(s_censusFile, "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+				frameMs, Direct3d11_StateCache::getDrawCallCount(),
+				vs[0], vs[1], vs[2], vs[3], ps[0], ps[1], ps[2], ps[3],
+				vbLocks, vbDiscards, ibLocks, ibDiscards);
+			fflush(s_censusFile);
+		}
+	}
 
 	HRESULT hr = ms_swapChain->Present(1, 0);  // vsync=1 for Wave 3 MVP (allowTearing override is Wave 4+)
 	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)

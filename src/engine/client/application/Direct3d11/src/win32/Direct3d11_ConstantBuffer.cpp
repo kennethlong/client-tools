@@ -46,6 +46,30 @@ using Microsoft::WRL::ComPtr;
 ComPtr<ID3D11Buffer> Direct3d11_ConstantBuffer::ms_vsBuffers[Direct3d11_ConstantBuffer::kNumSlots];
 ComPtr<ID3D11Buffer> Direct3d11_ConstantBuffer::ms_psBuffers[Direct3d11_ConstantBuffer::kNumSlots];
 
+int Direct3d11_ConstantBuffer::ms_frameVsUpdates[Direct3d11_ConstantBuffer::kNumSlots];
+int Direct3d11_ConstantBuffer::ms_framePsUpdates[Direct3d11_ConstantBuffer::kNumSlots];
+
+// ----------------------------------------------------------------------
+// CONSULT-58 per-frame churn census.
+
+void Direct3d11_ConstantBuffer::beginFrame()
+{
+	for (int i = 0; i < kNumSlots; ++i)
+	{
+		ms_frameVsUpdates[i] = 0;
+		ms_framePsUpdates[i] = 0;
+	}
+}
+
+void Direct3d11_ConstantBuffer::getFrameCensus(int (&vsUpdates)[kNumSlots], int (&psUpdates)[kNumSlots])
+{
+	for (int i = 0; i < kNumSlots; ++i)
+	{
+		vsUpdates[i] = ms_frameVsUpdates[i];
+		psUpdates[i] = ms_framePsUpdates[i];
+	}
+}
+
 // ======================================================================
 
 namespace Direct3d11_ConstantBufferNamespace
@@ -171,6 +195,8 @@ void Direct3d11_ConstantBuffer::updateVS(int slot, void const *data, size_t size
 	NOT_NULL(data);
 	NOT_NULL(ms_vsBuffers[slot].Get());
 
+	++ms_frameVsUpdates[slot];   // CONSULT-58 churn census
+
 	D3D11_MAPPED_SUBRESOURCE mapped = {};
 	HRESULT hr = Direct3d11_Device::getContext()->Map(
 		ms_vsBuffers[slot].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -199,6 +225,8 @@ void Direct3d11_ConstantBuffer::updatePS(int slot, void const *data, size_t size
 		("Direct3d11_ConstantBuffer::updatePS: size %zu exceeds slot capacity %d", sizeBytes, kMaxCBufferBytes));
 	NOT_NULL(data);
 	NOT_NULL(ms_psBuffers[slot].Get());
+
+	++ms_framePsUpdates[slot];   // CONSULT-58 churn census
 
 	D3D11_MAPPED_SUBRESOURCE mapped = {};
 	HRESULT hr = Direct3d11_Device::getContext()->Map(

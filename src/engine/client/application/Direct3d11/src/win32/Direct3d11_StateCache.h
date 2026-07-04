@@ -61,6 +61,7 @@ public:
 	static void remove();
 	static void beginFrame();
 	static void endFrame();
+	static int  getDrawCallCount();   // CONSULT-58 churn census (resets in beginFrame)
 
 	// ------------------------------------------------------------------
 	// Slot-setter bodies (called from Direct3d11.cpp slot bindings).

@@ -186,10 +186,19 @@ public:
 	static void bindVS(int slot);
 	static void bindPS(int slot);
 
+	// CONSULT-58 per-frame churn census: Map(WRITE_DISCARD) counts per stage/slot.
+	// beginFrame() resets (wired from Direct3d11_Device::beginScene); the census
+	// publisher in present() reads via getFrameCensus. Unconditional (Release-live).
+	static void beginFrame();
+	static void getFrameCensus(int (&vsUpdates)[kNumSlots], int (&psUpdates)[kNumSlots]);
+
 private:
 
 	static Microsoft::WRL::ComPtr<ID3D11Buffer> ms_vsBuffers[kNumSlots];
 	static Microsoft::WRL::ComPtr<ID3D11Buffer> ms_psBuffers[kNumSlots];
+
+	static int ms_frameVsUpdates[kNumSlots];
+	static int ms_framePsUpdates[kNumSlots];
 };
 
 // ======================================================================

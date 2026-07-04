@@ -79,9 +79,20 @@ void Direct3d11_DynamicIndexBufferData::remove()
 
 void Direct3d11_DynamicIndexBufferData::beginFrame()
 {
-	ms_newFrame                = true;
+	// CONSULT-58: mirror the D3D9 plugin -- frame-start forced discard is a CONFIG
+	// choice (default false); also resets the per-frame census counters. Wired from
+	// Direct3d11_Device::beginScene as of 2026-07-03 (no callers before that).
+	ms_newFrame                = ConfigDirect3d11::getDiscardDynamicBuffersAtBeginningOfFrame();
 	ms_locksSinceBeginFrame    = 0;
 	ms_discardsSinceBeginFrame = 0;
+}
+
+// ----------------------------------------------------------------------
+
+void Direct3d11_DynamicIndexBufferData::getFrameCensus(int &locks, int &discards)
+{
+	locks    = ms_locksSinceBeginFrame;
+	discards = ms_discardsSinceBeginFrame;
 }
 
 // ----------------------------------------------------------------------

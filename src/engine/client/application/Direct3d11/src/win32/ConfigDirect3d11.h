@@ -29,6 +29,7 @@ public:
 	static bool         getEnableDebugLayer();        // D-08 fallback (default: true in _DEBUG, false in NDEBUG)
 	static int          getPreferredAdapterIndex();   // default: -1 (use default adapter)
 	static bool         getPreventDriverInternalThreading(); // default: true (NV race defeat); false = perf A/B ONLY
+	static bool         getCensusLog();                      // default: false; true = per-frame gl11-census.csv (CONSULT-58)
 };
 
 // ======================================================================
