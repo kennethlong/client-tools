@@ -9,6 +9,26 @@ status: MOSTLY DELIVERED 2026-07-03 evening (CONSULT-58) — the churn root caus
   zone-ins → then flip the code default of preventDriverInternalThreading to false; (2) convict
   the residual cold-load pauses via the creation-census columns (735cea241) from organic play;
   (3) optional margin: vsB0 NO_OVERWRITE cbuffer ring (D3D11.1 feature probe needed).
+soak-log:
+  - session 1 (2026-07-03 ~9:45pm, 9.5 min): median 9.6ms, 0.6% >20ms, no crash (committed evidence).
+  - session 2 (2026-07-03 ~10:07pm, 3.3 min): median 12.1ms steady-state, 8.7% >20ms but nearly all
+    20-25ms missed-vsync variance in a heavier scene (38-54 draws) — no hang-class stutter; INCLUDED
+    a zone-in (2.6s load frame ~3896) with NO nvwgf2um crash. Kenny verdict: feels better than gl05.
+  - COLD-LOAD CONVICTION (item 2 = DONE, verdict negative): the >100ms stalls carry ZERO in-frame
+    creates (688ms mid-play frame: 37 draws same as neighbors, 0 creates; creates trail the 2.6s
+    zone stall as arriving assets, 3 shaderCreates ≠ 258ms). NOT D3D resource creation → pre-warm/
+    off-thread-creation is the wrong lever. Stall is upstream main-thread load work (TreeFile/disk/
+    decompress/world-build) — converges with the audio-pops todo's TreeFile-contention suspect.
+    Next tool: >100ms frame watchdog that samples the main-thread stack, not more D3D census.
+  - STALL WATCHDOG BUILT (2026-07-03 late, uncommitted): file-local namespace in clientGame
+    Game.cpp + heartbeat at top of runGameLoopOnce. [ClientGame] stallWatchdogMs=100 (0=off) /
+    stallWatchdogMaxDumps=6 -> whole-process MiniDumpNormal (all threads, incl. audio) as
+    stage/stall-loop<N>-s<K>.mdmp + stall-watchdog.log (per-stall total-duration lines even
+    past the dump budget; unfocused stalls log-only). Second sample at 5x threshold. Loads
+    SYSTEM dbghelp.dll so DebugHelp's single-use OOM crash reserve stays armed. Verified
+    end-to-end at threshold=1: 6 dumps, budget cap, MDMP magic, cdb+our-PDBs symbolize
+    (caught Clock::limitFrameRate/Sleep as expected). cfg armed at 100ms in stage/client.cfg.
+    Next: organic play with zone-ins + cantina cold-entries -> symbolize the real stall dumps.
 priority: medium-high (the last gap between gl11 and the butter-smooth gl05 baseline)
 references:
   - the conviction: 2026-07-03 Test 4 — [Direct3d11] preventDriverInternalThreading=false made

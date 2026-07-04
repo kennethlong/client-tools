@@ -22,3 +22,12 @@ Context worth checking when picked up:
 - Same session context: rebuilt exe (885b190a0 lineage) + Texture/TreeFile lock changes — if
   the delays correlate with zone-in bursts, consider lock-contention on the audio IO thread's
   TreeFile::open path (it now snapshots under ms_criticalSection) before blaming Miles.
+
+2026-07-04 UPDATE (stall-watchdog conviction, CONSULT-59): **TreeFile lock contention REFUTED**
+— in every whole-process stall dump the Miles threads are idle in WaitForSingleObject, never in
+engine code. The load-phase music glitches/pops were pure MAIN-THREAD STARVATION (terrain
+preload 3-4.5s + async-loader callback bursts, both fixed in the CONSULT-59 wave). Residual
+startup music glitch = WorldSnapshot::load ~2.5s parse + 0.6-0.9s string-table pump frames
+(see 2026-07-04-worldsnapshot-parse-startup-freeze.md). Settled-play census is clean (p99 17ms,
+0 frames >80ms) — if 3D-sound skips persist in SETTLED play after the snapshot fix, THEN this
+todo's Miles-side suspects (sample-handle pressure, provider set) are back on the table.

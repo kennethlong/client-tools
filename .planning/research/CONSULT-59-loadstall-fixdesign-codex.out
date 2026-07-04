@@ -1,0 +1,39 @@
+**1. Dependents**
+
+No caller appears to depend on `ClientProceduralTerrainAppearanceTemplate::PreloadManager`’s stored pointers. Its two vectors are private and only populated/released inside the template file: `ClientProceduralTerrainAppearanceTemplate.cpp:44-48`, `112-128`.
+
+Terrain chunks do not use those preloaded template pointers. `GroundScene::load()` creates the terrain appearance through `AppearanceTemplateList::createAppearance(terrainFileName)` at `GroundScene.cpp:1313-1325`. The resulting `ClientProceduralTerrainAppearance` constructs its own `ShaderCache` at `ClientProceduralTerrainAppearance.cpp:429-433`.
+
+Important nuance: current chunk creation is **not demand-load-on-miss**. `ShaderCache` eagerly loads all shader-group children and textures in its constructor via `preloadShaders()` at `ClientProceduralTerrainAppearance_ShaderCache.cpp:177-180`; `preloadShaders()` fetches each shader by name and pins its diffuse/normal texture at `315-347`. Later chunk creation passes `m_shaderCache` into `ClientCreateChunkData` at `ClientProceduralTerrainAppearance.cpp:774-783`; `ClientChunk::createTileShader()` calls `shaderCache->getTextures()` at `ClientProceduralTerrainAppearance_ClientChunk.cpp:379-382` and `578`. `getTextures()` simply reads cache slots at `ClientProceduralTerrainAppearance_ShaderCache.cpp:288-311`; it does not fetch on a missing slot.
+
+Flora is closer to demand-load safe. Static flora creates `StaticFloraNode` on first use, then fetches the appearance template by name through `AppearanceTemplateList::fetch()` at `ClientStaticRadialFloraManager.cpp:657-674` and `71-98`; the actual appearance is created later via `m_appearanceTemplate->createAppearance()` at `126-134` and installed at `696-698`. Dynamic/radial flora shader buckets fetch their shader by name on bucket construction at `ClientDynamicRadialFloraManager.cpp:274-289`.
+
+**2. Other callers / blast radius**
+
+The ground procedural terrain template is installed as the handler for `MPTA`/`PTAT` terrain appearances at `ClientProceduralTerrainAppearanceTemplate.cpp:133-140`, via `SetupClientTerrain::install()` at `SetupClientTerrain.cpp:83-89`. Direct construction and `preloadAssets()` calls for this class only appear in its own create path: `ClientProceduralTerrainAppearanceTemplate.cpp:153-156`, `189-195`.
+
+Normal multiplayer scene entry reaches it through `GameNetwork::receiveCmdStartScene()` calling `Game::setScene(false, sceneName, ...)` at `GameNetwork.cpp:481-505`; `Game::_startScene()` calls `SceneCreator::create()` at `Game.cpp:1534-1540`; multiplayer and single-player creators both construct `GroundScene` at `Game.cpp:221` and `267-277`; `GroundScene::load()` then creates the terrain appearance at `GroundScene.cpp:1313-1325`.
+
+Other ground-entry paths share the same path: scene command parser `Game::setScene(true, ...)` at `SwgCuiCommandParserScene.cpp:288`, locations at `SwgCuiLocations.cpp:179`, scene selection at `SwgCuiSceneSelection.cpp:264`, and the advertised editor hook `engine_gameLoadScene()` at `engine_advertise.cpp:310-320`. `GroundScene::reloadTerrain()` also re-enters `load()` after `AppearanceTemplateList::garbageCollect()` at `GroundScene.cpp:1288-1307`.
+
+Space terrain is separate: `ClientSpaceTerrainAppearanceTemplate::install()` binds the space terrain tag at `ClientSpaceTerrainAppearanceTemplate.cpp:21-32`, and `SetupClientTerrain` installs it separately at `SetupClientTerrain.cpp:93`. So changing `ClientProceduralTerrainAppearanceTemplate` timing is ground terrain / editor ground-scene blast radius, not space terrain.
+
+**3. Pump context**
+
+`GroundScene::init()` calls `load(terrainFilename, ...)` before enabling the CUI loading manager: `GroundScene.cpp:734-738` happens before `Game::_setScene(this)` and `CuiLoadingManager::setFullscreenLoadingEnabled(true)` at `808-817`. So the measured preload inside `GroundScene::load()` runs before the normal loading-screen update loop can tick.
+
+After the scene is constructed, the per-frame pump is `Game::runGameLoopOnce()`, which processes async callbacks at `Game.cpp:1288-1292`, updates network while loading at `1323-1326`, and later calls scene update. `GroundScene::update()` calls `updateLoading()` at `GroundScene.cpp:2048`.
+
+`GroundScene::updateLoading()` is the existing hook point: it calls `WorldSnapshot::preloadSomeAssets()`, optional `SpacePreloadedAssetManager::preloadSomeAssets()`, `CachedFileManager::preloadSomeAssets()`, then updates `CuiLoadingManager::setFullscreenLoadingPercent(...)` at `GroundScene.cpp:2053-2088`. The loading UI reads that percent in `SwgCuiLoadingGround::update()` at `SwgCuiLoadingGround.cpp:326-367`. `CachedFileManager::preloadSomeAssets()` is a per-frame list pump, but its slice is up to 1000ms at `CachedFileManager.cpp:183-227`, so it is a precedent for “list item pumping,” not a good frame-budget precedent as-is.
+
+**4. Async seam**
+
+`AsynchronousLoader::add()` is manifest-driven, not an arbitrary bulk-list API. It looks up `fileName` in `ms_fileMap`, submits the associated `FileRecordList`, or immediately invokes the callback if no async record exists: `AsynchronousLoader.cpp:357-379`. The map is loaded from the async data file’s `TAG_LOAD` chunk at `AsynchronousLoader.cpp:188-203`.
+
+The loader thread preopens/cache-fetches dependency records off-thread at `AsynchronousLoader.cpp:461-539`; `processCallbacks()` then inserts preopened files into `TreeFile` cache, invokes the callback on the main thread, and clears cached files at `AsynchronousLoader.cpp:571-687`. Meshes use this exact pattern: `MeshAppearanceTemplate::createAppearance()` calls `AsynchronousLoader::add()` at `MeshAppearanceTemplate.cpp:171-182`, and the callback opens/loads the mesh and creates waiting appearances at `222-240`.
+
+There is bulk pre-cache precedent, but it is synchronous `TreeFile::cacheFile()` via `CachedFileManager::preloadSomeAssets()` at `CachedFileManager.cpp:183-227`; `TreeFile::cacheFile()` delegates to the search cache at `TreeFile.cpp:1059-1063`. I did not find an existing “bulk preload this arbitrary list through `AsynchronousLoader` callbacks” precedent.
+
+**Verdict**
+
+**NO**, demand-load-on-miss is not currently safe as a general terrain shader/flora incremental-preload design. Deferring only `ClientProceduralTerrainAppearanceTemplate::PreloadManager`’s refcount pins is probably safe for correctness because chunks and flora do not consume its stored pointers. But terrain chunk rendering is not demand-load-on-miss: `ShaderCache::getTextures()` assumes `ShaderCache::preloadShaders()` already populated every shader/texture slot. Flora appearances are demand-fetched by name on first use, but terrain shaders would need an explicit incremental `ShaderCache` population state or a real miss-fetch path before removing/spreading the eager shader cache load.

@@ -1,0 +1,263 @@
+# CONSULT-59 — AsynchronousLoader drain budget (code-reading angle)
+
+Stall class 2 is confirmed: `Game::runGameLoopOnce` → `AsynchronousLoader::processCallbacks()` (`Game.cpp:1288-1291`) drains `ms_completedRequests` on the main thread; each callback does IFF parse + GPU work (e.g. `MeshAppearanceTemplate::asynchronousLoadCallback` → `load()` → `Texture::load`).
+
+---
+
+## 1. REQUEST / CACHE LIFECYCLE
+
+### Allocation & queues
+
+| Stage | Where | File:line |
+|-------|--------|-----------|
+| Request alloc | `MemoryBlockManager` pool | `AsynchronousLoader.cpp:208`, `:368`, `:413-424` |
+| Submit | `submitRequest` → `ms_pendingRequests.push_back` | `:413-424` |
+| Worker pickup | `pop_front` pending | `:442`, `:552` |
+| Worker complete | `push_back` completed + `ms_numberOfCachedBytes += bytes` | `:553-559` |
+| Main drain | `pop_front` completed | `:602-603` |
+| Retire | `ms_requestMemoryBlockManager->free` | `:684` |
+
+### Worker-side file load (`threadRoutine`)
+
+For each `FileRecord` in the request's list (`:462-544`):
+
+- **`alreadyCached` gate** (`:473`): if false, worker tries `fetchFunction` (`:477-479`) then `TreeFile::open` (`:488`).
+- **`alreadyCached = true`** (`:507-509`): set under mutex only when a file was opened on disk **and** a `fetchFunction` exists for that extension (dds/pal/vsh/psh/mgn bound at install).
+- **Cached payload**: stored in `request->cachedFiles` (`CachedFile{fileRecord, file, resource}`) (`:515-537`).
+- If `alreadyCached` is already true, worker **skips** the file entirely (`:473`, debug `:541-542`) — no `cachedFiles` entry for that dependency.
+
+`CachedFiles` vectors are pooled via `ms_cachedFilesPool` (`:521-526`, `:669-670`).
+
+### Main-thread callback path (`processCallbacks`)
+
+Per completed request (`:609-684`), atomically:
+
+1. **`TreeFile::addCachedFile`** for each pre-read `AbstractFile` (`:612-627`) — inserts into global `cachedFilesMap`, sets `ms_haveCachedFiles` (`TreeFile.cpp:1010-1017`).
+2. **Callback** (`:631`) — `Iff::open` hits cache via `TreeFile::open` (`TreeFile.cpp:734-768`: find in map, steal pointer, set entry to NULL).
+3. **`TreeFile::clearCachedFiles`** (`:634`, `TreeFile.cpp:1024-1040`) — deletes any map entries not consumed by `open`.
+4. **Cleanup** (`:638-672`): for each `CachedFile`, **`alreadyCached = false`** (`:646-647`), delete unconsumed files, `releaseFunction` on prefetched resources, return vector to pool.
+5. **`ms_numberOfCachedBytes -= bytes`** (`:680`) — bytes counted from files touched this iteration (`:607-623`, `:651-654`).
+
+### Early-break (count budget at `:686-687`) — state left behind
+
+Break happens **after** a request is fully retired (pop → process → free). Remaining entries stay in `ms_completedRequests` deque, untouched.
+
+**Safe:**
+
+- No half-processed request (pop is all-or-nothing per iteration).
+- No TreeFile cache leak — each processed request clears cache before break; unprocessed requests haven't touched TreeFile yet.
+- No `alreadyCached` wedge — flag is per static `FileRecord` in the `.asyn` map; unprocessed completed requests keep their worker-loaded state; flag is only cleared in `:646-647` when that request is retired.
+- `ms_numberOfCachedBytes` stays elevated for unprocessed completed work (worker added at `:559`, subtracted only at `:680`) — intentional back-pressure for the postpone threshold (`:445-448`, `cms_postponeThreshold = 8 MiB` at `:117`).
+
+**Pre-existing quirk (not introduced by early-break):** shared `FileRecord.alreadyCached` means a later request whose worker pass ran while an earlier completed request still holds `alreadyCached=true` may arrive with empty `cachedFiles` for that dependency; its callback falls back to synchronous `TreeFile::open`/fetch. Correct, just loses preload benefit.
+
+---
+
+## 2. ORDERING HAZARDS
+
+### Registration sites (only two callback types)
+
+```178:178:src/engine/client/library/clientObject/src/shared/appearance/MeshAppearanceTemplate.cpp
+			AsynchronousLoader::add(getName(), asynchronousLoadCallback, const_cast<MeshAppearanceTemplate*>(this));
+```
+
+```1964:1964:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+				AsynchronousLoader::add(getName().getString(), asynchronousLoadCallback, const_cast<SkeletalMeshGeneratorTemplate*>(this));
+```
+
+```3312:3312:src/engine/client/library/clientSkeletalAnimation/src/shared/appearance/SkeletalMeshGeneratorTemplate.cpp
+				AsynchronousLoader::add(getName().getString(), asynchronousLoadCallback, this);
+```
+
+(Plus sync fallback `AsynchronousLoader.cpp:377-378` when filename isn't in the `.asyn` map.)
+
+### Cross-callback same-frame dependencies
+
+**None found.** Each callback loads one template instance independently:
+
+- **Mesh** (`MeshAppearanceTemplate.cpp:222-244`): `Iff::open(getName())` → `load(iff)` → fix up `m_uninitializedMeshAppearances`.
+- **Skeletal mesh** (`SkeletalMeshGeneratorTemplate.cpp:3256-3343`): same pattern; then drains local `m_uninitializedMeshGenerators`.
+
+No code assumes callback *N*'s side effects are visible to callback *N+1* in the same drain pass. Shared deps (textures, shaders) go through global lists (`TextureList::fetch`, etc.), not prior callback completion.
+
+### Within-request ordering
+
+All files for one request are `addCachedFile`'d **before** its callback (`:612-631`) — correct for multi-file `.asyn` records.
+
+### Re-enqueue from inside a callback
+
+**Yes, safely:**
+
+- `SkeletalMeshGeneratorTemplate` retry on transient open failure (`:3305-3312`) calls `AsynchronousLoader::add` → `submitRequest` → `ms_pendingRequests.push_back` + worker signal (`:413-424`).
+- Runs on main thread during drain; new work goes to **pending**, not `completed`. Current request still finishes and is freed before budget check.
+- Worker runs concurrently — may complete the retry before this frame's drain loop ends; that completion can be picked up in the same `for(;;)` if budget allows.
+
+**No re-entrant `processCallbacks`** in normal game loop (single call per frame at `Game.cpp:1291`). Debug spin-wait at `SwgCuiCommandParserScene.cpp:1382-1383` calls it in a tight loop — budgets would affect that path (see §4).
+
+### `remove()` interaction
+
+`AsynchronousLoader::remove(callback, data)` (`:384-408`) nulls matching pending/completed entries; drain still retires them, skips callback (`:609`), cleans `cachedFiles` / resets `alreadyCached`. Safe.
+
+---
+
+## 3. TIME BUDGET FEASIBILITY
+
+### Where the check belongs
+
+Inside the existing `for(;;)` at `:592-688`, **after** full per-request retirement (`:684`) and **alongside** the count check at `:686-687`:
+
+```cpp
+// Pseudocode — minimal diff locus
+int const callbacksAllowed = ConfigSharedFile::getAsynchronousLoaderCallbacksPerFrame();  // :589
+int const timeBudgetMs     = ConfigSharedFile::getAsynchronousLoaderCallbackTimeBudgetMs(); // NEW, 0 = unlimited
+unsigned long const t0     = (timeBudgetMs > 0) ? Clock::timeMs() : 0;                     // Clock already included :16
+
+for (;;)
+{
+    // ... existing pop / process / free ...
+
+    if (callbacksAllowed && --callbacksAllowed == 0)
+        break;
+
+    if (timeBudgetMs > 0 && (Clock::timeMs() - t0) >= static_cast<unsigned long>(timeBudgetMs))
+        break;
+}
+```
+
+**Use `Clock::timeMs()`** (`Clock.cpp:440-446`) — already included, ms resolution, no new library dep. `PerformanceTimer` would pull in `sharedDebug` from `sharedFile`.
+
+**Do not check before starting a callback** to "save" budget — the stall IS the callback (100–800 ms per evidence). Mid-callback preemption is out of scope.
+
+**Worst-case floor:** one heavy callback can still blow the watchdog threshold; time budget caps *aggregate* per-frame drain, same structural limit as count=1.
+
+### Postponed-requests block (`:691-702`) — must still run on early break
+
+```691:702:src/engine/shared/library/sharedFile/src/shared/AsynchronousLoader.cpp
+	{
+		ms_mutex.enter();
+			int postponed = ms_numberOfPostponedRequests;
+			ms_numberOfPostponedRequests = 0;
+		ms_mutex.leave();
+
+		while (postponed)
+		{
+			ms_eventsPending.signal();
+			postponed--;
+		}
+	}
+```
+
+This is **outside** the drain loop and **unrelated** to callback count/time limits. When worker sees `ms_numberOfCachedBytes > 8 MiB` (`:445-448`), it increments `ms_numberOfPostponedRequests` and blocks on `ms_eventsPending.wait()` without dequeuing the pending request. After main-thread callbacks drop cached bytes, this block re-signals the worker.
+
+**Must run every `processCallbacks()` call**, including when the drain loop breaks early — otherwise worker can stall indefinitely under memory pressure even though main thread stopped draining.
+
+### `bytes` / `ms_numberOfCachedBytes` accounting
+
+Per-request `bytes` local (`:607`) tracks file sizes for this retirement. Subtracted from `ms_numberOfCachedBytes` under mutex at `:680`. Unprocessed completed requests keep their worker-added bytes (`:559`) until retired — correct coupling to postpone threshold. Early break does not desync this.
+
+---
+
+## 4. STARVATION & SHUTDOWN
+
+### FIFO across frames
+
+- `ms_completedRequests`: worker `push_back` (`:553`), drain `pop_front` (`:603`) → **FIFO preserved**.
+- Early break leaves remainder at the front; next frame continues with oldest first. **No starvation** under steady production.
+
+### Shutdown / force-drain paths — **existing hazard with ANY budget**
+
+**`remove()`** (`:234-255`) loops:
+
+```cpp
+while (!empty) {
+    Os::sleep(250);
+    AsynchronousLoader::processCallbacks();  // :250 — respects count budget at :589!
+    ...
+}
+```
+
+With `asynchronousLoaderCallbacksPerFrame > 0`, shutdown can take unbounded wall time (same for a new time budget).
+
+**`SwgCuiCommandParserScene.cpp:1382-1383`**: `while (!isIdle()) processCallbacks()` — same hang if budget is enabled.
+
+**Mitigation (flag in proposal below):** bypass budgets when draining to completion.
+
+### `disable()` / `enable()`
+
+Nested refcount at `:308-318`. `add()` fatals if disabled (`:359`). **`processCallbacks()` does not check `isEnabled()`** — completed work from before disable still drains. GroundScene toggles disable around sync player load (`GroundScene.cpp:938-945`, `:1040-1047`).
+
+---
+
+## Minimal-diff proposal: time-budgeted drain
+
+### Config (mirror count key)
+
+`ConfigSharedFile.cpp:43` pattern:
+
+```cpp
+KEY_INT(asynchronousLoaderCallbackTimeBudgetMs, 0);  // 0 = unlimited
+```
+
+Expose getter in `ConfigSharedFile.h` / `.cpp`.
+
+### `processCallbacks()` changes (`AsynchronousLoader.cpp`)
+
+```cpp
+namespace {
+    bool ms_drainAllCallbacks = false;  // file-static, set only by remove()
+}
+
+void AsynchronousLoaderNamespace::remove()
+{
+    ms_drainAllCallbacks = true;
+    // ... existing shutdown loop ...
+    ms_drainAllCallbacks = false;
+}
+
+void AsynchronousLoader::processCallbacks()
+{
+    // ... debug suspend block :573-583 ...
+
+    int const callbacksAllowed = ms_drainAllCallbacks ? 0
+        : ConfigSharedFile::getAsynchronousLoaderCallbacksPerFrame();
+    int const timeBudgetMs = ms_drainAllCallbacks ? 0
+        : ConfigSharedFile::getAsynchronousLoaderCallbackTimeBudgetMs();
+
+    unsigned long const drainStartMs = (timeBudgetMs > 0) ? Clock::timeMs() : 0;
+
+    for (;;)
+    {
+        // ... existing :594-684 unchanged ...
+
+        if (!ms_drainAllCallbacks)
+        {
+            if (callbacksAllowed && --callbacksAllowed == 0)
+                break;
+            if (timeBudgetMs > 0
+                && (Clock::timeMs() - drainStartMs) >= static_cast<unsigned long>(timeBudgetMs))
+                break;
+        }
+    }
+
+    // ... existing postponed block :691-702 UNCHANGED, always runs ...
+}
+```
+
+(`callbacksAllowed == 0` keeps current unlimited semantics via `:686`'s `callbacksAllowed &&`.)
+
+### Suggested starting values
+
+Evidence: ~10 stalls of 100–800 ms over ~10 s post-entry; median frame 10 ms. A **4–8 ms** time budget spreads burst load across many frames while keeping audio pump alive. Tune alongside optional `asynchronousLoaderCallbacksPerFrame` cap (e.g. 2–4) as a backstop for pathological single callbacks.
+
+### Hazards flagged
+
+| Hazard | Severity | Notes |
+|--------|----------|-------|
+| Single callback > budget | **Expected** | Cannot fix without splitting `load()` — out of scope |
+| Shutdown/spin-wait with budget | **High** | Pre-existing for count budget; fix with `ms_drainAllCallbacks` in `remove()`; optionally same flag for `SwgCuiCommandParserScene` spin |
+| Postponed block skipped | **Fatal** if regressed | Keep `:691-702` outside break |
+| Shared `alreadyCached` skip | **Low** | Pre-existing; early-break doesn't worsen |
+| Callback re-enqueues (`SkeletalMesh` retry) | **Low** | Safe; goes to pending tail |
+| Worker completes during drain | **Low** | Same-frame pickup OK; time check after each iteration bounds wall time |
+
+No shared-header ABI change; no renderer-specific code. Matches `ClientInteriorLayoutManager` throttle precedent (`maxInteriorCreatesPerFrame`, `ClientInteriorLayoutManager.cpp:75-87`) but uses wall time because callback cost variance dwarfs count.
