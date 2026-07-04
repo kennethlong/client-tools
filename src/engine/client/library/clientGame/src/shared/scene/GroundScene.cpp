@@ -2086,6 +2086,10 @@ void GroundScene::updateLoading()
 		if (clientProceduralTerrainAppearance)
 			IGNORE_RETURN (clientProceduralTerrainAppearance->updateTerrainWarmup ());
 
+		//-- CONSULT-60: pump the phased world-snapshot parse (node tree +
+		//   buildout tables + sphere tree) under its per-frame budget
+		WorldSnapshot::loadStep();
+
 		//-- CONSULT-59: warm queued localized-name string tables while the
 		//   loading screen is up (they otherwise load synchronously from disk
 		//   inside the UI render path on first target of a type)

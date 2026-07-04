@@ -155,6 +155,7 @@ namespace ConfigClientGameNamespace
 	bool            ms_autoInviteReject;
 
 	bool            ms_preloadWorldSnapshot;
+	int             ms_worldSnapshotParseBudgetMs;
 
 	float           ms_hackMovementSpeed;
 
@@ -1115,6 +1116,13 @@ void ConfigClientGame::install(void)
 
 	KEY_BOOL(preloadWorldSnapshot, shouldPreloadWorldSnapshot);
 
+	// CONSULT-60: per-frame time budget (ms) for the phased world-snapshot load
+	// (node parse + buildout tables + sphere tree), pumped during the loading
+	// screen. The old behavior -- the whole parse synchronous inside the
+	// GroundScene constructor (~3s frame, watchdog-convicted 2026-07-04) -- is
+	// restored by <= 0.
+	KEY_INT(worldSnapshotParseBudgetMs, 40);
+
 	KEY_FLOAT  (hackMovementSpeed,         1.0f);
 
 	KEY_BOOL   (profanityFiltered,         true);
@@ -1261,6 +1269,13 @@ const uint16 ConfigClientGame::getTaskConnectionPort()
 bool ConfigClientGame::getAutoInviteReject ()
 {
 	return ms_autoInviteReject;
+}
+
+//----------------------------------------------------------------------
+
+int ConfigClientGame::getWorldSnapshotParseBudgetMs()
+{
+	return ms_worldSnapshotParseBudgetMs;
 }
 
 //----------------------------------------------------------------------

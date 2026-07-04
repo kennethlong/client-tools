@@ -42,6 +42,7 @@
 #include "sharedUtility/DataTable.h"
 #include <algorithm>
 #include <limits>
+#include <set>
 
 //===================================================================
 
@@ -113,13 +114,40 @@ namespace WorldSnapshotNamespace
 	int  ms_numberOfObjectTemplates;
 
 	const float ms_closeToOriginDistance = 10.f;
-	float const cms_callbackTime = 1.f;
+	// CONSULT-61: was 1.f -- a full SECOND of synchronous template preloading per
+	// loading-screen frame (watchdog-convicted 1.38s frame, stall-loop1168). The
+	// audio mixer's queue cannot ride out back-to-back 1s frames; 50ms slices do
+	// the same total work across more frames and keep music fed.
+	float const cms_callbackTime = 0.05f;
 
 	CellProperty const * ms_lastCellProperty;
 	Vector ms_lastPosition_w (0.f, -9999.f, 0.f);
 	float ms_updateDistanceSquared;
 	int ms_maximumNumberOfCreatesPerFrame = 1000;
 	int ms_maximumNumberOfDeletesPerFrame = 1000;
+
+	//-- CONSULT-60: phased load state. WorldSnapshot::load() used to parse the
+	//   whole .ws + all buildout tables synchronously inside the GroundScene
+	//   constructor (watchdog-convicted 3.1s frame, 2026-07-04). The heavy work
+	//   now runs in budgeted loadStep() calls; these cursors persist between
+	//   frames. ms_parsePending gates donePreloading()/getLoadingPercent() (the
+	//   preload counters are 0 mid-parse and would otherwise read as done).
+	enum ParsePhase
+	{
+		PP_wsNodes,
+		PP_buildout,
+		PP_sphereTree,
+		PP_done
+	};
+	ParsePhase ms_parsePhase = PP_done;
+	bool ms_parsePending = false;
+	Iff* ms_parseIff = 0;
+	int  ms_buildoutAreaIndex = 0;
+	int  ms_sphereNodeIndex = 0;
+	std::set<int64> ms_buildoutObjects;
+
+	void loadOneBuildoutArea (const BuildoutArea& buildoutArea);
+	void finishLoadNow ();
 
 	//------------------------------------------------------------------------------------------------------------------
 
@@ -364,6 +392,21 @@ void WorldSnapshot::remove ()
 
 void WorldSnapshot::unload ()
 {
+	//-- CONSULT-60: cancel any in-flight phased parse (quit during loading /
+	//   startScene->startScene). Partial reader state is torn down by the
+	//   existing body below; nodes not yet in the sphere tree have a null
+	//   spatial handle and are skipped by the removal loop.
+	if (ms_parseIff)
+	{
+		delete ms_parseIff;
+		ms_parseIff = 0;
+	}
+	ms_parsePending = false;
+	ms_parsePhase = PP_done;
+	ms_buildoutAreaIndex = 0;
+	ms_sphereNodeIndex = 0;
+	ms_buildoutObjects.clear ();
+
 	//-- clear out the preloaded object templates
 	{
 		uint i;
@@ -415,8 +458,6 @@ void WorldSnapshot::unload ()
 
 void WorldSnapshot::load (char const *sceneName)
 {
-	const int cs_sharedCellObjectTemplate_tag = 0x0c5401ee;
-
 	NOT_NULL(sceneName);
 
 	//-- clear the current snapshot
@@ -435,6 +476,11 @@ void WorldSnapshot::load (char const *sceneName)
 	ms_sceneName = sceneName;
 	unload ();
 
+	//-- CONSULT-60: cheap prologue only. The node parse, per-area buildout
+	//   tables, and sphere-tree build all run in budgeted loadStep() calls
+	//   pumped from GroundScene's loading update -- the old synchronous body
+	//   froze the main loop ~3s inside the GroundScene constructor, BEFORE the
+	//   loading screen was even enabled.
 
 #if PRODUCTION
 	//always do block below [if ( true )]
@@ -442,24 +488,55 @@ void WorldSnapshot::load (char const *sceneName)
 	if ( ConfigClientGame::getLoadBuildoutOnly() == false )
 #endif
 	{
-		if ( !ms_reader.load (sceneName))
+		char filename[256];
+		IGNORE_RETURN(snprintf(filename, sizeof(filename)-1, "snapshot/%s.ws", sceneName));
+		filename[sizeof(filename)-1] = '\0';
+
+		ms_parseIff = new Iff;
+		if (ms_parseIff->open (filename, true))
 		{
+			if (!ms_reader.beginIncrementalLoad (*ms_parseIff))
+			{
+				delete ms_parseIff;
+				ms_parseIff = 0;
+			}
+		}
+		else
+		{
+			delete ms_parseIff;
+			ms_parseIff = 0;
+
 			//-- only warn if we don't have a buildout and are not in a space scene
 			if (strncmp(sceneName, "space_", 6))
 				DEBUG_WARNING (!SharedBuildoutAreaManager::isBuildoutScene(sceneName), ("WorldSnapshot::load - could not load %s", sceneName));
 		}
 	}
 
-	std::set< int64 > buildoutObjects;
-
-	//-- load area buildouts
+	//-- the buildout-area LIST loads synchronously -- GroundScene::init reads
+	//   it (getBuildoutNameForPosition) right after postload; only the per-area
+	//   object tables are deferred
 	SharedBuildoutAreaManager::load(sceneName);
-	const std::vector<BuildoutArea> &buildoutAreas = SharedBuildoutAreaManager::getBuildoutAreasForCurrentScene();
 
-	for (std::vector<BuildoutArea>::const_iterator buildoutAreaIter = buildoutAreas.begin(); buildoutAreaIter != buildoutAreas.end(); ++buildoutAreaIter)
+	ms_buildoutObjects.clear ();
+	ms_buildoutAreaIndex = 0;
+	ms_sphereNodeIndex = 0;
+	ms_parsePhase = ms_parseIff ? PP_wsNodes : PP_buildout;
+	ms_parsePending = true;
+
+	//-- budget <= 0 restores the old fully-synchronous load
+	if (ConfigClientGame::getWorldSnapshotParseBudgetMs () <= 0)
+		finishLoadNow ();
+}
+
+//-------------------------------------------------------------------
+
+void WorldSnapshotNamespace::loadOneBuildoutArea (const BuildoutArea& buildoutArea)
+{
+	const int cs_sharedCellObjectTemplate_tag = 0x0c5401ee;
+	const char* const sceneName = ms_sceneName.c_str ();
+	std::set< int64 > &buildoutObjects = ms_buildoutObjects;
+
 	{
-		const BuildoutArea &buildoutArea = *buildoutAreaIter;
-
 		char areaFilename[256];
 		IGNORE_RETURN(snprintf(areaFilename, sizeof(areaFilename)-1, "datatables/buildout/%s/%s.iff", sceneName, buildoutArea.areaName.c_str()));
 		areaFilename[sizeof(areaFilename)-1] = '\0';
@@ -661,37 +738,120 @@ void WorldSnapshot::load (char const *sceneName)
 		}
 	}
 
-	//-- add all objects to the sphere tree
-	{
-		const int n = ms_reader.getNumberOfNodes ();
-		int i;
-		for (i = 0; i < n; ++i)
-		{
-			const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
+}
 
-			//
-			// if the object is not a buildout object
-			// or the object is a top level object
-			// then add it to the sphere tree
-			//
-			const bool isSinglePlayer = Game::getSinglePlayer();
-			if ( isSinglePlayer
-				|| isInSet( buildoutObjects, node->getNetworkIdInt() ) == false 
-				|| ( node->getPortalLayoutCrc() == 0 && node->getContainedByNetworkIdInt() == 0 ) )
+//-------------------------------------------------------------------
+
+void WorldSnapshotNamespace::finishLoadNow ()
+{
+	//-- CONSULT-60 exactness valve: run the remaining parse to completion
+	//   synchronously. Callers use this when they need complete snapshot data
+	//   mid-parse; worst case degrades to the old synchronous-load cost.
+	while (ms_parsePending)
+		WorldSnapshot::loadStep ();
+}
+
+//-------------------------------------------------------------------
+
+void WorldSnapshot::loadStep ()
+{
+	if (!ms_parsePending)
+		return;
+
+	float const budgetMs = static_cast<float> (ConfigClientGame::getWorldSnapshotParseBudgetMs ());
+
+	PerformanceTimer timer;
+	timer.start ();
+
+	for (;;)
+	{
+		switch (ms_parsePhase)
+		{
+		case PP_wsNodes:
 			{
-				node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+				NOT_NULL (ms_parseIff);
+
+				float stepBudgetMs = 0.f;
+				if (budgetMs > 0.f)
+				{
+					stepBudgetMs = budgetMs - timer.getSplitTime () * 1000.f;
+					if (stepBudgetMs <= 0.f)
+						return;
+				}
+
+				if (ms_reader.stepIncrementalLoad (*ms_parseIff, stepBudgetMs))
+				{
+					//-- the Iff holds the whole .ws in RAM -- release it the
+					//   moment the parse is done (the later phases don't need it)
+					delete ms_parseIff;
+					ms_parseIff = 0;
+					ms_parsePhase = PP_buildout;
+				}
 			}
-			
+			break;
+
+		case PP_buildout:
+			{
+				const std::vector<BuildoutArea> &buildoutAreas = SharedBuildoutAreaManager::getBuildoutAreasForCurrentScene();
+				if (ms_buildoutAreaIndex < static_cast<int> (buildoutAreas.size ()))
+				{
+					loadOneBuildoutArea (buildoutAreas [static_cast<size_t> (ms_buildoutAreaIndex)]);
+					++ms_buildoutAreaIndex;
+				}
+				else
+					ms_parsePhase = PP_sphereTree;
+			}
+			break;
+
+		case PP_sphereTree:
+			{
+				//-- add all objects to the sphere tree (chunked by node index)
+				int const numberOfNodes = ms_reader.getNumberOfNodes ();
+				int const batchEnd = std::min (ms_sphereNodeIndex + 4096, numberOfNodes);
+				for (; ms_sphereNodeIndex < batchEnd; ++ms_sphereNodeIndex)
+				{
+					const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (ms_sphereNodeIndex);
+
+					//
+					// if the object is not a buildout object
+					// or the object is a top level object
+					// then add it to the sphere tree
+					//
+					const bool isSinglePlayer = Game::getSinglePlayer();
+					if ( isSinglePlayer
+						|| isInSet( ms_buildoutObjects, node->getNetworkIdInt() ) == false
+						|| ( node->getPortalLayoutCrc() == 0 && node->getContainedByNetworkIdInt() == 0 ) )
+					{
+						node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+					}
+				}
+
+				if (ms_sphereNodeIndex >= numberOfNodes)
+				{
+					if (ms_reader.getNumberOfNodes ())
+						DEBUG_REPORT_LOG (true, ("WorldSnapshot [%s]: %i object templates, %i root objects, %i total objects\n", ms_sceneName.c_str (), ms_reader.getNumberOfObjectTemplateNames (), ms_reader.getNumberOfNodes (), ms_reader.getTotalNumberOfNodes ()));
+
+					ms_parsePhase = PP_done;
+				}
+			}
+			break;
+
+		case PP_done:
+			{
+				ms_buildoutObjects.clear ();
+
+				//-- setup to preload all the object templates
+				ms_numberOfObjectTemplates = ms_reader.getNumberOfObjectTemplateNames ();
+				ms_preloadObjectTemplate = 0;
+				ms_parsePending = false;
+				preloadSomeAssets ();
+			}
+			return;
 		}
 
-		if (ms_reader.getNumberOfNodes ())
-			DEBUG_REPORT_LOG (true, ("WorldSnapshot [%s]: %i object templates, %i root objects, %i total objects\n", sceneName, ms_reader.getNumberOfObjectTemplateNames (), ms_reader.getNumberOfNodes (), ms_reader.getTotalNumberOfNodes ()));
+		if (budgetMs > 0.f && timer.getSplitTime () * 1000.f >= budgetMs)
+			return;
 	}
-
-	//-- setup to preload all the object templates
-	ms_numberOfObjectTemplates = ms_reader.getNumberOfObjectTemplateNames ();
-	ms_preloadObjectTemplate = 0;
-	preloadSomeAssets ();
 }
 
 //-------------------------------------------------------------------
@@ -705,6 +865,10 @@ void WorldSnapshot::setExcludeArea(char const *areaName)
 
 void WorldSnapshot::preloadSomeAssets ()
 {
+	//-- CONSULT-60: template names are not complete until the parse finishes
+	if (ms_parsePending)
+		return;
+
 	if (ConfigClientGame::getPreloadWorldSnapshot())
 	{
 		PerformanceTimer preloadTimer;
@@ -749,6 +913,10 @@ void WorldSnapshot::preloadSomeAssets ()
 
 int WorldSnapshot::getLoadingPercent ()
 {
+	//-- CONSULT-60: mid-parse the preload counters are 0 and would read as 100
+	if (ms_parsePending)
+		return 0;
+
 	if (! ConfigClientGame::getPreloadWorldSnapshot () || !ms_numberOfObjectTemplates)
 		return 100;
 
@@ -759,6 +927,11 @@ int WorldSnapshot::getLoadingPercent ()
 
 bool WorldSnapshot::donePreloading ()
 {
+	//-- CONSULT-60: hold the loading screen until the phased parse completes
+	//   (mid-parse the counters are 0/0 and would otherwise read as done)
+	if (ms_parsePending)
+		return false;
+
 	if (!ConfigClientGame::getPreloadWorldSnapshot () || (ms_preloadObjectTemplate >= ms_numberOfObjectTemplates))
 		return true;
 
@@ -784,6 +957,11 @@ static bool compareNodesForDelete (const WorldSnapshotReaderWriter::Node* const 
 void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const & position_w)
 {
 	PROFILER_AUTO_BLOCK_DEFINE("WorldSnapshot::update");
+
+	//-- CONSULT-60: no snapshot object creation until the phased parse is done
+	//   (the sphere tree is only populated in the final parse phase)
+	if (ms_parsePending)
+		return;
 
 	if (ms_pendingCreateList.empty() && ms_pendingDeleteList.empty() && cellProperty == ms_lastCellProperty && ms_lastPosition_w.magnitudeBetweenSquared (position_w) < ms_updateDistanceSquared)
 		return;
@@ -1071,6 +1249,11 @@ void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const
 
 bool WorldSnapshot::isClientCached (const int64 networkIdInt)
 {
+	//-- CONSULT-60 exactness valve: a miss against the partial map could be a
+	//   not-yet-parsed node -- finish the parse before answering negatively
+	if (ms_parsePending && !ms_reader.find (networkIdInt))
+		finishLoadNow ();
+
 	return ms_reader.find (networkIdInt) != 0;
 }
 
@@ -1086,6 +1269,10 @@ Object* WorldSnapshot::addObject(
 	int              cellCount,
 	std::string const& requiredEvent)
 {
+	//-- CONSULT-60: editor/external mutators need the complete snapshot
+	if (ms_parsePending)
+		finishLoadNow ();
+
 	WorldSnapshotReaderWriter::Node const * const node = ms_reader.addObject(
 		networkIdInt,
 		containerIdInt,
@@ -1093,7 +1280,7 @@ Object* WorldSnapshot::addObject(
 		cellCount,
 		transform_p,
 		radius,
-		portalLayoutCrc, 
+		portalLayoutCrc,
 		requiredEvent);
 
 	// TODO: We probably don't want to load an object if the event required for that object isn't currently active.
@@ -1125,6 +1312,10 @@ Object* WorldSnapshot::addObject(
 
 void WorldSnapshot::moveObject(int64 networkIdInt, Transform const &transform_p)
 {
+	//-- CONSULT-60: the target node may not be parsed yet
+	if (ms_parsePending)
+		finishLoadNow ();
+
 	WorldSnapshotReaderWriter::Node * const node = ms_reader.find(networkIdInt);
 	if (node)
 	{
@@ -1138,6 +1329,11 @@ void WorldSnapshot::moveObject(int64 networkIdInt, Transform const &transform_p)
 
 void WorldSnapshot::removeObject (const int64 networkIdInt)
 {
+	//-- CONSULT-60: a mid-parse miss here would let the node parse in later
+	//   WITHOUT the delete (duplicate object) -- finish the parse first
+	if (ms_parsePending)
+		finishLoadNow ();
+
 	const WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
 	if (node && !node->isDeleted () && node->getSpatialSubdivisionHandle ())
 	{
@@ -1166,6 +1362,10 @@ void WorldSnapshot::setDetailLevelBias (const float detailLevelBias)
 
 void WorldSnapshot::detailLevelChanged ()
 {
+	//-- CONSULT-60: sphere-tree rebuild needs the complete node set
+	if (ms_parsePending)
+		finishLoadNow ();
+
 	//-- make sure we have objects
 	if (ms_reader.getNumberOfNodes () == 0)
 		return;
@@ -1209,6 +1409,14 @@ void WorldSnapshot::loadIfClientCached(NetworkId const &networkId)
 {
 	if (networkId.getValue() <= std::numeric_limits<int>::max()) // <- i have no idea why this is here
 	{
+		//-- CONSULT-60 exactness valve: baselines/containment can arrive while
+		//   the phased parse is still running (player logging in inside a
+		//   client-cached POB). A miss against the partial map must not become
+		//   a silent no-op -- finish the parse first, then answer exactly.
+		//   (The int-max guard above already excludes most live server ids.)
+		if (ms_parsePending && !ms_reader.find (networkId.getValue ()))
+			finishLoadNow ();
+
 		WorldSnapshotReaderWriter::Node const *node = ms_reader.find( networkId.getValue() ) ;
 		while (node && node->getParent())
 			node = node->getParent();
@@ -1226,6 +1434,10 @@ void WorldSnapshot::loadIfClientCached(NetworkId const &networkId)
 
 NetworkId WorldSnapshot::findClosestCellIdFromWorldPosition(Vector const & position_w)
 {
+	//-- CONSULT-60: the sphere tree is incomplete mid-parse
+	if (ms_parsePending)
+		finishLoadNow ();
+
 	NetworkId cellid = NetworkId::cms_invalid;
 	
 	NodeList objects;
