@@ -26,6 +26,7 @@ namespace ConfigDirect3d11Namespace
 	char const * ms_shaderCacheDir;
 	bool         ms_enableDebugLayer;
 	int          ms_preferredAdapterIndex;
+	bool         ms_preventDriverInternalThreading;
 }
 using namespace ConfigDirect3d11Namespace;
 
@@ -61,6 +62,12 @@ void ConfigDirect3d11::install()
 	KEY_BOOL(enableDebugLayer, false);
 #endif
 	KEY_INT (preferredAdapterIndex, -1);
+
+	// CONSULT-51 NV worker-thread race defeat (D3D11_CREATE_DEVICE_PREVENT_INTERNAL_
+	// THREADING_OPTIMIZATIONS). Default TRUE -- turning it off re-exposes the nvwgf2um
+	// zone-in crash race; false is for perf A/B ONLY (the flag throttles the driver's
+	// internal threading and is the prime suspect for gl11 frame-rate pressure, 2026-07-03).
+	KEY_BOOL(preventDriverInternalThreading, true);
 }
 
 // ----------------------------------------------------------------------
@@ -74,5 +81,6 @@ bool ConfigDirect3d11::getAntiAlias()                                 { return m
 char const * ConfigDirect3d11::getShaderCacheDir()                    { return ms_shaderCacheDir; }
 bool         ConfigDirect3d11::getEnableDebugLayer()                  { return ms_enableDebugLayer; }
 int          ConfigDirect3d11::getPreferredAdapterIndex()             { return ms_preferredAdapterIndex; }
+bool         ConfigDirect3d11::getPreventDriverInternalThreading()    { return ms_preventDriverInternalThreading; }
 
 // ======================================================================

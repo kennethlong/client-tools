@@ -426,7 +426,11 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed, 
 	// the runtime NOT to create those internal driver worker threads, giving the debug layer's
 	// race-immunity in production at a fraction of the cost (no validation, no log). gl05/D3D9 is
 	// immune because it has no such async resource-dependency worker model.
-	createDeviceFlags |= D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
+	// Config-gated 2026-07-03 ([Direct3d11] preventDriverInternalThreading, default TRUE):
+	// the flag also throttles the driver's internal threading and is the prime suspect for
+	// gl11 frame-rate pressure. false = perf A/B ONLY -- it re-exposes the crash race.
+	if (ConfigDirect3d11::getPreventDriverInternalThreading())
+		createDeviceFlags |= D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
 
 #ifdef _DEBUG
 	if (ConfigDirect3d11::getEnableDebugLayer())
