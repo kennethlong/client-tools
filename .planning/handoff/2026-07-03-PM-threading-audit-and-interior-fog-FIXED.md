@@ -87,6 +87,39 @@ gl05: no stutter, no snap, no redraw anomalies — strictly better than retail o
 renderer** (door-snap fix + FPU_PRESERVE + WDDM present/allowTearing work all validated against
 the reference). The remaining gap is gl11-only.
 
+## Late-evening addendum 2 — CONSULT-58: the gl11 ring-fix WIN (19x hitch collapse)
+
+Kenny greenlit "get D3D11 past D3D9". Three scouts mapped the churn (reports summarized in the
+commit messages): the VB/IB rings were NO_OVERWRITE-correct in POLICY but **gl11's ring advanced
+the cursor by the LOCKED upper bound at lock() instead of the ACTUAL count at unlock() (D3D9
+commits at unlock)** — CuiLayerRenderer locks ALL remaining ring space per UI batch, so batch #1
+exhausted the ring's accounting and every subsequent dynamic lock was a WRITE_DISCARD rename.
+Also: cbuffers = 4-6 full-1152B DISCARDs/draw; all gl11 metrics were triple-dead (_DEBUG +
+never-incremented + never-called); gl11's beginScene never called any beginFrame (gl05 does).
+
+**Landed (`d09a62198` ring fix + census, `735cea241` creation census, `23fb9e99c` evidence):**
+ring commit-at-unlock (D3D9 parity); [Direct3d11] censusLog → per-frame gl11-census.csv
+(frameMs QPC, draws, per-slot cbuffer Maps, VB/IB locks/discards, + creates: tex/staging/
+shader/layout); beginScene now calls the beginFrame chain; discardDynamicBuffersAtBeginningOfFrame
+honored (default false).
+
+**Measured (CSVs committed in .planning/research/CONSULT-58-census-*):**
+- Ring fix: 36 vbLocks/frame → **0.05 discards/frame** (was structurally ~1/lock). setLights
+  measured TAME (0.6/frame — scout prediction wrong); vsB0 (per-draw WVP flush, ~33/frame) is
+  the remaining, idiomatic, top cbuffer source.
+- flag ON: median 12.9ms, 11.3% frames >20ms. **flag OFF + ring fix: median 9.6ms, p99 18.7,
+  0.6% >20ms — 19x hitch-rate collapse, 9.5 min, NO NV crash.** gl11 steady-state now at/above gl05.
+- Hitch frames have counters IDENTICAL to normal frames → residual pauses (9 >100ms in 9.5min,
+  all load-class: cantina cold-entry cluster + rare zone-stream one-offs) are NOT Map churn.
+  Audio pops ride the same stalls.
+
+**Current local state:** stage/client.cfg runs gl11 + censusLog=true + preventDriverInternalThreading=
+**false** (the soak config). Code default for the flag remains TRUE — flip only after several clean
+sessions incl. zone-ins (crash writes a real mdmp now). Next engineering: read creation-census
+columns from organic play → convict the cold-load pauses (texture/shader creation vs non-graphics),
+then either pre-warm or off-thread creation. vsB0 NO_OVERWRITE cbuffer ring (needs D3D11.1 feature
+probe — none exists yet) only if more margin is wanted.
+
 ## OPEN / next
 
 - **Two follow-up todos filed 2026-07-03** (plans being drafted):

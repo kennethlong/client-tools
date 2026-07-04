@@ -2,7 +2,13 @@
 created: 2026-07-03
 title: gl11 Map(WRITE_DISCARD) churn reduction — re-enable NV driver threading safely
 area: client graphics / Direct3d11 / performance
-status: backlog
+status: MOSTLY DELIVERED 2026-07-03 evening (CONSULT-58) — the churn root cause was the VB ring
+  advancing its cursor by the locked UPPER BOUND instead of the actual count at unlock (D3D9
+  parity fix, d09a62198): 19x hitch-rate collapse, gl11 median 9.6ms with driver threading
+  re-enabled, no crash in 9.5 min. REMAINING before closing: (1) multi-session flag-off soak with
+  zone-ins → then flip the code default of preventDriverInternalThreading to false; (2) convict
+  the residual cold-load pauses via the creation-census columns (735cea241) from organic play;
+  (3) optional margin: vsB0 NO_OVERWRITE cbuffer ring (D3D11.1 feature probe needed).
 priority: medium-high (the last gap between gl11 and the butter-smooth gl05 baseline)
 references:
   - the conviction: 2026-07-03 Test 4 — [Direct3d11] preventDriverInternalThreading=false made
