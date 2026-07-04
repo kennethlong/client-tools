@@ -21,6 +21,7 @@
 #include "clientGame/ClientEffectManager.h"
 #include "clientGame/ClientInteriorLayoutManager.h"
 #include "clientGame/ClientMissionObject.h"
+#include "clientGame/ClientObject.h"
 #include "clientGame/ClientObjectTerrainModificationNotification.h"
 #include "clientGame/ClientPathObject.h"
 #include "clientGame/ClientSecureTradeManager.h"
@@ -2078,6 +2079,18 @@ void GroundScene::updateLoading()
 	}
 	else
 	{
+		//-- CONSULT-59: pump the budgeted terrain warm-up during the loading
+		//   screen (terrain alter also pumps it; this guarantees progress even
+		//   on frames where the terrain object is not altered)
+		ClientProceduralTerrainAppearance * const clientProceduralTerrainAppearance = dynamic_cast<ClientProceduralTerrainAppearance *> (TerrainObject::getInstance ()->getAppearance ());
+		if (clientProceduralTerrainAppearance)
+			IGNORE_RETURN (clientProceduralTerrainAppearance->updateTerrainWarmup ());
+
+		//-- CONSULT-59: warm queued localized-name string tables while the
+		//   loading screen is up (they otherwise load synchronously from disk
+		//   inside the UI render path on first target of a type)
+		ClientObject::preloadSomeLocalizedNameTables (20.f);
+
 		WorldSnapshot::preloadSomeAssets();
 		bool const isSpace = Game::isSpace();
 		if (isSpace)

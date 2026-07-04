@@ -69,6 +69,14 @@ public:
 	static void install (bool viewer);
 	static ClientObject * findClientObjectByUniqueId (uint32 id);
 
+	// CONSULT-59: localized-name string tables were loaded synchronously from
+	// disk on first use INSIDE the UI render path (620ms stall on target
+	// change, watchdog-convicted 2026-07-04). Objects queue their name table
+	// at endBaselines; GroundScene's loading pump prefetches the queue under a
+	// time budget so the tables are warm before the loading screen drops.
+	static void queueLocalizedNameTablePrefetch (const StringId & stringId);
+	static void preloadSomeLocalizedNameTables (float budgetMs);
+
 public:	
 
 	explicit ClientObject (const SharedObjectTemplate* newTemplate, const ObjectNotification &notification = ClientWorld::getTangibleNotification());

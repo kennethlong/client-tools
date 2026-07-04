@@ -64,10 +64,12 @@
 #include "sharedObject/LayerProperty.h"
 #include "sharedObject/VolumeContainer.h"
 #include "sharedObject/VolumeContainmentProperty.h"
+#include "sharedDebug/PerformanceTimer.h"
 #include "sharedRandom/RandomGenerator.h"
 #include "swgSharedUtility/States.h"
 
 #include <algorithm>
+#include <set>
 
 //----------------------------------------------------------------------
 
@@ -113,6 +115,11 @@ namespace ClientObjectNamespace
 	Unicode::String s_invalidTargetString;
 	float const INVALID_TARGET_ENFORCE_DELAY = 0.1f;
 
+	// CONSULT-59: name string tables queued for prefetch (s_requestedNameTables
+	// dedupes across the session; s_pendingNameTables is the not-yet-loaded set)
+	std::set<std::string> s_pendingNameTables;
+	std::set<std::string> s_requestedNameTables;
+
 	// ----------------------------------------------------------------------------
 	bool isAlpha(Unicode::unicode_char_t const character)
 	{
@@ -129,6 +136,42 @@ namespace ClientObjectNamespace
 }
 
 using namespace ClientObjectNamespace;
+
+//-----------------------------------------------------------------------
+
+void ClientObject::queueLocalizedNameTablePrefetch (const StringId & stringId)
+{
+	const std::string & table = stringId.getTable ();
+	if (table.empty ())
+		return;
+
+	if (s_requestedNameTables.insert (table).second)
+		IGNORE_RETURN (s_pendingNameTables.insert (table));
+}
+
+//-----------------------------------------------------------------------
+
+void ClientObject::preloadSomeLocalizedNameTables (float const budgetMs)
+{
+	if (s_pendingNameTables.empty ())
+		return;
+
+	PerformanceTimer timer;
+	timer.start ();
+
+	while (!s_pendingNameTables.empty ())
+	{
+		std::set<std::string>::iterator const iter = s_pendingNameTables.begin ();
+		//-- public fetch memoizes the table in the manager's map (the manager
+		//   holds its own reference until an explicit purge), so the later
+		//   getLocalizedName is a pure map hit
+		IGNORE_RETURN (LocalizationManager::getManager ().fetchStringTable (*iter));
+		s_pendingNameTables.erase (iter);
+
+		if (budgetMs > 0.f && timer.getSplitTime () * 1000.f >= budgetMs)
+			break;
+	}
+}
 
 //-----------------------------------------------------------------------
 
@@ -685,6 +728,12 @@ void ClientObject::endBaselines()
 
 	setBeginBaselines(false);
 	m_initialized = true;
+
+	//-- CONSULT-59: the object's localized-name table is knowable here (post-
+	//   baseline, so server-overridden StringIds are settled). Queue it so the
+	//   loading pump warms it before the UI's first getLocalizedName.
+	if (m_objectName.get().empty() && !m_nameStringId.get().isInvalid())
+		queueLocalizedNameTablePrefetch(m_nameStringId.get());
 
 	VolumeContainmentProperty * const vcp = ContainerInterface::getVolumeContainmentProperty (*this);
 	if (vcp)
