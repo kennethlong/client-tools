@@ -1,3 +1,37 @@
+# 2026-07-04 CONTEXT-CLEAR checkpoint — load-stall + audio arc (CONSULT-59/60/61/62)
+
+**READ FIRST after context clear — SECOND CLEAR, EVENING STATE (supersedes the morning
+intro below; rounds 1-14 recorded chronologically in this file).**
+
+**COMMITTED through `35d0786e2`** (morning waves + timer-resolution/lazy-envblock/
+CONSULT-62 docs — 6 commits today, local, NOT pushed).
+**UNCOMMITTED (evening rounds 7-9, all built clean, staged exe 7:53 PM, live-tested):**
+GameMusicManager day-flip gate + Sound2d getFade phantom-duration guard + VOLZERO/
+STOPSOUND/CATVOL/DUCK/EOS/EOSPOLL/OPENCALL/CLOSE diag suite + s_backgroundMusicFadeVolume
+duck fix (VERIFIED: first no-mute session in 23) + stream-EOS POLL (VERIFIED working;
+Miles' stream EOS callback is CONFIRMED DEAD — EOSPOLL fires, EOS never does).
+**Commit this set first thing next session (Kenny approved the arc, exact files in §14).**
+
+**WHERE THE HUNT STANDS:** every engine-side mechanism is now fixed or eliminated. The
+music pipeline is healthy: theme plays full-length (the .snd is a MULTI-SAMPLE playlist —
+theme → mus_theme_generic_c 16ms after EOSPOLL). TWO residuals:
+(1) **Crackle storm — Kenny's 3-run experiment + rebuild-verify isolated it to: one-shot
+sounds TRIGGERED within the window of an MP3 music-track TRANSITION (old stream release +
+next stream open/prime), even with prompt release.** Repro: zone in, trigger cantina door
+as the theme ends (~35s). Engine probes see NOTHING (0ms calls, no starvation, no stalls).
+⇒ Miles-internal teardown/prime-vs-start collision. NEXT LEVER: instrumented mss32 from
+the vendored 9.3b SDK (D:\Code\milesss-v9.3b, Phase-35 asset) or CONSULT-63 with the
+5-consultant crew (Fable now added to CLAUDE.md as adversarial synthesis/mechanism-closer)
+handing them the crisp repro + this file's eliminations as LOCKED.
+(2) **Load-in dips (cosmetic):** DUCK lines show the zone-in global duck (nonBg count,
+rate 10) superimposed on the title's own 1s manual fade = 2-3 audible attenuation steps.
+Candidate fix: skip the global duck for sounds already manual-fading, or slow the duck's
+fadeOutRate. Backlog.
+
+---
+
+# (morning intro below — historical)
+
 # 2026-07-04 CONTEXT-CLEAR checkpoint — load-stall + audio arc (CONSULT-59/60/61)
 
 **READ FIRST after context clear.** One marathon session: Kenny's morning symptom
@@ -342,3 +376,143 @@ audible that stock hard-mutes → denser/louder soundscape. NEW config gate for 
 STARVED re-open artifacts vs live starvation (add stream-id/open-count to the diag
 line), then modest streamBufferBytes bump (mind 7/8-prime latency) or MSSAsync
 boost; (4) gl05 bytecode-cache port for the in-game click tail.
+
+---
+
+## 11. ROUND 7 (07-04 evening) — probe escalation on the mute + EOF crackle storm
+
+State of play after many instrumented runs (sessions 15-19 in audio-diag.log):
+- 5:07 baseline confirmed good by Kenny; committed (9a9d718e3/f988d3f76/35d0786e2).
+- Diag now logs OPEN/OPENCALL(+duration)/CLOSE(+duration)/STARVED(+stream ptr)/
+  VOLSTEP/STOPSOUND(+template,+fade)/CATVOL edges. ALL open/close calls measure 0ms.
+- **CLEARED:** stream teardown cost; end-of-track st=2 transition (clean, silent);
+  "live refill starvation" (was a same-pointer close→reopen artifact — Miles reuses
+  stream slots instantly; the CLOSE lines exposed it).
+- **THE MUTE:** mus_theme VOLSTEP 0.750→0.000 at +6.6-9s after EVERY zone-in,
+  coupled with the day/night ambient re-trigger (server time-of-day sync flips
+  isDay() mid-load). GameMusicManager E_sunrise/E_sunset suppression for the first
+  15s of a scene (ms_sceneTime gate, LANDED) did NOT stop the mute → the sunset
+  event was NOT (or not the only) mechanism. Remaining suspects: GameMusicManager's
+  `!isSoundPlaying` re-pick branch (GameMusicManager.cpp:512 area), a category/
+  master volume application, or per-sound volume math. Round-7 attribution probes
+  (STOPSOUND + CATVOL) will name it next run.
+- **THE CRACKLE STORM (reproducible):** fires at the muted theme stream's EOF
+  (+34s = track end) every time; watchdog + engine probes see NOTHING at that
+  moment (0ms calls, no stalls, no starvation edges). The muted-but-never-released
+  theme keeps streaming to EOF; the sound is never released even after EOF (CLOSE
+  only at scene teardown) despite m_autoDelete defaulting true — the
+  Sound2d fade-complete → isPlaying(false) → isDeletable → purge chain breaks
+  somewhere (getSampleVolume readback? never-stopped-just-muted? attribution
+  probes will discriminate). If the mute is fixed so the theme plays audibly to
+  its natural end, the EOF handling changes wholesale; if the storm STILL fires
+  at a healthy EOF, the mechanism is inside Miles' mix path → next lever = build
+  instrumented mss32.dll from the vendored 9.3b SDK (Phase-35 asset).
+- Filed: .planning/todos/pending/2026-07-04-gl05-portal-see-through-intermittent.md
+  (2 sightings, self-clearing, no log signature).
+- UNCOMMITTED: GameMusicManager day-flip gate, diag extensions (OPEN/CLOSE/
+  OPENCALL/STOPSOUND/CATVOL), staged exe 6:49 PM.
+
+---
+
+## 12. ROUND 8 (07-04 ~7 PM) — THE LOAD-END MUSIC DIP CONVICTED (stale ducking fade)
+
+Elimination trail (each step landed + verified by the next run's log):
+sunset-event gate → mute persisted; getFade phantom-duration guard (Miles
+under-reports these VBR MP3 totals ~5x — real bug, fixed, but not the mute);
+VOLZERO component probe → theme mute shows NO Sound2d-side zero (tmpl/fade/atten/
+user all healthy) while title-fade + cantina-band VOLZEROs attribute correctly.
+⇒ the zero enters in Audio::setSampleVolume's hidden multipliers:
+`getSoundCategoryVolume(cat, settingOnly=false)` applies s_globalAudioFadeVolume
+to SC_backGroundMusic ONLY when `s_nonBackgroundFadeCount == 0`.
+
+**MECHANISM (deterministic, every zone-in):** GroundScene ctor
+silenceAllNonBackgroundMusic → count=1 → global fade ramps to 0 (everything ducks
+EXCEPT bg music; theme plays 0.75 through load). unSilence at load-end → count=0 →
+bg music INSTANTLY inherits the still-ducked-to-0 global fade → theme snaps
+0.75→0.000 (the VOLSTEP), then crawls back at 1.5/s (sub-VOLSTEP steps =
+invisible; 13:02's 0.008→0.066 was this comeback). Kenny's "deterministic pops at
+load-in" = this duck + the title fade + ambient swaps. FIX: dedicated
+`s_backgroundMusicFadeVolume` ramped continuously toward the same targets — gate
+flips can no longer step the volume. Staged 7:17 PM.
+
+**STORM status:** fires at the theme's (now-audible) EOF — but every run Kenny's
+walk makes theme-EOF coincide with the cantina-door ambient churn (5-7 stream
+opens/closes+primes in ~3s). EOF-vs-churn STILL not separated — the decisive test
+he hasn't run yet: idle in open desert past theme end (no churn) → storm?; then
+door-churn long after EOF → storm? If storm tracks churn: mechanism = N
+simultaneous stream primes (7/8 pool each) saturating the Miles IO/decode passes;
+fix candidates = ambient-transition hysteresis / prime throttling. If it tracks
+EOF: Miles-internal → instrumented mss32 build (Phase-35 SDK asset).
+
+Also convicted en route: VBR MP3 duration misreport (getFade guard keeps streams
+audible past phantom end — landed); duplicate ambient instances (5x harvester,
+7x TIE = the double-volume suspect, backlog); footstep stop/start per step
+(late-sample-start wave, backlog).
+
+---
+
+## 13. ROUND 9 (07-04 ~7:50 PM) — Kenny's 3-run experiment SPLITS the storm; EOS
+## callback convicted dead; wave-4 build staged 7:53 PM
+
+**Load-end duck fix VERIFIED:** first session of 23 with NO theme VOLSTEP mute;
+theme plays full length. Residual: 2-3 SHALLOW dips near the TITLE fade window
+(sub-0.05/frame, invisible to old probes).
+
+**KENNY'S 3-RUN EXPERIMENT (the decisive one):** (1)+(2) standing away from
+triggers at theme EOF → NO storm; existing sounds (harvester hum) play fine
+through the music ending. (3) triggering the cantina door AS the theme ends →
+"crackles like crazy". Log corroborates: run 1 had 2 events within ±4s of EOF;
+run 3 had 24 incl. item_door_metal_open 150ms after EOF. Historical control: the
+18:22 session had door-churn 8s AFTER EOF and was clean. **STORM = NEW SOUNDS
+TRIGGERED IN THE STREAM-EOF WINDOW. Not EOF alone, not churn alone.**
+
+**EOS CALLBACK CONVICTED DEAD:** Sound2d::reset() releases promptly once
+endOfSample is seen (m_autoDelete true, chain verified) — yet finished theme
+streams sat done-unreleased 30-90s every session ⇒ Miles' AIL_register_stream_
+callback EOS never fires for these MP3 streams. (Title music loops MILES-side via
+AIL_set_stream_loop_count — consistent, loops don't need the callback.)
+
+**Wave-4 build (staged 7:53 PM):** (1) stream-EOS POLL in Audio::alter —
+AIL_stream_status==SMP_DONE (+position>0 guard vs opened-unstarted streams) drives
+endOfSample → release within a frame; kills the zombie window the storm needs.
+(2) EOS diag line in the callback (does it EVER fire?). (3) VOLSTEP threshold
+0.05→0.015 + DUCK edge log (global/bg fades + counts) for the shallow title-window
+dips. VERIFY: does the door-at-EOF repro still storm with prompt release? EOS vs
+EOSPOLL lines answer the callback question. If storm persists even with a
+promptly-released stream → the interaction is Miles-internal at the moment of
+stream teardown+starts → instrumented mss32 (Phase-35 SDK) with the crisp repro:
+"start one-shots within ±1s of MP3 stream EOF".
+
+---
+
+## 14. ROUND 10 (07-04 ~8 PM, FINAL) — wave-4 verdict + uncommitted file list
+
+**Wave-4 run verdict (session 27, 19:56):**
+- `EOSPOLL mus_theme_tatooine` at EOF, **NO `EOS` line ⇒ Miles' stream EOS callback
+  CONFIRMED DEAD** for these MP3 streams. Poll works; stream released within a frame.
+- 16ms after EOSPOLL: `OPENCALL mus_theme_generic_c.mp3` — **the music .snd is a
+  MULTI-SAMPLE PLAYLIST** (Sound2d setupNextSample); "end of the 2nd piece" is really
+  a track TRANSITION (release + fresh stream open/prime).
+- **STORM PERSISTS** at door-trigger + track-transition even with prompt release ⇒
+  the collision is Miles-internal (teardown/prime vs new-sound starts). Next lever:
+  instrumented mss32 build or CONSULT-63 (5 consultants — Fable added).
+- **Load-in dips ATTRIBUTED** (DUCK lines): zone-in global duck (nonBg=1, global
+  ramps toward 0 at rate 10) superimposed on the title's own 1s manual fade —
+  deliberate fades colliding; 2-3 audible steps. Cosmetic backlog: exempt
+  manual-fading sounds from the global duck, or soften fadeOutRate.
+
+**UNCOMMITTED FILES (commit first thing next session, Kenny approved the arc):**
+- `clientAudio/Audio.cpp` — diag suite (STOPSOUND/CATVOL/DUCK/EOS/EOSPOLL/OPENCALL/
+  CLOSE + VOLSTEP 0.015 threshold) + s_backgroundMusicFadeVolume duck fix +
+  stream-EOS poll.
+- `clientAudio/Sound2d.{h,cpp}` — getFade phantom-duration guard (VBR MP3 totals
+  ~5x short) + VOLZERO component probe (m_lastDiagVolume).
+- `clientGame/GameMusicManager.cpp` — day-flip sunrise/sunset 15s suppression gate.
+- This handoff + CLAUDE.md (gitignored, stays local) got the Fable crew entry.
+Suggested split: fix commit (duck fix + getFade guard + EOS poll + day-flip gate),
+diag commit (probe suite), docs commit (handoff).
+
+**Regression watch for the new pieces:** EOS poll — a stream ending early/cut off
+mid-track would suggest the SMP_DONE poll misfired (position>0 guard was the
+protection); title loop must keep looping (loops are Miles-side, unaffected);
+multi-sample playlists must advance (theme → generic_c verified).
