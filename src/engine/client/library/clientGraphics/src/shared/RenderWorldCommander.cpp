@@ -40,12 +40,14 @@ namespace RenderWorldCommanderNamespace
 {
 #ifdef _DEBUG
 	int                       ms_numberOfVisibleObjects;
-	int                       ms_numberOfPortalsCrossed;
 
 	bool                      ms_displayTextMessages;
 	bool                      ms_renderFrames;
 	bool                      ms_renderSpheres;
 #endif
+	// CONSULT-64: portals-crossed counter promoted out of _DEBUG for the Release
+	// portal-cull probe (RenderWorld.cpp drawScene) -- one ++ per PORTAL_ENTER.
+	int                       ms_numberOfPortalsCrossed;
 
 	typedef std::set<NetworkId> NetworkIdSet;
 	NetworkIdSet m_objectRenderedThisFrame;
@@ -87,14 +89,10 @@ int RenderWorldCommander::getNumberOfVisibleObjects()
 
 // ----------------------------------------------------------------------
 
-#ifdef _DEBUG
-
 int RenderWorldCommander::getNumberOfPortalsCrossed()
 {
 	return ms_numberOfPortalsCrossed;
 }
-
-#endif
 
 bool RenderWorldCommander::wasObjectRenderedThisFrame(NetworkId const & id)
 {
@@ -203,8 +201,8 @@ void RenderWorldCommander::command(DPVS::Commander::Command c)
 
 #ifdef _DEBUG
 			ms_numberOfVisibleObjects = 0;
-			ms_numberOfPortalsCrossed = 0;
 #endif
+			ms_numberOfPortalsCrossed = 0;
 
 			m_objectRenderedThisFrame.clear();
 
@@ -226,9 +224,7 @@ void RenderWorldCommander::command(DPVS::Commander::Command c)
 			////////////////////////////////////////////////////////////////////////////////////////////////////
 		case PORTAL_ENTER:
 		{
-#ifdef _DEBUG
 				++ms_numberOfPortalsCrossed;
-#endif
 
 				DPVS::Object *o = getInstance()->getObject();
 				DPVS::PhysicalPortal *p = static_cast<DPVS::PhysicalPortal *>(o);

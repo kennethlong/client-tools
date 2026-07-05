@@ -26,8 +26,9 @@ public:
 
 #ifdef _DEBUG
 	static int getNumberOfVisibleObjects();
-	static int getNumberOfPortalsCrossed();
 #endif
+	// CONSULT-64: available in Release for the portal-cull probe.
+	static int getNumberOfPortalsCrossed();
 
 	static bool wasObjectRenderedThisFrame(NetworkId const & id);
 	static void setCamera(const RenderWorldCamera * camera, CellProperty const * cameraCell, Transform const & cameraToWorld);

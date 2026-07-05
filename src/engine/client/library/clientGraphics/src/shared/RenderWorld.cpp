@@ -28,6 +28,7 @@
 #include "sharedDebug/DebugFlags.h"
 #include "sharedDebug/PerformanceTimer.h"
 #include "sharedDebug/Profiler.h"
+#include "sharedFoundation/ConfigFile.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedFoundation/Production.h"
 #include "sharedObject/Appearance.h"
@@ -1093,6 +1094,52 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
 		}
 		dpvsCpuTimer.stop();
+
+		// CONSULT-64 (2026-07-05): armed-for-days portal-cull probe for the intermittent
+		// cantina see-through (RenderDoc-convicted: whole cells never submitted). Logs ONLY
+		// on anomaly. Discriminates the two consultant camps at the next sighting:
+		//   - camera ROOT cell wrong/flipped (containment desync -- Opus/Fable/P9), vs
+		//   - correct root but portalsCrossed/visibleCells collapse under a nearly-static
+		//     camera (dPVS portal backface/rectangle degenerate -- Cursor P10/P11, Sonnet
+		//     clipVal<0.0f zero-epsilon).
+		// Correlate with Kenny's screenshot timestamps. [ClientGraphics] portalCullProbe=true
+		{
+			static bool const s_portalCullProbe = ConfigFile::getKeyBool("ClientGraphics", "portalCullProbe", false);
+			if (s_portalCullProbe)
+			{
+				static CellProperty const *s_lastCameraCell = NULL;
+				static int s_lastPortalsCrossed = -1;
+				static int s_lastVisibleCells = -1;
+				static Vector s_lastCameraPos;
+				static bool s_first = true;
+
+				int const portalsCrossed = RenderWorldCommander::getNumberOfPortalsCrossed();
+				int const visibleCells = static_cast<int>(ms_visibleCellList.size());
+				Vector const cameraPos = ms_cameraToWorld.getPosition_p();
+				float const camDelta = s_first ? 0.0f : cameraPos.magnitudeBetween(s_lastCameraPos);
+
+				bool const cellChanged = !s_first && (ms_cameraCell != s_lastCameraCell);
+				bool const countsChanged = !s_first && (portalsCrossed != s_lastPortalsCrossed || visibleCells != s_lastVisibleCells);
+
+				// Root-cell transitions always log (rare, gives the containment history);
+				// count flips log only when the camera barely moved (the boundary-flip signature).
+				if (cellChanged || (countsChanged && camDelta < 0.10f))
+				{
+					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f pos=%.2f %.2f %.2f\n",
+						ms_cameraCell ? ms_cameraCell->getCellName() : "(null)",
+						cellChanged ? (s_lastCameraCell ? " (CHANGED)" : " (first)") : "",
+						s_lastPortalsCrossed, portalsCrossed,
+						s_lastVisibleCells, visibleCells,
+						camDelta, cameraPos.x, cameraPos.y, cameraPos.z));
+				}
+
+				s_lastCameraCell = ms_cameraCell;
+				s_lastPortalsCrossed = portalsCrossed;
+				s_lastVisibleCells = visibleCells;
+				s_lastCameraPos = cameraPos;
+				s_first = false;
+			}
+		}
 	}
 
 	{
