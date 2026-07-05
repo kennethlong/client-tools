@@ -90,6 +90,40 @@ Line: `[PortalCullProbe] cell=NAME portals a->b visCells a->b camDelta pos`.
 - Optional Fable confirm either way: re-arm the old interior zoom cap for one soak
   (its removal is the exposure-change candidate).
 
+## ROUND 2 (2026-07-05 ~09:00) — probe FIRED on first session; BOTH signatures observed
+
+Kenny armed the probe, logged in at the cantina, and hit the bug in TWO places within
+90 seconds (screenshots 0009-0012, stage-x64; log times UTC = local+5).
+
+**Sighting 1 (screenshot 0009 @ 13:58:42Z, cantina entrance, pos ~3468 8 -4850):**
+view = raw terrain, NO building at all. Probe: camera ROOT CELL OSCILLATING
+world↔foyer1 SIX times in ~12s (13:58:43-55) at the same spot (deltas 0.03-0.27m).
+When tagged foyer1 with the eye actually outside, the world is only reachable through
+the doorway's shrunken portal frustum → the surrounding building-exterior (world-cell
+object) culls away; terrain (non-dPVS) survives = exactly the screenshot.
+⇒ **CAMP A signature: root/eye split at the entrance (P9).**
+
+**Sighting 2 (screenshot 0011 @ 13:59:00Z, INSIDE foyer1, pos ~3460-3465):**
+foyer floor/props/doorframe render (root CORRECT and STABLE at foyer1); the wall
+ahead is open starfield. Probe: `portals 1->0 visCells 2->1` at 13:58:58 (the break),
+heal `0->4->5` at 13:59:05 with camDelta=0.0037 (4 MILLIMETERS), re-break `5->0` at
+13:59:08 with camDelta=0.0061. Whole portal chain collapsing/rebuilding under an
+essentially frozen camera with the correct root.
+⇒ **CAMP B signature: portal-clip collapse at a near-static camera (P10/P11 /
+clipVal<0.0f).** Residual confound: probe round-1 gated on POSITION delta only —
+rotation could zero portal counts legitimately (screenshot facing argues against it:
+Kenny is looking INTO the missing wall).
+
+**Also noted:** pre-spawn loading window (13:58:28-32, camDelta exactly 0, camera
+parked) shows portals 0→3→4→3→2→0→2→5→6→4→3→4→6 flip-flops — either benign
+streaming-registration churn or the same instability during load. Unclassified.
+
+**Round-2 probe upgrade (landed):** line now carries fwdDot (camera forward dot
+previous frame — 1.0 = no rotation) + the forward vector, closing the rotation
+confound. Next sighting decides: count-collapse with fwdDot≈1 = camp B convicted
+beyond argument; oscillating root at the doorway remains camp A's (both fixes may
+be needed — the two sightings may genuinely be TWO defects sharing a symptom).
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.

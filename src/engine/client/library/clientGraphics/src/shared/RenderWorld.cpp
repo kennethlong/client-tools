@@ -1111,12 +1111,18 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 				static int s_lastPortalsCrossed = -1;
 				static int s_lastVisibleCells = -1;
 				static Vector s_lastCameraPos;
+				static Vector s_lastCameraFwd;
 				static bool s_first = true;
 
 				int const portalsCrossed = RenderWorldCommander::getNumberOfPortalsCrossed();
 				int const visibleCells = static_cast<int>(ms_visibleCellList.size());
 				Vector const cameraPos = ms_cameraToWorld.getPosition_p();
+				Vector const cameraFwd = ms_cameraToWorld.getLocalFrameK_p();
 				float const camDelta = s_first ? 0.0f : cameraPos.magnitudeBetween(s_lastCameraPos);
+				// fwdDot 1.0 = no rotation since the last frame; rules the rotation
+				// confound in/out of count-flip anomalies (2026-07-05 round 2: sighting 2
+				// showed portals 5->0 at camDelta 0.006 -- rotation was the one alternative).
+				float const fwdDot = s_first ? 1.0f : cameraFwd.dot(s_lastCameraFwd);
 
 				bool const cellChanged = !s_first && (ms_cameraCell != s_lastCameraCell);
 				bool const countsChanged = !s_first && (portalsCrossed != s_lastPortalsCrossed || visibleCells != s_lastVisibleCells);
@@ -1125,18 +1131,21 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 				// count flips log only when the camera barely moved (the boundary-flip signature).
 				if (cellChanged || (countsChanged && camDelta < 0.10f))
 				{
-					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f pos=%.2f %.2f %.2f\n",
+					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f fwdDot=%.5f pos=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
 						ms_cameraCell ? ms_cameraCell->getCellName() : "(null)",
 						cellChanged ? (s_lastCameraCell ? " (CHANGED)" : " (first)") : "",
 						s_lastPortalsCrossed, portalsCrossed,
 						s_lastVisibleCells, visibleCells,
-						camDelta, cameraPos.x, cameraPos.y, cameraPos.z));
+						camDelta, fwdDot,
+						cameraPos.x, cameraPos.y, cameraPos.z,
+						cameraFwd.x, cameraFwd.y, cameraFwd.z));
 				}
 
 				s_lastCameraCell = ms_cameraCell;
 				s_lastPortalsCrossed = portalsCrossed;
 				s_lastVisibleCells = visibleCells;
 				s_lastCameraPos = cameraPos;
+				s_lastCameraFwd = cameraFwd;
 				s_first = false;
 			}
 		}
