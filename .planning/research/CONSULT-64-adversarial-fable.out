@@ -1,0 +1,217 @@
+# CONSULT-64 — Adversarial review of the "portal clip test boundary" framing
+
+Reviewer: fresh Fable 5, no session context. Evidence pack read first and treated as given.
+Role: attack the leading framing ("boundary/degenerate case in the portal clip test, camera
+near a portal plane, inside the shared portal/frustum traversal").
+
+## 0. Verdict up front
+
+The leading framing picked one disjunct of the pack's own open question ("portal clip test
+rejecting" vs "camera's CONTAINING CELL resolved wrong") without a single discriminating fact.
+Reading the code, the CONTAINING-CELL account is not merely viable — it is structurally the
+better fit, and the repo's own git history contains a fact the evidence pack omitted that
+substantially reframes the whole investigation (Section 2.1).
+
+---
+
+## 1. The strongest alternative: camera containing-cell desync
+
+### 1.1 How the camera's cell is actually determined (this is the load-bearing mechanism)
+
+- `RenderWorld::drawScene` (RenderWorld.cpp:875-892) takes the cell straight off the camera
+  object: `ms_cameraCell = camera.getParentCell(); ms_dpvsCamera->setCell(...)`. dPVS does NOT
+  resolve containment; it trusts the engine's assignment absolutely. If the assigned cell is
+  wrong, dPVS traverses the portal graph from the wrong root and whole cell-blocks of draws are
+  never submitted — exactly the RenderDoc signature (missing DrawIndexed blocks, all shared
+  draws EQUAL).
+
+- The chase camera's cell is maintained INCREMENTALLY, not by geometric containment:
+  - `RenderWorldCamera` ctor registers `CellProperty::addPortalCrossingNotification(*this)`
+    (RenderWorldCamera.cpp:21). FreeChaseCamera → GameCamera → RenderWorldCamera, so the ground
+    chase cam is on this path.
+  - Every frame, `FreeChaseCamera::alter` re-bases: snaps the camera cell to the PLAYER's cell
+    (FreeChaseCamera.cpp:615-617), teleports to the player's transform with portal transitions
+    DISABLED (620-637), then applies shoulder offset (`move_o`, 651) and the zoom pull-back
+    (`move_o(negativeUnitZ * m_currentZoom)`, 775) with transitions ENABLED.
+  - Each enabled `move_o` fires `CellPropertyNamespace::Notification::positionChanged`
+    (CellProperty.cpp:110-186), which walks the move SEGMENT through
+    `CellProperty::getDestinationCell` → `Portal::testPenetration` (segment vs the portal
+    POLYGON, CellProperty.cpp:720-770, Portal.cpp:195-210).
+
+  Consequence: the camera's cell is correct ONLY IF every frame's offset+zoom segment that
+  crosses a cell boundary crosses it THROUGH a portal polygon. A segment that crosses the
+  boundary through a WALL (no portal polygon there) registers no transition → the camera's
+  assigned cell silently diverges from its physical position. The tracker has no self-check
+  and nothing logs — consistent with "no errors in logs."
+
+### 1.2 Why recent camera changes feed exactly that degenerate path
+
+Three recently landed, in-tree-documented behaviors put the camera on wall-crossing segments
+at doorways — the precise sighting location:
+
+- Shoulder-offset ease (FreeChaseCamera.cpp:675-682, door-snap fix): the comment literally
+  says "Brief shoulder-cam wall clip during the ease is accepted." Accepted for near-plane
+  clipping — but nobody re-audited what a camera transiently INSIDE the doorframe wall does to
+  segment-based cell tracking (it crosses the cell boundary through the wall, not the portal).
+- Collision pull-in rate limit (`cs_cameraPullInSpeed`, FreeChaseCamera.cpp:757-770): when a
+  collision demands pulling in, the camera now deliberately stays TOO FAR OUT for several
+  frames — i.e., at/behind the colliding wall. The comment documents that "occluders ended up
+  between the camera and the avatar" in the earlier variant. During the ease the camera's
+  physical position and its assigned cell can disagree.
+- Zoom recovery lerp (line 611): when the collision clears (player turns at the entrance),
+  the camera sweeps back OUT over multiple frames; if the outward path exits beside the portal
+  polygon (over the lintel, through the doorframe), again no crossing registers.
+
+All are elapsedTime-scaled: post-zone-in load hitches (large/erratic dt — the very stalls the
+recent perf work was fighting) make the ease steps large and the transient positions wild.
+That gives the zone-in clustering WITHOUT invoking dPVS registration races.
+
+### 1.3 Why this fits every locked fact
+
+- Renderer/bitness-agnostic: pure shared engine code (sharedObject + clientGame). ✓
+- Missing draws never submitted, shared draws EQUAL: wrong dPVS root cell culls whole cells;
+  everything else renders identically. ✓ (Pair B, 74 vs 234 draws: camera cell = small interior
+  cell while physically elsewhere plausibly yields a tiny visible set. Pair A, 42 missing:
+  adjacent-cell subset. Two different wrong-cells / depths — a clip-test boundary does not
+  naturally explain two such different magnitudes at the same doorway.)
+- Small camera angle change restores INSTANTLY: an orbit chase camera's "angle change" IS a
+  position change; next frame re-bases to the player's cell and re-runs crossing segments along
+  a new path → cell re-derived correctly → whole visible set returns in one frame. ✓
+- Intermittent, self-clearing, no persistence: the tracker is history-dependent BY
+  CONSTRUCTION (cell(t) = f(cell(t-1), segment(t))); identical camera poses with different
+  approach paths give different cells. A portal CLIP test is memoryless — identical
+  (cell, pose) inputs must reproduce identically. Intermittency at the same spot is evidence
+  AGAINST a pure clip-test boundary and FOR hidden state, and the biggest documented hidden
+  state in this pipeline is the incrementally tracked parent cell. (Caveat: dPVS keeps some
+  internal temporal-coherence state even with occlusion off, so this is an argument, not a
+  proof.)
+- Sightings cluster at the cantina ENTRANCE: doorways are where camera segments graze portal
+  polygon edges and where the ease/pull-in transiently embeds the camera in the doorframe. ✓
+
+## 2. Audit of the evidence pack — weakest "locked" facts
+
+### 2.1 The pack omits the decisive historical fact (found in git, not in the pack)
+
+Commit a976f81e2 (2026-07-02, TWO days before the first sighting) REMOVED the interior
+chase-cam zoom cap (`freeChaseCameraInteriorMaximumZoom`). The removed code's own comment:
+
+> "Pressed against a back wall, gl05/32-bit re-triggers the borderline portal cell-cull flip
+>  (exterior shows through the wall, clears on look up/down ...) ... SWGEmu/retail avoid all
+>  of this by simply not letting the indoor camera zoom out to the walls."
+
+Three consequences the pack misses:
+1. This artifact CLASS was already known, named ("portal cell-cull flip"), and deliberately
+   SUPPRESSED by keeping the camera away from walls/portals indoors. The suppression was
+   removed 2026-07-02; first sighting 2026-07-04. The bug almost certainly PREDATES the recent
+   fix wave — what changed is EXPOSURE (the camera is newly allowed to press against interior
+   geometry), not a regression in the traversal. The pack's "UNKNOWN whether the portal bug
+   predates these" is answerable from the repo.
+2. The historical flip happened pressed against a BACK WALL — where there is NO portal. A
+   portal CLIP test cannot be the gate for exterior-through-a-portalless-wall; a camera
+   cell/containment flip can (camera epsilon-past the wall plane → world/exterior cell wins →
+   interior culled). The one prior in-repo observation of this class is thus
+   containment-flavored, not clip-test-flavored.
+3. Retail/SWGEmu never fixed this — they FRAMED it away. That is a strong prior that the
+   defect is a structural containment quirk, not a numeric boundary someone else solved.
+
+### 2.2 "A SMALL camera angle change restores it" — non-discriminating
+
+The pack (and the leading framing) implicitly reads this as "camera pose crossed back over a
+clip-plane boundary." But in a chase camera, angle change = position change = new crossing
+segments = full cell re-derivation next frame. BOTH hypotheses predict instant restore. This
+fact has zero discriminating power and should not anchor the framing. Its only real content is
+the memoryless-vs-stateful argument (1.3), which cuts AGAINST the clip test.
+
+### 2.3 "No asset/portal/mesh errors in logs" — void, not exculpatory
+
+Nothing in the containment path logs anything: a missed `testPenetration` crossing is a silent
+`return true` (CellProperty.cpp:131-132,164-168), wrong parent cell raises no warning,
+`drawScene` never validates `ms_cameraCell` geometrically. Log silence eliminates nothing.
+
+### 2.4 "Sightings cluster shortly after zone-in" — exposure/sampling bias
+
+Shortly after zone-in is exactly when the player is AT the cantina entrance. Plus dt spikes
+amplify the eases (1.2). This fact cannot convict the phased WorldSnapshot load; it barely
+even correlates with it once the doorway-exposure confound is admitted.
+
+### 2.5 The FPU_PRESERVE precedent points at shared math, not at the clip test specifically
+
+The deterministic gl05/32-bit instance was fixed by restoring x87 precision to "shared
+portal-visibility math." `Portal::testPenetration` → `IndexedTriangleList::collide` (the
+containment/crossing test) is exactly as much "shared portal-visibility math" as the dPVS
+clip test. The precedent is neutral between the framings; the team is using it as if it
+localized to the clip test.
+
+## 3. Other alternatives considered — and honestly killed
+
+- Object-to-cell assignment wrong / objects never added to the cell
+  (`inWorldAddDpvsObject`, RenderWorld.cpp:627-654): killed by the good capture seconds later
+  at a slightly different angle — the objects ARE registered and render fully; their dPVS cell
+  state did not change between the pair. Object assignment is camera-independent; an
+  angle-only restore is impossible under this account.
+- Phased WorldSnapshot / budgeted preload leaving dPVS registrations incomplete: same kill —
+  registration state cannot flip with camera angle within one session-second. Survives only as
+  an indirect dt-spike amplifier for the containment account (1.2). Also, first sighting
+  (2026-07-04 per pack) does not postdate the phased-load commit by enough to separate it from
+  the 2026-07-02 zoom-cap removal — and the zoom-cap removal has the documented mechanism.
+- Door state driving portal passability (`closedStateChangedHookFunction`,
+  RenderWorld.cpp:754-762 disables the portal's dPVS object when closed;
+  `Portal::testPenetration` returns false when DISABLED): a real mechanism, but door state is
+  proximity/animation-driven, not camera-driven; restore-by-camera-angle across 5 sightings
+  coinciding with door-state flips is implausible. Also doorless portals get
+  `m_alwaysOpen = true` (Portal.cpp:269). Secondary at best — worth one glance at whether the
+  cantina entrance portal has a door style, nothing more. NOTE the sinister variant though:
+  a DISABLED portal is also invisible to `testPenetration`, so any transient disable would
+  ALSO break cell tracking — this variant collapses back into the containment account.
+- Per-render exclusion list leak (`disableDpvsObjectForThisRender` / `ms_excludedDpvsObjects`):
+  would persist across camera changes; killed by instant restore.
+
+## 4. THE decisive probe (cheap, armed for days, logs only on anomaly)
+
+Cross-check the camera's ASSIGNED cell against an independently RE-DERIVED containing cell,
+every frame, and log one line only on mismatch.
+
+Where: end of `RenderWorld::drawScene` setup (RenderWorld.cpp, right after line 876), or the
+end of `FreeChaseCamera::alter`.
+
+How (re-uses existing engine code, ~a handful of portal segment tests per frame at a doorway,
+zero heap):
+1. Anchor = player object position + player parent cell (server-authoritative via
+   `handleNetUpdateTransformWithParent`, ClientController.cpp:511 — the most trusted cell in
+   the client).
+2. Walk the segment anchor→camera-position through the same
+   `CellProperty::getDestinationCell(start, end, t)` chain the crossing notification uses
+   (loop shape of CellProperty.cpp:156-176).
+3. Compare the walked terminal cell with `camera->getParentCell()`.
+4. On mismatch only, log: frame #, assigned cell name/index, walked cell name/index, camera
+   pos_w, player cell + pos_w, `m_currentZoom`, `m_colliding`, whether the pull-in rate limit
+   clamped this frame, dt, and last frame's submitted-draw count. Optionally also trigger on a
+   frame-over-frame draw-count collapse (>40% drop with camera delta <0.5 m / <5 deg) to
+   time-stamp visible breakage even if the mismatch check somehow passes.
+
+Decision rule — decisive in BOTH directions:
+- Sighting occurs AND a mismatch line brackets it → containing-cell desync CONVICTED; the
+  clip-test framing is dead; the fix hunt moves to the camera cell tracker (and the probe's
+  `m_colliding`/rate-limit bits will name the feeder).
+- Sighting occurs AND the probe is silent → the containment alternative is DEAD, cheaply, and
+  the clip-test framing has earned its status for the first time (right now it has no
+  discriminating evidence at all).
+
+Cost: a few segment-vs-portal tests per frame (portal lists at the cantina are tiny), one
+fprintf on anomaly. Runs for days. No behavior change (probe only reads).
+
+Secondary confirmation (only if the probe convicts): re-add the interior zoom cap via its old
+cfg knob for one soak — if sightings stop, exposure via a976f81e2 is confirmed and the
+containment defect can be fixed under a stable repro recipe (zoom out against the entrance
+wall from inside).
+
+## 5. Files/lines cited
+
+- D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\RenderWorld.cpp:875-892 (camera cell trusted, fed to dPVS)
+- D:\Code\swg-client-v2\src\engine\client\library\clientGraphics\src\shared\RenderWorldCamera.cpp:21 (portal-crossing notification registration)
+- D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\camera\FreeChaseCamera.cpp:611,615-637,651,675-682,757-775 (re-base, eases, pull-in limit, zoom move_o)
+- D:\Code\swg-client-v2\src\engine\shared\library\sharedObject\src\shared\portal\CellProperty.cpp:110-186,720-770 (incremental crossing tracker; segment-vs-portal-polygon only)
+- D:\Code\swg-client-v2\src\engine\shared\library\sharedObject\src\shared\portal\Portal.cpp:195-210 (testPenetration; DISABLED portals invisible to tracking)
+- D:\Code\swg-client-v2\src\engine\client\library\clientGame\src\shared\controller\ClientController.cpp:433-529 (server-authoritative player cell)
+- git a976f81e2 (2026-07-02): interior zoom cap REMOVED; removed comment names "borderline portal cell-cull flip" at a portalless back wall — the pack-omitted key fact.
+- git 3549c7104 / 810b6c9a9 (2026-06-20): door-snap + pull-in convergence (the eases).

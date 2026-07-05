@@ -1,0 +1,392 @@
+﻿# CONSULT-64 — Cell-to-cell visibility predicate byte-map
+
+Mechanism analysis only. All evidence-pack facts treated as locked.
+
+---
+
+## Architecture: two layers
+
+| Layer | Role |
+|-------|------|
+| **Engine (sharedObject portal + clientGraphics)** | Builds portal geometry/planes, resolves object/camera **containing cell**, registers dPVS cells/portals, feeds `DPVS::Camera` each frame |
+| **dPVS (vendored `src/external/3rd/library/dpvs/`)** | Performs portal backface cull, screen-rectangle clip, frustum shrink through portals, cell graph traversal → `INSTANCE_*` callbacks → draw submission |
+
+RenderDoc locked fact: missing geometry = **whole cells never reach the renderer**. The gates below are upstream of any API draw call.
+
+---
+
+## 1. Portal geometry & plane construction
+
+### 1.1 Asset load → triangle fan + winding flag
+
+```176:180:src/engine/shared/library/sharedObject/src/shared/portal/PortalPropertyTemplate.cpp
+IndexedTriangleList * PortalPropertyTemplateNamespace::createPortalGeometry(PortalPropertyTemplate::VertexList const & vertices)
+{
+	IndexedTriangleList * const indexedTriangleList = new IndexedTriangleList;
+	indexedTriangleList->addTriangleFan(&vertices[0], static_cast<int>(vertices.size()));
+```
+
+- **Winding**: per-portal `m_geometryWindingClockwise` read from IFF (`load_0001`…`load_0005`, e.g. `:334`, `:350`, `:401`).
+- **Scale**: `scalePortalVertices()` at `:185–209` — default `portalScale = 1.1f` (`ConfigSharedObject.cpp:56`, getter `:78–80`). Expands portal quad radially from centroid; **no plane epsilon**.
+
+### 1.2 Template plane equation (normal direction)
+
+```413:421:src/engine/shared/library/sharedObject/src/shared/portal/PortalPropertyTemplate.cpp
+void PortalPropertyTemplateCellPortal::computePlaneEquation()
+{
+	...
+	Vector const & v0 = vertices[indices[0]];
+	Vector const & v1 = vertices[m_geometryWindingClockwise ? indices[1] : indices[2]];
+	Vector const & v2 = vertices[m_geometryWindingClockwise ? indices[2] : indices[1]];
+	m_plane.set(v0, v1, v2);
+}
+```
+
+- **Winding swaps v1/v2** → flips normal. Used for door frame alignment (`getDoorTransform`, `:426–451`), not directly in dPVS.
+- **Debug coplanarity only**: `validateCoplanar()` warns if vertex > **0.001f** from plane (`:168–169`); **Release has no runtime coplanarity gate**.
+
+### 1.3 Runtime portal mesh → dPVS model
+
+```686:711:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+DPVS::MeshModel *dpvsPortalModel = RenderWorld::fetchMeshModel(portalGeometry, portal->isGeometryWindingOrderClockwise());
+dpvsPortalModel->set(DPVS::Model::BACKFACE_CULLABLE, true);
+...
+dpvsPortal = DPVS::PhysicalPortal::create(dpvsPortalModel, dpvsTargetCell);
+```
+
+- Same `IndexedTriangleList` + same clockwise flag as engine collision tests.
+- Portal attached to **building object** (`Portal.cpp:394` → `m_relativeToObject->addDpvsObject`); object-to-cell matrix set in `inWorldAddDpvsObject` (`RenderWorld.cpp:648–653`) from `object->getTransform_o2c()`.
+
+**Degenerate cases**
+
+| Case | Mechanism | Observed failure |
+|------|-----------|------------------|
+| Non-coplanar asset verts | dPVS planar model derived from mesh; engine debug warns only | Intermittent BF cull / rectangle clip inconsistency; tiny view change shifts projected hull |
+| `portalScale` 1.1 | Engine penetration/overlap tests use scaled verts; dPVS uses same scaled mesh | Usually *helps* grazing hits; mismatch only if scale config diverges |
+| Winding asset error | BF cull uses plane from mesh; `collide()` reverses ray for CCW (`Portal.cpp:200–202`) | Portal always BF-culled from one side → **entire target cell never traversed** → sky/world shows through doorway |
+| Disabled portal | `PhysicalPortal::create(model, NULL)` (`RenderWorld.cpp:697–700`) | Target cell unreachable via that portal — permanent hole (not intermittent unless `isDisabled()` debug override) |
+
+---
+
+## 2. Engine geometric predicates (collision / containment path)
+
+These do **not** gate dPVS directly except where they set **`Object::m_parentCell`**.
+
+### 2.1 Portal ray penetration (segment × mesh)
+
+```195:209:src/engine/shared/library/sharedObject/src/shared/portal/Portal.cpp
+bool Portal::testPenetration(const Vector &begin, const Vector &end, float &t) const
+{
+	if (isGeometryWindingOrderClockwise() && getGeometry().collide(begin, end, result)) ...
+	else if (!isGeometryWindingOrderClockwise() && getGeometry().collide(end, begin, result)) ...
+```
+
+Core predicate in `IndexedTriangleList::collide` (`IndexedTriangleList.cpp:353–395`):
+
+```374:391:src/engine/shared/library/sharedMath/src/shared/IndexedTriangleList.cpp
+normal = (v0 - v2).cross(v1 - v0);
+if (direction.dot(normal) < std::numeric_limits<float>::min())  // backface reject
+{
+	plane.set(normal, v0);
+	if (plane.findDirectedIntersection(start, shortenedEnd, intersection) &&
+	    (start.magnitudeBetweenSquared(intersection) < ...) &&
+	    intersection.inPolygon(v0, v1, v2))
+```
+
+**Plane test** — `Plane::findDirectedIntersection` (`Plane.cpp:237–244`):
+
+```242:244:src/engine/shared/library/sharedMath/src/shared/Plane.cpp
+// t0 on front (>=0), t1 on back (<=0)
+if (t0 < CONST_REAL(0) || t1 > CONST_REAL(0))
+	return false;
+```
+
+**Epsilons: effectively zero.** Strict `<` / `>`; on-plane (`t0==0` or `t1==0`) **passes**. No tolerance band.
+
+**Polygon containment** — `Vector::inPolygon` (`Vector.cpp:253–256`): three cross-product same-side tests; point must lie on portal plane (comment `:262`).
+
+**Degenerate cases**
+
+| Case | Result | Visual |
+|------|--------|--------|
+| Camera/player motion segment parallel to portal plane | `direction·normal ≈ 0` → face skipped | **Player cell not updated** at doorway; dPVS still uses old cell |
+| Both endpoints on plane | `t0==t1==0` → intersection at endpoint (`Plane.cpp:246–249`) | Ambiguous crossing; may or may not fire `setParentCell` |
+| Grazing edge of portal quad | `inPolygon` false | No cell transition while visually “in doorway” |
+| CCW portal + wrong ray direction | Only reversed ray tested | One-way crossing failure |
+
+### 2.2 Portal sphere overlap
+
+```214:242:src/engine/shared/library/sharedObject/src/shared/portal/Portal.cpp
+Plane3d const plane(v0, v1, v2);
+if (Overlap3d::TestSpherePoly(sphere, vertexList, plane))
+```
+
+```469:475:src/engine/shared/library/sharedCollision/src/shared/core/Overlap3d.cpp
+if(!TestSpherePlane(A,P)) return false;  // |dist| <= radius, no epsilon
+...
+return dist2 < (A.getRadius() * A.getRadius());  // strict <
+```
+
+Used by `CellProperty::getDestinationCells` (`CellProperty.cpp:811–858`) — **not** the render/dPVS path.
+
+### 2.3 Cell portal crossing loop (player cell assignment)
+
+```115:185:src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp
+// Lift segment 0.1m along object up (feet → portal center heuristic)
+objUpW *= 0.1f;
+start += objUpW; end += objUpW;
+...
+CellProperty *nextCell = currentCell->getDestinationCell(cellStart, cellEnd, time);
+...
+if (targetCell) { object.setParentCell(targetCell); return false; }
+```
+
+`getDestinationCell` (`CellProperty.cpp:720–769`):
+
+- **`passableOnly` default `true`** → skips `!portal->isPassable()` (`:744–745`).
+- **Transform branch**: attached exterior portals transform segment world→portal-object space (`:750–754`); interior portals test in cell space (`:758`).
+- **Closest portal**: `penetrated && t <= closestPortalT` (`:761–764`) — **no epsilon**; ties favor later portal in list order.
+- **Stop conditions**: `time==1.0f`, `nextCell==NULL`, `nextCell==currentCell`, `nextCell==lastCell` (`:164–168`).
+
+**Hysteresis / caching: none.** Each position notification recomputes from segment; no sticky cell, no frame cache. Early-out if same cell (`Object::setParentCell` `:1391–1393`).
+
+**Who uses this**: player (`GroundScene.cpp:954,1054` — `addPortalCrossingNotification`), projectiles, WorldSnapshot objects. **Not** the chase camera’s authoritative cell (see §3).
+
+### 2.4 POB floor-based `findContainingCell` (login/placement only)
+
+Two variants:
+
+- `PortalProperty::findContainingCell(buildingPos, …)` (`PortalProperty.cpp:344–406`) — closest floor point, `y = max(floorY, testY)`.
+- `PortalProperty::findContainingCell(position_l)` (`PortalProperty.cpp:666–712`) — starts **`CellProperty::getWorldCellProperty()`** (`:668`), picks closest floor, optionally recurses nested POB.
+
+**Not called per render frame** for camera/player at cantina. Relevant post-zone-in for **object placement**, not dPVS query cell.
+
+### 2.5 `Object::getParentCell()` — world-cell fallback
+
+```1372:1382:src/engine/shared/library/sharedObject/src/shared/object/Object.cpp
+for (Object *o = getAttachedTo(); o && !cell; o = o->getAttachedTo())
+	cell = o->getCellProperty();
+if (!cell)
+	return CellProperty::getWorldCellProperty();
+```
+
+- Walks **attach chain** for `CellProperty`; default **world cell**.
+- No geometric containment test. Wrong attach parent ⇒ wrong cell with no float threshold.
+
+### 2.6 Passable / closed / disabled (portal state)
+
+| Predicate | Location | Affects dPVS? |
+|-----------|----------|---------------|
+| `isDisabled()` | `Portal.cpp:322–329` | Yes — NULL target cell (`RenderWorld.cpp:697–700`) |
+| `isClosed()` → `ENABLED` | `closedStateChangedHookFunction` `RenderWorld.cpp:754–761` | Yes — portal object disabled in dPVS |
+| `isPassable()` / `isPassageAllowed()` | `Portal.cpp:335–368` | **No** for visibility; only `getDestinationCell(passableOnly=true)` |
+| `getAccessAllowed()` hook | `CellProperty.cpp:1193–1198` | Gates passability, not dPVS |
+
+---
+
+## 3. Camera cell → dPVS handoff (RenderWorld path)
+
+### 3.1 Camera cell assignment (client)
+
+```613:637:src/engine/client/library/clientGame/src/shared/camera/FreeChaseCamera.cpp
+const CellProperty* const targetCell = m_target->getParentCell();
+if (getParentCell() != targetCell)
+	setParentCell(const_cast<CellProperty*>(targetCell));
+CellProperty::setPortalTransitionsEnabled(false);
+setTransform_o2p(targetObject->getTransform_o2c());
+CellProperty::setPortalTransitionsEnabled(true);
+// ... then offset, pitch, zoom, collision pull-in ...
+```
+
+- **Camera cell = player cell every frame** (forced copy).
+- Camera has `addPortalCrossingNotification` (`RenderWorldCamera.cpp:21`) but chase camera **overwrites** cell from target; portal-crossing on camera is **not** authoritative.
+- **Split**: `setCell` uses **player’s cell**; `setCameraToCellMatrix` uses **camera’s actual transform** after offset/zoom/collision (`RenderWorld.cpp:888–892`).
+
+### 3.2 Per-frame dPVS setup
+
+```875:893:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+ms_cameraCell = camera.getParentCell();
+ms_dpvsCameraCell = ms_cameraCell->getDpvsCell();
+...
+ms_dpvsCamera->setCell(ms_dpvsCameraCell);
+const Transform cameraToCell = camera.getTransform_o2c();
+convertToDpvsTransform(cameraToCell, Vector::xyz111, dpvsTransform, camera);
+ms_dpvsCamera->setCameraToCellMatrix(dpvsTransform);
+```
+
+`getTransform_o2c()` (`Object.cpp:1511–1518`): multiply o2p along attach chain until a `CellProperty` owner is hit.
+
+### 3.3 Visibility resolve
+
+```1093:1093:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
+```
+
+- `portalRecusionDepth = 8` (Release `:946`) or 0 if debug `disablePortalTraversal` (`:943`).
+- Occlusion bit **off** per evidence (`RenderWorld.cpp:905–931`, cfg default `DOM_off`).
+
+### 3.4 Engine-side portal clipping beyond dPVS
+
+**None for visibility.** `RenderWorldCommander`:
+
+- `QUERY_BEGIN` / `PORTAL_ENTER` / `PORTAL_PRE_EXIT` — pushes/pops **shader sort cell stack** only (`RenderWorldCommander.cpp:211,227–244`).
+- `CELL_IMMEDIATE_REPORT` → `RenderWorld::cellVisible` (`:179–185`, `RenderWorld.cpp:1165–1171`) — frame `m_visible` flag; cleared each frame (`clearVisibleCells` `:1079`).
+
+No additional frustum clip of portal quads in engine code.
+
+### 3.5 dPVS object ↔ cell binding
+
+```627:653:src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp
+const CellProperty *cell = object->getParentCell();
+dpvsObject->setCell(dpvsCell);
+dpvsObject->setObjectToCellMatrix(convertToDpvsTransform(o2c, ...));
+```
+
+Interior layout objects added post-zone-in via `ClientInteriorLayoutManager.cpp:153–156` (`addObjectNotifications` + `addToWorld`) — if cell never becomes visible in dPVS that frame, objects exist in graph but **never get `INSTANCE_VISIBLE`**.
+
+---
+
+## 4. dPVS portal predicates (visibility traversal)
+
+### 4.1 Portal visibility pipeline (ordered)
+
+```
+isObjectVisible_INTERNAL (dpvsVisibilityQuery_Test.cpp:49)
+  → backFaceCull (always for portals, :70–77)
+  → setPortalVisible (:308)
+      → traversePortal (:512)
+          → calculateTransition (ImpPhysicalPortal.cpp:157–171)
+          → testTransition / recursion (:616–651)
+          → getTestRectangle (:557–558)
+          → createFrustumFromRectangle (ImpCamera.cpp:372–423)
+```
+
+### 4.2 Portal backface cull — **EPSILON = 0.0f**
+
+```482:519:src/external/3rd/library/dpvs/implementation/sources/dpvsImpMeshModel.cpp
+const float EPSILON = 0.0f;
+float dist = tlat.x*p.x + tlat.y*p.y + tlat.z*p.z + tlat.w * p.w;
+if (dist >= EPSILON) return true;  // front-facing
+return false;  // completely back-face culled
+```
+
+Portal-specific camera position (`ImpObject.cpp:1829–1838`):
+
+```1829:1838:src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp
+// Portal: camera position in object-space (translation-only, rotation-invariant)
+Math::invertMatrix(cellToObject, getObjectToCell());
+Math::productFromLeft(tmp, c->getCameraToCell(), cellToObject);
+nlat = Vector4(tmp[0][3], tmp[1][3], tmp[2][3], 1.0f);
+return m_testModel->backFaceCull(nlat);
+```
+
+**Degenerate cases**
+
+| Case | Mechanism | Visual |
+|------|-----------|--------|
+| Camera **behind** portal plane (`dist < 0`) | BF culled → `traversePortal` fails (`VisibilityQuery_Test.cpp:363–367`) | **Entire interior cell block missing**; world/sky through opening |
+| Camera **on** plane (`dist == 0`) | Passes (`>= 0`) | Unstable; float noise can flip sign frame-to-frame → **intermittent** |
+| Camera in **player cell** but offset **through doorway** | Cell tag = world, camera position in building space behind entrance plane | Same as behind-plane from world-side portal |
+| NaN in transform | `_isnan` FATAL in debug `convertToDpvsTransform` (`RenderWorld.cpp:330–341`); Release FATAL `:346–360` | Would crash, not intermittent silent cull |
+
+### 4.3 Portal screen rectangle + frustum shrink
+
+```557:563:src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Traverse.cpp
+if(!p->getTestRectangle(portalRectangle)) return false;
+if(!targetCamera->createFrustumFromRectangle(frustum,portalRectangle)) return false;
+```
+
+- `getTestRectangle` → `getExactRectangle` for portals (`ImpObject.cpp:1239–1241`).
+- `createFrustumFromRectangle`: integer floor/ceil of raster rect, then **intersect** with current viewport (`ImpCamera.cpp:381–390`). Empty intersection → **false**.
+
+**Degenerate cases**
+
+| Case | Visual |
+|------|--------|
+| Portal projects to **zero-area** or off-screen sliver | Traversal rejected; interior not visited |
+| Shallow viewing angle at cantina entrance | Portal hull ≈ line → rectangle collapses; **tiny head turn restores** |
+| `importanceThreshold` | Default `0.0f` in resolve call (`RenderWorld.cpp:1093`) → importance gate **disabled** |
+
+### 4.4 Recursion / re-traversal
+
+`testTransition` (`dpvsVisibilityQuery_Traverse.cpp:616–651`): max depth 8, re-traversal block for nested real portals. Unlikely at single building entrance unless mirror/recursive layout.
+
+### 4.5 View-frustum cull on cell contents
+
+After portal accepted, objects in target cell go through standard VF cull (`VIEWFRUSTUM_CULLING` always set in Release `:945–946`). Would not remove **whole cell** at once unless cell never entered.
+
+---
+
+## 5. Predicate boundary catalog (summary table)
+
+| ID | Predicate | File:line | Epsilon | Degenerate / boundary | Failure look |
+|----|-----------|-----------|---------|----------------------|--------------|
+| P1 | Portal plane from winding | `PortalPropertyTemplate.cpp:413–421` | 0 (debug 0.001 coplanar warn) | Degenerate triangle → zero normal | Unpredictable cull / crash in plane setup |
+| P2 | Directed plane crossing | `Plane.cpp:242–244` | 0 | On-plane passes; parallel segment fails | Player cell stuck; portal penetration miss |
+| P3 | `inPolygon` | `Vector.cpp:253–256` | 0 | Edge/on-vertex | Cell transition miss at doorway |
+| P4 | IndexedTriangleList backface | `IndexedTriangleList.cpp:377–378` | `float::min()` | Grazing parallel ray | No penetration detected |
+| P5 | `getDestinationCell` closest-t | `CellProperty.cpp:761–764` | 0 | Tie → list order | Wrong adjacent cell (usually not “missing whole cell”) |
+| P6 | Portal segment +0.1m lift | `CellProperty.cpp:146–149` | 0.1m fixed | Low portal / terrain seam | Under-portal segment misses |
+| P7 | `getParentCell` attach walk | `Object.cpp:1376–1380` | N/A (discrete) | No CellProperty on chain → world | Wrong dPVS root cell |
+| P8 | Camera cell = player cell | `FreeChaseCamera.cpp:615–617` | N/A | Player cell wrong → camera cell wrong | Wrong portal graph root |
+| P9 | Camera o2c vs cell tag split | `RenderWorld.cpp:888–892` + `FreeChaseCamera.cpp:649–753` | collision t eps 0.25/line | Camera **position** outside tagged cell’s valid half-space | Portal BF cull / wrong frustum origin |
+| P10 | dPVS portal BF cull | `ImpMeshModel.cpp:511–516` | **0.0f** | `dist<0` culled; `dist==0` unstable | **Whole cell missing**; sky/wrong wall |
+| P11 | dPVS portal rectangle | `VisibilityQuery_Traverse.cpp:557–563` | int snap | Sub-pixel portal projection | Same; **angle-sensitive** |
+| P12 | Portal closed/disabled | `RenderWorld.cpp:697–700,754–761` | N/A | Door state | Permanent hole (less likely intermittent) |
+| P13 | Interior layout budget | `ClientInteriorLayoutManager.cpp:97–156` | per-frame cap | Objects not yet in world/dPVS | Partial cell content missing post-zone-in |
+
+**No hysteresis** anywhere in render containment path. `CellProperty::m_visible` is per-frame only.
+
+---
+
+## 6. End-to-end: camera containing cell resolution
+
+```
+Player moves
+  └─ CellProperty::Notification::positionChanged     [CellProperty.cpp:115–185]
+       └─ getDestinationCell → testPenetration       [CellProperty.cpp:720–769, Portal.cpp:195–209]
+            └─ Object::setParentCell                  [Object.cpp:1387–1408]
+
+FreeChaseCamera::update
+  └─ setParentCell(player->getParentCell())          [FreeChaseCamera.cpp:615–617]
+  └─ offset / zoom / ClientWorld::collide pull-in    [FreeChaseCamera.cpp:649–753]
+
+RenderWorld::drawScene
+  └─ ms_cameraCell = camera.getParentCell()          [RenderWorld.cpp:875]
+  └─ dpvsCamera->setCell + setCameraToCellMatrix     [RenderWorld.cpp:888–892]
+  └─ resolveVisibility(depth=8)                      [RenderWorld.cpp:1093]
+       └─ dPVS portal BF + rectangle + cell traverse
+            └─ RenderWorldCommander INSTANCE_*       [RenderWorldCommander.cpp:306–458]
+```
+
+**World-cell fallback**: only via `getParentCell()` when attach chain lacks `CellProperty` (`Object.cpp:1379–1380`). Player inside building should attach to cell object (`setParentCell` non-world branch `:1404–1405`).
+
+---
+
+## 7. Rank vs locked facts
+
+Locked symptoms: **(A)** whole cell draw blocks missing, **(B)** tiny camera move restores, **(C)** cantina **entrance** world↔interior, **(D)** gl05+gl11 / Win32+x64, **(E)** clusters post-zone-in, **(F)** occlusion buffer off.
+
+| Rank | Predicate(s) | Consistency rationale |
+|------|--------------|----------------------|
+| **1** | **P11** dPVS portal screen rectangle + frustum intersect (`VisibilityQuery_Traverse.cpp:557–563`, `ImpCamera.cpp:389–390`) | Explains **42–160 draws** (entire cell subgraph) gone while shared draws unchanged; **classic shallow-angle / sub-pixel portal** sensitivity at doorway; cross-renderer; self-clearing on tiny move; occlusion-independent |
+| **2** | **P10** dPVS portal backface cull, **ε=0** (`ImpMeshModel.cpp:511–516`, `ImpObject.cpp:1829–1838`) | Same whole-cell signature; **camera collision offset** (`FreeChaseCamera.cpp:673–753`) can place eye behind entrance plane while cell tag still world; **dist sign flip** on sub-mm move; shared float math; historical FPU neighborhood (2026-06-20 fix) |
+| **3** | **P9** camera **cell tag vs actual o2c position** split (`FreeChaseCamera.cpp:615–637` + `RenderWorld.cpp:888–892`) | At entrance, chase cam **outside** player feet; dPVS uses **camera position** for portal tests but **player cell** for root cell — coherent only if entrance portal traversal succeeds; amplifies P10/P11 |
+| **4** | **P2–P4, P6** player portal-crossing segment tests (`CellProperty.cpp:115–185`, `IndexedTriangleList.cpp:377–386`) | Wrong **root cell** → wrong portal graph; tiny step changes segment vs portal; **0.1m lift** sensitive at terrain-aligned doors; does not require dPVS bug; intermittent if player “mostly in world” at threshold |
+| **5** | **P13** phased interior layout / budgeted preload (`ClientInteriorLayoutManager.cpp`, evidence “post-zone-in”) | Explains **clustering after zone-in** and partial missing draws; weaker on **instant** angle-fix unless combined with P1/P10 race; less pure “whole native cell shell missing” |
+| **6** | **P12** closed/disabled portal | Would be stable until door animates; logs show no door errors; lower for intermittent |
+| **7** | P5 tie order, P7 attach-chain fallback | Wrong cell usually ≠ entire interior shell vanishing; tie-break rarely entrance-specific |
+
+**Eliminated by evidence**: dPVS occlusion buffer (off), GPU/renderer path (DrawIndexed never emitted), `canSeeParentCell` (loaded in template, **no runtime consumer** in repo).
+
+---
+
+## 8. Decisive experiments (mechanism-only, no fixes)
+
+1. **Instrument** `ms_numberOfPortalsCrossed` (`RenderWorldCommander.cpp:229–230`) on broken vs good frames — 0 crossings with camera facing interior ⇒ P10/P11; wrong cell with 0 crossings ⇒ P4/P7/P8.
+2. **Compare** `camera.getParentCell()->isWorldCell()` vs sign of dPVS portal `dist` at entrance portal mesh — tests P9/P10 directly.
+3. **Log** `getTestRectangle` failure vs BF cull failure inside dPVS (would require temporary stats hooks in `VisibilityQuery_Traverse.cpp:557–563` and `VisibilityQuery_Test.cpp:73–77`).
+
+---
+
+**Bottom line**: The render submission gate is **`ms_dpvsCamera->resolveVisibility()`** (`RenderWorld.cpp:1093`). Engine portal code supplies geometry and **discrete cell tags**; the geometric predicates that decide **cell-to-cell reachability** for drawing are predominantly **dPVS portal backface (ε=0)** and **portal screen-rectangle/frustum intersection**, fed by a **camera whose cell is copied from the player but whose position is independently collision-adjusted** at the cantina entrance. That combination best matches all locked RenderDoc and behavioral facts.

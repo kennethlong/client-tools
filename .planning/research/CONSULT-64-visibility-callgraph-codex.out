@@ -1,0 +1,192 @@
+﻿**Call-Graph Trace**
+
+```text
+GroundScene::draw()
+  src/engine/client/library/clientGame/src/shared/scene/GroundScene.cpp:2208
+  -> ClientWorld::draw()
+     GroundScene.cpp:2360-2362
+     src/engine/client/library/clientGame/src/shared/core/ClientWorld.cpp:658-676
+     -> Camera::renderScene()
+        src/engine/client/library/clientGraphics/src/shared/Camera.cpp:742-748
+        gates on Camera::isActive()
+        -> virtual drawScene()
+           -> RenderWorldCamera::drawScene()
+              src/engine/client/library/clientGraphics/src/shared/RenderWorldCamera.cpp:32-44
+              disables excluded objects for this render, then:
+              -> RenderWorld::drawScene(camera)
+                 src/engine/client/library/clientGraphics/src/shared/RenderWorld.cpp:857
+                 - camera cell = camera.getParentCell()
+                   RenderWorld.cpp:875-876
+                 - DPVS camera cell/transform/frustum/params set
+                   RenderWorld.cpp:888-904, 918-960
+                 - DPVS query:
+                   RenderWorld.cpp:1075-1093
+                   -> DPVS::Camera::resolveVisibility(commander, depth=8, 0)
+                      src/external/3rd/library/dpvs/interface/dpvsCamera.hpp:77
+                      src/external/3rd/library/dpvs/implementation/sources/dpvsWrapper.cpp:526-547
+                      -> VisibilityQuery::resolveVisibility()
+                         dpvsVisibilityQuery_Resolve.cpp:56-81
+                         -> resolveVisibility_INTERNAL()
+                            dpvsVisibilityQuery_Resolve.cpp:155-174
+                            -> launchTravelers(...) performs traversal
+                               dpvsVisibilityQuery_Resolve.cpp:172-174
+                      -> RenderWorldCommander::command(...)
+```
+
+**Commander Callbacks**
+
+```text
+QUERY_BEGIN
+  RenderWorldCommander.cpp:189-212
+  clears per-frame rendered set and pushes the camera cell.
+
+CELL_IMMEDIATE_REPORT
+  RenderWorldCommander.cpp:179-186
+  getCell()->getUserPointer() -> CellProperty
+  -> RenderWorld::cellVisible(cell)
+     RenderWorld.cpp:1165-1171
+  -> cell->callPreVisibilityTraversalRenderHookFunctions()
+
+PORTAL_ENTER / PORTAL_PRE_EXIT
+  RenderWorldCommander.cpp:227-243
+  PORTAL_ENTER gets PhysicalPortal target cell and pushes that CellProperty
+  as the current ShaderPrimitiveSorter cell.
+
+INSTANCE_VISIBLE
+  RenderWorldCommander.cpp:361-422
+  DPVS object user pointer -> Appearance.
+  Gate: owner object must be active at lines 375-382.
+  Visible appearance draw/submission happens at:
+  -> ourAppearance->render()
+     RenderWorldCommander.cpp:419
+  then appearance is marked rendered at lines 421-422.
+
+INSTANCE_IMMEDIATE_REPORT
+  RenderWorldCommander.cpp:306-351
+  Used for report-immediate objects such as portal appearances.
+  It calls preRender(), not render(), at lines 348-351.
+```
+
+**Cell/Portal Registration**
+
+```text
+RenderWorld::install()
+  RenderWorld.cpp:195-254
+  installs:
+  - Object DPVS hooks: Object::setDpvsObjectHookFunctions(...)
+    RenderWorld.cpp:249
+  - Cell dPVS hooks: CellProperty::setCreateAndDestroyDpvsCellHookFunctions(...)
+    RenderWorld.cpp:250
+  - Portal dPVS hooks: Portal::setHookFunctions(...)
+    RenderWorld.cpp:251
+  - creates world cell DPVS cell
+    RenderWorld.cpp:253-254
+
+CellObject::CellObject()
+  src/engine/client/library/clientGame/src/shared/object/CellObject.cpp:68-72
+  adds RenderWorld cell notifications and creates CellProperty.
+
+CellProperty::CellProperty()
+  src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp:343-366
+  creates DPVS cell immediately if hook exists.
+
+PortalProperty::cellLoaded()
+  PortalProperty.cpp:474-493
+  attaches cell object to building, stores CellProperty, initializes it.
+
+CellProperty::initialize()
+  CellProperty.cpp:417-439
+  creates the cell’s portal list and optional cell appearance object;
+  cell appearance is routed through add-to-render-world hook.
+
+PortalProperty::addToWorld()
+  PortalProperty.cpp:133-187
+  creates exterior portal list, pairs portal neighbors, then attaches parent cell.
+
+Portal::setNeighbor()
+  Portal.cpp:385-395
+  creates the DPVS portal exactly here:
+  m_dpvsPortal = createDpvsPortal(this);
+  m_relativeToObject->addDpvsObject(m_dpvsPortal);
+
+RenderWorldNamespace::createDpvsPortal()
+  RenderWorld.cpp:686-742
+  builds mesh model from portal geometry, creates DPVS::PhysicalPortal,
+  target cell is NULL if portal is disabled, otherwise neighbor parent cell’s DPVS cell.
+```
+
+**Gates That Can Exclude a Cell’s Contents**
+
+1. **Camera active / selected camera**
+   - `Camera::renderScene()` only runs if `isActive()` is true: `Camera.cpp:742-749`.
+   - Depends on active camera list and scene view state.
+   - Could differ frame-to-frame if camera switching/loading-screen camera logic is active.
+
+2. **Camera parent-cell containment**
+   - `RenderWorld::drawScene()` uses `camera.getParentCell()` as dPVS starting cell: `RenderWorld.cpp:875-892`.
+   - Camera crossing notification is installed in `RenderWorldCamera` ctor: `RenderWorldCamera.cpp:17-22`.
+   - Containment changes use segment/portal penetration in `CellProperty::Notification::positionChanged()`: `CellProperty.cpp:115-175`; portal hit test is `getDestinationCell()`: `CellProperty.cpp:720-769`.
+   - Inputs: previous/new camera position, camera parent cell, cell transforms, portal geometry, portal neighbor graph.
+   - Plausibly differs between nearly identical frames: yes, especially near a portal boundary or if previous-frame cell differs.
+
+3. **Camera DPVS cell missing or disabled**
+   - dPVS requires camera has a cell: `dpvsWrapper.cpp:532-547`.
+   - dPVS rejects disabled camera cell: `dpvsVisibilityQuery_Resolve.cpp:238-243`.
+   - DPVS cell has `ENABLED`: `dpvsCell.hpp:52-55`.
+   - I did not find engine code disabling DPVS cells. Marking engine-side cell disabling as **UNVERIFIED / not observed**.
+
+4. **dPVS view-frustum culling**
+   - Engine always sets view-frustum culling in Release: `RenderWorld.cpp:945-946`; Debug can disable it at `RenderWorld.cpp:940-943`.
+   - dPVS flag is defined at `dpvsCamera.hpp:53`.
+   - Inputs: camera frustum vertices, viewport, camera-to-cell matrix, cell/portal/object transforms.
+   - Plausibly differs between near-identical frames: yes, if a portal polygon is near a clip/frustum edge.
+
+5. **dPVS portal traversal depth**
+   - Engine passes depth 8 normally: `RenderWorld.cpp:943-946`, `RenderWorld.cpp:1093`.
+   - Inputs: portal graph depth from camera cell.
+   - Plausibly differs between near-identical frames only if starting cell differs or graph differs.
+
+6. **Portal disabled state**
+   - `Portal::isDisabled()` returns template disabled flag, with Debug override: `Portal.cpp:322-329`.
+   - Disabled portal creates DPVS physical portal with NULL target cell: `RenderWorld.cpp:695-710`.
+   - Inputs: portal template data and Debug config.
+   - Plausibly differs between near-identical frames: no, unless template/config/state is changing. I saw no per-frame mutation.
+
+7. **Portal closed/open state**
+   - Portal starts `m_closed(false)`: `Portal.cpp:104-118`.
+   - `Portal::setClosed()` calls RenderWorld closed hook: `Portal.cpp:373-379`.
+   - Hook sets DPVS object enabled to `!portal.isClosed()`: `RenderWorld.cpp:754-760`.
+   - Inputs: door/portal gameplay state.
+   - Plausibly differs between frames: yes, if door state changes; otherwise no.
+
+8. **DPVS object enabled / assigned to a cell**
+   - dPVS object `ENABLED` false means it does not exist for visibility queries: `dpvsWrapper.cpp:1687-1696`.
+   - Objects must be assigned to a cell to be visible: `dpvsWrapper.cpp:1717-1728`.
+   - Engine assigns object DPVS cell in `inWorldAddDpvsObject()`: `RenderWorld.cpp:627-653`.
+   - Inputs: object parent cell, object transform, DPVS cell pointer.
+   - Plausibly differs: yes during add/remove/world-load churn or parent-cell changes.
+
+9. **Per-frame explicit exclusion**
+   - `RenderWorldCamera::drawScene()` disables excluded objects recursively: `RenderWorldCamera.cpp:34-44`.
+   - Engine restores them after query: `RenderWorld.cpp:1109-1115`.
+   - Inputs: camera excluded-object list.
+   - Plausibly differs: only if exclusion list changes.
+
+10. **Object active flag before appearance render**
+   - `INSTANCE_VISIBLE` breaks before `render()` if owner object is inactive: `RenderWorldCommander.cpp:375-382`.
+   - Inputs: `Object::isActive()`.
+   - Plausibly differs: yes for objects being activated/loaded, but this is per-object, not a dPVS cell traversal gate.
+
+11. **Occlusion buffer**
+   - Interface flag exists: `dpvsCamera.hpp:54`; dPVS starts occlusion buffer only if flag set: `dpvsVisibilityQuery_Resolve.cpp:276-277`.
+   - Evidence pack says occlusion was OFF in sightings, so this is eliminated for this incident.
+
+**Registration-Window Findings**
+
+Verified window: `Portal` objects are constructed with `m_dpvsPortal(NULL)` at `Portal.cpp:104-118`; the dPVS portal is not created until `Portal::setNeighbor()` at `Portal.cpp:385-395`. `PortalProperty::addToWorld()` pairs neighbors at `PortalProperty.cpp:155-183`, then attaches the parent cell and calls `Container::addToWorld()` at `PortalProperty.cpp:186-187`.
+
+Verified window: `PortalProperty::serverEndBaselines()` can create missing cells before `addToWorld()` by calling `cellLoaded()` for null entries: `PortalProperty.cpp:212-223`. Debug `addToWorld()` asserts if cells are still unloaded: `PortalProperty.cpp:133-146`. Release behavior if cells are missing at `addToWorld()` is **UNVERIFIED** from this pass.
+
+Verified window: a renderable `Appearance` can create/add a DPVS object only when the owner is in world or gets added to world. `Object::addToWorld()` calls appearance/property/notification add hooks at `Object.cpp:1070-1091`; `Appearance::addToWorld()` calls `Object::addDpvsObject()` at `Appearance.cpp:208-214`; `Object::addDpvsObject()` only invokes the RenderWorld hook immediately if `isInWorld()` is true at `Object.cpp:1156-1173`.
+
+Verified possible stale geometry input: dPVS cell transforms are updated by `RenderWorld::CellNotification::transformChanged()` from the cell object transform: `RenderWorld_CellNotification.cpp:94-99`. Ordinary object transforms are updated by `RenderWorld::OcclusionNotification::transformChanged()` using object-to-cell transform: `RenderWorld_OcclusionNotification.cpp:140-150`. If notifications have not fired after a transform/parent-cell change, dPVS state could lag; I did not verify a concrete missed-notification path.

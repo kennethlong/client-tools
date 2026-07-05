@@ -1,0 +1,185 @@
+# CONSULT-64 — Mechanism enumeration & ranking (Opus)
+
+Angle: enumerate candidate mechanisms by which the cell/portal visibility system
+drops whole cells' draw calls from *submission* (upstream of any D3D call), healed by
+a tiny camera move, at a world↔interior entrance portal, cross-renderer/cross-bitness,
+clustered shortly after zone-in, intermittent. Occlusion buffer is ELIMINATED (config-off).
+
+Reasoning is grounded in these engine facts (read, not assumed):
+
+- **Camera cell = stateful segment-crossing history, not a per-frame point test.**
+  `RenderWorld::drawScene` roots the whole traversal at `ms_cameraCell =
+  camera.getParentCell()` (RenderWorld.cpp:875) → `ms_dpvsCamera->setCell(...)` (:888).
+  The camera IS an Object that self-tracks its cell via portal-crossing notifications
+  (`RenderWorldCamera` ctor calls `CellProperty::addPortalCrossingNotification(*this)`).
+- **The crossing test only runs when the camera moves and integrates a line segment**
+  from old→new position against portal quads: `CellPropertyNamespace::Notification::
+  positionChanged` (CellProperty.cpp:115-186). `if (start == end) return true;` (:131)
+  — a stationary camera is NEVER re-evaluated; its cell is frozen at whatever the last
+  segment integration produced. `getDestinationCell` (:720) → `Portal::testPenetration`
+  (Portal.cpp:195) is a **segment/triangle collide**, winding-order-signed (:202).
+- **dPVS portals are `BACKFACE_CULLABLE` (RenderWorld.cpp:693).** A portal is only
+  traversed when the eye is on its front side; an eye on/behind the plane drops it.
+- Environment/sky is drawn UNCONDITIONALLY before the dPVS query (:1005-1048,
+  `pushCell(worldCell)`), so "sky where interior should be" = interior simply never
+  submitted; sky fills the hole. This is why pair B shows sky, not black.
+
+============================================================================
+CANDIDATE MECHANISMS
+============================================================================
+
+### M1 — Camera containing-cell misresolution (wrong traversal ROOT). RANK 1.
+(a) Predicate: `ms_cameraCell` (:875) is the WRONG cell — most damagingly the world
+    cell (index 0) when the eye is actually inside the POB, or an interior cell when it
+    should be world. dPVS roots at that cell (:888); the entire portal graph is
+    traversed from the wrong origin.
+(b) Heal by tiny move: the cell is frozen while stationary (:131). ANY position delta
+    re-runs `positionChanged`, re-integrates the segment across the entrance portal, and
+    corrects `setParentCell`. That is exactly a "small camera change instantly restores."
+(c) Consistency: entrance portal ✓ (the one plane the camera's cell hinges on).
+    Cross-renderer/bitness ✓ (pure shared sharedObject math, no D3D, no x87 — the 2026-06-20
+    FPU_PRESERVE fix was this same neighborhood but a precision variant; x64 SSE is a
+    DIFFERENT instance, as the pack states). Post-zone-in cluster ✓✓ (see M1-trigger).
+    Intermittent ✓ (depends on the exact segment geometry of one crossing). Strain: none
+    material. This is the single best fit to ALL facts.
+    - **M1 trigger (why it mis-sets, esp. after zone-in):** the third-person camera
+      snaps/pulls-in near the doorway (`cs_cameraPullInSpeed`, door-snap converge, seam-graze
+      are all logged camera behaviors right here). A snap is a DISCONTINUOUS jump; the
+      old→new segment can tunnel the thin entrance quad, cross it an even number of times,
+      or the loop's break guards (`nextCell==currentCell/lastCell`, CellProperty.cpp:164-168)
+      can bail mid-chain, leaving the cell one step short. Right after zone-in the camera is
+      settling (position set discontinuously, collision converging) → highest snap density →
+      the observed cluster. Player cell can be right while the independently-tracked CAMERA
+      cell is wrong — nothing forces them equal.
+(d) Pair B (160 missing, SKY): root set to world cell; entrance portal into the POB not
+    taken → the whole interior subtree + adjacent cells vanish; sky (drawn unconditionally)
+    shows through. "Died at the root" = literally the wrong root. Pair A (42 missing, wrong
+    wall): root is a CORRECT interior cell but one hop is short/stale, so one neighbor room
+    is absent and you see the current cell's back wall — a shallower instance of the same
+    misresolution, or a portal-clip (M3/M4) one level down. The two pairs being different
+    DEPTHS is the signature this mechanism predicts.
+
+### M2 — dPVS lazy database / cell-bounds not yet committed post-zone-in. RANK 2.
+(a) Predicate: the cell's dPVS Cell / PhysicalPortal / member objects exist in the DB but
+    the region-of-influence / bounds / import-graph for that cell hasn't been resolved yet
+    (objects added via async POB realization), so `resolveVisibility` doesn't yet see them
+    inside the cell.
+(b) Heal by tiny move: a camera move forces a fresh query + any deferred DB commit /
+    dirty-bounds recompute to run that frame → cell appears. (Weaker: many dPVS commits are
+    per-query, not per-motion, so a stationary re-query might also fix it — but the user
+    only ever perturbs by moving, so indistinguishable in the field.)
+(c) Cross-renderer/bitness ✓ (dPVS is renderer-agnostic). Post-zone-in cluster ✓✓ (this is
+    fundamentally a "state still settling" mechanism — matches the pack's own open question).
+    Entrance portal: WEAK — this would also drop cells with no portal involved; the tight
+    clustering AT the entrance is only explained if the entrance POB is the last thing to
+    finish realizing. Intermittent ✓ (race with async loader). Strain: doesn't explain "wrong
+    WALL through portal" (pair A) as cleanly — that needs a real portal traversal that
+    partially succeeded, i.e. M1/M3.
+(d) Pair B: whole POB not yet in DB → all its cells missing → sky. GOOD fit for pair B.
+    Pair A: only partially explains (one late object/cell).
+
+### M3 — Portal-plane sidedness / winding-order flip within epsilon of the plane. RANK 3.
+(a) Predicate: eye is ~on the entrance portal plane; `BACKFACE_CULLABLE` (:693) +
+    winding-signed traversal decide the portal is back-facing and skip it, so the neighbor
+    cell isn't visited even though the root cell is correct.
+(b) Heal by tiny move: crossing to the unambiguous front side flips the sign → portal
+    traversed. Tiny delta, instant. Excellent fit to the "heal" clause.
+(c) Entrance portal ✓✓ (epsilon-on-plane only happens AT a doorway you're standing in).
+    Cross-bitness: PLAUSIBLE but this is the closest cousin to the x87 precision bug already
+    fixed once — must call the strain that a pure sidedness-sign flip is more fragile to FP
+    than M1's segment integration; on x64 SSE it's less likely but not impossible with a
+    genuinely coplanar eye. Post-zone-in cluster: NEUTRAL (sidedness doesn't care about
+    load state) — this is M3's main weakness vs M1/M2.
+(d) Pair A: root cell correct, ONE portal back-face-rejected → one neighbor room gone,
+    back wall shows. TEXTBOOK fit for pair A (42 draws). Pair B: would need MANY portals to
+    flip at once — poor fit for 160. So M3 explains A well, B poorly. (Mirror of M2.)
+
+### M4 — Portal-rectangle frustum clip collapses to degenerate area (edge-on / eye inside
+     the doorway volume). RANK 4.
+(a) Predicate: dPVS projects the portal quad to a screen rectangle and intersects it with
+    the running frustum; when the portal is edge-on or the eye is inside the doorway slab,
+    the projected rect degenerates to ~zero area / NaN and the portal is pruned as
+    "contributes nothing."
+(b) Heal by tiny move: rotating/translating gives the quad finite projected area → portal
+    kept. Fits heal.
+(c) Entrance portal ✓ (edge-on geometry happens at the threshold). Cross-bitness ✓ (integer/
+    float rect math in dPVS, renderer-agnostic). Cluster: NEUTRAL (weakness). Overlaps M3 —
+    hard to separate from sidedness without a dPVS-internal trace. Strain: dPVS is fairly
+    robust to degenerate rects (clamps), so this is less likely than M3 on the same evidence.
+(d) Pair A shallow / one portal. Pair B only if the FIRST (entrance) portal degenerates,
+    killing the whole subtree — possible, so M4 can reach pair B better than M3.
+
+### M5 — View near-plane straddles the portal quad. RANK 5.
+(a) Predicate: near clip plane intersects the entrance portal; the near-plane-clipped
+    portal polygon is mis-formed, so the portal is dropped or its sub-frustum is wrong.
+(b) Heal: a small pull-back/rotate moves the near plane off the quad. Fits.
+(c) Entrance portal ✓, cross-bitness ✓. Cluster NEUTRAL. Strain: the near plane is very
+    close to the eye; you'd have to be almost touching the doorway. Subset of M3/M4 spatially.
+    Low independent probability.
+(d) Similar to M4.
+
+### M6 — Disabled/closed door → portal passability/occluder state. RANK 6 (near-eliminated).
+(a) Predicate: door animation/barrier sets the portal disabled or a barrier occluder blocks.
+(c) STRAIN/near-refuted: (i) occlusion buffer is OFF, so barrier occluders can't cull; (ii)
+    rendering traversal uses geometry portals regardless of `isPassable` for the RENDER path
+    — passability gates the crossing test's `passableOnly`, but the cantina entrance is an
+    always-open passable portal; (iii) a closed door would be PERSISTENT, not self-clearing
+    on a 1° camera nudge. Does not fit "heal by tiny move." Keep only as a ruling-out.
+(d) N/A.
+
+### M7 — dPVS write-object-motion / camera-cell desync (camera moved, dPVS cell stale). RANK 7.
+(a) Predicate: `ms_dpvsCamera->setCell` uses `ms_cameraCell->getDpvsCell()`; if the cell
+    pointer is right but the dPVS camera's internal cell/motion wasn't updated in lockstep
+    with the transform, the query roots stale.
+(c) Mostly a sub-case of M1 seen from the dPVS side; the code sets cell + matrix together
+    each frame (:888-892), so an independent desync is unlikely. Low. Folds into M1.
+
+============================================================================
+RANKING (confidence)
+============================================================================
+1. M1 camera-cell misresolution (wrong root)     — 55%  ← explains EVERY fact incl. cluster + both depths
+2. M2 dPVS lazy/uncommitted post-zone-in state    — 20%  ← best "cluster" story; weak on pair A
+3. M3 portal sidedness/winding flip (epsilon)     — 12%  ← best pair-A story; weak on cluster + pair B
+4. M4 portal-rect degenerate clip                 — 7%
+5. M5 near-plane straddles portal                 — 3%
+6. M6 door/passability                            — 2%  (near-eliminated)
+7. M7 dpvs cell desync                            — 1%  (sub-case of M1)
+
+Note: M1 and M3 are NOT mutually exclusive across the two pairs. The cleanest single
+story is **M1 for pair B (root wrong → sky) and M1-or-M3 for pair A (one hop short →
+wrong wall).** If forced to one mechanism for both, M1 wins because only it also explains
+the post-zone-in clustering (camera snap density) and the total-subtree loss of pair B.
+
+============================================================================
+DECISIVE PROBES for the top 2 (one sighting discriminates)
+============================================================================
+Instrument ONE frame at the sighting; both probes live in `RenderWorld::drawScene`.
+
+PROBE for M1 (and to split M1 vs M3/M4) — the single most decisive log:
+  At **RenderWorld.cpp:875-876**, immediately after `ms_cameraCell = camera.getParentCell();`
+  log: camera world position; `ms_cameraCell->getCellName()` + `m_cellIndex`; AND the
+  player/reference object's parent-cell name+index (whatever object the camera is anchored
+  to). THEN at **:1096**, right after `resolveVisibility`, dump `getVisibleCells()`
+  (`ms_visibleCellList`) names+count.
+  Discrimination in ONE sighting:
+   - `ms_cameraCell` is the WORLD cell (idx 0) / disagrees with the player's cell
+     → **M1 convicted** (wrong root). Pair-B shape confirmed.
+   - `ms_cameraCell` is the CORRECT interior cell BUT the expected neighbor cell is ABSENT
+     from `getVisibleCells()` → root was fine, a portal traversal was rejected
+     → **M1 refuted, M3/M4 in play** (portal clip/sidedness). Pair-A shape.
+  This one paired log cleanly separates "wrong root" (M1) from "right root, portal dropped"
+  (M3/M4) — the top structural fork — using state the engine already has in hand.
+
+PROBE for M2 (lazy DB) — discriminate M1 vs M2 when the root IS wrong or a cell is missing:
+  Same `getVisibleCells()` dump at :1096 PLUS log whether the missing cell's `CellProperty`
+  even has a non-null `getDpvsCell()` and a realized `m_portalObjectList` at sighting time.
+   - Missing cell has NULL/empty dPVS cell or no portal objects yet → **M2** (not yet
+     committed post-zone-in).
+   - Missing cell is fully realized (dpvs cell + portals present) but still absent from the
+     visible list while `ms_cameraCell` is correct → **not M2**; portal clip (M3/M4).
+  Combined with the M1 probe, a SINGLE captured sighting frame classifies into
+  {M1 wrong-root | M2 unrealized | M3/M4 portal-clip}.
+
+Anchor lines: RenderWorld.cpp:875 (root), :888 (setCell), :1093/1096 (query + visible list),
+:693 (BACKFACE_CULLABLE portals); CellProperty.cpp:131 (stationary short-circuit),
+:162/:720 (crossing test), :181 (setParentCell); Portal.cpp:195/:202 (winding-signed segment).

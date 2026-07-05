@@ -1,0 +1,249 @@
+# CONSULT-64 — dPVS library internals + frame-to-frame state angle (Sonnet)
+
+Scope: vendored dPVS source only (src/external/3rd/library/dpvs/), occlusion-buffer path
+already eliminated per evidence pack (occlusionMode=off). Mechanism only, no fixes proposed.
+
+## LEAD FINDING — near-zero-epsilon clip-plane classification can reject a whole portal
+## transition, independent of renderer/bitness, and self-heals on a tiny camera move
+
+Call chain for every portal traversal (occlusion off):
+`VisibilityQuery::traversePortal()` [dpvsVisibilityQuery_Traverse.cpp:512]
+  -> `p->getTestRectangle(portalRectangle)` [dpvsImpObject.cpp:1230] — for a portal this ALWAYS
+     calls `m_testModel->getExactRectangle(r)` (never the plain OBB rect — "portals are so
+     expensive we always want exact rectangles")
+  -> `ImpMeshModel::getExactRectangle()` [dpvsImpMeshModel.cpp:540] first calls
+     `SilhouetteMath::getClippedRectangle_FLOW()` -> `getClippedRectangle()`
+     [dpvsSilhouetteMath.cpp:588].
+
+`getClippedRectangle()` clips the portal's OBB (6 quad faces) against the CURRENT camera's clip
+planes via `clipPolygonPlane()` [dpvsClipPolygon.cpp:40]. That function classifies each vertex
+with a **hard, zero-tolerance comparison**:
+
+```cpp
+clipVal[i] = -(polygon[i].x*plEq.x + polygon[i].y*plEq.y + polygon[i].z*plEq.z + plEq.w);
+if (clipVal[i] < 0.0f)   // should this be <= ?     <-- original dPVS author's own doubt, in-source
+    allClipped = false;
+```
+
+There is no epsilon anywhere in this test. If EVERY vertex of EVERY one of the 6 OBB faces
+lands with `clipVal <= 0.0f` for that face's governing plane comparison (`allClipped==true` for
+all 6, or every face's clip degenerates to 0 vertices), `getClippedRectangle()` hits
+`if (!valid) return false;` [line 743] — the "camera is not inside the OBB and OBB is outside
+the screen" path. This propagates: `getExactRectangle()` returns false -> `getTestRectangle()`
+returns false -> `traversePortal()` returns false at line 558-559 -> the ENTIRE downstream
+transition (portal, target cell, and everything reachable only through it) is **rejected for
+this frame's query** — no assertion, no error, just silently not traversed. This is upstream of
+render-queue submission, exactly matching the RenderDoc evidence ("missing cells' geometry
+never submitted").
+
+There is a second fail-closed path in the same function: even when some faces DO clip validly,
+if the accumulated depth range degenerates (`mnz > mxz` after clamping, line 750-751) the
+function also returns false. Both paths are reachable specifically when the portal's (thin,
+often near-planar) OBB straddles a clip plane at a shallow/grazing angle — i.e. exactly the
+geometric situation of a camera standing at/near a doorway threshold, looking through it at a
+shallow angle. (There is also a companion front-clip branch, lines 703-725, that substitutes the
+FULL VIEWPORT rectangle instead of rejecting — that path is fail-OPEN, not relevant to the
+missing-geometry symptom, but shows the same file has two different escape hatches for the same
+front-clipping condition, in tension with each other.)
+
+Why this matches the locked symptom set precisely:
+- **Renderer-agnostic + bitness-agnostic**: this is pure dPVS C++ float math (object/camera
+  matrices, dot products), executed identically regardless of gl05/D3D9 vs gl11/D3D11, and
+  regardless of Win32 vs x64 — it never touches a graphics API. The historical
+  D3DCREATE_FPU_PRESERVE fix addressed a DIFFERENT precision corruption (x87 control-word
+  clamping from the D3D9 runtime affecting shared portal-visibility math broadly); this
+  mechanism is dPVS's own zero-epsilon comparison and is agnostic to that fix, consistent with
+  the evidence pack's note that the current bug reproduces on x64/SSE (no x87 clamping) as "a
+  different instance, though possibly the same math neighborhood."
+- **"Standing at/near the cantina entrance"**: the portal quad's OBB is only marginally on one
+  side of a view-frustum clip plane at exactly this position/angle range.
+- **"A SMALL camera angle/position change restores correct rendering instantly"**: any
+  perturbation of camera position/orientation changes every dot product in
+  `clipPolygonPlane()` by a tiny but non-exactly-zero amount, flipping one or more vertices away
+  from the exact classification tie. No state persists across frames in this path — it is
+  recomputed fresh from the current camera pose every query — so this also explains "self-
+  clearing; no persistence."
+- **Variable magnitude of missing draws** (Pair A: 42 draws missing; Pair B: 160 draws missing):
+  rejection higher up the portal-recursion chain (a doorway that gates a large sub-graph of
+  cells) removes proportionally more geometry than rejection of a leaf portal — consistent with
+  two different-sized failures being observed from the same root mechanism.
+
+This is a single, self-contained, deterministic-given-camera-pose mechanism entirely inside the
+vendored dPVS math, requiring no cross-frame state, no engine-side bug, and no occlusion buffer.
+It is the most parsimonious explanation of the RenderDoc evidence and should be the first thing
+probed at the actual sighting location (e.g. instrument `getClippedRectangle()`'s `!valid` and
+`mnz>mxz` return points for the cantina entrance portal object, or watch `clipVal[]` values for
+its OBB corners as camera position is nudged through the reported trigger zone).
+
+## Task 1 — portal traversal path, camera-cell assignment, frame-coherency state
+
+- **Camera-cell assignment**: `VisibilityQuery::launchTravelers()` [Traverse.cpp:52] takes the
+  camera's cell via `m_currentCamera->getCell()` UNCONDITIONALLY, once, at the start of the
+  query (line 168: `DPVS_ASSERT (c->getCell())`). dPVS does not re-derive or validate which cell
+  the camera "actually" belongs to — that is entirely the CALLER's (engine's) responsibility via
+  `Camera::setCell()`/similar, invoked once per query setup. If the engine ever hands dPVS a
+  stale/wrong cell pointer for the camera, dPVS will traverse that cell's portal graph with zero
+  self-correction — but this is an ENGINE-side integration question (out of this angle's scope;
+  the other consultants tracing the call graph should confirm whether/when the engine
+  re-resolves camera-cell containment per frame vs. caching it).
+- **Portal traversal termination conditions** (`RecursionSolver`, dpvsRecursionSolver.cpp):
+  three independent gates, each of which silently drops a transition (returns `false` from
+  `testTransition()`, Traverse.cpp:616) without any diagnostic:
+  1. `testRecursionDepth()` — hard depth limit (`m_maximumDepth`, set once via
+     `Camera::setRecursionDepth()` — engine-configured, likely small, e.g. 3-8). Keyed by a
+     `Hash<Transition,int>` where the KEY equality is the FULL (not truncated) 64-bit
+     `(m_s,m_d)` pointer pair (`Transition::operator==`, dpvsRecursionSolver.hpp:85) — collisions
+     in the (deliberately truncated-to-32-bit, x64-safe per in-source comment) HASH BUCKET are
+     resolved correctly via full key compare, so this is NOT a correctness bug on x64, only a
+     (harmless) bucket-distribution one. See "x64/pointer" section below for the full note.
+  2. `testReTraversal()` — rejects a SECOND `REAL_TRANSITION` into a cell already reached this
+     query via a different portal chain (prevents duplicate-cell processing / infinite loops on
+     cyclic portal graphs). This is a legitimate one-arrival-per-cell-per-query rule, not a bug,
+     but it means: if a cell is reachable via two distinct real portals from the entry room
+     (e.g. two doorways/windows into the same interior), only the FIRST one processed (by
+     traversal order, see PQueue note below) actually contributes its frustum; the second is
+     dropped outright. Combined with traversal-order instability (below), this can make the
+     *narrower* of two valid portal views "win" on one frame and the *wider* one win on the
+     next, producing exactly a "wrong/tighter clip" flicker at a doorway with redundant portal
+     geometry — a secondary candidate mechanism worth checking if the cantina entrance in fact
+     has more than one physical-portal path between the same two cells.
+  3. Importance-threshold decay (`m_importanceThreshold`, Traverse.cpp:640-651) — if the engine
+     sets a non-zero importance threshold, cumulative decay along a longer/indirect traversal
+     path can drop a transition that would otherwise succeed via a more direct path. Order-
+     dependent (same traversal-order sensitivity as #2).
+- **Frame-coherency / temporal caching that DOES exist in the library** (all found, all
+  candidates for task 1's "frame coherency" question):
+  - `Node::m_lastVisible` / `Node::m_lastOcclusionTestVisible` — Jiri Bittner node-skipping +
+    visible-point-tracking caches (Database.cpp `traverseNode()` ~line 3052, `isNodeVisible()`
+    ~line 2635). **Confirmed inert under occlusionMode=off**: `isNodeVisible()` line 2645-2646
+    returns `true` unconditionally the instant `!VQData::get().performOcclusionCulling()` — so
+    with occlusion off, this cache path never diverges from "always visible" and cannot be the
+    cause. This independently CONFIRMS (does not just assume) the evidence pack's elimination of
+    the occlusion-buffer subsystem, at the Node-cache level as well as the buffer-instantiation
+    level.
+  - `ImpCamera::setTimeStamp(++s_portalTimeStamp)` on every synthesized child camera
+    (Traverse.cpp:572) — a monotonically increasing global counter, used only for cache-
+    invalidation bookkeeping elsewhere (write-queue / occlusion writer); not implicated while
+    occlusion is off.
+  - `Database::m_timeStamp` (incremented once per `traverse()` call, i.e. once per cell-query)
+    and `ImpObject`'s per-object timestamp — used to prevent re-processing the same object twice
+    within one query (multi-node object instances). Purely per-query dedup; resets cleanly every
+    call. Not a cross-frame persistence hazard.
+  - **`Database::m_updateHead`/`m_updateTail` dirty-node list + `optimizeHiddenAreas()`
+    background job** — this is real, PERSISTENT, budget-throttled cross-frame state. See Task 2.
+
+## Task 2 — what settles asynchronously after zone-in (dPVS's own answer)
+
+Each `CellProperty`/cell owns its own independent dPVS `IDatabase` (spatial BSP-like node tree)
+— confirmed at `ImpCell` construction, `m_database(NEW<IDatabase>())` (dpvsImpCell.cpp:56).
+`DPVS_HIERARCHICAL_DATABASE` (voxel/node splitting) **is compiled in** for this build — it is
+defined by default in `dpvsPrivateDefs.hpp:768` unless `DPVS_STABLE` is defined, and `DPVS_STABLE`
+is not defined anywhere in the tree (grep confirmed, only referenced at its own `#ifndef` site).
+So node splitting/collapsing is active, not disabled.
+
+The relevant self-throttling machinery, all in `dpvsDatabase.cpp`:
+- `Database::traverse()` [~line 3511] computes `optimizationBudget` as **2.5% of the time just
+  spent on this frame's actual visibility traversal** (`optimizationBudget *= 0.025`,
+  line 3580), then spends that budget in `optimizeHiddenAreas(optimizationBudget)`.
+- `optimizeHiddenAreas()` [line 914] additionally caps itself to `m_numNodes>>6` (i.e. ~1/64 of
+  the tree's nodes) per call regardless of remaining time budget.
+- `updateDirtyNode()` [line 2299] is where the actual work happens: splitting an over-full node
+  (`splitNode`+`pushObjectsDown`, when a node exceeds `MIN_NODE_INSTANCE_COUNT`=12 instances),
+  collapsing an under-full one, and recomputing `m_tightBounds`/`m_visiblePoint` for LEAF nodes
+  only (non-leaf nodes never get tight bounds — their frustum test always falls back to the
+  wider, static, split-derived `m_bounds`, which fails OPEN not closed, so that particular
+  staleness is not itself a missing-geometry vector).
+- Any newly-added/moved object marks its node (and ancestors, via `setNodeDirty`/
+  `setParentAccumulatedCostDirty`) dirty; dirty nodes are re-linked to the TAIL of the update
+  list (`linkNodeToUpdateTail`), so a fresh burst of insertions (zone-in populating an interior
+  cell with furniture/NPCs/dynamic objects all at once) can take **many frames** to fully drain
+  through this 2.5%-budget, 1/64-node-count-capped background job before the tree structure
+  (and per-leaf tight bounds / visible points) is fully "settled."
+
+This is dPVS's own documented mechanism for exactly the kind of "still settling minutes after
+cell creation" window the task asked about — it is not a guess, it is the explicit budget
+formula in `Database::traverse()`. It is a live candidate independent of the lead finding above:
+while a cell's node tree is mid-restructure, `Node::getTestBounds()` for affected nodes may
+temporarily use the coarser split-derived `m_bounds` rather than the tight object-derived AABB,
+changing which nodes/objects get visited by the priority-queue traversal (see next item) even
+though it should not, by itself, cause an already-well-formed node to falsely fail a frustum
+test (coarser bounds are always a superset).
+
+**Traversal-order instability (secondary but real, ties into #2 above and into Task 1's
+"portal ordering" question):** `Database::traverseNode()` enqueues objects/child-nodes into a
+`PQueue<TraversalElement>` [dpvsPriorityQueue.hpp] sorted by
+`getSquaredBoxNearDistance()` — the squared distance from the CURRENT camera location to each
+object/node's AABB, recomputed fresh every traversal from `VQData::get().getCameraLocation()`
+(dpvsDatabase.cpp:256-303). The priority queue is a **plain, non-stable binary heap**: ties
+(`m_items[parent] <= m_items[n]`, no swap on equality) resolve by insertion order, and insertion
+order into a node's linked list is **LIFO** — `createInstance()` always prepends
+(`instance->m_vNext = v->getFirstInstance(); v->setFirstInstance(instance);`,
+dpvsDatabase.cpp:1329-1341) — so the most-recently-created object/portal-instance is always
+processed first among ties. During/after zone-in, as objects are created asynchronously and the
+tree is mid-restructure (previous paragraph), both (a) which objects tie in distance and (b)
+their relative creation order are actively churning. Combined with `RecursionSolver::
+testReTraversal()`'s "first real transition into a cell wins, second is dropped" rule (Task 1,
+item 2), a traversal-order flip between two portals leading to overlapping cells/geometry can
+change WHICH portal's (possibly narrower) view frustum ends up gating that geometry, or
+whether an importance-threshold decay accumulated along a longer path first causes a legitimate
+transition to be dropped. This is consistent with, but secondary to, the lead finding: it
+requires a specific topology (redundant portal paths or non-trivial importance threshold) to
+manifest, whereas the lead finding (clip-plane classification) requires only ordinary single-
+portal geometry at a grazing angle.
+
+## Task 3 — x64/pointer/precision scan (secondary only; bug reproduces on Win32 too)
+
+- `RecursionSolver`'s `Transition` hash function (dpvsRecursionSolver.cpp:37-40) truncates
+  pointer values to a 32-bit hash deliberately, per an in-source comment already present
+  ("ad-hoc hash function (UPTR: pointer-width-safe on x64, low-32 hash intentional)") — this
+  reads as a change already made and reasoned about by a previous investigator/phase. Verified
+  harmless for correctness on x64: `Hash<Key,Value>::get()`/`exists()` (dpvsHash.hpp) always
+  re-checks full key equality (`table[h].key == s`, i.e. the untruncated 64-bit `Transition::
+  operator==` comparing both `m_s` and `m_d` pointers in full) after the hash-bucket lookup, so a
+  32-bit truncation collision only costs a slightly longer bucket chain, never a false match.
+  **Not a live x64 correctness suspect** (already checked and closed by a prior investigator per
+  the in-source annotation; re-verified independently here).
+- No other pointer-keyed hash/set structures were found in the portal-traversal-adjacent code
+  (`Set<ImpObject*>`, `Hash<Transition,int>` are the only two in this path); neither showed a
+  pointer-size assumption that would behave differently under x64 vs Win32.
+- Portal geometry transforms (`Matrix4x3`/`Matrix4x4`/`Vector3`/`Vector4`) throughout
+  `dpvsImpPhysicalPortal.cpp`, `dpvsSilhouetteMath.cpp`, `dpvsClipPolygon.cpp` are plain `float`
+  (32-bit) math end-to-end; no `double`, no platform-conditional precision code, nothing
+  `#ifdef`'d on architecture/bitness was found in the portal/clip/frustum path. This matches the
+  evidence pack's observation that the bug reproduces on BOTH Win32 and x64 — the lead finding's
+  zero-epsilon `clipVal < 0.0f` classification (dpvsClipPolygon.cpp:51) is bitness-agnostic by
+  construction (same IEEE-754 float math, same code, no architecture branch), which is why it
+  remains the best fit rather than an x64-specific SSE/x87 rounding-difference theory: whatever
+  rounding noise flips the classification exists on BOTH architectures (just with different
+  noise characteristics), consistent with "reproduces on both, not identical, possibly same math
+  neighborhood" already noted in the evidence pack for the historical x87 fix.
+- Flag, do not chase further under this task's framing: nothing x64-only was found that could
+  cull a whole cell. The one true pointer-hash-truncation spot is already correctness-safe by
+  construction (full-key re-check) and already has an in-source note suggesting it was already
+  reviewed.
+
+## Summary of candidate mechanisms, ranked
+
+1. **(Lead)** `getClippedRectangle()`'s zero-epsilon `clipPolygonPlane()` vertex classification
+   (dpvsClipPolygon.cpp:51) causing `getExactRectangle()`/`getTestRectangle()` to fail for a
+   portal's OBB at a grazing viewing angle -> `traversePortal()` rejects the whole downstream
+   transition for that frame only. Single-frame, camera-pose-only, no persistent state,
+   renderer- and bitness-agnostic. Best fit for all four locked symptom characteristics.
+2. **(Secondary, timing)** Per-cell `Database`'s budget-throttled (`2.5%` time, `1/64` node
+   count per call) background node-split/collapse job (`optimizeHiddenAreas`/
+   `updateDirtyNode`) taking multiple frames to converge after a burst of object insertions at
+   zone-in — dPVS's own explicit mechanism matching the "settles within seconds to minutes"
+   timing profile, independent of mechanism 1.
+3. **(Secondary, order-dependent)** Priority-queue (non-stable heap) traversal-order sensitivity
+   to camera position + LIFO object-instance insertion order, interacting with
+   `RecursionSolver::testReTraversal()`'s "first arrival wins" rule for cells reachable via
+   multiple portals, or with a non-zero importance threshold's cumulative decay. Requires
+   redundant-portal topology or non-zero importance threshold to manifest; worth checking engine
+   config for `Camera::setImportance`/threshold value and whether the cantina entrance has more
+   than one physical portal into the same interior cell.
+4. Occlusion-buffer node-visibility cache (`Node::m_lastVisible`/`m_lastOcclusionTestVisible`,
+   visible-point tracking) — independently CONFIRMED inert while occlusionMode=off
+   (`isNodeVisible()` short-circuits to `true` before touching any cached state). Reinforces,
+   does not contradict, the evidence pack's existing elimination of this subsystem.
+5. Pointer-hash truncation in `RecursionSolver` — checked, correctness-safe by full-key
+   re-verification, already flagged/commented by a prior pass. Not a live suspect.
