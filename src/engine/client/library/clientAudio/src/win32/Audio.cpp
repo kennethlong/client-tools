@@ -44,6 +44,28 @@
 #include <cstdio>
 
 // ============================================================================
+// CONSULT-63 (2026-07-05): Win32 builds against the retail-era Miles 7.2e SDK;
+// x64 stays on the 9.3b header (9.3v DLL at runtime). The 9.3b 32-bit DLL's
+// mixer storms when one-shot samples start inside an MP3 stream track-transition
+// window (A/B-convicted: same x64 exe, 9.3b DLL storms, 9.3v DLL clean) and no
+// 32-bit build of the fixed 9.3v exists. Two API deltas are bridged here so the
+// call sites stay identical across both builds.
+// ============================================================================
+
+#if MSS_MAJOR_VERSION < 9
+
+// Miles 9.3 added a bus_index arg to the room-type (EAX environment) calls; 7.2e has none.
+namespace MilesCompat
+{
+	inline void setRoomType(HDIGDRIVER dig, S32 /*busIndex*/, S32 roomType) { AIL_set_room_type(dig, roomType); }
+	inline S32 roomType(HDIGDRIVER dig, S32 /*busIndex*/) { return AIL_room_type(dig); }
+}
+#define AIL_set_room_type MilesCompat::setRoomType
+#define AIL_room_type     MilesCompat::roomType
+
+#endif // MSS_MAJOR_VERSION < 9
+
+// ============================================================================
 // 35-05 Miles audio integration state: login-title-music stream fix + 3D-mute setting.
 // ============================================================================
 
@@ -253,6 +275,10 @@ namespace AudioNamespace
 	int   s_streamBufferBytes = 0;
 	bool  s_audioDiagLog = false;
 	FILE* s_audioDiagFile = 0;
+	// CONSULT-63 7.2e bring-up: budget-limited Miles file-callback I/O trace (FILEOPEN
+	// always; FILESEEK/FILEREAD for the first N calls) -- shows exactly what Miles read
+	// before a failed stream open ("Error getting sound format").
+	volatile LONG s_diagFileIoLogBudget = 120;
 	float s_audioDiagSummaryTimer = 0.0f;
 
 	HSAMPLE s_bufferedSoundSample = 0;
@@ -705,10 +731,12 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 					DWORD const diagOpenMs = GetTickCount() - diagOpenStart;
 					SYSTEMTIME st;
 					GetLocalTime(&st);
-					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d OPENCALL %s took %lums stream=%p\n",
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d OPENCALL %s took %lums stream=%p%s%s\n",
 						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
 						sound.getSamplePath()->getString(), diagOpenMs,
-						static_cast<void *>(sampleStream.m_stream));
+						static_cast<void *>(sampleStream.m_stream),
+						sampleStream.m_stream ? "" : " lastError=",
+						sampleStream.m_stream ? "" : AIL_last_error());
 					fflush(s_audioDiagFile);
 				}
 
@@ -755,6 +783,15 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 
 					s_sampleIdToSample2dMap.insert(std::make_pair(sampleId, sample2d));
 				}
+				else if (s_audioDiagFile)
+				{
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d ALLOCFAIL2D %s alloc2d=%d alloc3d=%d lastError=%s\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						sound.getSamplePath()->getString(), s_allocated2dSampleHandles, s_allocated3dSampleHandles, AIL_last_error());
+					fflush(s_audioDiagFile);
+				}
 			}
 		}
 		else if (sound.is3d())
@@ -791,6 +828,15 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 				int const count3d = AIL_active_sample_count(s_digitalDevice2d);
 				UNREF(count3d);
 #endif // _DEBUG
+				if (s_audioDiagFile)
+				{
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d ALLOCFAIL3D %s alloc2d=%d alloc3d=%d lastError=%s\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						sound.getSamplePath()->getString(), s_allocated2dSampleHandles, s_allocated3dSampleHandles, AIL_last_error());
+					fflush(s_audioDiagFile);
+				}
 			}
 		}
 		else
@@ -3312,7 +3358,17 @@ void Audio::startSample(Sound2 &sound)
 			DEBUG_FATAL((fileSize == 0), ("File size is 0 %s", iterSampleIdToSample2dMap->second.getPath()));
 			HSAMPLE sample2d = iterSampleIdToSample2dMap->second.m_sample;
 
-			if (AIL_set_named_sample_file(sample2d, extension, sampleRawData, fileSize, 0))
+			S32 const setNamedResult = AIL_set_named_sample_file(sample2d, extension, sampleRawData, fileSize, 0);
+			if (!setNamedResult && s_audioDiagFile)
+			{
+				SYSTEMTIME st;
+				GetLocalTime(&st);
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d SETNAMEDFAIL %s ext=%s size=%u lastError=%s\n",
+					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+					iterSampleIdToSample2dMap->second.getPath()->getString(), extension, fileSize, AIL_last_error());
+				fflush(s_audioDiagFile);
+			}
+			if (setNamedResult)
 			{
 				setSampleVolume(iterSampleIdToSample2dMap->first, sound.getVolume());
 
@@ -4534,6 +4590,18 @@ U32 __stdcall fileOpenCallBack(char const *fileName, UINTa *fileHandle)
 		*fileHandle = 0;
 	}
 
+	if (s_audioDiagFile)
+	{
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d FILEOPEN %s -> %s handle=%u\n",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			effectiveName[0] ? effectiveName : "(empty)",
+			abstractFile ? "ok" : "FAIL",
+			static_cast<unsigned>(*fileHandle));
+		fflush(s_audioDiagFile);
+	}
+
 	return (abstractFile != NULL);
 }
 
@@ -4649,6 +4717,16 @@ S32 __stdcall fileSeekCallBack(UINTa const fileHandle, S32 const offset, U32 con
 
 	// Return the new absolute position of the file pointer (relative to the beginning of the file)
 
+	if (s_audioDiagFile && (InterlockedDecrement(const_cast<LONG *>(&s_diagFileIoLogBudget)) > 0))
+	{
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d FILESEEK handle=%u type=%u offset=%ld -> pos=%d\n",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			static_cast<unsigned>(fileHandle), static_cast<unsigned>(type), static_cast<long>(offset), result);
+		fflush(s_audioDiagFile);
+	}
+
 	return result;
 }
 
@@ -4703,6 +4781,16 @@ U32 __stdcall fileReadCallBack(UINTa const fileHandle, void *buffer, U32 const b
 #ifdef _DEBUG
 		determineCallbackError("read", fileHandle);
 #endif
+	}
+
+	if (s_audioDiagFile && (InterlockedDecrement(const_cast<LONG *>(&s_diagFileIoLogBudget)) > 0))
+	{
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d FILEREAD handle=%u want=%u -> got=%d\n",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			static_cast<unsigned>(fileHandle), static_cast<unsigned>(bytes), bytesRead);
+		fflush(s_audioDiagFile);
 	}
 
 	return static_cast<U32>(bytesRead);
@@ -5062,9 +5150,31 @@ void getSampleTime(char const *path, byte *fileImage, int fileSize, float &timeT
 				{
 					AIL_sample_ms_position(sample, &total, &current);
 					AIL_end_sample(sample);
-					AIL_release_sample_handle(sample);
+				}
+				else if (s_audioDiagFile)
+				{
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d TIMEPROBE-SETNAMEDFAIL %s ext=%s size=%d lastError=%s\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						path, sampleCacheEntry.getExtension(), fileSize, AIL_last_error());
+					fflush(s_audioDiagFile);
 				}
 			}
+			// CONSULT-63: release UNCONDITIONALLY. The original code released only on
+			// set_named_sample_file success, leaking one driver sample handle (of
+			// DIG_MIXER_CHANNELS=64) per failed duration probe -- invisible on 9.3b
+			// where the bind never fails; on 7.2e the boot preload burst drained the
+			// whole pool ("Unable to obtain a sample handle" on every open).
+			AIL_release_sample_handle(sample);
+		}
+		else if (s_audioDiagFile)
+		{
+			SYSTEMTIME st;
+			GetLocalTime(&st);
+			fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d TIMEPROBE-ALLOCFAIL %s lastError=%s\n",
+				st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, path, AIL_last_error());
+			fflush(s_audioDiagFile);
 		}
 
 		timeTotal = static_cast<float>(total) / 1000.0f;
@@ -5746,15 +5856,26 @@ void Audio::setLargePreMixBuffer()
 	// A mix-ahead >= the DIG_DS_FRAGMENT_CNT ring TotalMs (default 256ms, read at
 	// device open) overruns unplayed audio = crackles; any large value also delays
 	// every audible start/stop/fade by its own length during loading.
+	// CONSULT-63: DIG_DS_MIX_FRAGMENT_CNT is in FRAGMENTS -- 1ms each on 9.3b but
+	// 8ms each on 7.2e (DIG_DS_FRAGMENT_SIZE default). On 7.2e keep RAD stock
+	// (8 frags = the same 64ms retail shipped with) instead of 64 frags = 512ms.
+#if MSS_MAJOR_VERSION >= 9
 	AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT, 64);
 	AIL_serve();
+#endif
 }
 
 //-----------------------------------------------------------------------------
 void Audio::setNormalPreMixBuffer()
 {
+	// CONSULT-63: on 7.2e, s_bufferFragmentsMin (16, meaning 16ms at 9.3b's 1ms
+	// fragments) would be 128ms of start-lag at 8ms fragments -- and forcing 2
+	// fragments would starve the coarser 5ms-period 7.2e mixer. Retail ran stock
+	// (8 frags / 64ms) in-game; leave it stock there.
+#if MSS_MAJOR_VERSION >= 9
 	AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT, s_bufferFragmentsMin);
 	AIL_serve();
+#endif
 }
 
 //-----------------------------------------------------------------------------
