@@ -509,6 +509,20 @@ bool VisibilityQuery::performStencilOP(ImpCamera* sc, ImpPhysicalPortal* sp,Rang
  *
  *****************************************************************************/
 
+// SWG CONSULT-64 diagnostic: per-frame portal-rejection reason counters, read and
+// reset each frame by the engine's portal-cull probe (RenderWorld.cpp). Indices:
+// [0]=portal backface cull (dpvsVisibilityQuery_Test.cpp), [1]=calculateTransition,
+// [2]=testTransition (recursion solver), [3]=getTestRectangle, [4]=createFrustumFromRectangle.
+// Accessed via the exported FUNCTION below because Win32 builds dpvs as a DLL
+// (data exports would need dllimport on the consumer; function imports do not)
+// while x64 links it statically (dllexport is benign there).
+extern "C" unsigned int g_swgDpvsPortalRejects[5] = {0, 0, 0, 0, 0};
+
+extern "C" __declspec(dllexport) unsigned int * swgDpvsGetPortalRejects(void)
+{
+	return g_swgDpvsPortalRejects;
+}
+
 bool VisibilityQuery::traversePortal(ImpCamera* targetCamera, Cell* userTargetCell, UINT32 clipMask)
 {
 	DPVS_ASSERT(VQData::get().testProperties(VQData::FLOW_ACTIVE));
@@ -534,14 +548,20 @@ bool VisibilityQuery::traversePortal(ImpCamera* targetCamera, Cell* userTargetCe
 	Matrix4x3 m(NO_CONSTRUCTOR);
 
 	if(!p->calculateTransition(s,d, m,targetCell))
+	{
+		++g_swgDpvsPortalRejects[1];
 		return false;
+	}
 
 	//---------------------------------------------------------------
 	// test transition using recursion solver
 	//---------------------------------------------------------------
 
 	if(!testTransition(s,d,targetCell,transitionFlags))
+	{
+		++g_swgDpvsPortalRejects[2];
 		return false;
+	}
 
 	//---------------------------------------------------------------
 	// set data to target camera
@@ -556,11 +576,17 @@ bool VisibilityQuery::traversePortal(ImpCamera* targetCamera, Cell* userTargetCe
 
 	FloatRectangle	portalRectangle;
 	if(!p->getTestRectangle(portalRectangle))
+	{
+		++g_swgDpvsPortalRejects[3];
 		return false;
+	}
 
 	Frustum frustum;
 	if(!targetCamera->createFrustumFromRectangle(frustum,portalRectangle))		// create a new view frustum
+	{
+		++g_swgDpvsPortalRejects[4];
 		return false;
+	}
 
 	targetCamera->setFrustumPlanesAndMatrix	(frustum);
 

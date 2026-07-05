@@ -20,6 +20,7 @@
 #include "sharedCollision/NeighborObject.h"
 #include "sharedCollision/SimpleExtent.h"
 
+#include "sharedDebug/Report.h"
 #include "sharedFoundation/ConfigFile.h"
 #include "sharedFoundation/CrcLowerString.h"
 
@@ -460,10 +461,44 @@ void DoorObject::hitBy( CollisionProperty const * collision )
 	CellProperty const * colliderCurrentCell = collision->getCell();
 	CellProperty const * colliderLastCell    = collision->getLastCell();
 
+	// CONSULT-64 round 4: probe the two suspected swallow points in the door wake
+	// chain. The convicted symptom: a door's portal goes CLOSED and never re-opens
+	// while the PLAYER walks through the doorway repeatedly (entrance portal pair
+	// stuck closed 14:31:05 onward, whole session). This filter early-out with a
+	// stale/wrong COLLISION cell (a separate tracker from render cells) is prime.
+	static bool const s_portalCullProbe = ConfigFile::getKeyBool("ClientGraphics", "portalCullProbe", false);
+
 	// ignore things not in or moving into or out of the cell of the door or the door's neighbor.
 	if ((colliderCurrentCell != doorCell) && (colliderLastCell != doorCell) && (colliderCurrentCell != doorNeighborCell) && (colliderLastCell != doorNeighborCell))
 	{
+		if (s_portalCullProbe && collision->isPlayer())
+		{
+			static int s_filteredLogBudget = 300;
+			if (s_filteredLogBudget > 0)
+			{
+				--s_filteredLogBudget;
+				REPORT_LOG(true, ("[PortalCullProbe] DOORHIT-FILTERED doorCell=%s neighbor=%s colliderCell=%s colliderLastCell=%s portalClosed=%d\n",
+					doorCell ? doorCell->getCellName() : "(null)",
+					doorNeighborCell ? doorNeighborCell->getCellName() : "(null)",
+					colliderCurrentCell ? colliderCurrentCell->getCellName() : "(null)",
+					colliderLastCell ? colliderLastCell->getCellName() : "(null)",
+					(m_portal && m_portal->isClosed()) ? 1 : 0));
+			}
+		}
 		return;
+	}
+
+	if (s_portalCullProbe && collision->isPlayer() && m_portal && m_portal->isClosed())
+	{
+		static int s_wakeLogBudget = 300;
+		if (s_wakeLogBudget > 0)
+		{
+			--s_wakeLogBudget;
+			REPORT_LOG(true, ("[PortalCullProbe] DOORHIT-WAKE doorCell=%s neighbor=%s passageAllowed=%d\n",
+				doorCell ? doorCell->getCellName() : "(null)",
+				doorNeighborCell ? doorNeighborCell->getCellName() : "(null)",
+				isPassageAllowed() ? 1 : 0));
+		}
 	}
 
 	scheduleForAlter();

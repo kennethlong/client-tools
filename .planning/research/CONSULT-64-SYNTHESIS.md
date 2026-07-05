@@ -160,6 +160,38 @@ doorways close their portals / alter-starvation widening windows / alwaysOpen
 data); no DOOR lines at collapse → back to dPVS-internal state (traversal-order /
 database settling — Sonnet secondaries).
 
+## ROUNDS 4-5 (2026-07-05 ~15:30 session) — door story REFINED; the naked defect is
+## a bistable dPVS traversal flicker at CONSTANT inputs; library instrumented
+
+**Door findings (real, contributing, NOT the core):** DOOR edge logging showed doors
+close legitimately behind the player (e.g. 14:36:03, ~1m past the doorway — retail-
+normal), buildings initialize ALL portals closed on load (the 14:36:23 whole-building
+batch), and NO door mesh renders in any hole screenshot — doorways that close their
+portals with no visible door make every legit close a see-through window. One
+entrance pair (14:31:05) never re-opened all session — wake starvation is real too.
+DOORHIT probes: only 4 lines all session (one wake moment, passage allowed) — during
+the standing-in-the-hole windows hitBy NEVER fired (collision trigger silent).
+
+**THE NAKED DEFECT (15:30:50-15:31:26):** player standing still INSIDE foyer1
+(1.5cm jitter, fwdDot=1.00000), NO door edges for a minute, root cell stable —
+and the traversal flickers portals 0<->4-5 every couple of seconds. Constant
+portal-enabled states + constant camera + constant root, alternating full-chain /
+zero-chain results ⇒ **the instability is INSIDE DPVS::Camera::resolveVisibility**
+(Sonnet's secondaries: non-stable traversal priority queue with first-portal-wins
+re-traversal drop; lazily rebalancing per-cell Database). Kenny's "I disappeared
+behind the sky" = avatar in a culled neighbor cell (or zoom-in exclusion) while the
+flicker was active.
+
+**Round-5 instrument (landed):** the vendored dPVS build now exports per-frame
+portal-rejection reason counters (g_swgDpvsPortalRejects[5]: backface /
+calculateTransition / testTransition(recursion solver) / getTestRectangle /
+createFrustumFromRectangle), reset before each resolveVisibility and appended to
+every [PortalCullProbe] line as `rej=bf:x ct:x tt:x rect:x fr:x`. The 0-portal
+flicker frames will now NAME the check that killed the traversal. tt: spikes =
+recursion-solver first-portal-wins (Sonnet #6); rect:/fr: spikes = the zero-epsilon
+rectangle path (Sonnet #1); bf: spikes = plane-side flip; all-zero on a 0-frame =
+the portals were never REACHED (cell/object-level gate upstream).
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.

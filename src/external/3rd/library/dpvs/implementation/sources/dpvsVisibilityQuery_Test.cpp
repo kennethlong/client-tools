@@ -46,6 +46,9 @@ using namespace DPVS;
  *
  *****************************************************************************/
 
+// SWG CONSULT-64 diagnostic counters (defined in dpvsVisibilityQuery_Traverse.cpp)
+extern "C" unsigned int g_swgDpvsPortalRejects[5];
+
 DPVS_FORCE_INLINE bool VisibilityQuery::isObjectVisible_INTERNAL (bool assumeVisible)
 {
 	ImpObject *o = VQData::get().getObject();
@@ -73,6 +76,9 @@ DPVS_FORCE_INLINE bool VisibilityQuery::isObjectVisible_INTERNAL (bool assumeVis
 		if (!o->backFaceCull(c))
 		{
 			DPVS_PROFILE (Statistics::incStatistic(Library::STAT_DATABASEOBSBACKFACECULLED,1));
+			// SWG CONSULT-64 diagnostic (see dpvsVisibilityQuery_Traverse.cpp)
+			if (o->isPortal())
+				++g_swgDpvsPortalRejects[0];
 			return false;
 		}
 	}

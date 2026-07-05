@@ -41,6 +41,13 @@
 #include "dpvsObject.hpp"
 #include "dpvsModel.hpp"
 
+// CONSULT-64 round 5: per-frame portal-rejection reason counters exported by the
+// instrumented dPVS build (dpvsVisibilityQuery_Traverse.cpp / _Test.cpp). Indices:
+// [0]=portal backface cull, [1]=calculateTransition, [2]=testTransition (recursion
+// solver), [3]=getTestRectangle, [4]=createFrustumFromRectangle. Accessed via a
+// function because Win32 dpvs is a DLL (function imports need no dllimport).
+extern "C" unsigned int * swgDpvsGetPortalRejects(void);
+
 #include <vector>
 
 #define DO_OBJECT_TRACKING 0
@@ -1114,6 +1121,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 			// the end of this profiler block is in RenderWorldCommander::command() case QUERY_BEGIN
 			NP_PROFILER_BLOCK_ENTER(ms_dpvsQueryProfilerBlock);
 
+			// CONSULT-64 round 5: reset the dPVS portal-rejection counters for this frame.
+			{
+				unsigned int * const rejects = swgDpvsGetPortalRejects();
+				for (int r = 0; r < 5; ++r)
+					rejects[r] = 0;
+			}
+
 			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
 		}
 		dpvsCpuTimer.stop();
@@ -1154,12 +1168,14 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 				// count flips log only when the camera barely moved (the boundary-flip signature).
 				if (cellChanged || (countsChanged && camDelta < 0.10f))
 				{
-					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f fwdDot=%.5f pos=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
+					unsigned int const * const rejects = swgDpvsGetPortalRejects();
+					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f fwdDot=%.5f rej=bf:%u ct:%u tt:%u rect:%u fr:%u pos=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
 						ms_cameraCell ? ms_cameraCell->getCellName() : "(null)",
 						cellChanged ? (s_lastCameraCell ? " (CHANGED)" : " (first)") : "",
 						s_lastPortalsCrossed, portalsCrossed,
 						s_lastVisibleCells, visibleCells,
 						camDelta, fwdDot,
+						rejects[0], rejects[1], rejects[2], rejects[3], rejects[4],
 						cameraPos.x, cameraPos.y, cameraPos.z,
 						cameraFwd.x, cameraFwd.y, cameraFwd.z));
 				}
