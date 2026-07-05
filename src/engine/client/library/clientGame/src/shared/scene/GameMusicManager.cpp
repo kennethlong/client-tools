@@ -98,6 +98,15 @@ namespace GameMusicManagerNamespace
 	bool ms_lastCombatState;
 	bool ms_lastDay;
 	bool ms_lastSpaceCombatState;
+
+	// CONSULT-62 wave 2: age of the current scene's music manager. The server's
+	// time-of-day sync lands seconds into the (now-fast) load and flips isDay() --
+	// treating that as a real sunrise/sunset killed the planet first-play theme
+	// mid-load every zone-in (audio-diag: theme VOLSTEP 0.750->0.000 + the ambient
+	// day/night re-trigger at +7-9s in every 2026-07-04 session). Day flips inside
+	// this window latch silently instead of firing E_sunrise/E_sunset.
+	float ms_sceneTime = 0.f;
+	float const ms_dayNightEventSuppressTime = 15.f;
 	float const s_spaceCombatMusicMinDistance = 1024.0f;
 	Timer ms_spaceCombatStateTimer(5.0f);
 	size_t ms_lastSpaceCombatEnterIndex = 0;
@@ -314,6 +323,7 @@ void GameMusicManager::remove ()
 	ms_lastDay = false;
 	ms_lastSpaceCombatState = false;
 	ms_overrideMusic = false;
+	ms_sceneTime = 0.f;
 }
 
 // ----------------------------------------------------------------------
@@ -373,6 +383,8 @@ void GameMusicManager::update(float const elapsedTime)
 	const TerrainObject* const terrainObject = TerrainObject::getConstInstance ();
 	if (!terrainObject)
 		return;
+
+	ms_sceneTime += elapsedTime;
 
 	const ClientProceduralTerrainAppearance* const clientProceduralTerrainAppearance = dynamic_cast<const ClientProceduralTerrainAppearance*> (terrainObject->getAppearance ());
 	EnvironmentBlock const * const currentEnvironmentBlock = clientProceduralTerrainAppearance ? clientProceduralTerrainAppearance->getCurrentEnvironmentBlock() : 0;
@@ -483,7 +495,7 @@ void GameMusicManager::update(float const elapsedTime)
 									ms_event = E_exit;
 							}
 							else
-								if (!combatState && (day != ms_lastDay))
+								if (!combatState && (day != ms_lastDay) && ms_sceneTime > ms_dayNightEventSuppressTime)
 								{
 									if (day)
 										ms_event = E_sunrise;

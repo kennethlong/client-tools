@@ -223,6 +223,15 @@ namespace AudioNamespace
 	float                        s_globalAudioFadeVolume = 1.0f;
 	float                        s_allAudioFadeFactor = 0.5f;
 	float                        s_nonBuffereMusicFadeVolume = 1.0f;
+
+	// CONSULT-62 wave 3b: background music's OWN smoothed fade. It previously
+	// multiplied by s_globalAudioFadeVolume only while its count-gate said so --
+	// so when unSilenceAllNonBackgroundMusic dropped the count at load-end, the
+	// theme instantly inherited the STALE ducked-to-zero global fade (VOLZERO
+	// probe: theme muted with tmpl/fade/atten/user all healthy) and then crawled
+	// back up: Kenny's deterministic "pops" at every load-in. This variable ramps
+	// toward the same targets, so gate flips can never step the volume.
+	float                        s_backgroundMusicFadeVolume = 1.0f;
 	QueuedSamplesToStartList s_centerBucket;
 	SoundBucketList s_leftBucket;
 	SoundBucketList s_rightBucket;
@@ -686,7 +695,22 @@ SampleId AudioNamespace::createSampleId(Sound2 &sound)
 				// mssstrm.cpp:739). [ClientAudio] streamBufferBytes overrides for the
 				// load-in music-skip A/B (a 1MB first attempt did NOT cure the skips
 				// -- awaiting audio-diag conviction before committing to a value).
+				// CONSULT-62 wave 2: time the open -- AIL_open_stream holds the global
+				// Miles mutex for allocations/codec setup; long opens on main starve
+				// the mixer (crackle-at-sound-start suspect).
+				DWORD const diagOpenStart = s_audioDiagFile ? GetTickCount() : 0;
 				sampleStream.m_stream = AIL_open_stream(s_digitalDevice2d, sound.getSamplePath()->getString(), s_streamBufferBytes);
+				if (s_audioDiagFile)
+				{
+					DWORD const diagOpenMs = GetTickCount() - diagOpenStart;
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d OPENCALL %s took %lums stream=%p\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						sound.getSamplePath()->getString(), diagOpenMs,
+						static_cast<void *>(sampleStream.m_stream));
+					fflush(s_audioDiagFile);
+				}
 
 				if (sampleStream.m_stream != NULL)
 				{
@@ -788,6 +812,20 @@ void AudioNamespace::stopSound(SoundId const &soundId, float const fadeOutTime, 
 		// Stop the sound
 
 		Sound2 * const sound = NON_NULL(iterSoundIdToSoundMap->second);
+
+		// CONSULT-62 wave 3 attribution probe: name every stop so the recurring
+		// music mute ~7s after zone-in can be pinned to its caller class.
+		if (s_audioDiagFile)
+		{
+			SYSTEMTIME st;
+			GetLocalTime(&st);
+			fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d STOPSOUND %s fade=%.2f keepAlive=%d\n",
+				st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+				sound->getTemplate() && sound->getTemplate()->getName() ? sound->getTemplate()->getName() : "(null)",
+				fadeOutTime, keepAlive ? 1 : 0);
+			fflush(s_audioDiagFile);
+		}
+
 		sound->stop(fadeOutTime, keepAlive);
 
 		if (!keepAlive)
@@ -845,7 +883,21 @@ void AudioNamespace::setSoundCategoryVolume(Audio::SoundCategory const soundCate
 	DEBUG_WARNING((volume > 1.0f), ("sound category volume(%f) > 1", volume));
 #endif // _DEBUG
 
-	s_soundCategoryVolumes[static_cast<unsigned int>(soundCategory)] = clamp(0.0f, volume, 1.0f);
+	// CONSULT-62 wave 3 attribution probe: category volume changes silently rescale
+	// every playing sound -- log CHANGES so a category-driven music mute is visible.
+	float const clamped = clamp(0.0f, volume, 1.0f);
+	if (s_audioDiagFile && clamped != s_soundCategoryVolumes[static_cast<unsigned int>(soundCategory)])
+	{
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d CATVOL cat=%d %.3f -> %.3f\n",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+			static_cast<int>(soundCategory),
+			s_soundCategoryVolumes[static_cast<unsigned int>(soundCategory)], clamped);
+		fflush(s_audioDiagFile);
+	}
+
+	s_soundCategoryVolumes[static_cast<unsigned int>(soundCategory)] = clamped;
 }
 
 // Returns the volume of the specified sound category, this is a further 2d and
@@ -868,9 +920,12 @@ float AudioNamespace::getSoundCategoryVolume(Audio::SoundCategory const soundCat
 		{
 			result *= s_globalAudioFadeVolume;
 		}
-		else if (soundCategory == Audio::SC_backGroundMusic && (s_nonBackgroundFadeCount == 0 || s_allAudioFadeCount != 0) )
+		else if (soundCategory == Audio::SC_backGroundMusic)
 		{
-			result *= s_globalAudioFadeVolume;
+			// CONSULT-62 wave 3b: use the dedicated smoothed fade (see its comment).
+			// Multiplying by s_globalAudioFadeVolume only when the count-gate opened
+			// stepped background music straight to the stale ducked value.
+			result *= s_backgroundMusicFadeVolume;
 		}
 		else if (soundCategory == Audio::SC_voiceover && (s_nonBackgroundFadeCount != 0 || s_allAudioFadeCount != 0) )
 		{
@@ -2118,9 +2173,58 @@ static void audioDiagUpdate(float const deltaTime)
 	SYSTEMTIME st;
 	GetLocalTime(&st);
 
+	// CONSULT-62 wave 4: edge-log the global ducking state -- the residual shallow
+	// load-end music dips are invisible to the per-stream probes, so watch the fade
+	// variables and their driving counts directly.
+	{
+		static float s_lastGlobalFade = 1.0f;
+		static float s_lastBgFade = 1.0f;
+
+		if ((s_globalAudioFadeVolume < 0.995f) != (s_lastGlobalFade < 0.995f)
+			|| (s_backgroundMusicFadeVolume < 0.995f) != (s_lastBgFade < 0.995f))
+		{
+			fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d DUCK global=%.3f bg=%.3f nonBg=%d nonVo=%d all=%d\n",
+				st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+				s_globalAudioFadeVolume, s_backgroundMusicFadeVolume,
+				s_nonBackgroundFadeCount, s_nonVoiceoverFadeCount, s_allAudioFadeCount);
+			fflush(s_audioDiagFile);
+		}
+
+		s_lastGlobalFade = s_globalAudioFadeVolume;
+		s_lastBgFade = s_backgroundMusicFadeVolume;
+	}
+
 	// edge-detect starvation + abrupt volume steps per stream, every call (cheap)
 	static std::map<HSTREAM, S32> s_lastStarved;
 	static std::map<HSTREAM, F32> s_lastVolume;
+
+	// CONSULT-62 wave 2: prune tracking for streams that closed, so a reused
+	// HSTREAM pointer registers as a fresh OPEN instead of inheriting stale state.
+	{
+		for (std::map<HSTREAM, S32>::iterator it = s_lastStarved.begin(); it != s_lastStarved.end();)
+		{
+			bool live = false;
+			SampleIdToSampleStreamMap::iterator j = s_sampleIdToSampleStreamMap.begin();
+			for (; j != s_sampleIdToSampleStreamMap.end(); ++j)
+			{
+				if (j->second.m_stream == it->first)
+				{
+					live = true;
+					break;
+				}
+			}
+
+			if (!live)
+			{
+				s_lastVolume.erase(it->first);
+				std::map<HSTREAM, S32>::iterator const dead = it++;
+				s_lastStarved.erase(dead);
+			}
+			else
+				++it;
+		}
+	}
+
 	{
 		SampleIdToSampleStreamMap::iterator iter = s_sampleIdToSampleStreamMap.begin();
 		for (; iter != s_sampleIdToSampleStreamMap.end(); ++iter)
@@ -2133,11 +2237,25 @@ static void audioDiagUpdate(float const deltaTime)
 			std::map<HSTREAM, S32>::iterator last = s_lastStarved.find(stream);
 			S32 const lastStarved = (last != s_lastStarved.end()) ? last->second : 0;
 
+			// CONSULT-62 wave 2: explicit OPEN edge -- a STARVED line right after its
+			// stream's OPEN is the known init-state artifact; a STARVED with no
+			// adjacent OPEN on the same pointer is LIVE refill starvation (the
+			// promoted zone-in suspect).
+			if (last == s_lastStarved.end())
+			{
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d OPEN %s stream=%p\n",
+					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+					iter->second.getPath() ? iter->second.getPath()->getString() : "(null)",
+					static_cast<void *>(stream));
+				fflush(s_audioDiagFile);
+			}
+
 			if (starved && !lastStarved)
 			{
-				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d STARVED %s\n",
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d STARVED %s stream=%p\n",
 					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
-					iter->second.getPath() ? iter->second.getPath()->getString() : "(null)");
+					iter->second.getPath() ? iter->second.getPath()->getString() : "(null)",
+					static_cast<void *>(stream));
 				fflush(s_audioDiagFile);
 			}
 
@@ -2147,13 +2265,14 @@ static void audioDiagUpdate(float const deltaTime)
 			// is a bare scalar assignment -- NO ramp -- so a one-frame volume step is
 			// an audible click candidate (the .snd volume-wander path snaps when
 			// interpolationRate=0). Log steps > 0.05 in one frame to correlate with
-			// heard pops.
+			// heard pops. (CONSULT-62 wave 4: threshold lowered to 0.015 -- the
+			// residual load-end music dips ride below 0.05/frame.)
 			F32 const volume = stream->samp->left_volume;
 			std::map<HSTREAM, F32>::iterator lastVol = s_lastVolume.find(stream);
 			if (lastVol != s_lastVolume.end())
 			{
 				F32 const delta = volume - lastVol->second;
-				if (delta > 0.05f || delta < -0.05f)
+				if (delta > 0.015f || delta < -0.015f)
 				{
 					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d VOLSTEP %.3f -> %.3f %s\n",
 						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
@@ -2370,6 +2489,53 @@ void Audio::alter(float const deltaTime, Object const *listener)
 		s_rightBucket.clear();
 		s_frontBucket.clear();
 		s_backBucket.clear();
+	}
+
+	{
+		NP_PROFILER_AUTO_BLOCK_DEFINE("stream EOS poll");
+
+		// CONSULT-62 wave 4: drive stream end-of-sample from POLLED status instead of
+		// trusting Miles' stream callback (which demonstrably does not fire for these
+		// MP3 music streams -- finished streams sat done-but-unreleased for 30-90s,
+		// and new sounds triggered against that zombie window crackle; Kenny's
+		// three-run desert/door experiment 2026-07-04). Sound2d::reset() then releases
+		// the stream within a frame, exactly as the callback path would have.
+
+		SampleIdToSampleStreamMap::iterator iterStreamEosPoll = s_sampleIdToSampleStreamMap.begin();
+
+		for (; iterStreamEosPoll != s_sampleIdToSampleStreamMap.end(); ++iterStreamEosPoll)
+		{
+			if (iterStreamEosPoll->second.m_status != Audio::PS_done
+				&& iterStreamEosPoll->second.m_stream != NULL
+				&& AIL_stream_status(iterStreamEosPoll->second.m_stream) == SMP_DONE)
+			{
+				// Opened-but-never-started streams can also read SMP_DONE -- only a
+				// stream that actually advanced counts as finished.
+				S32 pollTotalMs = 0;
+				S32 pollCurrentMs = 0;
+				AIL_stream_ms_position(iterStreamEosPoll->second.m_stream, &pollTotalMs, &pollCurrentMs);
+				if (pollCurrentMs <= 0)
+					continue;
+
+				iterStreamEosPoll->second.m_status = Audio::PS_done;
+
+				Sound2 * const sound = iterStreamEosPoll->second.m_sound;
+				NOT_NULL(sound);
+
+				if (s_audioDiagFile)
+				{
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d EOSPOLL %s stream=%p\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						iterStreamEosPoll->second.getPath() ? iterStreamEosPoll->second.getPath()->getString() : "(null)",
+						static_cast<void *>(iterStreamEosPoll->second.m_stream));
+					fflush(s_audioDiagFile);
+				}
+
+				sound->endOfSample();
+			}
+		}
 	}
 
 	{
@@ -2704,6 +2870,31 @@ void Audio::alter(float const deltaTime, Object const *listener)
 			static float const fadeOutRate = 10.0f;	// one over fade time
 
 			s_globalAudioFadeVolume = clamp(fadeTarget, s_globalAudioFadeVolume - (deltaTime * fadeOutRate), 1.0f);
+		}
+
+		// CONSULT-62 wave 3b: background music's own smoothed fade. Same targets as
+		// the branch background music is ELIGIBLE for (global fade applies to bg
+		// music only when no non-background duck is active, or during an all-audio
+		// fade), but ramped continuously so a count-gate flip can't step the volume
+		// to a stale ducked value (the deterministic load-end music dip).
+		{
+			float bgFadeTarget = 1.0f;
+
+			if (s_nonBackgroundFadeCount == 0 || s_allAudioFadeCount != 0)
+				bgFadeTarget = fadeTarget;
+
+			if (s_backgroundMusicFadeVolume < bgFadeTarget)
+			{
+				static float const fadeInRate = 1.5f;   // one over fade time
+
+				s_backgroundMusicFadeVolume = clamp(0.0f, s_backgroundMusicFadeVolume + (deltaTime * fadeInRate), bgFadeTarget);
+			}
+			else if (s_backgroundMusicFadeVolume > bgFadeTarget)
+			{
+				static float const fadeOutRate = 10.0f;	// one over fade time
+
+				s_backgroundMusicFadeVolume = clamp(bgFadeTarget, s_backgroundMusicFadeVolume - (deltaTime * fadeOutRate), 1.0f);
+			}
 		}
 
 	}
@@ -3661,7 +3852,26 @@ void stopSample(Sound2 const &sound)
 		else if (isSampleStream(sound.getSampleId(), iterSampleIdToSampleStreamMap))
 		{
 			//AIL_pause_stream(iterSampleIdToSampleStreamMap->second.m_stream, 1);
+
+			// CONSULT-62 wave 2: time the close -- AIL_close_stream takes the global
+			// Miles mutex and cancels in-flight async IO (a disk wait); a long close
+			// on main at end-of-track is the "+34s crackle storm" suspect (the theme
+			// ends ~34s after zone-in in every session).
+			DWORD const diagCloseStart = s_audioDiagFile ? GetTickCount() : 0;
+			HSTREAM const diagClosedStream = iterSampleIdToSampleStreamMap->second.m_stream;
 			AIL_close_stream(iterSampleIdToSampleStreamMap->second.m_stream);
+			if (s_audioDiagFile)
+			{
+				DWORD const diagCloseMs = GetTickCount() - diagCloseStart;
+				SYSTEMTIME st;
+				GetLocalTime(&st);
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d CLOSE %s took %lums stream=%p\n",
+					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+					iterSampleIdToSampleStreamMap->second.getPath() ? iterSampleIdToSampleStreamMap->second.getPath()->getString() : "(null)",
+					diagCloseMs, static_cast<void *>(diagClosedStream));
+				fflush(s_audioDiagFile);
+			}
+
 			iterSampleIdToSampleStreamMap->second.m_stream = NULL;
 		}
 		else
@@ -5181,6 +5391,21 @@ void __stdcall endOfSampleStreamCallBack(HSTREAM stream)
 
 			Sound2 *sound = iterSampleIdToSampleStreamMap->second.m_sound;
 			NOT_NULL(sound);
+
+			// CONSULT-62 wave 4: does this Miles callback ever actually fire? The
+			// finished theme stream sat done-but-unreleased for 30-90s every session,
+			// which requires this whole path to be dead (Sound2d::reset releases
+			// promptly once endOfSample is seen).
+			if (s_audioDiagFile)
+			{
+				SYSTEMTIME st;
+				GetLocalTime(&st);
+				fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d EOS %s stream=%p\n",
+					st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+					iterSampleIdToSampleStreamMap->second.getPath() ? iterSampleIdToSampleStreamMap->second.getPath()->getString() : "(null)",
+					static_cast<void *>(stream));
+				fflush(s_audioDiagFile);
+			}
 
 			sound->endOfSample();
 

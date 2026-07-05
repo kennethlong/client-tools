@@ -109,6 +109,7 @@ private:
 	float               m_pitchTimer;
 	bool                m_endOfSample;
 	float               m_fadeOutTimer;
+	float               m_lastDiagVolume;
 	bool                m_manualFadeOutStarted;
 	bool                m_stoppedOutOfRange;
 	int                 m_initialPlayBackRate;

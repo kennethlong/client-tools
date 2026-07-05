@@ -111,6 +111,7 @@ Sound2d::Sound2d(Sound2dTemplate const *sound2dTemplate, SoundId const &soundId)
  , m_pitchTimer(0.0f)
  , m_endOfSample(true)
  , m_fadeOutTimer(0.0f)
+ , m_lastDiagVolume(1.0f)
  , m_manualFadeOutStarted(false)
  , m_stoppedOutOfRange(false)
  , m_initialPlayBackRate(-1)
@@ -389,7 +390,23 @@ void Sound2d::alter(float const deltaTime)
 					// Update the volume
 
 					updateTemplateVolume(deltaTime);
-					Audio::setSampleVolume(m_sampleId, getVolume());
+
+					float const computedVolume = getVolume();
+
+					// CONSULT-62 wave 3b: attribute WHICH term of the volume product
+					// silences music (the +7s zone-in theme mute survived the stop/
+					// category/fade eliminations). One line into SwgClient_report.log
+					// per high->low crossing, music templates only.
+					if (computedVolume < 0.05f && m_lastDiagVolume >= 0.05f
+						&& getTemplate() && getTemplate()->getName() && strstr(getTemplate()->getName(), "music") != NULL)
+					{
+						REPORT_LOG(true, ("VOLZERO %s tmpl=%.3f fade=%.3f atten=%.3f user=%.3f dist=%.1f cutoff=%.1f pos=%d\n",
+							getTemplate()->getName(), m_templateVolume, getFade(), getAttenuation(), getUserVolume(),
+							getDistanceFromListener(), getDistanceAtVolumeCutOff(), isPositionSpecified() ? 1 : 0));
+					}
+					m_lastDiagVolume = computedVolume;
+
+					Audio::setSampleVolume(m_sampleId, computedVolume);
 
 					// Update the pitch
 
@@ -685,7 +702,15 @@ float Sound2d::getFade()
 			}
 			else
 			{
-				result = 0.0f;
+				// CONSULT-62 wave 3: play at full volume past the ESTIMATED end instead
+				// of hard-muting. totalSampleTime for streams is Miles' MP3 duration
+				// estimate (AIL_stream_ms_position), which under-reports these VBR
+				// music files by ~5x -- mus_theme_tatooine (34s real) reported ~7s, so
+				// this branch silenced the planet theme 7s after zone-in every session
+				// (attributed 2026-07-04: VOLSTEP 0.750->0.000 with NO STOPSOUND and NO
+				// CATVOL), and the muted stream then played silently to its real EOF.
+				// A stream's true end arrives via the Miles end-of-stream callback
+				// (endOfSampleStreamCallBack), not this estimate.
 			}
 		}
 		else if (m_fadeInTime > 0.0f)
