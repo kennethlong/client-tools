@@ -124,6 +124,42 @@ confound. Next sighting decides: count-collapse with fwdDot≈1 = camp B convict
 beyond argument; oscillating root at the doorway remains camp A's (both fixes may
 be needed — the two sightings may genuinely be TWO defects sharing a symptom).
 
+## ROUND 3 (2026-07-05 ~09:10) — rotation confound CLOSED; DOOR mechanism promoted to prime suspect
+
+Second armed session (screenshots 0013): the conviction line —
+`140910 cell=foyer1 (CHANGED) portals 6->6 ... fwdDot=1.00000` (healthy transition)
+followed same-second by `portals 6->0 visCells 7->1 camDelta=0.0000 fwdDot=1.00000`:
+the WHOLE portal chain vanished with a BIT-STILL camera (no motion, no rotation),
+one frame after a clean root-cell change; healed on 2.7cm. Second collapse at 140916
+(4->0, fwdDot 0.99993) immediately precedes Kenny's screenshot (inside foyer1, wall =
+open starfield, an NPC NAMEPLATE floating in the void — object culled with its cell,
+screen-space UI not). Also decoded: the camDelta=0.0000/fwdDot=0.92388 flip-flop
+blocks are the planet-entry SPINNING preview camera (22.5°/frame) — legit, ignore.
+
+**Camp B's "clip test" cannot explain a collapse with an IDENTICAL camera pose** —
+the traversal inputs were bit-equal, so some OTHER state changed. The one gate that
+is camera-independent AND heals on player movement: **the door hook.**
+`DoorObject::alter` (sharedCollision/DoorObject.cpp:298-307) sets
+`m_portal->setClosed(!open)` from the door ANIMATION position every alter;
+`Portal::setClosed` is edge-triggered (Portal.cpp:373-381) into
+`closedStateChangedHookFunction` (RenderWorld.cpp:755-763) which sets the dPVS
+portal ENABLED=false → everything beyond culls. Explains: frozen-pose collapse
+(door timeline independent of camera), heal-on-tiny-move (proximity trigger
+re-entered), post-zone-in clustering (doors initialize closed until first trigger),
+sky through an APPARENTLY open archway (doorway with no/invisible drawn door mesh
+still closes its portal), the nameplate-in-void. Opus's 2% elimination of doors
+("closed would persist") was wrong for PROXIMITY doors — they heal exactly like
+this bug heals.
+
+**Round-3 probe (landed):** the closed-state hook now logs every portal
+OPEN/CLOSED transition (edge-triggered = rare) with portal ptr, cell, neighbor
+cell, dpvs-object presence, camera pos — same [PortalCullProbe] tag, same cfg key.
+Decision at next sighting: DOOR CLOSED line at the collapse timestamp for a
+foyer1/world portal → door mechanism CONVICTED (fix conversation: why these
+doorways close their portals / alter-starvation widening windows / alwaysOpen
+data); no DOOR lines at collapse → back to dPVS-internal state (traversal-order /
+database settling — Sonnet secondaries).
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.

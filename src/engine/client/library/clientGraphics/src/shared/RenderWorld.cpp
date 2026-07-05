@@ -760,6 +760,29 @@ void RenderWorldNamespace::closedStateChangedHookFunction(Portal &portal)
 	{
 		dpvsObject->set(DPVS::Object::ENABLED, !portal.isClosed());
 	}
+
+	// CONSULT-64 round 3: doors drive portal closed-state from their animation
+	// (DoorObject::alter, sharedCollision/DoorObject.cpp:298-307) and closed =
+	// dPVS portal DISABLED = everything beyond it culls. This edge-triggered hook
+	// is the exact suspected event behind the frozen-pose portal collapses
+	// (portals 6->0 at camDelta 0.0000 / fwdDot 1.00000). Log every transition
+	// with cell context to correlate against the [PortalCullProbe] lines.
+	{
+		static bool const s_portalCullProbe = ConfigFile::getKeyBool("ClientGraphics", "portalCullProbe", false);
+		if (s_portalCullProbe)
+		{
+			CellProperty const * const parentCell = portal.getParentCell();
+			CellProperty const * const neighborCell = portal.getNeighbor() ? portal.getNeighbor()->getParentCell() : NULL;
+			Vector const cameraPos = ms_cameraToWorld.getPosition_p();
+			REPORT_LOG(true, ("[PortalCullProbe] DOOR portal=%p %s cell=%s neighbor=%s dpvs=%s camPos=%.2f %.2f %.2f\n",
+				static_cast<void const *>(&portal),
+				portal.isClosed() ? "CLOSED" : "OPENED",
+				parentCell ? parentCell->getCellName() : "(null)",
+				neighborCell ? neighborCell->getCellName() : "(null)",
+				dpvsObject ? "yes" : "NO-DPVS-OBJ",
+				cameraPos.x, cameraPos.y, cameraPos.z));
+		}
+	}
 }
 
 // ----------------------------------------------------------------------
