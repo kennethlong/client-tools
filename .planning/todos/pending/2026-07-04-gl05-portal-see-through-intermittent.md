@@ -39,6 +39,31 @@ clears it. Second sighting ~18:2x session.
   portal-visibility walk logging cell/portal ids when a portal test flips frame-over-
   frame at a static camera (catches the transient without a screenshot).
 
+## RenderDoc capture-and-diff evidence (2026-07-05 — Kenny caught TWO broken/good pairs)
+
+`stage-x64\Capture100-103.rdc` (gl11/x64, cantina):
+- Pair A: 100 broken (portal shows wrong wall) = **249 draws / 26,650 tris**;
+  101 good (slightly different angle) = **291 draws / 32,842 tris** → 42 draws MISSING.
+- Pair B: 102 broken (sky through portal) = **74 draws / 9,882 tris**;
+  103 good = **234 draws / 47,959 tris** → 160 draws MISSING.
+- In BOTH pairs every shared draw is byte-equal (diff status `equal`); the broken
+  frames are missing whole blocks of DrawIndexed calls. **The cell geometry is never
+  SUBMITTED — culled engine-side by the portal/cell visibility traversal.** Renderer
+  fully exonerated (matches the cross-renderer/cross-bitness sightings).
+- Symptom mechanics: a small camera angle/position change flips the visibility test
+  back to correct ⇒ a boundary/degenerate case in the portal clip test (camera near
+  a portal plane?) in the shared traversal — same math family the gl05-32bit
+  FPU_PRESERVE fix touched, now misbehaving (rarely) even on SSE/x64.
+
+## Next step when picked up
+Trace the engine's portal-visibility walk (CellProperty/PortalProperty clip-plane
+test feeding ClientWorld render submission) for the camera-near-portal-plane
+degenerate case; candidate probe = log cell ids + portal clip results when the
+visible-cell SET changes while the camera moved < epsilon. The four captures are
+the ground truth for any hypothesis (broken frames enumerate exactly WHICH draws
+vanish). Likely a CONSULT-64 crew round with the captures + this evidence as the pack.
+
 ## Priority
 Cosmetic, self-clearing, intermittent — parked behind the audio arc close-out and
-the TreeFile loose-searchPath negative-cache work.
+the TreeFile loose-searchPath negative-cache work. UPGRADED candidate: with a
+RenderDoc-verified mechanism and cross-platform repro it is now cheap to pick up.
