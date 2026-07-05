@@ -1,0 +1,51 @@
+﻿**Q1: Stream EOS Callback**
+Findings:
+
+`AIL_register_stream_callback` has two different paths:
+
+- Preloaded streams install a real sample EOS callback via `AIL_register_EOS_callback(..., preload_callback_broker)` at `D:\Code\milesss-v9.3b\win\sdk\src\sdk\mssstrm.cpp:1655`.
+- Non-preloaded streams only store `stream->callback` at `mssstrm.cpp:1663`. They do not register sample EOS.
+
+For non-preloaded streams, the callback only fires from the stream background service:
+
+- `background()` calls `start_IOs_if_we_can()` and drains `load_buffer_into_Miles()` at `mssstrm.cpp:211-217`.
+- It dispatches only if `stream->docallback` is already set, `stream->callback` is non-null, and `AIL_sample_status(stream->samp) != SMP_PLAYING` at `mssstrm.cpp:221-229`.
+- `docallback` is set only in `load_buffer_into_Miles()` when Miles loads an explicit terminal zero-length buffer: `stream->alldone == 1 && stream->loadedsizes[index] == 0` at `mssstrm.cpp:172-176`.
+
+Natural EOF for the stream is detected earlier in `doread()`:
+
+- When `stream->async_pos == stream->totallen` and `loopsleft == 1`, Miles sets `stream->alldone = 1` at `mssstrm.cpp:1114-1117`.
+- Looping streams do not do this; they decrement/reset position and may request ASI reset at `mssstrm.cpp:1118-1142`. Infinite loop count therefore never reaches this callback path.
+
+`AIL_stream_status()` can report done without dispatching the callback:
+
+- It returns `SMP_DONE` when `stream->alldone` is set and `AIL_API_sample_loaded_len(stream->samp) == 0`, unless a pending async buffer still exists at the current index, at `mssstrm.cpp:956-961`.
+- That status path does not call `background()` and does not set or consume `docallback`.
+
+ASI-specific end behavior bypasses the stream callback mechanism:
+
+- The MP3 ASI returns short/zero output at natural decode exhaustion: `seek_frame()`/`frame_function()` failure breaks output generation at `D:\Code\milesss-v9.3b\win\mp3\src\sdk\mp3api.cpp:932-960`, then pads remaining requested output with zeroes at `mp3api.cpp:983-991`.
+- The mixer/sample path can mark the sample `SMP_DONE` directly when no new input is available, at `wavefile.cpp:11230-11234`.
+- That is sample EOS, not stream callback dispatch. Non-preloaded streams did not register `preload_callback_broker`, so sample EOS does not invoke `AIL_register_stream_callback`.
+
+Answer: for an ASI-decoded, non-preloaded stream that reaches natural EOF, the registered stream callback does not fire when EOF is observed through the sample/mixer status path before Miles posts and services the explicit zero-length terminal stream buffer that sets `stream->docallback`. Polling `AIL_stream_status()` sees `SMP_DONE`; callback dispatch requires later `background()`/`AIL_service_stream()` work and the `docallback` sentinel path. If the app closes on poll, callback is impossible; in this client it also appears the ASI natural-end path never reaches the zero-length-buffer `docallback` case.
+
+**Q2: Teardown/Prime Vs Starts**
+Shared Miles resources touched by stream close/open/prime and by simultaneous ASI one-shots:
+
+- Miles global API mutex: `InMilesMutex`/`OutMilesMutex` use `s_MilesMutex` at `genericmss.cpp:69-91`; MSSTimer also must acquire it before `API_timer()` at `genericmss.cpp:464-482`.
+- Stream close: releases sample handle/pipeline at `mssstrm.cpp:881-885`, removes stream from global list/timer at `mssstrm.cpp:892-914`, cancels/waits async I/O at `mssstrm.cpp:920-921`, frees stream buffers and closes file at `mssstrm.cpp:923-928`.
+- Stream open/prime: opens file outside mutex then re-enters at `mssstrm.cpp:696-699`, allocates sample handle at `mssstrm.cpp:709`, allocates 8 stream buffers at `mssstrm.cpp:791-805`, installs stream timer/list at `mssstrm.cpp:835-851`, and primes async reads via `start_IOs_if_we_can()`/`MilesAsyncFileRead()` at `mssstrm.cpp:1185-1199` and `mssstrm.cpp:1042-1059`.
+- MSSAsync queue: protected by `QueueLock` at `milesasync.cpp:121-133`; async reads are selected by one background IO thread, with stream low-water priority via `StreamCB` at `milesasync.cpp:561-568`; reads are 32 KiB chunks at `milesasync.cpp:494-500`.
+- One-shot setup: `AIL_init_sample` resets status/pipelines and sets status `SMP_DONE` at `wavefile.cpp:4773-4921`; `AIL_set_named_sample_file` installs ASI provider at `wavefile.cpp:2690-2806`; ASI open allocates codec/frame buffers at `mp3api.cpp:650-758`; `AIL_start_sample` resets ASI and marks `SMP_PLAYING` at `wavefile.cpp:7566-7599`.
+- Mixer/service thread: `SS_serve` fills output under the timer path at `genericdig.cpp:102-151`; before mixing, it forces newly-started single-buffer ASI samples to prefetch/decode first data at `wavefile.cpp:12023-12047`; active samples are then mixed at `wavefile.cpp:12119-12296`.
+
+Ranked mechanisms consistent with the evidence:
+
+1. Mixer-thread ASI decode burst. New one-shot MP3 starts defer meaningful decode work until MSSTimer `SS_fill`, exactly where the new stream’s ASI stream and active voices are also serviced. App calls can return in 0ms while mixed output degrades because the CPU/decode cost is on the mixer thread.
+
+2. Stream prime plus one-shot ASI first-prefetch collision. A new stream queues/primes up to the stream-buffer set while one-shots trigger first ASI prefetch/decode in the same service window. That matches “transition + new starts” but not “idle transition” or “starts 8s later.”
+
+3. Global Miles mutex/timer coupling. Close/open/start all touch the same mutex the timer thread needs. The source supports this as a possible amplifier, but prior evidence says call durations are 0ms and mix-ahead changes did not fix it, so it is lower-ranked.
+
+UNVERIFIED: I did not find a source-level limiter that explicitly explains the full ~1 second duration. The source supports transient mixer/ASI/prime contention; the exact persistence length likely depends on runtime number of one-shots, MP3 frame decode cost, and queued stream-buffer state.

@@ -516,3 +516,80 @@ diag commit (probe suite), docs commit (handoff).
 mid-track would suggest the SMP_DONE poll misfired (position>0 guard was the
 protection); title loop must keep looping (loops are Miles-side, unaffected);
 multi-sample playlists must advance (theme → generic_c verified).
+
+---
+
+## 15. ROUND 11 (07-04 late night) — CONSULT-63 verdict: STORM = MILES 9.3b DEFECT;
+## Win32 rolled back to 7.2e (UNCOMMITTED, awaiting Kenny's smoke)
+
+**Rounds 7-9 committed at session start:** `c994f74e8` (code) + `da6afa0fa` (docs).
+
+**CONSULT-63 (5 consultants incl. first Fable adversarial pass; SYNTHESIS + .out files
+in .planning/research/):** dead stream-EOS callback = STRUCTURAL in 9.3b (docallback
+zero-length-buffer latch + 16Hz timer; ASI/MP3 natural end never sets it — the poll
+is the CORRECT fix, CLOSED). Version matrix measured: retail shipped **7.2a**; Win32
+ran 9.3b; x64 links 9.3b lib but runs 9.3v (from Restoration; their 32-bit ships
+7.2a — NO 32-bit 9.3v exists anywhere on this machine).
+
+**THE DECISIVE A/B (Kenny, x64, same exe, only DLL swapped):** 9.3v = no storm;
+9.3b = STORM (run 2 of 2) + the known 9.3b-x64 3D dropping. **Storm = Miles 9.3b
+defect fixed by later RAD builds. Engine exonerated** (Fable's engine-side account
+died with this — code was byte-identical across the A/B). Gotcha hit en route:
+stage-x64\_miles93b_bak is INCOMPLETE (no binkawin64.asi) — my partial swap made a
+mixed set = instant boot AV (c0000005 pre-audio-install, the documented mixed-provider
+artifact). Always stage a full matched set from the repo redist dirs, hash-verify.
+stage-x64 RESTORED to hash-verified pure 9.3v.
+
+**Win32 → 7.2e ROLLBACK (built clean 0-unresolved, staged 9:31 PM, UNCOMMITTED):**
+- clientAudio.vcxproj: 3 Win32 include dirs → miles-7.2e (x64 blocks untouched).
+- SwgClient.vcxproj: 3 Win32 LIBDIRs + 9 postbuild redist paths → miles-7.2e.
+- Audio.cpp: MilesCompat shim (#if MSS_MAJOR_VERSION < 9): room_type bus_index arg
+  bridge; premix setters left RAD-stock on 7.2e (DIG_DS_MIX_FRAGMENT_CNT is 8ms/frag
+  there, not 1ms — 64 frags would be 512ms).
+- stage/ Miles runtime = hash-verified pure 7.2e set (no binkawin.asi — retail's own
+  miles/ has none either). All 77 used AIL_* symbols exist in 7.2e (verified).
+
+**KENNY'S SMOKE (Win32 SwgClient_r + door-at-transition repro):** expect storm GONE +
+retail-era 768ms-ring headroom. Regression signatures: title music not looping/silent
+at login (7.2e stream-path delta → check audio-diag.log OPEN lines), codec WARNING at
+boot (staging), 3D/EAX weirdness (7.2e M3D-era providers — retail-validated, unlikely).
+THEN: commit rollback (vcxprojs + Audio.cpp) + x64 unchanged; consider re-tuning
+in-game responsiveness later (7.2e stock 64ms mix-ahead vs 9.3b-tuned 16ms — Kenny
+may or may not perceive start-lag; retail always ran 64ms).
+
+---
+
+## 16. ROUND 12 (07-05, FINAL) — 7.2e "no audio" root-caused; Win32 lands on the
+## RETAIL 7.2a core; STORM GONE both platforms (Kenny 3×). ARC CLOSED, committed.
+
+The 7.2e build booted SILENT. Elimination chain (each step = one instrumented run):
+(1) `OPENCALL lastError=` probe → "Unable to obtain a sample handle" → **found a
+20-year-old engine bug: getSampleTime() released its throwaway duration-probe handle
+ONLY on set_named_sample_file success — every failure leaked one of the driver's 64
+handles; invisible on 9.3x where the bind never failed. FIXED unconditionally.**
+(2) Leak fixed → wavs/rollovers play, MP3s still dead: "Error getting sound format".
+(3) FILEOPEN/SEEK/READ callback trace + the 9.3b source of openwavefile decoded the
+read pattern (read-4 → seek-0 → read-16 = the WAV-then-ID3 fallback) ⇒ RIB found NO
+MP3 provider. (4) **Standalone harness** (miles72test.cpp, compiled against the
+in-repo 7.2e SDK, run in permuted environments — NO client runs burned): the
+**miles-7.2e SDK redist mss32.dll is a DUD — fails MP3 ASI discovery with ANY
+provider set; retail's 7.2a core works with ANY provider set (incl. 7.2e's)**.
+Engine usage exonerated (Kenny's check-the-old-client hint = the pivotal step).
+
+**LANDED:** vendored `src/external/3rd/library/miles-7.2a/redist` (retail
+Mss32.dll 7.2a + retail provider set + PROVENANCE.md); Win32 postbuild repointed
+(9 sites) 7.2e→7.2a redist; compile/link STAYS on the 7.2e SDK header+import lib
+(all 59 exe imports dumpbin-verified in the 7.2a DLL; MSS_MAJOR_VERSION<9 compat
+shim + premix-unit guards active). stage/ = 7.2a core + providers, harness-verified.
+
+**VERDICT (Kenny, 3 runs): music plays, door-at-transition STORM GONE on Win32-7.2a.**
+Combined with the x64 A/B (9.3b storms / 9.3v clean, same exe): storm was a Miles
+9.3b defect throughout. END STATE: Win32 = 7.2a runtime (ecosystem-standard),
+x64 = 9.3v runtime; both compile against their SDK headers (7.2e / 9.3b).
+
+**Remaining open:** x64 rebuild to pick up the getSampleTime leak fix + new diag
+probes (x64 exe predates them; leak is benign on 9.3v but the fix belongs there);
+load-in duck×fade attenuation dips (cosmetic backlog, cross-version, Kenny re-heard
+on both runtimes); Fable side-flag endOfSample2dCallBack cross-thread map walk
+(UAF-class audit); late-sample-start wave (§4 item 3); diag cfg keys off when the
+arc fully closes; NOT pushed — fetch before push (upstream-integration branch).

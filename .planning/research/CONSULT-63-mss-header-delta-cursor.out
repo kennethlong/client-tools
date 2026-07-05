@@ -1,0 +1,224 @@
+﻿# CONSULT-63 — Miles 7.2e vs 9.3b API delta map (engine-focused)
+
+Evidence pack treated as given. Headers compared: `miles-7.2e/include/mss.h` (2008) vs `miles-9.3b/include/mss.h` (compiled/run today). Engine usage cross-checked in `Audio.cpp` (`Sound2d.cpp` has **zero** `AIL_*` calls — one comment only).
+
+---
+
+## 1. Stream API
+
+### 1a. `HSTREAM` / `MSTREAM_TYPE` visibility
+
+| Item | 7.2e | 9.3b | Semantic delta |
+|------|------|------|----------------|
+| Handle typedef | `typedef struct _STREAM FAR* HSTREAM` (5286) | `typedef struct _STREAM* HSTREAM` (4264) | Same opaque handle; `FAR` dropped |
+| Struct exposed | Full `MSTREAM_TYPE` (5290–5365) | Full `MSTREAM_TYPE` (4270–4339) | **Layout changed** — not ABI-compatible |
+| Buffer ring | `bufs[3]`, triple-buffer indices `buf1/2/3` (5300–5321) | `bufs[MSS_STREAM_CHUNKS]` where `MSS_STREAM_CHUNKS=8` (4268, 4280) | **3 → 8 chunks**; different refill/EOF choreography |
+| Async I/O | `void FAR* asyncs[3]` (5305) | `struct MilesAsyncRead asyncs[8]` + `asyncs_loaded[8]` (4286–4287) | Sync callback reads wrapped in Miles async layer |
+| EOF/callback fields | `callback`, `docallback`, `alldone` (5355, 5364, 5349) | Same names (4324, 4336, 4318) | Same *names*; delivery path diverges (see 1f) |
+| New fields | — | `primeleft`, `was_popped`, `level`/`last_level`/`percent_mult`, `stream_count` (4320, 4331–4334) | `was_popped` forces `SMP_DONE` in `AIL_stream_status` (9.3b SDK `mssstrm.cpp:950–951`) |
+
+### 1b. Core stream functions (signatures)
+
+| API | 7.2e | 9.3b | Delta |
+|-----|------|------|-------|
+| `AIL_open_stream` | 5368: `(dig, char const FAR*, stream_mem)` | 4342: `(dig, char const*, stream_mem)` | `stream_mem==0` → bufsize = `datarate/3` (7.2e, 3 bufs) vs `datarate/8` (9.3b SDK `mssstrm.cpp:739–742`). Engine passes `streamBufferBytes` default **0** (`Audio.cpp:253,702`) |
+| `AIL_close_stream` | 5370 | 4344 | Same |
+| `AIL_start_stream` | 5376 | 4350 | 9.3b promotes `autostreaming` 1→2 on start (SDK `mssstrm.cpp:1464–1465`) |
+| `AIL_pause_stream` | 5378 | 4352 | Same signature; richer `playcontrol` bit semantics in 9.3b impl |
+| `AIL_stream_sample_handle` | 5372 | 4346 | Same |
+| `AIL_set_stream_loop_count` | 5382 | 4356 | Header identical; 9.3b sets `stream->loopsleft=count` directly (SDK `mssstrm.cpp:1547`). **`count==0` = infinite loop without `alldone`** |
+| `AIL_set_stream_loop_block` | 5384–5386 | 4358–4360 | Same |
+| `AIL_register_stream_callback` | 5396 | 4372 | Typedef identical (below); **delivery semantics differ** |
+| `AIL_service_stream` | 5374: `(stream, fillup)` | 4348 | Same decl; 9.3b `fillup!=0` waits on async completion (SDK `mssstrm.cpp:1239–1243`). **Engine never calls** |
+| `AIL_auto_service_stream` | 5398 | 4374 | 9.3b sets `autostreaming=(onoff)?2:0` (SDK `mssstrm.cpp:1705`). **Engine never calls** |
+| `AIL_stream_filled_percent` | — | 4364 | **New** in 9.3b |
+| `AIL_stream_ms_position` | 5410–5412 (`S32 FAR*`) | 4386–4388 (`S32*`) | Pointer style only |
+
+### 1c. `AILSTREAMCB` typedef and calling convention
+
+| | 7.2e | 9.3b |
+|---|------|------|
+| Typedef | 5288: `void (AILCALLBACK FAR* AILSTREAMCB)(HSTREAM stream)` | 4266: `void (AILCALLBACK* AILSTREAMCB)(HSTREAM stream)` |
+| Win32 `AILCALLBACK` | 485: `__stdcall` | 471: `__stdcall` |
+| Engine callbacks | `endOfSampleStreamCallBack` declared `__stdcall` (`Audio.cpp:349,5382`) | Matches 9.3b `AILCALLBACK` |
+
+**Signature and stdcall: unchanged.** Delta is **when** Miles invokes it, not the typedef.
+
+### 1d. `SMP_*` status values / `AIL_stream_status`
+
+| Flag | 7.2e | 9.3b | Value changed? |
+|------|------|------|----------------|
+| `SMP_FREE` | 1045 | 679 | `0x0001` — **same** |
+| `SMP_DONE` | 1047–1048 | 681–682 | `0x0002` — **same numeric value and comment** |
+| `SMP_PLAYING` | 1050 | 684 | `0x0004` — same |
+| `SMP_STOPPED` | 1052 | 686 | `0x0008` — same |
+| `SMP_PLAYINGBUTRELEASED` | 1054–1055 | 688–689 | `0x0010` — same |
+
+**`AIL_stream_status` return logic (9.3b only, not in header):** SDK `mssstrm.cpp:944–967` returns `SMP_DONE` when `alldone && sample_loaded_len==0` (with buffer-index guards), or `was_popped`. This is **not equivalent** to “stream callback was latched/delivered.”
+
+### 1e. Stream callback delivery mechanism (header + 9.3b SDK — relevant to locked anomaly)
+
+Headers in both versions expose `docallback` (“set when it time to poll for a callback”) at 7.2e:5364, 9.3b:4336, but **9.3b source makes the split explicit**:
+
+1. `docallback=1` is set only inside `load_buffer_into_Miles()` when `alldone==1 && loadedsizes[index]==0`, then `alldone` becomes 2 (SDK `mssstrm.cpp:172–176`).
+2. Delivery happens in `background()` timer (registered at first `AIL_open_stream`, **16 Hz** — SDK `mssstrm.cpp:841–851`), only if `autostreaming==2`, `noback==0`, and `AIL_sample_status(samp) != SMP_PLAYING` (SDK `mssstrm.cpp:211–229`).
+3. 7.2e-era EOB-driven stream service was **removed** in 9.3b: `//AIL_register_EOB_callback(stream->samp,(AILSAMPLECB)background);` (SDK `mssstrm.cpp:814`).
+
+**Locked anomaly alignment:** `AIL_stream_status()==SMP_DONE` can become true via the `alldone`/empty-pipeline path while the separate `docallback` latch may never be set or delivered. That matches measured behavior: **EOSPOLL fires, EOS callback line never appears**.
+
+### 1f. Periodic service notes
+
+| Mechanism | 7.2e header | 9.3b header | Engine |
+|-----------|-------------|-------------|--------|
+| `AIL_serve()` | 3243 | 2094 | Called ~every 50ms when sounds playing (`Audio.cpp:5583`) |
+| `AIL_MM_PERIOD` pref index | 12 (`DEFAULT_AMP` 5 ms) — 1400–1403 | 0 (`DEFAULT_AMP` 1 ms) — 762–763 | Not set — **stock 9.3b 1 ms mixer period** |
+| Stream background timer | Not in header; struct has `autostreaming` | Internal 16 Hz timer per SDK | Not app-visible |
+| `AIL_service_stream` / `AIL_auto_service_stream` | 5374, 5398 | 4348, 4374 | **Never called** — relies on Miles internal autostreaming (1→2 on `AIL_start_stream`) |
+
+---
+
+## 2. Sample API
+
+### 2a. Allocation / init
+
+| API | 7.2e | 9.3b | Delta |
+|-----|------|------|-------|
+| `AIL_allocate_sample_handle` | 4607–4608 | 3260–3261 | 9.3b impl **always calls** `AIL_init_sample(S, DIG_F_MONO_16)` inside allocate (SDK `wavefile.cpp:4681`) |
+| `AIL_init_sample` | 4687–4688: `(HSAMPLE, S32 format)` | 3550–3551: same | **Signature unchanged.** `format` still `DIG_F_*` code. Engine **never calls directly** |
+| `AIL_set_named_sample_file` | 4697–4701 | 3560–3564 | 9.3b impl calls `AIL_init_sample(S, DIG_F_MONO_16)` before ASI setup (SDK `wavefile.cpp:2727`). `block` arg: ADPCM block size / VOC marker flag (`block==-1`); **0 for MP3/WAV-in-memory is correct** |
+
+**Stale pattern check:** Retail-era code that did `allocate → init_sample(custom_format) → set_named_sample_file` is redundant in 9.3b but harmless; engine skips explicit `init_sample`.
+
+### 2b. Volume APIs
+
+| API | 7.2e | 9.3b | In vendored 7.2e? |
+|-----|------|------|-------------------|
+| `AIL_set_sample_volume_pan` | 4739–4741 | 3700–3702 | Yes both |
+| `AIL_set_sample_volume_levels` | 4743–4745 | 3704–3706 | Yes both |
+| `AIL_sample_volume_levels` | 4786–4788 | 3771–3773 | Yes both |
+| `AIL_set_sample_volume` (scalar) | **Not in 7.2e header** | **Not in 9.3b header** | Engine uses `volume_levels` throughout (`Audio.cpp:3661+`) — **already aligned with both headers** |
+
+**Semantics (both versions):** `volume_levels` = per-channel linear **0.0–1.0** `F32`; `volume_pan` = combined volume + pan. No unit change between headers.
+
+### 2c. Start/stop / EOS callbacks
+
+| API | 7.2e | 9.3b | Delta |
+|-----|------|------|-------|
+| `AIL_start_sample` | 4727 | 3590 | 9.3b adds `AIL_schedule_start_sample` (3594+) — unused by engine |
+| `AIL_register_EOS_callback` | 4912–4914 | 3899–3901 | Same `AILSAMPLECB` typedef (7.2e:2702, 9.3b:1587) |
+| `AIL_register_EOB_callback` | 4908–4910 | 3895–3897 | Same decl; **engine does not use EOB** |
+| `AIL_register_mix_callback` | — | 3903 | **New in 9.3b** — unused |
+
+**EOS vs stream callback:** Sample `EOS` fires from sample pipeline; stream EOF uses **`AIL_register_stream_callback`** (separate path). 9.3b preload streams reroute through `AIL_register_EOS_callback` broker when stream callback registered (SDK `mssstrm.cpp:1655–1660`). Engine music streams use non-preload 8-chunk path (`stream_mem=0`).
+
+---
+
+## 3. Digital driver + file I/O
+
+### 3a. `AIL_open_digital_driver`
+
+| | 7.2e | 9.3b |
+|---|------|------|
+| Decl | 4453–4456: `(U32 freq, S32 bits, S32 channel, U32 flags)` | 3139–3142: same |
+| Win32 open path | Direct `AIL_open_digital_driver` | **Macro** → `AIL_open_generic_digital_driver(..., RADSS_DSInstallDriver(0,0))` (3073–3074) |
+| Legacy waveOut | `AIL_waveOutOpen` commented out (7487–7492) | Not present |
+| `DIG_USE_WAVEOUT` pref | Index **15** (1593), default NO | Index **17** (821), default NO |
+
+Engine: `AIL_open_digital_driver(getFrequency(), getBits(), getProviderSpec(...), 0)` (`Audio.cpp:1518`) — correct for 9.3b macro; uses DirectSound backend by default.
+
+### 3b. `DIG_*` preference index renumbering (engine-touching)
+
+| Symbol | 7.2e index : default | 9.3b index : default | Engine usage |
+|--------|----------------------|----------------------|--------------|
+| `DIG_MIXER_CHANNELS` | 1 : 64 | 3 : 64 | `AIL_get_preference` at init (`Audio.cpp:1511`) — **uses 9.3b symbol** ✓ |
+| `DIG_3D_MUTE_AT_MAX` | 46 : **NO** | 11 : **YES** | Engine sets `0` before open (`Audio.cpp:1516`) — **required** on 9.3b |
+| `DIG_DS_FRAGMENT_SIZE` | 34 : **8 ms** | 6 : **1 ms** | Stock — drives ring granularity |
+| `DIG_DS_FRAGMENT_CNT` | 35 : **96** | 7 : **256** | Stock ring ≈768 ms (7.2e) vs **256 ms** (9.3b) — matches evidence pack |
+| `DIG_DS_MIX_FRAGMENT_CNT` | 42 : **8** (≈64 ms @ 8 ms/frag) | 8 : **48** (≈48 ms @ 1 ms/frag) | Engine overrides to 64 in `setLargePreMixBuffer` (`Audio.cpp:5749`) |
+| `AIL_MM_PERIOD` | 12 : 5 ms | 0 : 1 ms | Not touched by engine |
+
+**Trap:** Hardcoding 7.2e numeric preference IDs would hit wrong settings. Engine compiles against 9.3b symbols — safe **if** headers match runtime DLL (they do for Win32 9.3b).
+
+### 3c. `AIL_set_file_callbacks` / async
+
+| | 7.2e | 9.3b |
+|---|------|------|
+| `AIL_set_file_callbacks` | 5445–5448 | 4410–4413 |
+| Open typedef | `(MSS_FILE const FAR*, UINTa FAR*)` (5428–5429) | `(MSS_FILE const*, UINTa*)` (4393–4394) |
+| `MSS_FILE` | `char` or Mac `FSSpec` struct (5414–5424) | `char` only (4391) |
+| `AIL_file_callbacks` getter | — | 4415–4418 **new** |
+| Async variant | `AIL_set_file_async_callbacks` under `IS_32` (5460–5464) | Same (4430–4434) |
+
+Engine registers **sync** callbacks only (`Audio.cpp:1507,322–325`). Signatures use `UINTa` + `__stdcall` — matches 9.3b Win32 `AILCALLBACK`. 9.3b streaming layer issues reads through `MilesAsyncRead` internally while still calling the sync read callback from worker context.
+
+**Removed in 9.3b / new:** `DIG_DS_SECONDARY_SIZE` (7.2e:1596), `DIG_DS_SAMPLE_CEILING` (7.2e:1599), `DIG_SERVICE_RATE` DOS-only block (7.2e:1618+).
+
+---
+
+## 4. Engine `AIL_*` cross-check (`Audio.cpp`)
+
+**Legend:** ✅ no semantic delta (or already ported) · ⚠️ behavior/default changed · 🔴 7.2e-era assumption risky on 9.3b
+
+| Call | Location | 7.2e→9.3b delta | Flag |
+|------|----------|-----------------|------|
+| `AIL_register_stream_callback` | 3560 | Separate `docallback`/16 Hz delivery; **not tied to `SMP_DONE` poll** | 🔴 |
+| `AIL_stream_status` | 2510, 3195, 2321 | `SMP_DONE` value same; **9.3b richer state machine** | ⚠️ |
+| `AIL_stream_ms_position` | 2516, 4834+ | Used as EOSPOLL guard (`pollCurrentMs>0`) | ⚠️ |
+| `AIL_open_stream` | 702 | 3→8 chunk buffer geometry; `stream_mem=0` sizing | ⚠️ |
+| `AIL_set_stream_loop_count(0)` | 3547 | Infinite loop without `alldone`/callback path | ⚠️ (intentional skip of callback) |
+| `AIL_start_stream` | 3571, 5027 | Promotes autostreaming; no app `service_stream` | ⚠️ |
+| `AIL_close_stream` | 3862 | Same API; 9.3b syncs IO thread on close (engine comment :83) | ⚠️ |
+| `AIL_set_file_callbacks` | 1507 | Sync callbacks OK; 9.3b async stream IO underneath | ⚠️ |
+| `AIL_open_digital_driver` | 1518, 1524 | RADSS DirectSound wrapper | ✅ (ported) |
+| `AIL_set_preference(DIG_3D_MUTE_AT_MAX,0)` | 1516 | Default flipped YES→NO needed | ✅ (ported) |
+| `AIL_set_preference(DIG_DS_MIX_FRAGMENT_CNT,64)` | 5749 | Pref ID 42→8; value semantics 64 fragments × **1 ms** = 64 ms | ⚠️ |
+| `AIL_set_room_type(dig,0,env)` | 4295+ | **New `bus_index` arg** | ✅ (ported) |
+| `AIL_room_type(dig,0)` | 4333 | **New `bus_index` arg** | ✅ (ported) |
+| `AIL_allocate_sample_handle` | 738, 768, 5047 | Now includes `AIL_init_sample(MONO_16)` | ✅ |
+| `AIL_init_sample` | — | **Not called** — OK via allocate/set_named | ✅ |
+| `AIL_set_named_sample_file(..., 0)` | 3315, 3413, 5059 | 9.3b re-inits sample; MP3 via ASI | ✅ |
+| `AIL_register_EOS_callback` | 3357, 3448 | Same stdcall `AILSAMPLECB` | ✅ |
+| `AIL_set_sample_volume_levels` | 3661+ | Already correct API (no scalar volume) | ✅ |
+| `AIL_set_sample_reverb_levels` | 3662+ | Same | ✅ |
+| `AIL_lock` / `AIL_unlock` | 5547, 5553 | 9.3b `#define` → `AIL_lock_mutex` (2989–2990) | ⚠️ (mutex scope) |
+| `AIL_serve` | 5583, 5750 | Still required; 9.3b 1 ms MM period default | ⚠️ |
+| `AIL_service_stream` | — | **Never called** | ⚠️ |
+| `AIL_auto_service_stream` | — | **Never called** | ⚠️ |
+| `AIL_pause_stream` | 3854 (commented) | — | — |
+| `AIL_get_preference(DIG_MIXER_CHANNELS)` | 1511 | Index 1→3, same default 64 | ✅ |
+| All 3D sample/room/rolloff calls | various | Mostly pointer-style (`FAR` removal); bus_index on room | ✅ |
+| `AIL_startup/shutdown/redist/MSS_version/file_type/WAV_info/...` | various | Incidental `FAR` removal | ✅ |
+
+---
+
+## 5. Stale 7.2e-era assumptions — ranked by relevance to locked anomaly + storm
+
+### 🔴 1. Stream EOS callback ≡ end of playback (highest — **locked anomaly**)
+Engine registers `AIL_register_stream_callback` and historically drove `Sound2d::reset` from it (`Audio.cpp:3558–3560, 5382–5407`). On 9.3b, callback delivery requires a **`docallback` latch** in `load_buffer_into_Miles` plus **16 Hz background timer** delivery when the underlying sample is no longer `SMP_PLAYING` — a **different gate** than `AIL_stream_status()==SMP_DONE`. Measured: poll path fires (`EOSPOLL`), callback never does. Title infinite-loop path correctly skips callback (`loop_count(0)` → no `alldone`); **playlist MP3 tracks register callback but still silent**.
+
+### 🔴 2. `SMP_DONE` poll is a drop-in substitute for callback timing
+CONSULT-62 poll path (`Audio.cpp:2497–2537`) reads the same `SMP_DONE` flag but does not restore 7.2e-era release timing relative to mixer/IO teardown. Evidence: prompt 1-frame release **did not change storm** — so the anomaly and storm share a **Miles 9.3b transition/refill window**, not merely slow callback-driven release.
+
+### ⚠️ 3. Stream buffer / mix-ahead defaults are unchanged from retail 7.2a era
+7.2e Windows stock: 8 ms fragments × 96 = ~768 ms ring, 64 ms mix-ahead. 9.3b stock: **1 ms × 256 = 256 ms ring, 48 ms mix-ahead** (matches evidence). Engine never re-tuned at driver open except optional `DIG_DS_MIX_FRAGMENT_CNT=64`. Transition anatomy (~16 ms close→open) sits inside a **much shorter 9.3b ring** — different overlap physics when one-shots start (`Audio.cpp:693–697` still documents 7.2-style “one second” intuition, but 9.3b `stream_mem=0` is **datarate/8 per chunk**, not 1 s total).
+
+### ⚠️ 4. App need not call `AIL_service_stream` / `AIL_auto_service_stream`
+Headers still expose both. 9.3b depends on internal autostreaming (1→2 on start) and a per-driver stream timer. Worked for looping (`AIL_set_stream_loop_count` per evidence); **does not guarantee stream callback delivery** for finite MP3 EOF.
+
+### ⚠️ 5. `AIL_set_file_callbacks` sync read ≡ 7.2e streaming I/O profile
+9.3b opens stream files **per async chunk** (engine comment `Audio.cpp:4517–4520`: many opens, few closes). File callbacks run from Miles IO/async context while main thread batches starts under `AIL_lock`. Different contention signature vs 7.2e triple-buffer model at **track transition ±1 s**.
+
+### ⚠️ 6. `DIG_3D_MUTE_AT_MAX` default is still off
+Only true on 7.2e (default NO). 9.3b defaults **YES** — engine correctly forces `0` (`Audio.cpp:1513–1516`). Not storm-related but shows other silent default shifts.
+
+### ✅ Lower relevance (already aligned or non-participants)
+- Scalar `AIL_set_sample_volume` — not in either vendored header; engine uses `volume_levels`.
+- Explicit `AIL_init_sample` before one-shots — redundant on 9.3b.
+- `AIL_register_EOB_callback` — unused; 9.3b removed EOB-driven stream background anyway.
+- `Sound2d.cpp` — no Miles calls.
+
+---
+
+## Mechanism summary (no fixes)
+
+The headers preserve **API names and `SMP_DONE=0x0002`**, but 9.3b fundamentally rewired **stream internals** (8-chunk async ring, renumbered `DIG_*` prefs with 1 ms/256-fragment defaults, RADSS driver open, bus-indexed reverb) and **decoupled stream EOF signaling into two paths**: `AIL_stream_status` (observable from main thread — works) vs `AIL_register_stream_callback` (background `docallback` latch — **broken for MP3 music streams per evidence**). The engine’s call ordering (`open → loop_count → register_stream_callback → start`) matches both header contracts; the failure is **9.3b runtime semantics**, not a missing registration call. The crackle storm at music transitions persists even with poll-driven release, placing it in the **overlap between stream teardown/open and one-shot sample starts** under 9.3b’s shorter buffer ring and async stream I/O — not in stale scalar-volume or teardown-latency assumptions already eliminated by the evidence pack.

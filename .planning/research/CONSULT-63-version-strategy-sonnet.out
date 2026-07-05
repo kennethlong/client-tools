@@ -1,0 +1,297 @@
+CONSULT-63 — Version-strategy angle (Miles 7.2a/7.2e vs 9.3b/9.3v)
+====================================================================
+Consultant: fresh Sonnet 5, read-only mechanism/feasibility analysis. No code touched.
+
+Sources read:
+- D:\Code\milesss-v9.3b\README.md (SIGMA/Archivo Federal preservation repo, MSS 9.3b w/ source)
+- D:\Code\milesss-v9.3b\win\sdk\help\Miles.chm, decompiled via `hh.exe -decompile` (Windows'
+  built-in CHM decompiler) into changelog.html (full version history back to MSS 3.6, 1997),
+  migration.html, AIL_register_stream_callback.html, AIL_stream_status.html, and the
+  "glitch when looping MP3" FAQ.
+- src/external/3rd/library/miles-7.2e/include/mss.h (6693 lines) vs
+  src/external/3rd/library/miles-9.3b/include/mss.h (8352 lines) — full symbol/enum diff.
+- src/engine/client/library/clientAudio/src/win32/{Audio,Sound2d,Sound3d,Sample2d,Sample3d,
+  SampleStream}.cpp/.h — every AIL_* callsite.
+- clientAudio.vcxproj and SwgClient.vcxproj (Win32/x64, all 5 configs) — include/lib wiring.
+- git show 984afc073 (the 9.3b→9.3v x64 swap commit).
+
+====================================================================
+1. DOCUMENTED CHANGES 7.x → 9.3 (streams/EOS/MP3/mixer/file-IO/buffering)
+====================================================================
+
+The changelog.html I extracted is the REAL, dated RAD changelog (not the SIGMA fork's marketing
+text) — 1997 through 2012-12-12 (9.3b). Two entries are architecture-level rewrites of exactly
+the subsystem implicated in the crackle-storm bug, and they land squarely BETWEEN 7.2e (our
+rollback candidate, 2008-10-30) and 9.3b (what we ship):
+
+  A) "Changes from 8.0f to 8.0g (12-06-2010)":
+     "All new IO and streaming system (optimized with Telemetry) - uses background thread
+     loading on all platforms (including Wii). Much, much better sharing when reading from
+     multiple streams at once. You can even read static files during streaming safely."
+     Also added in this release: AIL_stream_filled_percent, AIL_timer_thread_handle,
+     AIL_IO_thread_handle. This is a confirmed, RAD-labeled REWRITE of the stream/IO layer,
+     not an incremental patch. Every stream-open/EOF/prime code path our engine drives
+     (AIL_open_stream → AIL_register_stream_callback → AIL_start_stream, polled via
+     AIL_stream_status) runs through this rewritten engine in 9.3b; it did NOT exist yet in
+     7.2e. This is the single strongest documented reason the two versions could differ in
+     EOS-callback behavior at exactly a stream-transition boundary.
+
+  B) "Changes from 9.1f to 9.2a (7-12-2012)": "Default mix granularity is now 1 millisecond
+     on all platforms." — CONFIRMED BY HEADER DIFF (below): this is a real, dated, global
+     change to the DirectSound mixing tick rate, landing AFTER 7.2e and folded into the 9.3b
+     we ship.
+
+  Other documented items touching the exact call surface in use here:
+  - 7.2d→7.2e (10-30-2008, i.e. THIS version): "Made AIL_decompress_ASI not take Miles mixer
+    lock on modern platforms (prevents skipping when decoding heavy duty files while sound is
+    playing)." — so even 7.2e itself already carries an ASI-decode/mixer-lock decoupling fix;
+    rolling back to 7.2e does NOT roll back past this specific fix.
+  - 8.0c→8.0d (5-17-2010): "Clarified the documentation for the DIG_3D_MUTE_AT_MAX preference
+    and related behavior." — this preference's default value literally flips between our two
+    candidate versions (see 2.3 below); the 8.0d note is RAD's own acknowledgment that this
+    preference's behavior needed clarification in this exact version window.
+  - 8.0d→8.0e (7-7-2010): "Fixed a bug that could cause audible glitches after multiple
+    iterations of looped .MP3s and other compressed samples." — a DIRECT MP3-looping-glitch
+    fix that postdates 7.2e. Not our exact symptom (ours is one-shots at a *stream transition*,
+    not looped-MP3 iteration), but it establishes that MP3-loop/iteration glitches were a live,
+    version-specific defect class in this exact era, fixed AFTER the version we're
+    contemplating rolling back to.
+  - 8.0i→8.0j (1-26-2011): "Fixed bug that could cause AIL_stream_status() to incorrectly
+    return SMP_PLAYING after stream termination." + "Fixed bug that could cause
+    AIL_start_stream() to fail to restart a completed stream under certain conditions." —
+    stream-status/restart correctness bugs, fixed between 7.2e and 9.3b. Rolling back to 7.2e
+    would resurrect these (already-fixed) bugs as a cost of the rollback, which matters because
+    our engine's own EOF detection is a poll of AIL_stream_status()==SMP_DONE — i.e. we lean
+    directly on the correctness of the exact function RAD had to patch post-7.2e.
+  - 9.0b→9.0c (7-28-2011): "Fix AIL_stream_status for very short sound samples." — another
+    stream-status fix in this window.
+  - 6.6d→6.6e (2004, ancient but instructive): "Changed some logic to allow streams to be
+    closed inside an end of stream callback" — shows EOS-callback/stream-lifetime interactions
+    have historically been a recurring fragile corner of this exact API, going back to 2004.
+
+  9.3-sub-version deltas (9.3a/9.3b/9.3g/9.3v) found in the changelog: 9.3a (11-26-2012, "big
+  new release") added push/pop system state, sample groups, scheduled starts, 1ms-granularity-
+  everywhere confirmation, spread/line-segment positioning. 9.3b (12-12-2012) is WAV marker/loop
+  and Bink-only fixes — nothing stream/EOS/MP3-related changed 9.3a→9.3b. There is no public
+  changelog entry for "9.3g" or "9.3v" (these appear to be post-retail/internal RAD builds not
+  covered by the archived SDK's own changelog — consistent with 9.3v being "the fixed later RAD
+  build" per commit 984afc073, i.e. a hotfix branch off 9.3-family that never got a public
+  changelog entry in this archive).
+
+  Net read: nothing in the public changelog specifically documents "the stream EOS callback
+  stops firing for MP3 streams" as a fix or regression at any version boundary. But the two
+  architecture rewrites (8.0g IO/streaming, 9.2a mixer granularity) are exactly the kind of
+  wholesale internal replacement that would silently change EOS-callback delivery timing/
+  reliability without RAD ever writing a changelog line about "streaming/EOS callback: this now
+  behaves differently," because from RAD's perspective it's an internal implementation detail,
+  not an API contract change.
+
+====================================================================
+2. 7.2e ROLLBACK FEASIBILITY (Win32 client only)
+====================================================================
+
+2.1 Header/API surface diff — CLEAN.
+Extracted every AIL_* symbol used across Audio.cpp/Sound2d.cpp/Sound3d.cpp/Sample2d.cpp/
+Sample3d.cpp/SampleStream.cpp (77 unique symbols) and grepped each against
+miles-7.2e/include/mss.h. Zero real misses. The two apparent misses were false positives:
+"AIL_file_" (a substring from a comment, "AIL_file_*_callback ABI", in Audio.cpp:318) and
+"AIL_stream_volume_levels" (a DEAD, commented-out line at Audio.cpp:3566 — this identifier
+doesn't even exist in the 9.3b header we actually build against, confirming it's inert).
+Every preference enum used (DIG_3D_MUTE_AT_MAX, DIG_DS_FRAGMENT_CNT, DIG_MIXER_CHANNELS,
+DIG_DS_MIX_FRAGMENT_CNT, SMP_DONE/PLAYING/STOPPED/FREE, MSS_MC_* speaker specs,
+MSS_STREAM_CHUNKS) is present in 7.2e too. The file-callback typedefs (AIL_file_open_callback/
+_close_callback/_seek_callback/_read_callback, and AIL_set_file_callbacks's signature) are
+BYTE-FOR-BYTE identical in shape between 7.2e and 9.3b (U32 return, UINTa handle) — the
+TreeFile file-I/O redirection would compile and link unchanged. clientAudio only
+`#include <mss.h>` (FirstClientAudio.h:18); 7.2e's mss.h is self-contained (predates the
+rrcore.h basic-type unification that landed at 8.0d→8.0e, so it doesn't need or want rrcore.h
+alongside it — and clientAudio never includes rrcore.h itself).
+
+  Verdict: a straight recompile of clientAudio (and anything else linking Mss32.lib) against
+  7.2e would very likely compile clean with ZERO source changes. This is a meaningfully
+  stronger result than "probably fine" — it's a verified zero-diff API surface over the
+  specific ~77 symbols this engine actually touches.
+
+2.2 Build-graph work-list (Win32 only; x64 stays untouched).
+  - clientAudio.vcxproj: 3 Win32 ItemDefinitionGroups (Debug/Optimized/Release) each have one
+    `AdditionalIncludeDirectories` line with `...\miles-9.3b\include` — repoint to
+    `...\miles-7.2e\include`. (x64 Debug/Release configs keep miles-9.3b\include — untouched.)
+  - SwgClient.vcxproj: 5 occurrences of `miles-9.3b\lib` in AdditionalLibraryDirectories (one
+    per config: Debug/Optimized/Release Win32 + Debug/Release x64). Repoint the 3 Win32 ones to
+    `miles-7.2e\lib\win`. AdditionalDependencies already references `Mss32.lib` (capital M) —
+    that's the EXACT filename 7.2e ships (`lib\win\Mss32.lib`), so no rename needed; the 9.3b
+    lib happens to be lowercase `mss32.lib` but Windows link.exe resolution is
+    case-insensitive, so this was never a hazard either way.
+  - Deploy: 7.2e's redist/ dir is a complete, matched set — mss32.dll, mssmp3.asi (the MP3
+    ASI decoder itself — the component most under suspicion), mssogg.asi, mssvoice.asi, and
+    the dolby/ds3d/dsp/eax/srs .flt filters + Msseax.m3d. This is everything currently staged
+    under stage/miles/ for 9.3b, so it's a pure folder-swap for an A/B build — no partial/
+    mixed-vintage redist risk (the exact trap the 9.3b→9.3v x64 swap commit had to work around
+    with a "matched set" comment).
+  - Any OTHER project besides clientAudio/SwgClient that includes mss.h or links Mss32.lib
+    would also need the same include/lib repoint (not audited beyond clientAudio+SwgClient
+    here — a `grep -rl "miles-9.3b"` across the full src tree before doing this for real is a
+    5-minute sanity check, cheap insurance).
+
+2.3 Behavioral risk even after a clean compile — the DIG_3D_MUTE_AT_MAX case study.
+This is the concrete, already-discovered example of "compiles fine, silently changes behavior"
+that the task asked me to find, and it is a textbook one:
+
+    7.2e:  #define DIG_3D_MUTE_AT_MAX  46      DEFAULT_D3MAM = NO   ("off by default")
+    9.3b:  #define DIG_3D_MUTE_AT_MAX  11      DEFAULT_D3MAM = YES  ("on by default")
+
+  Two things changed, not one: (a) the DEFAULT flipped NO→YES between these versions
+  (documented in-header, and independently corroborated by the 8.0c→8.0d changelog line about
+  clarifying this exact preference), and (b) the preference's numeric ID itself was
+  renumbered (46 → 11) — Miles preference IDs are NOT ABI-stable across major version
+  boundaries. Audio.cpp:99-101,1513-1516 already contains a hand-written comment and explicit
+  `AIL_set_preference(DIG_3D_MUTE_AT_MAX, 0)` fix for exactly this default-flip, dated to a
+  prior investigation (comment says "default YES in 9.3x"). A 7.2e rollback would silently
+  re-enable a NO-OP fix (setting an already-NO-by-default preference to 0 again is harmless),
+  but it's proof this exact hazard class (recompile-clean, behavior-different) is real and has
+  already bitten this codebase once. The renumbering point is the sharper risk: it means the
+  header and the runtime DLL must always be from the SAME matched version pair, or any raw/
+  cached preference ID would silently target the wrong preference. This is the same
+  "shared-header ABI trap" pattern already in this project's memory bank, just recurring at
+  the Miles-preference-enum layer instead of the C++-struct layer.
+
+2.4 The bigger, quantified behavioral delta: mixer granularity and buffer sizing.
+Diffing the two headers' Windows-specific preference-default blocks (both headers, guarded
+under `#if defined(IS_WINDOWS)`) gives hard numbers, not just prose:
+
+    7.2e  (Win32 DirectSound block, mss.h:1564-1573):
+      DIG_DS_FRAGMENT_SIZE default = 8 ms
+      DIG_DS_FRAGMENT_CNT  default = 96        → ring = 8ms x 96  = 768 ms
+      DIG_DS_MIX_FRAGMENT_CNT default = 8 fragments → mix-ahead = 8ms x 8 = 64 ms
+
+    9.3b  (mss.h:781-791, comments are RAD's own):
+      DIG_DS_FRAGMENT_SIZE default = 1 ms      // "1 ms per mix."
+      DIG_DS_FRAGMENT_CNT  default = 256       // "We want ~256 ms of buffers"
+      DIG_DS_MIX_FRAGMENT_CNT default = 48     // "Mix ahead ~48 ms"
+
+  This is the header-level confirmation of the changelog's "default mix granularity is now
+  1 millisecond on all platforms" (9.1f→9.2a) line, with actual numbers: the Windows mixer
+  granularity moved from 8ms ticks / 768ms ring / 64ms mix-ahead (7.2e) to 1ms ticks / 256ms
+  ring / 48ms mix-ahead (9.3b) — an 8x finer tick rate on a ring buffer 3x smaller. This lines
+  up suspiciously well with the evidence pack's measured "OPENCALL 16ms after the EOF poll
+  fired" and the engine's own in-game mix-ahead override (16ms, i.e. BELOW even 9.3b's already-
+  tightened 48ms stock default) — the whole system is now operating at a timing granularity an
+  order of magnitude finer than what 7.2e's internals were designed around. AIL_MM_PERIOD's
+  stock default also moved (7.2e Windows: 5ms service tick; 9.3b: DEFAULT_AMP=1, i.e. ~1ms,
+  though the in-header comment text is stale and still says "5 msec" — the VALUE is what the
+  code reads, and it's 1). None of this proves the storm is a 7.2e-vs-9.3b regression, but it
+  is hard, header-sourced evidence that the two versions' internal mixing cadence differs by
+  close to an order of magnitude on exactly the platform (Windows/DirectSound) and exactly the
+  parameter class (fragment/ring/mix-ahead timing) implicated by the symptom's own ~16ms
+  measured latency.
+
+2.5 Overall rollback verdict.
+NOT impractical. This is a low-effort, low-risk, high-information experiment for the Win32
+client specifically: 3 include-path edits + 3 lib-path edits + a redist folder swap, zero
+source changes predicted (verified against the actual 77-symbol usage surface), and the 7.2e
+SDK is already fully vendored in-repo (headers + Mss32.lib + a complete matched redist,
+including the mssmp3.asi decoder itself). The engineering cost is a rebuild + an A/B repro run,
+not a source-code project. The main real risk is unknown-unknowns in the ~8300-vs-6700-line
+header body outside the 77 symbols actually exercised (e.g. struct layout for AILSOUNDINFO or
+similar structs passed by value/pointer, if any are used) — worth one targeted check
+(`grep -n "AILSOUNDINFO\|MSS_" ` across clientAudio) before committing to a real build, but
+nothing found in this pass suggests a blocking incompatibility.
+
+====================================================================
+3. x64 DISCRIMINATION MATRIX (running the repro on mss64.dll 9.3v)
+====================================================================
+
+3.1 What the test tells you, per outcome.
+
+  STORM REPRODUCES on x64 (9.3v):
+    Strongest reading: the defect is NOT a narrow property of the specific mss32.dll 9.3b
+    binary. It's shared across at least two members of the "modern Miles" family (9.3b x86,
+    9.3v x64) that differ in bitness, in the specific 3D-mixer fix, and (per the mismatched
+    dolby/dsp/srs .flt FileVersion 9.3g vs the core mss64.dll's 9.3v) probably in patch
+    provenance too. Given they share almost nothing except "post-8.0g rewritten IO/streaming
+    core, 1ms mixer granularity, our engine's exact call pattern," reproducing on x64 pushes
+    weight AWAY from "one specific binary's bug" and onto either (a) something structural in
+    the 9.x-family stream/EOS design common to both runtimes, or (b) an engine-side usage
+    pattern that would reproduce against ANY sufficiently-modern Miles runtime regardless of
+    vendor patch level. This test alone cannot distinguish (a) from (b) — but it does rule out
+    "just a 9.3b-Win32-build quirk," which is valuable.
+
+  STORM DOES NOT REPRODUCE on x64 (9.3v):
+    Weaker/more ambiguous reading, for two reasons: (1) the repro is timing-precise (trigger
+    within roughly 1s of a track transition, specifically overlapping the ~16ms
+    EOF-poll→OPENCALL window) — a single clean run on a differently-scheduled binary is weak
+    evidence of true absence; it needs several repeated attempts at the exact same
+    "door-at-theme-end" timing before "no storm" is trustworthy. (2) Even if genuinely absent,
+    you cannot yet say WHY without further isolation (see 3.3) — candidates are "9.3v fixed it"
+    (a specific claim, testable per 3.3), "64-bit code path/SIMD/ASM differences avoid the
+    race" (bitness, not version), or "x64 client's overall frame pacing/thread scheduling
+    shifts the race window enough to dodge it" (an engine/OS-scheduling confound, not a Miles
+    fix at all).
+
+3.2 Confounds that limit inference from a bare x64 run.
+  - BITNESS is entangled with the version swap: mss64.dll 9.3v is compiled from different
+    platform-specific code paths (own SIMD/ASM mixer, per the 8.0a-era changelog note "Merged
+    the Win32 and Win64 builds" only in the *build system*, not the machine code) than
+    mss32.dll 9.3b. A pure x64-vs-x86 test can't separate "fixed by 9.3v's patches" from
+    "never was broken in the 64-bit compiled mixer to begin with."
+  - THE 9.3v RUNTIME IS ALREADY A CHIMERA, not a clean single version: mss64.dll itself
+    reports 9.3v, but its own bundled filter DLLs (dolby/dsp/srs .flt) report FileVersion
+    9.3g — a different sub-version than the core. Any x64 result is a property of this mixed
+    bundle, not of "9.3v" as a monolithic, well-defined version. There is no public changelog
+    entry in the archived SDK for either "9.3g" or "9.3v," consistent with both being
+    post-retail/internal RAD hotfix builds outside this changelog's coverage — meaning we
+    can't cross-reference *what* specifically 9.3v changed relative to 9.3b from documentation
+    alone; only empirical A/B (3.3) can tell you.
+  - THE ONE-SHOT TRIGGER SOUND ITSELF MAY RIDE THE KNOWN-DIFFERENT 3D-MIXER PATH. This is the
+    sharpest, least-obvious confound: the crisp repro trigger is explicitly "the cantina-door
+    sound," and commit 984afc073 (the 9.3b→9.3v x64 adoption) names "cantina door" verbatim as
+    one of the 3D-positional sounds that was BROKEN on 9.3b-x64 and FIXED by 9.3v. If that
+    door sound is played through the engine's Sound3d/Sample3d path (3D-positioned one-shot,
+    which is the normal way ambient/interactive world sounds are authored in this engine, as
+    opposed to Sound2d/Sample2d for UI), then an x64 storm test with the door trigger is not a
+    clean "same interaction, different runtime" comparison — it's running the MP3-stream-
+    transition race THROUGH a 3D-mixer code path that 9.3v specifically patches relative to
+    9.3b-x64, on a platform (x64) where that patch is known to change audible behavior for
+    this exact sound. A "clean" outcome on x64 could reflect the 3D-mixer fix incidentally
+    altering (masking OR revealing) the crackle rather than telling you anything about the
+    stream-EOS/transition defect per se. Recommend confirming whether the door SFX is 2D or
+    3D before trusting the x64 result, and/or repeating the x64 test with a known-2D one-shot
+    (a UI blip, or any Sound2d-authored SFX) alongside the door, to separate "MP3-transition
+    race" from "3D-mixer interaction" as two independently-varying axes.
+  - PROVIDER/PATH SELECTION: confirm getCurrent3dProvider()/getProviderSpec() resolve to the
+    same digital-driver provider on both builds before treating the two runs as
+    apples-to-apples; if x64 defaults to a different provider (e.g. because 9.3v's redist
+    ships/registers filters differently), that's yet another uncontrolled variable.
+  - x64 CLIENT FRAME PACING/SCHEDULING: this is a fundamentally different, freshly-landed
+    64-bit binary (Phase 33/34 milestone) with its own thread scheduling, GC-equivalent
+    behavior, and frame timing — any of which could shift whether the ~16ms race window is hit
+    at all during a given transition, independent of anything Miles-side.
+
+3.3 A sharper, available third test: isolate "9.3b vs 9.3v" from "32-bit vs 64-bit" directly.
+Unlike the header/lib situation, this is a pure DLL swap with NO recompile: miles-9.3b itself
+ships a full matched redist64 (src/external/3rd/library/miles-9.3b/redist64/, including
+mss64.dll AND mss64mp3.asi — the x64 MP3 decoder). Better still, there is already a backup of
+the pre-swap 9.3b x64 binary sitting in the tree: stage-x64/_miles93b_bak/mss64.dll (vs the
+live stage-x64/mss64.dll, which is 9.3v). Swapping mss64.dll (and its matched mss64mp3.asi,
+to avoid a mixed-vintage core/codec pairing) back to the 9.3b redist64 set, on the SAME x64
+SwgClient_r/d.exe, holding bitness constant, isolates the 9.3b-vs-9.3v variable cleanly — no
+rebuild required, just a file swap + repro run. This is a stronger, one-variable-at-a-time
+experiment than "run the shipped x64 client" and should be preferred if Kenny wants a real
+discriminating result rather than a single ambiguous data point. Caveat: this reintroduces
+the KNOWN 9.3b-x64 3D-mixer bug (silent/spotty 3D positional audio) for the duration of the
+test — irrelevant to the crackle-storm mechanism itself (which is 2D MP3 stream timing) unless
+the trigger SFX is 3D-positioned (see 3.2's door-sound confound), in which case that known
+breakage could itself mask whether the crackle occurs.
+
+3.4 Recommended sequencing.
+  1. Confirm whether the repro's one-shot trigger (cantina door) is authored 2D or 3D.
+  2. Run the repro as-is on the shipped x64 client (9.3v) — cheapest, zero-setup data point.
+  3. Whatever the outcome, swap in the 9.3b redist64 (mss64.dll + mss64mp3.asi from
+     miles-9.3b/redist64/, using the existing _miles93b_bak/mss64.dll as the known-good
+     backup source) on the same x64 exe and repeat, to separate "9.3b vs 9.3v" from
+     "32-bit vs 64-bit" cleanly.
+  4. If practical, repeat both x64 runs with a 2D-authored one-shot substituted for the door,
+     to separate "MP3-transition race" from "3D-mixer interaction."
+  Four data points (Win32 9.3b / x64 9.3v / x64 9.3b / x64+2D-trigger) will localize the
+  defect far more precisely than any single x64 run, at a cost of a few file swaps and repro
+  passes — no rebuild needed for any of them.

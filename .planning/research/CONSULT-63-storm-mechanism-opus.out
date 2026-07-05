@@ -1,0 +1,185 @@
+# CONSULT-63 — storm MECHANISM analysis (Opus, mechanism-reasoning angle)
+
+Grounded in the vendored 9.3b source (D:\Code\milesss-v9.3b\win\sdk\src\sdk).
+Key files read: mssdig.cpp (SS_serve / SS_fill dispatch / DS mix-ahead accounting),
+wavefile.cpp:11902 (SS_fill — the actual mix+ASI-decode pass), mssstrm.cpp (open/prime/async IO).
+
+## The load-bearing architectural fact I found (drives the whole ranking)
+
+The mixer pass is `SS_serve` (MSSTimer thread, ~AIL_MM_PERIOD). In the DirectSound path it:
+  1. briefly locks the Miles mutex ONLY around GoodGetCurrentPosition and the DS Lock/Unlock;
+  2. computes how many fragments are already filled ahead of the play cursor (`frags_filled`)
+     and a target `DS_frag_mix_ahead` (in-game = 16ms of fragments);
+  3. for each fragment still needing fill, calls `win_fill` → `SS_fill` **with the mutex NOT
+     held**. SS_fill (wavefile.cpp:11902) is where the real cost lives:
+       - it starts any *scheduled* samples (calls AIL_API_start_sample inline, 12013),
+       - it walks EVERY active ASI sample and calls `ASI_stream_process(...)` to
+         prefetch/decode a block (12026-12065) — MP3 decode happens HERE, per pass, per sample,
+       - then mixes all busses into the fragment.
+
+Corollary that decides everything below: **app-side AIL_* calls cost ~0ms because they only
+allocate handles / set state / schedule; the compressed→PCM MP3 decode is deferred onto the
+mixer thread's fill pass.** So a decode-cost spike is INVISIBLE to every app-side probe, to the
+main-thread watchdog, and to the 0ms open/close measurements. That is exactly the shape of this
+storm.
+
+A second load-bearing fact: an MP3 stream that was just opened+primed has only its **compressed**
+input buffer filled by async IO (mssstrm.cpp: prime loads 7/8 of `bufsize` of *compressed* bytes;
+`primeleft` is a compressed-byte counter). Its **PCM output reservoir is empty at start**. The
+first ~N mixer passes after AIL_start_stream must therefore do EXTRA MP3 decode work to build the
+reservoir lead from zero up to steady-state depth. That build-up window is the "~1 second."
+
+---
+
+## Candidate mechanisms
+
+### M1 — Mixer-thread ASI-decode overrun during the new-stream decode ramp, tipped over by the concurrent one-shot decode  ★ TOP
+- Resource under contention: **CPU time inside a single SS_fill pass vs. the 16ms in-game
+  mix-ahead budget.**
+- State: freshly-opened stream has an EMPTY PCM output reservoir. For ~1s the mixer must decode
+  more MP3 per pass than at steady state to build the reservoir lead. During that ramp the
+  per-pass headroom above 16ms is at its thinnest. Adding a one-shot MP3 at that instant forces
+  the same pass to ALSO init a new ASI decoder (12013 start + first ASI_stream_process, 12045)
+  and decode its frames — additive load that pushes total pass time past the fragment duration.
+- Why CRACKLE not silence/latency: when a fill pass overruns, the play cursor advances into
+  fragments that were not refilled in time → the DS ring replays stale/partial PCM → periodic
+  underrun clicks (crackle), not a clean gap. As soon as the new stream's reservoir reaches
+  steady depth (~1s) the per-pass cost drops back under budget and it self-heals.
+- Consistency vs. every locked fact:
+  - 0ms open/close: ✓ decode is on the mixer thread, not the app call. STRONGLY explains it.
+  - Watchdog silent / no main stall: ✓ cost is off-main-thread.
+  - Idle transition clean (a/b): ✓ stream ramp ALONE fits the budget; no added one-shot decode.
+  - Already-looping harvester hum clean: ✓ its ASI reservoir is already at steady depth — no
+    ramp, negligible marginal cost.
+  - Door 8s later clean: ✓ by then the stream reservoir is steady, so the one-shot's marginal
+    decode fits under budget. This is the single fact that most cleanly discriminates M1 from
+    everything mutex/teardown-related.
+  - Prompt release no help: ✓ cost is on OPEN+prime+first-decode, not teardown.
+  - No volume steps: ✓ underrun, not gain.
+  - Strain: assumes the marginal one-shot decode is enough to cross the threshold on a modern CPU
+    at only ~16ms budget. Plausible precisely because in-game mix-ahead is a mere 16ms (thin) and
+    MP3 frame decode + ASI init is bursty. Note the eliminated "192ms premix" was the LOAD-phase
+    budget (64→192ms), NOT the in-game 16ms — so the in-game budget lever is UNTESTED and M1 is
+    not contradicted by that elimination.
+
+### M2 — DS false-dropout re-prime discontinuity (mixer-thread scheduling jitter mistaken for a real underrun)
+- Resource/state: SS_serve's dropout detector (mssdig.cpp:1851): if `timer-DS_last_timer >
+  DS_skip_time` OR the fill fragment passed the play cursor, it forces `frags_filled=0` and the
+  foreground path re-primes the whole queue from `dig->first` (1597-1619 / SS_foreground_service
+  1597). A re-prime rewrites fragments the hardware is about to play → an audible splice.
+- Why CRACKLE: the re-prime overwrites/duplicates queued PCM at a non-zero-crossing → a burst of
+  clicks each time it trips.
+- Consistency: explains 0ms/off-main/no-volume-step the same way as M1. Explains the transition
+  specificity only if the transition makes SS_fill passes long enough (or preempts the timer long
+  enough) to trip the detector. STRAIN: `DS_skip_time = DIG_DS_FRAGMENT_CNT * DIG_DS_FRAGMENT_SIZE`
+  ≈ the full ring (~256ms) — a single long pass won't trip it; you'd need the boosted MSSTimer
+  thread to be starved >256ms, which the boosted priority argues against, and the watchdog seeing
+  no main stall weakly argues against a whole-machine CPU cliff. More likely a SECONDARY amplifier
+  of M1 (once M1 makes a pass overrun, the "fill passed play cursor" clause at 1851 can co-fire)
+  than the primary. Ranked #2 because it is the same-family alternative and shares an instrument.
+
+### M3 — First-decode burst of the primed compressed buffer serialized with the one-shot's ASI init
+- Essentially the mechanism *inside* M1 stated as its own hypothesis: the very first
+  ASI_stream_process on the new stream (12045) is disproportionately expensive (parses MP3 header,
+  fills granule reservoir from the 7/8-primed compressed block in one go) and, if it lands in the
+  same pass as the one-shot's first ASI_stream_process, the two bursts serialize on the single
+  mixer thread. Same consistency profile as M1; I fold it into M1 rather than rank separately —
+  it's the "why the FIRST ~passes specifically" refinement, not a distinct resource.
+
+### M4 — Miles global-mutex contention between the app start-batch and SS_serve's position/Lock
+- Resource: the Miles mutex. App holds it across the start batch; SS_serve needs it at
+  mssdig.cpp:1788 (GetCurrentPosition) and 1915/1947 (DS Lock/Unlock). If the app holds it while
+  the play cursor advances, the timer thread stalls and can fall behind → underrun.
+- Why CRACKLE: delayed refill → underrun clicks.
+- Consistency: superficially fits off-main/0ms. **But directly contradicted by a locked fact:**
+  cycling the lock per-sound (which REDUCES hold time and thus this contention) made audio WORSE,
+  not better. If mutex hold were the mechanism, shortening it would have helped. REFUTED as primary
+  by the evidence pack. Keep only as a note.
+
+### M5 — Stream-slot instant-reuse: ASI pipeline teardown/re-init of the reused slot races the new decode
+- Resource: the per-slot ASI decoder pipeline (SP_ASI_DECODER stage) and its OUTPUT_RESERVOIR.
+  Old stream closes, new opens ~16ms later into the SAME slot; the ASI stage is torn down and
+  re-created. If a one-shot ASI is allocated in the same window they may momentarily share
+  provider scratch or the reservoir is read while being re-inited.
+- Why CRACKLE: glitched decode output (garbage/partial PCM) rather than underrun.
+- Consistency: fits off-main/0ms. STRAIN: MP3 ASI instances are per-sample (separate stream
+  objects), so true shared-scratch corruption is unlikely; and if it were corruption you'd expect
+  it independent of the *8s-later* control (the slot is reused there too on later transitions).
+  The clean-at-8s control argues the problem is reservoir-DEPTH/timing (M1), not slot re-init
+  corruption. Lower confidence.
+
+### M6 — milesasync IO-thread saturation delays the new stream's compressed refill, starving decode
+- Resource: the background milesasync IO thread + app TreeFile callbacks. At the transition the
+  new stream primes (7/8) AND the door one-shot does a whole-file load through the SAME TreeFile
+  layer. If IO is momentarily backed up, the new stream's compressed refill lags → the decoder
+  runs dry → underrun.
+- Why CRACKLE: compressed starvation → decoder produces short/empty PCM → underrun clicks.
+- Consistency: fits off-main/0ms. STRAIN: the pack already ELIMINATED "live compressed-refill
+  starvation" (the STARVED edges were a slot-reuse logging artifact; Miles reuses slots
+  instantly). So the direct starvation form is disproven; the only residual is IO-thread *CPU*
+  contention with decode, which overlaps M1. Low confidence, largely eliminated.
+
+---
+
+## Ranking (confidence)
+
+1. **M1 — mixer-thread ASI-decode overrun of the 16ms in-game mix-ahead during the new-stream
+   reservoir ramp, tipped by the concurrent one-shot decode.**  ~60%. Uniquely explains the
+   8s-later clean control, the idle-clean control, the 0ms/off-main invisibility, and the ~1s
+   duration (= reservoir build time) with no strain.
+2. **M2 — DS false-dropout/real-timer-starvation re-prime discontinuity.**  ~20%. Same instrument
+   as M1; likely a co-firing amplifier rather than root, but must be ruled in/out because it
+   changes the fix (widen dropout tolerance / raise timer robustness vs. widen decode budget).
+3. M4 mutex contention ~6% (refuted-as-primary by the per-sound-lock regression).
+4. M5 slot re-init corruption ~7%. 5. M6 IO/refill ~4% (mostly eliminated). Residual ~3%.
+
+---
+
+## Decisive experiments
+
+### For #1 (M1) — two independent convictions, engine-side first
+
+**(A) Engine-side ablation (no DLL build needed).** Two-variable decode-load test on the crisp
+repro (cantina door as zone theme ends):
+  - Replace the DOOR one-shot asset with an uncompressed PCM/ADPCM WAV (kills its ASI-decode
+    path) while keeping the music as MP3 streams. If the storm VANISHES → the one-shot's marginal
+    ASI decode is the tipping load ⇒ M1 convicted.
+  - Independently, keep the MP3 door but convert the MUSIC playlist to a PCM/ADPCM stream (kills
+    the stream decode ramp). If clean → the stream reservoir ramp is the thin-headroom component
+    ⇒ M1 convicted from the other side.
+  Either result convicts M1; both clean = decisive. (Both being MP3 is the only storm state.)
+
+**(B) The untested budget lever.** Raise the IN-GAME DS mix-ahead only — set
+`DIG_DS_MIX_FRAGMENT_CNT` (via AIL_set_preference) so the in-game cushion goes 16ms → ~64-96ms,
+and re-run the exact repro. This is NOT the eliminated "load premix 192ms" (that was the
+load-phase budget). If the storm attenuates/disappears with a larger in-game cushion, underrun-vs-
+budget (M1) is confirmed; if totally unchanged, M1 is weakened toward M2/M5.
+
+**Instrumented mss32.dll (escalation) — exact instrumentation to convict/refute M1:**
+File `win/sdk/src/sdk/wavefile.cpp`, function `SS_fill` (line 11902). `start_time = rrGetTime()`
+is already captured at 11908, and per-stage costs `dig->asi_times[0..3]`, `dig->mix_time`, and
+`dig->n_active_samples` are already accumulated. Add at the END of SS_fill a lightweight ring-log
+(OutputDebugString or a lock-free ring the engine can drain) of:
+  `{ pass_wall_us = rrGetTime()-start_time, sum(asi_times), mix_time, n_active_samples,
+     n_ASI_samples_processed, fragment_budget_us }`.
+CONVICT M1 if, during the storm window ONLY, `pass_wall_us` (and specifically `sum(asi_times)`)
+spikes ABOVE the fragment budget and `n_ASI_samples_processed` jumps by exactly the one-shot(s)
+added — and returns under budget as the window ends ~1s later. REFUTE M1 if pass_wall stays well
+under budget throughout the storm (then the crackle is not a fill-time overrun → pivot to M2/M5).
+
+### For #2 (M2) — decisive experiment
+
+**Instrumented mss32.dll**, file `win/sdk/src/sdk/mssdig.cpp`, function `SS_serve`:
+  - at line 1851 (the dropout branch) log a counter + the `(timer - dig->DS_last_timer)` delta and
+    which clause fired (`skip_time` exceeded vs. `DS_last_frag < cur_frag`);
+  - at the re-prime block (1597-1619 / SS_foreground_service prime path) log each re-prime event;
+  - also log the inter-pass MSSTimer delta (timeGetTime at SS_serve entry) to catch true
+    timer-thread starvation.
+CONVICT M2 if the dropout/re-prime counters fire repeatedly *during the storm window* (and the
+inter-pass delta blows past `DS_skip_time`). REFUTE M2 (and thereby point back to M1) if those
+counters are silent while M1's pass_wall spikes — i.e., the passes overrun but never trip the
+dropout logic, meaning the crackle is pure per-pass underrun, not a re-prime splice.
+
+Note: because both instruments live in one rebuilt mss32.dll and both fire on the same MSSTimer
+thread, ONE instrumented-DLL session (with the SS_fill ring-log + SS_serve dropout counters)
+adjudicates M1 vs. M2 simultaneously — that is the single highest-value escalation.

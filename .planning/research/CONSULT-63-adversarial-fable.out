@@ -1,0 +1,176 @@
+# CONSULT-63 — Adversarial review: attacking the "Miles-internal" framing
+Reviewer: independent Fable 5, no prior session context. Evidence pack treated as ground truth.
+Code read: Audio.cpp, Sound2d.cpp/.h, GameMusicManager.cpp (current working tree).
+
+## Verdict up front
+
+I CAN construct a viable engine-side account, and it is not exotic: the storm is a
+**mixer-underrun conjunction** — the engine schedules its heaviest Miles work of the whole
+session (close + open + prime + one-shot codec init) into main-thread AIL_lock holds during
+the one window where the Miles service thread is also at peak load (stream prime), against
+an in-game mix-ahead cushion of only 16ms. Every "eliminated" item that would have caught
+this was eliminated with instruments that cannot see the 1–15ms band where this mechanism
+lives. The "Miles-internal collision" framing survives only because the probes' floor
+(GetTickCount ticks, 100ms watchdog) sits ABOVE the storm's operating range (16ms cushion).
+
+---
+
+## 1. The strongest engine-side account: "transition-frame overcommit"
+
+### What the engine uniquely does in the transition window (and not 8s later)
+
+Reconstructed timeline from code (all main thread):
+
+- Frame N: EOS poll fires (Audio.cpp:2504–2538) → `sound->endOfSample()` sets a flag.
+- Frame N+1 (~16ms later, matching the measured "OPENCALL 16ms after EOF poll"):
+  1. `Sound2d::reset()` (Sound2d.cpp:832) → `Audio::releaseSampleId` → `stopSample` →
+     **`AIL_close_stream`** (Audio.cpp:3862). Miles documents/behaves as synchronizing this
+     against its background IO thread — a wait of unknown sub-tick length.
+  2. `setupNextSample()` → `startSample()` → `Audio::queueSample` → the sound lands in this
+     frame's start bucket.
+  3. The "start sounds" block (Audio.cpp:2765–2795) takes **one batch-wide `Audio::lock()`
+     = `AIL_lock()`** (Audio.cpp:5545–5548) and, INSIDE that hold, runs
+     `startSample → createSampleId → AIL_open_stream` (Audio.cpp:702).
+
+  Critical detail: **`AIL_open_stream` re-enters the engine through the Miles file
+  callbacks on the calling thread.** `fileOpenCallBack` (Audio.cpp:4446) does
+  `TreeFile::open` (TOC search + archive open), and Miles' header parse issues synchronous
+  `fileSeekCallBack`/`fileReadCallBack` reads — real file I/O executed **while the main
+  thread holds the global Miles lock**, i.e. while the mixer thread is blocked. Then still
+  under the same hold: volume, playback rate, loop count, `AIL_register_stream_callback`,
+  `AIL_start_stream` (Audio.cpp:3508–3575).
+
+- For ~1s after `AIL_start_stream`, the Miles service side is at PEAK load: priming the
+  stream's default one-second compressed buffer and decoding MP3 to fill the 256ms ring —
+  the most expensive service passes of the entire track lifecycle.
+
+### Where the door fits
+
+A door one-shot start is itself a lock-held batch: `AIL_set_named_sample_file` (MP3 codec
+init/parse of the whole in-memory file, Audio.cpp:3315) + `AIL_start_sample`, under the
+same batch-wide `AIL_lock`. If the door lands in the transition frame it EXTENDS the very
+hold that contains the stream open; if it lands within ~1s after, its holds land inside the
+prime window; if it lands up to ~1s before, its own MP3 decode load (and its Miles-thread
+EOS callback, see §"secondary finding") is still live when the prime spike arrives.
+
+### The arithmetic
+
+In-game mix-ahead is 16ms (pack, stock). The mixer misses its deadline when
+(app lock-hold time) + (service-pass time) exceeds the cushion within a service period.
+
+- Idle transition: close + open-under-lock only. Each certified "<1 tick" (see §2) —
+  evidently fits under 16ms alone → **clean**, as observed.
+- Door at +8s: door-start hold only, stream at steady state → fits → **clean**, as observed.
+- Door at transition: door hold + open-with-I/O hold + close sync + prime-inflated service
+  passes, repeated across the ~1s prime window (per-frame per-sound AIL volume/rate calls
+  from `Sound2d::alter` continue throughout, each contending the same lock) → repeated
+  underruns → **storm**, as observed.
+
+### Consistency check against every locked fact
+
+- "0ms calls": GetTickCount cannot certify sub-tick durations (§2). 1–15ms holds read as 0.
+- "No watchdog stall >100ms": mechanism operates at 5–40ms. Invisible by construction.
+- "No volume steps": mechanism is not volume. Consistent.
+- "Prompt release didn't help": release timing was never the mechanism. Note prompt release
+  actually CONCENTRATES close+open+start into one frame — the storm being "unchanged" is
+  exactly what this account predicts (it neither adds nor removes the conjunction).
+- "Idle transitions clean / looped hum clean": no app-side start batches → no lock holds →
+  single-source load fits the cushion. Consistent.
+- "One-shots 8s later clean": steady-state service load restores headroom. Consistent.
+- "±1s window": +1s = the prime window; −1s = door decode load persisting into it. The pack
+  itself says "roughly" ±1s — human-timed, so the window's precise shape is unmeasured.
+- The dead stream-EOS callback: orthogonal anomaly (9.3b registration/behavior delta);
+  it does not discriminate between the framings and my account does not need it.
+
+The Miles-internal framing claims the collision happens entirely inside the DLL, so even a
+perfectly scheduled engine would storm. My account claims the engine's lock scheduling is a
+NECESSARY ingredient — remove or cushion it and the storm dies. These are cleanly separable
+(§3).
+
+---
+
+## 2. Elimination audit — where the holes are
+
+Ranked, weakest first:
+
+**(a) "Mix-ahead cushion raises … a 192ms LOAD premix did not touch this class" — WEAKEST.**
+The storm occurs IN-GAME (~35s after zone-in). Per the pack's own numbers the in-game
+mix-ahead is stock 16ms and only the LOAD-context premix was ever raised. The elimination
+tested the wrong context's cushion. Alternative reading: the in-game 16ms cushion at the
+storm moment is completely untested, and raising IT is precisely the experiment that would
+kill or confirm the entire underrun family. This hole revives my account wholesale.
+
+**(b) "Live compressed-refill starvation … STARVED edges were a slot-reuse logging
+artifact" — circular.** The artifact explanation ("Miles reuses stream slots instantly")
+means a GENUINE starvation edge on the NEW stream in the reused slot produces the identical
+log signature that was reclassified as artifact. The elimination and the artifact are
+observationally equivalent as logged. Alternative reading: some of those edges were real
+prime-window starvation — i.e. the storm mechanism, observed and then explained away.
+Revive by keying starvation logs to open-generation (stream ptr + open timestamp), not slot.
+
+**(c) "Teardown cost / open cost: calls measure 0ms" — metrological hole.** The probes use
+`GetTickCount` (Audio.cpp:701, 3860), whose documented resolution is 10–16ms and which is
+NOT improved by timeBeginPeriod(1) (that helps timeGetTime/Sleep). "0ms" certifies only
+"start and end fell in the same tick" — i.e. anything up to ~15.6ms. The danger threshold
+for this system is 16ms (the cushion). So the two locked "0ms" facts certify, at worst,
+"each call took less than approximately one full cushion" — which is not an elimination at
+all; it is the storm's operating range. Additionally the OPENCALL probe times only the
+`AIL_open_stream` call — no probe measures the full batch LOCK-HOLD duration (lock() at
+2773 to unLock() at 2790), which is the load-bearing quantity.
+
+**(d) "Main-thread stalls eliminated (watchdog at 100ms)"** — overclaims. It establishes
+"no stall >100ms". A 20–90ms composite (close-sync + open I/O + door batch in one frame) is
+invisible to it and is ~2–6 cushions of mixer blockage.
+
+**(e) "Engine-held Miles-mutex during start batches"** — the per-sound lock-cycling
+experiment was reverted because it was WORSE on start latency; that shows the alternative
+was bad on a different axis, not that the batch hold is innocent as storm fuel. Cycling
+also doesn't reduce total lock-held time; it only fragments it — arguably the wrong
+counter-experiment for this hypothesis.
+
+The volume-step and prompt-release eliminations are solid as stated.
+
+---
+
+## 3. The ONE decisive experiment
+
+**Raise the IN-GAME digital mix-ahead from 16ms to 100–200ms for a diagnostic run and
+re-run the door-at-transition repro.** (One config knob / one `AIL_set_digital_mixahead`
+value at the in-game setting site; latency degradation is irrelevant for a diagnostic run.)
+
+- **Storm vanishes** → the storm is a timing/underrun phenomenon that the engine's
+  scheduling participates in and can fix (pre-roll the next track before EOF; keep stream
+  opens out of the batch lock; transition-window cushion). Miles-internal-corruption
+  framing dies: corrupted decode does not heal because the output buffer got deeper.
+- **Storm persists under a 200ms cushion** → no underrun account survives; something is
+  genuinely producing corrupt samples inside the DLL (prime-vs-start collision), and the
+  Miles-internal framing is confirmed against my strongest attack.
+
+This is the sharpest available separator because buffer depth changes ONLY the underrun
+family's outcome and nothing in the corruption family's.
+
+Free companion (do in the same build): replace the GetTickCount diag probes with
+QueryPerformanceCounter and add a QPC timer around the batch `Audio::lock()`/`unLock()`
+hold in the start-sounds block (Audio.cpp:2773/2790). Whatever the A/B outcome, this
+converts "0ms" into real microsecond numbers and retires elimination-hole (c) permanently.
+
+---
+
+## Secondary findings (flag, not the account)
+
+- `endOfSample2dCallBack` / `endOfSample3dCallBack` (Audio.cpp:5340, 5361) run on the Miles
+  service thread and walk `s_sampleIdToSample2dMap`/`3dMap` — engine std::maps that the
+  main thread erases in `releaseSampleId` (Audio.cpp:3905/3914) on paths NOT under
+  `Audio::lock` (e.g. `Sound2d::stop` → immediate release during alter). Same
+  unguarded-cross-thread-container class as CONSULT-56/57. Predicts rare UAF/crash more
+  than crackle, but door churn + transition churn maximizes exposure. Worth its own audit.
+- The 35-05 title-music file-callback shim (single-slot `s_lastAudioOpenName` /
+  `s_streamResumeOffset`, Audio.cpp:4462–4530) is a genuine single-stream state machine
+  that would misbehave at exactly track transitions — but it defaults OFF
+  (`s_titleMusicStreamFix=false`, Audio.cpp:69/1362). CHECK the active client_d.cfg /
+  client.cfg for a leftover `titleMusicStreamFix=true` before trusting that it is dormant;
+  if armed, it is a second complete engine-side account (stale resume-offset feeding the
+  new stream misaligned MP3 frames = sustained decoder crackle).
+- `[ClientAudio] streamBufferBytes` overrides the prime size (Audio.cpp:702); verify the
+  active cfg value — a large leftover override inflates the prime spike this account
+  depends on.
