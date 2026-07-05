@@ -2652,6 +2652,60 @@ bool Direct3d9Namespace::applyGammaCorrectionToXRGBSurface( IDirect3DSurface9 *s
 
 // ----------------------------------------------------------------------
 
+namespace
+{
+	// CONSULT-63 (2026-07-05): libjpeg destination manager that performs ALL file I/O
+	// through THIS module's CRT. jpeg_stdio_dest hands our FILE* to jpeg62.dll, whose
+	// x64 build fwrites through the DYNAMIC UCRT while this plugin links the static
+	// CRT -- a foreign FILE* trips ucrtbase's invalid-parameter fail-fast (0xc0000409:
+	// screenshot key = instant crash). The Win32 jpeg62 is fully static-CRT and the
+	// legacy CRT never validated foreign FILE*s, which is why 32-bit survived for years.
+	// (Same fix as Direct3d11.cpp screenShot_impl.)
+	struct EngineJpegDestination
+	{
+		jpeg_destination_mgr pub;
+		FILE *file;
+		JOCTET buffer[16384];
+	};
+
+	void engineJpegInitDestination(j_compress_ptr cinfo)
+	{
+		EngineJpegDestination * const dest = reinterpret_cast<EngineJpegDestination *>(cinfo->dest);
+		dest->pub.next_output_byte = dest->buffer;
+		dest->pub.free_in_buffer = sizeof(dest->buffer);
+	}
+
+	boolean engineJpegEmptyOutputBuffer(j_compress_ptr cinfo)
+	{
+		// A short write (disk full) is tolerated -- truncated screenshot, never a crash.
+		EngineJpegDestination * const dest = reinterpret_cast<EngineJpegDestination *>(cinfo->dest);
+		fwrite(dest->buffer, 1, sizeof(dest->buffer), dest->file);
+		dest->pub.next_output_byte = dest->buffer;
+		dest->pub.free_in_buffer = sizeof(dest->buffer);
+		return TRUE;
+	}
+
+	void engineJpegTermDestination(j_compress_ptr cinfo)
+	{
+		EngineJpegDestination * const dest = reinterpret_cast<EngineJpegDestination *>(cinfo->dest);
+		size_t const remaining = sizeof(dest->buffer) - dest->pub.free_in_buffer;
+		if (remaining != 0)
+			fwrite(dest->buffer, 1, remaining, dest->file);
+		fflush(dest->file);
+	}
+
+	void engineJpegSetDestination(j_compress_ptr cinfo, EngineJpegDestination *dest, FILE *file)
+	{
+		dest->pub.init_destination    = engineJpegInitDestination;
+		dest->pub.empty_output_buffer = engineJpegEmptyOutputBuffer;
+		dest->pub.term_destination    = engineJpegTermDestination;
+		dest->pub.next_output_byte    = dest->buffer;
+		dest->pub.free_in_buffer      = sizeof(dest->buffer);
+		dest->file = file;
+		cinfo->dest = &dest->pub;
+	}
+}
+
 bool Direct3d9Namespace::screenShot(GlScreenShotFormat format, int quality, const char *fileName)
 {
 	HRESULT hresult;
@@ -2816,7 +2870,10 @@ bool Direct3d9Namespace::screenShot(GlScreenShotFormat format, int quality, cons
 			jpeg_error_mgr jerr;
 			cinfo.err = jpeg_std_error(&jerr);
 			jpeg_create_compress(&cinfo);
-			jpeg_stdio_dest(&cinfo, outputFile);
+			// CONSULT-63: NOT jpeg_stdio_dest -- our FILE* must never cross into
+			// jpeg62.dll's CRT (x64 = dynamic UCRT, this plugin = static CRT).
+			EngineJpegDestination jpegDest;
+			engineJpegSetDestination(&cinfo, &jpegDest, outputFile);
 			cinfo.image_width = ms_width;
 			cinfo.image_height = ms_height;
 			cinfo.input_components = 3;
