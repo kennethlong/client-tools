@@ -517,10 +517,13 @@ bool VisibilityQuery::performStencilOP(ImpCamera* sc, ImpPhysicalPortal* sp,Rang
 // fires BEFORE any counted reject; the round-6 all-zero collapse suspect),
 // [6]=portals TESTED at all (entered isObjectVisible_INTERNAL) -- 0 on a collapse
 // frame means the database traversal never enumerated them.
+// Round 7 (tested:0 CONFIRMED on all collapse frames): portal DATABASE lifecycle --
+// [7]=Database::updateObject on a portal, [8]=Database::removeObject on a portal,
+// [9]=Database::addObject on a portal (dpvsDatabase.cpp).
 // Accessed via the exported FUNCTION below because Win32 builds dpvs as a DLL
 // (data exports would need dllimport on the consumer; function imports do not)
 // while x64 links it statically (dllexport is benign there).
-extern "C" unsigned int g_swgDpvsPortalRejects[7] = {0, 0, 0, 0, 0, 0, 0};
+extern "C" unsigned int g_swgDpvsPortalRejects[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 extern "C" __declspec(dllexport) unsigned int * swgDpvsGetPortalRejects(void)
 {

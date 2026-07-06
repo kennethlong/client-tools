@@ -1243,11 +1243,18 @@ DPVS_FORCE_INLINE int Database::getObjectDeltaTimeStamp (ImpObject* ob) const
  *
  *****************************************************************************/
 
+// SWG CONSULT-64 diagnostic counters (defined in dpvsVisibilityQuery_Traverse.cpp)
+extern "C" unsigned int g_swgDpvsPortalRejects[10];
+
 DB_INLINE void Database::removeObject (ImpObject* ob)
 {
 	DPVS_ASSERT (ob);
 	if (!ob || !ob->getFirstInstance())				// object not in database
 		return;
+
+	// SWG CONSULT-64 round 7: count portal database removals ([8]).
+	if (ob->isPortal())
+		++g_swgDpvsPortalRejects[8];
 
 	while (ob->getFirstInstance())					// kill all instances
 		deleteInstance(ob->getFirstInstance());
@@ -1459,6 +1466,10 @@ DB_INLINE void Database::addObject (ImpObject* ob)
 	DPVS_ASSERT (ob);
 	DPVS_ASSERT (!ob->getFirstInstance());
 
+	// SWG CONSULT-64 round 7: count portal database insertions ([9]).
+	if (ob->isPortal())
+		++g_swgDpvsPortalRejects[9];
+
 
 	if (ob->isUnbounded())
 	{
@@ -1524,6 +1535,9 @@ DB_INLINE void Database::updateObject (ImpObject* ob)
 {
 	DPVS_ASSERT (ob);
 
+	// SWG CONSULT-64 round 7: count portal database updates ([7]).
+	if (ob->isPortal())
+		++g_swgDpvsPortalRejects[7];
 
 	DPVS_PROFILE(Statistics::incStatistic(Library::STAT_DATABASEOBSUPDATED,1));
 
