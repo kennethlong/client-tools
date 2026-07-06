@@ -1121,10 +1121,10 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 			// the end of this profiler block is in RenderWorldCommander::command() case QUERY_BEGIN
 			NP_PROFILER_BLOCK_ENTER(ms_dpvsQueryProfilerBlock);
 
-			// CONSULT-64 round 5: reset the dPVS portal-rejection counters for this frame.
+			// CONSULT-64 round 5/6: reset the dPVS portal-rejection counters for this frame.
 			{
 				unsigned int * const rejects = swgDpvsGetPortalRejects();
-				for (int r = 0; r < 5; ++r)
+				for (int r = 0; r < 7; ++r)
 					rejects[r] = 0;
 			}
 
@@ -1169,13 +1169,13 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 				if (cellChanged || (countsChanged && camDelta < 0.10f))
 				{
 					unsigned int const * const rejects = swgDpvsGetPortalRejects();
-					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f fwdDot=%.5f rej=bf:%u ct:%u tt:%u rect:%u fr:%u pos=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
+					REPORT_LOG(true, ("[PortalCullProbe] cell=%s%s portals %d->%d visCells %d->%d camDelta=%.4f fwdDot=%.5f rej=bf:%u ct:%u tt:%u rect:%u fr:%u ph:%u tested:%u pos=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
 						ms_cameraCell ? ms_cameraCell->getCellName() : "(null)",
 						cellChanged ? (s_lastCameraCell ? " (CHANGED)" : " (first)") : "",
 						s_lastPortalsCrossed, portalsCrossed,
 						s_lastVisibleCells, visibleCells,
 						camDelta, fwdDot,
-						rejects[0], rejects[1], rejects[2], rejects[3], rejects[4],
+						rejects[0], rejects[1], rejects[2], rejects[3], rejects[4], rejects[5], rejects[6],
 						cameraPos.x, cameraPos.y, cameraPos.z,
 						cameraFwd.x, cameraFwd.y, cameraFwd.z));
 				}

@@ -512,11 +512,15 @@ bool VisibilityQuery::performStencilOP(ImpCamera* sc, ImpPhysicalPortal* sp,Rang
 // SWG CONSULT-64 diagnostic: per-frame portal-rejection reason counters, read and
 // reset each frame by the engine's portal-cull probe (RenderWorld.cpp). Indices:
 // [0]=portal backface cull (dpvsVisibilityQuery_Test.cpp), [1]=calculateTransition,
-// [2]=testTransition (recursion solver), [3]=getTestRectangle, [4]=createFrustumFromRectangle.
+// [2]=testTransition (recursion solver), [3]=getTestRectangle, [4]=createFrustumFromRectangle,
+// [5]=portal skipped because its VISIBILITY PARENT was hidden (Test.cpp:58-62 --
+// fires BEFORE any counted reject; the round-6 all-zero collapse suspect),
+// [6]=portals TESTED at all (entered isObjectVisible_INTERNAL) -- 0 on a collapse
+// frame means the database traversal never enumerated them.
 // Accessed via the exported FUNCTION below because Win32 builds dpvs as a DLL
 // (data exports would need dllimport on the consumer; function imports do not)
 // while x64 links it statically (dllexport is benign there).
-extern "C" unsigned int g_swgDpvsPortalRejects[5] = {0, 0, 0, 0, 0};
+extern "C" unsigned int g_swgDpvsPortalRejects[7] = {0, 0, 0, 0, 0, 0, 0};
 
 extern "C" __declspec(dllexport) unsigned int * swgDpvsGetPortalRejects(void)
 {
