@@ -1,3 +1,15 @@
+# Intermittent portal see-through — **RESOLVED 2026-07-06** (verified both clients, multiple runs)
+
+**Full arc: .planning/research/CONSULT-64-SYNTHESIS.md (+ CONSULT-65 packs).**
+Five fixes / three defects: dPVS dirty-node-vs-frustum ordering (4dea2fdf3),
+chase-camera cell derived from its own position (7577dc9a7), meshless archway
+doors never close portals (458c7d386), dPVS portal backface leeway + derivation
+hysteresis (10821506b). Residual follow-ups (low priority): door trigger
+brittleness (capsule misses / one-shot wake — gameplay polish for REAL doors),
+probe removal after soak.
+
+# (original filing below — historical)
+
 # Intermittent portal see-through (cantina entrance, Mos Eisley) — RENDERER- AND BITNESS-AGNOSTIC
 
 **Filed:** 2026-07-04 evening (Kenny, 2 sightings same day, both gl05/Win32)

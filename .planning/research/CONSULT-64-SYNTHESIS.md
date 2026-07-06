@@ -1,5 +1,17 @@
 # CONSULT-64 SYNTHESIS — intermittent portal see-through (engine-side cell culling)
 
+**RESOLVED 2026-07-06 — Kenny verified: both clients, multiple runs, NO portal
+holes.** Five fixes across three defects + the knife-edge pair, every one
+convicted by instrumented runs before being written:
+1. `4dea2fdf3` dPVS traverseNode: dirty-node update hoisted above the frustum test.
+2. `7577dc9a7` chase-camera cell derived from its own position (player→camera walk).
+3. `458c7d386` meshless (archway) doors never close their portals.
+4+5. `10821506b` dPVS portal backface EPSILON 0→-0.05 + 20cm derivation hysteresis.
+Signature B (tested:0 deep in-cell) was never observed again after 3-5 — either
+a knife-edge variant all along or masked; reopen via CONSULT-66 only if holes
+return. Probes stay armed (log-on-anomaly, near-zero cost) for a soak period;
+strip in a later cleanup pass together with the audio diag suite.
+
 Five consultants (Codex call-graph, Cursor predicate byte-map, Sonnet dPVS internals,
 Opus mechanism ranking, Fable blind-adversarial), fed the neutral evidence pack
 (CONSULT-64-portal-culling-EVIDENCE.md). Outputs in the sibling .out files.
