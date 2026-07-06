@@ -304,7 +304,27 @@ float DoorObject::alter ( float time )
 			m_portal->setClosed(false);
 		else
 			if (!m_isForceField)
-				m_portal->setClosed(!open);
+			{
+				// CONSULT-65 (2026-07-06): a door that RENDERS NOTHING must never close
+				// its portal. Portal::setClosed feeds exactly one consumer -- the dPVS
+				// visibility hook (portal ENABLED=false culls everything beyond) -- and
+				// its only visual purpose is skipping work hidden behind a CLOSED DOOR
+				// MESH. Archway "doors" have no drawn appearance, so a closed portal is
+				// a naked see-through hole (sky/wrong wall through the opening); the
+				// retail-era design masked this because the proximity trigger kept
+				// doors open whenever anyone was near, and the trigger chain
+				// (SpatialDatabase door-tree query -> capsule test -> hitBy -> alter
+				// scheduling) is demonstrably brittle here (probe: doors initialize
+				// closed and are frequently never re-triggered; capsule misses while
+				// standing at the door). Keeping a meshless door's portal permanently
+				// enabled is ALWAYS visually correct -- you can see through an open
+				// archway -- at the cost of not culling behind unobserved archways.
+				// Doors with real drawn meshes keep the original behavior. Barrier /
+				// passage semantics are untouched (they read the door helper, not the
+				// portal flag).
+				bool const rendersADoor = (m_drawnDoor[0] && m_drawnDoor[0]->getAppearance() != NULL);
+				m_portal->setClosed(rendersADoor ? !open : false);
+			}
 	}
 
 	// ----------

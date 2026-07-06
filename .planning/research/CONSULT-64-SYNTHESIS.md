@@ -263,6 +263,34 @@ visible, no holes, camera renders the cell it is actually in; back-room and
 door-snap behaviors unchanged (the fix only re-tags the cell, never moves the
 camera).
 
+## FIX 3 (2026-07-06) — meshless doors must never close their portals
+
+DOORQUERY probe verdict (round 3): the door tree always finds the doors
+(doors=2 x344), the only failing gate is the geometric capsule test
+(capsuleMiss x56 — brittle even standing at the door), the probe budget burned
+in the first 9 seconds, and the session showed ALL doors initialize CLOSED with
+only ONE pair ever opening. Every remaining hole = an untriggered invisible
+door's disabled portal, faithfully rendered.
+
+Design realization: Portal::setClosed feeds exactly ONE consumer — the dPVS
+ENABLED hook — and its only visual purpose is culling behind a CLOSED DOOR
+MESH. Archway "doors" render nothing, so the retail design only worked because
+continuous proximity triggering kept portals open whenever observed; our
+trigger chain is brittle (capsule misses, idle gating, alter scheduling).
+
+**FIX 3 (DoorObject::alter):** a door only drives setClosed(!open) if it
+actually renders a drawn door appearance; meshless doors keep their portal
+permanently ENABLED (always visually correct — you can see through an open
+archway; cost = no culling behind unobserved archways). Doors with real meshes
+keep retail behavior. Barrier/passage semantics untouched (they read the door
+helper, not the portal flag).
+
+Also noted this round: the fix-2 camera cell derivation shows foyer1<->foyer2
+root flip-flops at 1-3cm deltas (boundary jitter, needs hysteresis or a
+midpoint bias if it ever matters visually — with portals enabled both roots
+render correctly, so likely benign). Trigger-chain brittleness (capsuleMiss,
+one-shot wake) remains as a low-priority gameplay-door polish item.
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.
