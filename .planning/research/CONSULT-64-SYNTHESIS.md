@@ -192,6 +192,41 @@ recursion-solver first-portal-wins (Sonnet #6); rect:/fr: spikes = the zero-epsi
 rectangle path (Sonnet #1); bf: spikes = plane-side flip; all-zero on a 0-frame =
 the portals were never REACHED (cell/object-level gate upstream).
 
+## ROUND 7 + CONSULT-65 (2026-07-06) — THE FIX
+
+Round-6 (three runs): every collapse frame = `tested:0, ph:0`, all reject counters
+silent — the cell database never ENUMERATES the portals. Flicker cadence ≈ dPVS
+g_timeUntilStatic (1.0s static-recheck heartbeat).
+
+CONSULT-65 (Codex trace + Opus mechanism/fix): two candidate families —
+(A) Database::updateObject → removeObject on transiently-bad bounds (Codex #1;
+predicts dbRem>0 on collapse), (B) traverseNode ORDERING HAZARD: the node is
+frustum-tested against STALE getTestBounds() (:3018-3022) BEFORE the dirty-node
+refresh (updateDirtyNode, was :3090) — a straddling leaf due for a bounds-grow is
+transiently NODE_HIDDEN for exactly one query, silently dropping every instance
+inside (Opus #1; predicts dbRem:0). Both consultants: run the round-7 counters
+before fixing — the families need OPPOSITE fixes.
+
+**Round-7 discriminator run (Kenny): every collapse frame = dbUpd:0 dbRem:0
+dbAdd:0.** Family A DEAD (the portal never leaves the database). **Family B
+CONVICTED.**
+
+**FIX (landed in vendored dPVS, dpvsDatabase.cpp traverseNode):** hoist the
+existing `if (v->isDirty() && !updateDirtyNode(v)) return NODE_KILLED;` block
+ABOVE the view-frustum test — dirty nodes refresh their bounds BEFORE being
+frustum-gated. Pure reordering of work the function already did; NODE_KILLED
+handled identically by the caller; only dirty nodes pay the update marginally
+earlier (Opus: regression risk LOW).
+
+**Verification protocol:** stand bit-still at the flicker spots 60s+ per spot —
+flicker gone; probe lines (if any) show tested:1-3 steady, no portals→0 events at
+camDelta≈0/fwdDot≈1, no dbRem/dbAdd churn, frame time flat.
+
+**Remaining, separate (parked as own todos):** door-portal layer — doorways close
+portals with NO visible door mesh (every legit close = see-through window until
+re-trigger) + one observed whole-session door wake starvation (hitBy silent).
+These are engine-side door/data issues, NOT the dPVS flicker.
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.

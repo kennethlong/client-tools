@@ -3009,6 +3009,23 @@ Database::NodeStatus Database::traverseNode (Node* v, unsigned int& frustumMask)
 		DPVS_PROFILE(Statistics::incStatistic(Library::STAT_DATABASELEAFNODESTRAVERSED,1));
 
 	//--------------------------------------------------------------------
+	// SWG CONSULT-65 FIX (2026-07-06): update a dirty node BEFORE the view
+	// frustum test below, not after it. The original order frustum-tested
+	// the node against its STALE getTestBounds() and only refreshed the
+	// bounds (updateDirtyNode) for nodes that survived the test -- so a
+	// straddling leaf whose bounds were due to grow could be transiently
+	// classified NODE_HIDDEN for exactly one query, silently dropping every
+	// object instance inside it (whole-cell portal/geometry flicker at a
+	// static camera; instrumented counters showed the skipped objects were
+	// never enumerated: tested:0 with zero rejects and zero database
+	// remove/add events). This is a pure reordering of work the function
+	// already did; NODE_KILLED is handled identically by the caller.
+	//--------------------------------------------------------------------
+
+	if (v->isDirty() && (!updateDirtyNode (v)))
+		return NODE_KILLED;
+
+	//--------------------------------------------------------------------
 	// If non-zero frustum mask (parent node crosses at least one
 	// clip plane), perform a view frustum test. If node is not inside
 	// the VF, we can return at this point. Otherwise, update the
@@ -3080,15 +3097,10 @@ Database::NodeStatus Database::traverseNode (Node* v, unsigned int& frustumMask)
 		DPVS_PROFILE(Statistics::incStatistic(Library::STAT_DATABASENODESSKIPPED,1));
 
 	//--------------------------------------------------------------------
-	// If node is 'dirty', perform updates. This may cause collapsing
-	// the sub-branches or splitting of the node. If the
-	// updateDirtyNode() functions returns 'false', the node got
-	// destroyed in the process and we must return immediately (node
-	// data isn't valid anymore).
+	// SWG CONSULT-65: the dirty-node update that used to live here was
+	// hoisted above the view frustum test (see the fix comment at the top
+	// of this function).
 	//--------------------------------------------------------------------
-
-	if (v->isDirty() && (!updateDirtyNode (v)))
-		return NODE_KILLED;
 
 	//--------------------------------------------------------------------
 	// Update statistics

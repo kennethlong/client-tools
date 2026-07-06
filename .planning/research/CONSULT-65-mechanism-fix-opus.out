@@ -1,0 +1,205 @@
+# CONSULT-65 — Mechanism ranking + fix design (Opus)
+
+Angle: enumerate the concrete dPVS mechanisms that make a live portal object
+NON-ENUMERABLE for ~one query, ~1s cadence, bit-still camera, all reject
+counters silent (tested:0, bf/ct/tt/rect/fr/ph all 0); rank; design minimal fix.
+
+============================================================================
+KEY STRUCTURAL FACT (narrows the whole search to two families)
+============================================================================
+
+I traced the object-enumeration funnel in traverseNode (dpvsDatabase.cpp):
+
+  3018  if (frustumMask) { VF-test node testBounds; return NODE_HIDDEN if out }   [node cull #1]
+  3040  if (leaf && hasInstances && !m_anyObjectsProcessed) {                    [node cull #2]
+          if every instance.timeStamp==m_timeStamp -> return NODE_HIDDEN }
+  3066  isNodeVisible() occlusion test -> NODE_HIDDEN                            [node cull #3, OFF here]
+  3090  if (v->isDirty() && !updateDirtyNode(v)) return NODE_KILLED              [node cull #4]
+  3105+ N=getInstanceCount(); build/collect m_cachedObs; FOR each obs[i]:
+  3153/3171  if (o->getTimeStamp() != m_timeStamp) {                            [object enqueue gate]
+               setTimeStamp; setTestState; addElementToQueue(...) }
+  3202/3222  (frustumMask!=0 branch) intersectAABBFrustum -> HIDDEN + continue   [object VF cull = "fr"]
+
+Decisive deduction from the measured counters:
+- If a portal instance is PRESENT in any traversed node AND its timeStamp !=
+  current m_timeStamp, line 3153/3171 ALWAYS enqueues it. It then either reaches
+  isObjectVisible (tested>=1) or is VF-culled at 3202/3222 (fr>=1).
+- tested:0 AND fr:0 TOGETHER prove the portal's instance was **never iterated in
+  the per-node object loop**. Therefore exactly one of:
+
+    FAMILY A — INSTANCE ABSENT: the portal has no instance in any node the
+      traversal visits (removeObject fired, or the instance was relocated to a
+      node that got killed/never-visited).
+
+    FAMILY B — NODE-LEVEL SILENT SKIP: the instance is present, but the node
+      that holds it (or an ancestor) is skipped at cull #1/#2/#4 before the
+      object loop runs.
+
+Everything else (per-object bf/ct/tt/rect/ph, the 1:16 assumeVisible demotion,
+occlusion) lives strictly INSIDE isObjectVisible and cannot be reached at
+tested:0. Those candidates are eliminated by construction.
+
+The metronome is fixed: updateAllDirtyBounds (VisibilityQuery_Traverse.cpp:188)
+runs immediately before database->traverse(), and every updateBounds re-links the
+static portal to the dirty-list TAIL with m_dirtyTimeStamp = queryTime +
+g_timeUntilStatic (1.0f). So the object is re-touched on a ~1s cadence, and ONLY
+on those due frames does updateObject run against it. The defect must be a
+transient produced on a due frame. This is why the cadence matches.
+
+============================================================================
+RANKED MECHANISMS
+============================================================================
+
+--- #1  FAMILY B: stale node testBounds VF-cull, ordering hazard (traverseNode) ---
+CONFIDENCE: MODERATE (best fit for "single query + silent + self-heal")
+
+traverseNode performs the node VF-frustum test at :3022 using v->getTestBounds()
+(tight bounds if present, else m_bounds) BEFORE it refreshes the node via
+updateDirtyNode() at :3090 (which recomputes m_tightBounds at :2410-2415). So a
+node that is DIRTY when visited is frustum-tested against STALE tight bounds, then
+updated. On the due frame, updateObject can mark the portal's leaf dirty
+(:1612-1613 setNodeDirty when the object leaves its tightBounds; :1620 root-motion;
+or moveInstance :1414/:1433). If that due-frame bounds change GREW the portal's
+extent (static->dynamic motion-TBV path when the per-cell s_dynamicToStaticWork
+budget is exhausted, updateBounds :1623/:1671-1746), the leaf's stale tightBounds
+momentarily do NOT enclose the portal, so a leaf that straddles a frustum plane
+(frustumMask != 0) is VF-culled at :3022 and returns NODE_HIDDEN — the object loop
+never runs. tested:0, fr:0 (it's a NODE cull, increments a node stat only, no
+portal reject counter). Next query the tight bounds are fresh -> heals. Recurs on
+the ~1s due cadence; intermittency (1-3s) = only fires on due frames where the
+budget was exhausted / bounds actually grew and the leaf straddles the frustum.
+Matches EVERY locked fact. Weakness: needs frustumMask!=0 at that leaf (portal near
+a view-frustum edge — common for a doorway portal you are looking toward) AND a
+bounds-grow on the due frame.
+
+Same ordering also exposes cull #2 (:3040) for dirty nodes, but that path cannot
+yield tested:0 for the portal (it requires the portal to already carry
+m_timeStamp, which only a real test sets -> tested>=1). So #1 is specifically the
+:3022 VF path.
+
+--- #2  FAMILY A: updateObject -> removeObject on transiently-bad bounds ---
+CONFIDENCE: LOW-MODERATE (cleanest tested:0, but predicts a ~1s outage, not 1 query)
+
+updateObject (:1558-1571): if !areObjectBoundsOK(ob) and the object HAS an
+instance -> removeObject -> kills all instances, sets OC_DONE + timeStamp. Instance
+absent => tested:0, fr:0, all silent. Cadence matches (fires on a due frame).
+BUT: after removeObject the object is re-linked to the dirty TAIL
+(updateBounds:1758) with m_dirtyTimeStamp = now + 1.0, and NOTHING re-adds it until
+that stamp comes due. So a removeObject is a **~1 second outage (~60 frames)**, not
+"one query." That tension is the main argument against #2 as the primary — the
+symptom reads as "mostly healthy with occasional single-query dropouts," not
+"broken for a second at a time." Also a flat static portal quad passes isOK()
+(min<=max on the degenerate axis) and isFinite, so a transient-bad-bounds source is
+weak. Still the single most directly testable hypothesis: dbRem[8] > 0 on a
+collapse frame confirms it outright.
+
+--- #3  FAMILY A: moveInstance churn -> emptied source leaf NODE_KILLED ---
+CONFIDENCE: LOW (largely self-refuting)
+
+Due-frame updateObject can moveInstance the portal UP toward root
+(:1587 loops upward to an ancestor). Source leaf, now empty + dirty, is deleted by
+updateDirtyNode (:2323-2330 -> return false -> NODE_KILLED at :3090/:3485
+continue). But updateObject runs in updateAllDirtyBounds BEFORE traversal, so the
+instance already sits in the ANCESTOR target when traversal begins, and ancestors
+are dequeued before descendants (root-first priority queue). The portal is
+enumerated at the ancestor (tested>=1) well before the empty source leaf is
+reached. So this cannot produce tested:0 unless the target is a sibling/already-
+visited node, which the upward-only fit loop never selects. Refuted for the normal
+case.
+
+--- #4  Timestamp/teststate aliasing (OC_DONE + m_timeStamp) skips a live object ---
+CONFIDENCE: LOW (refuted by the ++timeStamp ordering)
+
+The evidence's named candidate. removeObject/addObject set timeStamp=m_timeStamp.
+But updateAllDirtyBounds runs with m_traversing=false and the OLD m_timeStamp;
+traverse() then does updateTimeStamp (++m_timeStamp, :3544) BEFORE node
+enumeration. So any timeStamp written during updateAllDirtyBounds equals
+(current-1) and does NOT alias the current query -> the object is NOT skipped by
+:3153/:3364. Aliasing would require a same-query addObject/removeObject during
+m_traversing (only via CELL_IMMEDIATE_REPORT, which SWG cantina portals do not
+use). Refuted for this scene.
+
+--- #5  m_cachedObs staleness (node ob-array missing the portal) ---
+CONFIDENCE: VERY LOW (refuted)
+
+Every instance mutation frees the cache: createInstance/moveInstance ->
+setNodeDirty -> DELETE_ARRAY m_cachedObs (:876-879); deleteInstance -> DELETE_ARRAY
+directly (:1203). Cache is rebuilt (collectNodeObs) whenever null. Coherent.
+
+--- #6  1:16 assumeVisible demotion (VisibilityQuery_Test.cpp:92) ---
+CONFIDENCE: VERY LOW (wrong layer)
+
+Object-test-internal; only reachable at tested>=1; occlusion is OFF so it's
+bypassed anyway. Cannot cause tested:0.
+
+============================================================================
+DISCRIMINATOR (already instrumented — run this FIRST)
+============================================================================
+
+The round-7 counters dbUpd[7]/dbRem[8]/dbAdd[9] on the [PortalCullProbe] line
+cleanly split the families on a collapse frame:
+
+  dbRem >= 1                      -> FAMILY A #2 confirmed (instance removed).
+  dbRem == 0, dbUpd >= 1          -> FAMILY B (present but node-skipped): #1.
+  dbRem == 0, dbAdd >= 1          -> re-add churn (variant of A); check outage span.
+  all three 0 on a collapse frame -> pure node-cull with no db mutation that
+                                     frame -> #1 driven by a PRIOR due frame's
+                                     bounds change (stale tightBounds), or a
+                                     background-maintenance split/collapse
+                                     (optimizeHiddenAreas :930, 1/64 nodes/frame).
+
+This one run collapses a 6-way space to a 1-way answer. Do it before touching code.
+
+============================================================================
+MINIMAL SAFE FIX (for #1, the top mechanism)
+============================================================================
+
+Correct the ordering hazard in traverseNode: refresh a DIRTY node BEFORE it is
+frustum/occlusion-culled, so cull decisions never use stale tight bounds.
+
+  In Database::traverseNode (dpvsDatabase.cpp ~:3011), hoist the dirty-node update
+  to the very top of the function, immediately after the leaf/stat preamble and
+  BEFORE the :3018 frustumMask VF test:
+
+      if (v->isDirty() && !updateDirtyNode(v))
+          return NODE_KILLED;          // node destroyed; pointer invalid
+
+  then DELETE the original block at :3090-3091. Everything below (:3022 VF test,
+  :3040 all-processed skip, :3105 object loop) now runs against freshly recomputed
+  m_tightBounds / m_bounds / m_visiblePoint and a valid instance set.
+
+Why this is safe and surgical:
+- Pure reordering of an update the function already performs on the same node in
+  the same call; no new state, no behavioral rewrite, no API change.
+- NODE_KILLED is already a defined return handled by the caller
+  (traverseNodes :3485 `continue`), so early-returning it before the VF test is
+  identical control flow, just earlier.
+- The all-processed skip (:3040) and VF test (:3022) become strictly more correct
+  (fresh bounds), never less.
+
+Regression risk (LOW):
+- Perf: updateDirtyNode now runs for dirty nodes that the VF test would otherwise
+  have culled cheaply. Bounded — only DIRTY nodes (rare; self-throttled), and the
+  work (split/collapse/tight-bounds) had to happen on a subsequent frame anyway;
+  this just front-loads it. Net node churn is unchanged over time.
+- Taboo/collapse counters (m_tabooCounter, MIN_NODE_INSTANCE_COUNT) are keyed on
+  updateDirtyNode calls, not on call site, so cadence of maintenance is preserved.
+- Root node has its own updateRootNode path (:3582) and is unaffected.
+
+Verify with existing probes (no new instrumentation):
+- Before: collapse frames show tested:0, fr:0, dbUpd>=1, dbRem:0 (the #1
+  signature). After the reorder: those same poses show tested:1-3 with NO
+  reintroduced dbRem/dbAdd churn and NO new bf/ct/tt/rect/fr rejections — i.e. the
+  portal is enumerated every frame. Watch dbUpd stays as-is (we did not change how
+  often nodes go dirty), tested never returns 0 at a bit-still camera over a
+  60-second soak, and frame time is flat (no maintenance-storm regression).
+
+CONTINGENCY (if the discriminator shows FAMILY A #2 instead, dbRem>=1):
+The reorder will NOT help. Fix at the source: in Database::updateObject, do not
+remove a PORTAL object on a transient areObjectBoundsOK failure — for a portal
+whose bounds momentarily read bad, keep the existing instance (skip the
+removeObject at :1570) and leave it re-linked to the dirty list for re-check, OR
+in addObject/removeObject stop stamping portals with OC_DONE+timeStamp so a
+same-second re-add path can re-enumerate immediately. Gate on ob->isPortal() to
+keep the blast radius to portals only. Confirm dbRem returns to 0 on the collapse
+poses and the ~1s outage disappears.

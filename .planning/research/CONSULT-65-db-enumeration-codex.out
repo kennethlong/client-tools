@@ -1,0 +1,53 @@
+﻿**Trace Result**
+
+`DPVS::Camera::resolveVisibility()` reaches cell object enumeration through:
+
+1. [dpvsWrapper.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsWrapper.cpp:526) calls `m_imp->getVisibilityQuery()->resolveVisibility(...)`.
+2. [dpvsVisibilityQuery_Resolve.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Resolve.cpp:56) sends `QUERY_BEGIN`, validates, then calls `resolveVisibility_INTERNAL`.
+3. [dpvsVisibilityQuery_Resolve.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Resolve.cpp:155) calls `resolve_frameStart()`, then `launchTravelers()`.
+4. [dpvsVisibilityQuery_Traverse.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Traverse.cpp:188) consumes dirty bounds for the current cell before traversal: `ImpObject::updateAllDirtyBounds(*impCell)`.
+5. [dpvsVisibilityQuery_Traverse.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Traverse.cpp:197) calls `database->traverse()`.
+6. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3544) increments `Database::m_timeStamp`, then traverses root/real nodes.
+7. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3454) seeds the queue with the root node.
+8. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3481) processes each node via `traverseNode()`.
+9. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3124) uses or rebuilds `Node::m_cachedObs`, collected from `ObInstance` links.
+10. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3153) only queues objects whose `ImpObject::getTimeStamp() != Database::m_timeStamp`.
+11. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3243) queues the object, then marks it `VF_DONE`.
+12. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3473) later calls `traverseObject()`.
+13. [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3397) with occlusion off, calls `isObjectVisible(true)` only for backface/parent checks.
+
+**Non-Enumerable States**
+
+A live enabled portal can fail to reach `isObjectVisible_INTERNAL()` if:
+
+- It has no database instance: `removeObject()` deletes all `ObInstance`s at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1259). This is the cleanest “not enumerated” state.
+- Its current `ImpObject::timeStamp` equals `Database::m_timeStamp` before node object walk. The node loop skips it at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3153) / [3171](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3171). If every object in a leaf has that timestamp and `m_anyObjectsProcessed` is false, the whole leaf early-outs hidden at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3040).
+- It is queued, but `traverseObject()` sees `OC_DONE` with the current timestamp and returns before visibility testing at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3364). That state is explicitly used by `removeObject()` at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1262).
+- Its node is rejected before object walk. With occlusion off, object-level random assume-visible demotion is bypassed: [dpvsVisibilityQuery_Test.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Test.cpp:99) returns before the 1:16 random path at [107](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Test.cpp:107).
+
+**Dirty Path**
+
+`setBoundsDirty()` unlinks and relinks the object to the cell dirty head at [dpvsImpObject.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1424). The head link sets `m_dirtyTimeStamp = queryTime` at [402](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:402), so it is eligible next query.
+
+Dirty objects are consumed at query start, before `Database::traverse()`: [dpvsVisibilityQuery_Traverse.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsVisibilityQuery_Traverse.cpp:188). `updateAllDirtyBounds()` pops dirty objects while `m_dirtyTimeStamp <= queryTime` at [dpvsImpObject.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1795), then calls `updateBounds()` at [1808](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1808). If bounds update is needed, `updateBounds()` immediately calls database `updateObjectBounds()` at [1769](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1769).
+
+So between `setBoundsDirty()` and the next dirty consume, the object remains queryable using its previous database placement/bounds. The risky moment is the dirty consume itself.
+
+**Remove/Add Cycle**
+
+`Database::updateObject()` checks `areObjectBoundsOK()` at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1558). If an instanced object has bad bounds, it calls `removeObject()` at [1570](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1570). `removeObject()` deletes instances and sets `OC_DONE` plus current `m_timeStamp` at [1262](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1262).
+
+`addObject()` sets status and `timeStamp = m_timeStamp`, `testState = VF_DONE`, then creates a root instance at [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1488). Normal dirty consume occurs before `Database::traverse()` increments `m_timeStamp`, so a re-added object from that path should not be skipped by stale `OC_DONE` aliasing. The remove/add alias hypothesis is therefore weak unless the re-add happens during traversal or via an unusual callback path. UNVERIFIED.
+
+**1s Static Recheck**
+
+`g_timeUntilStatic = 1.0f` at [dpvsImpObject.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:116). `linkToDirtyListTail()` schedules recheck at `queryTime + 1.0f` and marks `m_static = true` at [436](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:436). When it expires, `updateBounds()` runs. If static/accessed/budget allows, it recomputes exact bounds at [1623](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1623), then updates the database at [1769](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsImpObject.cpp:1769).
+
+That window can suppress enumeration only if the database update removes the object or leaves it uninstanced. The 1s timer itself does not suppress enumeration.
+
+**Ranked Mechanisms**
+
+1. **Most likely:** periodic dirty/static recheck recomputes portal bounds, `updateObject()` sees transient bad bounds, and `removeObject()` makes the portal uninstanced. This matches “tested:0” and the ~1s source timer. Minimal fix: for portal objects, do not remove an already-instanced object on a single bad bounds recompute; preserve the previous database instance and reschedule bounds dirty/retry. Code site: guard the `!boundsOK -> removeObject()` branch in `Database::updateObject()` around [dpvsDatabase.cpp](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:1568).
+2. **Possible but less supported:** object timestamp equals current `Database::m_timeStamp` before node walk, causing per-node skips at [3153](D:/Code/swg-client-v2/src/external/3rd/library/dpvs/implementation/sources/dpvsDatabase.cpp:3153). I do not see the normal dirty path creating this alias because traversal increments after dirty consumption. UNVERIFIED.
+3. **Possible but weaker:** dirty node maintenance/split/collapse causes a transient missed walk. The source is designed to rebuild caches on dirty nodes and continue through children, so I did not find a direct loss path. UNVERIFIED.
+4. **Ruled out for this symptom:** object-level 1:16 assume-visible demotion; occlusion-off returns before that code. Also ruled out by evidence: backface, parent hidden, portal closed/disabled.
