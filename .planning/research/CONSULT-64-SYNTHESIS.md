@@ -227,6 +227,35 @@ portals with NO visible door mesh (every legit close = see-through window until
 re-trigger) + one observed whole-session door wake starvation (hitBy silent).
 These are engine-side door/data issues, NOT the dPVS flicker.
 
+## SOAK VERDICT + FIX 2 (2026-07-06) — two defects confirmed, both now fixed
+
+Kenny's soak after the dPVS traverseNode reorder (4dea2fdf3): **the bit-still
+flicker is GONE** (state no longer jumps while standing still — defect 1 CURED).
+Residual: holes now flip ONLY on movement through portals, are STABLE while
+still, and — Kenny's decisive observation — running through a doorway leaves the
+avatar invisible while the chase camera does NOT pull in (its collision ray sees
+the OPEN doorway, nothing wrong).
+
+That is defect 2, the round-2 CAMP A account, now cleanly separated:
+**FreeChaseCamera force-copies the PLAYER's cell onto the camera every frame
+(FreeChaseCamera.cpp:615-617) while the camera's POSITION lags meters behind** —
+crossing a doorway opens a window where the camera is tagged in the new cell
+with its eye still in the old one → dPVS roots visibility at the wrong cell for
+the eye → the doorway portal backface-culls → whole cells (avatar included)
+vanish until the camera catches up. Stable-when-still because nothing re-derives.
+
+**FIX 2 (FreeChaseCamera.cpp, after final camera positioning):** derive the
+camera's cell from its own FINAL position by walking the short player→camera
+segment through the portal graph (the exact loop
+CellProperty::Notification::positionChanged uses; passableOnly=false — sight,
+not passage; player's cell = authoritative anchor so per-frame camera teleports
+cannot desync). On a cell change, preserve the world pose via setTransform_o2w.
+
+Verify: run in/out through the cantina doorway repeatedly — avatar stays
+visible, no holes, camera renders the cell it is actually in; back-room and
+door-snap behaviors unchanged (the fix only re-tags the cell, never moves the
+camera).
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.
