@@ -13,6 +13,8 @@
 
 #include "sharedCollision/BarrierObject.h"
 #include "sharedCollision/CollisionResolve.h"
+#include "sharedDebug/Report.h"
+#include "sharedFoundation/ConfigFile.h"
 #include "sharedCollision/CollisionUtils.h"
 #include "sharedCollision/ConfigSharedCollision.h"
 #include "sharedCollision/Containment3d.h"
@@ -319,7 +321,23 @@ void SpatialDatabase::updateStaticCollision(CollisionProperty * mobCollision, Co
 
 		m_doorTree->findInRange(queryCapsule_w, queryResults);
 
+		// CONSULT-65 round 3 probe: name the gate that silences door re-triggering.
+		// Measured: a door opens on FIRST approach (hitBy fires), closes ~1s later,
+		// and hitBy never fires again even as the player crosses the trigger --
+		// the portal stays disabled = the see-through hole. Log the PLAYER's door
+		// query verdicts (budgeted).
+		static bool const s_portalCullProbe = ConfigFile::getKeyBool("ClientGraphics", "portalCullProbe", false);
+		static int s_doorQueryLogBudget = 400;
+		bool const probeThis = s_portalCullProbe && mobCollision->isPlayer() && s_doorQueryLogBudget > 0;
+
 		int const staticCount = static_cast<int>(queryResults.size());
+
+		if (probeThis && staticCount > 0)
+		{
+			--s_doorQueryLogBudget;
+			REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY doors=%d\n", staticCount));
+		}
+
 		for(int i = 0; i < staticCount; i++)
 		{
 			CollisionProperty * const staticCollision = queryResults.at(static_cast<unsigned int>(i));
@@ -329,13 +347,22 @@ void SpatialDatabase::updateStaticCollision(CollisionProperty * mobCollision, Co
 			NOT_NULL(staticObject);
 
 			if (!canCollideWithStatic(mobObject,staticObject))
+			{
+				if (probeThis) { --s_doorQueryLogBudget; REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY-REJ staticGate door=%p\n", static_cast<void *>(staticObject))); }
 				 continue;
+			}
 
 			if (!staticCollision->canCollideWith(mobCollision))
+			{
+				if (probeThis) { --s_doorQueryLogBudget; REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY-REJ doorCanCollide door=%p\n", static_cast<void *>(staticObject))); }
 				 continue;
+			}
 
 			if (!mobCollision->canCollideWith(staticCollision))
+			{
+				if (probeThis) { --s_doorQueryLogBudget; REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY-REJ mobCanCollide door=%p\n", static_cast<void *>(staticObject))); }
 				 continue;
+			}
 
 			Capsule const queryCapsule_p = CollisionUtils::transformFromWorld(queryCapsule_w,staticObject->getParentCell());
 
@@ -348,6 +375,14 @@ void SpatialDatabase::updateStaticCollision(CollisionProperty * mobCollision, Co
 					mobCollision->hit(staticCollision);
 					staticCollision->hitBy(mobCollision);
 				}
+				else if (probeThis)
+				{
+					--s_doorQueryLogBudget; REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY-REJ hitCallback door=%p\n", static_cast<void *>(staticObject)));
+				}
+			}
+			else if (probeThis)
+			{
+				--s_doorQueryLogBudget; REPORT_LOG(true, ("[PortalCullProbe] DOORQUERY-REJ capsuleMiss door=%p\n", static_cast<void *>(staticObject)));
 			}
 		}
 	}
