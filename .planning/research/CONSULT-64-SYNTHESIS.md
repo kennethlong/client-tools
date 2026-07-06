@@ -229,12 +229,19 @@ These are engine-side door/data issues, NOT the dPVS flicker.
 
 ## SOAK VERDICT + FIX 2 (2026-07-06) — two defects confirmed, both now fixed
 
-Kenny's soak after the dPVS traverseNode reorder (4dea2fdf3): **the bit-still
-flicker is GONE** (state no longer jumps while standing still — defect 1 CURED).
-Residual: holes now flip ONLY on movement through portals, are STABLE while
-still, and — Kenny's decisive observation — running through a doorway leaves the
-avatar invisible while the chase camera does NOT pull in (its collision ray sees
-the OPEN doorway, nothing wrong).
+Kenny's soak after the dPVS traverseNode reorder (4dea2fdf3), WITH HIS
+CORRECTION: **there was NEVER visible flicker while standing still — before or
+after fix 1; holes always required movement.** (The probe frames I had labeled
+"bit-still" at camDelta 0.004-0.07 were per-FRAME deltas = walking speed; only
+fwdDot was ~1.0. Mislabeled — movement was present in all flicker evidence.)
+This is CONSISTENT with the fix-1 mechanism: stale node bounds only exist when
+something DIRTIES nodes (moving objects — the player, NPCs); standing still =
+nothing dirty = stable. Fix 1's visible contribution cannot be isolated from
+defect 2's; the counters conviction (tested:0, db all-zero) stands regardless.
+Residual after fix 1: holes flip on movement through portals, and — Kenny's
+decisive observation — running through a doorway leaves the avatar invisible
+while the chase camera does NOT pull in (its collision ray sees the OPEN
+doorway, nothing wrong).
 
 That is defect 2, the round-2 CAMP A account, now cleanly separated:
 **FreeChaseCamera force-copies the PLAYER's cell onto the camera every frame
