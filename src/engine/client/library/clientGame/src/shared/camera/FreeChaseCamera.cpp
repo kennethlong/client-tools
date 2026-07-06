@@ -815,10 +815,21 @@ float FreeChaseCamera::alter (float elapsedTime)
 				if (time == 1.0f || !nextCell || nextCell == currentCell || nextCell == lastCell)
 					break;
 
+				//-- CONSULT-65 fix 5: knife-edge hysteresis. If the portal plane sits
+				//   within 20cm of the camera eye (the crossing happens essentially AT
+				//   the segment end), do NOT take the crossing -- keep the near-side
+				//   (player-side) cell. Re-tagging exactly at the plane made the
+				//   boundary portal backface-cull from the far root (probe signature
+				//   tested:1/bf:1) and the whole neighbor cell vanished. Stateless, so
+				//   there is no dangling-cell bookkeeping across zone changes.
+				Vector const crossing_w = Vector::linearInterpolate (start, end, time);
+				if (crossing_w.magnitudeBetween (end) < 0.20f)
+					break;
+
 				lastCell = currentCell;
 				currentCell = nextCell;
 				derivedCell = currentCell;
-				start = Vector::linearInterpolate (start, end, time);
+				start = crossing_w;
 			}
 
 			if (derivedCell != getParentCell ())

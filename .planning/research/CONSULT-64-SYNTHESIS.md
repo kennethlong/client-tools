@@ -291,6 +291,31 @@ midpoint bias if it ever matters visually — with portals enabled both roots
 render correctly, so likely benign). Trigger-chain brittleness (capsuleMiss,
 one-shot wake) remains as a low-priority gameplay-door polish item.
 
+## FIXES 4+5 (2026-07-06) — the knife-edge class; signature B still open
+
+Fix-3 test session: door layer now CLEAN (2 CLOSED events all session, both
+real-meshed doors; archway portals stay enabled) — yet holes persist. The
+collapse lines split into two signatures:
+
+**A — knife-edge (tested:1 bf:1 on root-CHANGED frames):** the fix-2 derivation
+re-tags the camera to the far cell the instant the eye crosses a boundary plane;
+the one portal tested (back toward the player) backface-culls at dPVS's
+zero-epsilon (eye ON the plane) → the neighbor cell (player included) vanishes.
+The original Cursor-P10 / Sonnet-#1 mechanism, caught live.
+FIX 4: dpvsImpMeshModel::backFaceCull EPSILON 0.0f → -0.05f (the original
+comment documents negative values as the intended leeway; ordinary meshes just
+cull slightly conservatively). FIX 5: derivation hysteresis — a crossing whose
+plane sits within 20cm of the eye is not taken (tag stays player-side);
+stateless, no cross-zone bookkeeping.
+
+**B — still open (tested:0, ALL counters zero, stable root, deep in-cell, no
+door events, fix-1 reorder insufficient):** portals not enumerated by the root
+cell's database traversal. Remaining candidates: leaf timestamp early-out
+(dpvsDatabase.cpp:3040 — instances stamped by another camera's traversal this
+query = first-portal-wins family), node VF-cull via bounds wrong-but-not-dirty.
+CONSULT-66 material if it survives fixes 4+5 (A may have accounted for most
+visible holes — the 0<->1 flickers show bf:1 on the heal frames).
+
 ## Consultant outputs
 
 - CONSULT-64-visibility-callgraph-codex.out — call chain + 11 gates + registration windows.
