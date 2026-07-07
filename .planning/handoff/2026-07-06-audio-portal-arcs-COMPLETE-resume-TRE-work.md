@@ -7,8 +7,34 @@ engine/dPVS defects) are both FIXED, live-verified by Kenny on BOTH clients, and
 
 ## ⏮ THE DIVERTED THREAD — resume here
 
-**TRE file work.** We were working on the TRE tooling when the audio/portal
-marathon took over — pick it back up first:
+**TRE file work — RUNTIME read efficiency (Kenny's 2026-07-06 correction: NOT
+the standalone editor).** The thread is making TRE file reading at run time
+more efficient, as part of the broader arc of getting D3D11 to perform at its
+peak by replacing D3D9-era algorithms with ones suited to the D3D11
+architecture. Concretely: the **TreeFile loose-searchPath stat-storm**
+(CONSULT-59 deferred item, named "next dominant load cost" by CONSULT-60's
+sweep) — every TreeFile::open pays ~3 CreateFileA kernel-miss round-trips
+probing the loose searchPath dirs (stage/override 10 / install root 9 /
+ilm_extract 5) before reaching the TOC that has the file. Fix LANDED + VERIFIED
+2026-07-06 (UNCOMMITTED: ConfigSharedFile.{h,cpp} + TreeFile_SearchNode.{h,cpp}):
+per-SearchPath negative-lookup cache (misses only, so override-wins semantics
+unchanged; leaf mutex per the CONSULT-55 SearchCache pattern; `[SharedFile]
+searchPathNegativeCache` gate, default on; caveat: loose files dropped
+mid-session stay invisible for already-probed names — restart or key off).
+Both platforms built green (0 unresolved), boot-gated, Kenny live-verified
+"feels pretty good".
+
+**Bonus find during verify: stage-x64/client.cfg was MISSING the CONSULT-59
+`asynchronousLoaderCallbackTimeBudgetMs=6` key** (only Win32 had it) — x64
+async callbacks drained unbudgeted → the cantina inner-portal crossing hitch
+(NPC first-reveal burst). Added to the x64 cfg (+ stallWatchdogMaxDumps 6→12);
+crossing re-verified BUTTERY SMOOTH, zero watchdog hits at the crossing.
+Remaining x64 stall census: zone-in GroundScene::init ~600ms real (known
+class) + benign exit-chain teardown. **Cfg-parity lesson: the two staged cfgs
+diverge silently — diff them FIRST when a perf class is one-platform-only.**
+
+Original tooling notes kept below for reference (the editor is NOT the resume
+point):
 - Standalone TRE editor (must be standalone/extractable — memory
   `project_tre_editor_standalone_extractable`).
 - Existing assets: `tools/tre-compare/` (isolated uv package, zero engine

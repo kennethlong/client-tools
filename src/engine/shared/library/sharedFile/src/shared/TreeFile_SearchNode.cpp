@@ -13,6 +13,7 @@
 #include "sharedCompression/Compressor.h"
 #include "sharedCompression/ZlibCompressor.h"
 #include "sharedDebug/DebugFlags.h"
+#include "sharedFile/ConfigSharedFile.h"
 #include "sharedFile/FileStreamerFile.h"
 #include "sharedFile/FileStreamer.h"
 #include "sharedFile/MemoryFile.h"
@@ -54,7 +55,10 @@ TreeFile::SearchNode::~SearchNode(void)
 TreeFile::SearchPath::SearchPath(int priority, const char *path)
 : SearchNode(priority),
 	m_pathName(NULL),
-	m_pathNameLength(0)
+	m_pathNameLength(0),
+	m_missingFiles(),
+	m_missingFilesMutex(),
+	m_missingFilesHits(0)
 {
 	NOT_NULL(path);
 	DEBUG_FATAL(!path[0], ("empty path"));
@@ -87,8 +91,14 @@ TreeFile::SearchPath::~SearchPath(void)
 
 void TreeFile::SearchPath::debugPrint(void)
 {
-	DEBUG_REPORT_PRINT(true, ("  %d=priority %s=path\n", getPriority(), m_pathName));
-	DEBUG_OUTPUT_STATIC_VIEW("Foundation\\Treefile", ("  %d=priority %s=path\n", getPriority(), m_pathName));
+	m_missingFilesMutex.enter();
+	int const missingEntries = static_cast<int>(m_missingFiles.size());
+	int const missingHits = m_missingFilesHits;
+	m_missingFilesMutex.leave();
+	UNREF(missingEntries);
+	UNREF(missingHits);
+	DEBUG_REPORT_PRINT(true, ("  %d=priority %s=path [negCache %d entries, %d probes skipped]\n", getPriority(), m_pathName, missingEntries, missingHits));
+	DEBUG_OUTPUT_STATIC_VIEW("Foundation\\Treefile", ("  %d=priority %s=path [negCache %d entries, %d probes skipped]\n", getPriority(), m_pathName, missingEntries, missingHits));
 }
 
 // ----------------------------------------------------------------------
@@ -106,20 +116,59 @@ void TreeFile::SearchPath::makeAbsolutePath(const char *fileName, char *buffer) 
 
 // ----------------------------------------------------------------------
 
-bool TreeFile::SearchPath::exists(const char *fileName, bool &) const 
+bool TreeFile::SearchPath::cachedMissing(const char *fileName) const
 {
-	char buffer[Os::MAX_PATH_LENGTH];
-	makeAbsolutePath(fileName, buffer);
-	return FileStreamer::exists(buffer);
+	if (!ConfigSharedFile::getSearchPathNegativeCache())
+		return false;
+
+	m_missingFilesMutex.enter();
+	bool const missing = m_missingFiles.find(fileName) != m_missingFiles.end();
+	if (missing)
+		++m_missingFilesHits;
+	m_missingFilesMutex.leave();
+	return missing;
 }
 
 // ----------------------------------------------------------------------
 
-int TreeFile::SearchPath::getFileSize(const char *fileName, bool &) const 
+void TreeFile::SearchPath::noteMissing(const char *fileName) const
 {
+	if (!ConfigSharedFile::getSearchPathNegativeCache())
+		return;
+
+	m_missingFilesMutex.enter();
+	IGNORE_RETURN(m_missingFiles.insert(fileName));
+	m_missingFilesMutex.leave();
+}
+
+// ----------------------------------------------------------------------
+
+bool TreeFile::SearchPath::exists(const char *fileName, bool &) const
+{
+	if (cachedMissing(fileName))
+		return false;
+
 	char buffer[Os::MAX_PATH_LENGTH];
 	makeAbsolutePath(fileName, buffer);
-	return FileStreamer::getFileSize(buffer);
+	bool const found = FileStreamer::exists(buffer);
+	if (!found)
+		noteMissing(fileName);
+	return found;
+}
+
+// ----------------------------------------------------------------------
+
+int TreeFile::SearchPath::getFileSize(const char *fileName, bool &) const
+{
+	if (cachedMissing(fileName))
+		return -1;
+
+	char buffer[Os::MAX_PATH_LENGTH];
+	makeAbsolutePath(fileName, buffer);
+	int const size = FileStreamer::getFileSize(buffer);
+	if (size < 0)
+		noteMissing(fileName);
+	return size;
 }
 
 // ----------------------------------------------------------------------
@@ -141,11 +190,17 @@ void TreeFile::SearchPath::getPathName(const char *fileName, char *outPathName, 
 
 AbstractFile *TreeFile::SearchPath::open(const char *fileName, AbstractFile::PriorityType priority, bool &)
 {
+	if (cachedMissing(fileName))
+		return NULL;
+
 	char buffer[Os::MAX_PATH_LENGTH];
 	makeAbsolutePath(fileName, buffer);
 	FileStreamer::File *file = FileStreamer::open(buffer);
 	if (!file)
+	{
+		noteMissing(fileName);
 		return NULL;
+	}
 	return new FileStreamerFile(priority, *file);
 }
 

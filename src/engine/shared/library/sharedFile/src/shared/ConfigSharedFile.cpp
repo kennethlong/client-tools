@@ -30,6 +30,7 @@ namespace ConfigSharedFileNamespace
 	int            ms_asynchronousLoaderCallbacksPerFrame;
 	int            ms_asynchronousLoaderCallbackTimeBudgetMs;
 	bool		   ms_validateIff;
+	bool		   ms_searchPathNegativeCache;
 	StringPtrArray ms_preloads; // ConfigFile owns the pointer
 }
 
@@ -44,6 +45,7 @@ void ConfigSharedFile::install()
 	KEY_INT(asynchronousLoaderCallbacksPerFrame, 0);
 	KEY_INT(asynchronousLoaderCallbackTimeBudgetMs, 0);
 	KEY_BOOL(validateIff, false);
+	KEY_BOOL(searchPathNegativeCache, true);
 
 	int index = 0;
 	char const * result = 0;
@@ -89,6 +91,13 @@ int ConfigSharedFile::getAsynchronousLoaderCallbackTimeBudgetMs()
 bool ConfigSharedFile::getValidateIff()
 {
 	return(ms_validateIff);
+}
+
+// ----------------------------------------------------------------------
+
+bool ConfigSharedFile::getSearchPathNegativeCache()
+{
+	return ms_searchPathNegativeCache;
 }
 
 // ----------------------------------------------------------------------

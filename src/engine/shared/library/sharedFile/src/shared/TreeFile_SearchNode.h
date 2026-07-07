@@ -18,6 +18,9 @@ class MemoryBlockManager;
 #include "sharedFile/TreeFile.h"
 #include "sharedFile/FileStreamer.h"
 #include "sharedSynchronization/Mutex.h"
+
+#include <string>
+#include <unordered_set>
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/LessPointerComparator.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Os.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Tag.h"
@@ -85,11 +88,28 @@ private:
 	SearchPath &operator =(const SearchPath &);
 
 	void makeAbsolutePath(const char *fileName, char *buffer) const;
+	bool cachedMissing(const char *fileName) const;
+	void noteMissing(const char *fileName) const;
 
 private:
 
 	char  *m_pathName;
 	int    m_pathNameLength;
+
+	// CONSULT-59 deferred item (2026-07-06): loose-searchPath stat-storm fix. Nearly every
+	// TreeFile::open resolves inside a TRE/TOC, but loose SearchPath nodes sit ABOVE the TOCs
+	// (stage/override must keep winning), so each open first paid one CreateFileA kernel
+	// round-trip MISS per loose path — the watchdog-sampled dominant cost of the world-entry
+	// load path. Cache the misses per node: a fixed-up name that missed once is answered from
+	// this set without touching the disk. Misses ONLY — an existing file never enters the set,
+	// so override-wins semantics are unchanged. Consequence: a loose file dropped into the
+	// directory mid-session stays invisible for names already probed (restart the client, or
+	// set [SharedFile] searchPathNegativeCache=false). Leaf mutex, same discipline as
+	// SearchCache::m_cachedFileMapMutex — nodes run OUTSIDE TreeFile::ms_criticalSection via
+	// the snapshot walk, concurrently from the main and asynchronous-loader threads.
+	mutable std::unordered_set<std::string> m_missingFiles;
+	mutable Mutex m_missingFilesMutex;
+	mutable int   m_missingFilesHits;
 };
 
 // ======================================================================

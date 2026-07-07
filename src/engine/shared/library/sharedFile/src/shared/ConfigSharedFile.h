@@ -21,6 +21,7 @@ public:
 	static int         getAsynchronousLoaderCallbacksPerFrame();
 	static int         getAsynchronousLoaderCallbackTimeBudgetMs();
 	static bool        getValidateIff();
+	static bool        getSearchPathNegativeCache();
 	static int         getNumberOfTreeFilePreloads();
 	static char const * getTreeFilePreload(int index);
 };
