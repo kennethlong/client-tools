@@ -281,6 +281,17 @@ namespace AudioNamespace
 	volatile LONG s_diagFileIoLogBudget = 120;
 	float s_audioDiagSummaryTimer = 0.0f;
 
+	// CONSULT-67 VOLSET probe: the per-stream VOLSTEP/STARVED probes read
+	// stream->samp fields through the miles-9.3b/7.2e COMPILE-TIME struct
+	// layouts, which do NOT match either shipped runtime anymore (Win32 runs
+	// the retail 7.2a DLL, x64 runs 9.3v) -- those reads are garbage on both
+	// (x64 logs chunks=-856759528; Win32 logs constant 0/0). This probe
+	// instead edge-logs OUR final computed volume at the AIL_set_sample_
+	// volume_levels handoff for music streams, with every term of the
+	// product, so a load-fade volume step can be attributed engine-side or
+	// pinned inside the Miles DLL. Keyed by HSTREAM; erased at stream close.
+	std::map<void *, float> s_lastVolSet;
+
 	HSAMPLE s_bufferedSoundSample = 0;
 	HSAMPLE s_bufferedMusicSample = 0;
 
@@ -3744,13 +3755,44 @@ void Audio::setSampleVolume(SampleId const &sampleId, float const volume)
 	{
 		NOT_NULL(iterSampleIdToSampleStreamMap->second.m_stream);
 
-		float const finalVolume = !s_audioEnabled ? 0.0f : clamp(0.0f, volume * s_masterVolume * getSoundCategoryVolume(iterSampleIdToSampleStreamMap->second.m_sound->getTemplate()->getSoundCategory()), 1.0f);
+		Audio::SoundCategory const soundCategory = iterSampleIdToSampleStreamMap->second.m_sound->getTemplate()->getSoundCategory();
+		float const categoryVolume = getSoundCategoryVolume(soundCategory);
+		float const finalVolume = !s_audioEnabled ? 0.0f : clamp(0.0f, volume * s_masterVolume * categoryVolume, 1.0f);
 		float const leftLevel = finalVolume;
 		float const rightLevel = finalVolume;
 
 		SampleStream const &sampleStream = iterSampleIdToSampleStreamMap->second;
 
-		//DEBUG_REPORT_LOG((getSampleVolume(sampleId) != finalVolume), ("Audio::setSampleVolume() %d <id> %s <volume> %.2f <old volume> %.2f\n", count++, iterSampleIdToSampleStreamMap->second.getPath()->getString(), finalVolume, getSampleVolume(sampleId)));
+		// CONSULT-67 VOLSET probe (see s_lastVolSet): attribute music-stream
+		// volume steps from OUR side of the AIL handoff -- runtime-agnostic.
+		if (s_audioDiagFile)
+		{
+			char const * const path = sampleStream.getPath() ? sampleStream.getPath()->getString() : "";
+			if (strstr(path, "music") != NULL)
+			{
+				void * const key = static_cast<void *>(sampleStream.m_stream);
+				std::map<void *, float>::iterator const iterLast = s_lastVolSet.find(key);
+				if (iterLast != s_lastVolSet.end())
+				{
+					float const delta = finalVolume - iterLast->second;
+					if (delta > 0.02f || delta < -0.02f)
+					{
+						SYSTEMTIME st;
+						GetLocalTime(&st);
+						fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d VOLSET %.3f -> %.3f in=%.3f master=%.3f cat=%.3f global=%.3f bg=%.3f %s\n",
+							st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+							iterLast->second, finalVolume,
+							volume, s_masterVolume, categoryVolume,
+							s_globalAudioFadeVolume, s_backgroundMusicFadeVolume,
+							path);
+						fflush(s_audioDiagFile);
+					}
+					iterLast->second = finalVolume;
+				}
+				else
+					s_lastVolSet[key] = finalVolume;
+			}
+		}
 
 		AIL_set_sample_volume_levels((AIL_stream_sample_handle(sampleStream.m_stream)), leftLevel, rightLevel);
 		AIL_set_sample_reverb_levels((AIL_stream_sample_handle(sampleStream.m_stream)), 1.0f, 0.0f);
@@ -3915,6 +3957,7 @@ void stopSample(Sound2 const &sound)
 			// ends ~34s after zone-in in every session).
 			DWORD const diagCloseStart = s_audioDiagFile ? GetTickCount() : 0;
 			HSTREAM const diagClosedStream = iterSampleIdToSampleStreamMap->second.m_stream;
+			s_lastVolSet.erase(static_cast<void *>(diagClosedStream));   // CONSULT-67 VOLSET probe: HSTREAM may be reused
 			AIL_close_stream(iterSampleIdToSampleStreamMap->second.m_stream);
 			if (s_audioDiagFile)
 			{
