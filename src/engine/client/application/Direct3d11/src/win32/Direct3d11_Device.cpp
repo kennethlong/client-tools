@@ -276,7 +276,6 @@ namespace Direct3d11_DeviceNamespace
 		ID3D11PixelShader        *oldPS = nullptr;
 		ID3D11ShaderResourceView *oldSRV0 = nullptr;
 		ID3D11SamplerState       *oldSamp0 = nullptr;
-		ID3D11Buffer             *oldPSCB0 = nullptr;
 		D3D11_VIEWPORT            oldViewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
 		UINT                      oldViewportCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
 
@@ -290,8 +289,11 @@ namespace Direct3d11_DeviceNamespace
 		ms_context->PSGetShader(&oldPS, nullptr, nullptr);
 		ms_context->PSGetShaderResources(0, 1, &oldSRV0);
 		ms_context->PSGetSamplers(0, 1, &oldSamp0);
-		ms_context->PSGetConstantBuffers(0, 1, &oldPSCB0);
 		ms_context->RSGetViewports(&oldViewportCount, oldViewports);
+		// PS cbuffer slot 0 is NOT raw-saved: a plain PSGet/PSSetConstantBuffers
+		// round-trip loses the CONSULT-67 ring's FirstConstant offset. Everything
+		// that binds PS b0 goes through Direct3d11_ConstantBuffer, so the restore
+		// below re-issues the wrapper's own bind (correct in ring AND legacy mode).
 
 		// -- run the pass
 		ID3D11RenderTargetView *rtv = ms_backBufferRTV.Get();
@@ -331,7 +333,7 @@ namespace Direct3d11_DeviceNamespace
 		ms_context->PSSetShader(oldPS, nullptr, 0);
 		ms_context->PSSetShaderResources(0, 1, &oldSRV0);
 		ms_context->PSSetSamplers(0, 1, &oldSamp0);
-		ms_context->PSSetConstantBuffers(0, 1, &oldPSCB0);
+		Direct3d11_ConstantBuffer::bindPS(0);   // see save-side note: wrapper re-bind keeps the ring offset
 		if (oldViewportCount)
 			ms_context->RSSetViewports(oldViewportCount, oldViewports);
 
@@ -345,7 +347,6 @@ namespace Direct3d11_DeviceNamespace
 		if (oldPS)     oldPS->Release();
 		if (oldSRV0)   oldSRV0->Release();
 		if (oldSamp0)  oldSamp0->Release();
-		if (oldPSCB0)  oldPSCB0->Release();
 	}
 
 	// ------------------------------------------------------------------
@@ -1177,7 +1178,7 @@ bool Direct3d11_Device::present()
 		if (!s_censusFile)
 		{
 			if (fopen_s(&s_censusFile, "gl11-census.csv", "w") == 0 && s_censusFile)
-				fprintf(s_censusFile, "frameMs,draws,vsB0,vsB1,vsB2,vsB3,psB0,psB1,psB2,psB3,vbLocks,vbDiscards,ibLocks,ibDiscards,texCreates,stagingCreates,shaderCreates,layoutCreates\n");
+				fprintf(s_censusFile, "frameMs,draws,vsB0,vsB1,vsB2,vsB3,psB0,psB1,psB2,psB3,vbLocks,vbDiscards,ibLocks,ibDiscards,texCreates,stagingCreates,shaderCreates,layoutCreates,cbVsDiscards,cbPsDiscards\n");
 			QueryPerformanceFrequency(&s_censusQpf);
 			QueryPerformanceCounter(&s_censusLast);
 		}
@@ -1194,15 +1195,18 @@ bool Direct3d11_Device::present()
 			int vbLocks = 0, vbDiscards = 0, ibLocks = 0, ibDiscards = 0;
 			Direct3d11_DynamicVertexBufferData::getFrameCensus(vbLocks, vbDiscards);
 			Direct3d11_DynamicIndexBufferData::getFrameCensus(ibLocks, ibDiscards);
+			int cbVsDiscards = 0, cbPsDiscards = 0;
+			Direct3d11_ConstantBuffer::getFrameDiscardCensus(cbVsDiscards, cbPsDiscards);
 			int creates[Direct3d11_StateCache::CCK_COUNT];
 			Direct3d11_StateCache::getCreateCensus(creates);
 
-			fprintf(s_censusFile, "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+			fprintf(s_censusFile, "%.2f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 				frameMs, Direct3d11_StateCache::getDrawCallCount(),
 				vs[0], vs[1], vs[2], vs[3], ps[0], ps[1], ps[2], ps[3],
 				vbLocks, vbDiscards, ibLocks, ibDiscards,
 				creates[Direct3d11_StateCache::CCK_texture], creates[Direct3d11_StateCache::CCK_staging],
-				creates[Direct3d11_StateCache::CCK_shader], creates[Direct3d11_StateCache::CCK_inputLayout]);
+				creates[Direct3d11_StateCache::CCK_shader], creates[Direct3d11_StateCache::CCK_inputLayout],
+				cbVsDiscards, cbPsDiscards);
 			fflush(s_censusFile);
 		}
 	}

@@ -28,6 +28,7 @@ namespace ConfigDirect3d11Namespace
 	int          ms_preferredAdapterIndex;
 	bool         ms_preventDriverInternalThreading;
 	bool         ms_censusLog;
+	bool         ms_constantBufferRing;
 }
 using namespace ConfigDirect3d11Namespace;
 
@@ -74,6 +75,11 @@ void ConfigDirect3d11::install()
 	// frame: frame ms, draws, cbuffer updates per stage/slot, VB/IB ring
 	// locks/discards) from present(). Default off = zero I/O.
 	KEY_BOOL(censusLog, false);
+
+	// CONSULT-67 cbuffer NO_OVERWRITE ring (Direct3d11_ConstantBuffer). Default
+	// ON; also requires the D3D11.1 caps probed at install. false = kill switch
+	// back to the legacy per-slot Map(WRITE_DISCARD) path.
+	KEY_BOOL(constantBufferRing, true);
 }
 
 // ----------------------------------------------------------------------
@@ -89,5 +95,6 @@ bool         ConfigDirect3d11::getEnableDebugLayer()                  { return m
 int          ConfigDirect3d11::getPreferredAdapterIndex()             { return ms_preferredAdapterIndex; }
 bool         ConfigDirect3d11::getPreventDriverInternalThreading()    { return ms_preventDriverInternalThreading; }
 bool         ConfigDirect3d11::getCensusLog()                         { return ms_censusLog; }
+bool         ConfigDirect3d11::getConstantBufferRing()                { return ms_constantBufferRing; }
 
 // ======================================================================

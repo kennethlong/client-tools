@@ -156,6 +156,15 @@ public:
 	// values under Map(WRITE_DISCARD) (CODEX sixth hypothesis).
 	static int const kMaxCBufferBytes = 1152;
 
+	// CONSULT-58/67 NO_OVERWRITE ring: per-stage shared dynamic buffer,
+	// appended per update, bound via XSSetConstantBuffers1 offset windows.
+	// D3D11.1 offset/count units are 16-byte constants and must be multiples
+	// of 16 constants (256 bytes): 1152B payload pads to 1280B = 80 constants
+	// (80 = 5*16, so every entry offset k*80 is aligned too).
+	static int const kRingEntryBytes     = 1280;
+	static int const kRingEntryConstants = kRingEntryBytes / 16;
+	static int const kRingBytes          = 1024 * 1024;   // per stage; ~819 entries, wraps every ~8-15 frames at census rates
+
 	static void install();
 	static void remove();
 
@@ -186,11 +195,17 @@ public:
 	static void bindVS(int slot);
 	static void bindPS(int slot);
 
-	// CONSULT-58 per-frame churn census: Map(WRITE_DISCARD) counts per stage/slot.
+	// CONSULT-58 per-frame churn census: update counts per stage/slot.
 	// beginFrame() resets (wired from Direct3d11_Device::beginScene); the census
 	// publisher in present() reads via getFrameCensus. Unconditional (Release-live).
+	// getFrameDiscardCensus counts Map(WRITE_DISCARD) buffer renames per stage:
+	// legacy path = every update; ring path = ring wraps only. The before/after
+	// delta of THESE columns is the ring's whole point.
 	static void beginFrame();
 	static void getFrameCensus(int (&vsUpdates)[kNumSlots], int (&psUpdates)[kNumSlots]);
+	static void getFrameDiscardCensus(int &vsDiscards, int &psDiscards);
+
+	static bool isRingActive();
 
 private:
 
@@ -199,6 +214,8 @@ private:
 
 	static int ms_frameVsUpdates[kNumSlots];
 	static int ms_framePsUpdates[kNumSlots];
+	static int ms_frameVsDiscards;
+	static int ms_framePsDiscards;
 };
 
 // ======================================================================
