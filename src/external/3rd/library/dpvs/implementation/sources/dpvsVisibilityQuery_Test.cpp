@@ -47,7 +47,7 @@ using namespace DPVS;
  *****************************************************************************/
 
 // SWG CONSULT-64 diagnostic counters (defined in dpvsVisibilityQuery_Traverse.cpp)
-extern "C" unsigned int g_swgDpvsPortalRejects[10];
+extern "C" unsigned int g_swgDpvsPortalRejects[14];
 
 DPVS_FORCE_INLINE bool VisibilityQuery::isObjectVisible_INTERNAL (bool assumeVisible)
 {

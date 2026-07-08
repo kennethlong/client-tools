@@ -523,11 +523,53 @@ bool VisibilityQuery::performStencilOP(ImpCamera* sc, ImpPhysicalPortal* sp,Rang
 // Accessed via the exported FUNCTION below because Win32 builds dpvs as a DLL
 // (data exports would need dllimport on the consumer; function imports do not)
 // while x64 links it statically (dllexport is benign there).
-extern "C" unsigned int g_swgDpvsPortalRejects[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// CONSULT-66 round 2 (2026-07-07): indices [10..13] attribute the SILENT culling
+// routes to PORTAL objects specifically (the STUCK0 probe proved a live, enabled,
+// in-database portal goes untested while staring at it -- these name the guilty
+// stage): [10]=portal killed by the object AABB-vs-frustum test (dpvsDatabase.cpp
+// traverseNode object loop), [11]=portal killed by the exact OBB test
+// (isObjectInViewFrustum), [12]=portal inside a node returned NODE_HIDDEN by the
+// node view-frustum test, [13]=portal inside a node returned NODE_HIDDEN by the
+// timestamp-skip or occlusion path.
+extern "C" unsigned int g_swgDpvsPortalRejects[14] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 extern "C" __declspec(dllexport) unsigned int * swgDpvsGetPortalRejects(void)
 {
 	return g_swgDpvsPortalRejects;
+}
+
+// SWG CONSULT-66 diagnostic: is this object currently INSTANCED in a cell database?
+// ImpCell::enableObject() REMOVES a disabled object's DB instances and re-adds them on
+// enable (dpvsImpCell.cpp), so the engine-side ENABLED flag and actual database
+// membership can disagree -- that disagreement is what the STUCK0 probe discriminates
+// (enabled-but-absent = membership loss; enabled-and-present-but-untested = a silent
+// node/object view-frustum cull). Function export for the same DLL/static-link reason
+// as swgDpvsGetPortalRejects above.
+extern "C" __declspec(dllexport) int swgDpvsObjectInDatabase(DPVS::Object *object)
+{
+	if (!object)
+		return 0;
+	ImpObject const * const imp = object->getImplementation();
+	return (imp && imp->getFirstInstance()) ? 1 : 0;
+}
+
+// SWG CONSULT-66 diagnostic: the object's cell-space test bounding volume (m_TBV).
+// The 2026-07-07 sighting behaves like a spatial REGION the camera eye sits inside
+// ("consistent distance like a viewport", clears on any eye translation) -- printing
+// the affected portal's box next to the camera position shows on sight whether the
+// box is wrong/inflated and whether pos-in-box tracks the hole. Returns 1 and fills
+// out[minX,minY,minZ,maxX,maxY,maxZ] on success.
+extern "C" __declspec(dllexport) int swgDpvsGetObjectCellSpaceAABB(DPVS::Object *object, float out[6])
+{
+	if (!object || !out)
+		return 0;
+	ImpObject const * const imp = object->getImplementation();
+	if (!imp)
+		return 0;
+	AABB const &box = imp->getCellSpaceAABB();
+	out[0] = box.getMin().x; out[1] = box.getMin().y; out[2] = box.getMin().z;
+	out[3] = box.getMax().x; out[4] = box.getMax().y; out[5] = box.getMax().z;
+	return 1;
 }
 
 bool VisibilityQuery::traversePortal(ImpCamera* targetCamera, Cell* userTargetCell, UINT32 clipMask)

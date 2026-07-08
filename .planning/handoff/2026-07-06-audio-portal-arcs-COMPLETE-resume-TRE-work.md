@@ -108,6 +108,19 @@ Residual (low priority, filed in synthesis + todo):
   meshes; invisible to the player now.
 - "Signature B" (tested:0 deep in-cell) never reappeared after fixes 3-5 —
   reopen via a CONSULT-66 crew round ONLY if holes return.
+  **2026-07-07 UPDATE: it RETURNED and is CLOSED — CONSULT-66 (crew round +
+  3 probe rounds) convicted dpvs `Database::splitInstance`: the exact
+  triangle-vs-AABB refinement for static objects drops a flat portal's
+  instance from a child node (zero-epsilon on box faces; per-session via
+  streaming order, cold-cache repro) → portal survives only in a sliver leaf
+  whose clamped tight bounds exclude it → node VF-culled → tested:0 skybox.
+  FIX (6th of the arc): portals skip the exact refinement (`isStatic() &&
+  !isPortal()`), keeping box-based child coverage. Fixed + verified x64
+  (multi-run soak clean), fixed Win32 (dpvs.dll HAND-STAGED 2026-07-07).
+  New armed probes: CELLSTATE (walk-in per-portal box/node/flags dump),
+  STUCK0/CLEAR0 heartbeat, KILLDETAIL (failing-test operands), portal-
+  attributed kill counters [10..13]. Full record:
+  ../research/CONSULT-66-SYNTHESIS.md.**
 - Camera-cell derivation boundary jitter (foyer1↔foyer2 flip at cm deltas) —
   benign with portals enabled; hysteresis covers the knife-edge.
 

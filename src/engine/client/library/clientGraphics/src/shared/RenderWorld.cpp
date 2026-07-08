@@ -48,6 +48,15 @@
 // function because Win32 dpvs is a DLL (function imports need no dllimport).
 extern "C" unsigned int * swgDpvsGetPortalRejects(void);
 
+// CONSULT-66: database-membership + cell-space-bounds queries for the STUCK0 probe
+// (see the heartbeat block after resolveVisibility). Same function-import pattern as above.
+extern "C" int swgDpvsObjectInDatabase(DPVS::Object *object);
+extern "C" int swgDpvsGetObjectCellSpaceAABB(DPVS::Object *object, float out[6]);
+// CONSULT-66 round 3: owning-BSP-node state for an object (test bounds + leaf/dirty +
+// instance counts) and the formatted operands of the last portal-attributed cull.
+extern "C" int swgDpvsGetObjectNodeInfo(DPVS::Object *object, float nodeBounds[6], int outInfo[4]);
+extern "C" const char * swgDpvsGetLastPortalKillString(void);
+
 #include <vector>
 
 #define DO_OBJECT_TRACKING 0
@@ -128,6 +137,13 @@ namespace RenderWorldNamespace
 	ObjectList                                   ms_moveWithCameraWorldEnvironmentObjects;
 	ObjectList                                   ms_worldEnvironmentLights;
 	std::vector<DPVS::Object *>                  ms_excludedDpvsObjects;
+
+	// CONSULT-66: pre-query dPVS profile-statistic snapshot for the STUCK0 probe
+	// (set right before resolveVisibility, read right after; probe-gated).
+	float                                        ms_consult66StatNodesVFCulled;
+	float                                        ms_consult66StatObsTraversed;
+	float                                        ms_consult66StatObsVFCulled;
+	float                                        ms_consult66StatObsExactCulled;
 
 	DPVS::Model                                 *ms_defaultModel;
 
@@ -1121,11 +1137,30 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 			// the end of this profiler block is in RenderWorldCommander::command() case QUERY_BEGIN
 			NP_PROFILER_BLOCK_ENTER(ms_dpvsQueryProfilerBlock);
 
-			// CONSULT-64 round 5/6/7: reset the dPVS portal-rejection counters for this frame.
+			// CONSULT-64 round 5/6/7 (+CONSULT-66 round 2: [10..13] portal-attributed
+			// silent-cull counters): reset the dPVS portal-rejection counters for this frame.
 			{
 				unsigned int * const rejects = swgDpvsGetPortalRejects();
-				for (int r = 0; r < 10; ++r)
+				for (int r = 0; r < 14; ++r)
 					rejects[r] = 0;
+			}
+
+			// CONSULT-66: snapshot the dPVS profile statistics around the query so the
+			// STUCK0 probe below can report per-query deltas. These statistics are the
+			// ONLY witnesses of the silent-zero culling routes (node NODE_HIDDEN and
+			// object-level VF cull `continue` both skip portals WITHOUT touching the
+			// reject counters -- Fable, CONSULT-66 synthesis §0). DPVS_ENABLE_PROFILE is
+			// unconditionally defined (dpvsPrivateDefs.hpp:306), so these are live in
+			// Release.
+			{
+				static bool const s_portalCullProbe = ConfigFile::getKeyBool("ClientGraphics", "portalCullProbe", false);
+				if (s_portalCullProbe)
+				{
+					ms_consult66StatNodesVFCulled  = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASENODESVFCULLED);
+					ms_consult66StatObsTraversed   = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSTRAVERSED);
+					ms_consult66StatObsVFCulled    = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSVFCULLED);
+					ms_consult66StatObsExactCulled = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSVFEXACTCULLED);
+				}
 			}
 
 			ms_dpvsCamera->resolveVisibility(ms_commander, portalRecusionDepth, 0.0f);
@@ -1179,6 +1214,46 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 						rejects[7], rejects[8], rejects[9],
 						cameraPos.x, cameraPos.y, cameraPos.z,
 						cameraFwd.x, cameraFwd.y, cameraFwd.z));
+
+					// CONSULT-66 round 3: CELLSTATE dump on ENTERING an interior cell --
+					// detects a broken-session state (bad portal/node bounds) immediately
+					// at walk-in, without needing to find the visual window (repro is
+					// ~1-in-12 relogs; every walk-in in a broken session should show it).
+					if (cellChanged && ms_cameraCell && ms_cameraCell != CellProperty::getWorldCellProperty())
+					{
+						int portalIndex = 0;
+						int const cellStatePortalObjects = ms_cameraCell->getNumberOfPortalObjects();
+						for (int po = 0; po < cellStatePortalObjects && portalIndex < 12; ++po)
+						{
+							CellProperty::PortalObjectEntry const &entry = ms_cameraCell->getPortalObject(po);
+							if (!entry.portalList)
+								continue;
+							for (size_t j = 0; j < entry.portalList->size() && portalIndex < 12; ++j)
+							{
+								Portal * const portal = (*entry.portalList)[j];
+								if (!portal)
+									continue;
+								DPVS::Object * const dpvsObject = portal->getDpvsObject();
+								float box[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+								float nodeBox[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+								int nodeInfo[4] = { 0, 0, 0, 0 };
+								if (dpvsObject)
+								{
+									IGNORE_RETURN(swgDpvsGetObjectCellSpaceAABB(dpvsObject, box));
+									IGNORE_RETURN(swgDpvsGetObjectNodeInfo(dpvsObject, nodeBox, nodeInfo));
+								}
+								REPORT_LOG(true, ("[PortalCullProbe] CELLSTATE cell=%s P%d c%d e%d db%d box=%.2f,%.2f,%.2f..%.2f,%.2f,%.2f node=%.2f,%.2f,%.2f..%.2f,%.2f,%.2f leaf%d dirty%d nInst%d nNodes%d\n",
+									ms_cameraCell->getCellName(), portalIndex,
+									portal->isClosed() ? 1 : 0,
+									(dpvsObject && dpvsObject->test(DPVS::Object::ENABLED)) ? 1 : 0,
+									dpvsObject ? swgDpvsObjectInDatabase(dpvsObject) : 0,
+									box[0], box[1], box[2], box[3], box[4], box[5],
+									nodeBox[0], nodeBox[1], nodeBox[2], nodeBox[3], nodeBox[4], nodeBox[5],
+									nodeInfo[0], nodeInfo[1], nodeInfo[2], nodeInfo[3]));
+								++portalIndex;
+							}
+						}
+					}
 				}
 
 				s_lastCameraCell = ms_cameraCell;
@@ -1187,6 +1262,105 @@ void RenderWorld::drawScene(const RenderWorldCamera &camera)
 				s_lastCameraPos = cameraPos;
 				s_lastCameraFwd = cameraFwd;
 				s_first = false;
+
+				// CONSULT-66: STUCK0/CLEAR0 heartbeat. The count-flip gate above cannot
+				// distinguish a collapse that never heals from one that healed unlogged
+				// (a stuck state emits nothing). While the camera is in an INTERIOR cell
+				// and the query tested ZERO portals (the Signature-B collapse), emit a
+				// full state line ~1/s; emit one CLEAR0 edge line when it heals (episodes
+				// shorter than ~1s never log, so glancing at a wall stays quiet). The
+				// per-portal {isClosed, dpvsEnabled, inDatabase} triple, the per-query
+				// dPVS profile-statistic deltas, and the first enabled portal's
+				// cell-space AABB adjudicate all surviving CONSULT-66 mechanisms in one
+				// line (conviction table: .planning/research/CONSULT-66-SYNTHESIS.md).
+				{
+					unsigned int const * const rejects = swgDpvsGetPortalRejects();
+					bool const stuck = ms_cameraCell
+						&& ms_cameraCell != CellProperty::getWorldCellProperty()
+						&& rejects[6] == 0;
+
+					static bool s_wasStuck = false;
+					static int  s_stuckFrames = 0;
+
+					bool const logHeartbeat = stuck && (s_stuckFrames % 60) == 0;
+					bool const logClear = !stuck && s_wasStuck && s_stuckFrames >= 60;
+
+					if (stuck)
+						++s_stuckFrames;
+					else
+						s_stuckFrames = 0;
+					s_wasStuck = stuck;
+
+					if (logHeartbeat || logClear)
+					{
+						char portalBuf[512];
+						portalBuf[0] = '\0';
+						int  portalCount = 0;
+						int  off = 0;
+						float aabb[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+						bool haveAabb = false;
+
+						int const numPortalObjects = ms_cameraCell->getNumberOfPortalObjects();
+						for (int po = 0; po < numPortalObjects; ++po)
+						{
+							CellProperty::PortalObjectEntry const &entry = ms_cameraCell->getPortalObject(po);
+							if (!entry.portalList)
+								continue;
+							for (size_t j = 0; j < entry.portalList->size(); ++j)
+							{
+								Portal * const portal = (*entry.portalList)[j];
+								if (!portal)
+									continue;
+								DPVS::Object * const dpvsObject = portal->getDpvsObject();
+								int const closed  = portal->isClosed() ? 1 : 0;
+								int const enabled = (dpvsObject && dpvsObject->test(DPVS::Object::ENABLED)) ? 1 : 0;
+								int const inDb    = dpvsObject ? swgDpvsObjectInDatabase(dpvsObject) : 0;
+								if (enabled && !haveAabb && dpvsObject)
+									haveAabb = swgDpvsGetObjectCellSpaceAABB(dpvsObject, aabb) != 0;
+								if (portalCount < 12 && off < static_cast<int>(sizeof(portalBuf)) - 32)
+									off += snprintf(portalBuf + off, sizeof(portalBuf) - static_cast<size_t>(off), " P%d{c%d e%d db%d}", portalCount, closed, enabled, inDb);
+								++portalCount;
+							}
+						}
+
+						float const dNodesVFCulled  = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASENODESVFCULLED)    - ms_consult66StatNodesVFCulled;
+						float const dObsTraversed   = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSTRAVERSED)     - ms_consult66StatObsTraversed;
+						float const dObsVFCulled    = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSVFCULLED)      - ms_consult66StatObsVFCulled;
+						float const dObsExactCulled = DPVS::Library::getStatistic(DPVS::Library::STAT_DATABASEOBSVFEXACTCULLED) - ms_consult66StatObsExactCulled;
+
+						// Camera position in the camera cell's own space -- directly
+						// comparable against the printed cell-space AABB.
+						Vector const cameraPosInCell = ms_cameraCell->getOwner().rotateTranslate_w2o(cameraPos);
+
+						// CONSULT-66 round 3: dPVS's OWN idea of the camera's cell-space
+						// position (translation column of cameraToCell). A mismatch vs
+						// posC = the engine->dPVS camera transform is desynced, which
+						// would fail a VF test against a CORRECT box.
+						DPVS::Matrix4x4 dpvsCameraToCell;
+						ms_dpvsCamera->getCameraToCellMatrix(dpvsCameraToCell);
+
+						REPORT_LOG(true, ("[PortalCullProbe] %s cell=%s cellPtr=%p dpvsCell=%p nPort=%d%s tested:%u pObVF:%u pObXVF:%u pNodeVF:%u pNodeSkip:%u dNodeVF=%.0f dObTrav=%.0f dObVF=%.0f dObXVF=%.0f aabb0=%.2f,%.2f,%.2f..%.2f,%.2f,%.2f posC=%.2f %.2f %.2f dpvsPosC=%.2f %.2f %.2f posW=%.2f %.2f %.2f fwd=%.3f %.3f %.3f\n",
+							logClear ? "CLEAR0" : "STUCK0",
+							ms_cameraCell->getCellName(),
+							static_cast<void const *>(ms_cameraCell),
+							static_cast<void const *>(ms_cameraCell->getDpvsCell()),
+							portalCount, portalBuf,
+							rejects[6],
+							rejects[10], rejects[11], rejects[12], rejects[13],
+							dNodesVFCulled, dObsTraversed, dObsVFCulled, dObsExactCulled,
+							aabb[0], aabb[1], aabb[2], aabb[3], aabb[4], aabb[5],
+							cameraPosInCell.x, cameraPosInCell.y, cameraPosInCell.z,
+							dpvsCameraToCell.m[0][3], dpvsCameraToCell.m[1][3], dpvsCameraToCell.m[2][3],
+							cameraPos.x, cameraPos.y, cameraPos.z,
+							cameraFwd.x, cameraFwd.y, cameraFwd.z));
+
+						// CONSULT-66 round 3: when a portal-attributed kill fired this
+						// query, print the exact operands of the failing test (site,
+						// tested box, active clip mask, every active plane equation).
+						if (rejects[10] + rejects[11] + rejects[12] + rejects[13] > 0)
+							REPORT_LOG(true, ("[PortalCullProbe] KILLDETAIL %s\n", swgDpvsGetLastPortalKillString()));
+					}
+				}
 			}
 		}
 	}

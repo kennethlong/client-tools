@@ -1,0 +1,602 @@
+=== SICK RUN (UTC 2026-07-07; login 02:31:52; hole onset 02:32:11; screenshot 02:32:27 pos 3457 5 -4847; session ended ~02:32:3x with hole still present) ===
+20260707023151:SwgClient:reportLog:InstallTimer:  0.0000 20720 ClientWorld::install
+20260707023152:SwgClient:reportLog:VOLZERO sound/music_main_title.snd tmpl=1.000 fade=0.047 atten=1.000 user=1.000 dist=0.0 cutoff=8.0 pos=0
+20260707023152:SwgClient:reportLog:InstallTimer:  0.0164 864304 GameMusicManager::install
+20260707023152:SwgClient:reportLog:CuiSettings loaded inventory state from profiles/swg/swg/127040355.uis
+20260707023152:SwgClient:reportLog:CuiChatHistory loaded inventory state from profiles/swg/swg/127040355.cht
+20260707023152:SwgClient:warning:unknown location : WARNING ab8f0ad0: Unable to find CodeData object 'bigViewerBackground1' [bigPage.Toolbar.bigViewerBackground1] from [/GroundHUD.Toolbar] for [SwgCuiToolbar]
+20260707023152:SwgClient:warning:unknown location : WARNING ab8f0ad0: Unable to find CodeData object 'bigViewerBackground2' [bigPage.Toolbar.bigViewerBackground2] from [/GroundHUD.Toolbar] for [SwgCuiToolbar]
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7904E0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7BDC80 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C1B10 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C5B40 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C6680 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C7140 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7CF4A0 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D29B0 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D5F40 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D6A80 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7DB5F0 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7DEE70 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7E3810 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7EF0D0 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7EFC10 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7F0710 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7F46E0 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7F6D30 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF80F5A0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF817350 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF81A5C0 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF81E0C0 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF81ECA0 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF81F7E0 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF822C00 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF825CF0 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF828E20 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF8299F0 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF82A4B0 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF83D180 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF8461F0 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF8493E0 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF84A250 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF84AD10 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF84E800 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF850FE0 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB44E20 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB9A960 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB9B500 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB9F730 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA36C0 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA8040 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA8B40 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA9650 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB96D50 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBB78D0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBC4880 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBC7A80 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFF19F30 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFC47D0 CLOSED cell=cantina neighbor=office_hallway dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFC4240 CLOSED cell=cantina neighbor=office_hallway dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFCEBB0 CLOSED cell=cantina neighbor=private_room dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFD9370 CLOSED cell=office_hallway neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFFD590 CLOSED cell=office_hallway neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0004C70 CLOSED cell=private_room neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0020C10 CLOSED cell=back_entrance neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0027350 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F00296F0 CLOSED cell=world neighbor=back_entrance dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F04288E0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0429650 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F042CA90 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0434850 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0435390 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0436B40 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0439E70 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F043D100 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F04483E0 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0448FB0 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0449A70 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044CDB0 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044FC40 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0453910 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0454450 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0454FA0 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0458A90 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F045B010 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F919F0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB9D90 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FBA890 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FBE810 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FC22E0 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FCEA10 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FCF5B0 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FD01E0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FAFFD0 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FDC7B0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FDFBA0 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FE1C40 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F100ABE0 CLOSED cell=foyer neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1054180 CLOSED cell=lobby neighbor=livingroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1054C40 CLOSED cell=lobby neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1055770 CLOSED cell=lobby neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1058920 CLOSED cell=livingroom1 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F105E480 CLOSED cell=kitchen neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1061A00 CLOSED cell=livingroom2 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1078C60 CLOSED cell=foyer2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1079720 CLOSED cell=foyer2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1061940 CLOSED cell=bedroom1 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1085A30 CLOSED cell=bedroom2 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1089EB0 CLOSED cell=foyer3 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1080F30 CLOSED cell=bedroom3 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1094780 CLOSED cell=hall2 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1095820 CLOSED cell=hall2 neighbor=bedroom7 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1096330 CLOSED cell=hall2 neighbor=bedroom6 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10A2090 CLOSED cell=hall3 neighbor=bedroom8 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10A2B90 CLOSED cell=hall3 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10A6090 CLOSED cell=bedroom4 neighbor=foyer3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10A9560 CLOSED cell=bedroom5 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10AD6E0 CLOSED cell=bedroom6 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1090490 CLOSED cell=bedroom7 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B4FB0 CLOSED cell=bedroom8 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B6DE0 CLOSED cell=world neighbor=foyer dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10E0000 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10FDCC0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10FE7C0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1102410 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1108190 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F110B9E0 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F110C690 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F110D1A0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10FA430 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1113D50 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1117C60 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1119C20 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11445F0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11560F0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1156BF0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F115A840 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F115EF60 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F116E990 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F116F490 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F116FFA0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1152860 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1176B50 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F117AA60 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F117CA20 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1197500 CLOSED cell=foyer neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F119D130 CLOSED cell=lobby neighbor=livingroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F119DBF0 CLOSED cell=lobby neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F119E720 CLOSED cell=lobby neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11A20D0 CLOSED cell=livingroom1 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11AED90 CLOSED cell=kitchen neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11B1EB0 CLOSED cell=livingroom2 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11BE550 CLOSED cell=foyer2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11BF010 CLOSED cell=foyer2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11B1DF0 CLOSED cell=bedroom1 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11D0570 CLOSED cell=bedroom2 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11D45D0 CLOSED cell=foyer3 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11C5350 CLOSED cell=bedroom3 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11DE1C0 CLOSED cell=hall2 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11DF260 CLOSED cell=hall2 neighbor=bedroom7 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11DFD70 CLOSED cell=hall2 neighbor=bedroom6 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11E74D0 CLOSED cell=hall3 neighbor=bedroom8 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11E7FD0 CLOSED cell=hall3 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11EB020 CLOSED cell=bedroom4 neighbor=foyer3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11EED30 CLOSED cell=bedroom5 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11F9F80 CLOSED cell=bedroom6 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11DAF90 CLOSED cell=bedroom7 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12001B0 CLOSED cell=bedroom8 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1201BC0 CLOSED cell=world neighbor=foyer dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F122AE30 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F123EB50 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F123F650 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F124B480 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F124EED0 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1253570 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1254070 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1254B80 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1258E00 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F125C420 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F125F6C0 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12615E0 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1279BD0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F127A830 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1281AA0 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1286160 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1286CA0 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1287760 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F128A990 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1295C80 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1298D20 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F129D860 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F129E320 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A20F0 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A4F80 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A7FF0 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A8B30 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A95F0 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12AD020 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12AF400 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08392F0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0842130 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08453E0 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0848DF0 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0849930 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F084A3F0 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F084D620 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0851380 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0854400 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0854F40 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0855A00 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0858B70 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F085B9E0 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F085EA50 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F085F590 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0860050 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F086D750 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0873760 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F089B800 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B54B0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B5FB0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B9C00 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08BE280 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08C1AD0 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08C25D0 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08C30E0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B1C20 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08D1E50 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08D5100 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08D7D20 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] cell=world portals 0->3 visCells 1->4 camDelta=0.0000 fwdDot=1.00000 rej=bf:4 ct:0 tt:0 rect:0 fr:0 ph:0 tested:7 dbUpd:25 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.000 0.000 1.000
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1A0D610 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1A10C80 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB81E20 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBE1020 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBE1C30 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBF0290 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBF35C0 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F201C0C0 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F20202A0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2020E60 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F20368B0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2039160 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023153:SwgClient:warning:unknown location : WARNING eb0cc988: ArrangementDescriptor [abstract/slot/arrangement/arrangement_structure.iff] specified invalid slot name [structure_control_device], ignoring
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0B248A0 CLOSED cell=bedroom8 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F120D600 CLOSED cell=bedroom7 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1203A60 CLOSED cell=bedroom6 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11B1910 CLOSED cell=bedroom5 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F119DD50 CLOSED cell=bedroom4 neighbor=foyer3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11DB100 CLOSED cell=hall3 neighbor=bedroom8 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12001F0 CLOSED cell=hall3 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11FA9C0 CLOSED cell=hall2 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11D0D70 CLOSED cell=hall2 neighbor=bedroom7 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11C6810 CLOSED cell=hall2 neighbor=bedroom6 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10761F0 CLOSED cell=bedroom3 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F119AC70 CLOSED cell=foyer3 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1199100 CLOSED cell=bedroom2 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233ECA10B00 CLOSED cell=bedroom1 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFC6D4F0 CLOSED cell=foyer2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFC6E240 CLOSED cell=foyer2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F27975A0 CLOSED cell=livingroom2 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F275B580 CLOSED cell=kitchen neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F275E770 CLOSED cell=livingroom1 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2763F10 CLOSED cell=lobby neighbor=livingroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2764A90 CLOSED cell=lobby neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2765680 CLOSED cell=lobby neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2769D90 CLOSED cell=foyer neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F279DAC0 CLOSED cell=world neighbor=foyer dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F117E760 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0B26D60 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1144340 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1156430 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F114FF80 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F116C4B0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1177A00 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1141D10 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1170450 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1145B50 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F115D5C0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F115ED50 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F126BBA0 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F27553D0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2E041C0 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2E06990 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2E07570 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F2E080C0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFD5DC20 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFD610D0 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFDB9EB0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFDBB6E0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFD678C0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFD723A0 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F086E3F0 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0855330 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F084A7F0 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0849E50 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0858B70 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0862480 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0850E50 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0848AD0 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0851230 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F084A630 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11EC2A0 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08536A0 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0844310 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F085A670 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFFB2160 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F085DE30 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0838060 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0857220 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F00D0C10 CLOSED cell=entry neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFF927E0 CLOSED cell=world neighbor=entry dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F045C370 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7796D0 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0428890 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044D7F0 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0458730 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F043DA00 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044F970 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F043CAF0 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0434450 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0431AB0 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F045A630 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F04329C0 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F04277C0 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044E690 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0433080 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F044F8C0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F042C290 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0457D50 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10C1FF0 CLOSED cell=bedroom8 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1012520 CLOSED cell=bedroom7 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F100C240 CLOSED cell=bedroom6 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B8360 CLOSED cell=bedroom5 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B7520 CLOSED cell=bedroom4 neighbor=foyer3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F100C0A0 CLOSED cell=hall3 neighbor=bedroom8 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F100B300 CLOSED cell=hall3 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F02C0820 CLOSED cell=hall2 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1085960 CLOSED cell=hall2 neighbor=bedroom7 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10742C0 CLOSED cell=hall2 neighbor=bedroom6 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1080910 CLOSED cell=bedroom3 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1066A80 CLOSED cell=foyer3 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B1680 CLOSED cell=bedroom2 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B2DD0 CLOSED cell=bedroom1 neighbor=foyer2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1095360 CLOSED cell=foyer2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10B5820 CLOSED cell=foyer2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F102A8D0 CLOSED cell=livingroom2 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1084390 CLOSED cell=kitchen neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10804B0 CLOSED cell=livingroom1 neighbor=lobby dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F107CB70 CLOSED cell=lobby neighbor=livingroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F105BFA0 CLOSED cell=lobby neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F105CB50 CLOSED cell=lobby neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1011220 CLOSED cell=foyer neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10A4B70 CLOSED cell=world neighbor=foyer dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FE4DD0 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FA98B0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB1960 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FBE000 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F8FA80 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB0710 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FE0550 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FD6420 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB1D90 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FDC840 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FD7980 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FAF950 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1124160 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFC447A0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10FE0B0 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F110BCD0 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1108110 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10E7BA0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1107E40 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10E0150 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1114EB0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F11118A0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1116390 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1133040 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:warning:unknown location : WARNING a70f9aef: ClientWeaponObjectTemplate empty cef template name for [object/weapon/ranged/pistol/shared_pistol_launcher.iff], cef [missHitOther]
+20260707023154:SwgClient:warning:unknown location : WARNING a70f9aef: ClientWeaponObjectTemplate empty cef template name for [object/weapon/ranged/pistol/shared_pistol_launcher.iff], cef [missHitNothing]
+20260707023154:SwgClient:warning:unknown location : WARNING a70f9aef: ClientWeaponObjectTemplate empty cef template name for [object/weapon/ranged/heavy/shared_heavy_rocket_launcher.iff], cef [missHitOther]
+20260707023154:SwgClient:warning:unknown location : WARNING a70f9aef: ClientWeaponObjectTemplate empty cef template name for [object/weapon/ranged/heavy/shared_heavy_rocket_launcher.iff], cef [missHitNothing]
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08E3430 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08E3670 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B5540 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F08B5470 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F041D2A0 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F041DDF0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0422160 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F046B600 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F046F6A0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0470270 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F6E43470 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F6E45DB0 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023154:SwgClient:warning:unknown location : WARNING fa66d8fb: ClientDataFile [clientdata/creature/client_shared_cr_angler.cdf] unable to load sound template [sound/cr_angler_vocalize.snd]
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F5C020 CLOSED cell=lounge03 neighbor=elevator04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F5CC60 CLOSED cell=lounge03 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F60770 CLOSED cell=elevator04 neighbor=lounge02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F61330 CLOSED cell=elevator04 neighbor=lounge03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0585DD0 CLOSED cell=elevator03 neighbor=hall01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F05869D0 CLOSED cell=elevator03 neighbor=lobby01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F73010 CLOSED cell=elevator02 neighbor=hall01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F73CA0 CLOSED cell=elevator02 neighbor=lobby01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB36C0 CLOSED cell=elevator01 neighbor=hall01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB42C0 CLOSED cell=elevator01 neighbor=lobby01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FB79B0 CLOSED cell=guest07 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F55C10 CLOSED cell=guest06 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FF43E0 CLOSED cell=guest04 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F689D0 CLOSED cell=guest02 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F6C1A0 CLOSED cell=guest05 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FFDFC0 CLOSED cell=guest03 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F10016B0 CLOSED cell=guest01 neighbor=hall05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9C520 CLOSED cell=hall05 neighbor=guest01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9DCD0 CLOSED cell=hall05 neighbor=guest03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9E7E0 CLOSED cell=hall05 neighbor=guest05 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9F2D0 CLOSED cell=hall05 neighbor=guest02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9FD50 CLOSED cell=hall05 neighbor=guest04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F9F260 CLOSED cell=hall05 neighbor=guest06 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0FA1340 CLOSED cell=hall05 neighbor=guest07 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F0F55A10 CLOSED cell=meeting01 neighbor=hall04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73370C0 CLOSED cell=meeting02 neighbor=hall04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F733AEE0 CLOSED cell=hall04 neighbor=meeting02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F733B9E0 CLOSED cell=hall04 neighbor=meeting01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7340E50 CLOSED cell=meeting04 neighbor=lobby02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7346AC0 CLOSED cell=lobby02 neighbor=meeting04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7353490 CLOSED cell=meeting03 neighbor=lobby01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1004D60 CLOSED cell=lobby01 neighbor=elevator01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7357BF0 CLOSED cell=lobby01 neighbor=elevator02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7358770 CLOSED cell=lobby01 neighbor=elevator03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73614D0 CLOSED cell=lobby01 neighbor=meeting03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73664D0 CLOSED cell=lounge02 neighbor=elevator04 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73695A0 CLOSED cell=kitchen neighbor=lounge01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7371350 CLOSED cell=fresher02 neighbor=lounge01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7374320 CLOSED cell=fresher01 neighbor=lounge01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7377E80 CLOSED cell=lounge01 neighbor=fresher02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7378950 CLOSED cell=lounge01 neighbor=fresher01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7379410 CLOSED cell=lounge01 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F732B550 CLOSED cell=valarian neighbor=hall01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73856B0 CLOSED cell=hall01 neighbor=elevator01 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F73862B0 CLOSED cell=hall01 neighbor=elevator02 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7386E30 CLOSED cell=hall01 neighbor=elevator03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F7387F40 CLOSED cell=hall01 neighbor=valarian dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F739D630 CLOSED cell=world neighbor=lounge03 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->4 visCells 4->5 camDelta=0.0000 fwdDot=1.00000 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:9 dbUpd:3 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.000 0.000 1.000
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12B1AC0 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12A9320 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1282C30 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F127A700 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1288AD0 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F12AA910 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1285E60 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1295B80 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1279BA0 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1283160 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F195FDD0 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1955250 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1950DF0 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F19518F0 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1946C30 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFA9F840 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F194B640 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F194EA00 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF852450 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1979840 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF829F10 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF843010 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF84EB10 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF822F40 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF8259E0 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF80F010 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF825E10 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF829830 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF824090 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF823580 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF821B40 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF817D00 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF8243C0 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF825930 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF84D820 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF847D70 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7F9660 CLOSED cell=livingroom1 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D0520 CLOSED cell=elevator1 neighbor=livingroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C3220 CLOSED cell=elevator1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7DF3D0 CLOSED cell=elevator1 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C7CB0 CLOSED cell=bedroom3 neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C23A0 CLOSED cell=kitchen neighbor=hall3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7DEEF0 CLOSED cell=hall3 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7CF710 CLOSED cell=hall3 neighbor=kitchen dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7E3B90 CLOSED cell=hall3 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF806ED0 CLOSED cell=bedroom2 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D6A00 CLOSED cell=bedroom1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF78D360 CLOSED cell=hall2 neighbor=elevator1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7F5DB0 CLOSED cell=hall2 neighbor=bedroom1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C3320 CLOSED cell=hall2 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F1EF9E00 CLOSED cell=hall1 neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7DEE40 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7D4ED0 CLOSED cell=foyer1 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF7C5360 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:warning:unknown location : WARNING de7fca28: CDF clientdata/npc/client_shared_npc_dressed_noble_human_m_01.cdf unable to set int variable /private/index_color_3
+20260707023155:SwgClient:warning:unknown location : WARNING de7fca28: CDF clientdata/npc/client_shared_npc_dressed_noble_human_m_01.cdf unable to set int variable /private/index_color_3
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F002A880 CLOSED cell=back_entrance neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F634EE30 CLOSED cell=private_room neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F02E46A0 CLOSED cell=office_hallway neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F02E5160 CLOSED cell=office_hallway neighbor=cantina dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F8B229F0 CLOSED cell=cantina neighbor=office_hallway dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F8BBE6D0 CLOSED cell=cantina neighbor=office_hallway dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F8BC7370 CLOSED cell=cantina neighbor=private_room dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F5B4EA80 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EEFC9960 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F5758950 CLOSED cell=world neighbor=back_entrance dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBC9CF0 CLOSED cell=bedroom5 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB97DF0 CLOSED cell=bedroom4 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA2110 CLOSED cell=kitchen1 neighbor=hall2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB9B9E0 CLOSED cell=hall2 neighbor=kitchen1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBDA4F0 CLOSED cell=hall2 neighbor=bedroom4 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBA80C0 CLOSED cell=hall2 neighbor=bedroom5 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB833F0 CLOSED cell=bedroom3 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBB74D0 CLOSED cell=bedroom2 neighbor=hall1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB970B0 CLOSED cell=hall1 neighbor=bedroom2 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EF80BCA0 CLOSED cell=hall1 neighbor=bedroom3 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFB85190 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EFBB6930 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3472.09 6.08 -4857.45
+20260707023155:SwgClient:reportLog:[PortalCullProbe] cell=world portals 4->3 visCells 5->4 camDelta=0.0000 fwdDot=1.00000 rej=bf:4 ct:0 tt:0 rect:0 fr:0 ph:0 tested:7 dbUpd:4 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.000 0.000 1.000
+20260707023155:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->4 visCells 4->5 camDelta=0.0000 fwdDot=1.00000 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:9 dbUpd:8 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.000 0.000 1.000
+20260707023157:SwgClient:reportLog:[PortalCullProbe] cell=world portals 4->3 visCells 5->4 camDelta=0.0000 fwdDot=0.92388 rej=bf:4 ct:0 tt:0 rect:0 fr:0 ph:0 tested:7 dbUpd:0 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.707 0.000 0.707
+20260707023157:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->2 visCells 4->3 camDelta=0.0000 fwdDot=0.92388 rej=bf:3 ct:0 tt:0 rect:0 fr:0 ph:0 tested:5 dbUpd:0 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.924 0.000 0.383
+20260707023157:SwgClient:reportLog:[PortalCullProbe] cell=world portals 2->0 visCells 3->1 camDelta=0.0000 fwdDot=0.92388 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:1 dbUpd:0 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=1.000 0.000 -0.000
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 0->2 visCells 1->3 camDelta=0.0000 fwdDot=0.92388 rej=bf:3 ct:0 tt:0 rect:0 fr:0 ph:0 tested:5 dbUpd:4 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.383 0.000 -0.924
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 2->5 visCells 3->6 camDelta=0.0000 fwdDot=0.92388 rej=bf:6 ct:0 tt:0 rect:0 fr:0 ph:0 tested:11 dbUpd:7 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=0.000 0.000 -1.000
+20260707023158:SwgClient:warning:unknown location : WARNING d30f207b: Could not open texture texture/dewback_saddle_n.dds
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 5->6 visCells 6->7 camDelta=0.0000 fwdDot=0.92388 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:13 dbUpd:1 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-0.383 -0.000 -0.924
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 6->4 visCells 7->5 camDelta=0.0000 fwdDot=0.92388 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:9 dbUpd:0 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-0.707 -0.000 -0.707
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 4->2 visCells 5->3 camDelta=0.0000 fwdDot=0.92388 rej=bf:3 ct:0 tt:0 rect:0 fr:0 ph:0 tested:5 dbUpd:2 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-0.924 -0.000 -0.383
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 2->3 visCells 3->4 camDelta=0.0000 fwdDot=0.92388 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:8 dbUpd:5 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-1.000 0.000 0.000
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->4 visCells 4->5 camDelta=0.0000 fwdDot=0.92388 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:9 dbUpd:8 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-0.924 0.000 0.383
+20260707023158:SwgClient:reportLog:[PortalCullProbe] cell=world portals 4->6 visCells 5->7 camDelta=0.0000 fwdDot=0.92388 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:13 dbUpd:0 dbRem:0 dbAdd:0 pos=3472.09 6.08 -4857.45 fwd=-0.707 0.000 0.707
+20260707023158:SwgClient:reportLog:InstallTimer:  0.0005 26272 ClientWaypointObject::install
+20260707023159:SwgClient:warning:unknown location : WARNING 6601c1e7: received ChatOnEnteredRoom but room [0] doesn't exist on client.
+20260707023201:SwgClient:reportLog:[PortalCullProbe] cell=world portals 0->1 visCells 1->2 camDelta=0.0496 fwdDot=0.99995 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:3 dbUpd:0 dbRem:0 dbAdd:0 pos=3467.22 6.64 -4858.26 fwd=0.980 -0.175 0.092
+20260707023203:SwgClient:reportLog:[PortalCullProbe] cell=world portals 0->3 visCells 1->4 camDelta=0.0393 fwdDot=0.99997 rej=bf:3 ct:0 tt:0 rect:0 fr:0 ph:0 tested:6 dbUpd:0 dbRem:0 dbAdd:0 pos=3475.26 7.25 -4861.05 fwd=-0.571 -0.297 0.765
+20260707023203:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->5 visCells 4->6 camDelta=0.0395 fwdDot=0.99997 rej=bf:6 ct:0 tt:0 rect:0 fr:0 ph:0 tested:11 dbUpd:0 dbRem:0 dbAdd:0 pos=3475.28 7.21 -4861.04 fwd=-0.575 -0.289 0.765
+20260707023203:SwgClient:reportLog:[PortalCullProbe] cell=world portals 5->6 visCells 6->7 camDelta=0.0428 fwdDot=0.99996 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:13 dbUpd:0 dbRem:0 dbAdd:0 pos=3475.32 7.10 -4861.05 fwd=-0.584 -0.267 0.767
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F5B4EA80 OPENED cell=foyer1 neighbor=world dpvs=yes camPos=3473.38 7.72 -4859.13
+20260707023208:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EEFC9960 OPENED cell=world neighbor=foyer1 dpvs=yes camPos=3473.38 7.72 -4859.13
+20260707023208:SwgClient:reportLog:[PortalCullProbe] cell=world portals 6->7 visCells 7->8 camDelta=0.0614 fwdDot=0.99999 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:14 dbUpd:3 dbRem:0 dbAdd:0 pos=3473.33 7.74 -4859.10 fwd=-0.543 -0.203 0.815
+20260707023208:SwgClient:reportLog:[PortalCullProbe] cell=world portals 7->6 visCells 8->7 camDelta=0.0901 fwdDot=0.99997 rej=bf:6 ct:0 tt:0 rect:0 fr:0 ph:0 tested:12 dbUpd:0 dbRem:0 dbAdd:0 pos=3471.19 7.90 -4856.51 fwd=-0.484 -0.203 0.851
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=world portals 6->7 visCells 7->8 camDelta=0.0853 fwdDot=0.99998 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:14 dbUpd:0 dbRem:0 dbAdd:0 pos=3470.39 8.03 -4855.69 fwd=-0.440 -0.206 0.874
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=world portals 7->8 visCells 8->9 camDelta=0.0656 fwdDot=1.00000 rej=bf:8 ct:0 tt:0 rect:0 fr:0 ph:0 tested:16 dbUpd:2 dbRem:0 dbAdd:0 pos=3468.58 8.04 -4852.73 fwd=-0.361 -0.209 0.909
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=world portals 8->7 visCells 9->8 camDelta=0.0849 fwdDot=0.99995 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:14 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.41 7.90 -4851.05 fwd=-0.438 -0.186 0.880
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 (CHANGED) portals 7->1 visCells 8->2 camDelta=0.1366 fwdDot=0.99999 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:3 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.28 7.86 -4850.34 fwd=-0.469 -0.186 0.863
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 portals 1->7 visCells 2->8 camDelta=0.0366 fwdDot=0.99998 rej=bf:6 ct:0 tt:1 rect:0 fr:0 ph:0 tested:14 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.39 7.90 -4850.26 fwd=-0.489 -0.186 0.852
+20260707023209:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 portals 7->8 visCells 8->9 camDelta=0.0949 fwdDot=0.99995 rej=bf:8 ct:0 tt:0 rect:0 fr:0 ph:0 tested:16 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.41 7.90 -4850.00 fwd=-0.511 -0.186 0.839
+20260707023210:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 portals 3->2 visCells 4->3 camDelta=0.0696 fwdDot=0.99998 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:3 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.52 7.89 -4849.44 fwd=-0.568 -0.183 0.803
+20260707023210:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233F5B4EA80 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3470.34 7.64 -4845.35
+20260707023210:SwgClient:reportLog:[PortalCullProbe] DOOR portal=00000233EEFC9960 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3470.34 7.64 -4845.35
+20260707023211:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 portals 1->0 visCells 2->1 camDelta=0.0783 fwdDot=0.99995 rej=bf:0 ct:0 tt:0 rect:0 fr:0 ph:0 tested:0 dbUpd:0 dbRem:0 dbAdd:0 pos=3464.26 7.45 -4845.99 fwd=-0.990 -0.111 0.084
+
+=== HEALTHY CONTRAST (UTC 2026-07-06 21:37:50-21:38:13, same building, same foyer1-world door class closing, traversal stayed healthy) ===
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73BEB0 OPENED cell=foyer1 neighbor=world dpvs=yes camPos=3471.78 8.09 -4861.27
+20260706213755:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73EB10 OPENED cell=world neighbor=foyer1 dpvs=yes camPos=3471.78 8.09 -4861.27
+20260706213755:SwgClient:reportLog:[PortalCullProbe] cell=world portals 6->7 visCells 7->8 camDelta=0.0991 fwdDot=0.99998 rej=bf:7 ct:0 tt:0 rect:0 fr:0 ph:0 tested:14 dbUpd:0 dbRem:0 dbAdd:0 pos=3471.00 8.62 -4856.10 fwd=-0.488 -0.254 0.835
+20260706213755:SwgClient:reportLog:[PortalCullProbe] cell=world portals 7->8 visCells 8->9 camDelta=0.0967 fwdDot=0.99997 rej=bf:8 ct:0 tt:0 rect:0 fr:0 ph:0 tested:16 dbUpd:2 dbRem:0 dbAdd:0 pos=3470.93 8.69 -4854.85 fwd=-0.558 -0.263 0.787
+20260706213756:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 (CHANGED) portals 6->6 visCells 7->7 camDelta=0.2204 fwdDot=0.99999 rej=bf:6 ct:0 tt:1 rect:0 fr:0 ph:0 tested:13 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.71 8.24 -4850.17 fwd=-0.737 -0.283 0.613
+20260706213756:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73BEB0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3468.31 8.92 -4846.99
+20260706213756:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73EB10 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3468.31 8.92 -4846.99
+20260706213757:SwgClient:warning:unknown location : WARNING 4ca632d0: CustomizableShaderTemplate::TextureFactorIntOperation::execute error
+20260706213757:SwgClient:warning:unknown location : WARNING 39bcedc8: CustomizableShader::prepareToView() failed for shader/belt_s14_sm_hc8.sht
+20260706213757:SwgClient:warning:unknown location : WARNING 4ca632d0: CustomizableShaderTemplate::TextureFactorIntOperation::execute error
+20260706213757:SwgClient:warning:unknown location : WARNING 39bcedc8: CustomizableShader::prepareToView() failed for shader/armor_zam_wesell_gloves_sm_hc8.sht
+20260706213758:SwgClient:reportLog:[PortalCullProbe] cell=foyer2 (CHANGED) portals 4->3 visCells 5->4 camDelta=0.2916 fwdDot=0.99909 rej=bf:4 ct:0 tt:0 rect:0 fr:0 ph:0 tested:7 dbUpd:0 dbRem:0 dbAdd:0 pos=3455.98 8.91 -4845.83 fwd=-0.427 -0.418 0.802
+20260706213759:SwgClient:reportLog:[PortalCullProbe] cell=foyer2 portals 1->2 visCells 2->3 camDelta=0.0604 fwdDot=0.99995 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:4 dbUpd:0 dbRem:0 dbAdd:0 pos=3456.81 8.89 -4839.87 fwd=-0.179 -0.541 0.822
+20260706213759:SwgClient:warning:unknown location : WARNING 197e6485: could not open shader template shader/chiss_f_body_sm.sht
+20260706213800:SwgClient:reportLog:[PortalCullProbe] cell=foyer2 portals 2->3 visCells 3->4 camDelta=0.0923 fwdDot=0.99989 rej=bf:3 ct:0 tt:0 rect:0 fr:0 ph:0 tested:6 dbUpd:0 dbRem:0 dbAdd:0 pos=3457.49 8.88 -4837.38 fwd=-0.559 -0.483 0.674
+20260706213800:SwgClient:warning:unknown location : WARNING 197e6485: could not open shader template shader/chiss_m_body_sm.sht
+20260706213800:SwgClient:reportLog:[PortalCullProbe] cell=foyer2 portals 3->4 visCells 4->5 camDelta=0.0577 fwdDot=0.99998 rej=bf:5 ct:0 tt:0 rect:0 fr:0 ph:0 tested:9 dbUpd:1 dbRem:0 dbAdd:0 pos=3457.55 8.65 -4835.70 fwd=-0.727 -0.423 0.540
+20260706213800:SwgClient:reportLog:[PortalCullProbe] cell=cantina (CHANGED) portals 4->3 visCells 5->4 camDelta=0.2553 fwdDot=0.99967 rej=bf:3 ct:0 tt:1 rect:0 fr:0 ph:0 tested:7 dbUpd:0 dbRem:0 dbAdd:0 pos=3456.80 8.43 -4834.18 fwd=-0.806 -0.394 0.442
+20260706213802:SwgClient:reportLog:[PortalCullProbe] cell=cantina portals 3->2 visCells 4->3 camDelta=0.0568 fwdDot=0.99997 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:4 dbUpd:0 dbRem:0 dbAdd:0 pos=3441.99 7.09 -4825.21 fwd=0.582 -0.180 -0.793
+20260706213804:SwgClient:reportLog:[PortalCullProbe] cell=cantina portals 1->2 visCells 2->3 camDelta=0.0874 fwdDot=1.00000 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:4 dbUpd:0 dbRem:0 dbAdd:0 pos=3446.83 6.70 -4830.42 fwd=0.788 -0.126 -0.603
+20260706213805:SwgClient:reportLog:[PortalCullProbe] cell=foyer2 (CHANGED) portals 2->1 visCells 3->2 camDelta=0.1118 fwdDot=0.99998 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:3 dbUpd:0 dbRem:0 dbAdd:0 pos=3455.50 8.54 -4835.63 fwd=0.187 -0.323 -0.928
+20260706213807:SwgClient:reportLog:[PortalCullProbe] cell=foyer1 (CHANGED) portals 1->0 visCells 2->1 camDelta=0.1298 fwdDot=0.99998 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:1 dbUpd:0 dbRem:0 dbAdd:0 pos=3457.31 8.48 -4843.91 fwd=0.874 -0.252 -0.414
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=foyer1 neighbor=world passageAllowed=1
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOORHIT-WAKE doorCell=world neighbor=foyer1 passageAllowed=1
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73BEB0 OPENED cell=foyer1 neighbor=world dpvs=yes camPos=3460.41 8.74 -4842.41
+20260706213807:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73EB10 OPENED cell=world neighbor=foyer1 dpvs=yes camPos=3460.41 8.74 -4842.41
+20260706213808:SwgClient:reportLog:VOLZERO sound/music_figrin_dan_song_1.snd tmpl=1.000 fade=1.000 atten=0.124 user=1.000 dist=36.3 cutoff=40.0 pos=1
+20260706213808:SwgClient:reportLog:[PortalCullProbe] cell=world (CHANGED) portals 1->0 visCells 2->1 camDelta=0.1474 fwdDot=1.00000 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:1 dbUpd:0 dbRem:0 dbAdd:0 pos=3466.70 7.68 -4850.34 fwd=0.577 -0.289 -0.764
+20260706213808:SwgClient:reportLog:[PortalCullProbe] cell=world portals 3->1 visCells 4->2 camDelta=0.0158 fwdDot=1.00000 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:2 dbUpd:0 dbRem:0 dbAdd:0 pos=3467.25 7.90 -4850.79 fwd=0.532 -0.303 -0.791
+20260706213809:SwgClient:reportLog:[PortalCullProbe] cell=world portals 1->0 visCells 2->1 camDelta=0.0832 fwdDot=1.00000 rej=bf:0 ct:0 tt:0 rect:1 fr:0 ph:0 tested:1 dbUpd:0 dbRem:0 dbAdd:0 pos=3467.88 8.01 -4851.66 fwd=0.521 -0.309 -0.796
+20260706213809:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73BEB0 CLOSED cell=foyer1 neighbor=world dpvs=yes camPos=3467.93 8.01 -4851.73
+20260706213809:SwgClient:reportLog:[PortalCullProbe] DOOR portal=0000014EED73EB10 CLOSED cell=world neighbor=foyer1 dpvs=yes camPos=3467.93 8.01 -4851.73
+20260706213809:SwgClient:reportLog:[PortalCullProbe] cell=world portals 0->1 visCells 1->2 camDelta=0.0288 fwdDot=0.99999 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:2 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.10 7.96 -4851.81 fwd=0.510 -0.303 -0.805
+20260706213809:SwgClient:reportLog:[PortalCullProbe] cell=world portals 1->2 visCells 2->3 camDelta=0.0164 fwdDot=1.00000 rej=bf:2 ct:0 tt:0 rect:0 fr:0 ph:0 tested:4 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.10 7.95 -4851.80 fwd=0.508 -0.302 -0.806
+20260706213809:SwgClient:reportLog:[PortalCullProbe] cell=world portals 2->1 visCells 3->2 camDelta=0.0681 fwdDot=0.99996 rej=bf:1 ct:0 tt:0 rect:0 fr:0 ph:0 tested:2 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.17 7.96 -4851.75 fwd=0.499 -0.303 -0.812
+20260706213809:SwgClient:reportLog:[PortalCullProbe] cell=world portals 1->0 visCells 2->1 camDelta=0.0538 fwdDot=0.99997 rej=bf:0 ct:0 tt:0 rect:0 fr:0 ph:0 tested:0 dbUpd:0 dbRem:0 dbAdd:0 pos=3468.22 7.96 -4851.72 fwd=0.492 -0.303 -0.816
