@@ -149,6 +149,7 @@
 #include "UnicodeUtils.h"
 
 #include <cstdio>
+#include <dbghelp.h>   // stall watchdog stack sampler (StackWalk64 types; system dll loaded at runtime)
 
 //-----------------------------------------------------------------
 
@@ -1093,6 +1094,57 @@ namespace StallWatchdogNamespace
 	typedef BOOL (WINAPI *MiniDumpWriteDumpFunction)(HANDLE process, DWORD processId, HANDLE file, int dumpType, void *exceptionParam, void *userStreamParam, void *callbackParam);
 	MiniDumpWriteDumpFunction s_miniDumpWriteDump;
 
+	// ------------------------------------------------------------------
+	// CONSULT-68 audio-safe stack sampler ([ClientGame] stallWatchdogStackSamples,
+	// default 100 samples per stall, 0=off). The 07-08 dump-freeze closure set
+	// stallWatchdogMaxDumps=0 because MiniDumpWriteDump suspends EVERY thread
+	// (including the Miles mixer) 0.2-1.3s per dump = the zone-in audio dips; that
+	// left the stall telemetry with durations but no attribution. This samples the
+	// MAIN thread only: suspend it (it is already stalled), snapshot its context +
+	// raw stack bytes (microseconds; nothing but syscalls while suspended -- no
+	// lock-taking API), resume, then walk + symbolize the SNAPSHOT here on the
+	// watchdog thread via the system dbghelp (PDB-driven StackWalk64, so it is
+	// FPO-correct on x86 too). Re-samples every watchdog tick while the same frame
+	// stays stalled, so a long stall becomes a time-weighted profile; consecutive
+	// identical samples are run-length compressed in the log.
+
+	int      s_maxStackSamples;
+	HANDLE   s_mainThread;
+	int      s_stackSamplesTaken;      // this stall
+	bool     s_stackSamplerBroken;
+	bool     s_stackSamplerReady;
+
+	typedef DWORD   (WINAPI *SymSetOptionsFunction)(DWORD options);
+	typedef BOOL    (WINAPI *SymInitializeFunction)(HANDLE process, PCSTR searchPath, BOOL invadeProcess);
+	typedef BOOL    (WINAPI *StackWalk64Function)(DWORD machineType, HANDLE process, HANDLE thread, LPSTACKFRAME64 stackFrame, PVOID context, PREAD_PROCESS_MEMORY_ROUTINE64 readMemory, PFUNCTION_TABLE_ACCESS_ROUTINE64 functionTableAccess, PGET_MODULE_BASE_ROUTINE64 getModuleBase, PTRANSLATE_ADDRESS_ROUTINE64 translateAddress);
+	typedef PVOID   (WINAPI *SymFunctionTableAccess64Function)(HANDLE process, DWORD64 addrBase);
+	typedef DWORD64 (WINAPI *SymGetModuleBase64Function)(HANDLE process, DWORD64 address);
+	typedef BOOL    (WINAPI *SymGetSymFromAddr64Function)(HANDLE process, DWORD64 address, PDWORD64 displacement, PIMAGEHLP_SYMBOL64 symbol);
+	typedef BOOL    (WINAPI *SymGetLineFromAddr64Function)(HANDLE process, DWORD64 address, PDWORD displacement, PIMAGEHLP_LINE64 line);
+
+	SymSetOptionsFunction            s_symSetOptions;
+	SymInitializeFunction            s_symInitialize;
+	StackWalk64Function              s_stackWalk64;
+	SymFunctionTableAccess64Function s_symFunctionTableAccess64;
+	SymGetModuleBase64Function       s_symGetModuleBase64;
+	SymGetSymFromAddr64Function      s_symGetSymFromAddr64;
+	SymGetLineFromAddr64Function     s_symGetLineFromAddr64;
+
+	// static so the suspend-window memcpy target and the CONTEXT (16-byte alignment
+	// requirement on x64) never live on the watchdog thread's stack
+	unsigned char s_stackSnapshot[256 * 1024];
+	DWORD64       s_stackSnapshotBase;
+	SIZE_T        s_stackSnapshotSize;
+	CONTEXT       s_sampleContext;
+
+	// run-length compression of identical consecutive samples
+	enum { cms_maxSampleFrames = 16 };
+	uintptr_t s_lastSamplePcs[cms_maxSampleFrames];
+	int       s_lastSampleFrameCount;
+	int       s_repeatedSamples;
+	long      s_repeatedFrameIndex;
+	double    s_repeatedLastElapsedMs;
+
 	void stallLog(char const *format, ...)
 	{
 		if (!s_stallLog)
@@ -1106,6 +1158,224 @@ namespace StallWatchdogNamespace
 		va_end(va);
 		fprintf(s_stallLog, "\n");
 		fflush(s_stallLog);
+	}
+
+	void flushRepeatedSamples()
+	{
+		if (s_repeatedSamples > 0)
+		{
+			stallLog("loop %ld stack x%d more identical (through %.0f ms)", s_repeatedFrameIndex, s_repeatedSamples, s_repeatedLastElapsedMs);
+			s_repeatedSamples = 0;
+		}
+		s_lastSampleFrameCount = 0;
+	}
+
+	bool installStackSampler()
+	{
+		if (s_stackSamplerReady)
+			return true;
+		if (s_stackSamplerBroken || !s_mainThread)
+			return false;
+
+		// the SYSTEM dbghelp.dll instance (same choice as the dump path above -- keeps
+		// DebugHelp's dbghelp_6.3.17.0.dll crash-handler session untouched)
+		HMODULE const dbghelp = LoadLibrary("dbghelp.dll");
+		if (dbghelp)
+		{
+			s_symSetOptions            = reinterpret_cast<SymSetOptionsFunction>(GetProcAddress(dbghelp, "SymSetOptions"));
+			s_symInitialize            = reinterpret_cast<SymInitializeFunction>(GetProcAddress(dbghelp, "SymInitialize"));
+			s_stackWalk64              = reinterpret_cast<StackWalk64Function>(GetProcAddress(dbghelp, "StackWalk64"));
+			s_symFunctionTableAccess64 = reinterpret_cast<SymFunctionTableAccess64Function>(GetProcAddress(dbghelp, "SymFunctionTableAccess64"));
+			s_symGetModuleBase64       = reinterpret_cast<SymGetModuleBase64Function>(GetProcAddress(dbghelp, "SymGetModuleBase64"));
+			s_symGetSymFromAddr64      = reinterpret_cast<SymGetSymFromAddr64Function>(GetProcAddress(dbghelp, "SymGetSymFromAddr64"));
+			s_symGetLineFromAddr64     = reinterpret_cast<SymGetLineFromAddr64Function>(GetProcAddress(dbghelp, "SymGetLineFromAddr64"));
+		}
+		if (!s_symSetOptions || !s_symInitialize || !s_stackWalk64 || !s_symFunctionTableAccess64 || !s_symGetModuleBase64 || !s_symGetSymFromAddr64 || !s_symGetLineFromAddr64)
+		{
+			stallLog("stack sampler unavailable (dbghelp exports missing) -- sampling disabled");
+			s_stackSamplerBroken = true;
+			return false;
+		}
+
+		s_symSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES | SYMOPT_FAIL_CRITICAL_ERRORS);
+
+		// PDBs live next to the binaries; this is a separate dbghelp session from
+		// DebugHelp's, with its own independent module/symbol state
+		char searchPath[MAX_PATH * 2];
+		DWORD const length = GetModuleFileName(NULL, searchPath, sizeof(searchPath));
+		char * const slash = (length > 0) ? strrchr(searchPath, '\\') : NULL;
+		if (slash)
+			*slash = '\0';
+		if (!s_symInitialize(GetCurrentProcess(), slash ? searchPath : NULL, TRUE))
+		{
+			stallLog("stack sampler unavailable (SymInitialize failed %lu) -- sampling disabled", GetLastError());
+			s_stackSamplerBroken = true;
+			return false;
+		}
+
+		s_stackSamplerReady = true;
+		return true;
+	}
+
+	BOOL CALLBACK stackSampleReadMemory(HANDLE, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD numberOfBytesRead)
+	{
+		// serve stack reads from the suspended-moment snapshot; anything else (module
+		// code, unwind tables) reads the live process -- modules do not move
+		if (baseAddress >= s_stackSnapshotBase && baseAddress - s_stackSnapshotBase + size <= s_stackSnapshotSize)
+		{
+			memcpy(buffer, s_stackSnapshot + static_cast<SIZE_T>(baseAddress - s_stackSnapshotBase), size);
+			*numberOfBytesRead = size;
+			return TRUE;
+		}
+		SIZE_T bytesRead = 0;
+		if (!ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<LPCVOID>(static_cast<uintptr_t>(baseAddress)), buffer, size, &bytesRead))
+			return FALSE;
+		*numberOfBytesRead = static_cast<DWORD>(bytesRead);
+		return TRUE;
+	}
+
+	void formatStackFrame(uintptr_t pc, char *out, int outSize)
+	{
+		char symbolBuffer[sizeof(IMAGEHLP_SYMBOL64) + 160];
+		memset(symbolBuffer, 0, sizeof(symbolBuffer));
+		IMAGEHLP_SYMBOL64 * const symbol = reinterpret_cast<IMAGEHLP_SYMBOL64 *>(symbolBuffer);
+		symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
+		symbol->MaxNameLength = 160;
+		DWORD64 displacement64 = 0;
+		if (s_symGetSymFromAddr64(GetCurrentProcess(), pc, &displacement64, symbol))
+		{
+			IMAGEHLP_LINE64 line;
+			memset(&line, 0, sizeof(line));
+			line.SizeOfStruct = sizeof(line);
+			DWORD displacement = 0;
+			if (s_symGetLineFromAddr64(GetCurrentProcess(), pc, &displacement, &line) && line.FileName)
+			{
+				char const * const fileSlash = strrchr(line.FileName, '\\');
+				snprintf(out, static_cast<size_t>(outSize), "%s@%s:%lu", symbol->Name, fileSlash ? fileSlash + 1 : line.FileName, line.LineNumber);
+			}
+			else
+				snprintf(out, static_cast<size_t>(outSize), "%s+0x%llx", symbol->Name, static_cast<unsigned long long>(displacement64));
+			return;
+		}
+
+		// no symbol: module+rva, symbolizable offline
+		MEMORY_BASIC_INFORMATION mbi;
+		char moduleName[MAX_PATH];
+		if (VirtualQuery(reinterpret_cast<void const *>(pc), &mbi, sizeof(mbi)) != 0 && mbi.AllocationBase && GetModuleFileNameA(static_cast<HMODULE>(mbi.AllocationBase), moduleName, sizeof(moduleName)) != 0)
+		{
+			char const * const moduleSlash = strrchr(moduleName, '\\');
+			snprintf(out, static_cast<size_t>(outSize), "%s+0x%llx", moduleSlash ? moduleSlash + 1 : moduleName, static_cast<unsigned long long>(pc - reinterpret_cast<uintptr_t>(mbi.AllocationBase)));
+		}
+		else
+			snprintf(out, static_cast<size_t>(outSize), "0x%llx", static_cast<unsigned long long>(pc));
+	}
+
+	void takeStackSample(long frameIndex, int sampleNumber, double elapsedMs)
+	{
+		if (!installStackSampler())
+			return;
+
+		// ---- suspend window: syscalls + memcpy ONLY (no CRT, heap, or dbghelp --
+		// the suspended main thread could hold any of those locks) ----
+		if (SuspendThread(s_mainThread) == static_cast<DWORD>(-1))
+			return;
+		memset(&s_sampleContext, 0, sizeof(s_sampleContext));
+		s_sampleContext.ContextFlags = CONTEXT_FULL;
+		bool const haveContext = GetThreadContext(s_mainThread, &s_sampleContext) != FALSE;
+		s_stackSnapshotSize = 0;
+		if (haveContext)
+		{
+#if defined(_M_X64)
+			DWORD64 const stackPointer = s_sampleContext.Rsp;
+#else
+			DWORD64 const stackPointer = s_sampleContext.Esp;
+#endif
+			s_stackSnapshotBase = stackPointer;
+			// copy committed stack upward from the stack pointer (the callers live above it)
+			while (s_stackSnapshotSize < sizeof(s_stackSnapshot))
+			{
+				void const * const address = reinterpret_cast<void const *>(static_cast<uintptr_t>(stackPointer + s_stackSnapshotSize));
+				MEMORY_BASIC_INFORMATION mbi;
+				if (VirtualQuery(address, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT || (mbi.Protect & PAGE_GUARD) != 0 || (mbi.Protect & (PAGE_READWRITE | PAGE_READONLY | PAGE_EXECUTE_READWRITE)) == 0)
+					break;
+				SIZE_T copySize = static_cast<SIZE_T>(static_cast<char const *>(mbi.BaseAddress) + mbi.RegionSize - static_cast<char const *>(address));
+				if (copySize > sizeof(s_stackSnapshot) - s_stackSnapshotSize)
+					copySize = sizeof(s_stackSnapshot) - s_stackSnapshotSize;
+				memcpy(s_stackSnapshot + s_stackSnapshotSize, address, copySize);
+				s_stackSnapshotSize += copySize;
+			}
+		}
+		ResumeThread(s_mainThread);
+		// ---- main thread is live again; walk + symbolize the snapshot at leisure ----
+
+		if (!haveContext || s_stackSnapshotSize == 0)
+		{
+			stallLog("loop %ld stack sample %d failed (context %d, stack %u bytes)", frameIndex, sampleNumber, haveContext ? 1 : 0, static_cast<unsigned>(s_stackSnapshotSize));
+			return;
+		}
+
+		STACKFRAME64 stackFrame;
+		memset(&stackFrame, 0, sizeof(stackFrame));
+		stackFrame.AddrPC.Mode    = AddrModeFlat;
+		stackFrame.AddrStack.Mode = AddrModeFlat;
+		stackFrame.AddrFrame.Mode = AddrModeFlat;
+#if defined(_M_X64)
+		stackFrame.AddrPC.Offset    = s_sampleContext.Rip;
+		stackFrame.AddrStack.Offset = s_sampleContext.Rsp;
+		stackFrame.AddrFrame.Offset = s_sampleContext.Rbp;
+		DWORD const machineType = IMAGE_FILE_MACHINE_AMD64;
+#else
+		stackFrame.AddrPC.Offset    = s_sampleContext.Eip;
+		stackFrame.AddrStack.Offset = s_sampleContext.Esp;
+		stackFrame.AddrFrame.Offset = s_sampleContext.Ebp;
+		DWORD const machineType = IMAGE_FILE_MACHINE_I386;
+#endif
+
+		uintptr_t pcs[cms_maxSampleFrames];
+		int frameCount = 0;
+		while (frameCount < cms_maxSampleFrames)
+		{
+			if (!s_stackWalk64(machineType, GetCurrentProcess(), s_mainThread, &stackFrame, &s_sampleContext, stackSampleReadMemory, s_symFunctionTableAccess64, s_symGetModuleBase64, NULL))
+				break;
+			if (stackFrame.AddrPC.Offset == 0)
+				break;
+			pcs[frameCount++] = static_cast<uintptr_t>(stackFrame.AddrPC.Offset);
+		}
+		if (frameCount == 0)
+		{
+			stallLog("loop %ld stack sample %d: walk produced no frames", frameIndex, sampleNumber);
+			return;
+		}
+
+		// identical to the previous sample: run-length compress
+		if (frameCount == s_lastSampleFrameCount && memcmp(pcs, s_lastSamplePcs, static_cast<size_t>(frameCount) * sizeof(uintptr_t)) == 0)
+		{
+			++s_repeatedSamples;
+			s_repeatedFrameIndex = frameIndex;
+			s_repeatedLastElapsedMs = elapsedMs;
+			return;
+		}
+		flushRepeatedSamples();
+		memcpy(s_lastSamplePcs, pcs, static_cast<size_t>(frameCount) * sizeof(uintptr_t));
+		s_lastSampleFrameCount = frameCount;
+
+		char line[1600];
+		int used = snprintf(line, sizeof(line), "loop %ld stack @%.0f ms:", frameIndex, elapsedMs);
+		if (used < 0 || used >= static_cast<int>(sizeof(line)))
+			return;
+		for (int i = 0; i < frameCount; ++i)
+		{
+			char frameText[352];
+			formatStackFrame(pcs[i], frameText, sizeof(frameText));
+			int const wrote = snprintf(line + used, sizeof(line) - static_cast<size_t>(used), "%s%s", (i == 0) ? " " : " < ", frameText);
+			if (wrote < 0 || wrote >= static_cast<int>(sizeof(line)) - used)
+			{
+				line[sizeof(line) - 1] = '\0';
+				break;
+			}
+			used += wrote;
+		}
+		stallLog("%s", line);
 	}
 
 	void writeStallDump(long frameIndex, int sample, double elapsedMs)
@@ -1156,6 +1426,7 @@ namespace StallWatchdogNamespace
 			// the heartbeat moved on: the stalled frame's true duration is the next frame's start minus its own
 			if (pendingIndex != 0 && frameIndex != pendingIndex)
 			{
+				flushRepeatedSamples();
 				stallLog("loop %ld total stall %.0f ms (incl. dump-write time)", pendingIndex, 1000.0 * static_cast<double>(frameStart - stalledStart) / static_cast<double>(s_qpcFrequency));
 				pendingIndex = 0;
 			}
@@ -1173,6 +1444,7 @@ namespace StallWatchdogNamespace
 			{
 				sampledIndex = frameIndex;
 				samplesTaken = 0;
+				s_stackSamplesTaken = 0;
 				stalledStart = frameStart;
 				pendingIndex = frameIndex;
 				if (!focused)
@@ -1184,6 +1456,12 @@ namespace StallWatchdogNamespace
 			}
 			else if (samplesTaken == 1 && focused && s_dumpsWritten < s_maxDumps && elapsedMs > 5.0 * static_cast<double>(s_thresholdMs))
 				writeStallDump(frameIndex, ++samplesTaken, elapsedMs);
+
+			// CONSULT-68: audio-safe attribution -- sample the main thread's stack every
+			// tick while the stall persists (suspends only the already-stalled main
+			// thread, for microseconds)
+			if (focused && s_maxStackSamples > 0 && s_stackSamplesTaken < s_maxStackSamples)
+				takeStackSample(frameIndex, ++s_stackSamplesTaken, elapsedMs);
 		}
 	}
 
@@ -1198,6 +1476,11 @@ namespace StallWatchdogNamespace
 			if (s_thresholdMs > 0)
 			{
 				s_maxDumps = ConfigFile::getKeyInt("ClientGame", "stallWatchdogMaxDumps", 6);
+				s_maxStackSamples = ConfigFile::getKeyInt("ClientGame", "stallWatchdogStackSamples", 100);
+				// real handle to the main thread for the stack sampler (this init runs on main;
+				// created before the watchdog thread so it never observes a null handle)
+				if (s_maxStackSamples > 0 && !DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &s_mainThread, 0, FALSE, DUPLICATE_SAME_ACCESS))
+					s_mainThread = NULL;
 				LARGE_INTEGER qpcFrequency;
 				QueryPerformanceFrequency(&qpcFrequency);
 				s_qpcFrequency = qpcFrequency.QuadPart;
@@ -1210,7 +1493,7 @@ namespace StallWatchdogNamespace
 					SetThreadPriority(thread, THREAD_PRIORITY_ABOVE_NORMAL);
 					CloseHandle(thread);
 					s_enabled = true;
-					stallLog("stall watchdog armed: threshold %d ms, budget %d dumps", s_thresholdMs, s_maxDumps);
+					stallLog("stall watchdog armed: threshold %d ms, budget %d dumps, stack samples %d/stall%s", s_thresholdMs, s_maxDumps, s_maxStackSamples, (s_maxStackSamples > 0 && !s_mainThread) ? " (main-thread handle FAILED -- sampling off)" : "");
 				}
 			}
 		}
