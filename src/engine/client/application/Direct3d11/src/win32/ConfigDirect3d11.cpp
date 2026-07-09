@@ -29,6 +29,7 @@ namespace ConfigDirect3d11Namespace
 	bool         ms_preventDriverInternalThreading;
 	bool         ms_censusLog;
 	bool         ms_constantBufferRing;
+	bool         ms_shaderCachePreload;
 }
 using namespace ConfigDirect3d11Namespace;
 
@@ -80,6 +81,13 @@ void ConfigDirect3d11::install()
 	// ON; also requires the D3D11.1 caps probed at install. false = kill switch
 	// back to the legacy per-slot Map(WRITE_DISCARD) path.
 	KEY_BOOL(constantBufferRing, true);
+
+	// CONSULT-68 shader-cache RAM preload (Direct3d11_ShaderCache). The stall
+	// sampler convicted per-hit fopen/fread of .cso files in the draw path
+	// (charselect first-draw 1.2s, repeated 100-160ms zone-in stalls). Default
+	// ON: a background thread slurps the cache dir at install; tryLoad becomes
+	// a memory lookup. false = kill switch back to per-hit disk reads.
+	KEY_BOOL(shaderCachePreload, true);
 }
 
 // ----------------------------------------------------------------------
@@ -96,5 +104,6 @@ int          ConfigDirect3d11::getPreferredAdapterIndex()             { return m
 bool         ConfigDirect3d11::getPreventDriverInternalThreading()    { return ms_preventDriverInternalThreading; }
 bool         ConfigDirect3d11::getCensusLog()                         { return ms_censusLog; }
 bool         ConfigDirect3d11::getConstantBufferRing()                { return ms_constantBufferRing; }
+bool         ConfigDirect3d11::getShaderCachePreload()                { return ms_shaderCachePreload; }
 
 // ======================================================================

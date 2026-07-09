@@ -20,13 +20,19 @@
 #include "FirstDirect3d11.h"
 #include "Direct3d11_ShaderCache.h"
 
+#include "ConfigDirect3d11.h"
 #include "sharedDebug/DebugFlags.h"
 #include "sharedFoundation/Os.h"
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <filesystem>
@@ -41,6 +47,22 @@ namespace Direct3d11_ShaderCacheNamespace
 	int         ms_misses    = 0;
 	int         ms_stores    = 0;
 	int         ms_storeFailures = 0;
+
+	// CONSULT-68 RAM preload ([Direct3d11] shaderCachePreload, default true).
+	// The stall stack sampler convicted the per-hit fopen/fread below as a
+	// first-draw stall class (charselect avatar 1.2s single fread; repeated
+	// 100-160ms zone-in stalls on cold cache files). The cache dir is small
+	// (~2-25MB), so a background thread slurps every .cso into ms_blobs at
+	// install and tryLoad becomes a memory lookup. Until the preload finishes,
+	// a map miss falls back to the per-hit disk read; after it finishes, a map
+	// miss is authoritative (no disk I/O at all in the draw path).
+	std::mutex        ms_blobMutex;
+	std::unordered_map<uint64_t, std::vector<unsigned char> > ms_blobs;
+	std::atomic<bool> ms_preloadDone(false);
+	std::thread       ms_preloadThread;
+	bool              ms_preloadEnabled = false;
+	int               ms_preloadedFiles = 0;   // written by the preload thread before ms_preloadDone
+	int               ms_ramHits = 0;
 
 	// FNV-1a 64-bit constants.
 	constexpr uint64_t kFnv1aOffset = 14695981039346656037ULL;
@@ -91,6 +113,70 @@ namespace Direct3d11_ShaderCacheNamespace
 		path += ".cso";
 		return path;
 	}
+
+	// Read one cache file into bytes. Same sanity gates as the per-hit path
+	// (empty / >64MB treated as unusable). Returns false on any failure.
+	bool readCacheFile(char const *path, std::vector<unsigned char> &outBytes)
+	{
+		FILE *f = std::fopen(path, "rb");
+		if (!f)
+			return false;
+		if (std::fseek(f, 0, SEEK_END) != 0)
+		{
+			std::fclose(f);
+			return false;
+		}
+		long const sizeLong = std::ftell(f);
+		if (sizeLong <= 0 || sizeLong > (64 * 1024 * 1024))
+		{
+			std::fclose(f);
+			return false;
+		}
+		std::fseek(f, 0, SEEK_SET);
+		outBytes.resize(static_cast<size_t>(sizeLong));
+		size_t const got = std::fread(outBytes.data(), 1, outBytes.size(), f);
+		std::fclose(f);
+		return got == outBytes.size();
+	}
+
+	// CONSULT-68 preload thread: slurp every <16-hex>.cso in the cache dir
+	// into ms_blobs. Runs once, concurrently with early rendering; tryLoad
+	// falls back to per-hit disk reads until ms_preloadDone.
+	void preloadProc()
+	{
+		int loaded = 0;
+		std::error_code ec;
+		for (std::filesystem::directory_iterator it(ms_cacheDir, ec), end; !ec && it != end; it.increment(ec))
+		{
+			std::filesystem::directory_entry const &entry = *it;
+			std::error_code fileEc;
+			if (!entry.is_regular_file(fileEc) || fileEc)
+				continue;
+			if (entry.path().extension() != ".cso")
+				continue;
+			std::string const stem = entry.path().stem().string();
+			if (stem.size() != 16)
+				continue;
+			char *endPtr = NULL;
+			uint64_t const hash = std::strtoull(stem.c_str(), &endPtr, 16);
+			if (!endPtr || *endPtr != '\0')
+				continue;
+
+			std::vector<unsigned char> bytes;
+			if (!readCacheFile(entry.path().string().c_str(), bytes))
+				continue;
+
+			{
+				std::lock_guard<std::mutex> lock(ms_blobMutex);
+				ms_blobs.emplace(hash, std::move(bytes));
+			}
+			++loaded;
+		}
+
+		ms_preloadedFiles = loaded;
+		ms_preloadDone.store(true, std::memory_order_release);
+		REPORT_LOG_PRINT(true, ("Direct3d11_ShaderCache: preload complete (%d cached shaders in RAM)\n", loaded));
+	}
 }
 using namespace Direct3d11_ShaderCacheNamespace;
 
@@ -123,6 +209,11 @@ void Direct3d11_ShaderCache::install(char const *cacheDir)
 	{
 		DEBUG_REPORT_LOG_PRINT(true,
 			("Direct3d11_ShaderCache: install at '%s'\n", ms_cacheDir.c_str()));
+
+		// CONSULT-68: slurp the cache into RAM off-thread (see namespace note).
+		ms_preloadEnabled = ConfigDirect3d11::getShaderCachePreload();
+		if (ms_preloadEnabled)
+			ms_preloadThread = std::thread(preloadProc);
 	}
 }
 
@@ -130,12 +221,21 @@ void Direct3d11_ShaderCache::install(char const *cacheDir)
 
 void Direct3d11_ShaderCache::remove()
 {
+	if (ms_preloadThread.joinable())
+		ms_preloadThread.join();
+
 	DEBUG_REPORT_LOG_PRINT(true,
-		("Direct3d11_ShaderCache: remove -- hits=%d misses=%d stores=%d storeFailures=%d\n",
-		ms_hits, ms_misses, ms_stores, ms_storeFailures));
+		("Direct3d11_ShaderCache: remove -- hits=%d (%d from RAM) misses=%d stores=%d storeFailures=%d preloaded=%d\n",
+		ms_hits, ms_ramHits, ms_misses, ms_stores, ms_storeFailures, ms_preloadedFiles));
 
 	ms_cacheDir.clear();
 	ms_installed = false;
+	ms_preloadEnabled = false;
+	ms_preloadDone.store(false);
+	{
+		std::lock_guard<std::mutex> lock(ms_blobMutex);
+		ms_blobs.clear();
+	}
 	// Cache files on disk are intentionally NOT deleted (D-03 -- cache
 	// survives across launches).
 }
@@ -177,6 +277,37 @@ bool Direct3d11_ShaderCache::tryLoad(uint64_t sourceHash, Microsoft::WRL::ComPtr
 	{
 		++ms_misses;
 		return false;
+	}
+
+	// CONSULT-68: serve from the RAM preload. After the preload completes a
+	// map miss is authoritative (the draw path never touches the disk); while
+	// it is still running, fall through to the per-hit disk read.
+	if (ms_preloadEnabled)
+	{
+		{
+			std::lock_guard<std::mutex> lock(ms_blobMutex);
+			std::unordered_map<uint64_t, std::vector<unsigned char> >::const_iterator const it = ms_blobs.find(sourceHash);
+			if (it != ms_blobs.end())
+			{
+				ID3DBlob *blob = NULL;
+				HRESULT const hr = D3DCreateBlob(it->second.size(), &blob);
+				if (SUCCEEDED(hr) && blob)
+				{
+					std::memcpy(blob->GetBufferPointer(), it->second.data(), it->second.size());
+					outBlob.Attach(blob);
+					++ms_hits;
+					++ms_ramHits;
+					return true;
+				}
+				if (blob)
+					blob->Release();
+			}
+		}
+		if (ms_preloadDone.load(std::memory_order_acquire))
+		{
+			++ms_misses;
+			return false;
+		}
 	}
 
 	std::string const path = buildCachePath(sourceHash);
@@ -235,6 +366,15 @@ void Direct3d11_ShaderCache::store(uint64_t sourceHash, ID3DBlob *blob)
 {
 	if (!ms_installed || ms_cacheDir.empty() || !blob)
 		return;
+
+	// CONSULT-68: keep the RAM map coherent (a freshly-compiled variant should
+	// hit RAM if re-queried this session, even if the disk write fails).
+	if (ms_preloadEnabled)
+	{
+		unsigned char const * const bytes = static_cast<unsigned char const *>(blob->GetBufferPointer());
+		std::lock_guard<std::mutex> lock(ms_blobMutex);
+		ms_blobs[sourceHash].assign(bytes, bytes + blob->GetBufferSize());
+	}
 
 	std::string const path = buildCachePath(sourceHash);
 
