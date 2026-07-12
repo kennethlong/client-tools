@@ -20,6 +20,7 @@
 #include "clientObject/InteriorEnvironmentBlock.h"
 #include "clientTerrain/ClientProceduralTerrainAppearance.h"
 #include "clientTerrain/EnvironmentBlock.h"
+#include "clientUserInterface/CuiManager.h"
 #include "sharedDebug/InstallTimer.h"
 #include "sharedFile/Iff.h"
 #include "sharedFoundation/PersistentCrcString.h"
@@ -513,6 +514,17 @@ void GameMusicManager::update(float const elapsedTime)
 
 		if (ms_event != E_none || !(ms_currentMusicSoundId.isValid () && Audio::isSoundPlaying (ms_currentMusicSoundId)))
 		{
+			//-- scene-change music handoff (2026-07-12): while the UI/title music is
+			//   still audible (including its stopMusic fade-out window), defer starting
+			//   the next track -- selection re-runs next frame with no state consumed
+			//   (first-played lists append below, ms_event clears below). This preserves
+			//   the fade-completes-THEN-new-track sequencing the old blocking 1s pump in
+			//   SwgCuiManager's scene-change listener enforced; the pump itself is gone
+			//   (it was a ~1.4s main-thread mega-stall per zone-in). Inert in normal
+			//   play -- the UI music is only audible around scene changes.
+			if (CuiManager::isMusicPlaying ())
+				return;
+
 			const char* playMusicSoundTemplateName = 0;
 
 			switch (ms_event)

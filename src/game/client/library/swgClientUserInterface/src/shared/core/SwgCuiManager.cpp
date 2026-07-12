@@ -336,33 +336,50 @@ namespace SwgCuiManagerNamespace
 					ClientTextManager::loadUserSettings();
 					MatchMakingManager::loadUserSettings();
 					
-					PerformanceTimer performanceTimer;
-					performanceTimer.start();
-					float waitTimer = 0.0f;
-					
 					CuiManager::stopMusic                 (1.0f);
 					SwgCuiAvatarCreationHelper::stopMusic (1.0f, false);
-					
-					//-- only use this artificial loop when switching scenes, but not hud types
+
+					//-- scene-change music fade reframe (2026-07-12): the fade-out started
+					//   above used to be pumped to COMPLETION here by a blocking 1s
+					//   Audio::alter/Sleep loop -- one ~1.4s main-thread mega-stall per
+					//   zone-in (both renderers; the sampler's biggest remaining frame).
+					//   That loop guarded against the load path starving Audio::alter for
+					//   seconds, which the CONSULT-59/60/68 budgeted load work has since
+					//   fixed: the fade now rides the main loop's per-frame Audio::alter
+					//   (Game.cpp runGameLoopOnce) through the loading screen. Clock's
+					//   minFrameRate elapsed-time clamp (cfg 10 -> 100ms max step) bounds
+					//   any single fade step across the remaining GroundScene-ctor frame --
+					//   the same anti-snap protection the loop's own 50ms clamp provided
+					//   (VOLSTEP 0.329->0.750 lesson, 2026-07-04). The loading screen also
+					//   appears ~1s sooner. Old blocking behavior:
+					//   [ClientUserInterface] blockingSceneChangeMusicFade=true.
 
 					if (!s_handlingHudTypeChange)
 					{
-						while (waitTimer < 1.0f)
+						static bool const s_blockingSceneChangeMusicFade = ConfigFile::getKeyBool("ClientUserInterface", "blockingSceneChangeMusicFade", false);
+						if (s_blockingSceneChangeMusicFade)
 						{
-							performanceTimer.stop();
-							float const deltaTime = performanceTimer.getElapsedTime();
+							PerformanceTimer performanceTimer;
 							performanceTimer.start();
+							float waitTimer = 0.0f;
 
-							// Clamp the step fed to Audio::alter: this loop runs inside the
-							// zone-in stall window, so an iteration can measure a huge dt
-							// (watchdog dump writes, GroundScene work) and one oversized
-							// alter() snaps sound volumes audibly mid-fade (VOLSTEP
-							// 0.329->0.750 on the fading title music, 2026-07-04). Mirrors
-							// the main loop's minFrameRate elapsed-time clamp.
-							float const clampedDeltaTime = deltaTime < 0.05f ? deltaTime : 0.05f;
-							waitTimer += clampedDeltaTime;
-							Audio::alter(clampedDeltaTime, NULL);
-							Sleep(5);
+							while (waitTimer < 1.0f)
+							{
+								performanceTimer.stop();
+								float const deltaTime = performanceTimer.getElapsedTime();
+								performanceTimer.start();
+
+								// Clamp the step fed to Audio::alter: this loop runs inside the
+								// zone-in stall window, so an iteration can measure a huge dt
+								// (watchdog dump writes, GroundScene work) and one oversized
+								// alter() snaps sound volumes audibly mid-fade (VOLSTEP
+								// 0.329->0.750 on the fading title music, 2026-07-04). Mirrors
+								// the main loop's minFrameRate elapsed-time clamp.
+								float const clampedDeltaTime = deltaTime < 0.05f ? deltaTime : 0.05f;
+								waitTimer += clampedDeltaTime;
+								Audio::alter(clampedDeltaTime, NULL);
+								Sleep(5);
+							}
 						}
 					}
 					else if(shouldToggleMousePointer())

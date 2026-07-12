@@ -1106,6 +1106,17 @@ void CuiManager::stopMusic (float fadeout)
 	Audio::stopSound (s_musicId, fadeout);
 }
 
+//----------------------------------------------------------------------
+
+bool CuiManager::isMusicPlaying ()
+{
+	// True while the UI/title music is audible, INCLUDING the stopMusic fade-out
+	// window. GameMusicManager defers starting the next scene's track on this,
+	// preserving the fade-then-start sequencing the old blocking scene-change
+	// pump provided (SwgCuiManager.cpp scene-change reframe, 2026-07-12).
+	return ms_installed && Audio::isSoundPlaying (s_musicId);
+}
+
 //-----------------------------------------------------------------
 
 UICanvas * CuiManager::getUICanvas ()

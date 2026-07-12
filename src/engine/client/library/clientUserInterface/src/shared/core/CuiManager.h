@@ -96,7 +96,8 @@ public:
 
 	static void                         restartMusic            (bool onlyIfNotPlaying = false);
 	static void                         stopMusic               (float fadeout);
-	
+	static bool                         isMusicPlaying          ();
+
 	static CuiIoWin &                   getIoWin                ();
 	static bool                         getLocalizedString      (const std::string & name, Unicode::String & dest);
 	static const Unicode::String        getLocalizedString      (const std::string & name);
