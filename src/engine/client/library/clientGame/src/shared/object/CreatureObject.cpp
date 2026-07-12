@@ -6947,4 +6947,30 @@ void * engine_creatureSetTargetRealEntry()
 	return (m.delta != 0) ? 0 : m.pfn;
 }
 
+// ----------------------------------------------------------------------
+// game::getPlayerLookAtTargetId shim (2026-07-09 lookAtTarget-accessor request, v16).
+//
+// Returns the PLAYER's lookAt/selection-target NetworkId VALUE (full 64 bits,
+// cluster-id bits included) -- the same m_lookAtTarget slot the advertised
+// creatureObject::setTarget row (setLookAtTarget, above) writes; NOT the NGE
+// intended/combat target (getIntendedTarget is a distinct member). 0 = no
+// player / no target (NetworkId::cms_invalid is NetworkId(0)).
+//
+// WHY an extern "C" primitive shim (the sysmsg rev-2 ABI RULE): only primitives
+// and pointers cross the advertised boundary on CALLED endpoints.
+// CreatureObject::getLookAtTarget() is INLINE [CreatureObject.h:882] (no ODR
+// address to advertise) and returns const CachedNetworkId& -- CachedNetworkId
+// embeds a mutable Watcher<Object> the consumer does not model; reading through
+// that reference is the sysmsg layout trap in the read direction. The shim
+// collapses it to an __int64 in EDX:EAX -- nothing but a primitive crosses.
+// Player-scoped -> no `this`, no MI real-entry subtlety. Lives HERE (not
+// engine_advertise.cpp) because the exe TU cannot include CreatureObject.h
+// (see the accessor note above). Game-thread-only, on-demand (not per-frame).
+// ----------------------------------------------------------------------
+extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void)
+{
+	CreatureObject const * const player = Game::getPlayerCreature();
+	return player ? player->getLookAtTarget().getValue() : 0;
+}
+
 #endif // !defined(_WIN64)

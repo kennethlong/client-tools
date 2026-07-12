@@ -39,4 +39,15 @@
 // Defined in CreatureObject.cpp.
 void * engine_creatureSetTargetRealEntry();
 
+// game::getPlayerLookAtTargetId (2026-07-09 request, v16): CALLED extern "C" shim
+// returning the player's lookAt/selection-target NetworkId VALUE (full 64 bits;
+// 0 = no player / no target). The read twin of the setTarget row above -- same
+// m_lookAtTarget slot, NOT the NGE intended/combat target. Primitive-only
+// boundary (the sysmsg rev-2 ABI RULE): getLookAtTarget() is INLINE and returns
+// const CachedNetworkId& (embeds a Watcher the consumer does not model), so the
+// shim collapses it to __int64 in EDX:EAX. Defined in CreatureObject.cpp
+// (the exe TU cannot include CreatureObject.h -- see the header comment above).
+// Consumer typedef: int64_t(__cdecl*)()
+extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void);
+
 #endif
