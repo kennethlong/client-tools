@@ -14,9 +14,12 @@
 #include "clientGraphics/Texture.h"
 #include "clientGraphics/TextureFormatInfo.h"
 #include "sharedDebug/DataLint.h"
+#include "sharedDebug/PerformanceTimer.h"
+#include "sharedDebug/Report.h"
 #include "sharedFile/AsynchronousLoader.h"
 #include "sharedFile/Iff.h"
 #include "sharedFile/TreeFile.h"
+#include "sharedFoundation/ConfigFile.h"
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedFoundation/LessPointerComparator.h"
@@ -296,7 +299,23 @@ Texture const * TextureList::create(CrcString const & filename, bool const creat
 			}
 
 			// need to create
+			// [texture-prewarm diag 2026-07-13] cold-create probe: the Texture ctor
+			// does the whole cold load (TreeFile::open + read/inflate + GPU create)
+			// synchronously on this thread. One line per named-texture creation with
+			// wall time, for the zone-in pre-warm working-set tally.
+			// [ClientGraphics] logTextureCreates (default off, Release-visible).
+			static bool const s_logTextureCreates = ConfigFile::getKeyBool("ClientGraphics", "logTextureCreates", false);
+			PerformanceTimer createTimer;
+			if (s_logTextureCreates)
+				createTimer.start();
+
 			Texture *const newTexture = new Texture(filename);
+
+			if (s_logTextureCreates)
+			{
+				createTimer.stop();
+				REPORT_LOG(true, ("TEXCREATE %8.3fms %s\n", createTimer.getElapsedTime() * 1000.f, filename.getString()));
+			}
 
 			// add to list
 			NamedContainer::value_type newValue(&(newTexture->getCrcString()), newTexture);

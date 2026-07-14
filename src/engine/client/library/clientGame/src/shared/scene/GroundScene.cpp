@@ -1833,7 +1833,18 @@ bool GroundScene::isFinishedLoading() const
 	ClientProceduralTerrainAppearance * clientProceduralTerrainAppearance = dynamic_cast <ClientProceduralTerrainAppearance *> (TerrainObject::getInstance ()->getAppearance ());
 	if (clientProceduralTerrainAppearance)
 	{
-		terrainGenerationStabilized = clientProceduralTerrainAppearance->terrainGenerationStabilized();
+		//-- texture pre-warm (2026-07-13): ALSO hold the loading screen until the
+		//   CONSULT-59 terrain warm-up queue (surface/flora shader fetches -- each
+		//   pulls its textures, ~390ms of spec maps on Tatooine) is fully drained.
+		//   terrainGenerationStabilized alone is trivially true BEFORE the warm-up
+		//   completes (chunk requests are only submitted after preloadShaders), so
+		//   a fast loading screen dropped with the warm-up tail still pending and
+		//   its 40ms alter slices + texture creates spilled into the world-entry
+		//   frames (the TEXCREATE-probe-convicted entry stall class). updateLoading
+		//   keeps pumping updateTerrainWarmup while this holds, so the gate
+		//   converges; each pump slice stays budgeted (terrainPreloadBudgetMs).
+		terrainGenerationStabilized = clientProceduralTerrainAppearance->terrainGenerationStabilized()
+			&& clientProceduralTerrainAppearance->isTerrainWarmupComplete();
 	}
 	// In single-player (offline editor / advertised client) there is no server-driven PlayerObject
 	// (ghost) -- the avatar is a bare client CreatureObject. Accept single-player in lieu of the ghost
@@ -1870,7 +1881,11 @@ void GroundScene::updateCuiLoading()
 	ClientProceduralTerrainAppearance * clientProceduralTerrainAppearance = dynamic_cast <ClientProceduralTerrainAppearance *> (TerrainObject::getInstance ()->getAppearance ());
 	if (clientProceduralTerrainAppearance)
 	{
-		terrainGenerationStabilized = clientProceduralTerrainAppearance->terrainGenerationStabilized();
+		//-- texture pre-warm (2026-07-13): mirror the isFinishedLoading gate --
+		//   the terrain display flag/string covers the warm-up drain too (it IS
+		//   terrain work), so the bar reads honestly while the screen holds.
+		terrainGenerationStabilized = clientProceduralTerrainAppearance->terrainGenerationStabilized()
+			&& clientProceduralTerrainAppearance->isTerrainWarmupComplete();
 	}
 	bool const playerReady = m_receivedSceneReady && (getPlayer() != 0) && (getPlayer()->isInWorld());
 
