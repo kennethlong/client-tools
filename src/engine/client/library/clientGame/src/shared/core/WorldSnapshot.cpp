@@ -156,6 +156,12 @@ namespace WorldSnapshotNamespace
 	int  ms_sphereNodeIndex = 0;
 	std::set<int64> ms_buildoutObjects;
 
+	//-- Goal B Wave 1 (hookpoints v17): snapshot generation for the editor read
+	//   shims (utinni_wsGetGeneration, end of file). Bumps on unload (which every
+	//   load routes through) so the consumer invalidates cached rows + undo
+	//   targets across snapshot generations. A pure counter -- never gates logic.
+	int ms_wsEditGeneration = 0;
+
 	void loadOneBuildoutArea (const BuildoutArea& buildoutArea);
 	void finishLoadNow ();
 
@@ -403,6 +409,9 @@ void WorldSnapshot::remove ()
 
 void WorldSnapshot::unload ()
 {
+	//-- Goal B Wave 1: new snapshot generation (editor cache/undo invalidation)
+	++ms_wsEditGeneration;
+
 	//-- CONSULT-60: cancel any in-flight phased parse (quit during loading /
 	//   startScene->startScene). Partial reader state is torn down by the
 	//   existing body below; nodes not yet in the sphere tree have a null
@@ -849,7 +858,13 @@ void WorldSnapshot::loadStep ()
 
 		case PP_done:
 			{
-				ms_buildoutObjects.clear ();
+				//-- Goal B Wave 1 (hookpoints v17): ms_buildoutObjects is RETAINED
+				//   for the session (this used to clear it). It is the provenance
+				//   filter for the editor read shims (authored-only enumeration,
+				//   ANSWERS 5.1a) and the Wave-3 authored-only save; load()/unload()
+				//   still clear it on every scene change, and nothing else reads it
+				//   after this phase (verified 2026-07-15: only the PP_sphereTree
+				//   isInSet gate above, already complete here).
 
 				//-- setup to preload all the object templates
 				ms_numberOfObjectTemplates = ms_reader.getNumberOfObjectTemplateNames ();
@@ -1596,5 +1611,231 @@ void WorldSnapshot::addEventObjects(const std::string & eventName)
 		}
 	}
 }
+
+//===================================================================
+// Goal B Wave 1 (hookpoints v16 -> v17; rev-3 freeze 2026-07-15): the Utinni
+// snapshot-editor READ shims. extern "C" __cdecl, advertised by
+// engine_advertise.cpp (constant &fn rows; declared in
+// engine_worldSnapshot_forward.h). They live HERE because ms_reader and its
+// bookkeeping are file-scope in WorldSnapshotNamespace -- the
+// sysmsg/lookAtTarget shim pattern at TU scale.
+//
+// FROZEN contracts (the rev-3 Wave-1 row table -- do not change semantics
+// without a version wave):
+//  - enumeration is live, AUTHORED-ONLY: tombstones (removeNode's setDeleted)
+//    and buildout-provenance rows (the retained ms_buildoutObjects set) are
+//    never enumerated, and id-keyed reads answer MISS for them.
+//  - node reads force-finish the CONSULT-60 incremental parse (the same
+//    finishLoadNow discipline as the mutators above).
+//  - wsGetGeneration is a PURE counter read: no parse force (pollable during
+//    a loading screen without re-synchronizing the phased load).
+//  - game-thread-only (consumer marshals); graceful degradation (a missing
+//    row leaves the affordance dark, never a crash).
+//
+// 32-bit only: the hookpoint table is Win32-only (engine_advertise.cpp), so
+// the shims compile away on x64 -- x64 behavior untouched by construction.
+//===================================================================
+
+#if !defined(_WIN64)
+
+#include <cstddef>  // offsetof (frozen-ABI asserts)
+#include <cstring>  // memcpy/memset (POD-out fill)
+#include "../../../../../../../game/client/application/SwgClient/src/shared/engine_hookpoints.h" // UtinniWsNodeInfo (the shared contract POD; header pulls in no engine headers by design)
+
+//-- pin the rev-3 frozen ABI: any drift here is a contract break, not a build tweak
+static_assert (sizeof (UtinniWsNodeInfo) == 80,                          "UtinniWsNodeInfo: rev-3 froze sizeof == 80");
+static_assert (offsetof (UtinniWsNodeInfo, size)            ==  0,      "UtinniWsNodeInfo: frozen layout drift (size)");
+static_assert (offsetof (UtinniWsNodeInfo, flags)           ==  4,      "UtinniWsNodeInfo: frozen layout drift (flags)");
+static_assert (offsetof (UtinniWsNodeInfo, containedById)   ==  8,      "UtinniWsNodeInfo: frozen layout drift (containedById)");
+static_assert (offsetof (UtinniWsNodeInfo, cellIndex)       == 16,      "UtinniWsNodeInfo: frozen layout drift (cellIndex)");
+static_assert (offsetof (UtinniWsNodeInfo, portalLayoutCrc) == 20,      "UtinniWsNodeInfo: frozen layout drift (portalLayoutCrc)");
+static_assert (offsetof (UtinniWsNodeInfo, radius)          == 24,      "UtinniWsNodeInfo: frozen layout drift (radius)");
+static_assert (offsetof (UtinniWsNodeInfo, transform)       == 28,      "UtinniWsNodeInfo: frozen layout drift (transform)");
+static_assert (offsetof (UtinniWsNodeInfo, childCount)      == 76,      "UtinniWsNodeInfo: frozen layout drift (childCount)");
+
+namespace WorldSnapshotNamespace
+{
+	//-- the authored-only enumeration filter: live (non-tombstone) and NOT a
+	//   buildout-provenance row. Buildout children only ever nest under buildout
+	//   parents, so the id-set test is exact at every tree level.
+	inline bool wsIsEnumerable (const WorldSnapshotReaderWriter::Node* const node)
+	{
+		return node
+			&& !node->isDeleted ()
+			&& ms_buildoutObjects.find (node->getNetworkIdInt ()) == ms_buildoutObjects.end ();
+	}
+
+	//-- id-keyed lookup under the frozen miss contract: parse force-finished
+	//   (mutator discipline), tombstones missed by find() itself (erased from
+	//   the map + id zeroed), buildout rows missed by provenance.
+	const WorldSnapshotReaderWriter::Node* wsFindAuthoredLive (const int64 networkIdInt)
+	{
+		if (ms_parsePending)
+			finishLoadNow ();
+
+		const WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+		if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+			return 0;
+
+		return node;
+	}
+
+	int wsEnumerableChildCount (const WorldSnapshotReaderWriter::Node* const node)
+	{
+		int count = 0;
+		for (int i = 0; i < node->getNumberOfNodes (); ++i)
+			if (wsIsEnumerable (node->getNode (i)))
+				++count;
+
+		return count;
+	}
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetNodeCount (void)
+{
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	int count = 0;
+	for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
+		if (wsIsEnumerable (ms_reader.getNode (i)))
+			++count;
+
+	return count;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" __int64 __cdecl utinni_wsGetTopNodeIdAt (int index)
+{
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	if (index < 0)
+		return 0;
+
+	for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
+	{
+		const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
+		if (!wsIsEnumerable (node))
+			continue;
+
+		if (index-- == 0)
+			return node->getNetworkIdInt ();
+	}
+
+	return 0;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetChildCount (__int64 networkIdInt)
+{
+	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
+	if (!node)
+		return 0;
+
+	return wsEnumerableChildCount (node);
+}
+
+//-------------------------------------------------------------------
+
+extern "C" __int64 __cdecl utinni_wsGetChildIdAt (__int64 networkIdInt, int index)
+{
+	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
+	if (!node || index < 0)
+		return 0;
+
+	for (int i = 0; i < node->getNumberOfNodes (); ++i)
+	{
+		const WorldSnapshotReaderWriter::Node* const child = node->getNode (i);
+		if (!wsIsEnumerable (child))
+			continue;
+
+		if (index-- == 0)
+			return child->getNetworkIdInt ();
+	}
+
+	return 0;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetNodeInfo (__int64 networkIdInt, UtinniWsNodeInfo* out)
+{
+	//-- size-first protocol: the caller declares its compiled-against size FIRST
+	if (!out || out->size < sizeof (unsigned int))
+		return 0;
+
+	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
+	if (!node)
+		return 0;
+
+	UtinniWsNodeInfo info;
+	memset (&info, 0, sizeof (info));
+	info.size            = sizeof (UtinniWsNodeInfo);
+	info.flags           = 0;   // bit0 deleted: never set here (tombstones answer miss); bit1 buildout: RESERVED, 0 in v1
+	info.containedById   = node->getContainedByNetworkIdInt ();
+	info.cellIndex       = node->getCellIndex ();
+	info.portalLayoutCrc = node->getPortalLayoutCrc ();
+	info.radius          = node->getRadius ();
+
+	//-- row-major 3x4, position = column 3 (frozen rev-3 layout). Composed from
+	//   the Transform column accessors -- layout-defined, independent of
+	//   Transform's internal representation.
+	{
+		const Transform& t = node->getTransform_p ();
+		const Vector i = t.getLocalFrameI_p ();
+		const Vector j = t.getLocalFrameJ_p ();
+		const Vector k = t.getLocalFrameK_p ();
+		const Vector p = t.getPosition_p ();
+		info.transform [ 0] = i.x;  info.transform [ 1] = j.x;  info.transform [ 2] = k.x;  info.transform [ 3] = p.x;
+		info.transform [ 4] = i.y;  info.transform [ 5] = j.y;  info.transform [ 6] = k.y;  info.transform [ 7] = p.y;
+		info.transform [ 8] = i.z;  info.transform [ 9] = j.z;  info.transform [10] = k.z;  info.transform [11] = p.z;
+	}
+
+	info.childCount = wsEnumerableChildCount (node);
+
+	//-- write min(callerSize, providerSize); never touch caller space beyond
+	//   what this provider understands
+	const unsigned int copyBytes = out->size < sizeof (info) ? out->size : static_cast<unsigned int> (sizeof (info));
+	memcpy (out, &info, copyBytes);
+
+	return 1;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetNodeTemplateName (__int64 networkIdInt, char* buf, int cap)
+{
+	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
+	if (!node)
+		return 0;
+
+	const char* const name = ms_reader.getObjectTemplateName (node->getObjectTemplateNameIndex ());
+	if (!name)
+		return 0;
+
+	//-- copy-out: min(cap, needed) bytes, NUL-terminated when it fits; returns
+	//   the needed length INCLUDING the NUL (buf==0/cap<=0 is a pure size query)
+	const int needed = static_cast<int> (strlen (name)) + 1;
+	if (buf && cap > 0)
+		memcpy (buf, name, static_cast<size_t> (cap < needed ? cap : needed));
+
+	return needed;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetGeneration (void)
+{
+	//-- PURE counter read by contract: no finishLoadNow (pollable during a
+	//   loading screen without forcing the phased parse synchronous)
+	return ms_wsEditGeneration;
+}
+
+#endif // !defined(_WIN64)
 
 //===================================================================

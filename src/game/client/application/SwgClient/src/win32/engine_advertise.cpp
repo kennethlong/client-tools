@@ -67,6 +67,7 @@
 #include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND: CuiSystemMessageManager::sendFakeSystemMessage, reached via the utinni_sendFakeSystemMessage utf8 shim (v15). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half, NOT the reverted receive half (see the A-2.1 OMIT note).
 #include "UnicodeUtils.h"                                // sysmsg SEND rev-2 (v14->v15): Unicode::narrowToWide for the utf8->Unicode::String widen inside the shim (widen on OUR side -- our CRT, our string layout)
 #include "engine_creatureObject_forward.h"               // engine_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
+#include "engine_worldSnapshot_forward.h"                // Goal B Wave 1 (v17): utinni_ws* snapshot-editor READ shims -- DEFINED in clientGame WorldSnapshot.cpp (the ms_reader file-local-singleton TU)
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
 #include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
@@ -696,6 +697,24 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- game lookAt-target READ (v15->v16, 2026-07-09 request) --
 	{ "game::getPlayerLookAtTargetId", (void *)&utinni_getPlayerLookAtTargetId }, // v16 NAME ADD: extern "C" __int64 __cdecl(void) shim DEFINED IN CreatureObject.cpp (exe TU cannot include CreatureObject.h -- the setTarget accessor precedent; declared in engine_creatureObject_forward.h). Returns the PLAYER's lookAt/selection-target NetworkId VALUE (full 64 bits; 0 = no player/no target) -- the READ twin of creatureObject::setTarget (same m_lookAtTarget slot; NOT getIntendedTarget). Shim per the rev-2 ABI RULE: getLookAtTarget() is INLINE [CreatureObject.h:882] + returns const CachedNetworkId& (embeds a Watcher the consumer does not model) -> primitive in EDX:EAX instead. CALLED, game-thread-only, on-demand (target-change callback + panel refresh, not per-frame). Consumer resolves the id via the v12 network::getObjectById row; a null resolve (unloaded/out-of-range) is a normal staleness outcome. constant &fn.
 	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load. SEND (above) is unaffected -- it is an advertisable static behind a POD-only shim.)
+	// -- worldSnapshot editor READ wave (v16->v17, Goal B Wave 1; rev-3 freeze 2026-07-15) --
+	// Id-keyed read/browse of the CURRENT scene's live snapshot (the Utinni snapshot editor,
+	// the last SWGEmu-only editor). All 7 are extern "C" __cdecl shims DEFINED in clientGame
+	// WorldSnapshot.cpp (ms_reader + its bookkeeping are file-scope there; declared in
+	// engine_worldSnapshot_forward.h) -> constant &fn rows, image-valid at load (no dyn[]).
+	// FROZEN contracts (rev-3 §1): enumeration live + AUTHORED-ONLY (tombstones AND
+	// buildout-provenance rows never enumerate; id-keyed reads answer miss for them); node
+	// reads force-finish the CONSULT-60 incremental parse; wsGetGeneration is a PURE counter
+	// read (no parse force) bumping on load/unload ONLY; wsGetNodeInfo fills the FROZEN
+	// 80-byte UtinniWsNodeInfo (engine_hookpoints.h) under the size-first protocol.
+	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
+	{ "worldSnapshot::wsGetNodeCount",        (void *)&utinni_wsGetNodeCount },        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
+	{ "worldSnapshot::wsGetTopNodeIdAt",      (void *)&utinni_wsGetTopNodeIdAt },      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
+	{ "worldSnapshot::wsGetChildCount",       (void *)&utinni_wsGetChildCount },       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
+	{ "worldSnapshot::wsGetChildIdAt",        (void *)&utinni_wsGetChildIdAt },        // __int64 (__int64 id, int index) -- id of the index-th enumerable child; 0 = miss/out-of-range
+	{ "worldSnapshot::wsGetNodeInfo",         (void *)&utinni_wsGetNodeInfo },         // int (__int64 id, UtinniWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
+	{ "worldSnapshot::wsGetNodeTemplateName", (void *)&utinni_wsGetNodeTemplateName }, // int (__int64 id, char* buf, int cap) -- copy-out; returns needed length INCLUDING the NUL; 0 = miss
+	{ "worldSnapshot::wsGetGeneration",       (void *)&utinni_wsGetGeneration },       // int (void) -- bumps on load/unload ONLY (consumer cache/undo invalidation)
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
