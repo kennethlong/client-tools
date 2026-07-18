@@ -116,3 +116,32 @@ it, and if it's dead on advertised come back with the evidence.
 - The Wave-2 diagnostics + discriminator + self-test key all stay in-tree, default off.
 - This closes every open Goal B item on our side: 3 waves landed (v17/v18/v19), both riders, all
   four investigation rounds. Remaining traffic we expect: your Wave-3 smoke, then arc close-out.
+
+## 6. POST-PUBLICATION ADDENDUM (`25c8c8f35`, same day) — the self-test caught a shipped-in-§1 bug; two flagged amendments
+
+The §3 gate demand you wrote ("exercise a REAL save — the Wave-2 gate never exercised a real add")
+paid for itself on first flight: the `wsSelfTestSaveOnLoad` key returned **result=5 on every
+zone-in**. The finding-#5 tripwire premise was WRONG — and it was the TOC blind spot a second
+time: the per-area buildout tables for the regular planets DO exist (TOC-indexed into the patch
+tres, invisible to our per-tre scan that reported them absent), and SWGSource v2 tables carry
+**positive objids at scale** (88 and 1,076,941 observed live). A non-negative id in the buildout
+set is normal data; worse, such ids can genuinely collide with authored ids, and an id-keyed
+provenance filter would have dropped AUTHORED nodes from save on any collision.
+
+Fix (`25c8c8f35`, restaged): **provenance is now NODE-IDENTITY-keyed** — `loadOneBuildoutArea`
+records the top-level `Node*`s it inserts; every filter (Wave-1 enumeration/lookup, Wave-2
+remove/radius misses, the Wave-3 save filter) tests subtree-root identity instead of id. On an id
+collision the reader map keeps the authored node (parse inserts first), so identity stays exact
+where ids are ambiguous. Two consumer-visible amendments, flagged per protocol:
+
+1. **Save result code 5 (`buildout-set-integrity`) is RESERVED and never fires.** Keep it in your
+   message map (the enum is append-only stable); it simply won't occur.
+2. **Wave-2 frozen behavior amended:** `wsAddNodeAt` no longer refuses on buildout-SET membership
+   (frozen as a fail-closed condition when we all believed buildout ids couldn't be positive).
+   With positive buildout ids real, that refusal would break undo-replay of any removed authored
+   node whose id collides with an unloaded buildout row. Reader-presence remains the operative
+   collision guard; everything else in the frozen set stands.
+
+Enumeration semantics are UNCHANGED in effect (the same nodes enumerate; they're now excluded by
+identity instead of id) — but on buildout-carrying scenes your placements counts may shift
+slightly vs any consumer-side id-based mirror of the old filter; trust the shims.
