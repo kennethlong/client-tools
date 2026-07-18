@@ -1879,14 +1879,24 @@ namespace WorldSnapshotNamespace
 	}
 
 	//-- contiguous free-range first-fit (ANSWERS 5.2): seed = max positive
-	//   authored id + 1 raised by the consumer floor; every id in id..id+count
-	//   verified free against the reader map, the buildout-provenance set, AND
-	//   NetworkIdManager (a live server-streamed id in the band would refuse
-	//   the spawn with CEC_objectAlreadyExists and leave a half-added node --
-	//   the review-caught hole); fail-closed 0 when the band is exhausted.
+	//   IN-BAND authored id + 1 raised by the consumer floor; every id in
+	//   id..id+count verified free against the reader map, the buildout-
+	//   provenance set, AND NetworkIdManager (a live server-streamed id in the
+	//   band would refuse the spawn with CEC_objectAlreadyExists and leave a
+	//   half-added node); fail-closed 0 when the band is exhausted.
+	//
+	//   2026-07-18 hardening + discriminator (id-mint refusal, consumer paired
+	//   logs): (1) ids at/above the ceiling never contribute to the seed -- an
+	//   authored id past the band would otherwise drag the seed out of it and
+	//   refuse every add before one iteration; (2) the walk and the loop log
+	//   their state on ANY refusal, and the first collisions log which
+	//   predicate fired -- one click names the mechanism.
 	int64 wsAllocateIdRange (const int cellCount)
 	{
 		int64 seed = 1;
+		int64 maxOutOfBand = 0;
+		int   walkedNodes  = 0;
+		int   inSetSkips   = 0;
 		{
 			NodeList stack;
 			for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
@@ -1896,9 +1906,17 @@ namespace WorldSnapshotNamespace
 			{
 				const WorldSnapshotReaderWriter::Node* const node = stack.back ();
 				stack.pop_back ();
+				++walkedNodes;
 
 				const int64 id = node->getNetworkIdInt ();
-				if (id >= seed && ms_buildoutObjects.find (id) == ms_buildoutObjects.end ())
+				if (ms_buildoutObjects.find (id) != ms_buildoutObjects.end ())
+					++inSetSkips;
+				else if (id >= ms_wsIdCeiling)
+				{
+					if (id > maxOutOfBand)
+						maxOutOfBand = id;
+				}
+				else if (id >= seed)
 					seed = id + 1;
 
 				for (int i = 0; i < node->getNumberOfNodes (); ++i)
@@ -1909,14 +1927,30 @@ namespace WorldSnapshotNamespace
 		if (ms_wsIdFloor > seed)
 			seed = ms_wsIdFloor;
 
+		if (maxOutOfBand)
+			REPORT_LOG (true, ("[editor.ws] wsAllocateIdRange: authored ids at/above the ceiling exist (max=%I64d >= %I64d) -- excluded from seeding\n", maxOutOfBand, ms_wsIdCeiling));
+
+		//-- discriminator: remember the first few collisions + which predicate
+		const int cs_maxLoggedCollisions = 3;
+		int64 loggedCollisionId [cs_maxLoggedCollisions];
+		char  loggedCollisionWhy [cs_maxLoggedCollisions];
+		int   loggedCollisions = 0;
+		int64 totalCollisions = 0;
+
 		for (int64 id = seed; id + cellCount < ms_wsIdCeiling; )
 		{
 			int64 collided = 0;
+			char  why = 0;
 			for (int64 k = id; k <= id + cellCount; ++k)
 			{
-				if (   ms_reader.find (k)
-				    || ms_buildoutObjects.find (k) != ms_buildoutObjects.end ()
-				    || NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (k))) != 0)
+				if (ms_reader.find (k))
+					why = 'r';
+				else if (ms_buildoutObjects.find (k) != ms_buildoutObjects.end ())
+					why = 'b';
+				else if (NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (k))) != 0)
+					why = 'n';
+
+				if (why)
 				{
 					collided = k;
 					break;
@@ -1926,8 +1960,25 @@ namespace WorldSnapshotNamespace
 			if (!collided)
 				return id;
 
+			++totalCollisions;
+			if (loggedCollisions < cs_maxLoggedCollisions)
+			{
+				loggedCollisionId [loggedCollisions] = collided;
+				loggedCollisionWhy [loggedCollisions] = why;
+				++loggedCollisions;
+			}
+
 			id = collided + 1;
 		}
+
+		//-- refusal: dump the full discriminator state. seed >= ceiling with
+		//   zero collisions = the seed itself is out of band (walk problem);
+		//   millions of collisions = a predicate is false-positive at scale.
+		REPORT_LOG (true, ("[editor.ws] wsAllocateIdRange REFUSED: seed=%I64d cells=%d band=[%I64d..%I64d) walked=%d inSetSkips=%d maxOutOfBand=%I64d collisions=%I64d",
+			seed, cellCount, ms_wsIdFloor, ms_wsIdCeiling, walkedNodes, inSetSkips, maxOutOfBand, totalCollisions));
+		for (int i = 0; i < loggedCollisions; ++i)
+			REPORT_LOG (true, (" first[%d]=%I64d(%c)", i, loggedCollisionId [i], loggedCollisionWhy [i]));
+		REPORT_LOG (true, ("\n"));
 
 		return 0;
 	}
