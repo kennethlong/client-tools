@@ -1836,6 +1836,416 @@ extern "C" int __cdecl utinni_wsGetGeneration (void)
 	return ms_wsEditGeneration;
 }
 
+//===================================================================
+// Goal B Wave 2 (hookpoints v17 -> v18; frozen 2026-07-18): LIVE-ONLY
+// mutation shims. Explicitly non-persistent -- nothing here touches disk;
+// persistence is Wave 3. Semantics per the accepted ANSWERS §5.2/5.3/5.5 +
+// the §4 Wave-2 deltas (occupancy-guarded remove, redesigned wsAddNodeAt
+// spawn, allocator NetworkIdManager check). Same TU / same guard / same
+// game-thread-only + graceful-degradation contracts as Wave 1 above.
+//===================================================================
+
+namespace WorldSnapshotNamespace
+{
+	//-- Wave-2 id-allocator band (utinni_wsConfigureIdAllocator). floor 0 =
+	//   derive the seed (max positive authored id + 1); the ceiling default is
+	//   the consumer's server-id convention (no engine constant exists -- the
+	//   ANSWERS 5.1c finding), always <= INT32_MAX (the on-disk id width).
+	int64 ms_wsIdFloor   = 0;
+	int64 ms_wsIdCeiling = 0x1000000;
+
+	//-- interactive-add default update radius: the god-client fallback value
+	//   (BuildoutAreaSupport). The consumer tunes per-node via wsSetNodeRadius.
+	const float cs_wsDefaultAddRadius = 512.f;
+
+	//-- row-major 3x4, position = column 3 (the frozen wsGetNodeInfo layout,
+	//   inverted): floats -> engine Transform via the column setters.
+	void wsTransformFromFloats (const float* const m, Transform& out)
+	{
+		out.setLocalFrameIJK_p (Vector (m[0], m[4], m[8]), Vector (m[1], m[5], m[9]), Vector (m[2], m[6], m[10]));
+		out.setPosition_p (Vector (m[3], m[7], m[11]));
+	}
+
+	//-- subtree walk, ROOT FIRST (the remove teardown deletes the root object
+	//   before looking at descendants -- the container cascade has already
+	//   despawned them by then)
+	void wsCollectSubtree (const WorldSnapshotReaderWriter::Node* const root, NodeList& nodes, std::vector<int64>& ids)
+	{
+		nodes.push_back (root);
+		ids.push_back (root->getNetworkIdInt ());
+
+		for (int i = 0; i < root->getNumberOfNodes (); ++i)
+			wsCollectSubtree (root->getNode (i), nodes, ids);
+	}
+
+	//-- contiguous free-range first-fit (ANSWERS 5.2): seed = max positive
+	//   authored id + 1 raised by the consumer floor; every id in id..id+count
+	//   verified free against the reader map, the buildout-provenance set, AND
+	//   NetworkIdManager (a live server-streamed id in the band would refuse
+	//   the spawn with CEC_objectAlreadyExists and leave a half-added node --
+	//   the review-caught hole); fail-closed 0 when the band is exhausted.
+	int64 wsAllocateIdRange (const int cellCount)
+	{
+		int64 seed = 1;
+		{
+			NodeList stack;
+			for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
+				stack.push_back (ms_reader.getNode (i));
+
+			while (!stack.empty ())
+			{
+				const WorldSnapshotReaderWriter::Node* const node = stack.back ();
+				stack.pop_back ();
+
+				const int64 id = node->getNetworkIdInt ();
+				if (id >= seed && ms_buildoutObjects.find (id) == ms_buildoutObjects.end ())
+					seed = id + 1;
+
+				for (int i = 0; i < node->getNumberOfNodes (); ++i)
+					stack.push_back (node->getNode (i));
+			}
+		}
+
+		if (ms_wsIdFloor > seed)
+			seed = ms_wsIdFloor;
+
+		for (int64 id = seed; id + cellCount < ms_wsIdCeiling; )
+		{
+			int64 collided = 0;
+			for (int64 k = id; k <= id + cellCount; ++k)
+			{
+				if (   ms_reader.find (k)
+				    || ms_buildoutObjects.find (k) != ms_buildoutObjects.end ()
+				    || NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (k))) != 0)
+				{
+					collided = k;
+					break;
+				}
+			}
+
+			if (!collided)
+				return id;
+
+			id = collided + 1;
+		}
+
+		return 0;
+	}
+}
+
+//-------------------------------------------------------------------
+
+extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilename, const float* transform12, __int64 containedById)
+{
+	if (!sharedTemplateFilename || !*sharedTemplateFilename || !transform12)
+		return 0;
+
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	Transform transform_p;
+	wsTransformFromFloats (transform12, transform_p);
+
+	//-- PRE-VALIDATE EVERYTHING before minting or mutating (frozen contract):
+	//   a failed add never leaves a half-added node.
+
+	//-- container: must be an authored live node with a spawned, in-world live
+	//   object ("spawns immediately" is only honorable against a live parent)
+	int cellIndex = 0;
+	if (containedById != 0)
+	{
+		const WorldSnapshotReaderWriter::Node* const containerNode = wsFindAuthoredLive (containedById);
+		if (!containerNode)
+			return 0;
+
+		Object* const containerObject = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (containedById)));
+		if (!containerObject || !containerObject->isInWorld ())
+			return 0;
+
+		//-- buildout v1 convention: a contained row carries its containing
+		//   cell's index (unused by non-cell creates; serialized by Wave 3)
+		cellIndex = containerNode->getCellIndex ();
+	}
+	else
+	{
+		//-- mirror createObject's corrupt-data guards (an add they would refuse
+		//   becomes a permanently unspawnable zombie node -- fail here instead)
+		const Vector position = transform_p.getPosition_p ();
+		if (position == Vector::zero || position.magnitudeSquared () < sqr (ms_closeToOriginDistance))
+			return 0;
+	}
+
+	//-- template must resolve; derive pobCrc + cellCount from it (the
+	//   god-client recipe: crc from the portal layout file, cell count = the
+	//   .pob root's second int32 minus the exterior cell)
+	uint32 portalLayoutCrc = 0;
+	int cellCount = 0;
+	{
+		const ObjectTemplate* const fetched = ObjectTemplateList::fetch (sharedTemplateFilename);
+		if (!fetched)
+			return 0;
+
+		const SharedObjectTemplate* const sharedTemplate = safe_cast<const SharedObjectTemplate*> (fetched);
+		const std::string& pobName = sharedTemplate->getPortalLayoutFilename ();
+		if (!pobName.empty ())
+		{
+			bool pobOk = PortalPropertyTemplate::extractPortalLayoutCrc (pobName.c_str (), portalLayoutCrc);
+
+			if (pobOk)
+			{
+				Iff iff;
+				if (iff.open (pobName.c_str (), true))
+				{
+					iff.enterForm ();
+					iff.enterForm ();
+					iff.enterChunk ();
+					IGNORE_RETURN (iff.read_int32 ());
+					cellCount = iff.read_int32 () - 1;
+					if (cellCount < 0)
+						cellCount = 0;
+				}
+				else
+					pobOk = false;
+			}
+
+			//-- a POB can never go into a container (the buildout loader FATALs
+			//   on exactly this shape -- "Tried to add a pob to a cell")
+			if (!pobOk || containedById != 0)
+			{
+				sharedTemplate->releaseReference ();
+				return 0;
+			}
+		}
+
+		sharedTemplate->releaseReference ();
+	}
+
+	//-- mint the contiguous range (reader + buildout set + NetworkIdManager + band)
+	const int64 networkIdInt = wsAllocateIdRange (cellCount);
+	if (!networkIdInt)
+		return 0;
+
+	//-- MUTATE: node + atomic POB cell expansion, then the FULL streamed-create
+	//   bookkeeping (sphere handle for top-level; createObject + addObjectToWorld
+	//   exactly like the update() streamed path -- the WorldSnapshot::addObject
+	//   gap this shim exists to close)
+	IGNORE_RETURN (ms_reader.addObject (networkIdInt, containedById, ConstCharCrcString (sharedTemplateFilename), cellIndex, transform_p, cs_wsDefaultAddRadius, portalLayoutCrc, std::string ()));
+	for (int i = 0; i < cellCount; ++i)
+		IGNORE_RETURN (ms_reader.addObject (networkIdInt + i + 1, networkIdInt, ConstCharCrcString ("object/cell/shared_cell.iff"), i + 1, Transform::identity, 0.f, 0));
+
+	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+	NOT_NULL (node);
+
+	if (containedById == 0)
+		node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+
+	CreateErrorCode result;
+	Object* const object = createObject (ms_reader, node, result);
+	if (!object)
+	{
+		//-- pre-validated, so exceptional (template createObject returned null):
+		//   roll back to nothing-live -- unhook the sphere handle and tombstone
+		//   the whole minted range (no live objects exist; the ids free again)
+		if (node->getSpatialSubdivisionHandle ())
+		{
+			ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
+			node->setSpatialSubdivisionHandle (0);
+		}
+
+		for (int i = cellCount; i >= 0; --i)
+			ms_reader.removeNode (networkIdInt + i);
+
+		return 0;
+	}
+
+	addObjectToWorld (object, node);
+
+	return networkIdInt;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 containedById, const char* templateFilename, int cellIndex, const float* transform12, float radius, unsigned int portalLayoutCrc)
+{
+	if (!templateFilename || !*templateFilename || !transform12 || radius < 0.f)
+		return 0;
+
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	//-- the frozen fail-closed set: id band (on-disk int32, positive), reader
+	//   collision, LIVE object holding the id (would refuse the spawn later),
+	//   buildout-provenance id, missing container (the engine FATAL, finding #2)
+	if (explicitId <= 0 || explicitId > static_cast<__int64> (std::numeric_limits<int>::max ()))
+		return 0;
+	if (ms_reader.find (explicitId))
+		return 0;
+	if (ms_buildoutObjects.find (explicitId) != ms_buildoutObjects.end ())
+		return 0;
+	if (NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (explicitId))) != 0)
+		return 0;
+	if (containedById != 0 && !ms_reader.find (containedById))
+		return 0;
+
+	Transform transform_p;
+	wsTransformFromFloats (transform12, transform_p);
+
+	IGNORE_RETURN (ms_reader.addObject (explicitId, containedById, ConstCharCrcString (templateFilename), cellIndex, transform_p, radius, portalLayoutCrc, std::string ()));
+
+	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (explicitId);
+	NOT_NULL (node);
+
+	if (containedById == 0)
+	{
+		//-- top-level replay: sphere handle + DIRTY the update-diff sentinels --
+		//   update() early-outs for a stationary player (the review-caught
+		//   starvation), so force the next pass to run the full diff. The spawn
+		//   itself stays streaming's job (a distant undo must not force-spawn;
+		//   the whole one-batch-replayed subtree is visible to the createObject
+		//   recursion when the pass fires).
+		node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+		ms_lastCellProperty = 0;
+		ms_lastPosition_w.set (0.f, -9999.f, 0.f);
+	}
+	else
+	{
+		//-- child under a spawned, in-world parent: immediate spawn -- NO engine
+		//   path would ever spawn it (children hold no sphere handles and the
+		//   cell-fill only fires on a cell's not-in-world transition, the
+		//   review-caught never-spawns case). Parent not spawned -> data-only;
+		//   the POB's own streaming create recurses all children present then.
+		Object* const containerObject = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (containedById)));
+		if (containerObject && containerObject->isInWorld ())
+		{
+			CreateErrorCode result;
+			Object* const object = createObject (ms_reader, node, result);
+			if (object)
+				addObjectToWorld (object, node);
+			//-- a spawn refusal (e.g. template no longer loadable) leaves the
+			//   DATA replay in place -- still a successful re-add
+		}
+	}
+
+	return 1;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
+{
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+	if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+		return 0;
+
+	//-- (1) capture the subtree FIRST (tombstoning zeroes node ids)
+	NodeList subtreeNodes;
+	std::vector<int64> subtreeIds;
+	wsCollectSubtree (node, subtreeNodes, subtreeIds);
+
+	//-- (2) OCCUPANCY GUARD (load-bearing, ANSWERS 5.5): Container::~Container
+	//   cascade-deletes every contained object -- deleting a POB with the player
+	//   (or any server-streamed object) inside would delete THEM. update()'s own
+	//   delete path refuses via the same recursive check; so do we.
+	for (size_t i = 0; i < subtreeIds.size (); ++i)
+	{
+		Object* const object = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (subtreeIds [i])));
+		if (object)
+		{
+			ClientObject* const clientObject = dynamic_cast<ClientObject*> (object);
+			if (!clientObject || !ContainerInterface::isClientCachedOnly (*clientObject))
+				return -1;   // "occupied" -- editor tells the user to step out first
+		}
+	}
+
+	//-- (3) sphere handle (root only -- children never hold handles)
+	if (node->getSpatialSubdivisionHandle ())
+	{
+		ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
+		node->setSpatialSubdivisionHandle (0);
+	}
+
+	//-- (4) recursive in-world unmark
+	node->removeFromWorld ();
+
+	//-- (5) live despawn, root first: deleting the root cascades through cells/
+	//   contents (the unload() shape); the loop then catches any straggler
+	for (size_t i = 0; i < subtreeIds.size (); ++i)
+	{
+		Object* const object = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (subtreeIds [i])));
+		if (object)
+		{
+			if (object->isInWorld ())
+				object->removeFromWorld ();
+
+			delete object;
+		}
+	}
+
+	//-- (6) ms_loadedList subtree sweep (children reach it via the cell-fill
+	//   path -- finding #4). Pending lists need no purge: update() rebuilds
+	//   them from the diff before every drain.
+	for (size_t i = 0; i < subtreeNodes.size (); ++i)
+	{
+		NodeList::iterator iter = std::find (ms_loadedList.begin (), ms_loadedList.end (), subtreeNodes [i]);
+		if (iter != ms_loadedList.end ())
+			IGNORE_RETURN (ms_loadedList.erase (iter));
+	}
+
+	//-- (7) tombstone every subtree id -- the map frees them all, keeping the
+	//   allocator's map-miss free-test exact
+	for (size_t i = 0; i < subtreeIds.size (); ++i)
+		ms_reader.removeNode (subtreeIds [i]);
+
+	return 1;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsSetNodeRadius (__int64 networkIdInt, float radius)
+{
+	if (radius < 0.f)
+		return 0;
+
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+	if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+		return 0;
+
+	node->setRadius (radius);
+
+	//-- radius changes the node's sphere extent -- re-seat it (the moveObject pattern)
+	if (node->getSpatialSubdivisionHandle ())
+		ms_sphereTree.move (node->getSpatialSubdivisionHandle ());
+
+	return 1;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsConfigureIdAllocator (__int64 floorId, __int64 ceilingId)
+{
+	const int64 newFloor   = floorId   != 0 ? floorId   : ms_wsIdFloor;
+	const int64 newCeiling = ceilingId != 0 ? ceilingId : ms_wsIdCeiling;
+
+	//-- band sanity: positive, int32-safe ceiling (the on-disk id width), floor
+	//   below ceiling. Rejection is VISIBLE (returns 0, nothing changed).
+	if (   newFloor < 0
+	    || newCeiling <= 0
+	    || newCeiling > static_cast<__int64> (std::numeric_limits<int>::max ())
+	    || (newFloor != 0 && newFloor >= newCeiling))
+		return 0;
+
+	ms_wsIdFloor   = newFloor;
+	ms_wsIdCeiling = newCeiling;
+
+	return 1;
+}
+
 #endif // !defined(_WIN64)
 
 //===================================================================

@@ -27,4 +27,11 @@ extern "C" int     __cdecl utinni_wsGetNodeInfo(__int64 networkIdInt, UtinniWsNo
 extern "C" int     __cdecl utinni_wsGetNodeTemplateName(__int64 networkIdInt, char* buf, int cap);
 extern "C" int     __cdecl utinni_wsGetGeneration(void);
 
+// -- Goal B Wave 2 (v18; frozen 2026-07-18): LIVE-ONLY mutation --------------
+extern "C" __int64 __cdecl utinni_wsAddObject(const char* sharedTemplateFilename, const float* transform12, __int64 containedById);
+extern "C" int     __cdecl utinni_wsAddNodeAt(__int64 explicitId, __int64 containedById, const char* templateFilename, int cellIndex, const float* transform12, float radius, unsigned int portalLayoutCrc);
+extern "C" int     __cdecl utinni_wsRemoveNode(__int64 networkIdInt);
+extern "C" int     __cdecl utinni_wsSetNodeRadius(__int64 networkIdInt, float radius);
+extern "C" int     __cdecl utinni_wsConfigureIdAllocator(__int64 floorId, __int64 ceilingId);
+
 #endif // INCLUDED_engine_worldSnapshot_forward_H

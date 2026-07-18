@@ -715,6 +715,16 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "worldSnapshot::wsGetNodeInfo",         (void *)&utinni_wsGetNodeInfo },         // int (__int64 id, UtinniWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
 	{ "worldSnapshot::wsGetNodeTemplateName", (void *)&utinni_wsGetNodeTemplateName }, // int (__int64 id, char* buf, int cap) -- copy-out; returns needed length INCLUDING the NUL; 0 = miss
 	{ "worldSnapshot::wsGetGeneration",       (void *)&utinni_wsGetGeneration },       // int (void) -- bumps on load/unload ONLY (consumer cache/undo invalidation)
+	// -- worldSnapshot editor MUTATION wave (v17->v18, Goal B Wave 2; frozen 2026-07-18) --
+	// LIVE-ONLY mutation, explicitly non-persistent (persistence = Wave 3). Shims in
+	// WorldSnapshot.cpp (same TU/discipline as Wave 1); constant &fn rows. Semantics per the
+	// accepted ANSWERS 5.2/5.3/5.5 + Wave-2 deltas -- see the .inc block + shim comments.
+	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
+	{ "worldSnapshot::wsAddObject",           (void *)&utinni_wsAddObject },           // __int64 (const char* tmpl, const float* transform12, __int64 containedById) -- pre-validates ALL before minting; id..id+cellCount + atomic POB cells; FULL streamed-create bookkeeping; spawns immediately; 0 = fail-closed nothing mutated
+	{ "worldSnapshot::wsAddNodeAt",           (void *)&utinni_wsAddNodeAt },           // int (__int64 explicitId, __int64 containedById, const char* tmpl, int cellIndex, const float* transform12, float radius, unsigned int pobCrc) -- undo-replay data re-add at the EXPLICIT id; top-level = sphere handle + diff-sentinel dirty; child under live parent = immediate spawn; 1 ok, 0 fail-closed
+	{ "worldSnapshot::wsRemoveNode",          (void *)&utinni_wsRemoveNode },          // int (__int64 id) -- 7-step subtree teardown, OCCUPANCY-GUARDED (isClientCachedOnly recursive; Container dtor cascade-deletes contents): 1 removed / 0 miss / -1 occupied
+	{ "worldSnapshot::wsSetNodeRadius",       (void *)&utinni_wsSetNodeRadius },       // int (__int64 id, float radius) -- 1 ok, 0 miss/tombstone; re-seats the sphere-tree extent (the moveObject pattern)
+	{ "worldSnapshot::wsConfigureIdAllocator",(void *)&utinni_wsConfigureIdAllocator },// int (__int64 floor, __int64 ceiling) -- one-time optional allocator band (0 = keep default per param; default ceiling 0x1000000 = consumer server-id convention); 1 accepted, 0 rejected VISIBLY
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
