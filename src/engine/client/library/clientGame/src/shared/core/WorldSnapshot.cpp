@@ -156,6 +156,15 @@ namespace WorldSnapshotNamespace
 	int  ms_sphereNodeIndex = 0;
 	std::set<int64> ms_buildoutObjects;
 
+	//-- Goal B Wave 3 (2026-07-18 self-test finding): buildout provenance by
+	//   NODE IDENTITY, not id. SWGSource v2 buildout tables (TOC-indexed for the
+	//   regular planets) legitimately carry POSITIVE objids, so an id can no
+	//   longer discriminate buildout from authored (and on an id collision the
+	//   id-keyed filter would drop the AUTHORED node from save). This set holds
+	//   the top-level reader nodes INSERTED by loadOneBuildoutArea -- exact by
+	//   construction; cleared with ms_buildoutObjects on load/unload.
+	std::set<const WorldSnapshotReaderWriter::Node*> ms_buildoutTopLevelNodes;
+
 	//-- Goal B Wave 1 (hookpoints v17): snapshot generation for the editor read
 	//   shims (utinni_wsGetGeneration, end of file). Bumps on unload (which every
 	//   load routes through) so the consumer invalidates cached rows + undo
@@ -440,6 +449,7 @@ void WorldSnapshot::unload ()
 	ms_buildoutAreaIndex = 0;
 	ms_sphereNodeIndex = 0;
 	ms_buildoutObjects.clear ();
+	ms_buildoutTopLevelNodes.clear ();
 
 	//-- clear out the preloaded object templates
 	{
@@ -552,6 +562,7 @@ void WorldSnapshot::load (char const *sceneName)
 	SharedBuildoutAreaManager::load(sceneName);
 
 	ms_buildoutObjects.clear ();
+	ms_buildoutTopLevelNodes.clear ();
 	ms_buildoutAreaIndex = 0;
 	ms_sphereNodeIndex = 0;
 	ms_parsePhase = ms_parseIff ? PP_wsNodes : PP_buildout;
@@ -754,7 +765,7 @@ void WorldSnapshotNamespace::loadOneBuildoutArea (const BuildoutArea& buildoutAr
 			
 					if ( !containerId || buildoutObjects.find( containerId ) != buildoutObjects.end() )
 					{
-						ms_reader.addObject(
+						const WorldSnapshotReaderWriter::Node* const buildoutNode = ms_reader.addObject(
 							objId,
 							containerId,
 							ObjectTemplateList::lookUp(sharedTemplateCrc),
@@ -763,6 +774,12 @@ void WorldSnapshotNamespace::loadOneBuildoutArea (const BuildoutArea& buildoutAr
 							radius,
 							portalLayoutCrc,
 							requiredEvent);
+
+						//-- Goal B: identity-keyed provenance for the editor
+						//   shims + save filter (positive v2 objids make the id
+						//   set ambiguous vs authored ids)
+						if (buildoutNode && containerId == 0)
+							IGNORE_RETURN(ms_buildoutTopLevelNodes.insert(buildoutNode));
 					}
 
 					buildoutObjects.insert( objId );
@@ -1681,26 +1698,39 @@ static_assert (offsetof (UtinniWsNodeInfo, childCount)      == 76,      "UtinniW
 
 namespace WorldSnapshotNamespace
 {
+	//-- IDENTITY-keyed buildout test (2026-07-18 self-test finding): walk to the
+	//   subtree root and test membership in the buildout top-level node set.
+	//   Ids can no longer discriminate -- SWGSource v2 buildout tables carry
+	//   positive objids that can collide with authored ids; on a collision the
+	//   reader map keeps the AUTHORED node (parse inserts first), so an
+	//   identity test stays exact where an id test would drop authored content.
+	bool wsIsBuildoutNode (const WorldSnapshotReaderWriter::Node* node)
+	{
+		while (node->getParent ())
+			node = node->getParent ();
+
+		return ms_buildoutTopLevelNodes.find (node) != ms_buildoutTopLevelNodes.end ();
+	}
+
 	//-- the authored-only enumeration filter: live (non-tombstone) and NOT a
-	//   buildout-provenance row. Buildout children only ever nest under buildout
-	//   parents, so the id-set test is exact at every tree level.
+	//   buildout-provenance node (identity-keyed).
 	inline bool wsIsEnumerable (const WorldSnapshotReaderWriter::Node* const node)
 	{
 		return node
 			&& !node->isDeleted ()
-			&& ms_buildoutObjects.find (node->getNetworkIdInt ()) == ms_buildoutObjects.end ();
+			&& !wsIsBuildoutNode (node);
 	}
 
 	//-- id-keyed lookup under the frozen miss contract: parse force-finished
 	//   (mutator discipline), tombstones missed by find() itself (erased from
-	//   the map + id zeroed), buildout rows missed by provenance.
+	//   the map + id zeroed), buildout nodes missed by identity provenance.
 	const WorldSnapshotReaderWriter::Node* wsFindAuthoredLive (const int64 networkIdInt)
 	{
 		if (ms_parsePending)
 			finishLoadNow ();
 
 		const WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
-		if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+		if (!node || wsIsBuildoutNode (node))
 			return 0;
 
 		return node;
@@ -2221,11 +2251,12 @@ extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 contained
 		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (id-present): id=%I64d already in the reader\n", explicitId));
 		return 0;
 	}
-	if (ms_buildoutObjects.find (explicitId) != ms_buildoutObjects.end ())
-	{
-		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (buildout-id): id=%I64d is a buildout-provenance id\n", explicitId));
-		return 0;
-	}
+	//-- v19 SEMANTIC REFINEMENT (flagged in the Wave-3 handback): the frozen
+	//   Wave-2 "id in the buildout set" refusal is RETIRED. Positive v2 buildout
+	//   objids are normal SWGSource data and can collide with genuine authored
+	//   ids -- refusing on set membership would break undo-replay of any removed
+	//   authored node whose id happens to collide. Presence in the READER (the
+	//   check above) is the operative collision guard.
 	if (NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (explicitId))) != 0)
 	{
 		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (live-object): id=%I64d held by a live object\n", explicitId));
@@ -2292,9 +2323,9 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 		finishLoadNow ();
 
 	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
-	if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+	if (!node || wsIsBuildoutNode (node))
 	{
-		WS_EDITOR_LOG (("[editor.ws] wsRemoveNode MISS: id=%I64d (%s)\n", networkIdInt, node ? "buildout-provenance id" : "no live node"));
+		WS_EDITOR_LOG (("[editor.ws] wsRemoveNode MISS: id=%I64d (%s)\n", networkIdInt, node ? "buildout-provenance node" : "no live node"));
 		return 0;
 	}
 
@@ -2420,7 +2451,7 @@ extern "C" int __cdecl utinni_wsSetNodeRadius (__int64 networkIdInt, float radiu
 		finishLoadNow ();
 
 	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
-	if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+	if (!node || wsIsBuildoutNode (node))
 		return 0;
 
 	node->setRadius (radius);
@@ -2485,13 +2516,17 @@ namespace WorldSnapshotNamespace
 		WSR_noLooseSearchPath   = 2,   // no loose SearchPath configured -- nowhere to write
 		WSR_destinationShadowed = 3,   // written, but a higher-priority archive still wins the name
 		WSR_idInt32Overflow     = 4,   // an authored id/containedById won't round-trip the on-disk int32
-		WSR_buildoutSetIntegrity= 5,   // a non-negative id in the retained buildout set (finding #5 tripwire)
+		WSR_buildoutSetIntegrity= 5,   // RESERVED (retired same-day, 2026-07-18 self-test): the id-based
+		                               // tripwire mis-fired on NORMAL SWGSource data -- positive v2
+		                               // buildout objids exist at scale (TOC-indexed per-area tables);
+		                               // provenance is IDENTITY-keyed now, so the ambiguity the tripwire
+		                               // guarded cannot occur. Code kept so the published enum is stable.
 		WSR_writeFailure        = 6    // Iff/Os write failed (disk/permissions)
 	};
 
-	bool wsSaveIncludeTopLevelNode (const int64 networkIdInt, void*)
+	bool wsSaveIncludeTopLevelNode (const WorldSnapshotReaderWriter::Node* const node, void*)
 	{
-		return ms_buildoutObjects.find (networkIdInt) == ms_buildoutObjects.end ();
+		return ms_buildoutTopLevelNodes.find (node) == ms_buildoutTopLevelNodes.end ();
 	}
 
 	//-- builds "<top loose SearchPath root>/snapshot/<scene>.ws"; empty = no path
@@ -2548,15 +2583,9 @@ extern "C" int __cdecl utinni_wsSaveSnapshot (void)
 		return WSR_noSnapshotLoaded;
 	}
 
-	//-- finding-#5 tripwire: a non-negative id in the buildout set is the one
-	//   configuration where the provenance filter could silently drop an
-	//   authored node -- fail closed, write nothing
-	for (std::set<int64>::const_iterator iter = ms_buildoutObjects.begin (); iter != ms_buildoutObjects.end (); ++iter)
-		if (*iter >= 0)
-		{
-			WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d buildout-set-integrity): non-negative buildout id %I64d\n", WSR_buildoutSetIntegrity, *iter));
-			return WSR_buildoutSetIntegrity;
-		}
+	//-- (the finding-#5 id tripwire lived here and was RETIRED same-day: the
+	//   2026-07-18 self-test proved positive buildout objids are NORMAL data --
+	//   provenance is identity-keyed now, WSR_buildoutSetIntegrity reserved)
 
 	//-- id-width fail-closed (ANSWERS 5.1c): every AUTHORED node (the set that
 	//   will serialize) must round-trip the on-disk int32
@@ -2565,7 +2594,7 @@ extern "C" int __cdecl utinni_wsSaveSnapshot (void)
 		for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
 		{
 			const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
-			if (node->isDeleted () || !wsSaveIncludeTopLevelNode (node->getNetworkIdInt (), 0))
+			if (node->isDeleted () || !wsSaveIncludeTopLevelNode (node, 0))
 				continue;
 			stack.push_back (node);
 		}

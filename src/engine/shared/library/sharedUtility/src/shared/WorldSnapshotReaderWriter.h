@@ -149,7 +149,11 @@ public:
 	// names; surviving nodes' indices stay valid without a remap). Additive
 	// API -- no layout change; Node::save/saveFiltered remain the sole format
 	// writers.
-	typedef bool (*IncludeTopLevelNodeFunction) (int64 networkIdInt, void* context);
+	// The callback receives the NODE POINTER, not the id -- provenance must be
+	// identity-keyed (a buildout row and an authored node can share an id; the
+	// 2026-07-18 self-test caught the id-keyed filter refusing every
+	// buildout-planet save).
+	typedef bool (*IncludeTopLevelNodeFunction) (const Node* node, void* context);
 	bool             saveFiltered (const char* filename, IncludeTopLevelNodeFunction includeTopLevelNode, void* context) const;
 	void             saveFiltered (Iff& iff, IncludeTopLevelNodeFunction includeTopLevelNode, void* context) const;
 

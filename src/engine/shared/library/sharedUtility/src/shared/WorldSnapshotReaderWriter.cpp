@@ -845,7 +845,7 @@ void WorldSnapshotReaderWriter::saveFiltered (Iff& iff, IncludeTopLevelNodeFunct
 						const Node* const node = (*m_nodeList) [i];
 						if (node->isDeleted ())
 							continue;
-						if (includeTopLevelNode && !includeTopLevelNode (node->getNetworkIdInt (), context))
+						if (includeTopLevelNode && !includeTopLevelNode (node, context))
 							continue;
 
 						node->saveFiltered (iff);
