@@ -2277,10 +2277,19 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 	std::vector<int64> subtreeIds;
 	wsCollectSubtree (node, subtreeNodes, subtreeIds);
 
-	//-- (2) OCCUPANCY GUARD (load-bearing, ANSWERS 5.5): Container::~Container
-	//   cascade-deletes every contained object -- deleting a POB with the player
-	//   (or any server-streamed object) inside would delete THEM. update()'s own
-	//   delete path refuses via the same recursive check; so do we.
+	//-- (2) OCCUPANCY GUARD (load-bearing, ANSWERS 5.5), BIDIRECTIONAL since the
+	//   2026-07-18 cantina flag. Container::~Container cascade-deletes every
+	//   contained object -- deleting a POB with the player inside would delete
+	//   THEM -- but on server sessions the client does not necessarily link
+	//   occupants into the cell's Container CONTENTS (containment is server-
+	//   authoritative; the client tracks the occupant's render/physics cell via
+	//   Object::getParentCell). The contents walk and the delete cascade share
+	//   that blind spot symmetrically (which is why the flagged delete despawned
+	//   cleanly), but the occupant's parentCell would dangle into the deleted
+	//   building. So: (i) DOWNWARD -- the recursive contents walk (linked
+	//   containment; what the cascade would actually delete); (ii) UPWARD -- any
+	//   live non-client-cached object PARKED IN a subtree cell by parentCell,
+	//   regardless of contents linkage.
 	for (size_t i = 0; i < subtreeIds.size (); ++i)
 	{
 		Object* const object = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (subtreeIds [i])));
@@ -2289,8 +2298,43 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 			ClientObject* const clientObject = dynamic_cast<ClientObject*> (object);
 			if (!clientObject || !ContainerInterface::isClientCachedOnly (*clientObject))
 			{
-				WS_EDITOR_LOG (("[editor.ws] wsRemoveNode OCCUPIED: root=%I64d subtree-id=%I64d holds a non-client-cached occupant (%s)\n", networkIdInt, subtreeIds [i], clientObject ? "in contents" : "not a ClientObject"));
+				WS_EDITOR_LOG (("[editor.ws] wsRemoveNode OCCUPIED (contents): root=%I64d subtree-id=%I64d holds a non-client-cached occupant (%s)\n", networkIdInt, subtreeIds [i], clientObject ? "in contents" : "not a ClientObject"));
 				return -1;   // "occupied" -- editor tells the user to step out first
+			}
+		}
+	}
+	{
+		std::set<int64> subtreeIdSet (subtreeIds.begin (), subtreeIds.end ());
+
+		const NetworkIdManager::NetworkIdObjectHashMap& allObjects = NetworkIdManager::getAllObjects ();
+		for (NetworkIdManager::NetworkIdObjectHashMap::const_iterator iter = allObjects.begin (); iter != allObjects.end (); ++iter)
+		{
+			Object* const object = iter->second;
+			if (!object)
+				continue;
+
+			//-- cheap rejects first: most objects sit in the world cell
+			const CellProperty* const parentCell = object->getParentCell ();
+			if (!parentCell || parentCell == CellProperty::getWorldCellProperty ())
+				continue;
+
+			const int64 cellOwnerIdInt = parentCell->getOwner ().getNetworkId ().getValue ();
+			if (subtreeIdSet.find (cellOwnerIdInt) == subtreeIdSet.end ())
+				continue;
+
+			//-- standing inside this subtree. Subtree members despawn with the
+			//   building (correct); other CLIENT-CACHED objects re-seat via
+			//   streaming; a non-client-cached occupant (the player, any
+			//   server-streamed NPC/vendor) refuses the delete.
+			const int64 occupantIdInt = iter->first.getValue ();
+			if (subtreeIdSet.find (occupantIdInt) != subtreeIdSet.end ())
+				continue;
+
+			ClientObject* const clientObject = dynamic_cast<ClientObject*> (object);
+			if (!clientObject || !ContainerInterface::isClientCachedOnly (*clientObject))
+			{
+				WS_EDITOR_LOG (("[editor.ws] wsRemoveNode OCCUPIED (parent-cell): root=%I64d occupant=%I64d stands in cell-owner=%I64d (%s)\n", networkIdInt, occupantIdInt, cellOwnerIdInt, clientObject ? "non-client-cached" : "not a ClientObject"));
+				return -1;
 			}
 		}
 	}
