@@ -34,4 +34,9 @@ extern "C" int     __cdecl utinni_wsRemoveNode(__int64 networkIdInt);
 extern "C" int     __cdecl utinni_wsSetNodeRadius(__int64 networkIdInt, float radius);
 extern "C" int     __cdecl utinni_wsConfigureIdAllocator(__int64 floorId, __int64 ceilingId);
 
+// -- Goal B Wave 3 (v19; frozen 2026-07-18): PERSISTENCE ---------------------
+extern "C" int     __cdecl utinni_wsSaveSnapshot(void);
+extern "C" int     __cdecl utinni_wsGetSavePath(char* buf, int cap);
+extern "C" void    __cdecl utinni_wsUnloadSnapshot(void);
+
 #endif // INCLUDED_engine_worldSnapshot_forward_H

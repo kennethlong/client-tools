@@ -94,6 +94,13 @@ public:
 	static int           getNumberOfSearchPaths();
 	static const char   *getSearchPath(int index);
 
+	// Goal B Wave 3 (2026-07-18): clear the searchPath negative-cache entry for
+	// one engine-relative name on every loose SearchPath node. Call after
+	// WRITING a loose file mid-session (the misses-only cache otherwise keeps a
+	// previously-probed name invisible until restart -- the CONSULT-59 trade-off,
+	// TreeFile_SearchNode.h:99). No-op for names never probed.
+	static void          forgetMissingFile(const char *fileName);
+
 	// Engine-hookpoint advertisement (treeFile::enumerateFiles): invoke callback once
 	// per filename across all registered SearchTree/SearchTOC nodes (engine-relative
 	// paths, e.g. "terrain/tatooine.trn"). Order/dedup unspecified. The callback runs

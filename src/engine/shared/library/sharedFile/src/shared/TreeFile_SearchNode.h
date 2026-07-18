@@ -81,6 +81,14 @@ public:
 
 	const char           *getPathName() const; //lint !e1411  // Warning -- member with different signature hides virtual member (bug in PC-Lint, incorrect warning)
 
+	// Goal B Wave 3 (2026-07-18): a file WRITTEN into this loose dir mid-session
+	// must become visible again -- clear its cached miss (see the class comment:
+	// misses-only cache; without this, a freshly saved snapshot/<scene>.ws stays
+	// invisible to reload until restart). PUBLIC: called by the enclosing
+	// TreeFile::forgetMissingFile (an enclosing class has no access to nested-
+	// class privates).
+	void forgetMissing(const char *fileName) const;
+
 private:
 
 	SearchPath();

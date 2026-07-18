@@ -143,6 +143,15 @@ void TreeFile::SearchPath::noteMissing(const char *fileName) const
 
 // ----------------------------------------------------------------------
 
+void TreeFile::SearchPath::forgetMissing(const char *fileName) const
+{
+	m_missingFilesMutex.enter();
+	IGNORE_RETURN(m_missingFiles.erase(fileName));
+	m_missingFilesMutex.leave();
+}
+
+// ----------------------------------------------------------------------
+
 bool TreeFile::SearchPath::exists(const char *fileName, bool &) const
 {
 	if (cachedMissing(fileName))

@@ -874,6 +874,26 @@ const char *TreeFile::getSearchPath(int index)
 
 // ----------------------------------------------------------------------
 
+void TreeFile::forgetMissingFile(const char *fileName)
+{
+	//-- the caches key on the FIXED-UP engine-relative name (the same form
+	//   exists()/open() probe with)
+	char fixedFileName[Os::MAX_PATH_LENGTH];
+	fixUpFileName(fixedFileName, fileName, false);
+
+	SearchNode *snapshot[cms_searchNodeSnapshotMax];
+	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
+
+	for (int i = 0; i < nodeCount; ++i)
+	{
+		const SearchPath *searchPath = dynamic_cast<const SearchPath*>(snapshot[i]);
+		if (searchPath != NULL)
+			searchPath->forgetMissing(fixedFileName);
+	}
+}
+
+// ----------------------------------------------------------------------
+
 void TreeFile::enumerateFiles(void (*callback)(const char *fileName, void *context), void *context)
 {
 	// Walk every registered node and yield each contained filename. Only SearchTree

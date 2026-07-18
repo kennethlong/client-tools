@@ -447,6 +447,52 @@ extern "C" void __cdecl utinni_sendFakeSystemMessage(const char * utf8Msg, bool 
 }
 
 // ----------------------------------------------------------------------
+// camera::{getProjectionMatrix, getTransformO2W} -- Goal B Wave-3 rider 4C
+// (2026-07-18). The consumer's gizmo read camera matrices via RAW STRUCT
+// OFFSETS (SWGEmu layout) and crashed on the NGE layout; these copy-out
+// accessors are the primitives-only replacements (ABI RULE). Layouts:
+//   out16: the engine GlMatrix4x4 verbatim -- row-major float[4][4]
+//          (Camera::getProjectionMatrix(), the matrix the renderer consumes).
+//   out12: row-major 3x4, position = column 3 -- the SAME convention as
+//          UtinniWsNodeInfo.transform (composed via the Transform column
+//          accessors, independent of Transform's internal representation).
+// Returns 1 ok / 0 no-current-camera-or-null-arg. CALLED, game-thread-only,
+// per-frame-safe (plain copies, no allocation).
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_getCameraProjectionMatrix(float * out16)
+{
+	if (!out16)
+		return 0;
+
+	const Camera * const camera = Game::getConstCamera();
+	if (!camera)
+		return 0;
+
+	std::memcpy(out16, &camera->getProjectionMatrix().matrix[0][0], 16 * sizeof(float));
+	return 1;
+}
+
+extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
+{
+	if (!out12)
+		return 0;
+
+	const Camera * const camera = Game::getConstCamera();
+	if (!camera)
+		return 0;
+
+	const Transform & t = camera->getTransform_o2w();
+	const Vector i = t.getLocalFrameI_p();
+	const Vector j = t.getLocalFrameJ_p();
+	const Vector k = t.getLocalFrameK_p();
+	const Vector p = t.getPosition_p();
+	out12[ 0] = i.x;  out12[ 1] = j.x;  out12[ 2] = k.x;  out12[ 3] = p.x;
+	out12[ 4] = i.y;  out12[ 5] = j.y;  out12[ 6] = k.y;  out12[ 7] = p.y;
+	out12[ 8] = i.z;  out12[ 9] = j.z;  out12[10] = k.z;  out12[11] = p.z;
+	return 1;
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -725,6 +771,28 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "worldSnapshot::wsRemoveNode",          (void *)&utinni_wsRemoveNode },          // int (__int64 id) -- 7-step subtree teardown, OCCUPANCY-GUARDED (isClientCachedOnly recursive; Container dtor cascade-deletes contents): 1 removed / 0 miss / -1 occupied
 	{ "worldSnapshot::wsSetNodeRadius",       (void *)&utinni_wsSetNodeRadius },       // int (__int64 id, float radius) -- 1 ok, 0 miss/tombstone; re-seats the sphere-tree extent (the moveObject pattern)
 	{ "worldSnapshot::wsConfigureIdAllocator",(void *)&utinni_wsConfigureIdAllocator },// int (__int64 floor, __int64 ceiling) -- one-time optional allocator band (0 = keep default per param; default ceiling 0x1000000 = consumer server-id convention); 1 accepted, 0 rejected VISIBLY
+	// -- worldSnapshot editor PERSISTENCE wave (v18->v19, Goal B Wave 3; frozen 2026-07-18) --
+	// The disk half. Shims in WorldSnapshot.cpp; semantics per ANSWERS 5.1(a-d). Save is
+	// authored-only + tombstone-skip (recursive), absolute destination in the winning loose
+	// SearchPath, negative-cache invalidation, post-write shadow verification. Typed result
+	// enum published in the Wave-3 handback (0 ok / 1 no-snapshot / 2 no-loose-search-path /
+	// 3 destination-shadowed / 4 id-int32-overflow / 5 buildout-set-integrity / 6 write-failure).
+	{ "worldSnapshot::wsSaveSnapshot",        (void *)&utinni_wsSaveSnapshot },        // int (void) -- save the CURRENT scene's authored .ws; typed result per the enum above
+	{ "worldSnapshot::wsGetSavePath",         (void *)&utinni_wsGetSavePath },         // int (char* buf, int cap) -- resolved save ROOT copy-out; needed length INCLUDING NUL; 0 = no loose SearchPath (save would fail closed too)
+	{ "worldSnapshot::wsUnloadSnapshot",      (void *)&utinni_wsUnloadSnapshot },      // void (void) -- unload + reset the sticky ms_sceneName (else advertised load(currentScene) early-outs and reload returns EMPTY); bumps the generation
+	// -- Wave-3 rider 4B: world-pick/target filter (2026-07-18). The NGE gate the consumer's
+	// SWGEmu RVA patch (0x00BD3FA3) was aiming at: CuiPreferences::allowTargetAnything -- read at
+	// SwgCuiHud.cpp:198/365 (world-pick) AND CuiRadialMenuManager.cpp:977/2714 (radial on
+	// non-ClientObjects). PUBLIC out-of-line statics, primitives-only -- plain constant &fn, the
+	// config::setModalChat precedent. Contract name mirrors the ENGINE name (allowTargetAnything),
+	// not the consumer's patchAllowTargetEverything working title.
+	{ "cuiPreferences::setAllowTargetAnything", (void *)&CuiPreferences::setAllowTargetAnything }, // static void (bool) [CuiPreferences.h:149 / .cpp:1051]
+	{ "cuiPreferences::getAllowTargetAnything", (void *)&CuiPreferences::getAllowTargetAnything }, // static bool (void) [CuiPreferences.h:148 / .cpp:1733]
+	// -- Wave-3 rider 4C: gizmo camera matrices (2026-07-18). Copy-out accessors defined above
+	// in this TU; replaces the consumer's raw struct-offset camera reads (NGE layout != SWGEmu ->
+	// garbage matrix -> execute-of-heap crash, cdb-confirmed their side).
+	{ "camera::getProjectionMatrix",          (void *)&utinni_getCameraProjectionMatrix }, // int (float* out16) -- GlMatrix4x4 verbatim (row-major 4x4); 1 ok / 0 no camera
+	{ "camera::getTransformO2W",              (void *)&utinni_getCameraTransformO2W },     // int (float* out12) -- row-major 3x4, position column 3 (the UtinniWsNodeInfo convention); 1 ok / 0 no camera
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

@@ -162,6 +162,12 @@ namespace WorldSnapshotNamespace
 	//   targets across snapshot generations. A pure counter -- never gates logic.
 	int ms_wsEditGeneration = 0;
 
+	//-- Goal B Wave 3 gate aid: when set, the phased parse's completion runs one
+	//   utinni_wsSaveSnapshot and logs the typed result -- a REAL save exercised
+	//   by a normal world entry (the Wave-2 lesson: gates that never exercise
+	//   the path ship the bug). Default off; harmless to leave in-tree.
+	bool ms_wsSelfTestSaveOnLoad = false;
+
 	void loadOneBuildoutArea (const BuildoutArea& buildoutArea);
 	void finishLoadNow ();
 
@@ -363,6 +369,13 @@ namespace WorldSnapshotNamespace
 
 using namespace WorldSnapshotNamespace;
 
+#if !defined(_WIN64)
+//-- Goal B Wave 3: file-scope forward declaration for the loadStep self-test
+//   hook (the shim is defined at the end of this TU; a linkage specification
+//   is not allowed inside a function body)
+extern "C" int __cdecl utinni_wsSaveSnapshot (void);
+#endif
+
 //===================================================================
 // STATIC PUBLIC WorldSnapshotReaderWriter
 //===================================================================
@@ -387,6 +400,7 @@ void WorldSnapshot::install ()
 	ms_maximumNumberOfCreatesPerFrame = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "maximumNumberOfCreatesPerFrame", ms_maximumNumberOfCreatesPerFrame);
 	ms_maximumNumberOfDeletesPerFrame = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "maximumNumberOfDeletesPerFrame", ms_maximumNumberOfDeletesPerFrame);
 	ms_createTimeBudgetMs = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "createTimeBudgetMs", ms_createTimeBudgetMs);
+	ms_wsSelfTestSaveOnLoad = ConfigFile::getKeyBool("ClientGame/WorldSnapshot", "wsSelfTestSaveOnLoad", ms_wsSelfTestSaveOnLoad);
 
 	ExitChain::add (remove, "WorldSnapshot::remove");
 }
@@ -871,6 +885,18 @@ void WorldSnapshot::loadStep ()
 				ms_preloadObjectTemplate = 0;
 				ms_parsePending = false;
 				preloadSomeAssets ();
+
+#if !defined(_WIN64)
+				//-- Wave-3 gate aid (default off): one REAL save at parse
+				//   completion, typed result logged (utinni_wsSaveSnapshot is
+				//   declared at file scope above -- C2598 forbids a linkage
+				//   specification inside a function)
+				if (ms_wsSelfTestSaveOnLoad)
+				{
+					const int selfTestResult = utinni_wsSaveSnapshot ();
+					REPORT_LOG (true, ("[editor.ws] SELF-TEST save-on-load: result=%d\n", selfTestResult));
+				}
+#endif
 			}
 			return;
 		}
@@ -2425,6 +2451,214 @@ extern "C" int __cdecl utinni_wsConfigureIdAllocator (__int64 floorId, __int64 c
 	ms_wsIdCeiling = newCeiling;
 
 	return 1;
+}
+
+//===================================================================
+// Goal B Wave 3 (hookpoints v18 -> v19; frozen 2026-07-18): PERSISTENCE.
+// The disk half -- nothing here mints or spawns. Semantics per ANSWERS 5.1
+// (a-d): authored-only + tombstone-skip save, absolute destination in the
+// winning loose SearchPath, negative-cache invalidation, post-write shadow
+// verification, sticky-scene-name reset on unload.
+//
+// NOTE on provenance (the Wave-3 request's §3 rider): the feared "runtime
+// server nodes in the reader" class DOES NOT EXIST -- the above-ceiling ids
+// observed live (609,457,649 etc.) are AUTHORED nodes of the TOC-resolved
+// patch_55 .ws copies (NGE collection-system items: hanging lights,
+// paintings, the collection fan in cantina cell 1134566) and MUST serialize.
+// Nothing inserts server-streamed objects into ms_reader at runtime; the
+// authored-only filter here is complete with tombstone-skip + the retained
+// buildout set. See 2026-07-18-utinni-goalB-wave2-idmint-CLOSED.md.
+//===================================================================
+
+#include <direct.h>  // _mkdir (save destination directory)
+#include <cctype>    // tolower (path comparison)
+#include "sharedFoundation/Os.h"  // Os::MAX_PATH_LENGTH (resolve buffer)
+
+namespace WorldSnapshotNamespace
+{
+	//-- utinni_wsSaveSnapshot typed result codes. FROZEN once published in the
+	//   Wave-3 handback -- append-only from then on.
+	enum WsSaveResult
+	{
+		WSR_ok                  = 0,
+		WSR_noSnapshotLoaded    = 1,   // no scene name / nothing to save
+		WSR_noLooseSearchPath   = 2,   // no loose SearchPath configured -- nowhere to write
+		WSR_destinationShadowed = 3,   // written, but a higher-priority archive still wins the name
+		WSR_idInt32Overflow     = 4,   // an authored id/containedById won't round-trip the on-disk int32
+		WSR_buildoutSetIntegrity= 5,   // a non-negative id in the retained buildout set (finding #5 tripwire)
+		WSR_writeFailure        = 6    // Iff/Os write failed (disk/permissions)
+	};
+
+	bool wsSaveIncludeTopLevelNode (const int64 networkIdInt, void*)
+	{
+		return ms_buildoutObjects.find (networkIdInt) == ms_buildoutObjects.end ();
+	}
+
+	//-- builds "<top loose SearchPath root>/snapshot/<scene>.ws"; empty = no path
+	void wsBuildSaveDestination (std::string& saveRoot, std::string& destination)
+	{
+		saveRoot.clear ();
+		destination.clear ();
+
+		const char* const root = TreeFile::getSearchPath (0);
+		if (!root || !*root)
+			return;
+
+		saveRoot = root;
+		const char last = saveRoot [saveRoot.size () - 1];
+		if (last != '/' && last != '\\')
+			saveRoot += '/';
+
+		destination = saveRoot;
+		destination += "snapshot/";
+		destination += ms_sceneName;
+		destination += ".ws";
+	}
+
+	//-- case/slash-insensitive path compare (Win32 filesystem semantics)
+	bool wsPathsEquivalent (const char* a, const char* b)
+	{
+		if (!a || !b)
+			return false;
+
+		while (*a && *b)
+		{
+			char ca = *a++;
+			char cb = *b++;
+			if (ca == '\\') ca = '/';
+			if (cb == '\\') cb = '/';
+			if (tolower (static_cast<unsigned char> (ca)) != tolower (static_cast<unsigned char> (cb)))
+				return false;
+		}
+
+		return *a == *b;
+	}
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsSaveSnapshot (void)
+{
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	if (ms_sceneName.empty ())
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d no-snapshot): nothing loaded\n", WSR_noSnapshotLoaded));
+		return WSR_noSnapshotLoaded;
+	}
+
+	//-- finding-#5 tripwire: a non-negative id in the buildout set is the one
+	//   configuration where the provenance filter could silently drop an
+	//   authored node -- fail closed, write nothing
+	for (std::set<int64>::const_iterator iter = ms_buildoutObjects.begin (); iter != ms_buildoutObjects.end (); ++iter)
+		if (*iter >= 0)
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d buildout-set-integrity): non-negative buildout id %I64d\n", WSR_buildoutSetIntegrity, *iter));
+			return WSR_buildoutSetIntegrity;
+		}
+
+	//-- id-width fail-closed (ANSWERS 5.1c): every AUTHORED node (the set that
+	//   will serialize) must round-trip the on-disk int32
+	{
+		NodeList stack;
+		for (int i = 0; i < ms_reader.getNumberOfNodes (); ++i)
+		{
+			const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
+			if (node->isDeleted () || !wsSaveIncludeTopLevelNode (node->getNetworkIdInt (), 0))
+				continue;
+			stack.push_back (node);
+		}
+
+		const int64 int32Max = static_cast<int64> (std::numeric_limits<int>::max ());
+		while (!stack.empty ())
+		{
+			const WorldSnapshotReaderWriter::Node* const node = stack.back ();
+			stack.pop_back ();
+
+			if (   node->getNetworkIdInt () <= 0 || node->getNetworkIdInt () > int32Max
+			    || node->getContainedByNetworkIdInt () < 0 || node->getContainedByNetworkIdInt () > int32Max)
+			{
+				WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d id-int32-overflow): id=%I64d containedBy=%I64d\n", WSR_idInt32Overflow, node->getNetworkIdInt (), node->getContainedByNetworkIdInt ()));
+				return WSR_idInt32Overflow;
+			}
+
+			for (int i = 0; i < node->getNumberOfNodes (); ++i)
+				if (!node->getNode (i)->isDeleted ())
+					stack.push_back (node->getNode (i));
+		}
+	}
+
+	//-- destination: the winning loose SearchPath (never CWD-relative)
+	std::string saveRoot;
+	std::string destination;
+	wsBuildSaveDestination (saveRoot, destination);
+	if (destination.empty ())
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d no-loose-search-path)\n", WSR_noLooseSearchPath));
+		return WSR_noLooseSearchPath;
+	}
+
+	//-- ensure <root>/snapshot exists (EEXIST is fine)
+	IGNORE_RETURN (_mkdir ((saveRoot + "snapshot").c_str ()));
+
+	//-- authored-only + tombstone-skip filtered save
+	if (!ms_reader.saveFiltered (destination.c_str (), wsSaveIncludeTopLevelNode, 0))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d write-failure): %s\n", WSR_writeFailure, destination.c_str ()));
+		return WSR_writeFailure;
+	}
+
+	//-- the CONSULT-59 negative cache would keep the freshly written file
+	//   invisible for the already-probed name -- clear it BEFORE the resolve
+	char relativeName [256];
+	IGNORE_RETURN (snprintf (relativeName, sizeof (relativeName) - 1, "snapshot/%s.ws", ms_sceneName.c_str ()));
+	relativeName [sizeof (relativeName) - 1] = '\0';
+	TreeFile::forgetMissingFile (relativeName);
+
+	//-- post-write shadow verification: the engine must resolve the name to
+	//   the file we just wrote, or the save is a silent no-op for reload
+	char resolved [Os::MAX_PATH_LENGTH];
+	resolved [0] = '\0';
+	if (!TreeFile::getPathName (relativeName, resolved, sizeof (resolved)) || !wsPathsEquivalent (resolved, destination.c_str ()))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot REFUSED (%d destination-shadowed): wrote %s but the name resolves to %s\n", WSR_destinationShadowed, destination.c_str (), resolved));
+		return WSR_destinationShadowed;
+	}
+
+	WS_EDITOR_LOG (("[editor.ws] wsSaveSnapshot OK: %s\n", destination.c_str ()));
+
+	return WSR_ok;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsGetSavePath (char* buf, int cap)
+{
+	std::string saveRoot;
+	std::string destination;
+	wsBuildSaveDestination (saveRoot, destination);
+	if (saveRoot.empty ())
+		return 0;
+
+	const int needed = static_cast<int> (saveRoot.size ()) + 1;
+	if (buf && cap > 0)
+		memcpy (buf, saveRoot.c_str (), static_cast<size_t> (cap < needed ? cap : needed));
+
+	return needed;
+}
+
+//-------------------------------------------------------------------
+
+extern "C" void __cdecl utinni_wsUnloadSnapshot (void)
+{
+	//-- unload() cancels any in-flight phased parse itself and bumps the
+	//   generation. The scene-name reset is the ANSWERS §2 delta: load() would
+	//   otherwise early-out on the sticky name and reload would return EMPTY.
+	WorldSnapshot::unload ();
+	ms_sceneName.clear ();
+
+	WS_EDITOR_LOG (("[editor.ws] wsUnloadSnapshot OK (scene name reset; generation=%d)\n", ms_wsEditGeneration));
 }
 
 #endif // !defined(_WIN64)
