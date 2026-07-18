@@ -145,3 +145,14 @@ where ids are ambiguous. Two consumer-visible amendments, flagged per protocol:
 Enumeration semantics are UNCHANGED in effect (the same nodes enumerate; they're now excluded by
 identity instead of id) — but on buildout-carrying scenes your placements counts may shift
 slightly vs any consumer-side id-based mirror of the old filter; trust the shims.
+
+**Live-save gate CLOSED (2026-07-18 evening, post-`25c8c8f35`):** two zone-ins with the self-test
+key — `wsSaveSnapshot OK` + `result=0` on BOTH tatooine and naboo, files written to
+`stage/override/snapshot/` (the winning loose SearchPath; shadow check passed = the engine
+resolves the name to the written file, proving the negative-cache invalidation + priority chain
+live). Offline parse of the saved files: tatooine **15,808 nodes — the exact node count of the
+TOC-resolved source** — with all 8 collection items preserved and zero tombstone/id-0 leaks;
+naboo 6,529 / 4 / 0. A `wsAddObject` in the same session minted 9,895,361 (naboo sub-ceiling
+max + 1 — allocator exact under identity provenance). Self-test artifacts deleted and the cfg
+key stripped after verification (a lingering override snapshot would shadow future TRE updates —
+your smoke should likewise clean or intentionally keep its saves).
