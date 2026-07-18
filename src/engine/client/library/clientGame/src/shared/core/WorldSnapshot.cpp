@@ -1935,10 +1935,34 @@ namespace WorldSnapshotNamespace
 
 //-------------------------------------------------------------------
 
+//-- refusal-reason diagnostics (consumer request 2026-07-18): every fail-closed
+//   branch of the mutation shims logs ONE line naming the branch + the offending
+//   value. On-demand editor actions -- no spam risk; PERMANENT by design
+//   ("silently did nothing" is the failure mode the whole consult exists to
+//   prevent; Wave 3's save shims inherit the same discipline).
+namespace WorldSnapshotNamespace
+{
+	const char* const cs_wsCreateErrorCodeNames[] = { "objectAlreadyExists", "orphanedAtOrigin", "mismatchedPobCrc", "tooCloseToOrigin" };
+
+	const char* wsCreateErrorCodeName (const CreateErrorCode result)
+	{
+		const int index = static_cast<int> (result);
+		if (index >= 0 && index < static_cast<int> (sizeof (cs_wsCreateErrorCodeNames) / sizeof (cs_wsCreateErrorCodeNames [0])))
+			return cs_wsCreateErrorCodeNames [index];
+
+		return "unknown";
+	}
+}
+
+#define WS_EDITOR_LOG(printfArgs) REPORT_LOG (true, printfArgs)
+
 extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilename, const float* transform12, __int64 containedById)
 {
 	if (!sharedTemplateFilename || !*sharedTemplateFilename || !transform12)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (args): template=%s transform12=%s\n", sharedTemplateFilename ? sharedTemplateFilename : "(null)", transform12 ? "ok" : "(null)"));
 		return 0;
+	}
 
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -1956,11 +1980,17 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 	{
 		const WorldSnapshotReaderWriter::Node* const containerNode = wsFindAuthoredLive (containedById);
 		if (!containerNode)
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (container-not-found): id=%I64d (no authored live node)\n", containedById));
 			return 0;
+		}
 
 		Object* const containerObject = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (containedById)));
 		if (!containerObject || !containerObject->isInWorld ())
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (container-not-live): id=%I64d object=%s\n", containedById, containerObject ? "exists-but-not-in-world" : "none"));
 			return 0;
+		}
 
 		//-- buildout v1 convention: a contained row carries its containing
 		//   cell's index (unused by non-cell creates; serialized by Wave 3)
@@ -1972,7 +2002,10 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 		//   becomes a permanently unspawnable zombie node -- fail here instead)
 		const Vector position = transform_p.getPosition_p ();
 		if (position == Vector::zero || position.magnitudeSquared () < sqr (ms_closeToOriginDistance))
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (origin): pos=(%g %g %g) magSq=%g < %g\n", position.x, position.y, position.z, position.magnitudeSquared (), sqr (ms_closeToOriginDistance)));
 			return 0;
+		}
 	}
 
 	//-- template must resolve; derive pobCrc + cellCount from it (the
@@ -1983,15 +2016,19 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 	{
 		const ObjectTemplate* const fetched = ObjectTemplateList::fetch (sharedTemplateFilename);
 		if (!fetched)
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (template-fetch): %s (ObjectTemplateList::fetch returned null)\n", sharedTemplateFilename));
 			return 0;
+		}
 
 		const SharedObjectTemplate* const sharedTemplate = safe_cast<const SharedObjectTemplate*> (fetched);
 		const std::string& pobName = sharedTemplate->getPortalLayoutFilename ();
 		if (!pobName.empty ())
 		{
-			bool pobOk = PortalPropertyTemplate::extractPortalLayoutCrc (pobName.c_str (), portalLayoutCrc);
+			bool pobCrcOk = PortalPropertyTemplate::extractPortalLayoutCrc (pobName.c_str (), portalLayoutCrc);
+			bool pobOpenOk = true;
 
-			if (pobOk)
+			if (pobCrcOk)
 			{
 				Iff iff;
 				if (iff.open (pobName.c_str (), true))
@@ -2005,13 +2042,20 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 						cellCount = 0;
 				}
 				else
-					pobOk = false;
+					pobOpenOk = false;
 			}
 
 			//-- a POB can never go into a container (the buildout loader FATALs
 			//   on exactly this shape -- "Tried to add a pob to a cell")
-			if (!pobOk || containedById != 0)
+			if (!pobCrcOk || !pobOpenOk || containedById != 0)
 			{
+				if (!pobCrcOk)
+					WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (pob-crc-extract): %s\n", pobName.c_str ()));
+				else if (!pobOpenOk)
+					WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (pob-open): %s\n", pobName.c_str ()));
+				else
+					WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (pob-into-container): %s pob=%s containedById=%I64d\n", sharedTemplateFilename, pobName.c_str (), containedById));
+
 				sharedTemplate->releaseReference ();
 				return 0;
 			}
@@ -2023,7 +2067,10 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 	//-- mint the contiguous range (reader + buildout set + NetworkIdManager + band)
 	const int64 networkIdInt = wsAllocateIdRange (cellCount);
 	if (!networkIdInt)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (id-mint): band [floor=%I64d ceiling=%I64d) exhausted/invalid for cellCount=%d\n", ms_wsIdFloor, ms_wsIdCeiling, cellCount));
 		return 0;
+	}
 
 	//-- MUTATE: node + atomic POB cell expansion, then the FULL streamed-create
 	//   bookkeeping (sphere handle for top-level; createObject + addObjectToWorld
@@ -2039,13 +2086,19 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 	if (containedById == 0)
 		node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
 
-	CreateErrorCode result;
+	//-- init out-of-range: instantiateObject's template-failure path returns null
+	//   WITHOUT setting result, so an untouched value must log as [unknown]
+	//   (= template instantiate failure), never as a misleading CEC name
+	CreateErrorCode result = static_cast<CreateErrorCode> (-1);
 	Object* const object = createObject (ms_reader, node, result);
 	if (!object)
 	{
-		//-- pre-validated, so exceptional (template createObject returned null):
-		//   roll back to nothing-live -- unhook the sphere handle and tombstone
-		//   the whole minted range (no live objects exist; the ids free again)
+		//-- pre-validated, so exceptional (template createObject returned null
+		//   or a CEC refusal): roll back to nothing-live -- unhook the sphere
+		//   handle and tombstone the whole minted range (no live objects exist;
+		//   the ids free again)
+		WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (createObject): CEC=%d [%s; -1=template-instantiate] template=%s id=%I64d -> rolled back\n", static_cast<int> (result), wsCreateErrorCodeName (result), sharedTemplateFilename, networkIdInt));
+
 		if (node->getSpatialSubdivisionHandle ())
 		{
 			ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
@@ -2060,6 +2113,8 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 
 	addObjectToWorld (object, node);
 
+	WS_EDITOR_LOG (("[editor.ws] wsAddObject OK: id=%I64d cells=%d template=%s containedById=%I64d\n", networkIdInt, cellCount, sharedTemplateFilename, containedById));
+
 	return networkIdInt;
 }
 
@@ -2068,7 +2123,10 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 containedById, const char* templateFilename, int cellIndex, const float* transform12, float radius, unsigned int portalLayoutCrc)
 {
 	if (!templateFilename || !*templateFilename || !transform12 || radius < 0.f)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (args): id=%I64d template=%s transform12=%s radius=%g\n", explicitId, (templateFilename && *templateFilename) ? templateFilename : "(null/empty)", transform12 ? "ok" : "(null)", radius));
 		return 0;
+	}
 
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -2077,15 +2135,30 @@ extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 contained
 	//   collision, LIVE object holding the id (would refuse the spawn later),
 	//   buildout-provenance id, missing container (the engine FATAL, finding #2)
 	if (explicitId <= 0 || explicitId > static_cast<__int64> (std::numeric_limits<int>::max ()))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (id-band): id=%I64d (must be positive int32)\n", explicitId));
 		return 0;
+	}
 	if (ms_reader.find (explicitId))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (id-present): id=%I64d already in the reader\n", explicitId));
 		return 0;
+	}
 	if (ms_buildoutObjects.find (explicitId) != ms_buildoutObjects.end ())
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (buildout-id): id=%I64d is a buildout-provenance id\n", explicitId));
 		return 0;
+	}
 	if (NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (explicitId))) != 0)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (live-object): id=%I64d held by a live object\n", explicitId));
 		return 0;
+	}
 	if (containedById != 0 && !ms_reader.find (containedById))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt REFUSED (container-missing): containedById=%I64d not in the reader\n", containedById));
 		return 0;
+	}
 
 	Transform transform_p;
 	wsTransformFromFloats (transform12, transform_p);
@@ -2117,14 +2190,19 @@ extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 contained
 		Object* const containerObject = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (containedById)));
 		if (containerObject && containerObject->isInWorld ())
 		{
-			CreateErrorCode result;
+			CreateErrorCode result = static_cast<CreateErrorCode> (-1);
 			Object* const object = createObject (ms_reader, node, result);
 			if (object)
 				addObjectToWorld (object, node);
-			//-- a spawn refusal (e.g. template no longer loadable) leaves the
-			//   DATA replay in place -- still a successful re-add
+			else
+				//-- a spawn refusal (e.g. template no longer loadable) leaves the
+				//   DATA replay in place -- still a successful re-add; logged so a
+				//   visually-absent replay is attributable
+				WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt: DATA re-added but child spawn refused: CEC=%d [%s; -1=template-instantiate] id=%I64d\n", static_cast<int> (result), wsCreateErrorCodeName (result), explicitId));
 		}
 	}
+
+	WS_EDITOR_LOG (("[editor.ws] wsAddNodeAt OK: id=%I64d containedById=%I64d template=%s\n", explicitId, containedById, templateFilename));
 
 	return 1;
 }
@@ -2138,7 +2216,10 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 
 	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
 	if (!node || ms_buildoutObjects.find (networkIdInt) != ms_buildoutObjects.end ())
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsRemoveNode MISS: id=%I64d (%s)\n", networkIdInt, node ? "buildout-provenance id" : "no live node"));
 		return 0;
+	}
 
 	//-- (1) capture the subtree FIRST (tombstoning zeroes node ids)
 	NodeList subtreeNodes;
@@ -2156,7 +2237,10 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 		{
 			ClientObject* const clientObject = dynamic_cast<ClientObject*> (object);
 			if (!clientObject || !ContainerInterface::isClientCachedOnly (*clientObject))
+			{
+				WS_EDITOR_LOG (("[editor.ws] wsRemoveNode OCCUPIED: root=%I64d subtree-id=%I64d holds a non-client-cached occupant (%s)\n", networkIdInt, subtreeIds [i], clientObject ? "in contents" : "not a ClientObject"));
 				return -1;   // "occupied" -- editor tells the user to step out first
+			}
 		}
 	}
 
@@ -2198,6 +2282,8 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 	//   allocator's map-miss free-test exact
 	for (size_t i = 0; i < subtreeIds.size (); ++i)
 		ms_reader.removeNode (subtreeIds [i]);
+
+	WS_EDITOR_LOG (("[editor.ws] wsRemoveNode OK: id=%I64d subtree=%u nodes\n", networkIdInt, static_cast<unsigned int> (subtreeIds.size ())));
 
 	return 1;
 }
