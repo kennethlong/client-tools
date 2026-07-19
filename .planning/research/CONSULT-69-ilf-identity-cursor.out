@@ -1,0 +1,239 @@
+﻿# CONSULT-69 trace: `.ilf` lifecycle + id-less selection
+
+Evidence pack taken as given. Below is code-only tracing.
+
+---
+
+## PART A — Interior-layout object lifecycle
+
+### A1. Creation
+
+**Lazy path (default)** — `ClientInteriorLayoutManager::update()` each frame from `GroundScene.cpp:2026`:
+
+```141:156:src/engine/client/library/clientGame/src/shared/object/ClientInteriorLayoutManager.cpp
+			ClientObject * const interiorObject = safe_cast<ClientObject *>(ObjectTemplateList::createObject(objectTemplateName));
+			if (interiorObject)
+			{
+				// ...
+				tangibleObject->addClientOnlyInteriorLayoutObject(interiorObject);
+
+				interiorObject->setParentCell(const_cast<CellProperty *>(cellProperty));
+				// ...
+				RenderWorld::addObjectNotifications(*interiorObject);
+
+				interiorObject->endBaselines();
+				interiorObject->addToWorld();
+			}
+```
+
+Gates: visible cell in `RenderWorld::getVisibleCells()` (:83–89), owner in world (:94–95), `!cellProperty->getAppliedInteriorLayout()` (:98–99), tangible + `.ilf` present (:112–124), optional per-frame budget (:134–135, :161–168).
+
+**Eager path** — `BuildingObject::addToWorld()` → `applyInteriorLayout()` when lazy creation is disabled:
+
+```55:65:src/engine/client/library/clientGame/src/shared/object/BuildingObject.cpp
+void BuildingObject::addToWorld()
+{
+	TangibleObject::addToWorld();
+	// ...
+		safe_cast<ClientBuildingObjectTemplate const *>(getObjectTemplate())->applyInteriorLayout(this);
+```
+
+Same spawn sequence at `ClientInteriorLayoutManager.cpp:212–227`. `applyInteriorLayout` itself no-ops when lazy mode is on (`ClientInteriorLayoutManager.cpp:178`).
+
+No `NetworkId` is assigned anywhere in either path (stays invalid/0 per evidence).
+
+---
+
+### A1. Ownership storage and iteration
+
+**Store** — `TangibleObject::addClientOnlyInteriorLayoutObject`:
+
+```1080:1086:src/engine/client/library/clientGame/src/shared/object/TangibleObject.cpp
+void TangibleObject::addClientOnlyInteriorLayoutObject(Object * const object)
+{
+	if (!m_clientOnlyInteriorLayoutObjectList)
+		m_clientOnlyInteriorLayoutObjectList = new ClientOnlyInteriorLayoutObjectList;
+
+	m_clientOnlyInteriorLayoutObjectList->push_back(Watcher<Object>(object));
+}
+```
+
+Field: `TangibleObject::m_clientOnlyInteriorLayoutObjectList` (`TangibleObject.h:281`).
+
+**Who iterates the list:** only `TangibleObject::removeFromWorld()` — no other readers/walkers in the repo.
+
+---
+
+### A1. Destruction — every `delete` site
+
+| # | File:line | Path |
+|---|-----------|------|
+| 1 | `TangibleObject.cpp:502` | `TangibleObject::removeFromWorld()` — `delete object` for each list entry, then `delete m_clientOnlyInteriorLayoutObjectList` (:505–506) |
+| 2 | `TangibleObject.cpp:334–335` | `TangibleObject::~TangibleObject()` — if `isInWorld()`, calls `removeFromWorld()` → site #1 |
+| 3 | `BuildingObject.cpp:163` | `BuildingObject::removeFromWorld()` — calls `TangibleObject::removeFromWorld()` → site #1 |
+| 4 | `BuildingObject.cpp:49–50` | `BuildingObject::~BuildingObject()` — if `isInWorld()`, calls `removeFromWorld()` → chain to #3 → #1 |
+
+**Not ilf deletes:** `BuildingObject::removeFromWorld()` also `delete`s door/barrier child objects at `:160` — separate from ilf list.
+
+**Cell unload bookkeeping (no direct ilf delete):** `CellProperty::removeFromWorld()` resets layout state only:
+
+```564:585:src/engine/shared/library/sharedObject/src/shared/portal/CellProperty.cpp
+void CellProperty::removeFromWorld()
+{
+	Container::removeFromWorld();
+	// ...
+	m_appliedInteriorLayout = false;
+	m_interiorLayoutCreatedCount = 0;
+}
+```
+
+Comment at `:581–583` explicitly ties this to ilf deletion happening in `TangibleObject::removeFromWorld`.
+
+There are **no other** `delete` sites for ilf objects (grep confirms only `TangibleObject.cpp:502` for this list).
+
+---
+
+### A2. Safe lifetime window for a raw `Object*`
+
+**Object exists from:** successful `ObjectTemplateList::createObject` + `addToWorld()` until `delete` at `TangibleObject.cpp:502`.
+
+**Safe for a per-frame game-thread re-read of the live pointer while the building is loaded:** from first frame after that instance’s `addToWorld()` until the owning building’s `TangibleObject::removeFromWorld()` (building despawn, zone unload, object destroy, or dtor while in-world).
+
+**Mid-session invalidation WITHOUT zone change:**
+
+| Event | Invalidates `Object*`? | Code basis |
+|-------|------------------------|------------|
+| Resume-cursor / throttle | **No** for already-spawned objects | Budget only breaks the create loop (`ClientInteriorLayoutManager.cpp:134–135`); existing instances stay |
+| Cell drops off visible list | **No** | No teardown in `ClientInteriorLayoutManager::update()`; objects stay in world |
+| LOD / detail level | **No** | No ilf delete path tied to LOD |
+| Building server despawn / `removeFromWorld` | **Yes** | `TangibleObject.cpp:497–506` |
+| Throttle mid-cell (partial spawn) | **N/A for not-yet-created** | Indices ≥ cursor simply don’t exist yet (`ClientInteriorLayoutManager.cpp:131–132`, `:166–168`) |
+
+**Consumer using `Watcher<Object>`:** nulled via `nullWatchers()` in `TangibleObject::~TangibleObject()` (:332) when the ilf object is deleted.
+
+---
+
+### A3. Per-object identity stable across destroy/respawn
+
+**No runtime-stable identity on the spawned `Object`:**
+
+- **NetworkId:** never assigned (evidence + no assignment in creation code).
+- **ClientObject::m_uniqueId** (`ClientObject.cpp:236`, `getUniqueId()` at `ClientObject.h:362–364`): process-local monotonic counter — **new instance gets a new id** after respawn.
+- **`.ilf` logical key** `(cellName, objectIndex, templateName, transform_o2p)` lives only in `InteriorLayoutReaderWriter` (`InteriorLayoutReaderWriter.cpp:214–234`); **nothing writes that index onto the spawned `Object`**.
+
+After destroy/respawn of the same cell, the “same chair” is a **new heap object, new pointer, new uniqueId**. Correlation is only external: building `NetworkId` + cell name + ilf index + transform/template — not an engine-provided handle.
+
+---
+
+## PART B — Id-less selection pipeline (`allowTargetAnything == true`)
+
+### B1. Per-frame hover — does the chair reach `m_lastSelectedObject`?
+
+**Ray → filter chain:**
+
+1. `SwgCuiHud::update()` (`m_targetingEnabled`) → `findAllTargettableObjects()` at `:1273`
+2. Polygon pass: `findObjectByPolygon()` → `ClientWorld::collide` with `CF_interiorObjects` (`SwgCuiHud.cpp:240–247`, `:263`) → `testFindObject()` (`:156–226`)
+3. With `allowTargetAnything == true`, `testFindObject` skips GOT/network-id filters (`SwgCuiHud.cpp:198–224`); only rejects appearance-less objects (`:191–194`)
+4. `findAllTargettableObjects` adds hit when `allowTargetAnything` (`SwgCuiHud.cpp:369`, `:390`)
+5. `foundObject = orderedTargets.front()` (`SwgCuiHud.cpp:1274`)
+6. Assignment:
+
+```1432:1437:src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHud.cpp
+			player->setTargetUnderCursor(foundObject	? foundObject->getNetworkId() : NetworkId::cms_invalid);
+			if (m_lastSelectedObject.getPointer() != foundObject || (foundObject && player->getLookAtTarget().getObject() != foundObject))
+			{
+				player->setLookAtTarget(foundObject ? foundObject->getNetworkId() : NetworkId::cms_invalid);
+				m_lastSelectedObject = foundObject;
+			}
+```
+
+**Verdict for hover:** **Yes** — an interior-layout chair with an appearance **does** land in `m_lastSelectedObject` while the reticle ray hits it, `m_targetingEnabled == true`, and `(updateCursor || allowLookAtTargetSelection)` so `findAllTargettableObjects` runs (`:1264–1274`).
+
+(`getRootParent()` leaves cell-contained chairs as themselves — evidence; `Object.cpp:2105–2108`.)
+
+---
+
+### B2. Click / selection — what happens with id 0?
+
+**Primary click path** (`setIntendedAndSummonRadialMenu`, wired from mouse actions):
+
+```2069:2124:src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHud.cpp
+	NetworkId workingObjectId = NetworkId::cms_invalid;
+	if (m_lastSelectedObject.getPointer())
+		workingObjectId = m_lastSelectedObject.getPointer()->getNetworkId();
+	// ...
+			if (mouseDownObject == NetworkId::cms_invalid)
+				canOpenRadial = false;
+	// ...
+					player->setLookAtTarget(mouseDownObject);
+					player->setIntendedTarget(mouseDownObject);
+					Object *intendedTargetObj = NetworkIdManager::getObjectById(mouseDownObject);
+```
+
+**Modal target-at-cursor** (`targetAtCursorModal`):
+
+```1968:1989:src/game/client/library/swgClientUserInterface/src/shared/page/SwgCuiHud.cpp
+				if (selectedObject)
+				{
+					// ...
+						CuiRadialMenuManager::touchCache (selectedObject->getNetworkId ());
+						// ...
+						player->setLookAtTarget (selectedObject->getNetworkId ());
+```
+
+**Id-keyed dead ends (exact lines):**
+
+| Line | Effect for id-less chair |
+|------|--------------------------|
+| `SwgCuiHud.cpp:1435` | `setLookAtTarget(cms_invalid)` — `m_lookAtTarget` stores id 0 |
+| `CachedNetworkId.cpp:172–181` | `getLookAtTarget().getObject()` → **NULL** (no hash lookup for invalid id) |
+| `SwgCuiHud.cpp:2103–2104` | Primary click+radial: **`canOpenRadial = false`** |
+| `SwgCuiHud.cpp:2115–2116` | Sets lookAt/intended to invalid id |
+| `SwgCuiHud.cpp:2117` | `NetworkIdManager::getObjectById(invalid)` → **NULL** |
+| `CuiAction.cpp:135–136` | `summonRadialMenu` / `findObjectFromFirstParam(..., useLookAt=true)` → falls back to `getLookAtTarget().getObject()` → **NULL** → radial action dead (`SwgCuiHud.cpp:2017–2048`) |
+| `CuiRadialMenuManager.cpp:2292` | Menu actions that hit server path send `ObjectMenuSelectMessage(object.getNetworkId(), …)` with **id 0** |
+
+**Object\* paths that still run:** `targetAtCursorModal` radial timer uses `m_radialMenuObject` / `createMenu(*object, …)` (`SwgCuiHud.cpp:1238–1240`, `:1984–1989`). `createMenu` uses `Object&`; `findOrRequestCache` **short-circuits** for invalid id (`CuiRadialMenuManager.cpp:281–284`). `populateMenu` can still build client-side EXAMINE for furniture (`:1647`). So **Object\*-based radial open is possible** on the modal double-click timer path, but **id-keyed target/intended/radial-via-action paths stop at the lines above**.
+
+---
+
+### B3. `getLastSelectedObject` — update vs clear vs persistence
+
+**Updated:** only inside `if (m_targetingEnabled)` block, at `SwgCuiHud.cpp:1436` (same condition as `:1433–1437`).
+
+**Cleared to NULL:** when `foundObject == 0` and the `:1433` condition fires — cursor off target, ray miss, or mouse not on hud page (`updateCursor == false` and `allowLookAtTargetSelection == false` → `foundObject` stays initial `0` at `:1170`, then `:1436` assigns NULL).
+
+**Does NOT persist off-object:** moving cursor off the chair clears `m_lastSelectedObject` same frame (`:1436`), even though the chair `Object` still exists in the world.
+
+**Not cleared when:** `m_targetingEnabled == false` (e.g. space HUD `SwgCuiHudSpace.cpp:75`) — `:1228–1444` skipped; last value can go stale until `Watcher` nulls on delete.
+
+**Id-keyed target set “failure”:** hover still writes `m_lastSelectedObject = foundObject` (`:1436`); parallel `setLookAtTarget(invalid)` (`:1435`) means id-keyed `getLookAtTarget().getObject()` never resolves to the chair (`CachedNetworkId.cpp:172–181`).
+
+---
+
+## Deliverable: dead-end lines + verdict
+
+### Exact dead-end lines where **id-keyed / retail selection** stops working for an id-less chair
+
+1. `SwgCuiHud.cpp:1435` — `setLookAtTarget(NetworkId::cms_invalid)`
+2. `SwgCuiHud.cpp:2103–2104` — `canOpenRadial = false` when `mouseDownObject == cms_invalid`
+3. `SwgCuiHud.cpp:2115–2117` — intended/lookAt set to invalid; `NetworkIdManager::getObjectById` returns NULL
+4. `CuiAction.cpp:135–136` + `SwgCuiHud.cpp:2017` — radial menu action cannot resolve target from lookAt
+5. `CuiRadialMenuManager.cpp:2292` — server menu select with `getNetworkId() == 0`
+
+Hover/`m_lastSelectedObject` itself is **not** a dead end for the pointer.
+
+### Verdict: can an in-process consumer get the chair’s `Object*` via `allowTargetAnything` + `getLastSelectedObject`?
+
+**Yes, with conditions — as a transient hover pick, not a stable selection handle.**
+
+| Condition | Required |
+|-----------|----------|
+| `CuiPreferences::allowTargetAnything == true` | Relaxes `testFindObject` / `findAllTargettableObjects` (chair also passes retail if `canSitOn()` — `SwgCuiHud.cpp:218–220`) |
+| Ground HUD, `m_targetingEnabled == true` | `SwgCuiHud.cpp:1228` |
+| Cursor on hud page (not UI widget) | `updateCursor == true` at `:1250` |
+| Ray hits chair (appearance present) | `testFindObject` `:191–194` |
+| Read timing | **While cursor remains on the chair** — `:1436` clears on miss/off-widget |
+| Object lifetime | Valid until building `TangibleObject::removeFromWorld()` (`TangibleObject.cpp:502`) |
+
+**No** for: persistent selection after cursor moves away, `getLookAtTarget().getObject()`, primary click+radial via `setIntendedAndSummonRadialMenu`, or any path that re-resolves through `NetworkId` alone — those dead-end at the lines above. For manipulation, the consumer should read `getLastSelectedObject()` **on the same frame as hover** (or hold a `Watcher<Object>` themselves), not rely on lookAt target or click-to-select semantics.
