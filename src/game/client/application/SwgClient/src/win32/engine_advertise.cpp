@@ -75,6 +75,13 @@
 
 #include "clientObject/GameCamera.h"                     // FREE-CAM (v13): gameCamera::getMessageQueue thunk (via Object::getController)
 #include "sharedObject/Controller.h"                     // FREE-CAM (v13): Controller::getMessageQueue (the camera's movement MQ)
+
+// -- Live World Editor ray-pick (v19 -> v20, 2026-07-19 change request) -------
+#include "clientGame/ClientWorld.h"                      // ClientWorld::collide (static) + the CF_* pick flags
+#include "clientGame/ConfigClientGame.h"                 // getTargetingRange (the engine cursor-ray viewDistance, SwgCuiHud.cpp:1163)
+#include "sharedCollision/CollideParameters.h"           // CollideParameters::cms_default (the hud pick's parameter set)
+#include "sharedCollision/CollisionInfo.h"               // stack copy-out source (never crosses the boundary)
+#include "sharedTerrain/TerrainObject.h"                 // terrain-instance check (terrain hit -> id 0, point valid)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -493,6 +500,86 @@ extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
 }
 
 // ----------------------------------------------------------------------
+// clientWorld::collideScreenRay -- Live World Editor ray-pick (v19 -> v20,
+// 2026-07-19 change request). Copy-out cursor ray-cast: the consumer's
+// collideCursorWithWorld (Utinni cui_hud.cpp:221) done ENGINE-SIDE so the
+// NGE-unsafe pieces (CollisionInfo layout, ClientWorld::collide's added
+// CollideParameters param, camera viewport math) never cross the boundary
+// (ABI RULE -- the rider-4C camera-accessor shape). Mirrors the engine's own
+// cursor pick (SwgCuiHud.cpp findObjectByPolygon:230 / hitReticle:279): ray
+// from the CURRENT camera through screen pixel (x,y) (reverseProjectInScreen-
+// Space handles the viewport offset), length = ConfigClientGame::
+// getTargetingRange() (the hud's targeting viewDistance, SwgCuiHud.cpp:1163),
+// camera parent cell as the start cell, CollideParameters::cms_default,
+// player excluded (the engine's &self). Flags = the hud's nine-flag pick set;
+// objectsOnly=1 drops the three NON-OBJECT geometry classes (terrain,
+// terrainFlora, interiorGeometry) so only client objects report.
+// Hit id resolution: the terrain instance reports id 0 (a VALID hit -- the
+// place-at-cursor case); otherwise the hit object's NetworkId, walking up
+// getParent() to the nearest NETWORKED ancestor when the immediate hit is a
+// non-networked child part (a POB door part resolves to an id the consumer
+// can feed network::getObjectById; no networked ancestor -> id stays 0).
+// Returns 1 = hit (outs filled), 0 = miss/no-camera/null-outs (outs zeroed).
+// CALLED, game-thread-only, per-frame-safe (stack CollisionInfo, no alloc).
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int objectsOnly, __int64 * outHitObjectId, float * outPoint3)
+{
+	if (!outHitObjectId || !outPoint3)
+		return 0;
+
+	*outHitObjectId = 0;
+	outPoint3[0] = outPoint3[1] = outPoint3[2] = 0.0f;
+
+	const Camera * const camera = Game::getConstCamera();
+	if (!camera)
+		return 0;
+
+	const Vector worldStart = camera->getPosition_w();
+	Vector viewDirection = camera->rotate_o2w(camera->reverseProjectInScreenSpace(screenX, screenY));
+	if (!viewDirection.normalize())
+		return 0;
+
+	const Vector worldEnd = worldStart + viewDirection * ConfigClientGame::getTargetingRange();
+
+	uint16 flags = ClientWorld::CF_terrain
+	             | ClientWorld::CF_terrainFlora
+	             | ClientWorld::CF_tangible
+	             | ClientWorld::CF_tangibleNotTargetable
+	             | ClientWorld::CF_tangibleFlora
+	             | ClientWorld::CF_interiorObjects
+	             | ClientWorld::CF_interiorGeometry
+	             | ClientWorld::CF_skeletal
+	             | ClientWorld::CF_childObjects;
+	if (objectsOnly)
+		flags = static_cast<uint16>(flags & ~(ClientWorld::CF_terrain | ClientWorld::CF_terrainFlora | ClientWorld::CF_interiorGeometry));
+
+	CollisionInfo info;
+	if (!ClientWorld::collide(camera->getParentCell(), worldStart, worldEnd, CollideParameters::cms_default, info, flags, Game::getPlayer()))
+		return 0;
+
+	const Vector & point = info.getPoint();
+	outPoint3[0] = point.x;
+	outPoint3[1] = point.y;
+	outPoint3[2] = point.z;
+
+	const Object * const hitObject = info.getObject();
+	if (hitObject && hitObject != static_cast<const Object *>(TerrainObject::getInstance()))
+	{
+		for (const Object * o = hitObject; o; o = o->getParent())
+		{
+			const NetworkId & id = o->getNetworkId();
+			if (id != NetworkId::cms_invalid)
+			{
+				*outHitObjectId = id.getValue();
+				break;
+			}
+		}
+	}
+
+	return 1;
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -793,6 +880,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	// garbage matrix -> execute-of-heap crash, cdb-confirmed their side).
 	{ "camera::getProjectionMatrix",          (void *)&utinni_getCameraProjectionMatrix }, // int (float* out16) -- GlMatrix4x4 verbatim (row-major 4x4); 1 ok / 0 no camera
 	{ "camera::getTransformO2W",              (void *)&utinni_getCameraTransformO2W },     // int (float* out12) -- row-major 3x4, position column 3 (the UtinniWsNodeInfo convention); 1 ok / 0 no camera
+	// -- Live World Editor ray-pick + pre-approved radial clear (v19->v20, 2026-07-19 change request) --
+	{ "clientWorld::collideScreenRay",        (void *)&utinni_collideScreenRay },          // int (int screenX, int screenY, int objectsOnly, __int64* outHitObjectId, float* outPoint3) -- copy-out cursor ray-cast (shim above); 1 hit / 0 miss; terrain hit = id 0 + valid point; objectsOnly=1 drops terrain/terrainFlora/interiorGeometry
+	{ "cuiRadialMenuManager::clear",          (void *)&CuiRadialMenuManager::clear },      // static void () [CuiRadialMenuManager.h:47] -- pre-approved rider (2026-07-18 positionchanged ANSWER); plain &fn, the update-row sibling
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
