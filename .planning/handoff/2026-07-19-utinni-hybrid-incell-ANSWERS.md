@@ -130,3 +130,48 @@ every instance of a building template — an edit to the cantina .ilf changes EV
 If the toolkit ever wants that: it needs its own read/save surface
 (`InteriorLayoutReaderWriter` exists engine-side and has a save path), and a design decision
 about per-instance vs per-template semantics. Out of scope until you ask.
+
+## ADDENDUM (2026-07-19 evening) — making id-less objects targetable/manipulatable
+
+Kenny asked the natural follow-up; provider position, source-verified:
+
+**1. Manipulation may already work TODAY, id-free — smoke this first (zero cost).**
+The hud's selection is NOT id-keyed: `m_lastSelectedObject = foundObject`
+(SwgCuiHud.cpp:1436) stores the picked **`Object*`** in a Watcher, fed from the pick path
+that honors `allowTargetAnything` — id-less .ilf objects included. That watcher is already
+advertised: **`cuiHud::getTarget`**. Chain to try:
+`setAllowTargetAnything(true)` → hover/click the chair → `cuiHud::getTarget` → non-null
+`Object*` → gizmo drives the advertised object transform rows. What broke in your smoke was
+only the id-keyed half (brackets, `getObjectById`, ws bookkeeping) — not the Object*-keyed
+half. If a later filter does drop id-less objects, the fallback is a trivial v21 sibling:
+`clientWorld::collideScreenRayObject` returning the borrowed `Object*` (per-frame-safe ONLY —
+.ilf objects are deleted on cell unload; never cache across frames).
+
+**2. Minting ids ("guid") for .ilf objects — feasible, reserved-band, with audit items.**
+`NetworkId` is int64; `isValid()` only checks `!= 0` — a reserved band (negative is natural:
+servers + snapshots mint positive only) can be assigned at ilf-create and registered in
+`NetworkIdManager`, making them targetable through every normal id path. Stability: hash
+`(buildingId, cellName, ilfIndex)` into the band → the same chair gets the same id every
+session (selection/undo continuity). Audit before landing: (i) id-leak into server traffic in
+hybrid sessions (`setLookAtTarget` uplinks the id; radial requests on it become server
+no-ops — likely harmless, verify); (ii) ws allocator ignores the band (negative is
+out-of-band by construction — confirm the seeding filter).
+
+**3. Ids make them selectable, NOT persistent — the real design decision is where edits live:**
+- **(a) Edit the .ilf itself (provider recommendation).** The engine writer EXISTS and is
+  complete: `InteriorLayoutReaderWriter::{save,clear,addObject}` (sharedUtility, verified).
+  A small advertised surface (enumerate entries of the building under edit, move/add/remove
+  entry, save to the loose override dir where the searchPath already wins) = real
+  persistence. Semantics are PER-TEMPLATE — moving the chair moves it in every instance of
+  that building style, everywhere. For a world-building toolkit, arguably the honest and
+  useful semantic of that layer (fix a bad layout once).
+- **(b) Promote to snapshot rows** — convert a picked .ilf object into a `wsAddObject`
+  contained node + suppress the .ilf original. Per-instance semantics, but only possible
+  inside SNAPSHOT buildings (server-streamed POBs have no cell node to contain into), and
+  the suppression sidecar is real machinery (else duplicates on next cell load).
+- **(c) Session-only** — ids + gizmo, edits revert on reload. Demo mode.
+
+Suggested sequencing: smoke #1 now (may unblock in-cell gizmo work with zero changes); if
+the layer is wanted for real, (a) is a clean bounded freeze request — the writer, the
+override mechanism, and the v20 pick oracle already line up for it. A provider-side design
+consult on this is queued our side.
