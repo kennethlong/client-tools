@@ -60,6 +60,22 @@ sweep buys nothing selection doesn't already have → don't.
 | **(B) Materialize-to-.ws** — one-time per-building-instance conversion of .ilf content into ws contained rows using the REAL ws id-allocator (genuine ids, no fake band), then suppress .ilf application for that instance | Sonnet #2, Opus (b) | Per-instance fork; downstream = the existing, verified .ws pipe | Suppression hook in the spawn loop; only works where the building HAS a snapshot cell node (NOT server-streamed POBs); on-disk .ws ids are int32 (Codex) so materialized ids must fit the authored band; one-way divergence from template |
 | **(C) Instance-keyed overlay (sidecar)** — kill-switched spawn-seam registry capturing `(buildingId, cellName, rowIndex)` (the one point where the row index exists — ClientInteriorLayoutManager.cpp:146/:217) + ~4 advertised rows (resolve, get-by-key, copy-in transform, hide); consumer-owned sidecar file replayed per-frame through the resolver | Fable | Per-instance, works on ANY building incl. server-streamed; id-0 firewall intact; engine never parses editor files | Replay is consumer-side forever (idempotent per-frame apply); drift tiebreak needed vs upstream .ilf changes; NOT a shareable game-data artifact (it's an editor-runtime overlay) |
 
+**(D) Template-derive + rebind (Kenny, post-synthesis — the current front-runner for
+"this one only"):** per-instance editing as PURE DATA through existing channels. Mint a tiny
+DERIVED building template (`@base` original + overridden `interiorLayoutFileName` — it is a
+`StringParam` on SharedBuildingObjectTemplate.h:61, derivable by construction) + the edited
+.ilf copy, both in the loose override dir (`ObjectTemplateList::fetch` resolves new names via
+TreeFile — ObjectTemplateList.cpp:94-120 — no CRC-table registration; .ws stores template
+NAMES); rebind the instance = remove + re-add the .ws building row with the derived template
+name (same .pob crc) + save. Zero engine additions for persistence; ships as pure data
+(.ws + 2 loose files) through the toolkit's deploy pipeline. **"User selectable: this one or
+all"** = (D) for this-one, (A) for all — 1:1 UX mapping. Caveats: snapshot buildings only
+(server-streamed POBs have no row to rebind — the overlay (C) or server cooperation remains
+their only per-instance path); live rebind despawns/respawns the building (occupancy guard
+correctly forces stepping out); reuse the instance's existing derived template on repeat
+edits (no derivation chains); selection/manipulation still needs the pointer-keyed pick
+(the decisive experiment is unchanged).
+
 Common ground regardless of model: **the identity key is `(building NetworkId, cellName,
 rowIndex-in-cell)`** — the .ilf file's own primary key (deterministic spawn order per cell,
 Watcher-vector in file order — Sonnet/Cursor), and a **locator/registry at the spawn seam**
