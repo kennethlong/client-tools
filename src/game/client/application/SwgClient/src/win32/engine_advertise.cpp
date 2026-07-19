@@ -580,6 +580,33 @@ extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int obj
 }
 
 // ----------------------------------------------------------------------
+// game::getSceneId -- current scene id copy-out (v20 -> v21, 2026-07-19
+// change request #2: one-click "Reload current scene" + auto-naming the
+// imported .ws). Game::getSceneId() is INLINE and returns const
+// std::string& -- doubly un-advertisable (no ODR address; class type across
+// the boundary, the v14 sysmsg lesson) -> copy-out shim, the
+// wsGetSavePath convention: returns needed length INCLUDING the NUL
+// (size-first: call with null/0 to size, then with a buffer); 0 = no scene
+// loaded (ms_sceneId empty -- charselect/pre-world). The id is the SAME
+// string WorldSnapshot::load()/wsSaveSnapshot() key the .ws filename on
+// (e.g. "tatooine"), so unload() + load(getSceneId()) is the correct
+// one-click reload and picks up a just-saved override .ws.
+// CALLED, game-thread-only, trivially per-frame-safe.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_getSceneId(char * buf, int cap)
+{
+	const std::string & sceneId = Game::getSceneId();
+	if (sceneId.empty())
+		return 0;
+
+	const int needed = static_cast<int>(sceneId.size()) + 1;
+	if (buf && cap > 0)
+		std::memcpy(buf, sceneId.c_str(), static_cast<size_t>(cap < needed ? cap : needed));
+
+	return needed;
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -883,6 +910,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- Live World Editor ray-pick + pre-approved radial clear (v19->v20, 2026-07-19 change request) --
 	{ "clientWorld::collideScreenRay",        (void *)&utinni_collideScreenRay },          // int (int screenX, int screenY, int objectsOnly, __int64* outHitObjectId, float* outPoint3) -- copy-out cursor ray-cast (shim above); 1 hit / 0 miss; terrain hit = id 0 + valid point; objectsOnly=1 drops terrain/terrainFlora/interiorGeometry
 	{ "cuiRadialMenuManager::clear",          (void *)&CuiRadialMenuManager::clear },      // static void () [CuiRadialMenuManager.h:47] -- pre-approved rider (2026-07-18 positionchanged ANSWER); plain &fn, the update-row sibling
+	// -- current-scene-id copy-out (v20->v21, 2026-07-19 change request #2: one-click reload) --
+	{ "game::getSceneId",                     (void *)&utinni_getSceneId },                // int (char* buf, int cap) -- copy-out (shim above); needed length INCLUDING NUL; 0 = no scene loaded. Game::getSceneId() is inline + const std::string& -> shim mandatory (ABI RULE)
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
