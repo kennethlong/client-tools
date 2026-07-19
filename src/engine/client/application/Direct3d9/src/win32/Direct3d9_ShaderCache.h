@@ -23,6 +23,10 @@
 // game). store() failure is NON-FATAL (cache is opportunistic; next launch just
 // recompiles). install() creates the directory lazily.
 //
+// CONSULT-68 sibling: install() also starts a background thread that slurps the
+// whole cache dir into RAM ([Direct3d9] shaderCachePreload, default true), so
+// tryLoad in the draw path is a memory lookup, never a per-hit disk read.
+//
 // ======================================================================
 
 #ifndef INCLUDED_Direct3d9_ShaderCache_H
