@@ -522,22 +522,18 @@ extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
 // Returns 1 = hit (outs filled), 0 = miss/no-camera/null-outs (outs zeroed).
 // CALLED, game-thread-only, per-frame-safe (stack CollisionInfo, no alloc).
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int objectsOnly, __int64 * outHitObjectId, float * outPoint3)
+// Shared ray core for the two pick shims below (v22 refactor -- identical ray,
+// two return shapes). Returns false on no-camera/degenerate-ray/miss.
+static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
 {
-	if (!outHitObjectId || !outPoint3)
-		return 0;
-
-	*outHitObjectId = 0;
-	outPoint3[0] = outPoint3[1] = outPoint3[2] = 0.0f;
-
 	const Camera * const camera = Game::getConstCamera();
 	if (!camera)
-		return 0;
+		return false;
 
 	const Vector worldStart = camera->getPosition_w();
 	Vector viewDirection = camera->rotate_o2w(camera->reverseProjectInScreenSpace(screenX, screenY));
 	if (!viewDirection.normalize())
-		return 0;
+		return false;
 
 	const Vector worldEnd = worldStart + viewDirection * ConfigClientGame::getTargetingRange();
 
@@ -553,8 +549,19 @@ extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int obj
 	if (objectsOnly)
 		flags = static_cast<uint16>(flags & ~(ClientWorld::CF_terrain | ClientWorld::CF_terrainFlora | ClientWorld::CF_interiorGeometry));
 
+	return ClientWorld::collide(Game::getConstCamera()->getParentCell(), worldStart, worldEnd, CollideParameters::cms_default, info, flags, Game::getPlayer());
+}
+
+extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int objectsOnly, __int64 * outHitObjectId, float * outPoint3)
+{
+	if (!outHitObjectId || !outPoint3)
+		return 0;
+
+	*outHitObjectId = 0;
+	outPoint3[0] = outPoint3[1] = outPoint3[2] = 0.0f;
+
 	CollisionInfo info;
-	if (!ClientWorld::collide(camera->getParentCell(), worldStart, worldEnd, CollideParameters::cms_default, info, flags, Game::getPlayer()))
+	if (!engine_screenRayCollide(screenX, screenY, objectsOnly, info))
 		return 0;
 
 	const Vector & point = info.getPoint();
@@ -577,6 +584,32 @@ extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int obj
 	}
 
 	return 1;
+}
+
+// ----------------------------------------------------------------------
+// clientWorld::collideScreenRayObject -- borrowed-Object* pick (v21 -> v22,
+// 2026-07-19 change request #3; the fallback pre-described in the
+// hybrid-incell ANSWERS addendum). The consumer's CONSULT-69 layer probe
+// MEASURED that pure .ilf decorations never reach the hud pick
+// (cuiHud::getTarget = null for an id-less table the ray demonstrably hits)
+// -- so id-keyed AND watcher-keyed selection both miss that layer. This row
+// returns the RAW nearest-hit Object* from the same ray as collideScreenRay:
+// NO ancestor walk, NO id resolution -- the hit may be an .ilf decoration,
+// a networked tangible, a child part, or the BUILDING itself when the ray
+// hits cell geometry. Consumers pair it with collideScreenRay for layer
+// triage (id != 0 there = networked; wsGetNodeInfo(id) hit = snapshot).
+// BORROWED pointer, game-thread-only: valid until the owning building
+// leaves world (the single delete site, TangibleObject.cpp:502); consumers
+// clear on cell/zone change and must never cache across a zone. Gizmo-ing
+// a SERVER-streamed hit desyncs from the server -- consumer warns/refuses.
+// ----------------------------------------------------------------------
+extern "C" void * __cdecl utinni_collideScreenRayObject(int screenX, int screenY, int objectsOnly)
+{
+	CollisionInfo info;
+	if (!engine_screenRayCollide(screenX, screenY, objectsOnly, info))
+		return 0;
+
+	return const_cast<Object *>(info.getObject());
 }
 
 // ----------------------------------------------------------------------
@@ -912,6 +945,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "cuiRadialMenuManager::clear",          (void *)&CuiRadialMenuManager::clear },      // static void () [CuiRadialMenuManager.h:47] -- pre-approved rider (2026-07-18 positionchanged ANSWER); plain &fn, the update-row sibling
 	// -- current-scene-id copy-out (v20->v21, 2026-07-19 change request #2: one-click reload) --
 	{ "game::getSceneId",                     (void *)&utinni_getSceneId },                // int (char* buf, int cap) -- copy-out (shim above); needed length INCLUDING NUL; 0 = no scene loaded. Game::getSceneId() is inline + const std::string& -> shim mandatory (ABI RULE)
+	// -- borrowed-Object* pick (v21->v22, 2026-07-19 change request #3: pure-.ilf decoration selection) --
+	{ "clientWorld::collideScreenRayObject",  (void *)&utinni_collideScreenRayObject },    // void* (int screenX, int screenY, int objectsOnly) -- RAW nearest-hit Object* (no ancestor walk, no id resolution; null = miss/no camera); BORROWED, game-thread-only, cleared by consumer on cell/zone change; pair with collideScreenRay for layer triage
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

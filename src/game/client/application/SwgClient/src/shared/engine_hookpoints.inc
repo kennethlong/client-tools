@@ -406,3 +406,12 @@ ENGINE_HOOKPOINT(cuiRadialMenuManager, clear)           // static void (void) --
 // auto-naming. Game::getSceneId() is inline + returns const std::string&
 // -> copy-out shim mandatory (ABI RULE), wsGetSavePath convention.
 ENGINE_HOOKPOINT(game, getSceneId)                      // int (char* buf, int cap) -- needed length INCLUDING NUL; 0 = no scene loaded
+
+// -- borrowed-Object* pick (v21->v22, 2026-07-19 change request #3): the
+// CONSULT-69 layer probe MEASURED that pure .ilf decorations never reach the
+// hud pick (cuiHud::getTarget null for an id-less table the ray hits) --
+// this row returns the RAW nearest-hit Object* from the collideScreenRay ray
+// (no ancestor walk / no id resolution). BORROWED, game-thread-only; valid
+// until the owning building leaves world; consumer clears on cell/zone
+// change; pair with collideScreenRay + wsGetNodeInfo for layer triage.
+ENGINE_HOOKPOINT(clientWorld, collideScreenRayObject)   // void* (int screenX, int screenY, int objectsOnly) -- raw hit Object*; null = miss/no camera

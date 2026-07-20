@@ -101,16 +101,25 @@ placed REAL server objects with the normal gizmo and `ActionsGame::onSaveInterio
 deliberately discarded). "Edit live real objects, bake at the end" is the original pattern —
 model (B) is its closest descendant.
 
-## THE DECISIVE EXPERIMENT — ✅ PASSED 2026-07-19
+## THE DECISIVE EXPERIMENT — ⚠️ CORRECTED RESULT (2026-07-19 late evening): PARTIAL PASS
 
-**Consumer-verified same evening (Kenny-confirmed): the gizmo moves the chair LIVE via the
-pointer path on v21, zero engine changes.** Selection + manipulation are DONE as designed;
-remaining work is persistence-only. Next provider wave (await the consumer freeze): the
-Object*→(buildingId, cellName, rowIndex) resolver — implementable as a PURE READ (walk the
-building's watcher list, rank within the object's parentCell group = .ilf row index; no
-spawn-seam registry needed since the list is file-ordered and per-cell contiguous) — plus
-the (A)-mode .ilf editing surface if "change all" is wanted. Original experiment spec kept
-below for the record.
+**The initial same-evening "PASS" was a FALSE POSITIVE** — the object the gizmo moved was a
+**server-streamed networked tangible** (id 1127094080; the sittable chair — client-side move
+left its NPC floating), not .ilf decoration. The consumer's layer probe then measured the
+real split:
+- Networked in-cell tangibles: pointer path works exactly as predicted (getTarget non-null,
+  gizmo moves it) — Verdict 1 holds for them.
+- **Pure .ilf decoration: `cuiHud::getTarget` = NULL** (measured) — Cursor's hud-pick
+  prediction is REFUTED by ground truth (some gate between the collide hit and
+  `m_lastSelectedObject` drops them; not yet pinpointed, and no longer load-bearing). The
+  RAY still reaches the decoration (`collideScreenRay` hit=1, id=0, at its exact position).
+**Fix (the fallback pre-described in the ANSWERS addendum): `clientWorld::collideScreenRayObject`
+— borrowed-Object* sibling of the ray row, v21→v22 (toolkit change request 2026-07-19).**
+Also flagged to consumers: gizmo-ing server-streamed objects (id != 0 + wsGetNodeInfo miss
+in the layer oracle) edits nothing durable and desyncs from the server — the editor should
+warn/refuse. Resolver + (A)-surface next-wave notes below still stand. Original experiment
+spec kept below for the record; its step-3 divergence criterion is exactly what caught the
+false positive.
 
 Fable's design, corroborated by Cursor's trace conditions:
 

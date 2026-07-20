@@ -224,8 +224,18 @@
 // const std::string& -> shim mandatory (ABI RULE). Enables one-click
 // "Reload current scene" (unload + load(getSceneId())) and .ws
 // auto-naming. 143 names.
+//
+// v21 -> v22 (2026-07-19, SWG-Toolkit change request #3):
+// clientWorld::collideScreenRayObject -- borrowed-Object* sibling of the
+// v20 ray-pick. The CONSULT-69 layer probe MEASURED that pure .ilf interior
+// decorations never reach the hud pick (cuiHud::getTarget = null for an
+// id-less table the ray demonstrably hits), so watcher-keyed selection
+// misses that layer; this row returns the RAW nearest-hit Object* (no
+// ancestor walk, no id resolution; borrowed, game-thread-only, cleared by
+// the consumer on cell/zone change). Unblocks gizmo manipulation of
+// id-less .ilf decoration. 144 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 21
+#define ENGINE_HOOKPOINTS_VERSION 22
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
