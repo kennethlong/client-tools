@@ -234,8 +234,18 @@
 // ancestor walk, no id resolution; borrowed, game-thread-only, cleared by
 // the consumer on cell/zone change). Unblocks gizmo manipulation of
 // id-less .ilf decoration. 144 names.
+//
+// v22 -> v23 (2026-07-19, SWG-Toolkit change request #4):
+// worldSnapshot::wsSetNodeTemplateName -- in-place template re-point for an
+// authored .ws node (OTNL name intern + index swap; subtree/id/transform/
+// crc untouched). The CONSULT-70 lossless-rebind fix for per-instance
+// interior editing (model D: derived template overriding
+// interiorLayoutFileName + edited .ilf, both loose) -- remove+re-add would
+// tombstone the building's whole authored subtree and churn the id.
+// Fail-closed: authored non-buildout nodes; the new template must resolve
+// via TreeFile at call time (negative cache invalidated first). 145 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 22
+#define ENGINE_HOOKPOINTS_VERSION 23
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

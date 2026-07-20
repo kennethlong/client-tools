@@ -895,6 +895,28 @@ void WorldSnapshotReaderWriter::clear ()
 }
 
 //-------------------------------------------------------------------
+// Find-or-append a template name in the OTNL table, returning its index.
+// Extracted from addObject (v23) so an existing node can be re-pointed at a
+// new template name IN PLACE (wsSetNodeTemplateName) without add/remove.
+// Append-only by construction -- existing indices never move, so no other
+// node is disturbed and save/saveFiltered serialize the grown table as-is.
+
+int WorldSnapshotReaderWriter::internObjectTemplateName (CrcString const &objectTemplateName)
+{
+	NOT_NULL (m_objectTemplateNameList);
+
+	std::unordered_map<uint32, uint>::const_iterator i = m_objectTemplateCrcMap->find(objectTemplateName.getCrc());
+	if (i != m_objectTemplateCrcMap->end())
+		return static_cast<int> ((*i).second);
+
+	uint const objectTemplateNameIndex = m_objectTemplateNameList->size();
+	(*m_objectTemplateCrcMap)[objectTemplateName.getCrc()] = objectTemplateNameIndex;
+	m_objectTemplateNameList->push_back(DuplicateString(objectTemplateName.getString()));
+
+	return static_cast<int> (objectTemplateNameIndex);
+}
+
+//-------------------------------------------------------------------
 
 WorldSnapshotReaderWriter::Node const *WorldSnapshotReaderWriter::addObject (
 	const int64 networkIdInt,
@@ -910,17 +932,7 @@ WorldSnapshotReaderWriter::Node const *WorldSnapshotReaderWriter::addObject (
 	NOT_NULL (m_networkIdNodeMap);
 
 	//-- find objectTemplateNameIndex
-	uint objectTemplateNameIndex = 0;
-
-	std::unordered_map<uint32, uint>::const_iterator i = m_objectTemplateCrcMap->find(objectTemplateName.getCrc());
-	if (i != m_objectTemplateCrcMap->end())
-		objectTemplateNameIndex = (*i).second;
-	else
-	{
-		objectTemplateNameIndex = m_objectTemplateNameList->size();
-		(*m_objectTemplateCrcMap)[objectTemplateName.getCrc()] = objectTemplateNameIndex;
-		m_objectTemplateNameList->push_back(DuplicateString(objectTemplateName.getString()));
-	}
+	uint const objectTemplateNameIndex = static_cast<uint> (internObjectTemplateName (objectTemplateName));
 
 	Node * const node = new Node;
 	node->setNetworkIdInt            (networkIdInt);

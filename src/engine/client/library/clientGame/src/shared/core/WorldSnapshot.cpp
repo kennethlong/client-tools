@@ -2690,6 +2690,63 @@ extern "C" void __cdecl utinni_wsUnloadSnapshot (void)
 	WS_EDITOR_LOG (("[editor.ws] wsUnloadSnapshot OK (scene name reset; generation=%d)\n", ms_wsEditGeneration));
 }
 
+//-------------------------------------------------------------------
+// wsSetNodeTemplateName -- in-place .ws node template re-point (v22 -> v23,
+// 2026-07-19 toolkit change request; the CONSULT-70 lossless-rebind fix for
+// per-instance interior editing, model D). Re-points an EXISTING authored
+// node at a new object-template NAME -- interns the name in the snapshot's
+// OTNL table (WorldSnapshotReaderWriter::internObjectTemplateName, the
+// addObject intern path exposed; append-only, no other node disturbed) and
+// swaps the node's index. Does NOT touch cells, children, id, transform,
+// radius, or portalLayoutCrc; the LIVE spawned object is untouched (the
+// swap is data-only -- reload spawns from the new template; the consumer's
+// derived template inherits the .pob so the spawn-time crc check still
+// passes -- THEIR stated guarantee, and a mismatch fails loudly at spawn,
+// never silently). Fail-closed: authored non-buildout nodes only, and the
+// new template must RESOLVE NOW via TreeFile (forgetMissingFile first --
+// the CONSULT-59 negative cache may hold a stale miss for a derived .iff
+// the consumer wrote seconds ago). Caller follows with wsSaveSnapshot.
+// Returns 1 ok / 0 miss (no such authored node) / -1 refused (empty name,
+// buildout-provenance node, or unresolvable template).
+//-------------------------------------------------------------------
+
+extern "C" int __cdecl utinni_wsSetNodeTemplateName (__int64 networkIdInt, const char* name)
+{
+	if (!name || !*name)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName REFUSED (args): id=%I64d name=%s\n", networkIdInt, name ? "(empty)" : "(null)"));
+		return -1;
+	}
+
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+	if (!node)
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName MISS: id=%I64d (no live node)\n", networkIdInt));
+		return 0;
+	}
+	if (wsIsBuildoutNode (node))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName REFUSED (buildout): id=%I64d\n", networkIdInt));
+		return -1;
+	}
+
+	TreeFile::forgetMissingFile (name);
+	if (!TreeFile::exists (name))
+	{
+		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName REFUSED (template-missing): id=%I64d name=%s (stage the derived .iff BEFORE the swap)\n", networkIdInt, name));
+		return -1;
+	}
+
+	const char* const oldName = ms_reader.getObjectTemplateName (node->getObjectTemplateNameIndex ());
+	node->setObjectTemplateNameIndex (ms_reader.internObjectTemplateName (ConstCharCrcString (name)));
+
+	WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName OK: id=%I64d %s -> %s\n", networkIdInt, oldName ? oldName : "(?)", name));
+	return 1;
+}
+
 #endif // !defined(_WIN64)
 
 //===================================================================

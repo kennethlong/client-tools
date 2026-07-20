@@ -38,5 +38,6 @@ extern "C" int     __cdecl utinni_wsConfigureIdAllocator(__int64 floorId, __int6
 extern "C" int     __cdecl utinni_wsSaveSnapshot(void);
 extern "C" int     __cdecl utinni_wsGetSavePath(char* buf, int cap);
 extern "C" void    __cdecl utinni_wsUnloadSnapshot(void);
+extern "C" int     __cdecl utinni_wsSetNodeTemplateName(__int64 networkIdInt, const char* name);   // v23: in-place template re-point (model-D lossless rebind)
 
 #endif // INCLUDED_engine_worldSnapshot_forward_H

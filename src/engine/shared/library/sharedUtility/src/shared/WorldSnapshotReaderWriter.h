@@ -170,6 +170,7 @@ public:
 	//-- creation interface
 	void             clear ();
 	const Node*      addObject (int64 networkIdInt, int64 containedByNetworkIdInt, CrcString const &objectTemplateName, int cellIndex, const Transform& transform_p, float radius, uint32 portalLayoutCrc, const std::string & eventName = "");
+	int              internObjectTemplateName (CrcString const &objectTemplateName);   // find-or-append in the OTNL table; returns the index (the addObject intern path, exposed for in-place node re-pointing -- v23 wsSetNodeTemplateName)
 
 	//-- query interface
 	int              getNumberOfNodes () const;

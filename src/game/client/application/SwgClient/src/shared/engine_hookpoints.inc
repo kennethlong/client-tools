@@ -415,3 +415,14 @@ ENGINE_HOOKPOINT(game, getSceneId)                      // int (char* buf, int c
 // until the owning building leaves world; consumer clears on cell/zone
 // change; pair with collideScreenRay + wsGetNodeInfo for layer triage.
 ENGINE_HOOKPOINT(clientWorld, collideScreenRayObject)   // void* (int screenX, int screenY, int objectsOnly) -- raw hit Object*; null = miss/no camera
+
+// -- in-place .ws node template re-point (v22->v23, 2026-07-19 change request
+// #4): the CONSULT-70 lossless-rebind fix for per-instance interior editing
+// (model D) -- remove+re-add would tombstone the building's WHOLE subtree
+// (authored in-cell content lost) and churn the id; this swaps ONLY the
+// node's template-name index (OTNL intern, append-only). Fail-closed:
+// authored non-buildout nodes; template must resolve via TreeFile at call
+// time (negative-cache invalidated first). Data-only -- live object
+// untouched; reload spawns from the new template; spawn-time pob-crc check
+// still guards a bad derived template LOUDLY.
+ENGINE_HOOKPOINT(worldSnapshot, wsSetNodeTemplateName)  // int (__int64 id, const char* name) -- 1 ok / 0 miss / -1 refused
