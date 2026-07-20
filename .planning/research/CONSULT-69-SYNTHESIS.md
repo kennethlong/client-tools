@@ -101,7 +101,16 @@ placed REAL server objects with the normal gizmo and `ActionsGame::onSaveInterio
 deliberately discarded). "Edit live real objects, bake at the end" is the original pattern —
 model (B) is its closest descendant.
 
-## THE DECISIVE EXPERIMENT (consumer-only, zero engine changes, run BEFORE any freeze)
+## THE DECISIVE EXPERIMENT — ✅ PASSED 2026-07-19
+
+**Consumer-verified same evening (Kenny-confirmed): the gizmo moves the chair LIVE via the
+pointer path on v21, zero engine changes.** Selection + manipulation are DONE as designed;
+remaining work is persistence-only. Next provider wave (await the consumer freeze): the
+Object*→(buildingId, cellName, rowIndex) resolver — implementable as a PURE READ (walk the
+building's watcher list, rank within the object's parentCell group = .ilf row index; no
+spawn-seam registry needed since the list is file-ordered and per-cell contiguous) — plus
+the (A)-mode .ilf editing surface if "change all" is wanted. Original experiment spec kept
+below for the record.
 
 Fable's design, corroborated by Cursor's trace conditions:
 
