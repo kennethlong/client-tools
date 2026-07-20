@@ -517,8 +517,12 @@ extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
 // Hit id resolution: the terrain instance reports id 0 (a VALID hit -- the
 // place-at-cursor case); otherwise the hit object's NetworkId, walking up
 // getParent() to the nearest NETWORKED ancestor when the immediate hit is a
-// non-networked child part (a POB door part resolves to an id the consumer
-// can feed network::getObjectById; no networked ancestor -> id stays 0).
+// non-networked TRUE CHILD part (a POB door part resolves to an id the
+// consumer can feed network::getObjectById). NOTE (v22 correction):
+// getParent() is m_childObject-gated [Object.h:604] -- cell-CONTAINED
+// objects attach with asChildObject=false, so an id-less .ilf decoration
+// reports id 0 WITHOUT dissolving into the cell/building id (the correct
+// editor semantic; pair with collideScreenRayObject for the pointer).
 // Returns 1 = hit (outs filled), 0 = miss/no-camera/null-outs (outs zeroed).
 // CALLED, game-thread-only, per-frame-safe (stack CollisionInfo, no alloc).
 // ----------------------------------------------------------------------

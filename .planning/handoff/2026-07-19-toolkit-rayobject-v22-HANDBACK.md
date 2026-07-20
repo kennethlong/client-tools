@@ -28,17 +28,19 @@ was a server-streamed networked tangible, id 1127094080).
 
 ## 2. ⚠️ Two truths to design the consumer UX around
 
-1. **The floor-hit ambiguity — your `id=0, point≈table` probe result is NOT yet proof the
-   ray hit the TABLE.** A hit on the floor beneath the cursor reads almost identically
-   (id 0 was measured, but a server-building's geometry hit should have resolved the
-   BUILDING's id through the ancestor walk — that it didn't is genuinely odd). Decoration
-   meshes may not implement collision at all (`implementsCollide()` gates the appearance
-   test, ClientWorld.cpp:1180) — which would explain BOTH measurements at once (ray "hits"
-   near the table, hud pick finds nothing). **This row settles it instantly:** the returned
-   `Object*`'s template (your existing read) names exactly what the ray touched. If it
-   comes back floor/building rather than the table, the next ask is an EXTENT-based pick
-   sibling (`CF_extentsOnly` pass, the hud's own findObjectsByExtent shape) — flag it and
-   we'll spec it; do not burn a round discovering this the slow way.
+1. **CORRECTED READING (post-request analysis): your `id=0, point≈table` result is exactly
+   what a GENUINE table hit produces.** `Object::getParent()` returns non-null only for
+   TRUE child objects (`m_childObject` gate, Object.h:604-607) — cell-CONTAINED objects
+   attach with `asChildObject=false`, so the v20 ancestor walk ends at the decoration
+   itself → id 0. (This is the right editor semantic: attachment parts like doors resolve
+   upward; contained objects stand alone instead of dissolving into the building's id.)
+   Expectation for smoke step 1 is therefore: **the TABLE comes back and decoration picking
+   is DONE with this row.** The residual fallback (only if step 1 surprises us with
+   floor/building — e.g. an appearance that skips `implementsCollide()`,
+   ClientWorld.cpp:1180): an EXTENT-based pick sibling, pre-flagged, spec on request.
+   Note the two collision systems are independent — movement collision (you run through
+   chairs/NPCs) says NOTHING about ray/appearance collision (clickability); retail chairs
+   prove both at once.
 2. **Gizmo-ing server-streamed hits desyncs from the server** (your floating-NPC chair).
    Layer-triage before manipulating: `collideScreenRay` id != 0 + `wsGetNodeInfo(id)` miss
    → server object → warn/refuse in the editor.
