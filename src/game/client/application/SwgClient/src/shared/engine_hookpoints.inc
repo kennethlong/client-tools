@@ -426,3 +426,10 @@ ENGINE_HOOKPOINT(clientWorld, collideScreenRayObject)   // void* (int screenX, i
 // untouched; reload spawns from the new template; spawn-time pob-crc check
 // still guards a bad derived template LOUDLY.
 ENGINE_HOOKPOINT(worldSnapshot, wsSetNodeTemplateName)  // int (__int64 id, const char* name) -- 1 ok / 0 miss / -1 refused
+
+// -- object o2p copy-out (v23->v24, 2026-07-19 change request #5): the .ilf
+// stores o2p (object-to-parent-cell); the gizmo drives o2w; this reads o2p
+// directly for the model-D persist flow (pick-time original + persist-time
+// moved). Object::getTransform_o2p() is inline + const Transform& -> shim
+// mandatory (ABI RULE); layout = camera::getTransformO2W byte-for-byte.
+ENGINE_HOOKPOINT(object, getTransformO2P)               // int (void* object, float* out12) -- row-major 3x4, pos col 3; 1 ok / 0 null

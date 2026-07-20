@@ -526,6 +526,34 @@ extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
 // Returns 1 = hit (outs filled), 0 = miss/no-camera/null-outs (outs zeroed).
 // CALLED, game-thread-only, per-frame-safe (stack CollisionInfo, no alloc).
 // ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
+// object::getTransformO2P -- copy-out o2p read (v23 -> v24, 2026-07-19
+// change request #5; the last accessor model-D persistence needs). The .ilf
+// stores o2p (object-to-parent-CELL); the gizmo drives o2w; this reads the
+// object's o2p directly. Object::getTransform_o2p() is INLINE + returns
+// const Transform& [Object.h:233/:652] -> copy-out shim mandatory (ABI
+// RULE), byte-for-byte the camera::getTransformO2W layout: row-major 3x4,
+// columns = local frame i/j/k, column 3 = position (the .ilf /
+// UtinniWsNodeInfo convention). The Object* is BORROWED consumer-held
+// (their pick rows) -- null-checked only; lifetime discipline is theirs.
+// CALLED, game-thread-only, per-frame-safe (plain copy, no allocation).
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_getObjectTransformO2P(void * object, float * out12)
+{
+	if (!object || !out12)
+		return 0;
+
+	const Transform & t = static_cast<const Object *>(object)->getTransform_o2p();
+	const Vector i = t.getLocalFrameI_p();
+	const Vector j = t.getLocalFrameJ_p();
+	const Vector k = t.getLocalFrameK_p();
+	const Vector p = t.getPosition_p();
+	out12[ 0] = i.x;  out12[ 1] = j.x;  out12[ 2] = k.x;  out12[ 3] = p.x;
+	out12[ 4] = i.y;  out12[ 5] = j.y;  out12[ 6] = k.y;  out12[ 7] = p.y;
+	out12[ 8] = i.z;  out12[ 9] = j.z;  out12[10] = k.z;  out12[11] = p.z;
+	return 1;
+}
+
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
 // two return shapes). Returns false on no-camera/degenerate-ray/miss.
 static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
@@ -953,6 +981,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "clientWorld::collideScreenRayObject",  (void *)&utinni_collideScreenRayObject },    // void* (int screenX, int screenY, int objectsOnly) -- RAW nearest-hit Object* (no ancestor walk, no id resolution; null = miss/no camera); BORROWED, game-thread-only, cleared by consumer on cell/zone change; pair with collideScreenRay for layer triage
 	// -- in-place .ws template re-point (v22->v23, 2026-07-19 change request #4: model-D lossless per-instance rebind) --
 	{ "worldSnapshot::wsSetNodeTemplateName", (void *)&utinni_wsSetNodeTemplateName },     // int (__int64 id, const char* name) -- re-point an authored node's template NAME in place (OTNL intern; subtree/id/transform/crc untouched; data-only, reload spawns from the new template); 1 ok / 0 miss / -1 refused (empty name, buildout, or template unresolvable NOW -- forgetMissingFile+exists pre-check); caller follows with wsSaveSnapshot
+	// -- object o2p copy-out (v23->v24, 2026-07-19 change request #5: the .ilf persist read) --
+	{ "object::getTransformO2P",              (void *)&utinni_getObjectTransformO2P },     // int (void* object, float* out12) -- row-major 3x4, position column 3 (the camera::getTransformO2W / .ilf convention); 1 ok / 0 null; borrowed consumer-held Object*, game-thread-only
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

@@ -244,8 +244,15 @@
 // tombstone the building's whole authored subtree and churn the id.
 // Fail-closed: authored non-buildout nodes; the new template must resolve
 // via TreeFile at call time (negative cache invalidated first). 145 names.
+//
+// v23 -> v24 (2026-07-19, SWG-Toolkit change request #5):
+// object::getTransformO2P -- copy-out o2p read on a borrowed consumer-held
+// Object* (the .ilf stores o2p; the gizmo drives o2w). getTransform_o2p()
+// is inline + const Transform& -> shim mandatory (ABI RULE); layout =
+// camera::getTransformO2W byte-for-byte (row-major 3x4, position col 3).
+// The last accessor of the model-D persist flow. 146 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 23
+#define ENGINE_HOOKPOINTS_VERSION 24
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
