@@ -433,3 +433,13 @@ ENGINE_HOOKPOINT(worldSnapshot, wsSetNodeTemplateName)  // int (__int64 id, cons
 // moved). Object::getTransform_o2p() is inline + const Transform& -> shim
 // mandatory (ABI RULE); layout = camera::getTransformO2W byte-for-byte.
 ENGINE_HOOKPOINT(object, getTransformO2P)               // int (void* object, float* out12) -- row-major 3x4, pos col 3; 1 ok / 0 null
+
+// -- containing-building id copy-out (v24->v25, 2026-07-30 change request
+// #6): the model-D Arm step -- from any cell-contained object (an .ilf
+// decoration pick, a wall-click CELL object, the player) to the POB
+// building's NetworkId (== the .ws node id wsSetNodeTemplateName takes).
+// Chain is inline/reference-returning -> shim mandatory (ABI RULE); a cell
+// object's OWN CellProperty is used (getParentCell on a cell walks
+// ancestors -> world cell -> wrong 0); world-cell objects report 0
+// (no PortalProperty). Borrowed Object*, game-thread-only.
+ENGINE_HOOKPOINT(object, getContainingBuildingId)       // __int64 (void* object) -- building NetworkId value; 0 = null / not inside a POB

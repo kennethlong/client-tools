@@ -82,6 +82,9 @@
 #include "sharedCollision/CollideParameters.h"           // CollideParameters::cms_default (the hud pick's parameter set)
 #include "sharedCollision/CollisionInfo.h"               // stack copy-out source (never crosses the boundary)
 #include "sharedTerrain/TerrainObject.h"                 // terrain-instance check (terrain hit -> id 0, point valid)
+
+#include "sharedObject/CellProperty.h"                   // v25 getContainingBuildingId: cell -> getPortalProperty() (inline, CellProperty.h:270)
+#include "sharedObject/PortalProperty.h"                 // v25 getContainingBuildingId: portal -> getOwner() = the building (Property.h:57 via Container)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
 // 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
@@ -554,6 +557,46 @@ extern "C" int __cdecl utinni_getObjectTransformO2P(void * object, float * out12
 	return 1;
 }
 
+// ----------------------------------------------------------------------
+// object::getContainingBuildingId -- containing-POB building id (v24 -> v25,
+// 2026-07-30 change request #6; the model-D Arm-step unblock). From any
+// cell-contained object to the NetworkId of the POB building that contains
+// it -- the .ws node id wsSetNodeTemplateName takes, whose template carries
+// the interiorLayoutFileName model-D re-points. The whole chain is inline /
+// reference-returning -> shim mandatory (ABI RULE):
+//   cell   = object's OWN CellProperty (a wall-click resolves to the CELL
+//            object; Object::getParentCell [Object.cpp:1372] walks
+//            ANCESTORS, so on a cell it lands in the WORLD cell and would
+//            wrongly report "not inside") else object->getParentCell()
+//            (never null -- world-cell fallback);
+//   portal = cell->getPortalProperty() [CellProperty.h:119/inline :270] --
+//            NULL for the world cell = not inside a POB -> 0;
+//   building = portal->getOwner() [Property.h:34/inline :57 via Container]
+//            -> getNetworkId().getValue().
+// The Object* is BORROWED consumer-held (their pick rows) -- null-checked
+// only; lifetime discipline is theirs (the getTransformO2P precedent).
+// CALLED, game-thread-only, per-frame-safe (pointer hops + a value read).
+// ----------------------------------------------------------------------
+extern "C" __int64 __cdecl utinni_getContainingBuildingId(void * object)
+{
+	if (!object)
+		return 0;
+
+	const Object * const obj = static_cast<const Object *>(object);
+
+	const CellProperty * cell = obj->getCellProperty();
+	if (!cell)
+		cell = obj->getParentCell();
+	if (!cell)
+		return 0;
+
+	const PortalProperty * const portal = cell->getPortalProperty();
+	if (!portal)
+		return 0;
+
+	return portal->getOwner().getNetworkId().getValue();
+}
+
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
 // two return shapes). Returns false on no-camera/degenerate-ray/miss.
 static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
@@ -983,6 +1026,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "worldSnapshot::wsSetNodeTemplateName", (void *)&utinni_wsSetNodeTemplateName },     // int (__int64 id, const char* name) -- re-point an authored node's template NAME in place (OTNL intern; subtree/id/transform/crc untouched; data-only, reload spawns from the new template); 1 ok / 0 miss / -1 refused (empty name, buildout, or template unresolvable NOW -- forgetMissingFile+exists pre-check); caller follows with wsSaveSnapshot
 	// -- object o2p copy-out (v23->v24, 2026-07-19 change request #5: the .ilf persist read) --
 	{ "object::getTransformO2P",              (void *)&utinni_getObjectTransformO2P },     // int (void* object, float* out12) -- row-major 3x4, position column 3 (the camera::getTransformO2W / .ilf convention); 1 ok / 0 null; borrowed consumer-held Object*, game-thread-only
+	// -- containing-building id copy-out (v24->v25, 2026-07-30 change request #6: the model-D Arm step) --
+	{ "object::getContainingBuildingId",      (void *)&utinni_getContainingBuildingId },   // __int64 (void* object) -- NetworkId value of the containing POB building (== the .ws node id); works for an .ilf decoration, a wall-click CELL object, or the player; 0 = null / not inside a POB; borrowed consumer-held Object*, game-thread-only
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

@@ -251,8 +251,23 @@
 // is inline + const Transform& -> shim mandatory (ABI RULE); layout =
 // camera::getTransformO2W byte-for-byte (row-major 3x4, position col 3).
 // The last accessor of the model-D persist flow. 146 names.
+//
+// v24 -> v25 (2026-07-30, SWG-Toolkit change request #6):
+// object::getContainingBuildingId -- copy-out containing-POB-building
+// NetworkId for a borrowed consumer-held Object* (an .ilf decoration, a
+// cell, the player). The whole chain is inline / reference-returning ->
+// un-advertisable directly (ABI RULE): cell = the object's OWN
+// CellProperty if it IS a cell (the wall-click fallback resolves to the
+// CELL object -- getParentCell on a cell walks ANCESTORS and lands in the
+// world cell, which would wrongly report "not inside"), else
+// getParentCell() [never null -- world-cell fallback, Object.cpp:1372];
+// -> getPortalProperty() [CellProperty.h:119, null for the world cell]
+// -> getOwner() [Property.h:34, the building] -> getNetworkId().getValue().
+// 0 = null arg / not inside a POB. Unblocks the model-D Arm step: building
+// id -> getObjectById -> getObjectTemplateName = the template carrying
+// interiorLayoutFileName. 147 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 24
+#define ENGINE_HOOKPOINTS_VERSION 25
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
