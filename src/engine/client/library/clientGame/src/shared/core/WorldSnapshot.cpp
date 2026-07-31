@@ -1428,6 +1428,34 @@ void WorldSnapshot::removeObject (const int64 networkIdInt)
 }
 
 //-------------------------------------------------------------------
+// Prevent a snapshot node from ever spawning again this session WITHOUT
+// destroying its authored data. The spawn set is the sphere tree, so
+// dropping the handle is the whole re-create prevention; removeObject's
+// additional removeNode tombstones+erases the AUTHORED row, which (a)
+// makes wsSetNodeTemplateName/find miss a building the server replaced,
+// (b) silently drops that authored row from every later wsSaveSnapshot
+// (tombstone-skip), and (c) makes the id allocator's map-miss free-test
+// see a still-authored id as free. Used by the SceneCreateObject
+// client-cached-replacement path (GroundScene), where the object is
+// merely superseded by the server-streamed copy -- the .ws data is not
+// being edited and must survive.
+
+void WorldSnapshot::suppressObject (const int64 networkIdInt)
+{
+	//-- same discipline as removeObject: a mid-parse miss would let the
+	//   node parse in later WITH its sphere handle (duplicate object)
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	const WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
+	if (node && node->getSpatialSubdivisionHandle ())
+	{
+		ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
+		node->setSpatialSubdivisionHandle (0);
+	}
+}
+
+//-------------------------------------------------------------------
 
 float WorldSnapshot::getDetailLevelBias ()
 {
@@ -2724,7 +2752,7 @@ extern "C" int __cdecl utinni_wsSetNodeTemplateName (__int64 networkIdInt, const
 	WorldSnapshotReaderWriter::Node* const node = ms_reader.find (networkIdInt);
 	if (!node)
 	{
-		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName MISS: id=%I64d (no live node)\n", networkIdInt));
+		WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName MISS: id=%I64d (not in authored map -- unknown id or editor-removed)\n", networkIdInt));
 		return 0;
 	}
 	if (wsIsBuildoutNode (node))

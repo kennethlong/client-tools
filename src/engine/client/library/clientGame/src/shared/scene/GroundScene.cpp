@@ -2521,8 +2521,11 @@ void GroundScene::receiveMessage(const MessageDispatch::Emitter &, const Message
 				delete clientObject;
 				existingObject = 0;
 
-				//-- mark the object so it never gets created again
-				WorldSnapshot::removeObject (static_cast<int> (networkId.getValue ()));
+				//-- mark the object so it never gets created again -- but keep the
+				//   authored .ws row: the object is superseded by the server copy,
+				//   not deleted (removeObject here erased the authored node, so the
+				//   editor rebind missed it and saves silently dropped it)
+				WorldSnapshot::suppressObject (static_cast<int> (networkId.getValue ()));
 			}
 			else
 			{

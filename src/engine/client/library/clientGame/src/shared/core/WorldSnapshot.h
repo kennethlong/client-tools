@@ -56,6 +56,7 @@ public:
 	static bool isClientCached     (int64 networkIdInt);
 	static void moveObject         (int64 networkIdInt, Transform const &transform_p);
 	static void removeObject       ( int64 networkIdInt);
+	static void suppressObject     (int64 networkIdInt);
 	static void loadIfClientCached (NetworkId const &networkId);
 	static void preloadSomeAssets  ();
 	static int  getLoadingPercent  ();
