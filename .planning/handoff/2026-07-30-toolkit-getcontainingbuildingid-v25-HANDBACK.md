@@ -37,8 +37,14 @@ building template from in-game, without a wall-click / without advertising `getP
 - Release/Win32 `/t:SwgClient` forced relink: exit 0, **0 unresolved**; exe auto-staged
   20:05:31. Exe-TU-only change (shim + row in engine_advertise.cpp + the two contract files).
 - `GetEngineHookPoints` ordinal 82, undecorated. 147 == 147 static_assert holds.
-- 45s boot smoke: alive, no new dumps (279 pre-existing artifacts, unchanged). x64 untouched
-  by construction.
+- Boot smoke CORRECTED (2026-07-30 late): the scripted 45s login-screen smoke was
+  inconclusive (the smoke process exited early — session collision, see below), but a
+  SUPERSEDING stronger validation exists: a live session on the new exe (8:07:21 PM boot)
+  went boot → login → character → WORLD ENTRY with normal in-world probe output and zero
+  new dumps (279 pre-existing artifacts, unchanged). x64 untouched by construction.
+  ⚠️ Process note: that live session was Kenny's and was killed at 8:07:48 by the smoke
+  harness misreading it as its own respawned process — NOT a crash (no dump / no crash-txt
+  / no WER / no event-log entry; logs stop mid-stream at the Stop-Process timestamp).
 
 ## 3. Contract re-sync
 
