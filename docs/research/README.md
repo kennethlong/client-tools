@@ -12,6 +12,8 @@ in `docs/*.html`.
 
 | File | Question answered |
 | --- | --- |
+| [asset-formats-and-modding-guide.md](asset-formats-and-modding-guide.md) | **START HERE for modding/SWG-Toolkit**: every asset extension, composition chains (mermaid), original SOE pipeline, modern editing paths, composite-edit recipes, SOE editor inventory + toolkit prioritization + gap analysis. (2026-08-01, verified against source + live TOC census.) |
+| [toolkit-guided-workflows-and-ai-layer.md](toolkit-guided-workflows-and-ai-layer.md) | SWG-Toolkit design proposal: demand-ranked mod archetype catalog (MTG census + server policies), the Guided Workflow engine as a supplemental layer over the planned Phase-8 MCP server, four consumer tiers (UI wizard / external MCP agents / embedded BYO-credential agent / spot assists), wizard build order. (2026-08-01.) |
 | [swgclient-build.md](swgclient-build.md) | What does `SwgClient.vcproj` build, what does it depend on, what's missing? |
 | [animation-system.md](animation-system.md) | Is the animation system Granny middleware or in-house? |
 | [foliage-system.md](foliage-system.md) | Is there a SpeedTree dependency, or is foliage in-house? |
