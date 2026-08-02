@@ -2061,6 +2061,21 @@ void GroundScene::update(float elapsedTime)
 		}
 	}
 
+	//-- Pump the phased world-snapshot parse EVERY frame, not only under the
+	//   loading screen. updateLoading() early-outs on !m_loading, so once we are
+	//   in-world its budgeted loadStep() pump is dead for the rest of the session.
+	//   An in-world load() -- the editor's "Reload current scene"
+	//   (wsUnloadSnapshot + load(getSceneId())) -- would therefore start a parse
+	//   that can NEVER progress: WorldSnapshot::update() returns immediately while
+	//   ms_parsePending, so the world comes back with no buildings, no collision
+	//   and no snapshot creatures. It only recovered when some unrelated advertised
+	//   row happened to force finishLoadNow(), which reads as "everything returned
+	//   at once after moving around".
+	//   Hoisted (not duplicated) from updateLoading()'s else-branch so the
+	//   loading-screen pump rate is unchanged at one call per frame. loadStep() is
+	//   a no-op when no parse is pending, so this is free in the normal case.
+	WorldSnapshot::loadStep();
+
 	updateLoading();
 }
 
@@ -2101,9 +2116,9 @@ void GroundScene::updateLoading()
 		if (clientProceduralTerrainAppearance)
 			IGNORE_RETURN (clientProceduralTerrainAppearance->updateTerrainWarmup ());
 
-		//-- CONSULT-60: pump the phased world-snapshot parse (node tree +
-		//   buildout tables + sphere tree) under its per-frame budget
-		WorldSnapshot::loadStep();
+		//-- CONSULT-60: the phased world-snapshot parse pump moved UP into
+		//   GroundScene::update (see the comment there) -- it must keep running
+		//   after m_loading clears, or an in-world load() stalls forever.
 
 		//-- CONSULT-59: warm queued localized-name string tables while the
 		//   loading screen is up (they otherwise load synchronously from disk
