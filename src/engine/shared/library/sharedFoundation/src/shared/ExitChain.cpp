@@ -50,7 +50,18 @@ int ExitChain::getShutdownPhase(void)
 void ExitChain::raiseShutdownPhase(int phase)
 {
 	if (phase > s_shutdownPhase)
+	{
+		int const previous = s_shutdownPhase;
 		s_shutdownPhase = phase;
+
+		//-- PERMANENT, not a temporary probe. Fires at most twice per process, and
+		//   it is the only evidence either side can point at to answer "did the
+		//   shutdown signal actually fire, and on which exit path?". Without it,
+		//   the claim that a window-close raises SP_requested rests on source
+		//   reading alone -- and the 0->2 gap it guards against is invisible by
+		//   construction (a consumer that never sees phase 1 cannot report it).
+		REPORT_LOG(true, ("[shutdown] phase %d -> %d\n", previous, phase));
+	}
 }
 
 // ======================================================================
