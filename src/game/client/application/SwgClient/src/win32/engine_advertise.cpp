@@ -597,6 +597,51 @@ extern "C" __int64 __cdecl utinni_getContainingBuildingId(void * object)
 	return portal->getOwner().getNetworkId().getValue();
 }
 
+// ----------------------------------------------------------------------
+// object::setParentCell -- cell reparenting (v26 -> v27, SWG-Toolkit change
+// request 2026-08-02). VIRTUAL [Object.h:168] -> shim mandatory (ABI RULE).
+//
+// WHY: writing only the world transform leaves the object parented to the
+// WORLD cell, so the engine evaluates the outdoor portal set from a position
+// that is physically indoors -> interiors render see-through from the inside.
+// Repairs itself on a portal crossing, which is why walking out the door
+// "fixes" it. Also fires on a scene load, so it is not teleport-specific.
+// The consumer's larger use is placement routing: the container is resolved
+// from the PLACEMENT POINT, never the player (standing in a cantina doorway
+// must be able to place OUT to .ws and IN to .ilf) -- the doorway is the
+// acceptance test in both directions.
+//
+// The null-cell guard is LOAD-BEARING, not cosmetic: Object::setParentCell
+// NOT_NULLs its argument [Object.cpp:1389], so a null cell is a FATAL, not a
+// graceful refusal. To reparent OUT to the exterior the caller must pass the
+// world cell explicitly via cellProperty::getWorldCellProperty -- null is NOT
+// how you say "outside". Unchanged-cell is a no-op engine-side [:1392].
+//
+// TRANSFORM: write o2w and do NOT convert. Two independent mechanisms keep
+// world semantics -- attachToObject_w [Object.cpp:1956] derives o2p from the
+// CURRENT world frame (rotate_w2o/rotateTranslate_w2o), and setTransform_o2w
+// [Object.cpp:1450] is itself cell-aware (world-cell parent -> direct o2p,
+// else it inverts the cell owner's o2w and back-converts).
+//
+// ORDERING: write the transform FIRST, then reparent. Both orders converge,
+// but setParentCell fires cellChanged(false) [:1408] -- reparent-first makes
+// that notification observe the object still at its OLD world position.
+//
+// Both pointers are BORROWED consumer-held; null-checked only, lifetime
+// discipline is theirs. CALLED, game-thread-only. 1 = ok, 0 = refused.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_setParentCell(void * object, void * cellProperty)
+{
+	if (!object || !cellProperty)
+		return 0;
+
+	Object * const obj = static_cast<Object *>(object);
+	CellProperty * const cell = static_cast<CellProperty *>(cellProperty);
+
+	obj->setParentCell(cell);
+	return 1;
+}
+
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
 // two return shapes). Returns false on no-camera/degenerate-ray/miss.
 static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
@@ -1029,6 +1074,8 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "object::getTransformO2P",              (void *)&utinni_getObjectTransformO2P },     // int (void* object, float* out12) -- row-major 3x4, position column 3 (the camera::getTransformO2W / .ilf convention); 1 ok / 0 null; borrowed consumer-held Object*, game-thread-only
 	// -- containing-building id copy-out (v24->v25, 2026-07-30 change request #6: the model-D Arm step) --
 	{ "object::getContainingBuildingId",      (void *)&utinni_getContainingBuildingId },   // __int64 (void* object) -- NetworkId value of the containing POB building (== the .ws node id); works for an .ilf decoration, a wall-click CELL object, or the player; 0 = null / not inside a POB; borrowed consumer-held Object*, game-thread-only
+	{ "object::setParentCell",                (void *)&utinni_setParentCell },             // v27 NEW: int (void* object, void* cellProperty) -- cell reparent; VIRTUAL [Object.h:168] so the shim is mandatory. 1 ok / 0 refused (null either side). Null cell would FATAL (NOT_NULL Object.cpp:1389) -- pass cellProperty::getWorldCellProperty to reparent OUT, never null. Write o2w FIRST then reparent (cellChanged fires inside setParentCell); do NOT convert to o2p -- attachToObject_w preserves world. Borrowed pointers, game-thread-only
+	{ "cellProperty::getWorldCellProperty",   (void *)&CellProperty::getWorldCellProperty },// v27 NEW: CellProperty* (void) -- the world-cell sentinel, out-of-line [CellProperty.h:78 / CellProperty.cpp:308] so a plain constant &fn row, NO shim (the cuiPreferences::getAllowTargetAnything pattern). Required to express "reparent to the exterior" -- setParentCell cannot take null
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

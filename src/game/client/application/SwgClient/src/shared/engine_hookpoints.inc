@@ -444,3 +444,5 @@ ENGINE_HOOKPOINT(object, getTransformO2P)               // int (void* object, fl
 // ancestors -> world cell -> wrong 0); world-cell objects report 0
 // (no PortalProperty). Borrowed Object*, game-thread-only.
 ENGINE_HOOKPOINT(object, getContainingBuildingId)       // __int64 (void* object) -- building NetworkId value; 0 = null / not inside a POB
+ENGINE_HOOKPOINT(object, setParentCell)                 // int (void* object, void* cellProperty) -- cell reparent; 1 ok / 0 refused. VIRTUAL -> shim. Null cell FATALs engine-side: use cellProperty::getWorldCellProperty for "outside"
+ENGINE_HOOKPOINT(cellProperty, getWorldCellProperty)    // CellProperty* (void) -- world-cell sentinel; plain &fn (out-of-line static), no shim

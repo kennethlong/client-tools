@@ -283,7 +283,21 @@
 // int in sharedFoundation -- safe to read from any thread at any time,
 // including CRT teardown. 148 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 26
+// ----------------------------------------------------------------------
+// v27 (2026-08-02): + object::setParentCell, + cellProperty::getWorldCellProperty
+// (SWG-Toolkit change request 2026-08-02). Writing a world transform alone
+// leaves the object in the WORLD cell, so the engine evaluates the outdoor
+// portal set from a position that is physically indoors -> interiors render
+// see-through from inside; a portal crossing repairs it, and a scene load
+// triggers it too. Beyond teleport, this backs PLACEMENT ROUTING: the
+// container is resolved from the PLACEMENT POINT, never the player, so
+// standing in a cantina doorway must place OUT to .ws and IN to .ilf -- the
+// doorway is the acceptance test in both directions.
+// setParentCell is virtual -> shim; getWorldCellProperty is an out-of-line
+// static -> plain &fn row, and it is REQUIRED because setParentCell NOT_NULLs
+// its argument (null is a FATAL, not "outside"). 150 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 27
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
