@@ -1,0 +1,196 @@
+# CONSULT-56 — Lateral-thinking angle (Sonnet 5)
+
+Scope discipline: I deliberately did NOT re-derive/re-argue the non-atomic `Shader::m_users`
+refcount race or the unlocked `ShaderCache::nodeList` race (Shader.cpp:45-49,
+ClientProceduralTerrainAppearance_ShaderCache.cpp:351-478) — those are explicitly assigned to
+other consultants. Everything below is either (a) a mechanism I could positively RULE OUT by
+reading the actual source, or (b) a genuinely different mechanism from those two.
+
+## Ruled out (with file:line evidence)
+
+1. **OOB indexing into `cache[priority][childIndex]`.** `getTextures()`
+   (ClientProceduralTerrainAppearance_ShaderCache.cpp:303-305) computes
+   `childIndex = shaderGroup.createShader(sgi)`. `ShaderGroup::Family::createShader()`
+   (ShaderGroup.cpp:316-340) always returns an index `< childList.getNumberOfElements()` for
+   *that* family, which is `<= maxNumberOfChildren` (the max across all families, used to size
+   `cache[i]`, ShaderCache.cpp:113-134). `sgi.getPriority()` is a family index produced by
+   `ShaderGroup::chooseShader()` (ShaderGroup.cpp:564-582) which is bounded by
+   `familyList.getNumberOfElements()` == `maxNumberOfFamilies`. Both the `shaderMap` samples
+   consumed in `createTileShader` (ClientProceduralTerrainAppearance_ClientChunk.cpp:330-370) and
+   the `ShaderCache` itself are built from the *same* `ShaderGroup` instance
+   (`generator->getShaderGroup()`, ClientProceduralTerrainAppearance.cpp:404,429,432), so the
+   indices are always consistent with the cache's dimensions by construction. No OOB path found.
+
+2. **`ShaderGroup` mutated concurrently / `ShaderCache::shaderGroup` dangling.**
+   `ShaderCache` stores `const ShaderGroup& shaderGroup;` (ClientProceduralTerrainAppearance_ShaderCache.h:74)
+   bound once in the ctor to `generator->getShaderGroup()`. `ShaderGroup::Family`'s mutators
+   (`addChild`, `removeChild`, `setChild`, `promoteFamily`, `demoteFamily`, `renameChild`,
+   `setChildWeight` — ShaderGroup.cpp:344-1432) are TerrainEditor-only APIs; nothing in the
+   runtime client calls them. `ProceduralTerrainAppearanceTemplate::load()`
+   (ProceduralTerrainAppearanceTemplate.cpp:826-952) builds `m_terrainGenerator` exactly once and
+   only frees it in its own dtor (:117-118); there is no reload/replace path. Ruled out.
+
+3. **ShaderCache / whole terrain appearance rebuilt mid-scene (options/device-reset).**
+   `m_shaderCache` is `new`'d exactly once in the ctor (ClientProceduralTerrainAppearance.cpp:432)
+   and `delete`'d exactly once in the dtor (:548-549) — no other call sites. Even the
+   specular-terrain option toggle is explicitly deferred to a full appearance *recreation*, not a
+   live in-place rebuild (comment at :386, "spec terrain changes are deferred until the terrain is
+   re-created"). Ruled out.
+
+4. **`StaticShaderTemplate`/`ShaderTemplateList` reload racing shared shaders' aliased maps.**
+   `m_materialMap` et al. are allocated once inside `StaticShaderTemplate::load_0000/0001`
+   (StaticShaderTemplate.cpp:107-130,278-478) and never touched again outside the dtor
+   (:134-156) — there is no reload/hot-swap method. `ShaderTemplateList`'s name map AND
+   `ShaderTemplate::fetch()/release()` (the template-level refcount, one layer above the
+   already-covered `Shader::m_users`) are both protected by the *same* `RecursiveMutex`
+   (`ShaderTemplateList::ms_criticalSection`, ShaderTemplateList.cpp:34,98-118,206-235;
+   ShaderTemplate.cpp:48-73). This layer is thread-safe. Ruled out as an independent cause —
+   though see the Rank-1 finding below for how it still connects to the crash.
+
+5. **Generic allocator / pool-internals races (a fresh "adjacent allocation" theory).** This
+   codebase overrides *every* engine `new`/`delete` (including `std::map`'s default
+   `std::allocator`, since it ultimately calls `::operator new`) to route through a custom global
+   allocator, `MemoryManager` (sharedMemoryManager/src/shared/MemoryManager.cpp), itself protected
+   by a `RecursiveMutex` around the actual allocate/free logic in *all* build configs, not just
+   Debug (MemoryManager.cpp:1173,1216-1219,1450+). `MemoryBlockManager` (the fixed-size pools used
+   by `StaticShader`, `StaticShaderTemplate`, and `Direct3d11_StaticShaderData`) is likewise fully
+   locked via `ms_globalCriticalSection` in Release — its only lock-free path
+   (`if(!m_usingMemoryBlockManager) return operator new(...)`, MemoryBlockManager.cpp:588-593) is
+   `#ifdef _DEBUG` and does not exist in the crashing `SwgClient_r.exe`. **So the allocator's own
+   bookkeeping is not racy.** This matters: it means the corruption is a genuine logical
+   use-after-free/overrun of a legitimately-freed-too-early (or overrun) block, not an allocator
+   metadata race — reinforcing (not replacing) the refcount-race theories already assigned to
+   other consultants.
+
+## Findings (ranked)
+
+### Rank 1 — Why this manifests as "string text," not why it happens (amplifier, high confidence)
+
+`DEBUG_FATAL`/`DEBUG_WARNING` compile to a complete NOP outside `_DEBUG`
+(sharedFoundation/src/shared/Fatal.h:40-53: `#define DEBUG_FATAL(a,b) NOP` in non-debug builds).
+The crashing binary is `SwgClient_r.exe` (Release). Every guard that would have caught the *real*
+root cause immediately and loudly is therefore silently absent in exactly this binary:
+
+- `DEBUG_FATAL(m_users < 0, ...)` in `Shader::~Shader()` (Shader.cpp:39) and
+  `ShaderTemplate::~ShaderTemplate()` (ShaderTemplate.cpp:39) — would catch a double-release the
+  instant it happens.
+- `DEBUG_FATAL(m_staticShader, ("StaticShader still exists for this template"))` in
+  `~StaticShaderTemplate()` (StaticShaderTemplate.cpp:136) — would catch a template being torn
+  down while its cached shared `StaticShader` (and hence its family/tile shaders' aliased map)
+  is still considered live.
+- Every `DEBUG_FATAL(!result.second, ("insert failed"))` guarding the `MaterialMap`/`TextureDataMap`/etc.
+  inserts during `.sht` load (StaticShaderTemplate.cpp, many sites) — would catch a corrupted/
+  duplicate-key load.
+- The engine's own heap has guard-band and free-pattern corruption *detection* built in
+  (`ms_debugVerifyGuardPatterns`, `ms_debugVerifyFreePatterns`, MemoryManager.cpp:1193-1198) but
+  it too is `#ifdef _DEBUG`-gated and therefore inert in this exe.
+
+Net effect: whichever of the covered races (non-atomic `Shader::m_users`, unlocked `nodeList`)
+actually frees the `StaticShaderTemplate`/`MaterialMap` too early, Release has *zero* instrumentation
+between "free happens" and "some unrelated later allocation reuses the block" — so the fault
+naturally surfaces frames away, in `getMaterial`'s `map::find`, reading whatever the next
+same-size-class allocation on any other thread (plausibly a filename/path string from the async
+TreeFile loader, which is confirmed live and racing a *sibling* unlocked map per evidence #7)
+happened to write there. This isn't a new root cause, but it is the concrete, source-verified
+reason the AV looks like "string text where a map header should be," and it gives a cheap,
+high-value verification lever.
+
+**Verification:** repro Tatooine zone-in with `ms_debugVerifyGuardPatterns`/
+`ms_debugVerifyFreePatterns` and `ConfigSharedFoundation::getUseMemoryBlockManager()` turned on
+(Debug build, or a Release build compiled with `DEBUG_FATAL` live). Expect the crash to relocate
+from a generic AV in `std::_Tree::find` to a specific, in-context `FATAL`/guard-band violation at
+the actual double-release or overrun site — this will directly identify which of the covered races
+is the real trigger, and confirms/refutes this theory in one run.
+
+### Rank 2 — A second, independent call site into `StaticShader::getMaterial()` from the terrain thread (D3D11-specific, medium-high confidence, genuinely new)
+
+`StaticShader::createGlData()` (StaticShader.cpp:274-278, calling
+`Graphics::createStaticShaderGraphicsData(*this)`) is invoked unconditionally from **both**
+`StaticShader` constructors: the shared-fetch ctor (StaticShader.cpp:82-116, call at :114) *and*
+the modifiable-clone ctor (StaticShader.cpp:120-154, call at :152). The modifiable ctor is exactly
+the one used for every blended-tile shader clone on the terrain thread:
+`blendingShader[blendCount]->fetchModifiable()` /
+`blendingShaderSpecular[blendCount]->fetchModifiable()`
+(ClientProceduralTerrainAppearance_ShaderCache.cpp:417,420, inside `createBlendedShader`, which is
+on the crash's own call stack one frame up from `setupMaterial`).
+
+For gl11, `Graphics::createStaticShaderGraphicsData` resolves to
+`Direct3d11_StaticShaderData::construct()` (Direct3d11_StaticShaderData.cpp:375-524), and that
+function does its own **independent** unguarded read of a `StaticShaderTemplate`'s `MaterialMap`:
+
+```
+Direct3d11_StaticShaderData.cpp:510-513
+  if (engPass->m_materialTag)
+  {
+      Material material;
+      if (shader.getMaterial(engPass->m_materialTag, material))
+```
+
+This is the *same* `StaticShader::getMaterial()` named in the crash stack
+(`StaticShader::getMaterial+0x1a`), but reached via a completely different caller
+(`Direct3d11_StaticShaderData::construct`, not
+`ClientProceduralTerrainAppearanceShaderCacheNamespace::setupMaterial`), on the *same* ClientTerrain
+thread, once per ephemeral blend-shader clone created during zone-in (potentially thousands of
+calls as tiles stream in). Practically, this means:
+
+- The set of `MaterialMap`s read off the terrain thread is larger than the one call site visible
+  in this particular crash's stack would suggest — it includes every blend/blend-specular
+  template's own map (`blnd_onequarter.sht`, `terrain_blend*.sht`, etc.), not just the family/tile
+  templates read by `setupMaterial`.
+- Any fix the other consultants land for the `setupMaterial` call site (e.g. a lock around shared
+  `StaticShaderTemplate` map access, or restricting blend-clone construction to the main thread)
+  needs to also cover this construct()-time read, or the same class of AV can resurface with
+  `Direct3d11_StaticShaderData::construct` in the stack instead of `setupMaterial`.
+- This is reachable identically regardless of renderer (the `fetchModifiable()`/`createGlData()`
+  call chain is shared engine code), so it is not gl11-*exclusive* in principle — but gl11's
+  `construct()` is the one that happens to do a synchronous engine-map read at construct time
+  (Plan 17-03 SR-1 per the file's own comments), and this file already has a documented history of
+  exactly this class of cross-thread graphics-data lifetime bug (see the extensive "UAF FIX" block
+  at Direct3d11_StaticShaderData.h:141-158, about `m_graphicsData` being freed/recreated out from
+  under a stale snapshot during device restore) — so an audit of whether a device-lost/restore
+  sequence can race `construct()` while the terrain thread is mid-blend-shader-creation is worth a
+  dedicated pass.
+
+**Minimal fix:** none proposed standalone (this rides on whichever locking fix lands for the
+`setupMaterial` read) — but explicitly extend that fix's scope to
+`Direct3d11_StaticShaderData::construct()`'s `shader.getMaterial()` call, and audit
+`ShaderImplementationPassVertexShaderGraphicsData`/`...PixelShaderProgramGraphicsData` traversal in
+the same function for the same hazard.
+
+**Verification:** add a thread-id assertion/log at both call sites
+(ShaderCache.cpp:49 and Direct3d11_StaticShaderData.cpp:513) confirming both are hit from the
+ClientTerrain thread during zone-in; on a future repro, check whether the crash stack ever shows
+`Direct3d11_StaticShaderData::construct` instead of `setupMaterial` — that would confirm this is
+the same systemic hazard reaching a second door, not a coincidence.
+
+### Rank 3 — Residual open question, same shape as the already-fixed bug, unconfirmed (low-medium confidence)
+
+`TreeFile::open()` (TreeFile.cpp:661-765) iterates the global `ms_searchNodes` list **without any
+lock** (lines 712-740: `for (SearchNodes::iterator i = ms_searchNodes.begin(); ...) file = (*i)->open(...)`)
+from whichever thread calls it — main thread, ClientTerrain thread, and the async TreeFile loader
+thread all call `TreeFile::open()` during zone-in. The container itself is safe (populated only
+once, single-threaded, during `TreeFile::install()`), and the one exact sibling bug that *was* found
+in this file — `TreeFile::SearchCache::m_cachedFileMap`, fixed at commit 9c03f53c5 — was a leaf
+map inside one specific `SearchNode` subclass, not this top-level list. I did not have time in this
+pass to audit every other `SearchNode` subclass's `open()`/`getPathName()` override
+(`SearchPath`, `SearchTree`/archive-TOC reader, `SearchTOC`, `SearchAbsolute`) for a similar
+unlocked lazily-populated cache. Given the project just found and fixed exactly one instance of
+"unlocked std::map raced by the async loader" in this same file, it's worth a quick grep pass for
+siblings before ruling this family of bug out entirely.
+
+**Verification:** `grep -n "std::map\|mutable" src/engine/shared/library/sharedFile/src/shared/TreeFile_SearchNode*`
+and read each `SearchNode`-derived `open()` for state mutated outside `TreeFile::ms_criticalSection`.
+If found, apply the same "leaf mutex" pattern used for `SearchCache::m_cachedFileMap`.
+
+## Summary / what would discriminate
+
+- Rank 1 is a diagnostic amplifier, not a distinct root cause — it explains *why* Release shows
+  "string text in a map header" instead of a precise FATAL, for *any* of the racy-free theories
+  (covered or not). Turning on the engine's own existing (but Debug-only) guard-band/DEBUG_FATAL
+  instrumentation is the cheapest way to convert this whole investigation from post-hoc dump
+  analysis into a live, precise repro.
+- Rank 2 is the most concrete, novel, source-verified finding: a second reachable call path into
+  `StaticShader::getMaterial()` off the terrain thread, via `Direct3d11_StaticShaderData::construct()`,
+  that any locking fix must also cover.
+- Rank 3 is a legitimate but unconfirmed audit item in the same bug family as the already-fixed
+  `SearchCache` issue.

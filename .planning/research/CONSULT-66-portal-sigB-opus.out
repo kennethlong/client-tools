@@ -1,0 +1,38 @@
+(archived from Agent-tool run; fresh Opus consultant, CONSULT-66)
+
+## Grounding fact that prunes the space
+
+The probe fields map 1:1 to the dPVS reject array documented in dpvsVisibilityQuery_Traverse.cpp:512-526:
+bf=[0] backface, ct=[1] calculateTransition, tt=[2] testTransition, rect=[3] getTestRectangle, fr=[4] createFrustumFromRectangle, ph=[5] visibility-parent-hidden, tested=[6] "entered the visibility test at all", dbUpd/dbRem/dbAdd=[7/8/9] Database updateObject/removeObject/addObject on a portal.
+
+Closing a portal is dpvsObject->set(DPVS::Object::ENABLED,false) (RenderWorld.cpp:768, edge-triggered via closedStateChangedHookFunction). A disabled dPVS object is skipped before the visibility test and without a removeObject. Therefore:
+
+tested:0 with every reject 0 and dbRem/dbAdd:0 = the cell-database enumerated ZERO enabled portal objects that frame. Not a culling/frustum/geometry failure — any enabled portal in the cell would have incremented tested (and any backface/frustum kill would have incremented bf/fr). The fault is strictly at the ENABLE/enumeration layer: foyer1 had no live exit portal. [Orchestrator note: Cursor's node-level VF-cull path (NODE_HIDDEN before object enumeration) would also produce silent zero — this exclusion has that one hole.]
+
+## Ranked enumeration
+
+S1 — SEALED CELL (leading). All of foyer1's real-door portals legitimately ENABLED=false: interior door still in login-init CLOSED state (wake never fired — the documented brittle one-shot capsule miss), front door auto-closed at 02:32:10 → zero enabled exits. While the front door was open, foyer1's 7-8 visCells were the world seen through the open front door (world itself saw 8-9 cells at 02:32:08) — foyer1 was never seeing through the interior door. Persists because neither door re-opens. Requires NO new bug — only the already-filed real-door-trigger residual plus normal edge-triggered closing.
+- Discriminator: dump each foyer1 portal's isClosed + dpvs ENABLED while stuck → all isClosed=1, ENABLED=0.
+- Healthy contrast: player had walked deeper and back (interior doors demonstrably open) AND the close happened with the camera in world. Both S1 conditions absent. The sick-vs-healthy delta collapses to: was foyer1's interior door open when the front door closed? Sick: no. Healthy: yes.
+
+S2 — STUCK-DISABLED PORTAL. A portal that WAS open got left ENABLED=false by the disableDpvsObjectForThisRender / ms_excludedDpvsObjects path (RenderWorld.cpp:870-877 disables + queues; 1205-1211 is the ONLY re-enable). A skipped/short-circuited cleanup leaves it disabled; the edge-triggered close hook never re-syncs. Plausibly newly exposed by preventDriverInternalThreading=false + censusLog=true altering drawScene exit/timing.
+- Discriminator: a portal with ENABLED=0 but isClosed=0 = DESYNC = S2. Under S1 the flags always agree.
+
+S3 — WRONG/EMPTY CELL REFERENCE. Camera-cell derivation latched a foyer1 ImpCell whose database is unpopulated (duplicate/still-streaming instance; fresh-login cell-name collisions visible in the 02:31:53 wave), while the populated foyer1 is a different ImpCell.
+- Discriminator: log query-root ImpCell* and its TOTAL portal count → total==0 or pointer mismatch = S3.
+
+S4 — eye on wrong side / all portals backfacing: EXCLUDED by counters (bf:0; backfacing portals are enumerated → would count).
+
+S5 — dropped dirty-node DB desync (CONSULT-64 hoist x new threading): low — would generally show nonzero db counters on the close frame and likely hit more than one cell.
+
+## Single best mechanism
+
+S1 — the player sealed themselves in foyer1. Fully consistent with the tested:0/all-zero proof, the causal 1-second door-close edge, and the healthy contrast.
+
+## Cheapest probe / experiment
+
+Zero-code experiment on repro: walk hard into the INTERIOR doorway to trip its collision wake, then separately walk back onto the front door. If bumping a door clears the hole → S1 confirmed. If no door contact clears it → S2/S3.
+
+One decisive probe line (the count-flip gate makes the probe silent while stuck — bypass it for this case): on any frame where cell != world AND tested == 0, emit once per second:
+[PortalCullProbe] STUCK cell=%s cellPtr=%p nPortals=%d | per-portal{ name=%s isClosed=%d dpvsEnabled=%d }...
+S1 = every portal isClosed=1, dpvsEnabled=0; S2 = at least one isClosed=0, dpvsEnabled=0; S3 = nPortals=0 or cellPtr differs from live foyer1.

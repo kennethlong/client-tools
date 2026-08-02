@@ -1,0 +1,244 @@
+# CONSULT-56 — Opus (concurrency / memory-model) findings
+
+Angle: rigorous interleaving analysis of the unsynchronized shared state, grounded in source.
+All line numbers are from this tree (D:\Code\swg-client-v2).
+
+## Executive verdict (read first)
+
+The crash is **NOT** an orderly refcount-driven destruction of the family shader or its template.
+The family shader's template map cannot be freed by a refcount race, because:
+
+- The family/tile StaticShaders are fetched **exactly once, single-threaded, before any
+  concurrency exists**, and are only **read** thereafter (proof below). Their `Shader::m_users`
+  is never concurrently mutated.
+- The `StaticShaderTemplate` refcount **is lock-protected** (`ShaderTemplate::fetch/release` take
+  `ShaderTemplateList::ms_criticalSection`, a `RecursiveMutex`), so template deletion is serialized
+  and only occurs at refcount 0 — which cannot happen while the ShaderCache still holds its ref.
+
+Therefore the material-map block is **collateral damage from heap corruption**. The one provably
+unsynchronized structure on the hot zone-in path is `ShaderCache::nodeList` (a raw
+`ArrayList<BlendedShaderCacheNode>` with **no lock**), mutated concurrently by the ClientTerrain
+thread and the main thread. Its `ArrayList::resizeUp` (`new[] / memcpy / delete[] / pointer-swap`)
+and `removeIndexAndCompactList` (byte-shift) run with zero synchronization, producing
+use-after-free and **double-free of the backing buffer**. A double-free poisons the CRT heap
+free-list; a later allocation (a loader path string) is then handed a block that still aliases a
+live `StaticShaderTemplate::m_materialMap` node — which is exactly what the dump shows: the map's
+root/head slot overwritten with ASCII loader-path text (`0x66207265` = "er f").
+
+The single correct fix is to **guard every `nodeList` access with one mutex** (the header already
+`#include`s `sharedSynchronization/Mutex.h` at ShaderCache.h:12 but declares **no** mutex member —
+an abandoned/incomplete fix). Making refcounts atomic alone does **not** suffice.
+
+---
+
+## 1. Non-atomic refcounts: which objects, which interleavings
+
+### 1a. `Shader::m_users` (the non-atomic one)
+
+- Declared `mutable int m_users` (Shader.h:69). `fetch()` is inline `++m_users` (Shader.h:75-78).
+  `release()` is `if (--m_users <= 0) delete this;` (Shader.cpp:45-49). No lock on either.
+- On Win32/x86 these compile to a non-`LOCK`ed read-modify-write (`dec dword ptr [mem]` or
+  load/dec/store). Two cores can interleave the RMW and lose an update:
+  - **Lost decrement** (T1.fetch reads 2, T2.release reads 2, T1 writes 3? no) — concretely:
+    both do RMW on the same word; one store clobbers the other. Losing a *decrement* → leak
+    (harmless-ish). Losing an *increment* is fatal: T1 `fetch` reads `m_users==1`; T2 `release`
+    reads `m_users==1`; T1 writes 2; T2 computes `1-1=0`, writes 0, and `delete this`. T1 now holds
+    a pointer it believes has refcount 2, to freed memory → UAF / double-free.
+
+- **Does this hit a FAMILY shader here? No.** Proof of single-threaded, read-only lifecycle:
+  - `m_shaderCache = new ShaderCache(...)` at ClientProceduralTerrainAppearance.cpp:432 runs the
+    ctor, which calls `preloadShaders()` (ShaderCache ctor, ShaderCache.cpp:178).
+  - `preloadShaders()` fetches each family shader once via
+    `ShaderTemplateList::fetchShader(...)` (ShaderCache.cpp:328-329) and stores it in
+    `cache[i][j].shader` (:331). That `fetchShader` did the one `++m_users`.
+  - The **terrain thread is not created until line 501-502** — i.e. *after* line 432. So preload
+    is single-threaded.
+  - Post-preload, the family shader is only **read**: `getTextures` copies the pointer
+    (ShaderCache.cpp:307), and `createBlendedShader`→`setupMaterial` calls
+    `shader.getMaterial(...)` (ShaderCache.cpp:49, 406) — no `fetch`/`release`.
+  - It is released once, in `~ShaderCache` (:202-203), which runs only **after the thread is
+    joined**: `m_requestThread->wait()` (:533) precedes `delete m_shaderCache` (:548).
+
+  So the family shader's `m_users` is `+1` once and `-1` once, never concurrently. **No torn RMW on
+  the family shader.** (This *is* a real latent bug for any *shared* StaticShader that is genuinely
+  fetched from two threads — see §3 note on `StaticShaderTemplate::fetchShader` — but it is not the
+  mechanism for this crash.)
+
+### 1b. `ShaderTemplate` refcount (the family shader's template = owner of `m_materialMap`)
+
+- `ShaderTemplate::fetch()` / `release()` **take the lock**: `enterCriticalSection();
+  ++/--m_users; ... leaveCriticalSection()` (ShaderTemplate.cpp:48-53, 57-73). `release()` deletes
+  the template (and `~StaticShaderTemplate` runs `delete m_materialMap`, StaticShaderTemplate.cpp:146)
+  **only** when `--m_users <= 0`, all under the lock.
+- For a shared family StaticShader, `m_materialMap` aliases the template's map
+  (`m_materialMap(const_cast<...>(staticShaderTemplate.m_materialMap))`, StaticShader.cpp:93) and
+  `~StaticShader` does **not** delete it (only deletes when it differs, StaticShader.cpp:220-222).
+  The map is owned solely by the template.
+- The shared StaticShader holds one template ref (`Shader` ctor `m_template.fetch()`,
+  Shader.cpp:22). While the family StaticShader is alive (ShaderCache holds it, §1a), that template
+  ref is held → template `m_users >= 1` → **template cannot be deleted** → `delete m_materialMap`
+  **cannot legitimately run**. And because template refcounting is lock-serialized, there is no
+  torn-RMW path to drop it to 0 either.
+
+**Conclusion of §1:** No refcount interleaving — atomic or not — can free the family shader's
+material map while the ShaderCache holds its reference. The map is freed/overwritten by
+out-of-band heap corruption, not by `delete m_materialMap`. This is the pivotal deduction; it
+redirects the whole investigation to §2.
+
+---
+
+## 2. The `ShaderCache::nodeList` races (the actual corruptor)
+
+`mutable ArrayList<BlendedShaderCacheNode> nodeList` (ShaderCache.h:89). **No mutex guards it**
+(header includes Mutex.h at :12 but declares no member; the .cpp locks nothing).
+
+### Threads and the exact unsynchronized entry points
+
+- **ClientTerrain thread** (name matches the faulting thread in the dump):
+  `threadRoutine` (LevelOfDetail.cpp:783) **releases `m_requestCriticalSection` at :820** and then
+  calls `createClientChunk` at :823 with **no lock held** → `ClientChunk::create` → `createTileShader`
+  → `createBlendedShader` (ClientChunk.cpp:572). Inside:
+  - `findCachedShader`: iterates `nodeList`, and on a hit does `++node.referenceCount;
+    node.timeout = 0.0f` (ShaderCache.cpp:353-380).
+  - `createBlendedShader`: reads `*shaderData.inputShaders[i]` via `setupMaterial`
+    (:406 → getMaterial), then `nodeList.add(node)` (:431).
+  - `setupShaderData` writes node fields (:531-534).
+- **Main thread**, in `ClientProceduralTerrainAppearance::alter`:
+  - `m_shaderCache->alter(elapsedTime)` (:889) → `ShaderCache::alter` iterates `nodeList`,
+    `node.timeout += elapsedTime`, and on 5 s timeout: `nodeList[i].shader->release();
+    nodeList[i].shader = 0; nodeList.removeIndexAndCompactList(i)` (ShaderCache.cpp:456-478).
+  - `destroyShader`: `--nodeList[i].referenceCount` (:445); `flushCache`: `nodeList.clear()` (:484).
+- **Main thread also writes nodeList** on first zone-in frames: `selectActualLevelOfDetail`
+  (LevelOfDetail.cpp:704) → `initializeLevelOfDetail` (:719 → :675) → `createChunk`
+  (appearance.cpp:848) → `createClientChunk` → `createBlendedShader` → `nodeList.add`. So there can
+  be **two concurrent writers** (main + terrain) both calling `nodeList.add`.
+
+The `ArrayList` primitives are all non-atomic (ArrayList.h):
+- `add` → if full, `resizeUp` (:226-227). `resizeUp`: `newData = new T[newSize];
+  memcpy(newData, m_data, ...); delete[] m_data; m_data = newData;` (:395-414).
+- `removeIndexAndCompactList`: byte-shift `m_data[j] = m_data[j+1]` loop, `--m_numberOfElements`
+  (:330-341).
+- `operator[]` returns `m_data[index]` by reference (:482-488).
+
+### Concrete interleavings and their outcomes
+
+**(A) resizeUp use-after-free (terrain add vs main alter).**
+Main `alter` holds `BlendedShaderCacheNode &node = nodeList[i]` (ShaderCache.cpp:460), i.e. a
+pointer into `m_data`. Terrain `nodeList.add` triggers `resizeUp`: `delete[] m_data` (ArrayList.h:410)
+frees the buffer while `node` still points into it; `m_data = newData` (:413) swaps the base.
+Main thread then executes `node.timeout += elapsedTime` (:464) or `nodeList[i].shader = 0` (:468)
+— a **write into a freed block**. If that block has already been recycled (e.g. to a loader path
+string or a std::map node), the write corrupts the new owner. Symmetric case: main `alter` reads
+`nodeList[i].shader` from the freed old buffer → garbage pointer → `->release()` (:467) performs a
+wild `--*(int*)(garbage+offset)` and possibly `delete this` on garbage.
+
+**(B) Double-free of the backing buffer (two concurrent `resizeUp`) — best fit for the evidence.**
+Two writers (terrain `createBlendedShader` and main `initializeLevelOfDetail`→`createBlendedShader`,
+or terrain `add` racing itself is impossible, but terrain-`add` vs main-`add` is possible) both see
+`m_numberOfElements == m_size` and both enter `resizeUp`. Each does `new T[newSize]`, `memcpy`, then
+**both `delete[] m_data` on the same original pointer** (ArrayList.h:410) → **double-free**. A
+double-free poisons the CRT small-block free-list so a single physical block is later handed out to
+**two** distinct `malloc`/`new` callers. During zone-in the ClientTerrain thread is simultaneously
+loading `.sht`/texture data and formatting loader path strings (e.g. ShaderTemplateList.cpp:542
+`ShaderTemplate_Iff: %s`, FileName construction, IFF path buffers). One of those string/heap
+allocations gets the same block that still backs a live `StaticShaderTemplate::m_materialMap`
+(a `std::map<Tag,Material>` node). The string bytes overwrite the map's header/root pointer.
+Next time the terrain thread reads that family shader — `getMaterial` → `m_materialMap->find`
+(StaticShader.cpp:524) — `std::_Tree::find` dereferences the now-string-valued root and AVs at
+`root + 0xd`. **This reproduces the dump byte-for-byte:** freed-and-reused block, root slot = ASCII
+loader text, family shader's template-owned map (not the blended shader's freshly-cloned map).
+
+**(C) removeIndexAndCompactList shifting during a concurrent find/add.**
+Main `removeIndexAndCompactList` (ArrayList.h:337-338) shifts elements down and decrements
+`m_numberOfElements` while terrain `findCachedShader` iterates `for (i < getNumberOfElements())`
+and holds `nodeList[i]` (ShaderCache.cpp:353-355). The terrain thread can read a half-shifted node
+(mixed fields from two different `BlendedShaderCacheNode`s — `shader` from one, `referenceCount`
+from another), then `++node.referenceCount` on the wrong node and **return a `node.shader` that
+main just `release()`d/zeroed** (:379). That hands a **dangling blended shader** to a new chunk
+(consumed later during render) — a *different*, later crash signature, but the same root cause.
+
+**(D) referenceCount TOCTOU vs the 5 s timeout.**
+`node.referenceCount` is a plain int RMW touched by terrain `findCachedShader` `++` (:377) and main
+`alter`'s `== 0` test (:462) plus `destroyShader` `--` (:445). Interleaving: main reads
+`referenceCount == 0` and lets `timeout` age to > 5 s; terrain `findCachedShader` matches the same
+node, `++referenceCount` → 1, `timeout = 0`, returns `node.shader` to a chunk; main, already past
+its re-read, executes `nodeList[i].shader->release()` (:467) and frees the blended shader the chunk
+just adopted → dangling blended shader (again the render-time variant of (C)).
+
+### Why the crash is a FAMILY shader and not a blended shader
+
+The blended shader's own `m_materialMap` is a fresh per-node clone (setMaterial clones on first
+write, StaticShader.cpp:348-349) and is only **written** in this path (setupShaderData→setMaterial,
+ShaderCache.cpp:582), never read by `setupMaterial`. The only map **read** on the terrain thread is
+the family shader's (`setupMaterial(*inputShaders[i])` → `getMaterial`, ShaderCache.cpp:406→49→
+StaticShader.cpp:524). The family/template map is long-lived (allocated once at preload) and sits in
+an older heap region next to loader activity — a prime target to be aliased by a double-free
+collision. So heap corruption originating in `nodeList` is *observed* precisely as a bad family-map
+read. Mechanisms (A)/(B) corrupt arbitrary heap; the family map is where we happen to fault.
+
+---
+
+## 3. Ranking and the minimal fix
+
+Ranked by (a) probability per zone-in and (b) fit to the evidence (string-over-map-header; family
+not blended; ClientTerrain faulting thread):
+
+1. **(B) Double-free / (A) UAF of the `nodeList` ArrayList buffer** — *highest probability,
+   best evidence fit.* Guaranteed concurrent access every zone-in (terrain `createBlendedShader`
+   + `findCachedShader` vs main `alter`'s release/compact, plus occasional second main-thread
+   writer via `initializeLevelOfDetail`). Directly explains "freed-and-reused block whose header now
+   holds loader-path string text," and explains why a *template-owned family* map is hit while the
+   ShaderCache legitimately holds its reference (heap collateral, not a refcount event). This is the
+   cause.
+2. **(C)/(D) dangling blended shader from compaction/TOCTOU** — real and caused by the same missing
+   lock, but its natural crash is later, at render time, not the observed terrain-thread
+   `getMaterial` AV. Same fix closes it.
+3. **(1a) non-atomic `Shader::m_users` torn RMW** — a genuine latent bug, but *not reachable for
+   the terrain family shaders* (single-threaded preload, read-only after). Would require a shared
+   StaticShader fetched from two threads via the unlocked `StaticShaderTemplate::fetchShader`
+   (StaticShaderTemplate.cpp:169-176, which also races the lazy `m_staticShader` create). Not this
+   crash; worth a separate hardening pass.
+
+### The single fix that closes every credible interleaving
+
+Add **one mutex to `ShaderCache`** (the header already includes `sharedSynchronization/Mutex.h`)
+and hold it across the **entire body** of every `nodeList` operation:
+
+- `findCachedShader` (ShaderCache.cpp:351-384) — whole scan + `++referenceCount`.
+- `createBlendedShader` (:388-434) — including its internal `findCachedShader` call and
+  `nodeList.add` (do not drop the lock between the lookup and the add, or (B) reopens).
+- `destroyShader` (:438-449), `alter` (:453-478), `flushCache` (:482-485).
+
+Correct granularity = one lock per ShaderCache instance covering the ArrayList as a unit (the
+structural realloc/compaction is what must be atomic, not just the counter). A recursive/simple
+`Mutex` is fine since these calls don't nest. This serializes `resizeUp` (no double-`delete[]`, no
+UAF), makes `removeIndexAndCompactList` atomic wrt readers, and closes the referenceCount TOCTOU.
+
+Note the lock ordering: `createBlendedShader` internally calls `fetchModifiable()` (:417/420),
+which goes through `ShaderTemplateList`'s `ms_criticalSection`. To avoid an A/B deadlock, take the
+ShaderCache lock only around the `nodeList` touches, or ensure ShaderCache-lock → ShaderTemplateList-
+lock is the consistent global order (it already is: nothing takes the ShaderTemplateList lock and
+then calls into ShaderCache).
+
+**Atomic refcounts alone are NOT sufficient.** Making `Shader::m_users` and `referenceCount` atomic
+fixes (1a) and the (D) counter TOCTOU, but does nothing about the `ArrayList` buffer being
+`delete[]`d and pointer-swapped under a concurrent reader/writer — the resizeUp double-free/UAF
+(A)/(B), which is the actual corruptor here, is a **structural** data race on the container, not a
+counter race. Only mutual exclusion over `nodeList` fixes it.
+
+### Verification
+
+- **Static:** after the fix, `nodeList` must have zero access outside the lock — grep the six call
+  sites above.
+- **Dynamic repro/probe (pre-fix, to confirm):** add a debug canary — a per-ShaderCache
+  `volatile LONG m_inNodeListOp` bumped with `InterlockedIncrement` at the top of each of the six
+  methods and asserted `== 1`; a fire during Tatooine zone-in on gl11 proves concurrent entry.
+  Alternatively run under Application Verifier (page-heap + "free" fill) — the double-free/UAF will
+  trip deterministically at the `delete[] m_data` in `resizeUp` (ArrayList.h:410).
+- **Post-fix:** the canary assert never fires; page-heap zone-in is clean; the intermittent
+  `std::_Tree::find` AV on the ClientTerrain thread disappears across repeated cold-cache zone-ins.
+
+This is the same class of defect already fixed once in this exe for `TreeFile::SearchCache`
+(unlocked `std::map` raced by the async loader, commit 9c03f53c5) — `ShaderCache::nodeList` is the
+same bug in a hand-rolled `ArrayList` on the terrain thread, and the fix is the same shape: add the
+missing leaf lock.

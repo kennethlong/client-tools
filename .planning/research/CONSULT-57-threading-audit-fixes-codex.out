@@ -1,0 +1,53 @@
+**A. Change 1 Completeness**
+
+| Access site | Access | Category | Trace |
+|---|---:|---|---|
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:180` | read `empty()/front()` in `TreeFile::install` for `addSearchAbsolute` priority | NEITHER | Not under `ms_criticalSection`; not using `copySearchNodes`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:185` | read `empty()/front()` in `TreeFile::install` for `addSearchCache` priority | NEITHER | Not under `ms_criticalSection`; not using `copySearchNodes`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:212`-`215` | iterate/delete/clear in `TreeFile::remove` | under lock | `ms_criticalSection.enter()` precedes the loop at `TreeFile.cpp:208`; leave at `TreeFile.cpp:219`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:276`-`277` | iterate in `debugReportPaths` | under lock | `ms_criticalSection.enter()` at `TreeFile.cpp:269`; leave at `TreeFile.cpp:284`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:308`-`309` | `lower_bound` + `insert` in `addSearchNode` | under lock | `ms_criticalSection.enter()` at `TreeFile.cpp:305`; leave at `TreeFile.cpp:311`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:336`-`340` | `size()` and indexed read in `copySearchNodes` | under lock | `ms_criticalSection.enter()` at `TreeFile.cpp:334`; leave at `TreeFile.cpp:342`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:456`-`459` | iterate/delete/clear in `removeAllSearches` | under lock | `ms_criticalSection.enter()` at `TreeFile.cpp:453`; leave at `TreeFile.cpp:461`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:491` | `find` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[i]` at `TreeFile.cpp:495`-`496`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:532` | `getFileSize` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[i]` at `TreeFile.cpp:536`-`537`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:752` | `open` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[n]` at `TreeFile.cpp:756`-`766`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:816` | `getNumberOfSearchPaths` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[i]` at `TreeFile.cpp:818`-`819`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:832` | `getSearchPath` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[i]` at `TreeFile.cpp:835`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:864`-`865` | iterate in `enumerateFiles` | under lock | `ms_criticalSection.enter()` at `TreeFile.cpp:862`; leave at `TreeFile.cpp:872`. |
+| `src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp:940` | `stripTreeFileSearchPathFromFile` traversal source | snapshot | Reads via `copySearchNodes`; traversal uses `snapshot[i]` at `TreeFile.cpp:944`. |
+| `src/engine/shared/application/TreeFileExtractor/src/shared/TreeFileExtractor.cpp:151` | read `TreeFile::ms_searchNodes.empty()` | NEITHER | Tool/app TU reaches private internals directly. |
+| `src/engine/shared/application/TreeFileExtractor/src/shared/TreeFileExtractor.cpp:159` | indexed read `TreeFile::ms_searchNodes[0]` | NEITHER | Tool/app TU reaches private internals directly. |
+
+**Change 1 DISSENT:** concrete category-c gaps remain at `TreeFile::install` and `TreeFileExtractor`.
+
+**B. Change 2 Lock-Order Trace**
+
+| Path / context | Locks already held before `Texture::fetch/release` | Then acquired / destructor path | Cycle result |
+|---|---|---|---|
+| `TextureList::create` by-name fetch | `TextureList::ms_criticalSection` entered at `src/engine/client/library/clientGraphics/src/shared/TextureList.cpp:283` | calls `texture->fetch()` at `TextureList.cpp:311`; `Texture::fetch` re-enters `TextureList` at `Texture.cpp:325` | recursive same-lock only. |
+| `Texture::release` last release | `TextureList` entered at `src/engine/client/library/clientGraphics/src/shared/Texture.cpp:334` | `removeFromList` re-enters at `TextureList.cpp:430`; `delete this` at `Texture.cpp:339`; `~Texture` deletes graphics data at `Texture.cpp:313` | `TextureList -> renderer data`. |
+| D3D9 texture data dtor | reached under `TextureList` from above | `Direct3d9_TextureData::~Direct3d9_TextureData` calls `Direct3d9_StateCache::destroyTexture(this)` at `src/engine/client/application/Direct3d9/src/win32/Direct3d9_TextureData.cpp:514`, which calls `ms_device->SetTexture(i, NULL)` at `Direct3d9_StateCache.cpp:496` | no explicit D3D9 StateCache mutex found on this path. |
+| D3D11 texture data dtor | reached under `TextureList` from above | `Direct3d11_TextureData::~Direct3d11_TextureData` only resets COM pointers at `src/engine/client/application/Direct3d11/src/win32/Direct3d11_TextureData.cpp:527`-`528` | no StateCache/device mutex acquired. |
+| Terrain blended shader create | `ShaderCache::m_nodeListLock` held at `src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp:391`-`395` | `fetchModifiable()` copies `StaticShader`; copy ctor fetches textures at `src/engine/client/library/clientGraphics/src/shared/StaticShader.cpp:190` | order: `ShaderCache -> TextureList`. |
+| Terrain cache eviction | `ShaderCache::m_nodeListLock` held in `alter` at `ClientProceduralTerrainAppearance_ShaderCache.cpp:471`; release at `ShaderCache.cpp:490` | last shader release can enter `StaticShader::~StaticShader`; dtor releases textures at `StaticShader.cpp:229` | order: `ShaderCache -> TextureList`. |
+| Shader template release | `ShaderTemplateList` lock held at `src/engine/client/library/clientGraphics/src/shared/ShaderTemplate.cpp:59`-`72` | derived `StaticShaderTemplate::~StaticShaderTemplate` releases stored textures at `src/engine/client/library/clientGraphics/src/shared/StaticShaderTemplate.cpp:139`-`143` | order: `ShaderTemplateList -> TextureList`. |
+| Static shader runtime `setTexture` | no list lock visible in `StaticShader::setTexture`; old texture release/fetch at `src/engine/client/library/clientGraphics/src/shared/StaticShader.cpp:398`-`401` | acquires `TextureList` through `Texture::release/fetch` | no prior named lock in this function. |
+| D3D11 global texture bind | no StateCache lock visible; `Direct3d11_StateCache::setGlobalTexture` delegates at `src/engine/client/application/Direct3d11/src/win32/Direct3d11_StateCache.cpp:2369`-`2376` | `Direct3d11_TextureData::setGlobalTexture` calls `texture.fetch()` and old `engineTexture->release()` at `Direct3d11_TextureData.cpp:226`-`227` | no explicit reverse lock. |
+| Asynchronous texture callback | callback registered at `src/engine/client/library/clientGraphics/src/shared/TextureList.cpp:148`-`151` | fetch callback enters `TextureList::fetch` at `TextureList.cpp:172`-`175`; release callback calls `Texture::release` at `TextureList.cpp:180`-`182` | no AsynchronousLoader lock visible in callback body. |
+
+Resulting observed partial order: `ShaderCache::m_nodeListLock -> TextureList::ms_criticalSection`; `ShaderTemplateList::ms_criticalSection -> TextureList::ms_criticalSection`; `TextureList::ms_criticalSection -> D3D9 SetTexture/COM Release` and `TextureList::ms_criticalSection -> D3D11 COM Reset`. I found no traced pair acquired in both orders.
+
+**Change 2 CONFIRM:** trace supports the change as written; no concrete lock-order cycle found.
+
+**C. Change 3 Producer / Consumer Trace**
+
+| Question | Sites found | Result |
+|---|---|---|
+| Calls to `ShaderCache::createBlendedShader` | Definition at `src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp:391`; only call at `src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ClientChunk.cpp:584` | single producer path. |
+| Calls to `ShaderCache::findCachedShader` | Definition at `ClientProceduralTerrainAppearance_ShaderCache.cpp:352`; only call at `ClientProceduralTerrainAppearance_ShaderCache.cpp:400` inside `createBlendedShader` | no external producer. |
+| Per-tile primitive accounting | tile loop calls `createTileShader` at `ClientProceduralTerrainAppearance_ClientChunk.cpp:694`, groups or creates one `ShaderSet` at `ClientChunk.cpp:703`-`713`, then calls `shaderSet->addPrimitive` at `ClientChunk.cpp:760` | one primitive added after each tile shader creation. |
+| `ShaderSet` delete / clear sites | `ClientChunk::~ClientChunk` calls `getNumberOfPrimitives()` at `ClientChunk.cpp:179`, calls `destroyShader` once per primitive at `ClientChunk.cpp:180`-`181`, deletes each set at `ClientChunk.cpp:184`, clears list at `ClientChunk.cpp:186` | single consumer path. |
+| `ShaderSet` internal primitive count | `addPrimitive` pushes primitive in `src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.cpp:417`; accessor returns `m_primitiveList.size()` at `ShaderSet.cpp:549`-`551` | destructor accounting matches stored primitive count. |
+
+**Change 3 CONFIRM:** trace supports the change as written; I found no extra producer/consumer that breaks once-per-primitive accounting.

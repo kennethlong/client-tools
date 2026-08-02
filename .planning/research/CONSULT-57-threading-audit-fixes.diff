@@ -1,0 +1,511 @@
+diff --git a/src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp b/src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
+index 98381480d..49014ac1a 100644
+--- a/src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
++++ b/src/engine/client/library/clientGraphics/src/shared/ShaderImplementation.cpp
+@@ -2285,7 +2285,13 @@ ShaderImplementationPassVertexShader::~ShaderImplementationPassVertexShader()
+ 
+ void ShaderImplementationPassVertexShader::fetch() const
+ {
+-	++m_referenceCount;
++	using namespace ShaderImplementationPassVertexShaderNamespace;
++
++	// CONSULT-56 follow-up: release() already serializes on this mutex; an unlocked
++	// fetch racing a last-release can corrupt the count. Lock both sides.
++	ms_criticalSection.enter();
++		++m_referenceCount;
++	ms_criticalSection.leave();
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -2803,7 +2809,13 @@ char const * ShaderImplementationPassPixelShaderProgram::getFileName() const
+ 
+ void ShaderImplementationPassPixelShaderProgram::fetch() const
+ {
+-	++m_referenceCount;
++	using namespace ShaderImplementationPassPixelShaderProgramNamespace;
++
++	// CONSULT-56 follow-up: release() already serializes on this mutex; an unlocked
++	// fetch racing a last-release can corrupt the count. Lock both sides.
++	ms_criticalSection.enter();
++		++m_referenceCount;
++	ms_criticalSection.leave();
+ }
+ 
+ // ----------------------------------------------------------------------
+diff --git a/src/engine/client/library/clientGraphics/src/shared/Texture.cpp b/src/engine/client/library/clientGraphics/src/shared/Texture.cpp
+index 056f806a1..9915eae02 100644
+--- a/src/engine/client/library/clientGraphics/src/shared/Texture.cpp
++++ b/src/engine/client/library/clientGraphics/src/shared/Texture.cpp
+@@ -317,19 +317,32 @@ Texture::~Texture(void)
+ 
+ void Texture::fetch() const
+ {
++	// CONSULT-56 follow-up: serialize the count under TextureList's critical section
++	// (the ShaderEffect/ShaderImplementation idiom). The ClientTerrain worker's
++	// StaticShader clone fetch/release races main-thread render fetch/release, and
++	// TextureList::create resurrects a dying texture under this same lock -- taking
++	// it here makes the last-release decision and by-name resurrection totally ordered.
++	TextureList::enterCriticalSection();
+ 	++m_referenceCount;
++	TextureList::leaveCriticalSection();
+ }
+ 
+ // ----------------------------------------------------------------------
+ 
+ void Texture::release() const
+ {
+-	if (--m_referenceCount < 1)
++	TextureList::enterCriticalSection();
++	int const newCount = --m_referenceCount;
++	if (newCount == 0)
+ 	{
+-		FATAL(m_referenceCount < 0, ("Texture reference count has gone negative"));
+ 		TextureList::removeFromList(this);
+ 		delete const_cast<Texture*>(this);
+ 	}
++	TextureList::leaveCriticalSection();
++
++	// fire the corrupted-refcount FATAL only after releasing the critical section
++	// so the crash handler doesn't run with the texture lock held (CONSULT-57)
++	FATAL(newCount < 0, ("Texture reference count has gone negative"));
+ }
+ 
+ // ----------------------------------------------------------------------
+diff --git a/src/engine/client/library/clientGraphics/src/shared/Texture.h b/src/engine/client/library/clientGraphics/src/shared/Texture.h
+index 8206ac592..2fb14f742 100644
+--- a/src/engine/client/library/clientGraphics/src/shared/Texture.h
++++ b/src/engine/client/library/clientGraphics/src/shared/Texture.h
+@@ -116,6 +116,9 @@ public:
+ 
+ private:
+ 
++	// CONSULT-56 follow-up: mutated ONLY under TextureList's critical section (the
++	// ShaderEffect/ShaderImplementation idiom) -- the ClientTerrain worker's StaticShader
++	// clone fetch/release races main-thread render fetch/release and by-name resurrection.
+ 	mutable int                              m_referenceCount;
+ 	PersistentCrcString                      m_crcString;
+ 
+diff --git a/src/engine/client/library/clientGraphics/src/shared/TextureList.cpp b/src/engine/client/library/clientGraphics/src/shared/TextureList.cpp
+index 4c60259c1..2abbfdf96 100644
+--- a/src/engine/client/library/clientGraphics/src/shared/TextureList.cpp
++++ b/src/engine/client/library/clientGraphics/src/shared/TextureList.cpp
+@@ -425,6 +425,8 @@ void TextureList::removeFromList(const Texture *texture)
+ 		return;
+ 	}
+ 
++	// Callers on the Texture::release path already hold ms_criticalSection; it is a
++	// recursive CRITICAL_SECTION, so this nested enter is safe.
+ 	ms_criticalSection.enter();
+ 
+ 		NamedContainer::iterator it = ms_namedTextures->find(&crcString);
+@@ -440,6 +442,20 @@ void TextureList::removeFromList(const Texture *texture)
+ 
+ // ----------------------------------------------------------------------
+ 
++void TextureList::enterCriticalSection()
++{
++	ms_criticalSection.enter();
++}
++
++// ----------------------------------------------------------------------
++
++void TextureList::leaveCriticalSection()
++{
++	ms_criticalSection.leave();
++}
++
++// ----------------------------------------------------------------------
++
+ void TextureList::addCleanupCallbackFunction(CleanupCallbackFunction cleanupCallbackFunction)
+ {
+ 	ms_cleanupCallbackFunctionList.push_back(cleanupCallbackFunction);
+diff --git a/src/engine/client/library/clientGraphics/src/shared/TextureList.h b/src/engine/client/library/clientGraphics/src/shared/TextureList.h
+index 5a0833b4b..cb983900b 100644
+--- a/src/engine/client/library/clientGraphics/src/shared/TextureList.h
++++ b/src/engine/client/library/clientGraphics/src/shared/TextureList.h
+@@ -61,6 +61,10 @@ private:
+ 
+ 	static void           remove();
+ 	static void           removeFromList(const Texture *texture);
++	// Serialize Texture::fetch/release refcounting with by-name create/resurrection
++	// (the ShaderEffectList idiom; ms_criticalSection is a recursive CRITICAL_SECTION).
++	static void           enterCriticalSection();
++	static void           leaveCriticalSection();
+ 	static const Texture *fetch(CrcString const & fileName, bool createTexture);
+ 	static const void    *asynchronousLoaderFetchNoCreate(const char *fileName);
+ 	static void           asynchronousLoaderRelease(const void *texture);
+diff --git a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance.cpp b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance.cpp
+index 0225dd1ea..fe50c637f 100644
+--- a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance.cpp
++++ b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance.cpp
+@@ -544,9 +544,10 @@ ClientProceduralTerrainAppearance::~ClientProceduralTerrainAppearance ()
+ 		}
+ 	}
+ 
+-	//-- delete shader cache
+-	delete m_shaderCache;
+-	m_shaderCache = 0;
++	//-- (CONSULT-57) the shader cache is deleted AFTER m_chunkTree below: ~TerrainQuadTree
++	//-- deletes every live ClientChunk, and ~ClientChunk now calls
++	//-- shaderCache->destroyShader() to balance the blended-shader reference counts --
++	//-- deleting the cache first would make those calls a use-after-free.
+ 
+ 	//-- delete flora managers
+ 	m_dynamicNearFloraManager         = 0;
+@@ -576,6 +577,10 @@ ClientProceduralTerrainAppearance::~ClientProceduralTerrainAppearance ()
+ 	delete m_chunkTree;
+ 	m_chunkTree = 0;
+ 
++	//-- delete shader cache (after the chunk tree -- see the CONSULT-57 note above)
++	delete m_shaderCache;
++	m_shaderCache = 0;
++
+ 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 	//-- to ensure that memory isn't claimed on the client for server terrain (this must be last)
+ 	{
+diff --git a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ClientChunk.cpp b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ClientChunk.cpp
+index 00ac05b4c..e9ff52158 100644
+--- a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ClientChunk.cpp
++++ b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ClientChunk.cpp
+@@ -169,6 +169,18 @@ ClientProceduralTerrainAppearance::ClientChunk::~ClientChunk ()
+ 		ShaderSetList::iterator ssi;
+ 		for (ssi=m_shaderSetList.begin();ssi!=m_shaderSetList.end();++ssi)
+ 		{
++			// CONSULT-56 follow-up: balance the per-tile createBlendedShader reference
++			// bumps (one per primitive -- see create()'s tile loop) so the cache node's
++			// referenceCount can return to 0 and ShaderCache::alter's 5s-idle eviction
++			// can reclaim unused blended shaders. destroyShader had ZERO callers since
++			// the original SOE import -- this wires the missing consumer half.
++			if (shaderCache)
++			{
++				int const primitiveCount = (*ssi)->getNumberOfPrimitives ();
++				for (int i = 0; i < primitiveCount; ++i)
++					shaderCache->destroyShader ((*ssi)->getShader ());
++			}
++
+ 			delete *ssi;
+ 		}
+ 		m_shaderSetList.clear();
+diff --git a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp
+index ab2181c77..4652d3ded 100644
+--- a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp
++++ b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderCache.cpp
+@@ -444,17 +444,38 @@ const Shader* ClientProceduralTerrainAppearance::ShaderCache::createBlendedShade
+ 
+ void ClientProceduralTerrainAppearance::ShaderCache::destroyShader (const Shader* shader) const
+ {
+-	Guard guard(m_nodeListLock);
++	// CONSULT-56 follow-up accounting guards. Underflow means the ClientChunk-teardown
++	// destroys outnumbered the per-tile createBlendedShader bumps: refuse the decrement
++	// so the node stays pinned (an imbalance must fail toward the old leak, never toward
++	// alter() evicting a possibly-still-referenced shader). No-match means the shader
++	// was never cached (or already evicted) -- also an accounting anomaly. The fatals
++	// fire OUTSIDE the lock so the crash handler doesn't run holding m_nodeListLock.
++	bool underflow = false;
++	bool found = false;
+ 
+-	int i;
+-	for (i = 0; i < nodeList.getNumberOfElements (); i++)
+ 	{
+-		if (nodeList [i].shader == shader)
++		Guard guard(m_nodeListLock);
++
++		int i;
++		for (i = 0; i < nodeList.getNumberOfElements (); i++)
+ 		{
+-			--nodeList [i].referenceCount;
+-			return;
++			if (nodeList [i].shader == shader)
++			{
++				found = true;
++
++				if (nodeList [i].referenceCount <= 0)
++					underflow = true;
++				else
++					--nodeList [i].referenceCount;
++
++				break;
++			}
+ 		}
+ 	}
++
++	DEBUG_FATAL (underflow, ("ShaderCache::destroyShader: destroy without matching create"));
++	WARNING (underflow, ("ShaderCache::destroyShader: destroy without matching create; leaving node pinned"));
++	WARNING (!found, ("ShaderCache::destroyShader: shader not in cache; decrement dropped"));
+ }
+ 
+ //-------------------------------------------------------------------
+@@ -492,6 +513,11 @@ void ClientProceduralTerrainAppearance::ShaderCache::alter (const float elapsedT
+ 
+ void ClientProceduralTerrainAppearance::ShaderCache::flushCache()
+ {
++	// WARNING (CONSULT-57): dead code with a latent bug -- zero callers today, and
++	// clear() drops every node WITHOUT shader->release(), leaking each cached blended
++	// StaticShader clone, and strands live ClientChunks whose ~ClientChunk destroyShader
++	// decrements will then no-match. If you wire this up, release each node's shader
++	// first (the ~ShaderCache/alter() pattern) and account for outstanding references.
+ 	Guard guard(m_nodeListLock);
+ 
+ 	nodeList.clear ();
+diff --git a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.cpp b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.cpp
+index a1558da5f..0bafe5b46 100644
+--- a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.cpp
++++ b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.cpp
+@@ -546,6 +546,13 @@ const Shader* ClientProceduralTerrainAppearance::ShaderSet::getShader () const
+ 
+ //-------------------------------------------------------------------
+ 
++int ClientProceduralTerrainAppearance::ShaderSet::getNumberOfPrimitives () const
++{
++	return static_cast<int> (m_primitiveList.size ());
++}
++
++//-------------------------------------------------------------------
++
+ void ClientProceduralTerrainAppearance::ShaderSet::render (const Camera* camera, 
+ 																			  const Shader* lotShader, 
+ 																			  const Shader* i_cloudShader
+diff --git a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.h b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.h
+index 8ffb05711..337af3e95 100644
+--- a/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.h
++++ b/src/engine/client/library/clientTerrain/src/shared/appearance/ClientProceduralTerrainAppearance_ShaderSet.h
+@@ -40,6 +40,7 @@ public:
+ 	void          chooseIndexBuffer(unsigned newHasLargerNeighborFlags, int numberOfTilesPerChunk);
+ 
+ 	const Shader* getShader (void) const;
++	int           getNumberOfPrimitives (void) const;
+ 	void          render (const Camera* camera, const Shader* lotShader, const Shader* terrainCloudShader) const;
+ 	void          renderNormals (void) const;
+ 
+diff --git a/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp b/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp
+index 9512a87f2..34ba8490a 100644
+--- a/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp
++++ b/src/engine/shared/library/sharedFile/src/shared/TreeFile.cpp
+@@ -67,6 +67,12 @@ namespace TreeFileNamespace
+ 	typedef std::map<const char *, AbstractFile *, CachedFilesComparator> CachedFilesMap;
+ 	static CachedFilesMap cachedFilesMap;
+ 
++	// CONSULT-56 follow-up: capacity of the per-call stack snapshot of ms_searchNodes.
++	// Real node counts are cfg-bounded (maxSearchPriority buckets x per-priority keys +
++	// runtime adds); typical installs use ~10-15. 256 (2KB of stack) leaves an order of
++	// magnitude of headroom -- addSearchNode WARNs the moment an add crosses it (CONSULT-57).
++	int const cms_searchNodeSnapshotMax = 256;
++
+ #if PRODUCTION == 0
+ 	bool ms_debugLogSynchronousOnly;
+ 	bool ms_warnTreeFileOpens;
+@@ -172,13 +178,23 @@ void TreeFile::install(uint32 skuBits)
+ 	}
+ 
+ 	//-- add an absolute search path after all search nodes
++	// (read the current top priority under the lock -- install is single-threaded
++	// today, but keep every ms_searchNodes access serialized; CONSULT-57. The two
++	// reads are deliberately separate: the cache must land ABOVE the just-added
++	// absolute node, exactly as the original double-evaluation behaved.)
+ 	{
+-		TreeFile::addSearchAbsolute(ConfigFile::getKeyInt("SharedFile", "searchAbsolute", 0, !ms_searchNodes.empty() ? ms_searchNodes.front()->getPriority() + 1 : 0));
++		ms_criticalSection.enter();
++			int const defaultPriority = !ms_searchNodes.empty() ? ms_searchNodes.front()->getPriority() + 1 : 0;
++		ms_criticalSection.leave();
++		TreeFile::addSearchAbsolute(ConfigFile::getKeyInt("SharedFile", "searchAbsolute", 0, defaultPriority));
+ 	}
+ 
+ 	//-- add search cache after all search nodes
+ 	{
+-		TreeFile::addSearchCache(ConfigFile::getKeyInt("SharedFile", "searchCache", 0, !ms_searchNodes.empty() ? ms_searchNodes.front()->getPriority() + 1 : 0));
++		ms_criticalSection.enter();
++			int const defaultPriority = !ms_searchNodes.empty() ? ms_searchNodes.front()->getPriority() + 1 : 0;
++		ms_criticalSection.leave();
++		TreeFile::addSearchCache(ConfigFile::getKeyInt("SharedFile", "searchCache", 0, defaultPriority));
+ 	}
+ 
+ #if PRODUCTION == 0
+@@ -304,7 +320,53 @@ void TreeFile::addSearchNode(SearchNode *newNode)
+ 		SearchNodes::iterator insertionPoint = std::lower_bound(ms_searchNodes.begin(), ms_searchNodes.end(), newNode, searchNodePriorityOrder);
+ 		IGNORE_RETURN(ms_searchNodes.insert(insertionPoint, newNode));
+ 
++		// CONSULT-57: warn at the add that pushes the list past the reader-snapshot
++		// capacity -- past it, copySearchNodes truncates the lowest-priority tail.
++		WARNING(static_cast<int>(ms_searchNodes.size()) > cms_searchNodeSnapshotMax, ("TreeFile::addSearchNode: %d search nodes exceed the reader snapshot capacity %d -- raise cms_searchNodeSnapshotMax", static_cast<int>(ms_searchNodes.size()), cms_searchNodeSnapshotMax));
++
++	ms_criticalSection.leave();
++}
++
++// ----------------------------------------------------------------------
++/**
++ * Snapshot the search-node list under ms_criticalSection.
++ *
++ * CONSULT-56 follow-up: ms_searchNodes is a std::vector mutated at RUNTIME
++ * (e.g. the advertised treeFile::searchTree hookpoint row -> addSearchTree)
++ * while main, the AsynchronousLoader worker, the ClientTerrain worker, and
++ * the audio IO thread traverse it concurrently -- an insert can REALLOCATE
++ * the backing array under an in-flight reader (dangling iterator).  Readers
++ * copy the node pointers under the lock and traverse the snapshot instead;
++ * nodes themselves are only deleted at shutdown (ExitChain, workers joined),
++ * so snapshot entries stay valid, and the blocking per-node disk I/O runs
++ * OUTSIDE the lock (the CONSULT-55 no-I/O-under-the-lock rule).
++ *
++ * @return the number of nodes copied into the snapshot
++ */
++
++int TreeFile::copySearchNodes(SearchNode **snapshot, int maxNodes)
++{
++	NOT_NULL(snapshot);
++	ms_criticalSection.enter();
++
++		int const nodeCount = static_cast<int>(ms_searchNodes.size());
++		if (nodeCount > maxNodes)
++		{
++			// warn once, not per open (this runs on every file lookup); the paired
++			// per-add WARNING in addSearchNode already names the moment it happened.
++			static bool s_warnedTruncation = false;   // guarded by ms_criticalSection
++			if (!s_warnedTruncation)
++			{
++				s_warnedTruncation = true;
++				WARNING(true, ("TreeFile::copySearchNodes: %d search nodes exceed snapshot capacity %d; lowest-priority nodes ignored", nodeCount, maxNodes));
++			}
++		}
++		int const copyCount = nodeCount < maxNodes ? nodeCount : maxNodes;
++		for (int i = 0; i < copyCount; ++i)
++			snapshot[i] = ms_searchNodes[static_cast<SearchNodes::size_type>(i)];
++
+ 	ms_criticalSection.leave();
++	return copyCount;
+ }
+ 
+ // ----------------------------------------------------------------------
+@@ -450,12 +512,14 @@ TreeFile::SearchNode *TreeFile::find(const char *fileName)
+ 		return NULL;
+ 	}
+ 
+-	// search the list of nodes looking to see if the specified file exists
++	// search a snapshot of the node list looking to see if the specified file exists
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
+ 	bool deleted = false;
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); !deleted && i != iEnd; ++i)
+-		if ((*i)->exists(fileName, deleted))
+-			return *i;
++	for (int i = 0; !deleted && i < nodeCount; ++i)
++		if (snapshot[i]->exists(fileName, deleted))
++			return snapshot[i];
+ 
+ 	return NULL;
+ }
+@@ -489,12 +553,14 @@ int TreeFile::getFileSize(const char *fileName)
+ 	char fixedFileName[Os::MAX_PATH_LENGTH];
+ 	fixUpFileName(fixedFileName, fileName, true);
+ 
+-	// search the list of nodes looking to see if the specified file exists
++	// search a snapshot of the node list looking to see if the specified file exists
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
+ 	bool deleted = false;
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); !deleted && i != iEnd; ++i)
++	for (int i = 0; !deleted && i < nodeCount; ++i)
+ 	{
+-		int size = (*i)->getFileSize(fixedFileName, deleted);
++		int size = snapshot[i]->getFileSize(fixedFileName, deleted);
+ 		if (size >= 0)
+ 			return size;
+ 	}
+@@ -708,11 +774,13 @@ AbstractFile* TreeFile::open(const char *fileName, AbstractFile::PriorityType pr
+ 	bool first = true;
+ #endif
+ 
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
+ 	bool deleted = false;
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); !file && !deleted && i != iEnd; ++i)
++	for (int n = 0; !file && !deleted && n < nodeCount; ++n)
+ 	{
+-		file = (*i)->open(fixedFileName, priority, deleted);
++		file = snapshot[n]->open(fixedFileName, priority, deleted);
+ 
+ #if PRODUCTION == 0
+ 		if (file)
+@@ -723,13 +791,13 @@ AbstractFile* TreeFile::open(const char *fileName, AbstractFile::PriorityType pr
+ 			if (ms_debugLogFlag || ms_warnTreeFileOpens)
+ 			{
+ 				char buffer[Os::MAX_PATH_LENGTH];
+-				(*i)->getPathName(fixedFileName, buffer, sizeof(buffer));
++				snapshot[n]->getPathName(fixedFileName, buffer, sizeof(buffer));
+ 
+ 				if (ms_warnTreeFileOpens)
+ 					WARNING(true, ("TF::open(%s) %s @ %s, [size=%d]\n", cms_priorityStrings[priority], fixedFileName, buffer, file->length()));
+ 				else
+ 				{
+-					REPORT_LOG(!ms_debugLogSynchronousOnly || (ms_debugLogSynchronousOnly && (priority == AbstractFile::PriorityData) && (*i != ms_searchCache)), ("TF::open(%s) %s @ %s, [size=%d]\n", cms_priorityStrings[priority], fixedFileName, buffer, file->length()));
++					REPORT_LOG(!ms_debugLogSynchronousOnly || (ms_debugLogSynchronousOnly && (priority == AbstractFile::PriorityData) && (snapshot[n] != ms_searchCache)), ("TF::open(%s) %s @ %s, [size=%d]\n", cms_priorityStrings[priority], fixedFileName, buffer, file->length()));
+ 					DEBUG_OUTPUT_CHANNEL("Foundation\\Treefile", ("TF::open %s -- %s\n", fixedFileName, buffer));
+ 				}
+ 			}
+@@ -770,9 +838,11 @@ int TreeFile::getNumberOfSearchPaths(void)
+ {
+ 	int count = 0;
+ 
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); i != iEnd; ++i)
+-		if (dynamic_cast<const SearchPath*>(*i) != 0)
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
++	for (int i = 0; i < nodeCount; ++i)
++		if (dynamic_cast<const SearchPath*>(snapshot[i]) != 0)
+ 			count++;
+ 
+ 	return count;
+@@ -783,10 +853,13 @@ int TreeFile::getNumberOfSearchPaths(void)
+ const char *TreeFile::getSearchPath(int index)
+ {
+ 	int count = 0;
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); i != iEnd; ++i)
++
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
++	for (int i = 0; i < nodeCount; ++i)
+ 	{
+-		const SearchPath *searchPath = dynamic_cast<const SearchPath*>(*i);
++		const SearchPath *searchPath = dynamic_cast<const SearchPath*>(snapshot[i]);
+ 		if (searchPath != NULL)
+ 		{
+ 			if (count == index)
+@@ -888,12 +961,14 @@ bool TreeFile::stripTreeFileSearchPathFromFile(const char *inputPath, char *outp
+ 	if (!Os::getAbsolutePath(inputPath, buffer, sizeof(buffer)))
+ 		return false;
+ 
+-	// scan all the search nodes
+-	const SearchNodes::iterator iEnd = ms_searchNodes.end();
+-	for (SearchNodes::iterator i = ms_searchNodes.begin(); i != iEnd; ++i)
++	// scan a snapshot of the search nodes
++	SearchNode *snapshot[cms_searchNodeSnapshotMax];
++	int const nodeCount = copySearchNodes(snapshot, cms_searchNodeSnapshotMax);
++
++	for (int i = 0; i < nodeCount; ++i)
+ 	{
+ 		// make sure it's a relative search path
+-		const SearchPath *searchPath = dynamic_cast<const SearchPath*>(*i);
++		const SearchPath *searchPath = dynamic_cast<const SearchPath*>(snapshot[i]);
+ 		if (searchPath != NULL)
+ 		{
+ 			// check to see if the the search path is a prefix for the requested path
+diff --git a/src/engine/shared/library/sharedFile/src/shared/TreeFile.h b/src/engine/shared/library/sharedFile/src/shared/TreeFile.h
+index 353517978..4572b4b62 100644
+--- a/src/engine/shared/library/sharedFile/src/shared/TreeFile.h
++++ b/src/engine/shared/library/sharedFile/src/shared/TreeFile.h
+@@ -124,6 +124,7 @@ private:
+ 	static void        addSearchCache(int priority);
+ 	static bool        searchNodePriorityOrder(const SearchNode *a, const SearchNode *b);
+ 	static void        addSearchNode(SearchNode *newNode);
++	static int         copySearchNodes(SearchNode **snapshot, int maxNodes);
+ 	static SearchNode *find(const char *fileName);
+ 
+ 	static void        fixUpFileName(char *output, const char *filename, bool warning);

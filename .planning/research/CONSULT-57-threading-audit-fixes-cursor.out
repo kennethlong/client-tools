@@ -1,0 +1,84 @@
+# CONSULT-57 line review — defects in changed lines
+
+## Findings
+
+1. **`TreeFile.cpp:337-340` — MAJOR**  
+   Snapshot copies only the first `maxNodes` entries of a highest→lowest priority vector; with `maxSearchPriority` (default 20), unbounded per-priority `searchPath`/`searchTree`/`searchTOC` keys, multi-SKU loops, plus runtime `addSearchTree`, total nodes can exceed 64 and silently drop lowest-priority nodes (open/find miss; `getSearchPath` returns wrong/null).  
+   **Fix:** Size the snapshot to `ms_searchNodes.size()` (heap/stack allocator) or raise `cms_searchNodeSnapshotMax` above worst-case cfg + hook headroom.
+
+2. **`TreeFile.cpp:337` — MINOR**  
+   Truncation `WARNING` fires on every `copySearchNodes` call while over capacity (every `open`/`find`/…), not once at install.  
+   **Fix:** Static `std::atomic`/once-flag, or warn only from `addSearchNode` when `size() > cms_searchNodeSnapshotMax`.
+
+3. **`TreeFile.cpp:490-491,531-532,751-752,815-816,831-832,939-940` — MINOR**  
+   `SearchNode *snapshot[cms_searchNodeSnapshotMax]` is a C99 VLA/GCC extension; MSVC allows it as a non-standard extension but it is not portable ISO C++.  
+   **Fix:** `std::array<SearchNode*, cms_searchNodeSnapshotMax>` or `std::vector` sized to `copyCount`.
+
+4. **`TreeFile.cpp:331-333` — NIT**  
+   `NOT_NULL(snapshot)` is tautological for stack arrays passed by callers; `maxNodes` is never validated (>0).  
+   **Fix:** Drop the assert or `DEBUG_FATAL(maxNodes <= 0, ...)`.
+
+5. **`TreeFile.cpp:755,774` — NIT (confirmatory)**  
+   Loop guard `!file && !deleted && n < nodeCount` preserves original short-circuit vs `!file && !deleted && i != iEnd`; `snapshot[n] != ms_searchCache` correctly replaces `(*i != ms_searchCache)` (original compared dereferenced node, not iterator).  
+   **Fix:** None.
+
+6. **`Texture.cpp:334-341` — MINOR**  
+   `FATAL` inside the held `TextureList` CS never reaches `leaveCriticalSection()` (`InternalFatal` → `ExitChain::fatal()` → `Os::abort()`, no return); same thread keeps the CS until process exit. `ExitChain::fatal()` runs per-thread cleanup; `TextureList::remove` does not take `ms_criticalSection`, so no self-deadlock, but another live thread blocked on `enterCriticalSection()` can stall until abort.  
+   **Fix:** Move `FATAL` after `leaveCriticalSection()`, or snapshot `m_referenceCount` and unlock before `FATAL`.
+
+7. **`Texture.cpp:334-339`, `TextureList.cpp:428-440` — NIT (confirmatory)**  
+   `delete this` under the outer CS is safe: `~Texture` does not re-enter; `removeFromList` early-returns for empty `crcString` (unnamed textures never in `ms_namedTextures`); named path re-enters the recursive Win32 CRITICAL_SECTION (`Mutex.cpp:29-43`).  
+   **Fix:** None.
+
+8. **`TextureList.cpp:311`, `TextureList.cpp:364-408` — NIT (confirmatory)**  
+   `create()` and anonymous `fetch(int,…)`/`fetch(pixelData,…)` call `texture->fetch()` which re-enters `ms_criticalSection`; Win32 CRITICAL_SECTION is recursive; no non-recursive lock wraps these paths.  
+   **Fix:** None.
+
+9. **`ShaderCache.cpp:459-463` — MINOR**  
+   `DEBUG_FATAL` under `Guard(m_nodeListLock)` calls `InternalFatal` without unwinding the guard (Debug-only; Release macro is `NOP` per `Fatal.h:41-45`). Same held-lock-during-abort pattern as Texture `FATAL`.  
+   **Fix:** Check count, unlock (`guard` scope end / early `return` after leave), then `DEBUG_FATAL`.
+
+10. **`ShaderCache.cpp:445-469` — MINOR**  
+    If `shader` is not found in `nodeList` (pointer mismatch / stale `ShaderSet`), the new `ClientChunk` teardown loop silently no-ops—cache `referenceCount` stays elevated (eviction never fires for that node).  
+    **Fix:** `WARNING(true, (...))` after the loop when no node matched.
+
+11. **`ClientChunk.cpp:179-181`, `ShaderSet.cpp:549-551` — NIT**  
+    `static_cast<int>(m_primitiveList.size())` assumes ≤ `INT_MAX` primitives; safe for terrain tiles, technically narrowing.  
+    **Fix:** Use `size_t` loop bound or `DEBUG_FATAL` on overflow.
+
+12. **`ShaderCache.cpp:459-466` — NIT (confirmatory)**  
+    Release path intentionally refuses decrement at `referenceCount <= 0` and pins the node (`WARNING` only)—matches stated fail-toward-leak policy; `ArrayList`/`getNumberOfElements`/`operator[]` usage is consistent with the rest of the TU.  
+    **Fix:** None.
+
+13. **`ShaderImplementation.cpp:2292-2294`, `2816-2818` — NIT (confirmatory)**  
+    Fetch now uses the same namespace `ms_criticalSection` as `release()`; no semantic change beyond serialization.  
+    **Fix:** None.
+
+14. **`TreeFile.cpp:337`, `FirstSharedFile.h:13→FirstSharedFoundation.h:76` — NIT (confirmatory)**  
+    `WARNING(...)` is available and variadic in this TU via `Fatal.h:47`; no `DEBUG_FATAL` side effects in Release on the TreeFile changes.  
+    **Fix:** None.
+
+---
+
+## Snapshot capacity 64 — what actually bounds node count?
+
+| Source | Bound |
+|--------|--------|
+| `TreeFile::install` | `maxSearchPriority` cfg key (default **20** → priorities **0..20**, 21 slots) |
+| Per priority/SKU | Unbounded indexed cfg keys: `searchPath{sku}_{pri}`, `searchTree{sku}_{pri}`, `searchTOC{sku}_{pri}` until `ConfigFile::getKeyString(..., index, NULL)` returns NULL |
+| Post-loop | `addSearchAbsolute` (+1), `addSearchCache` (+1) |
+| Runtime | `TreeFile::addSearchTree` via advertised hookpoint (`engine_advertise.cpp:613`) |
+
+**Ordering on truncation:** `ms_searchNodes` is sorted high→low (`searchNodePriorityOrder`, `TreeFile.cpp:289-308`). `copySearchNodes` copies indices `0..copyCount-1`, so indices **`copyCount..nodeCount-1` (lowest priority) are dropped**. The WARNING text (“lowest-priority nodes ignored”) is accurate.
+
+**Typical install:** stage cfgs have ~handful of paths/trees (well under 64). **Worst case:** many `.tre`/TOC entries × 21 priorities × active SKU bits can exceed 64; truncation then breaks resolution for assets only reachable through dropped nodes.
+
+---
+
+## DISSENT / CONFIRM
+
+**Change 1 (TreeFile snapshot readers):** **DISSENT** — locking/copy pattern is sound, but fixed capacity **64** with silent tail drop is a real semantic regression for heavy cfgs or hook-heavy runtimes; raise or dynamic-size the snapshot.
+
+**Change 2 (Texture fetch/release + pass-object fetch locks):** **CONFIRM** — recursive `TextureList` CS matches the ShaderEffect idiom; unnamed-texture and `create()` re-entry paths are coherent; only nit is `FATAL` while holding the CS on the negative-ref crash path.
+
+**Change 3 (ShaderCache eviction wiring):** **CONFIRM** — `primitiveCount` × `destroyShader(getShader())` matches one `createBlendedShader` bump per tile/primitive; Release underflow guard is intentional; add a no-match `WARNING` if you want imbalance visibility beyond the `<=0` case.

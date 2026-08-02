@@ -1,0 +1,28 @@
+(archived from Agent-tool run; fresh Sonnet consultant, CONSULT-66 — environment-delta angle)
+
+## Per-delta grades (chains abridged; full reasoning in session record)
+
+Delta 1 — searchPath negative cache (dde0c2a0a): misses-only, TOC untouched; no path to portal topology (built from loaded cell data, not per-frame filesystem probes). Healthy 21:37 run already ran this exe cleanly. GRADE: LOW.
+
+Delta 2 — asynchronousLoaderCallbackTimeBudgetMs=6: processCallbacks is MAIN-THREAD synchronous (Game.cpp:1290-1291; AsynchronousLoader.cpp:577-699); budget breaks the drain loop, remainder drains later frames (not dropped, not racy). Starvation shape real but needs an unproven downstream one-shot-consumption bug to become permanent. Present during the healthy run. GRADE: LOW-MEDIUM.
+
+Delta 3 — preventDriverInternalThreading=false (FIRST session = sick run): direct mechanism implausible — resolveVisibility is pure CPU (RenderWorld.cpp:1112-1119 "DPVS issues no GPU work"); driver worker threads have no channel into CPU-only counters. Indirect (driver race → main-thread Map stall → giant frame → async backlog at door-transition instant) is two unproven hops. Best timing correlation of all deltas. GRADE: MEDIUM on timing alone, LOW direct.
+
+Delta 4 — censusLog=true: one buffered fprintf per frame; no mechanism. GRADE: NEGLIGIBLE. (Free forensic asset.)
+
+Delta 5 — fresh-login streaming state: exactly the precondition class Signature B needs; a runtime condition, not a code change; may simply not have been re-exercised since the fix wave. Candidate in its own right.
+
+## Ranking
+
+1. Pre-existing residual, no delta required (streaming + door-close window; documented open residual "real-door trigger brittleness"). Plurality favorite.
+2. Delta 3 (timing correlation only).
+3. Delta 2. 4. Delta 1. 5. Delta 4.
+Weight for "unrelated to all deltas": substantial — base rate unknown, soak ~1 day, precondition narrow.
+
+## Experiments (ordered by cost)
+
+1. FREE: inspect gl11-census.csv from the sick session for a stall spike at 02:32:10-11. [DONE by orchestrator: no spike; watchdog also clean at onset — kills the stall-cascade hop.]
+2. One-line: revert preventDriverInternalThreading=true and re-repro; still reproduces → Delta 3 exonerated.
+3. One-line: asynchronousLoaderCallbackTimeBudgetMs=0 for one repro session.
+4. One-line: searchPathNegativeCache=false for one repro session.
+5. Probe fix (highest value regardless of verdict): the probe only logs on count-flips, so "stuck forever" and "recovered but unlogged" look identical — NOTE: the healthy contrast's own last captured line (21:38:09 cell=world portals 1->0 tested:0) is structurally identical to the sick collapse line; "stayed healthy" rests on out-of-band assertion. Add a heartbeat log (every ~2s regardless of flip) so persistence vs logger-blindness is distinguishable.
