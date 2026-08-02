@@ -189,6 +189,7 @@ public:
 
 	static int                 getLoopCount         ();
 	static int                 getMainLoopCount     ();   // out-of-line (ODR-emitted) twin of the inline getLoopCount(); exists so the engine-hookpoint advertisement contract can advertise the per-frame counter (game::g_mainLoopCounter) by &address -- see SwgClient/.../engine_advertise.cpp
+	static int                 getShutdownPhase     ();   // out-of-line forwarder to ExitChain::getShutdownPhase() so the advertisement contract can expose the process-wide shutdown phase by &address (game::getShutdownPhase, v26). 0=running 1=requested 2=unwinding. Unlike isOver() this stays safe to call during teardown -- see ExitChain.h
 
 	static void                setProfanityFiltered (bool profanityFiltered);
 	static bool                isProfanityFiltered  ();

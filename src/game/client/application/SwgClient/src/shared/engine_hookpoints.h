@@ -267,7 +267,23 @@
 // id -> getObjectById -> getObjectTemplateName = the template carrying
 // interiorLayoutFileName. 147 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 25
+// ----------------------------------------------------------------------
+// v26 (2026-08-01): + game::getShutdownPhase -- process-wide MONOTONIC
+// shutdown phase for attached consumers (0=running, 1=quit requested,
+// 2=ExitChain unwinding). Closes a real gap: the contract had game::quit and
+// game::cleanupScene (both IMPERATIVE -- the consumer CAUSES teardown) but no
+// NOTIFICATION that unwind has begun. SWG-Toolkit's safety was emergent from
+// Present-hook ordering (the main loop is over before ExitChain runs, so
+// Present stops firing first), not promised -- it breaks the moment any
+// consumer thread calls an advertised row directly instead of queueing.
+// The two obvious candidates do NOT work: ExitChain::isRunning() reads
+// PerThreadData (per-THREAD -- a consumer thread always sees false), and
+// game::g_runningFlags (&Game::isOver) dereferences IoWinManager/Os state so
+// it goes unsafe exactly when teardown starts. Backed by a plain process-wide
+// int in sharedFoundation -- safe to read from any thread at any time,
+// including CRT teardown. 148 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 26
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

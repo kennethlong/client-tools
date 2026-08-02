@@ -83,6 +83,7 @@ ENGINE_HOOKPOINT(game,          isViewFirstPerson)
 ENGINE_HOOKPOINT(game,          isHudSceneTypeSpace)
 ENGINE_HOOKPOINT(game,          g_runningFlags)
 ENGINE_HOOKPOINT(game,          g_mainLoopCounter)
+ENGINE_HOOKPOINT(game,          getShutdownPhase)
 
 // -- graphics (clientGraphics facade, all static; Graphics.h) ---------------
 ENGINE_HOOKPOINT(graphics,      install)

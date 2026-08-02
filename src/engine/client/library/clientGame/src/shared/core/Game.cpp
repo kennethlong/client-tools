@@ -1004,6 +1004,11 @@ void Game::quit()
 	PixCounter::disable();
 #endif
 	ms_done = true;
+
+	// Tell attached external consumers the quit decision is made, BEFORE any
+	// teardown starts (advertised as game::getShutdownPhase). ExitChain::run()
+	// raises this to SP_unwinding later; monotonic, so ordering is safe.
+	ExitChain::raiseShutdownPhase(ExitChain::SP_requested);
 }
 
 //-------------------------------------------------------------------
@@ -1035,6 +1040,22 @@ int Game::getMainLoopCount(void)
 	return ms_loops;
 }
 
+//-------------------------------------------------------------------
+/**
+ * Out-of-line forwarder so the engine-hookpoint contract can advertise the
+ * process-wide shutdown phase by &address (game::getShutdownPhase, v26).
+ *
+ * 0 = running, 1 = shutdown requested, 2 = ExitChain unwinding. Monotonic.
+ * Prefer this over the already-advertised game::g_runningFlags (&Game::isOver)
+ * for teardown gating: isOver() dereferences IoWinManager/Os state and so goes
+ * unsafe exactly when teardown begins. See ExitChain.h for the full rationale.
+ */
+
+int Game::getShutdownPhase(void)
+{
+	return ExitChain::getShutdownPhase();
+}
+
 
 //-------------------------------------------------------------------
 
@@ -1052,6 +1073,15 @@ void Game::run(void)
 	{
 		runGameLoopOnce(false, NULL, 0, 0);
 	}
+
+	// UNIVERSAL loop-exit marker (game::getShutdownPhase). The Game::quit() and
+	// ms_done raises cover only ONE of isOver()'s three terms; the other two --
+	// !IoWinManager::haveWindow() and Os::isGameOver() -- never touch ms_done,
+	// so a window-close/OS quit would otherwise skip SP_requested entirely and
+	// jump straight to SP_unwinding with no early-warning edge at all. This is
+	// the one place every exit path provably passes through. Monotonic, so the
+	// earlier quit() raise still wins when it fired first.
+	ExitChain::raiseShutdownPhase(ExitChain::SP_requested);
 	// -------------------------------------------
 
 	// -------------------------------------------
@@ -1582,6 +1612,9 @@ void Game::runGameLoopOnce(bool presentToWindow, HWND hwnd, int width, int heigh
 		if (!result)
 		{
 			ms_done = true;
+			// second ms_done site -- mirror the quit() marker so a loop-driven
+			// exit signals consumers identically (game::getShutdownPhase).
+			ExitChain::raiseShutdownPhase(ExitChain::SP_requested);
 			return;
 		}
 
