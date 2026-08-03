@@ -450,4 +450,6 @@ ENGINE_HOOKPOINT(cellProperty, getWorldCellProperty)    // CellProperty* (void) 
 ENGINE_HOOKPOINT(cellProperty, setPortalTransitionsEnabled) // void (bool) -- suppress the portal sweep across a teleport write; plain &fn. ALWAYS re-enable (global state)
 ENGINE_HOOKPOINT(collisionWorld, objectWarped)          // void (Object*) -- reconcile collision after a discontinuous move; plain &fn
 ENGINE_HOOKPOINT(clientWorld, findCellAtWorldPosition)  // void* (float x,y,z) -- CellProperty* containing world point P; never null (world-cell fallback). Placement routing
-ENGINE_HOOKPOINT(object, getAttachedTo)                 // void* (void* object) -- parent object or 0; SAFETY guard, setParentCell on a mounted player corrupts pose
+ENGINE_HOOKPOINT(object, getAttachedTo)                 // void* (void* object) -- parent object or 0. NOT a mount guard: cell parentage shares this field
+ENGINE_HOOKPOINT(playerCreatureController, warpClient)  // int (float x,y,z) world -- client-initiated SEQUENCED teleport; a raw setTransform_o2w is overwritten by the server
+ENGINE_HOOKPOINT(object, isChildObject)                 // int (void* object) -- 1 = genuine child/mount attachment. THE mount discriminator (v28's getAttachedTo guidance was falsified live)

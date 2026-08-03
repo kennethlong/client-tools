@@ -316,7 +316,40 @@
 //     paying the whole remaining ~3.1s synchronous parse.
 // 155 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 28
+// ----------------------------------------------------------------------
+// v29 (2026-08-03): + object::isChildObject. CORRECTS v28's §1.4 guidance,
+// which was falsified live by the consumer. We advertised object::getAttachedTo
+// as the mount guard ("non-null means do not reparent"); it refused every
+// teleport made from INSIDE a building, because cell parentage and mount
+// attachment share m_attachedToObject -- Object::setParentCell attaches via
+// attachToObject_w(&cellProperty->getOwner(), false) (Object.cpp:1404-1405), so
+// a player merely standing in a POB has a non-null getAttachedTo (the cell
+// owner). m_childObject is the actual discriminator: set only from the
+// asChildObject argument (Object.cpp:1931), and cells attach with FALSE. It is
+// what the compiled-out DEBUG_FATAL(isChildObject()) at Object.cpp:1396 tests --
+// the assert that would otherwise catch the silent mounted-player pose
+// corruption. getAttachedTo stays advertised for reading the actual parent.
+// 156 names.
+// ----------------------------------------------------------------------
+// ----------------------------------------------------------------------
+// v30 (2026-08-03): + playerCreatureController::warpClient. A consumer writing
+// the player's transform directly (object::setTransform_o2w) performs an
+// UNSEQUENCED local write the server never hears about, so the next
+// authoritative update legitimately overwrites it -- observed live as "lands,
+// then yanked back after ~1s" on a server session and NOT offline, because
+// offline nothing corrects it. warpClient is the engine's own client-initiated
+// teleport (its other caller is DebugPortalCamera.cpp:314): it stamps
+// m_previousTransform_p, mints a CLIENT-side sequence number, and sends
+// CM_netUpdateTransform with SEND|RELIABLE|DEST_AUTH_SERVER|DEST_AUTH_CLIENT,
+// so the server is told AND the local apply runs through
+// handleNetUpdateTransform -- which brings CollisionWorld::objectWarped and the
+// FreeChaseCamera retarget with it. NOTE the server->client teleport path
+// (handleNetUpdateTransform -> ackTeleport) is the opposite direction: its
+// sequence number comes from the server and the client only ACKs, so a client
+// cannot fabricate it. Shim takes WORLD coords, converts to parent space, and
+// does NOT reparent -- set the cell first. 157 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 30
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

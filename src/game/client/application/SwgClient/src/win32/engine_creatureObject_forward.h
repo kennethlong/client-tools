@@ -50,4 +50,16 @@ void * engine_creatureSetTargetRealEntry();
 // Consumer typedef: int64_t(__cdecl*)()
 extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void);
 
+// playerCreatureController::warpClient (v30): CALLED extern "C" shim performing a
+// CLIENT-INITIATED teleport through the CONTROLLER path, so the move is sequenced
+// and the server is told. A direct object::setTransform_o2w write is unsequenced
+// and the next authoritative server update overwrites it ("yanked back after ~1s"
+// on a live session; no revert offline). Takes WORLD coords and converts to
+// parent space internally; does NOT reparent -- set the cell first.
+// 1 = ok / 0 = no player / -1 = no PlayerCreatureController.
+// Defined in PlayerCreatureController.cpp (the exe TU cannot include
+// CreatureObject.h -- see the header comment above).
+// Consumer typedef: int(__cdecl*)(float,float,float)
+extern "C" int __cdecl utinni_warpPlayer(float x_w, float y_w, float z_w);
+
 #endif

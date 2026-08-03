@@ -725,6 +725,36 @@ extern "C" void * __cdecl utinni_getAttachedTo(void * object)
 	return const_cast<Object *>(static_cast<const Object *>(object)->getAttachedTo());
 }
 
+// ----------------------------------------------------------------------
+// object::isChildObject -- THE mount discriminator (v28 -> v29).
+//
+// CORRECTS THE v28 HANDBACK. We advertised object::getAttachedTo as the mount
+// guard and said "non-null means do not reparent". That is FALSE and was
+// falsified live by the consumer: it refused every teleport made from INSIDE a
+// building. Cell attachment and mount attachment share the SAME field --
+// Object::setParentCell attaches via attachToObject_w(&cellProperty->getOwner(),
+// false) [Object.cpp:1404-1405], so any player standing in a POB has a non-null
+// getAttachedTo (the cell owner). getAttachedTo cannot tell "mounted" from
+// "indoors", and indoors is the entire editing workflow.
+//
+// m_childObject is the real discriminator: it is set ONLY from the
+// asChildObject argument [Object.cpp:1931], and cells are attached with
+// asChildObject=FALSE, so it is false for cell parentage and true for a genuine
+// child/mount attachment. It is exactly what the compiled-out
+// DEBUG_FATAL(isChildObject(), ...) at Object.cpp:1396 tests -- the assert that
+// would have caught the mounted-player pose corruption if it were still armed.
+//
+// Object::isChildObject is INLINE [Object.h:1289] -> no PMF address -> shim.
+// 1 = child/mounted (do NOT reparent) · 0 = not a child, or null.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_isChildObject(void * object)
+{
+	if (!object)
+		return 0;
+
+	return static_cast<const Object *>(object)->isChildObject() ? 1 : 0;
+}
+
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
 // two return shapes). Returns false on no-camera/degenerate-ray/miss.
 static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
@@ -1163,7 +1193,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "cellProperty::setPortalTransitionsEnabled", (void *)&CellProperty::setPortalTransitionsEnabled }, // v28 NEW: void (bool) -- suppress the portal transition sweep across a teleport write. Public out-of-line static [CellProperty.h:73 / CellProperty.cpp:336] so a plain &fn row, NO shim. THIS is the row that makes the o2w-vs-o2p / ordering analysis moot: use the engine's OWN idiom, GroundScene.cpp:1492-1497 -- setParentCell(C); setPortalTransitionsEnabled(false); setTransform_o2p(...); setPortalTransitionsEnabled(true); CollisionWorld::objectWarped(player). ALWAYS re-enable (it is global state, not scoped)
 	{ "collisionWorld::objectWarped",         (void *)&CollisionWorld::objectWarped },     // v28 NEW: void (Object*) -- reconcile collision after a discontinuous move; out-of-line static [CollisionWorld.h:82 / .cpp:1334], plain &fn row. Without it CollisionWorld::update reconciles against a stale last-position/cell pair after a tool-driven teleport. Completes the GroundScene.cpp:1497 idiom above
 	{ "clientWorld::findCellAtWorldPosition", (void *)&utinni_findCellAtWorldPosition },   // v28 NEW: void* (float x, float y, float z) -- CellProperty* containing world point P; THE placement-routing primitive (a coordinate-only destination has no object to pick). Wraps ClientWorld::findClosestCellObjectFromWorldPosition [ClientWorld.cpp:1649] + the getCellProperty hop; the client's own containment heuristic, so tool and engine agree about a doorway. NEVER null -- falls back to the world cell, so it is always a legal setParentCell argument
-	{ "object::getAttachedTo",                (void *)&utinni_getAttachedTo },             // v28 NEW: void* (void* object) -- parent object or 0. SAFETY row: setParentCell on a MOUNTED player silently corrupts pose in Release (the isChildObject DEBUG_FATAL at Object.cpp:1396 is #if 0'd). Non-null = do not reparent. Both getAttachedTo and isChildObject are INLINE -> shim; one row covers both
+	{ "object::getAttachedTo",                (void *)&utinni_getAttachedTo },             // v28: void* (void* object) -- parent object or 0. ⚠ NOT the mount guard: cell parentage and mount attachment SHARE m_attachedToObject (setParentCell -> attachToObject_w, Object.cpp:1404-1405), so a player merely standing in a POB reports non-null. The v28 claim "non-null = do not reparent" was FALSIFIED live (refused every teleport from indoors). Use object::isChildObject instead; this row remains for reading the actual parent
+	{ "playerCreatureController::warpClient", (void *)&utinni_warpPlayer },              // v30 NEW: int (float x, float y, float z) WORLD coords -- CLIENT-INITIATED teleport through the controller. warpClient [PlayerCreatureController.h:120, engine's own DebugPortalCamera.cpp:314 caller] stamps m_previousTransform_p, mints a CLIENT sequence number, and sends CM_netUpdateTransform SEND|RELIABLE|DEST_AUTH_SERVER|DEST_AUTH_CLIENT -- so the SERVER is told and the local apply runs via handleNetUpdateTransform, bringing objectWarped + FreeChaseCamera retarget for free. A raw setTransform_o2w is UNSEQUENCED and gets overwritten by the next server update. Does NOT reparent: findCellAtWorldPosition -> setParentCell FIRST. 1 ok / 0 no player / -1 no controller
+	{ "object::isChildObject",                (void *)&utinni_isChildObject },             // v29 NEW: int (void* object) -- 1 = genuine child/mount attachment, 0 = not a child (incl. cell parentage) or null. THE mount discriminator: m_childObject is set only from the asChildObject arg (Object.cpp:1931) and cells attach with FALSE, so it is exactly what the compiled-out DEBUG_FATAL(isChildObject()) at Object.cpp:1396 tests. Inline -> shim. Guard setParentCell with this to avoid the silent Release pose corruption on a mounted player
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

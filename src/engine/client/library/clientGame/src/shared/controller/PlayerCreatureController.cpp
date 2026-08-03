@@ -1447,6 +1447,68 @@ void PlayerCreatureController::setCurrentSpeed (float const currentSpeed)
 
 //----------------------------------------------------------------------
 
+// ----------------------------------------------------------------------
+// playerCreatureController::warpClient -- client-initiated teleport (v30).
+//
+// WHY A ROW: a consumer writing the player's transform directly (object::
+// setTransform_o2w) performs an UNSEQUENCED local write the server never hears
+// about, so the next authoritative update legitimately overwrites it -- observed
+// live as "lands correctly, yanked back after ~1s" on a server session and NOT
+// offline, because offline there is no server to correct it.
+//
+// warpClient is the engine's own client-initiated teleport (its other caller is
+// DebugPortalCamera.cpp:314). It stamps m_previousTransform_p so local movement
+// reconciliation does not fight the move, mints a CLIENT-side sequence number,
+// and appends CM_netUpdateTransform with SEND|RELIABLE|DEST_AUTH_SERVER|
+// DEST_AUTH_CLIENT -- so the server is told AND the local apply runs through
+// handleNetUpdateTransform, which brings CollisionWorld::objectWarped and the
+// FreeChaseCamera retarget with it.
+//
+// NOTE the engine's server->client teleport path (handleNetUpdateTransform ->
+// ackTeleport) is NOT this: its sequence number comes from the server and the
+// client only ACKs it. A client cannot fabricate that; warpClient is the correct
+// client-initiated direction.
+//
+// warpClient takes a PARENT-relative transform. This shim accepts WORLD coords
+// (what a bookmark stores) and converts through the player's current parent
+// cell, mirroring Object::setTransform_o2w [Object.cpp:1450]. It does NOT
+// reparent -- resolve and set the cell FIRST (clientWorld::findCellAtWorldPosition
+// -> object::setParentCell), then call this.
+//
+// 1 = ok · 0 = no player · -1 = player has no PlayerCreatureController.
+// Defined here because the exe TU cannot include CreatureObject.h (see
+// engine_creatureObject_forward.h). Game-thread-only.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_warpPlayer(float x_w, float y_w, float z_w)
+{
+	CreatureObject * const player = Game::getPlayerCreature();
+	if (!player)
+		return 0;
+
+	PlayerCreatureController * const playerController = dynamic_cast<PlayerCreatureController *>(player->getController());
+	if (!playerController)
+		return -1;
+
+	//-- keep the player's current orientation; move the translation only
+	Transform transform_w = player->getTransform_o2w();
+	transform_w.setPosition_p(Vector(x_w, y_w, z_w));
+
+	//-- world -> parent, exactly as setTransform_o2w does
+	Transform transform_p = transform_w;
+	CellProperty const * const cellProperty = player->getParentCell();
+	if (cellProperty && cellProperty != CellProperty::getWorldCellProperty())
+	{
+		Transform worldToCell;
+		worldToCell.invert(cellProperty->getOwner().getTransform_o2w());
+		transform_p.multiply(worldToCell, transform_w);
+	}
+
+	playerController->warpClient(transform_p);
+	return 1;
+}
+
+// ----------------------------------------------------------------------
+
 void PlayerCreatureController::warpClient (const Transform& transform_p)
 {
 	m_previousTransform_p = transform_p;
