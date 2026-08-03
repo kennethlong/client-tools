@@ -1,0 +1,72 @@
+﻿## ROUTE A
+
+**Primary server-streamed path (cell `containedBy` arrives via `UpdateContainmentMessage`, not in `SceneCreateObject*`).**
+
+1. `GroundScene.cpp:2459` — `SceneCreateObjectByName` / `SceneCreateObjectByCrc` handler creates the proxy object (`ObjectTemplate::createObject`, `beginBaselines` at `:2590–2602`). No containment field in this message.
+2. `GroundScene.cpp:2742–2748` — `UpdateContainmentMessage` handler unpacks `networkId`, `containerId` (cell network id), `slotArrangement`.
+3. `GroundScene.cpp:2788` — `target->updateContainment(o.getContainerId(), o.getSlotArrangement())`.
+4. `ClientObject.cpp:700–705` — `updateContainment`: optional `WorldSnapshot::loadIfClientCached`, then `getContainedByProperty()->setContainedBy(containerId, false)`.
+5. `ContainedByProperty.cpp:70–76` — `setContainedBy` stores id, calls `getOwner().containedByModified(oldValue, id, local)`.
+6. `ClientObject.cpp:962–976` — `containedByModified` → `depersistContainedBy(oldValue, newValue, isLocal)`.
+7. `ClientObject.cpp:986–1027` — `depersistContainedBy` (server path: `!isLocal` at `:986`): resolves `newContainerObj` by id; for a non-player (guard at `:1019` passes), calls container depersist:
+   - If `isInitialized()` and container is a `CellProperty`: `newContainer->Container::depersistContents(*this)` at `:1023–1024`.
+   - Else: `newContainer->depersistContents(*this)` at `:1026`.
+8. **Cell branch (typical pre-`endBaselines` case):** `CellProperty.cpp:462–470` — `depersistContents`: `setParentCell(this)`, then `Container::depersistContents(item)`.
+9. `Container.cpp:840–843` — `Container::depersistContents` → `insertNewItem(id)`.
+10. **`Container.cpp:451`** — `m_contents.push_back(id)` — **exact insertion into the cell's `Container::m_contents`.**
+
+**Alternate insertion path (same `m_contents` line, not the normal stream path):** `CellProperty.cpp:926–937` — `addObject_w` → `addToContents` → `Container.cpp:407` → `insertNewItem` → `:451`. Called from `PortalProperty.cpp:316` (`fixupObject`). The only live caller of `queueObjectForFixup` is inside `#if 0` at `PortalProperty.cpp:230–245`; I did not find an active server-stream enqueue for NPCs on this path.
+
+**`setContainedBy` call sites in tree:** only `ClientObject.cpp:705`, `Container.cpp:407`, and `WorldSnapshot.cpp:289`. Server-streamed interior NPCs reach `m_contents` through the `UpdateContainmentMessage` chain above, not through `WorldSnapshot.cpp:289`.
+
+---
+
+## ROUTE B
+
+**Routes A and B diverge.** They share steps 1–6, then split.
+
+**Shared prefix:** `UpdateContainmentMessage` → `ClientObject::updateContainment` (`ClientObject.cpp:705`) → `ContainedByProperty::setContainedBy` (`ContainedByProperty.cpp:76`) → `ClientObject::containedByModified` (`ClientObject.cpp:962–976`) → `depersistContainedBy` entry (`ClientObject.cpp:983`).
+
+**Divergence — NPC (and other non-player server objects in a cell):**
+- `ClientObject.cpp:1019–1026` — guard `(this != Game::getPlayer() || …)` is **true** for an NPC → `depersistContents` runs → `CellProperty.cpp:462–470` / `Container.cpp:451` → **object id lands in cell `m_contents`.**
+
+**Divergence — player on a live server session (initialized, cell container):**
+- `ClientObject.cpp:1019–1026` — for `this == Game::getPlayer()` **and** `isInitialized()` **and** cell owner is a `CellObject` (not a mount `CreatureObject`), the whole condition is **false** → **`depersistContents` is skipped** → **no `m_contents` insert for the player.**
+- `ClientObject.cpp:756–784` — player `endBaselines` instead calls `setParentCell(cellProperty)` (`:784`) after resolving the cell via `ContainerInterface::getContainedByObject` (`:762`). **`setParentCell` attaches via `Object.cpp:1404–1405` (`attachToObject_w(..., false)`) and does not call `addToContents` / `depersistContents`.**
+
+This matches locked fact 6; Routes A and B do **not** converge on the same insertion logic.
+
+**Uncertainty:** At login, `!isInitialized()` makes the `:1019` guard true, so `depersistContents` *can* run for the player before `endBaselines`. Steady-state on a live session (post-init) is the `:1019` skip + `:784` `setParentCell` path above.
+
+---
+
+## ROUTE C
+
+**Refuted:** POB cells are **not** reached by the `isChildObject()==true` delete branch in `Object::~Object`.
+
+**Destroy-children loop:** `Object.cpp:892–907` — only `delete child` when `child->isChildObject()` (`:903–905`); non-child attached objects get `WARNING_STRICT_FATAL` + `detachFromObject(DF_parent)` at `:898–901`.
+
+**Where cells are created/attached — all paths pass `asChildObject = false`:**
+
+| Creation site | Attach call | `asChildObject` |
+|---|---|---|
+| `PortalProperty.cpp:99–101` — `initializeFirstTimeObject`: `ms_beginCreateObjectFunction(i)` then `cellLoaded(i, *object, false)` | `PortalProperty.cpp:484` — `cellObject.attachToObject_p(&getOwner(), false)` | **false** |
+| `PortalProperty.cpp:218–220` — `serverEndBaselines` missing-cell creation | same `cellLoaded` → `:484` | **false** |
+| `CellObject.cpp:136` — streamed cell `endBaselines` → `portalProperty->cellLoaded(...)` | `PortalProperty.cpp:484` | **false** |
+
+(`PortalProperty.cpp:100` also `addToContents(*object, tmp)` for locally minted cells — puts the cell object in the **building's** `PortalProperty` container `m_contents`, separate from interior NPC occupancy in a cell's `CellProperty::m_contents`.)
+
+Because `Object.cpp:1931` sets `m_childObject = asChildObject`, cells always have `isChildObject()==false`. On building `~Object`, the destroy-children loop **detaches** them (`:898–901`), it does **not** `delete` them. Cell-object deletion on a building teardown would have to come from elsewhere (e.g. per-node `WorldSnapshot::unload` deletes, or `Container::~Container` at `Container.cpp:264–276` when a cell object's own `CellProperty` is destroyed and its `m_contents` are cascaded — consistent with locked fact 3's property-destruction arm, not the child-object arm).
+
+---
+
+## BOTTOM LINE
+
+**YES** — on a live server session, when `WorldSnapshot::unload()` deletes a POB building, the **`CellProperty::m_contents` of that building's interior cells can be populated with server-owned object network ids** (interior NPCs/vendors), while the player is not.
+
+**Deciding lines:**
+- Server-streamed occupants (NPCs): `UpdateContainmentMessage` → `ClientObject.cpp:705` → `depersistContainedBy` `:1019–1024/1026` → `Container.cpp:451` (`m_contents.push_back`).
+- Player excluded from that insert: same guard at `ClientObject.cpp:1019` (skip) + `ClientObject.cpp:784` (`setParentCell` only).
+- Cell contents cascade on cell teardown: `Container.cpp:264–276` (`~Container` deletes every non-invalid `m_contents` entry).
+
+So interior server-owned NPC ids **are** in cell `m_contents` at unload time; the player id **is not** (steady state), per the `:1019` / `:784` split.

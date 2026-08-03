@@ -1,0 +1,53 @@
+﻿Your message looks truncated — it has only the evidence-pack header, not the assigned angle or full pack. I read the complete pack from `.planning/research/CONSULT-71-unload-cascade.md` plus the toolkit's authoritative result in `.planning/handoff/2026-08-02-toolkit-v28-npc-test-RESULT.md`.
+
+**All seven facts are accepted as GIVEN.** I will not re-derive them.
+
+---
+
+## Quick source confirmation (facts 1–3 only)
+
+The mechanism chain in the pack matches the code:
+
+**Unguarded delete in `unload()`:**
+
+```475:478:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+			node->removeFromWorld();
+			Object * const object = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(node->getNetworkIdInt())));
+			if (object)
+				delete object;
+```
+
+**Guarded delete in `update()`:**
+
+```1299:1304:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+					if (ContainerInterface::isClientCachedOnly (*safe_cast<ClientObject*> (object)))
+					{
+						if (object->isInWorld ())
+							object->removeFromWorld ();
+						else
+							DEBUG_WARNING (true, ("WorldSnapshot::update - deleting client cached object %i which is not in the world\n", node->getNetworkIdInt ()));
+```
+
+**Cascade path (fact 3):** building `~Object` deletes child objects (cells) at `Object.cpp:892-906`; cell `CellProperty` is a `Container`, whose dtor deletes every contained object at `Container.cpp:264-278`. That is exactly the hazard `wsRemoveNode` guards against with the bidirectional occupancy check (`WorldSnapshot.cpp:2405-2444`).
+
+The field report (fact 4) — interior NPCs gone permanently, exterior unaffected, relog-only recovery — is the expected signature of unguarded client-side delete of server-streamed objects inside POB cells during an in-place reload.
+
+---
+
+## What I need from you
+
+The consult prompt ends with:
+
+> *Answer ONLY the question in your assigned angle below.*
+
+That angle was not in your message. Codex was assigned the **call-graph angle** (enumerate `unload()`/`load()` callers, distinguish zone-change vs in-place reload, name a distinguishing symbol, assess cascade dependencies). Its output file (`.planning/research/CONSULT-71-codex.out`) looks like raw search traces without a synthesized answer — possibly still running or truncated.
+
+**Which angle do you want me to answer?** For example:
+
+- **Call graph / caller enumeration** (Codex angle)
+- **Fix design** — what guard to add, where, and what invariants it must preserve
+- **Mechanism closer / falsification** — what would disprove the cascade hypothesis
+- **Player safety** — does the same bug path threaten the player (fact 6 context)
+- **Something else**
+
+Paste the assigned angle (or the rest of the consult prompt) and I'll answer only that scope, with file:line citations, treating facts 1–7 as locked.
