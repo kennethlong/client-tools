@@ -1777,6 +1777,27 @@ namespace WorldSnapshotNamespace
 
 //-------------------------------------------------------------------
 
+// v28: PURE, NON-FORCING parse-completion read. Deliberately the ONLY ws* row
+// with no finishLoadNow() prologue (wsGetGeneration is the other pure read, but
+// it is a load/unload counter and says nothing about the parse).
+//
+// Exists so a consumer can WAIT instead of FORCE. Without it the only way to
+// observe completion was to call a forcing row purely for its side effect --
+// which pays the whole remaining synchronous parse (~3.1s worst case) to avoid
+// a race, exactly the freeze CONSULT-60 removed. getLoadingPercent() is NOT a
+// substitute: it returns 0 while ms_parsePending and then reports template-
+// preload percent (:983), so a reader cannot tell "still parsing" from
+// "parsed, preload at 0%".
+//
+// 1 = a phased parse is in flight (world still rebuilding), 0 = idle/complete.
+// Poll it from a per-frame detour; safe at any time, no side effects.
+extern "C" int __cdecl utinni_wsIsParsePending (void)
+{
+	return ms_parsePending ? 1 : 0;
+}
+
+//-------------------------------------------------------------------
+
 extern "C" int __cdecl utinni_wsGetNodeCount (void)
 {
 	if (ms_parsePending)

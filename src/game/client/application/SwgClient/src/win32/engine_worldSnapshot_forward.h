@@ -19,6 +19,7 @@
 
 struct UtinniWsNodeInfo;
 
+extern "C" int     __cdecl utinni_wsIsParsePending(void);   // v28: PURE, NON-forcing parse-completion read (1 = rebuilding). The only ws* row with no finishLoadNow() prologue -- lets a consumer WAIT instead of FORCE a ~3.1s synchronous parse
 extern "C" int     __cdecl utinni_wsGetNodeCount(void);
 extern "C" __int64 __cdecl utinni_wsGetTopNodeIdAt(int index);
 extern "C" int     __cdecl utinni_wsGetChildCount(__int64 networkIdInt);

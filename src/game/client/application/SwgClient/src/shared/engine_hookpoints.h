@@ -297,7 +297,26 @@
 // static -> plain &fn row, and it is REQUIRED because setParentCell NOT_NULLs
 // its argument (null is a FATAL, not "outside"). 150 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 27
+// ----------------------------------------------------------------------
+// v28 (2026-08-02): +5 rows answering the toolkit's post-v27 field report.
+//   cellProperty::setPortalTransitionsEnabled -- suppress the portal sweep
+//     across a teleport write. THE row: it lets a consumer use the engine's own
+//     idiom (GroundScene.cpp:1492-1497) instead of reasoning about sweep
+//     ordering at all. Global state -- always re-enable.
+//   collisionWorld::objectWarped -- completes that same idiom (:1497).
+//   clientWorld::findCellAtWorldPosition -- "which cell contains world point P".
+//     THE placement-routing primitive: a coordinate-only destination (bookmark,
+//     scripted placement) has no object to pick, so the collideScreenRayObject
+//     -> getParentCell path cannot serve the doorway test. Never null.
+//   object::getAttachedTo -- SAFETY. setParentCell on a MOUNTED player silently
+//     corrupts pose in Release (the isChildObject DEBUG_FATAL at Object.cpp:1396
+//     is #if 0'd). Non-null = do not reparent.
+//   worldSnapshot::wsIsParsePending -- PURE, non-forcing completion read, so a
+//     consumer can WAIT instead of calling a forcing row for its side effect and
+//     paying the whole remaining ~3.1s synchronous parse.
+// 155 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 28
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

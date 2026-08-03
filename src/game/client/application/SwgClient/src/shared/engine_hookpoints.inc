@@ -343,6 +343,7 @@ ENGINE_HOOKPOINT(game, getPlayerLookAtTargetId)
 // load/unload); wsGetNodeInfo fills the FROZEN 80-byte UtinniWsNodeInfo
 // (engine_hookpoints.h) under the size-first protocol; wsGetGeneration bumps
 // on load/unload ONLY and is a PURE counter read (no parse force).
+ENGINE_HOOKPOINT(worldSnapshot, wsIsParsePending)       // int (void) -- 1 = parse in flight; PURE/non-forcing (no finishLoadNow prologue)
 ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeCount)        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
 ENGINE_HOOKPOINT(worldSnapshot, wsGetTopNodeIdAt)      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
 ENGINE_HOOKPOINT(worldSnapshot, wsGetChildCount)       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
@@ -446,3 +447,7 @@ ENGINE_HOOKPOINT(object, getTransformO2P)               // int (void* object, fl
 ENGINE_HOOKPOINT(object, getContainingBuildingId)       // __int64 (void* object) -- building NetworkId value; 0 = null / not inside a POB
 ENGINE_HOOKPOINT(object, setParentCell)                 // int (void* object, void* cellProperty) -- cell reparent; 1 ok / 0 refused. VIRTUAL -> shim. Null cell FATALs engine-side: use cellProperty::getWorldCellProperty for "outside"
 ENGINE_HOOKPOINT(cellProperty, getWorldCellProperty)    // CellProperty* (void) -- world-cell sentinel; plain &fn (out-of-line static), no shim
+ENGINE_HOOKPOINT(cellProperty, setPortalTransitionsEnabled) // void (bool) -- suppress the portal sweep across a teleport write; plain &fn. ALWAYS re-enable (global state)
+ENGINE_HOOKPOINT(collisionWorld, objectWarped)          // void (Object*) -- reconcile collision after a discontinuous move; plain &fn
+ENGINE_HOOKPOINT(clientWorld, findCellAtWorldPosition)  // void* (float x,y,z) -- CellProperty* containing world point P; never null (world-cell fallback). Placement routing
+ENGINE_HOOKPOINT(object, getAttachedTo)                 // void* (void* object) -- parent object or 0; SAFETY guard, setParentCell on a mounted player corrupts pose

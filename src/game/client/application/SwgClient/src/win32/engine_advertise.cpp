@@ -78,6 +78,7 @@
 
 // -- Live World Editor ray-pick (v19 -> v20, 2026-07-19 change request) -------
 #include "clientGame/ClientWorld.h"                      // ClientWorld::collide (static) + the CF_* pick flags
+#include "sharedCollision/CollisionWorld.h"              // v28 collisionWorld::objectWarped -- reconcile collision after a discontinuous move
 #include "clientGame/ConfigClientGame.h"                 // getTargetingRange (the engine cursor-ray viewDistance, SwgCuiHud.cpp:1163)
 #include "sharedCollision/CollideParameters.h"           // CollideParameters::cms_default (the hud pick's parameter set)
 #include "sharedCollision/CollisionInfo.h"               // stack copy-out source (never crosses the boundary)
@@ -623,9 +624,34 @@ extern "C" __int64 __cdecl utinni_getContainingBuildingId(void * object)
 // [Object.cpp:1450] is itself cell-aware (world-cell parent -> direct o2p,
 // else it inverts the cell owner's o2w and back-converts).
 //
-// ORDERING: write the transform FIRST, then reparent. Both orders converge,
-// but setParentCell fires cellChanged(false) [:1408] -- reparent-first makes
-// that notification observe the object still at its OLD world position.
+// ORDERING (rationale CORRECTED 2026-08-02 by the consumer's trace -- the
+// original reasoning here was wrong even though the conclusion was right):
+// setParentCell does NOT run the portal sweep. It fires only cellChanged(false)
+// [:1408], and CellPropertyNamespace::Notification overrides only getPriority/
+// positionChanged/positionAndRotationChanged [CellProperty.cpp:42-66] -- NOT
+// cellChanged. The sweep is a side effect of the TRANSFORM WRITE, and only the
+// transform write. (Object::cellChanged is non-virtual [Object.h:366] so the
+// observer set is closed: all of them re-derive from current state and none
+// caches a position, which is why the "stale position" argument this comment
+// used to make was cosmetic.)
+//
+// So the real question is whether the sweep runs before or after the
+// authoritative cell assignment, and that answers cleanly:
+//   transform-first -> the sweep runs against the OLD cell and whatever it
+//                      picks is UNCONDITIONALLY overwritten by the trailing
+//                      setParentCell. Final cell is deterministic.
+//   reparent-first  -> the sweep runs LAST, so a cell it picks is final and
+//                      uncorrected: a silent permanent mis-parent, and it is
+//                      exactly the value getContainingBuildingId then feeds to
+//                      placement routing.
+// Transform-first strictly dominates. WRITE THE TRANSFORM FIRST, THEN REPARENT.
+//
+// BETTER STILL (v28): use the engine's OWN idiom now that
+// cellProperty::setPortalTransitionsEnabled is advertised --
+// GroundScene.cpp:1492-1497 does reparent -> suppress -> write o2p ->
+// unsuppress -> collisionWorld::objectWarped. With the sweep suppressed the
+// ordering question does not arise at all. Their cell-first choice is
+// CONDITIONAL on that suppression; do not copy it without the bracket.
 //
 // Both pointers are BORROWED consumer-held; null-checked only, lifetime
 // discipline is theirs. CALLED, game-thread-only. 1 = ok, 0 = refused.
@@ -640,6 +666,63 @@ extern "C" int __cdecl utinni_setParentCell(void * object, void * cellProperty)
 
 	obj->setParentCell(cell);
 	return 1;
+}
+
+// ----------------------------------------------------------------------
+// clientWorld::findCellAtWorldPosition -- "which cell contains world point P"
+// (v28). THE placement-routing primitive: the container must be resolved from
+// the PLACEMENT POINT, and a coordinate-only destination (bookmark, scripted
+// placement) has no object to pick, so the collideScreenRayObject ->
+// getParentCell path cannot serve it.
+//
+// Wraps ClientWorld::findClosestCellObjectFromWorldPosition [ClientWorld.h:227
+// / .cpp:1649] and folds in the getCellProperty() hop, so the consumer never
+// dereferences an engine type. That function is ALSO the client's own
+// containment heuristic (its other caller is SwgCuiQuestHelper.cpp:997), so
+// tool and engine cannot disagree about which cell a doorway point belongs to.
+//
+// Never returns null in practice -- the engine falls back to the world cell's
+// owner -- but we null-check every hop anyway and fall back explicitly to
+// CellProperty::getWorldCellProperty(), so the result is always a valid
+// argument for object::setParentCell (which FATALs on null).
+// Shim mandatory: takes Vector const&, returns Object const*.
+// ----------------------------------------------------------------------
+extern "C" void * __cdecl utinni_findCellAtWorldPosition(float x, float y, float z)
+{
+	Object const * const cellObject = ClientWorld::findClosestCellObjectFromWorldPosition(Vector(x, y, z));
+	if (cellObject)
+	{
+		CellProperty const * const cell = cellObject->getCellProperty();
+		if (cell)
+			return const_cast<CellProperty *>(cell);
+	}
+
+	return CellProperty::getWorldCellProperty();
+}
+
+// ----------------------------------------------------------------------
+// object::getAttachedTo -- child-object guard (v28). SAFETY, not convenience.
+//
+// setParentCell on a MOUNTED player silently corrupts its pose in Release: the
+// DEBUG_FATAL(isChildObject(), ...) at Object.cpp:1396 is #if 0'd out, so
+// nothing stops it. Traced path: isInWorldCell() returns true THROUGH the
+// mount so the detach at :1400 is skipped; attachToObject_w computes the right
+// m_objectToParent at :1968-1969; then attachToObject_p re-enters
+// detachFromObject(DF_none) (:1913-1914) whose :2002
+// `m_objectToParent = getTransform_o2w()` overwrites it with a mount-composed
+// value.
+//
+// Both Object::getAttachedTo [Object.h:628/640] and Object::isChildObject
+// [:1289] are INLINE -> no PMF address -> shim. One row covers both needs:
+// non-null == attached to a parent object (mounted/child) == do not reparent.
+// Returns the parent as an opaque void*; borrowed, no consumer dereference.
+// ----------------------------------------------------------------------
+extern "C" void * __cdecl utinni_getAttachedTo(void * object)
+{
+	if (!object)
+		return 0;
+
+	return const_cast<Object *>(static_cast<const Object *>(object)->getAttachedTo());
 }
 
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
@@ -1022,6 +1105,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	// read (no parse force) bumping on load/unload ONLY; wsGetNodeInfo fills the FROZEN
 	// 80-byte UtinniWsNodeInfo (engine_hookpoints.h) under the size-first protocol.
 	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
+	{ "worldSnapshot::wsIsParsePending",      (void *)&utinni_wsIsParsePending },      // v28 NEW: int (void) -- 1 = phased parse in flight (world still rebuilding), 0 = idle/complete. PURE, NON-forcing: the ONLY ws* row without a finishLoadNow() prologue, so a consumer can WAIT rather than call a forcing row for its side effect (which pays the whole remaining ~3.1s synchronous parse). NOT getLoadingPercent -- that returns 0 while parsing and then reports preload percent, so 0 is ambiguous
 	{ "worldSnapshot::wsGetNodeCount",        (void *)&utinni_wsGetNodeCount },        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
 	{ "worldSnapshot::wsGetTopNodeIdAt",      (void *)&utinni_wsGetTopNodeIdAt },      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
 	{ "worldSnapshot::wsGetChildCount",       (void *)&utinni_wsGetChildCount },       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
@@ -1076,6 +1160,10 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "object::getContainingBuildingId",      (void *)&utinni_getContainingBuildingId },   // __int64 (void* object) -- NetworkId value of the containing POB building (== the .ws node id); works for an .ilf decoration, a wall-click CELL object, or the player; 0 = null / not inside a POB; borrowed consumer-held Object*, game-thread-only
 	{ "object::setParentCell",                (void *)&utinni_setParentCell },             // v27 NEW: int (void* object, void* cellProperty) -- cell reparent; VIRTUAL [Object.h:168] so the shim is mandatory. 1 ok / 0 refused (null either side). Null cell would FATAL (NOT_NULL Object.cpp:1389) -- pass cellProperty::getWorldCellProperty to reparent OUT, never null. Write o2w FIRST then reparent (cellChanged fires inside setParentCell); do NOT convert to o2p -- attachToObject_w preserves world. Borrowed pointers, game-thread-only
 	{ "cellProperty::getWorldCellProperty",   (void *)&CellProperty::getWorldCellProperty },// v27 NEW: CellProperty* (void) -- the world-cell sentinel, out-of-line [CellProperty.h:78 / CellProperty.cpp:308] so a plain constant &fn row, NO shim (the cuiPreferences::getAllowTargetAnything pattern). Required to express "reparent to the exterior" -- setParentCell cannot take null
+	{ "cellProperty::setPortalTransitionsEnabled", (void *)&CellProperty::setPortalTransitionsEnabled }, // v28 NEW: void (bool) -- suppress the portal transition sweep across a teleport write. Public out-of-line static [CellProperty.h:73 / CellProperty.cpp:336] so a plain &fn row, NO shim. THIS is the row that makes the o2w-vs-o2p / ordering analysis moot: use the engine's OWN idiom, GroundScene.cpp:1492-1497 -- setParentCell(C); setPortalTransitionsEnabled(false); setTransform_o2p(...); setPortalTransitionsEnabled(true); CollisionWorld::objectWarped(player). ALWAYS re-enable (it is global state, not scoped)
+	{ "collisionWorld::objectWarped",         (void *)&CollisionWorld::objectWarped },     // v28 NEW: void (Object*) -- reconcile collision after a discontinuous move; out-of-line static [CollisionWorld.h:82 / .cpp:1334], plain &fn row. Without it CollisionWorld::update reconciles against a stale last-position/cell pair after a tool-driven teleport. Completes the GroundScene.cpp:1497 idiom above
+	{ "clientWorld::findCellAtWorldPosition", (void *)&utinni_findCellAtWorldPosition },   // v28 NEW: void* (float x, float y, float z) -- CellProperty* containing world point P; THE placement-routing primitive (a coordinate-only destination has no object to pick). Wraps ClientWorld::findClosestCellObjectFromWorldPosition [ClientWorld.cpp:1649] + the getCellProperty hop; the client's own containment heuristic, so tool and engine agree about a doorway. NEVER null -- falls back to the world cell, so it is always a legal setParentCell argument
+	{ "object::getAttachedTo",                (void *)&utinni_getAttachedTo },             // v28 NEW: void* (void* object) -- parent object or 0. SAFETY row: setParentCell on a MOUNTED player silently corrupts pose in Release (the isChildObject DEBUG_FATAL at Object.cpp:1396 is #if 0'd). Non-null = do not reparent. Both getAttachedTo and isChildObject are INLINE -> shim; one row covers both
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.
