@@ -151,6 +151,19 @@ namespace WorldSnapshotNamespace
 	};
 	ParsePhase ms_parsePhase = PP_done;
 	bool ms_parsePending = false;
+
+	// CONSULT-71 occupancy probe: which unload() call path is running. Set by each
+	// of the three call sites (remove/load/wsUnloadSnapshot) because Codex's call-graph
+	// pass established there is NO state reachable from inside unload() that reliably
+	// distinguishes a real zone change from an in-place editor reload -- GameNetwork
+	// connection state is live in both, and ms_sceneName is set BEFORE the call by
+	// load() but cleared AFTER it by wsUnloadSnapshot.
+	char const * ms_unloadReason = "unset";
+
+	// CONSULT-71: how many non-client-cached (server-owned) roots the last unload()
+	// REFUSED to delete. Surfaced by wsUnloadSnapshot so the toolkit can tell the user
+	// "N occupied buildings kept -- their edits show after a zone change or relog".
+	int ms_lastUnloadSkippedRoots = 0;
 	Iff* ms_parseIff = 0;
 	int  ms_buildoutAreaIndex = 0;
 	int  ms_sphereNodeIndex = 0;
@@ -418,6 +431,7 @@ void WorldSnapshot::install ()
 
 void WorldSnapshot::remove ()
 {
+	ms_unloadReason = "exitchain";  // CONSULT-71 probe tag: process teardown (asserted to still see a live world)
 	DebugFlags::unregisterFlag (ms_logWorldSnapshotCreates);
 	DebugFlags::unregisterFlag (ms_reportWorldSnapshotCreates);
 	DebugFlags::unregisterFlag (ms_vtuneWorldSnapshotCreates);
@@ -434,6 +448,8 @@ void WorldSnapshot::unload ()
 {
 	//-- Goal B Wave 1: new snapshot generation (editor cache/undo invalidation)
 	++ms_wsEditGeneration;
+
+	ms_lastUnloadSkippedRoots = 0;   // CONSULT-71 guard tally, per unload
 
 	//-- CONSULT-60: cancel any in-flight phased parse (quit during loading /
 	//   startScene->startScene). Partial reader state is torn down by the
@@ -474,8 +490,129 @@ void WorldSnapshot::unload ()
 
 			node->removeFromWorld();
 			Object * const object = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(node->getNetworkIdInt())));
+
+			// ------------------------------------------------------------------
+			// CONSULT-71 occupancy probe ([ClientGame/WorldSnapshot]
+			// logUnloadOccupancy, default 0 = OFF). Measures, per node, what this
+			// unguarded delete is actually about to destroy.
+			//
+			// This delete has NO isClientCachedOnly guard, unlike update()'s drain
+			// (:~1299). Deleting a POB cascades through TWO Container hops --
+			// PortalProperty(Container) deletes the cells, then each
+			// CellProperty(Container) deletes its occupants -- and server-streamed
+			// NPCs ARE in cell m_contents (ClientObject::depersistContainedBy ->
+			// Container::insertNewItem). A client-side delete is invisible to the
+			// server, so they never come back: field-confirmed as permanent loss of
+			// every NPC inside a POB after one in-place editor reload.
+			//
+			// The probe answers the question the fix design hinges on: WHICH call
+			// paths actually see live objects here. Predictions to falsify --
+			//   reason=load on a real zone change -> live=0 for everything, because
+			//     ~GroundScene/World::remove already deleted the world before the
+			//     new scene's postload reaches us (if this shows live objects, that
+			//     ordering claim is wrong);
+			//   reason=wsUnload -> live POBs with serverOwned > 0 (the bug);
+			//   reason=exitchain -> asserted to still see a fully live world purely
+			//     from ExitChain LIFO registration order. UNMEASURED, and the only
+			//     load-bearing claim in the analysis not yet observed.
+			// serverOwned is counted with the SAME predicate a guard would use, so
+			// the numbers also size the refuse-vs-skip decision.
+			// ------------------------------------------------------------------
+			static int const s_logUnloadOccupancy = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "logUnloadOccupancy", 0);
+			if (s_logUnloadOccupancy)
+			{
+				int cells = 0;
+				int contents = 0;
+				int serverOwned = 0;
+
+				if (object)
+				{
+					PortalProperty const * const portalProperty = object->getPortalProperty();
+					if (portalProperty)
+					{
+						cells = portalProperty->getNumberOfCells();
+						for (int cellIndex = 0; cellIndex < cells; ++cellIndex)
+						{
+							CellProperty const * const cellProperty = portalProperty->getCell(cellIndex);
+							if (!cellProperty)
+								continue;
+
+							contents += cellProperty->getNumberOfItems();
+
+							// getContents(int) is PROTECTED; the public read path is the
+							// const iterator, which yields the CachedNetworkId directly.
+							for (ContainerConstIterator it = cellProperty->begin(); it != cellProperty->end(); ++it)
+							{
+								Object * const occupant = (*it).getObject();
+								if (!occupant)
+									continue;
+
+								ClientObject * const clientOccupant = dynamic_cast<ClientObject *>(occupant);
+								if (clientOccupant && !ContainerInterface::isClientCachedOnly(*clientOccupant))
+									++serverOwned;
+							}
+						}
+					}
+				}
+
+				// getNetworkIdInt() is int64 -- it MUST NOT be printed with %d. Doing so
+				// consumes only 4 of its 8 bytes and shifts every following vararg one
+				// slot left, which silently produced impossible readings (live=-55312385)
+				// and dropped serverOwned off the end entirely. Cast + %lld.
+				if (object || contents)
+					REPORT_LOG(true, ("[ws.unload] reason=%s node=%lld live=%d cells=%d contents=%d serverOwned=%d\n",
+						ms_unloadReason, static_cast<long long>(node->getNetworkIdInt()), object ? 1 : 0, cells, contents, serverOwned));
+			}
+
+			// ------------------------------------------------------------------
+			// CONSULT-71 GUARD. This delete used to be unconditional, and it was
+			// the ONE snapshot path that violated the invariant update()'s drain
+			// already enforces (:~1299): snapshot code never deletes a
+			// non-client-cached object. Deleting a POB root cascades through two
+			// Container hops -- PortalProperty(Container) takes the cells, then
+			// each CellProperty(Container) takes its occupants -- and server
+			// NPCs live in cell m_contents (ClientObject::depersistContainedBy ->
+			// Container::insertNewItem). A client-side delete is invisible to the
+			// server, so an in-place editor reload permanently emptied every POB
+			// the player had entered, for the rest of the session.
+			//
+			// The guard is a NO-OP on every non-editor caller BY CONSTRUCTION,
+			// which is why it is safe to apply unconditionally here:
+			//   reason=exitchain -- ExitChain is LIFO and IoWinManager::remove is
+			//     registered AFTER SetupClientGame (ClientMain.cpp:417 vs :409),
+			//     so the IoWin stack is killed first -> ~GroundScene ->
+			//     ClientWorld::remove -> World::remove has already deleted the
+			//     world and unregistered every id, so getObjectById misses here.
+			//   reason=load (real zone change) -- ~GroundScene ran before the new
+			//     scene's postload for the same reason; nothing is live either.
+			// Only the editor reload reaches this with a live world, which is
+			// exactly the path that was losing NPCs. (The armed logUnloadOccupancy
+			// probe measures both claims -- two consultants disagreed about the
+			// exitchain one, so it is verified rather than assumed.)
+			//
+			// NOTE we do NOT touch Container::~Container. Ownership cascade
+			// semantics are depended on elsewhere (World::remove skips contained
+			// objects precisely because "their container will delete them",
+			// World.cpp:224-226). We only stop unload() from INITIATING the
+			// delete of a non-client-cached root.
+			//
+			// Residual, accepted deliberately: a surviving POB collides with the
+			// re-parsed node on the next load (createObject -> CEC_objectAlready-
+			// Exists -> the new node's sphere handle is stripped, :~1210), so the
+			// building shows its pre-edit on-disk state until a zone change or
+			// relog. That is bounded, visible staleness instead of irreversible,
+			// server-invisible data loss.
+			// ------------------------------------------------------------------
 			if (object)
-				delete object;
+			{
+				ClientObject * const clientObject = dynamic_cast<ClientObject *>(object);
+				bool const serverOwnedRoot = (clientObject != 0) && !ContainerInterface::isClientCachedOnly(*clientObject);
+
+				if (serverOwnedRoot)
+					++ms_lastUnloadSkippedRoots;   // leave it alive -- the server still owns it
+				else
+					delete object;                 // client-cached (or non-ClientObject): unchanged behavior
+			}
 		}
 	}
 
@@ -493,6 +630,11 @@ void WorldSnapshot::unload ()
 
 	// Event object map clean up.
 	ms_eventObjectMap.clear();
+
+	//-- CONSULT-71: report what the guard preserved (rare and important -- not gated
+	//   behind the probe key, which only controls the per-node detail lines).
+	if (ms_lastUnloadSkippedRoots > 0)
+		REPORT_LOG (true, ("[ws.unload] reason=%s KEPT %d server-owned root(s) -- not deleted (would have cascade-destroyed their cell occupants)\n", ms_unloadReason, ms_lastUnloadSkippedRoots));
 
 	//-- clear out the snapshot
 	ms_reader.clear ();
@@ -518,6 +660,7 @@ void WorldSnapshot::load (char const *sceneName)
 	}
 
 	ms_sceneName = sceneName;
+	ms_unloadReason = "load";       // CONSULT-71 probe tag: zone change OR in-place reload's second unload
 	unload ();
 
 	//-- CONSULT-60: cheap prologue only. The node parse, per-area buildout
@@ -2733,10 +2876,11 @@ extern "C" void __cdecl utinni_wsUnloadSnapshot (void)
 	//-- unload() cancels any in-flight phased parse itself and bumps the
 	//   generation. The scene-name reset is the ANSWERS §2 delta: load() would
 	//   otherwise early-out on the sticky name and reload would return EMPTY.
+	ms_unloadReason = "wsUnload";   // CONSULT-71 probe tag: THE in-place editor reload -- the path that destroys interior NPCs
 	WorldSnapshot::unload ();
 	ms_sceneName.clear ();
 
-	WS_EDITOR_LOG (("[editor.ws] wsUnloadSnapshot OK (scene name reset; generation=%d)\n", ms_wsEditGeneration));
+	WS_EDITOR_LOG (("[editor.ws] wsUnloadSnapshot OK (scene name reset; generation=%d; keptServerOwnedRoots=%d)\n", ms_wsEditGeneration, ms_lastUnloadSkippedRoots));
 }
 
 //-------------------------------------------------------------------
