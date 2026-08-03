@@ -349,7 +349,36 @@
 // cannot fabricate it. Shim takes WORLD coords, converts to parent space, and
 // does NOT reparent -- set the cell first. 157 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 30
+// ----------------------------------------------------------------------
+// v31 (2026-08-03): NO name change -- BEHAVIOUR CORRECTION behind
+// playerCreatureController::warpClient, bumped per the address-correctness
+// policy above. The v30 implementation was wrong in a way only a live server
+// could reveal, and the consumer reproduced it immediately.
+//
+// warpClient sends MessageQueueDataTransform / CM_netUpdateTransform -- the
+// NO-PARENT variant -- and its handler (ClientController.cpp:433) opens with
+// "transfer from cell to world": it calls setParentCell(getWorldCellProperty())
+// whenever the object is attached. That message STRUCTURALLY UN-PARENTS by
+// design, so warpClient can never place a player inside a cell, and the
+// setParentCell we told the consumer to call first was undone by the local
+// apply. Compounding it, the v30 shim converted world -> cell space and then
+// shipped the result in the world-space message (target (3448,4,-4824) put the
+// player at (15,193,5), the cell-relative magnitudes at world origin).
+//
+// The shim now performs the engine's own sequence and resolves the destination
+// cell ITSELF: findClosestCellObjectFromWorldPosition -> setParentCell ->
+// suppressed setTransform_o2p -> CollisionWorld::objectWarped ->
+// ClientController::sendTransform(transform_p, reliable). sendTransform
+// [ClientController.h:44 / .cpp:311-340] picks the message from parentage --
+// MessageQueueDataTransformWithParent + CM_netUpdateTransformWithParent with
+// the CELL id when attached, plain otherwise. That was the piece a bare local
+// write was always missing.
+//
+// CONSUMER CONTRACT CHANGE: do NOT call object::setParentCell around this any
+// more -- the shim owns cell resolution, and an external reparent will fight
+// the message-variant choice. Still 157 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 31
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
