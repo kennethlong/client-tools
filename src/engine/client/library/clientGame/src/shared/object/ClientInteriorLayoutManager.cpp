@@ -271,7 +271,7 @@ void ClientInteriorLayoutManager::applyInteriorLayout(TangibleObject * const tan
 // ======================================================================
 
 #if !defined(_WIN64)   // the advertise surface is 32-bit only (engine_advertise.cpp:94) -- no x64 export surface, so this shim would be a dead symbol there
-extern "C" int __cdecl utinni_refreshInteriorLayout (__int64 buildingNetworkId)
+extern "C" int __cdecl engine_refreshInteriorLayout (__int64 buildingNetworkId)
 {
 	Object * const object = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (buildingNetworkId)));
 	if (!object)

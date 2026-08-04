@@ -179,13 +179,13 @@ namespace WorldSnapshotNamespace
 	std::set<const WorldSnapshotReaderWriter::Node*> ms_buildoutTopLevelNodes;
 
 	//-- Goal B Wave 1 (hookpoints v17): snapshot generation for the editor read
-	//   shims (utinni_wsGetGeneration, end of file). Bumps on unload (which every
+	//   shims (engine_wsGetGeneration, end of file). Bumps on unload (which every
 	//   load routes through) so the consumer invalidates cached rows + undo
 	//   targets across snapshot generations. A pure counter -- never gates logic.
 	int ms_wsEditGeneration = 0;
 
 	//-- Goal B Wave 3 gate aid: when set, the phased parse's completion runs one
-	//   utinni_wsSaveSnapshot and logs the typed result -- a REAL save exercised
+	//   engine_wsSaveSnapshot and logs the typed result -- a REAL save exercised
 	//   by a normal world entry (the Wave-2 lesson: gates that never exercise
 	//   the path ship the bug). Default off; harmless to leave in-tree.
 	bool ms_wsSelfTestSaveOnLoad = false;
@@ -395,7 +395,7 @@ using namespace WorldSnapshotNamespace;
 //-- Goal B Wave 3: file-scope forward declaration for the loadStep self-test
 //   hook (the shim is defined at the end of this TU; a linkage specification
 //   is not allowed inside a function body)
-extern "C" int __cdecl utinni_wsSaveSnapshot (void);
+extern "C" int __cdecl engine_wsSaveSnapshot (void);
 #endif
 
 //===================================================================
@@ -1048,12 +1048,12 @@ void WorldSnapshot::loadStep ()
 
 #if !defined(_WIN64)
 				//-- Wave-3 gate aid (default off): one REAL save at parse
-				//   completion, typed result logged (utinni_wsSaveSnapshot is
+				//   completion, typed result logged (engine_wsSaveSnapshot is
 				//   declared at file scope above -- C2598 forbids a linkage
 				//   specification inside a function)
 				if (ms_wsSelfTestSaveOnLoad)
 				{
-					const int selfTestResult = utinni_wsSaveSnapshot ();
+					const int selfTestResult = engine_wsSaveSnapshot ();
 					REPORT_LOG (true, ("[editor.ws] SELF-TEST save-on-load: result=%d\n", selfTestResult));
 				}
 #endif
@@ -1854,18 +1854,18 @@ void WorldSnapshot::addEventObjects(const std::string & eventName)
 
 #include <cstddef>  // offsetof (frozen-ABI asserts)
 #include <cstring>  // memcpy/memset (POD-out fill)
-#include "../../../../../../../game/client/application/SwgClient/src/shared/engine_hookpoints.h" // UtinniWsNodeInfo (the shared contract POD; header pulls in no engine headers by design)
+#include "../../../../../../../game/client/application/SwgClient/src/shared/engine_hookpoints.h" // EngineWsNodeInfo (the shared contract POD; header pulls in no engine headers by design)
 
 //-- pin the rev-3 frozen ABI: any drift here is a contract break, not a build tweak
-static_assert (sizeof (UtinniWsNodeInfo) == 80,                          "UtinniWsNodeInfo: rev-3 froze sizeof == 80");
-static_assert (offsetof (UtinniWsNodeInfo, size)            ==  0,      "UtinniWsNodeInfo: frozen layout drift (size)");
-static_assert (offsetof (UtinniWsNodeInfo, flags)           ==  4,      "UtinniWsNodeInfo: frozen layout drift (flags)");
-static_assert (offsetof (UtinniWsNodeInfo, containedById)   ==  8,      "UtinniWsNodeInfo: frozen layout drift (containedById)");
-static_assert (offsetof (UtinniWsNodeInfo, cellIndex)       == 16,      "UtinniWsNodeInfo: frozen layout drift (cellIndex)");
-static_assert (offsetof (UtinniWsNodeInfo, portalLayoutCrc) == 20,      "UtinniWsNodeInfo: frozen layout drift (portalLayoutCrc)");
-static_assert (offsetof (UtinniWsNodeInfo, radius)          == 24,      "UtinniWsNodeInfo: frozen layout drift (radius)");
-static_assert (offsetof (UtinniWsNodeInfo, transform)       == 28,      "UtinniWsNodeInfo: frozen layout drift (transform)");
-static_assert (offsetof (UtinniWsNodeInfo, childCount)      == 76,      "UtinniWsNodeInfo: frozen layout drift (childCount)");
+static_assert (sizeof (EngineWsNodeInfo) == 80,                          "EngineWsNodeInfo: rev-3 froze sizeof == 80");
+static_assert (offsetof (EngineWsNodeInfo, size)            ==  0,      "EngineWsNodeInfo: frozen layout drift (size)");
+static_assert (offsetof (EngineWsNodeInfo, flags)           ==  4,      "EngineWsNodeInfo: frozen layout drift (flags)");
+static_assert (offsetof (EngineWsNodeInfo, containedById)   ==  8,      "EngineWsNodeInfo: frozen layout drift (containedById)");
+static_assert (offsetof (EngineWsNodeInfo, cellIndex)       == 16,      "EngineWsNodeInfo: frozen layout drift (cellIndex)");
+static_assert (offsetof (EngineWsNodeInfo, portalLayoutCrc) == 20,      "EngineWsNodeInfo: frozen layout drift (portalLayoutCrc)");
+static_assert (offsetof (EngineWsNodeInfo, radius)          == 24,      "EngineWsNodeInfo: frozen layout drift (radius)");
+static_assert (offsetof (EngineWsNodeInfo, transform)       == 28,      "EngineWsNodeInfo: frozen layout drift (transform)");
+static_assert (offsetof (EngineWsNodeInfo, childCount)      == 76,      "EngineWsNodeInfo: frozen layout drift (childCount)");
 
 namespace WorldSnapshotNamespace
 {
@@ -1934,7 +1934,7 @@ namespace WorldSnapshotNamespace
 //
 // 1 = a phased parse is in flight (world still rebuilding), 0 = idle/complete.
 // Poll it from a per-frame detour; safe at any time, no side effects.
-extern "C" int __cdecl utinni_wsIsParsePending (void)
+extern "C" int __cdecl engine_wsIsParsePending (void)
 {
 	return ms_parsePending ? 1 : 0;
 }
@@ -1971,7 +1971,7 @@ extern "C" int __cdecl utinni_wsIsParsePending (void)
 // this is the answer, and it holds regardless of whether they ever re-add at an explicit id.
 //
 // 1 = a live node was found and forgotten · 0 = the id did not resolve (or is a tombstone).
-extern "C" int __cdecl utinni_wsForgetNode (__int64 networkIdInt)
+extern "C" int __cdecl engine_wsForgetNode (__int64 networkIdInt)
 {
 	//-- CONSULT-60: a mid-parse miss would let the node parse in later WITH its sphere
 	//   handle, i.e. the forget would silently not stick.
@@ -1993,7 +1993,7 @@ extern "C" int __cdecl utinni_wsForgetNode (__int64 networkIdInt)
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetNodeCount (void)
+extern "C" int __cdecl engine_wsGetNodeCount (void)
 {
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -2008,7 +2008,7 @@ extern "C" int __cdecl utinni_wsGetNodeCount (void)
 
 //-------------------------------------------------------------------
 
-extern "C" __int64 __cdecl utinni_wsGetTopNodeIdAt (int index)
+extern "C" __int64 __cdecl engine_wsGetTopNodeIdAt (int index)
 {
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -2031,7 +2031,7 @@ extern "C" __int64 __cdecl utinni_wsGetTopNodeIdAt (int index)
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetChildCount (__int64 networkIdInt)
+extern "C" int __cdecl engine_wsGetChildCount (__int64 networkIdInt)
 {
 	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
 	if (!node)
@@ -2042,7 +2042,7 @@ extern "C" int __cdecl utinni_wsGetChildCount (__int64 networkIdInt)
 
 //-------------------------------------------------------------------
 
-extern "C" __int64 __cdecl utinni_wsGetChildIdAt (__int64 networkIdInt, int index)
+extern "C" __int64 __cdecl engine_wsGetChildIdAt (__int64 networkIdInt, int index)
 {
 	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
 	if (!node || index < 0)
@@ -2063,7 +2063,7 @@ extern "C" __int64 __cdecl utinni_wsGetChildIdAt (__int64 networkIdInt, int inde
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetNodeInfo (__int64 networkIdInt, UtinniWsNodeInfo* out)
+extern "C" int __cdecl engine_wsGetNodeInfo (__int64 networkIdInt, EngineWsNodeInfo* out)
 {
 	//-- size-first protocol: the caller declares its compiled-against size FIRST
 	if (!out || out->size < sizeof (unsigned int))
@@ -2073,9 +2073,9 @@ extern "C" int __cdecl utinni_wsGetNodeInfo (__int64 networkIdInt, UtinniWsNodeI
 	if (!node)
 		return 0;
 
-	UtinniWsNodeInfo info;
+	EngineWsNodeInfo info;
 	memset (&info, 0, sizeof (info));
-	info.size            = sizeof (UtinniWsNodeInfo);
+	info.size            = sizeof (EngineWsNodeInfo);
 	info.flags           = 0;   // bit0 deleted: never set here (tombstones answer miss); bit1 buildout: RESERVED, 0 in v1
 	info.containedById   = node->getContainedByNetworkIdInt ();
 	info.cellIndex       = node->getCellIndex ();
@@ -2108,7 +2108,7 @@ extern "C" int __cdecl utinni_wsGetNodeInfo (__int64 networkIdInt, UtinniWsNodeI
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetNodeTemplateName (__int64 networkIdInt, char* buf, int cap)
+extern "C" int __cdecl engine_wsGetNodeTemplateName (__int64 networkIdInt, char* buf, int cap)
 {
 	const WorldSnapshotReaderWriter::Node* const node = wsFindAuthoredLive (networkIdInt);
 	if (!node)
@@ -2129,7 +2129,7 @@ extern "C" int __cdecl utinni_wsGetNodeTemplateName (__int64 networkIdInt, char*
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetGeneration (void)
+extern "C" int __cdecl engine_wsGetGeneration (void)
 {
 	//-- PURE counter read by contract: no finishLoadNow (pollable during a
 	//   loading screen without forcing the phased parse synchronous)
@@ -2147,7 +2147,7 @@ extern "C" int __cdecl utinni_wsGetGeneration (void)
 
 namespace WorldSnapshotNamespace
 {
-	//-- Wave-2 id-allocator band (utinni_wsConfigureIdAllocator). floor 0 =
+	//-- Wave-2 id-allocator band (engine_wsConfigureIdAllocator). floor 0 =
 	//   derive the seed (max positive authored id + 1); the ceiling default is
 	//   the consumer's server-id convention (no engine constant exists -- the
 	//   ANSWERS 5.1c finding), always <= INT32_MAX (the on-disk id width).
@@ -2307,7 +2307,7 @@ namespace WorldSnapshotNamespace
 
 #define WS_EDITOR_LOG(printfArgs) REPORT_LOG (true, printfArgs)
 
-extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilename, const float* transform12, __int64 containedById)
+extern "C" __int64 __cdecl engine_wsAddObject (const char* sharedTemplateFilename, const float* transform12, __int64 containedById)
 {
 	if (!sharedTemplateFilename || !*sharedTemplateFilename || !transform12)
 	{
@@ -2471,7 +2471,7 @@ extern "C" __int64 __cdecl utinni_wsAddObject (const char* sharedTemplateFilenam
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 containedById, const char* templateFilename, int cellIndex, const float* transform12, float radius, unsigned int portalLayoutCrc)
+extern "C" int __cdecl engine_wsAddNodeAt (__int64 explicitId, __int64 containedById, const char* templateFilename, int cellIndex, const float* transform12, float radius, unsigned int portalLayoutCrc)
 {
 	if (!templateFilename || !*templateFilename || !transform12 || radius < 0.f)
 	{
@@ -2561,7 +2561,7 @@ extern "C" int __cdecl utinni_wsAddNodeAt (__int64 explicitId, __int64 contained
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
+extern "C" int __cdecl engine_wsRemoveNode (__int64 networkIdInt)
 {
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -2686,7 +2686,7 @@ extern "C" int __cdecl utinni_wsRemoveNode (__int64 networkIdInt)
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsSetNodeRadius (__int64 networkIdInt, float radius)
+extern "C" int __cdecl engine_wsSetNodeRadius (__int64 networkIdInt, float radius)
 {
 	if (radius < 0.f)
 		return 0;
@@ -2709,7 +2709,7 @@ extern "C" int __cdecl utinni_wsSetNodeRadius (__int64 networkIdInt, float radiu
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsConfigureIdAllocator (__int64 floorId, __int64 ceilingId)
+extern "C" int __cdecl engine_wsConfigureIdAllocator (__int64 floorId, __int64 ceilingId)
 {
 	const int64 newFloor   = floorId   != 0 ? floorId   : ms_wsIdFloor;
 	const int64 newCeiling = ceilingId != 0 ? ceilingId : ms_wsIdCeiling;
@@ -2751,7 +2751,7 @@ extern "C" int __cdecl utinni_wsConfigureIdAllocator (__int64 floorId, __int64 c
 
 namespace WorldSnapshotNamespace
 {
-	//-- utinni_wsSaveSnapshot typed result codes. FROZEN once published in the
+	//-- engine_wsSaveSnapshot typed result codes. FROZEN once published in the
 	//   Wave-3 handback -- append-only from then on.
 	enum WsSaveResult
 	{
@@ -2816,7 +2816,7 @@ namespace WorldSnapshotNamespace
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsSaveSnapshot (void)
+extern "C" int __cdecl engine_wsSaveSnapshot (void)
 {
 	if (ms_parsePending)
 		finishLoadNow ();
@@ -2906,7 +2906,7 @@ extern "C" int __cdecl utinni_wsSaveSnapshot (void)
 
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsGetSavePath (char* buf, int cap)
+extern "C" int __cdecl engine_wsGetSavePath (char* buf, int cap)
 {
 	std::string saveRoot;
 	std::string destination;
@@ -2923,7 +2923,7 @@ extern "C" int __cdecl utinni_wsGetSavePath (char* buf, int cap)
 
 //-------------------------------------------------------------------
 
-extern "C" void __cdecl utinni_wsUnloadSnapshot (void)
+extern "C" void __cdecl engine_wsUnloadSnapshot (void)
 {
 	//-- unload() cancels any in-flight phased parse itself and bumps the
 	//   generation. The scene-name reset is the ANSWERS §2 delta: load() would
@@ -2955,7 +2955,7 @@ extern "C" void __cdecl utinni_wsUnloadSnapshot (void)
 // buildout-provenance node, or unresolvable template).
 //-------------------------------------------------------------------
 
-extern "C" int __cdecl utinni_wsSetNodeTemplateName (__int64 networkIdInt, const char* name)
+extern "C" int __cdecl engine_wsSetNodeTemplateName (__int64 networkIdInt, const char* name)
 {
 	if (!name || !*name)
 	{

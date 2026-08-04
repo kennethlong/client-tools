@@ -48,7 +48,7 @@ void * engine_creatureSetTargetRealEntry();
 // shim collapses it to __int64 in EDX:EAX. Defined in CreatureObject.cpp
 // (the exe TU cannot include CreatureObject.h -- see the header comment above).
 // Consumer typedef: int64_t(__cdecl*)()
-extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void);
+extern "C" __int64 __cdecl engine_getPlayerLookAtTargetId(void);
 
 // playerCreatureController::warpClient (v30): CALLED extern "C" shim performing a
 // CLIENT-INITIATED teleport through the CONTROLLER path, so the move is sequenced
@@ -60,6 +60,6 @@ extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void);
 // Defined in PlayerCreatureController.cpp (the exe TU cannot include
 // CreatureObject.h -- see the header comment above).
 // Consumer typedef: int(__cdecl*)(float,float,float)
-extern "C" int __cdecl utinni_warpPlayer(float x_w, float y_w, float z_w);
+extern "C" int __cdecl engine_warpPlayer(float x_w, float y_w, float z_w);
 
 #endif

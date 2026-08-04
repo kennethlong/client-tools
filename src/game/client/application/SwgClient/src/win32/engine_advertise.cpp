@@ -64,10 +64,10 @@
 // -- Bucket A includes (per-editor real-entry rows; v8 -> v9) ----------------
 #include "clientUserInterface/CuiRadialMenuManager.h"   // CuiRadialMenuManager::update (static &fn)
 #include "clientUserInterface/CuiMenuInfoTypes.h"        // Cui::MenuInfoTypes::findDefaultCursor (namespace free fn)
-#include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND: CuiSystemMessageManager::sendFakeSystemMessage, reached via the utinni_sendFakeSystemMessage utf8 shim (v15). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half, NOT the reverted receive half (see the A-2.1 OMIT note).
+#include "clientUserInterface/CuiSystemMessageManager.h" // sysmsg SEND: CuiSystemMessageManager::sendFakeSystemMessage, reached via the engine_sendFakeSystemMessage utf8 shim (v15). RE-ADDED post the v10->v11 receiveMessage revert -- this is the SEND half, NOT the reverted receive half (see the A-2.1 OMIT note).
 #include "UnicodeUtils.h"                                // sysmsg SEND rev-2 (v14->v15): Unicode::narrowToWide for the utf8->Unicode::String widen inside the shim (widen on OUR side -- our CRT, our string layout)
 #include "engine_creatureObject_forward.h"               // engine_creatureSetTargetRealEntry() -- CreatureObject.h too heavy for the exe TU (sharedSkillSystem); accessor lives in CreatureObject.cpp
-#include "engine_worldSnapshot_forward.h"                // Goal B Wave 1 (v17): utinni_ws* snapshot-editor READ shims -- DEFINED in clientGame WorldSnapshot.cpp (the ms_reader file-local-singleton TU)
+#include "engine_worldSnapshot_forward.h"                // Goal B Wave 1 (v17): engine_ws* snapshot-editor READ shims -- DEFINED in clientGame WorldSnapshot.cpp (the ms_reader file-local-singleton TU)
 #include "sharedFoundation/MessageQueue.h"               // MessageQueue::appendMessage overloads (flat class -> pmfToVoid)
 #include "sharedObject/NetworkIdManager.h"               // Bucket A-3: NetworkIdManager::getObjectById (static NetworkId->Object* resolver)
 #include "swgClientUserInterface/SwgCuiHud.h"            // Bucket A-2: SwgCuiHud::getLastSelectedObject (MI -> __fastcall thunk)
@@ -444,13 +444,13 @@ static bool __fastcall engine_objectIsActive(const Object * pThis, int /*edx*/)
 // SSO basic_string (24 bytes) -- the engine read _Mysize past the end of the consumer's
 // object -> garbage size -> wild write. ABI RULE (rev-2 handoff, both repos): only PRIMITIVES
 // and POINTERS cross the advertised boundary on CALLED endpoints; any class-type parameter
-// (strings above all) needs a provider-side extern "C" shim -- the utinni_replayClientEffect
+// (strings above all) needs a provider-side extern "C" shim -- the engine_replayClientEffect
 // precedent. The widen happens HERE, on OUR side (our CRT, our string layout).
 // narrowToWide is a per-byte widen -- correct for the ASCII editor text the consumer sends
 // (rev-2 defers real UTF-8 decoding as unnecessary).
 // Threading: consumer calls game-thread-only (main-loop marshaled), never per-frame.
 // ----------------------------------------------------------------------
-extern "C" void __cdecl utinni_sendFakeSystemMessage(const char * utf8Msg, bool chatBoxOnly)
+extern "C" void __cdecl engine_sendFakeSystemMessage(const char * utf8Msg, bool chatBoxOnly)
 {
 	if (!utf8Msg)
 		return;
@@ -465,12 +465,12 @@ extern "C" void __cdecl utinni_sendFakeSystemMessage(const char * utf8Msg, bool 
 //   out16: the engine GlMatrix4x4 verbatim -- row-major float[4][4]
 //          (Camera::getProjectionMatrix(), the matrix the renderer consumes).
 //   out12: row-major 3x4, position = column 3 -- the SAME convention as
-//          UtinniWsNodeInfo.transform (composed via the Transform column
+//          EngineWsNodeInfo.transform (composed via the Transform column
 //          accessors, independent of Transform's internal representation).
 // Returns 1 ok / 0 no-current-camera-or-null-arg. CALLED, game-thread-only,
 // per-frame-safe (plain copies, no allocation).
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_getCameraProjectionMatrix(float * out16)
+extern "C" int __cdecl engine_getCameraProjectionMatrix(float * out16)
 {
 	if (!out16)
 		return 0;
@@ -483,7 +483,7 @@ extern "C" int __cdecl utinni_getCameraProjectionMatrix(float * out16)
 	return 1;
 }
 
-extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
+extern "C" int __cdecl engine_getCameraTransformO2W(float * out12)
 {
 	if (!out12)
 		return 0;
@@ -538,11 +538,11 @@ extern "C" int __cdecl utinni_getCameraTransformO2W(float * out12)
 // const Transform& [Object.h:233/:652] -> copy-out shim mandatory (ABI
 // RULE), byte-for-byte the camera::getTransformO2W layout: row-major 3x4,
 // columns = local frame i/j/k, column 3 = position (the .ilf /
-// UtinniWsNodeInfo convention). The Object* is BORROWED consumer-held
+// EngineWsNodeInfo convention). The Object* is BORROWED consumer-held
 // (their pick rows) -- null-checked only; lifetime discipline is theirs.
 // CALLED, game-thread-only, per-frame-safe (plain copy, no allocation).
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_getObjectTransformO2P(void * object, float * out12)
+extern "C" int __cdecl engine_getObjectTransformO2P(void * object, float * out12)
 {
 	if (!object || !out12)
 		return 0;
@@ -578,7 +578,7 @@ extern "C" int __cdecl utinni_getObjectTransformO2P(void * object, float * out12
 // only; lifetime discipline is theirs (the getTransformO2P precedent).
 // CALLED, game-thread-only, per-frame-safe (pointer hops + a value read).
 // ----------------------------------------------------------------------
-extern "C" __int64 __cdecl utinni_getContainingBuildingId(void * object)
+extern "C" __int64 __cdecl engine_getContainingBuildingId(void * object)
 {
 	if (!object)
 		return 0;
@@ -656,7 +656,7 @@ extern "C" __int64 __cdecl utinni_getContainingBuildingId(void * object)
 // Both pointers are BORROWED consumer-held; null-checked only, lifetime
 // discipline is theirs. CALLED, game-thread-only. 1 = ok, 0 = refused.
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_setParentCell(void * object, void * cellProperty)
+extern "C" int __cdecl engine_setParentCell(void * object, void * cellProperty)
 {
 	if (!object || !cellProperty)
 		return 0;
@@ -687,7 +687,7 @@ extern "C" int __cdecl utinni_setParentCell(void * object, void * cellProperty)
 // argument for object::setParentCell (which FATALs on null).
 // Shim mandatory: takes Vector const&, returns Object const*.
 // ----------------------------------------------------------------------
-extern "C" void * __cdecl utinni_findCellAtWorldPosition(float x, float y, float z)
+extern "C" void * __cdecl engine_findCellAtWorldPosition(float x, float y, float z)
 {
 	Object const * const cellObject = ClientWorld::findClosestCellObjectFromWorldPosition(Vector(x, y, z));
 	if (cellObject)
@@ -717,7 +717,7 @@ extern "C" void * __cdecl utinni_findCellAtWorldPosition(float x, float y, float
 // non-null == attached to a parent object (mounted/child) == do not reparent.
 // Returns the parent as an opaque void*; borrowed, no consumer dereference.
 // ----------------------------------------------------------------------
-extern "C" void * __cdecl utinni_getAttachedTo(void * object)
+extern "C" void * __cdecl engine_getAttachedTo(void * object)
 {
 	if (!object)
 		return 0;
@@ -747,7 +747,7 @@ extern "C" void * __cdecl utinni_getAttachedTo(void * object)
 // Object::isChildObject is INLINE [Object.h:1289] -> no PMF address -> shim.
 // 1 = child/mounted (do NOT reparent) · 0 = not a child, or null.
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_isChildObject(void * object)
+extern "C" int __cdecl engine_isChildObject(void * object)
 {
 	if (!object)
 		return 0;
@@ -782,7 +782,7 @@ extern "C" int __cdecl utinni_isChildObject(void * object)
 //
 // Borrowed pointer (theirs, from clientWorld::findCellAtWorldPosition), game-thread-only.
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_getCellName(void * cellProperty, char * buf, int cap)
+extern "C" int __cdecl engine_getCellName(void * cellProperty, char * buf, int cap)
 {
 	if (!cellProperty)
 		return 0;
@@ -830,7 +830,7 @@ static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, C
 	return ClientWorld::collide(Game::getConstCamera()->getParentCell(), worldStart, worldEnd, CollideParameters::cms_default, info, flags, Game::getPlayer());
 }
 
-extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int objectsOnly, __int64 * outHitObjectId, float * outPoint3)
+extern "C" int __cdecl engine_collideScreenRay(int screenX, int screenY, int objectsOnly, __int64 * outHitObjectId, float * outPoint3)
 {
 	if (!outHitObjectId || !outPoint3)
 		return 0;
@@ -881,7 +881,7 @@ extern "C" int __cdecl utinni_collideScreenRay(int screenX, int screenY, int obj
 // clear on cell/zone change and must never cache across a zone. Gizmo-ing
 // a SERVER-streamed hit desyncs from the server -- consumer warns/refuses.
 // ----------------------------------------------------------------------
-extern "C" void * __cdecl utinni_collideScreenRayObject(int screenX, int screenY, int objectsOnly)
+extern "C" void * __cdecl engine_collideScreenRayObject(int screenX, int screenY, int objectsOnly)
 {
 	CollisionInfo info;
 	if (!engine_screenRayCollide(screenX, screenY, objectsOnly, info))
@@ -904,7 +904,7 @@ extern "C" void * __cdecl utinni_collideScreenRayObject(int screenX, int screenY
 // one-click reload and picks up a just-saved override .ws.
 // CALLED, game-thread-only, trivially per-frame-safe.
 // ----------------------------------------------------------------------
-extern "C" int __cdecl utinni_getSceneId(char * buf, int cap)
+extern "C" int __cdecl engine_getSceneId(char * buf, int cap)
 {
 	const std::string & sceneId = Game::getSceneId();
 	if (sceneId.empty())
@@ -1000,7 +1000,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	// they are reached directly by the __fastcall thunks defined above (no friend decl).
 	// Contract names are the SPEC names; the in-tree method NAME MISMATCH is in each comment.
 	{ "cuiChatWindow::enableTextInput", 0 },  // REAL ENTRY (detoured by Utinni hkEnableTextInput; delta==0 verified) -- 38-05. PUBLIC non-virtual acceptTextInput(bool,bool,bool) [SwgCuiChatWindow.h:112], MISMATCH contract enableTextInput. Was a call-through MI thunk -> silently dead for a detour.
-	{ "cuiChatWindow::writeToAllTabs",    (void *)&engine_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk. ABI-UNSAFE TO CALL from the consumer (const Unicode::String& param -- the rev-2 sysmsg crash class); consumer-blocked on advertised (rev-2 §3, latent). utf8 shim (utinni_chatWriteToAllTabsUtf8) on request.
+	{ "cuiChatWindow::writeToAllTabs",    (void *)&engine_chatWindowAppendToAllTabs },         // CALLED row -- public [SwgCuiChatWindow.h:172] MISMATCH: ours appendToAllTabs(const Unicode::String&) -> MI __fastcall thunk. ABI-UNSAFE TO CALL from the consumer (const Unicode::String& param -- the rev-2 sysmsg crash class); consumer-blocked on advertised (rev-2 §3, latent). utf8 shim (engine_chatWriteToAllTabsUtf8) on request.
 	{ "cuiChatWindow::writeToCurrentTab", (void *)&engine_chatWindowAppendTextToCurrentTab },  // CALLED row -- public [SwgCuiChatWindow.h:174] MISMATCH: ours appendTextToCurrentTab(const Unicode::String&) -> MI __fastcall thunk. ABI-UNSAFE TO CALL (same rev-2 crash class as writeToAllTabs above); utf8 shim on request.
 	{ "cuiChatWindow::chatEnterHandler", 0 },  // REAL ENTRY (detoured by Utinni hkChatEnter; delta==0 verified) -- 38-05. PUBLIC non-virtual CLEAN-ENTRY performEnterKey() [SwgCuiChatWindow.h:214], MISMATCH contract chatEnterHandler. Was a call-through MI thunk -> silently dead for a detour. Issue #11 mid-function NOP remains a SEPARATE SWGEmu-only joint decision (no offset arithmetic in the contract).
 	{ "cuiChatWindow::createNewWindow", 0 },          // 24-4d: the requested cuiChatWindow::ctor REAL ENTRY is INFEASIBLE -- you cannot take &Class::Class in C++ (no ctor PMF -> pmfRealEntry has no input; a placement-new thunk is detour-dead). Instead advertise the SOLE construction funnel: PRIVATE static SwgCuiChatWindow* createNewWindow(UIPage&,Game::SceneType,std::string const&) [SwgCuiChatWindow.h:258], the only path to `new SwgCuiChatWindow` [SwgCuiChatWindow.cpp:1549]. PRIVATE -> address taken via a friend accessor compiled in SwgCuiChatWindow.cpp (engine_chatWindow_forward.h), same mechanism as the GroundScene private-method real-entry accessors. Static fn -> plain real entry (no MI inflation). CONSUMER: detour this to track construction (same coverage as the ctor). See handback 2026-06-24.
@@ -1165,9 +1165,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "cuiRadialMenuManager::update", (void *)&CuiRadialMenuManager::update }, // static void update() [CuiRadialMenuManager.h:46] -- all-static facade. Radial-menu editing.
 	{ "cuiMenu::infoTypesFindDefaultCursor", (void *)&Cui::MenuInfoTypes::findDefaultCursor }, // FREE FN UICursor* const findDefaultCursor(ClientObject&) in namespace Cui::MenuInfoTypes [CuiMenuInfoTypes.h:199 / .cpp:404] -- NOT a CuiMenu member (no such class); constant &fn (resolves the ledger's confirm-or-OMIT). Menu cursor behavior.
 	// -- systemMessageManager SEND (v15): the INJECT half of the sysmsg pair (2026-07-02 request, rev-2 2026-07-03) --
-	{ "systemMessageManager::sendMessageUtf8", (void *)&utinni_sendFakeSystemMessage }, // rev-2 REPLACE (v14->v15): extern "C" void __cdecl(const char* utf8Msg, bool chatBoxOnly) shim -> widens on OUR side -> sendFakeSystemMessage [CuiSystemMessageManager.h:38]. The v14 direct-&fn row sendMessage is REMOVED (name-REPLACE, not re-point, so a version-skewed pairing misses by name and degrades instead of mis-calling across a changed ABI): it passed const Unicode::String& across the boundary and CRASHED live smoke -- consumer WString models the 2002 3-pointer layout, ours is v145 SSO (see the shim comment). CALLED endpoint, game-thread-only. SEND half ONLY -- RECEIVE stays OMIT (A-2.1 note below).
+	{ "systemMessageManager::sendMessageUtf8", (void *)&engine_sendFakeSystemMessage }, // rev-2 REPLACE (v14->v15): extern "C" void __cdecl(const char* utf8Msg, bool chatBoxOnly) shim -> widens on OUR side -> sendFakeSystemMessage [CuiSystemMessageManager.h:38]. The v14 direct-&fn row sendMessage is REMOVED (name-REPLACE, not re-point, so a version-skewed pairing misses by name and degrades instead of mis-calling across a changed ABI): it passed const Unicode::String& across the boundary and CRASHED live smoke -- consumer WString models the 2002 3-pointer layout, ours is v145 SSO (see the shim comment). CALLED endpoint, game-thread-only. SEND half ONLY -- RECEIVE stays OMIT (A-2.1 note below).
 	// -- game lookAt-target READ (v15->v16, 2026-07-09 request) --
-	{ "game::getPlayerLookAtTargetId", (void *)&utinni_getPlayerLookAtTargetId }, // v16 NAME ADD: extern "C" __int64 __cdecl(void) shim DEFINED IN CreatureObject.cpp (exe TU cannot include CreatureObject.h -- the setTarget accessor precedent; declared in engine_creatureObject_forward.h). Returns the PLAYER's lookAt/selection-target NetworkId VALUE (full 64 bits; 0 = no player/no target) -- the READ twin of creatureObject::setTarget (same m_lookAtTarget slot; NOT getIntendedTarget). Shim per the rev-2 ABI RULE: getLookAtTarget() is INLINE [CreatureObject.h:882] + returns const CachedNetworkId& (embeds a Watcher the consumer does not model) -> primitive in EDX:EAX instead. CALLED, game-thread-only, on-demand (target-change callback + panel refresh, not per-frame). Consumer resolves the id via the v12 network::getObjectById row; a null resolve (unloaded/out-of-range) is a normal staleness outcome. constant &fn.
+	{ "game::getPlayerLookAtTargetId", (void *)&engine_getPlayerLookAtTargetId }, // v16 NAME ADD: extern "C" __int64 __cdecl(void) shim DEFINED IN CreatureObject.cpp (exe TU cannot include CreatureObject.h -- the setTarget accessor precedent; declared in engine_creatureObject_forward.h). Returns the PLAYER's lookAt/selection-target NetworkId VALUE (full 64 bits; 0 = no player/no target) -- the READ twin of creatureObject::setTarget (same m_lookAtTarget slot; NOT getIntendedTarget). Shim per the rev-2 ABI RULE: getLookAtTarget() is INLINE [CreatureObject.h:882] + returns const CachedNetworkId& (embeds a Watcher the consumer does not model) -> primitive in EDX:EAX instead. CALLED, game-thread-only, on-demand (target-change callback + panel refresh, not per-frame). Consumer resolves the id via the v12 network::getObjectById row; a null resolve (unloaded/out-of-range) is a normal staleness outcome. constant &fn.
 	// (systemMessageManager::receiveMessage REVERTED v10->v11 -- see the A-2.1 OMIT note below; it CRASHED world-load. SEND (above) is unaffected -- it is an advertisable static behind a POD-only shim.)
 	// -- worldSnapshot editor READ wave (v16->v17, Goal B Wave 1; rev-3 freeze 2026-07-15) --
 	// Id-keyed read/browse of the CURRENT scene's live snapshot (the Utinni snapshot editor,
@@ -1178,38 +1178,38 @@ static EngineHookPoint s_engineHookPoints[] =
 	// buildout-provenance rows never enumerate; id-keyed reads answer miss for them); node
 	// reads force-finish the CONSULT-60 incremental parse; wsGetGeneration is a PURE counter
 	// read (no parse force) bumping on load/unload ONLY; wsGetNodeInfo fills the FROZEN
-	// 80-byte UtinniWsNodeInfo (engine_hookpoints.h) under the size-first protocol.
+	// 80-byte EngineWsNodeInfo (engine_hookpoints.h) under the size-first protocol.
 	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
-	{ "worldSnapshot::wsForgetNode",          (void *)&utinni_wsForgetNode },           // v32 NEW: int (__int64 id) -- drop a node from the snapshot WITHOUT despawning the live Object. 1 forgotten / 0 not found. wsRemoveNode is TEARDOWN (subtree removeFromWorld + delete), which made the object the modder just placed VANISH at Persist; this is the missing half -- the DATA leaves the .ws (removeObject: sphere handle dropped, removeNode tombstones so every later saveFiltered skips it) and the OBJECT stays put. No occupancy guard needed (nothing is deleted). Forgetting does NOT free the id: wsAllocateIdRange tests NetworkIdManager, and the Object is still registered
-	{ "clientInteriorLayoutManager::refreshInteriorLayout", (void *)&utinni_refreshInteriorLayout }, // v32 NEW: int (__int64 buildingId) -- re-apply a changed .ilf to ONE building, NO scene reload. 1 ok / 0 no such object|not a POB|not a building template / -1 layout reload failed. Deletes ONLY the client-only interior-layout objects (NOT every client-cached object in the cells -- that would sweep the consumer's unpersisted wsAddObject placements), reloads the TEMPLATE's cached InteriorLayoutReaderWriter (the layout is cached on ClientBuildingObjectTemplate, so a latch/cursor reset alone would rebuild the PRE-EDIT .ilf) with TreeFile::forgetMissingFile first, then re-arms each cell so the budgeted update() re-creates under maxInteriorCreatesPerFrame
-	{ "cellProperty::getCellName",            (void *)&utinni_getCellName },            // v32 NEW: int (void* cellProperty, char* buf, int cap) -- COPY-OUT of CellProperty::getCellName [inline, CellProperty.h:249 -> shim]. Returns needed length INCL NUL (wsGetSavePath convention); 0 = null input/no name. Copy-out not pointer-return because m_cellName points into the TEMPLATE (CellProperty.cpp:456), whose lifetime the consumer cannot see. World cell returns "world", not null (CellProperty.cpp:225). The .ilf row stores the cell name as a literal string, so the CRC twin is not a substitute
-	{ "worldSnapshot::wsIsParsePending",      (void *)&utinni_wsIsParsePending },      // v28 NEW: int (void) -- 1 = phased parse in flight (world still rebuilding), 0 = idle/complete. PURE, NON-forcing: the ONLY ws* row without a finishLoadNow() prologue, so a consumer can WAIT rather than call a forcing row for its side effect (which pays the whole remaining ~3.1s synchronous parse). NOT getLoadingPercent -- that returns 0 while parsing and then reports preload percent, so 0 is ambiguous
-	{ "worldSnapshot::wsGetNodeCount",        (void *)&utinni_wsGetNodeCount },        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
-	{ "worldSnapshot::wsGetTopNodeIdAt",      (void *)&utinni_wsGetTopNodeIdAt },      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
-	{ "worldSnapshot::wsGetChildCount",       (void *)&utinni_wsGetChildCount },       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
-	{ "worldSnapshot::wsGetChildIdAt",        (void *)&utinni_wsGetChildIdAt },        // __int64 (__int64 id, int index) -- id of the index-th enumerable child; 0 = miss/out-of-range
-	{ "worldSnapshot::wsGetNodeInfo",         (void *)&utinni_wsGetNodeInfo },         // int (__int64 id, UtinniWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
-	{ "worldSnapshot::wsGetNodeTemplateName", (void *)&utinni_wsGetNodeTemplateName }, // int (__int64 id, char* buf, int cap) -- copy-out; returns needed length INCLUDING the NUL; 0 = miss
-	{ "worldSnapshot::wsGetGeneration",       (void *)&utinni_wsGetGeneration },       // int (void) -- bumps on load/unload ONLY (consumer cache/undo invalidation)
+	{ "worldSnapshot::wsForgetNode",          (void *)&engine_wsForgetNode },           // v32 NEW: int (__int64 id) -- drop a node from the snapshot WITHOUT despawning the live Object. 1 forgotten / 0 not found. wsRemoveNode is TEARDOWN (subtree removeFromWorld + delete), which made the object the modder just placed VANISH at Persist; this is the missing half -- the DATA leaves the .ws (removeObject: sphere handle dropped, removeNode tombstones so every later saveFiltered skips it) and the OBJECT stays put. No occupancy guard needed (nothing is deleted). Forgetting does NOT free the id: wsAllocateIdRange tests NetworkIdManager, and the Object is still registered
+	{ "clientInteriorLayoutManager::refreshInteriorLayout", (void *)&engine_refreshInteriorLayout }, // v32 NEW: int (__int64 buildingId) -- re-apply a changed .ilf to ONE building, NO scene reload. 1 ok / 0 no such object|not a POB|not a building template / -1 layout reload failed. Deletes ONLY the client-only interior-layout objects (NOT every client-cached object in the cells -- that would sweep the consumer's unpersisted wsAddObject placements), reloads the TEMPLATE's cached InteriorLayoutReaderWriter (the layout is cached on ClientBuildingObjectTemplate, so a latch/cursor reset alone would rebuild the PRE-EDIT .ilf) with TreeFile::forgetMissingFile first, then re-arms each cell so the budgeted update() re-creates under maxInteriorCreatesPerFrame
+	{ "cellProperty::getCellName",            (void *)&engine_getCellName },            // v32 NEW: int (void* cellProperty, char* buf, int cap) -- COPY-OUT of CellProperty::getCellName [inline, CellProperty.h:249 -> shim]. Returns needed length INCL NUL (wsGetSavePath convention); 0 = null input/no name. Copy-out not pointer-return because m_cellName points into the TEMPLATE (CellProperty.cpp:456), whose lifetime the consumer cannot see. World cell returns "world", not null (CellProperty.cpp:225). The .ilf row stores the cell name as a literal string, so the CRC twin is not a substitute
+	{ "worldSnapshot::wsIsParsePending",      (void *)&engine_wsIsParsePending },      // v28 NEW: int (void) -- 1 = phased parse in flight (world still rebuilding), 0 = idle/complete. PURE, NON-forcing: the ONLY ws* row without a finishLoadNow() prologue, so a consumer can WAIT rather than call a forcing row for its side effect (which pays the whole remaining ~3.1s synchronous parse). NOT getLoadingPercent -- that returns 0 while parsing and then reports preload percent, so 0 is ambiguous
+	{ "worldSnapshot::wsGetNodeCount",        (void *)&engine_wsGetNodeCount },        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
+	{ "worldSnapshot::wsGetTopNodeIdAt",      (void *)&engine_wsGetTopNodeIdAt },      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
+	{ "worldSnapshot::wsGetChildCount",       (void *)&engine_wsGetChildCount },       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
+	{ "worldSnapshot::wsGetChildIdAt",        (void *)&engine_wsGetChildIdAt },        // __int64 (__int64 id, int index) -- id of the index-th enumerable child; 0 = miss/out-of-range
+	{ "worldSnapshot::wsGetNodeInfo",         (void *)&engine_wsGetNodeInfo },         // int (__int64 id, EngineWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
+	{ "worldSnapshot::wsGetNodeTemplateName", (void *)&engine_wsGetNodeTemplateName }, // int (__int64 id, char* buf, int cap) -- copy-out; returns needed length INCLUDING the NUL; 0 = miss
+	{ "worldSnapshot::wsGetGeneration",       (void *)&engine_wsGetGeneration },       // int (void) -- bumps on load/unload ONLY (consumer cache/undo invalidation)
 	// -- worldSnapshot editor MUTATION wave (v17->v18, Goal B Wave 2; frozen 2026-07-18) --
 	// LIVE-ONLY mutation, explicitly non-persistent (persistence = Wave 3). Shims in
 	// WorldSnapshot.cpp (same TU/discipline as Wave 1); constant &fn rows. Semantics per the
 	// accepted ANSWERS 5.2/5.3/5.5 + Wave-2 deltas -- see the .inc block + shim comments.
 	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
-	{ "worldSnapshot::wsAddObject",           (void *)&utinni_wsAddObject },           // __int64 (const char* tmpl, const float* transform12, __int64 containedById) -- pre-validates ALL before minting; id..id+cellCount + atomic POB cells; FULL streamed-create bookkeeping; spawns immediately; 0 = fail-closed nothing mutated
-	{ "worldSnapshot::wsAddNodeAt",           (void *)&utinni_wsAddNodeAt },           // int (__int64 explicitId, __int64 containedById, const char* tmpl, int cellIndex, const float* transform12, float radius, unsigned int pobCrc) -- undo-replay data re-add at the EXPLICIT id; top-level = sphere handle + diff-sentinel dirty; child under live parent = immediate spawn; 1 ok, 0 fail-closed
-	{ "worldSnapshot::wsRemoveNode",          (void *)&utinni_wsRemoveNode },          // int (__int64 id) -- 7-step subtree teardown, OCCUPANCY-GUARDED (isClientCachedOnly recursive; Container dtor cascade-deletes contents): 1 removed / 0 miss / -1 occupied
-	{ "worldSnapshot::wsSetNodeRadius",       (void *)&utinni_wsSetNodeRadius },       // int (__int64 id, float radius) -- 1 ok, 0 miss/tombstone; re-seats the sphere-tree extent (the moveObject pattern)
-	{ "worldSnapshot::wsConfigureIdAllocator",(void *)&utinni_wsConfigureIdAllocator },// int (__int64 floor, __int64 ceiling) -- one-time optional allocator band (0 = keep default per param; default ceiling 0x1000000 = consumer server-id convention); 1 accepted, 0 rejected VISIBLY
+	{ "worldSnapshot::wsAddObject",           (void *)&engine_wsAddObject },           // __int64 (const char* tmpl, const float* transform12, __int64 containedById) -- pre-validates ALL before minting; id..id+cellCount + atomic POB cells; FULL streamed-create bookkeeping; spawns immediately; 0 = fail-closed nothing mutated
+	{ "worldSnapshot::wsAddNodeAt",           (void *)&engine_wsAddNodeAt },           // int (__int64 explicitId, __int64 containedById, const char* tmpl, int cellIndex, const float* transform12, float radius, unsigned int pobCrc) -- undo-replay data re-add at the EXPLICIT id; top-level = sphere handle + diff-sentinel dirty; child under live parent = immediate spawn; 1 ok, 0 fail-closed
+	{ "worldSnapshot::wsRemoveNode",          (void *)&engine_wsRemoveNode },          // int (__int64 id) -- 7-step subtree teardown, OCCUPANCY-GUARDED (isClientCachedOnly recursive; Container dtor cascade-deletes contents): 1 removed / 0 miss / -1 occupied
+	{ "worldSnapshot::wsSetNodeRadius",       (void *)&engine_wsSetNodeRadius },       // int (__int64 id, float radius) -- 1 ok, 0 miss/tombstone; re-seats the sphere-tree extent (the moveObject pattern)
+	{ "worldSnapshot::wsConfigureIdAllocator",(void *)&engine_wsConfigureIdAllocator },// int (__int64 floor, __int64 ceiling) -- one-time optional allocator band (0 = keep default per param; default ceiling 0x1000000 = consumer server-id convention); 1 accepted, 0 rejected VISIBLY
 	// -- worldSnapshot editor PERSISTENCE wave (v18->v19, Goal B Wave 3; frozen 2026-07-18) --
 	// The disk half. Shims in WorldSnapshot.cpp; semantics per ANSWERS 5.1(a-d). Save is
 	// authored-only + tombstone-skip (recursive), absolute destination in the winning loose
 	// SearchPath, negative-cache invalidation, post-write shadow verification. Typed result
 	// enum published in the Wave-3 handback (0 ok / 1 no-snapshot / 2 no-loose-search-path /
 	// 3 destination-shadowed / 4 id-int32-overflow / 5 buildout-set-integrity / 6 write-failure).
-	{ "worldSnapshot::wsSaveSnapshot",        (void *)&utinni_wsSaveSnapshot },        // int (void) -- save the CURRENT scene's authored .ws; typed result per the enum above
-	{ "worldSnapshot::wsGetSavePath",         (void *)&utinni_wsGetSavePath },         // int (char* buf, int cap) -- resolved save ROOT copy-out; needed length INCLUDING NUL; 0 = no loose SearchPath (save would fail closed too)
-	{ "worldSnapshot::wsUnloadSnapshot",      (void *)&utinni_wsUnloadSnapshot },      // void (void) -- unload + reset the sticky ms_sceneName (else advertised load(currentScene) early-outs and reload returns EMPTY); bumps the generation
+	{ "worldSnapshot::wsSaveSnapshot",        (void *)&engine_wsSaveSnapshot },        // int (void) -- save the CURRENT scene's authored .ws; typed result per the enum above
+	{ "worldSnapshot::wsGetSavePath",         (void *)&engine_wsGetSavePath },         // int (char* buf, int cap) -- resolved save ROOT copy-out; needed length INCLUDING NUL; 0 = no loose SearchPath (save would fail closed too)
+	{ "worldSnapshot::wsUnloadSnapshot",      (void *)&engine_wsUnloadSnapshot },      // void (void) -- unload + reset the sticky ms_sceneName (else advertised load(currentScene) early-outs and reload returns EMPTY); bumps the generation
 	// -- Wave-3 rider 4B: world-pick/target filter (2026-07-18). The NGE gate the consumer's
 	// SWGEmu RVA patch (0x00BD3FA3) was aiming at: CuiPreferences::allowTargetAnything -- read at
 	// SwgCuiHud.cpp:198/365 (world-pick) AND CuiRadialMenuManager.cpp:977/2714 (radial on
@@ -1221,29 +1221,29 @@ static EngineHookPoint s_engineHookPoints[] =
 	// -- Wave-3 rider 4C: gizmo camera matrices (2026-07-18). Copy-out accessors defined above
 	// in this TU; replaces the consumer's raw struct-offset camera reads (NGE layout != SWGEmu ->
 	// garbage matrix -> execute-of-heap crash, cdb-confirmed their side).
-	{ "camera::getProjectionMatrix",          (void *)&utinni_getCameraProjectionMatrix }, // int (float* out16) -- GlMatrix4x4 verbatim (row-major 4x4); 1 ok / 0 no camera
-	{ "camera::getTransformO2W",              (void *)&utinni_getCameraTransformO2W },     // int (float* out12) -- row-major 3x4, position column 3 (the UtinniWsNodeInfo convention); 1 ok / 0 no camera
+	{ "camera::getProjectionMatrix",          (void *)&engine_getCameraProjectionMatrix }, // int (float* out16) -- GlMatrix4x4 verbatim (row-major 4x4); 1 ok / 0 no camera
+	{ "camera::getTransformO2W",              (void *)&engine_getCameraTransformO2W },     // int (float* out12) -- row-major 3x4, position column 3 (the EngineWsNodeInfo convention); 1 ok / 0 no camera
 	// -- Live World Editor ray-pick + pre-approved radial clear (v19->v20, 2026-07-19 change request) --
-	{ "clientWorld::collideScreenRay",        (void *)&utinni_collideScreenRay },          // int (int screenX, int screenY, int objectsOnly, __int64* outHitObjectId, float* outPoint3) -- copy-out cursor ray-cast (shim above); 1 hit / 0 miss; terrain hit = id 0 + valid point; objectsOnly=1 drops terrain/terrainFlora/interiorGeometry
+	{ "clientWorld::collideScreenRay",        (void *)&engine_collideScreenRay },          // int (int screenX, int screenY, int objectsOnly, __int64* outHitObjectId, float* outPoint3) -- copy-out cursor ray-cast (shim above); 1 hit / 0 miss; terrain hit = id 0 + valid point; objectsOnly=1 drops terrain/terrainFlora/interiorGeometry
 	{ "cuiRadialMenuManager::clear",          (void *)&CuiRadialMenuManager::clear },      // static void () [CuiRadialMenuManager.h:47] -- pre-approved rider (2026-07-18 positionchanged ANSWER); plain &fn, the update-row sibling
 	// -- current-scene-id copy-out (v20->v21, 2026-07-19 change request #2: one-click reload) --
-	{ "game::getSceneId",                     (void *)&utinni_getSceneId },                // int (char* buf, int cap) -- copy-out (shim above); needed length INCLUDING NUL; 0 = no scene loaded. Game::getSceneId() is inline + const std::string& -> shim mandatory (ABI RULE)
+	{ "game::getSceneId",                     (void *)&engine_getSceneId },                // int (char* buf, int cap) -- copy-out (shim above); needed length INCLUDING NUL; 0 = no scene loaded. Game::getSceneId() is inline + const std::string& -> shim mandatory (ABI RULE)
 	// -- borrowed-Object* pick (v21->v22, 2026-07-19 change request #3: pure-.ilf decoration selection) --
-	{ "clientWorld::collideScreenRayObject",  (void *)&utinni_collideScreenRayObject },    // void* (int screenX, int screenY, int objectsOnly) -- RAW nearest-hit Object* (no ancestor walk, no id resolution; null = miss/no camera); BORROWED, game-thread-only, cleared by consumer on cell/zone change; pair with collideScreenRay for layer triage
+	{ "clientWorld::collideScreenRayObject",  (void *)&engine_collideScreenRayObject },    // void* (int screenX, int screenY, int objectsOnly) -- RAW nearest-hit Object* (no ancestor walk, no id resolution; null = miss/no camera); BORROWED, game-thread-only, cleared by consumer on cell/zone change; pair with collideScreenRay for layer triage
 	// -- in-place .ws template re-point (v22->v23, 2026-07-19 change request #4: model-D lossless per-instance rebind) --
-	{ "worldSnapshot::wsSetNodeTemplateName", (void *)&utinni_wsSetNodeTemplateName },     // int (__int64 id, const char* name) -- re-point an authored node's template NAME in place (OTNL intern; subtree/id/transform/crc untouched; data-only, reload spawns from the new template); 1 ok / 0 miss / -1 refused (empty name, buildout, or template unresolvable NOW -- forgetMissingFile+exists pre-check); caller follows with wsSaveSnapshot
+	{ "worldSnapshot::wsSetNodeTemplateName", (void *)&engine_wsSetNodeTemplateName },     // int (__int64 id, const char* name) -- re-point an authored node's template NAME in place (OTNL intern; subtree/id/transform/crc untouched; data-only, reload spawns from the new template); 1 ok / 0 miss / -1 refused (empty name, buildout, or template unresolvable NOW -- forgetMissingFile+exists pre-check); caller follows with wsSaveSnapshot
 	// -- object o2p copy-out (v23->v24, 2026-07-19 change request #5: the .ilf persist read) --
-	{ "object::getTransformO2P",              (void *)&utinni_getObjectTransformO2P },     // int (void* object, float* out12) -- row-major 3x4, position column 3 (the camera::getTransformO2W / .ilf convention); 1 ok / 0 null; borrowed consumer-held Object*, game-thread-only
+	{ "object::getTransformO2P",              (void *)&engine_getObjectTransformO2P },     // int (void* object, float* out12) -- row-major 3x4, position column 3 (the camera::getTransformO2W / .ilf convention); 1 ok / 0 null; borrowed consumer-held Object*, game-thread-only
 	// -- containing-building id copy-out (v24->v25, 2026-07-30 change request #6: the model-D Arm step) --
-	{ "object::getContainingBuildingId",      (void *)&utinni_getContainingBuildingId },   // __int64 (void* object) -- NetworkId value of the containing POB building (== the .ws node id); works for an .ilf decoration, a wall-click CELL object, or the player; 0 = null / not inside a POB; borrowed consumer-held Object*, game-thread-only
-	{ "object::setParentCell",                (void *)&utinni_setParentCell },             // v27 NEW: int (void* object, void* cellProperty) -- cell reparent; VIRTUAL [Object.h:168] so the shim is mandatory. 1 ok / 0 refused (null either side). Null cell would FATAL (NOT_NULL Object.cpp:1389) -- pass cellProperty::getWorldCellProperty to reparent OUT, never null. Write o2w FIRST then reparent (cellChanged fires inside setParentCell); do NOT convert to o2p -- attachToObject_w preserves world. Borrowed pointers, game-thread-only
+	{ "object::getContainingBuildingId",      (void *)&engine_getContainingBuildingId },   // __int64 (void* object) -- NetworkId value of the containing POB building (== the .ws node id); works for an .ilf decoration, a wall-click CELL object, or the player; 0 = null / not inside a POB; borrowed consumer-held Object*, game-thread-only
+	{ "object::setParentCell",                (void *)&engine_setParentCell },             // v27 NEW: int (void* object, void* cellProperty) -- cell reparent; VIRTUAL [Object.h:168] so the shim is mandatory. 1 ok / 0 refused (null either side). Null cell would FATAL (NOT_NULL Object.cpp:1389) -- pass cellProperty::getWorldCellProperty to reparent OUT, never null. Write o2w FIRST then reparent (cellChanged fires inside setParentCell); do NOT convert to o2p -- attachToObject_w preserves world. Borrowed pointers, game-thread-only
 	{ "cellProperty::getWorldCellProperty",   (void *)&CellProperty::getWorldCellProperty },// v27 NEW: CellProperty* (void) -- the world-cell sentinel, out-of-line [CellProperty.h:78 / CellProperty.cpp:308] so a plain constant &fn row, NO shim (the cuiPreferences::getAllowTargetAnything pattern). Required to express "reparent to the exterior" -- setParentCell cannot take null
 	{ "cellProperty::setPortalTransitionsEnabled", (void *)&CellProperty::setPortalTransitionsEnabled }, // v28 NEW: void (bool) -- suppress the portal transition sweep across a teleport write. Public out-of-line static [CellProperty.h:73 / CellProperty.cpp:336] so a plain &fn row, NO shim. THIS is the row that makes the o2w-vs-o2p / ordering analysis moot: use the engine's OWN idiom, GroundScene.cpp:1492-1497 -- setParentCell(C); setPortalTransitionsEnabled(false); setTransform_o2p(...); setPortalTransitionsEnabled(true); CollisionWorld::objectWarped(player). ALWAYS re-enable (it is global state, not scoped)
 	{ "collisionWorld::objectWarped",         (void *)&CollisionWorld::objectWarped },     // v28 NEW: void (Object*) -- reconcile collision after a discontinuous move; out-of-line static [CollisionWorld.h:82 / .cpp:1334], plain &fn row. Without it CollisionWorld::update reconciles against a stale last-position/cell pair after a tool-driven teleport. Completes the GroundScene.cpp:1497 idiom above
-	{ "clientWorld::findCellAtWorldPosition", (void *)&utinni_findCellAtWorldPosition },   // v28 NEW: void* (float x, float y, float z) -- CellProperty* containing world point P; THE placement-routing primitive (a coordinate-only destination has no object to pick). Wraps ClientWorld::findClosestCellObjectFromWorldPosition [ClientWorld.cpp:1649] + the getCellProperty hop; the client's own containment heuristic, so tool and engine agree about a doorway. NEVER null -- falls back to the world cell, so it is always a legal setParentCell argument
-	{ "object::getAttachedTo",                (void *)&utinni_getAttachedTo },             // v28: void* (void* object) -- parent object or 0. ⚠ NOT the mount guard: cell parentage and mount attachment SHARE m_attachedToObject (setParentCell -> attachToObject_w, Object.cpp:1404-1405), so a player merely standing in a POB reports non-null. The v28 claim "non-null = do not reparent" was FALSIFIED live (refused every teleport from indoors). Use object::isChildObject instead; this row remains for reading the actual parent
-	{ "playerCreatureController::warpClient", (void *)&utinni_warpPlayer },              // v30 NEW: int (float x, float y, float z) WORLD coords -- CLIENT-INITIATED teleport through the controller. warpClient [PlayerCreatureController.h:120, engine's own DebugPortalCamera.cpp:314 caller] stamps m_previousTransform_p, mints a CLIENT sequence number, and sends CM_netUpdateTransform SEND|RELIABLE|DEST_AUTH_SERVER|DEST_AUTH_CLIENT -- so the SERVER is told and the local apply runs via handleNetUpdateTransform, bringing objectWarped + FreeChaseCamera retarget for free. A raw setTransform_o2w is UNSEQUENCED and gets overwritten by the next server update. Does NOT reparent: findCellAtWorldPosition -> setParentCell FIRST. 1 ok / 0 no player / -1 no controller
-	{ "object::isChildObject",                (void *)&utinni_isChildObject },             // v29 NEW: int (void* object) -- 1 = genuine child/mount attachment, 0 = not a child (incl. cell parentage) or null. THE mount discriminator: m_childObject is set only from the asChildObject arg (Object.cpp:1931) and cells attach with FALSE, so it is exactly what the compiled-out DEBUG_FATAL(isChildObject()) at Object.cpp:1396 tests. Inline -> shim. Guard setParentCell with this to avoid the silent Release pose corruption on a mounted player
+	{ "clientWorld::findCellAtWorldPosition", (void *)&engine_findCellAtWorldPosition },   // v28 NEW: void* (float x, float y, float z) -- CellProperty* containing world point P; THE placement-routing primitive (a coordinate-only destination has no object to pick). Wraps ClientWorld::findClosestCellObjectFromWorldPosition [ClientWorld.cpp:1649] + the getCellProperty hop; the client's own containment heuristic, so tool and engine agree about a doorway. NEVER null -- falls back to the world cell, so it is always a legal setParentCell argument
+	{ "object::getAttachedTo",                (void *)&engine_getAttachedTo },             // v28: void* (void* object) -- parent object or 0. ⚠ NOT the mount guard: cell parentage and mount attachment SHARE m_attachedToObject (setParentCell -> attachToObject_w, Object.cpp:1404-1405), so a player merely standing in a POB reports non-null. The v28 claim "non-null = do not reparent" was FALSIFIED live (refused every teleport from indoors). Use object::isChildObject instead; this row remains for reading the actual parent
+	{ "playerCreatureController::warpClient", (void *)&engine_warpPlayer },              // v30 NEW: int (float x, float y, float z) WORLD coords -- CLIENT-INITIATED teleport through the controller. warpClient [PlayerCreatureController.h:120, engine's own DebugPortalCamera.cpp:314 caller] stamps m_previousTransform_p, mints a CLIENT sequence number, and sends CM_netUpdateTransform SEND|RELIABLE|DEST_AUTH_SERVER|DEST_AUTH_CLIENT -- so the SERVER is told and the local apply runs via handleNetUpdateTransform, bringing objectWarped + FreeChaseCamera retarget for free. A raw setTransform_o2w is UNSEQUENCED and gets overwritten by the next server update. Does NOT reparent: findCellAtWorldPosition -> setParentCell FIRST. 1 ok / 0 no player / -1 no controller
+	{ "object::isChildObject",                (void *)&engine_isChildObject },             // v29 NEW: int (void* object) -- 1 = genuine child/mount attachment, 0 = not a child (incl. cell parentage) or null. THE mount discriminator: m_childObject is set only from the asChildObject arg (Object.cpp:1931) and cells attach with FALSE, so it is exactly what the compiled-out DEBUG_FATAL(isChildObject()) at Object.cpp:1396 tests. Inline -> shim. Guard setParentCell with this to avoid the silent Release pose corruption on a mounted player
 	// -- real-entry / PMF rows (completed in ensureDynamicRowsFilled() -- {name,0} placeholders) --
 	{ "creatureObject::setTarget", 0 },         // MISMATCH name: no CreatureObject::setTarget exists; the "current target" setter is setLookAtTarget(const NetworkId&) [CreatureObject.h:311] (m_lookAtTarget = "this creature's current target"). CreatureObject is MI (TangibleObject : ClientObject, CallbackReceiver) -> pmfRealEntry (own method, delta==0). dyn[] below. MAINTAINER: verify consumer typedef vs setLookAtTarget; alts setIntendedTarget/setLookAtAndIntendedTarget.
 	{ "messageQueue::appendMessage", 0 },       // non-virtual overloaded [MessageQueue.h:51], flat class -> pmfToVoid; 3-arg (int,float,uint32) overload. dyn[] below. INPUT-path diag.

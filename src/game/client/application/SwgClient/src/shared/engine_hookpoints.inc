@@ -308,10 +308,10 @@ ENGINE_HOOKPOINT(object,             isActive)                         // extern
 // rev-2 NAME REPLACE (v14->v15): sendMessage -> sendMessageUtf8. The v14 direct-&fn row passed const
 // Unicode::String& across the advertised boundary and CRASHED live smoke (consumer WString models the 2002
 // SWGEmu 3-pointer string layout; ours is a v145 SSO basic_string -> garbage size read -> WRITE-AV). Now an
-// extern "C" utf8 shim: void __cdecl utinni_sendFakeSystemMessage(const char* utf8Msg, bool chatBoxOnly) widens
+// extern "C" utf8 shim: void __cdecl engine_sendFakeSystemMessage(const char* utf8Msg, bool chatBoxOnly) widens
 // on the PROVIDER side and calls sendFakeSystemMessage. ABI RULE (both repos): only primitives and pointers
 // cross the boundary on CALLED endpoints; class-type params need an extern "C" shim (the
-// utinni_replayClientEffect precedent). Name-REPLACE (not re-point) so version-skewed pairings miss by name
+// engine_replayClientEffect precedent). Name-REPLACE (not re-point) so version-skewed pairings miss by name
 // and degrade instead of mis-calling across a changed ABI. SEND half ONLY -- RECEIVE stays OMIT (the reverted
 // Bucket A-2.1 receiveMessage; the real inbound receiver is a file-local Listener, un-advertisable).
 ENGINE_HOOKPOINT(systemMessageManager, sendMessageUtf8)
@@ -319,7 +319,7 @@ ENGINE_HOOKPOINT(systemMessageManager, sendMessageUtf8)
 // -- game lookAt-target READ (v15->v16, 2026-07-09 request): the read twin of
 // creatureObject::setTarget (same m_lookAtTarget slot; NOT the NGE intended/combat
 // target -- that would be a separate request, never a re-point of this row).
-// extern "C" __int64 __cdecl shim (utinni_getPlayerLookAtTargetId, defined in
+// extern "C" __int64 __cdecl shim (engine_getPlayerLookAtTargetId, defined in
 // CreatureObject.cpp): returns the PLAYER's lookAt-target NetworkId VALUE (full
 // 64 bits, cluster-id bits included); 0 = no player / no target. Primitive-only
 // boundary (the sysmsg rev-2 ABI RULE) -- CreatureObject::getLookAtTarget() is
@@ -333,14 +333,14 @@ ENGINE_HOOKPOINT(game, getPlayerLookAtTargetId)
 // 2026-07-15): id-keyed read/browse of the CURRENT scene's live snapshot for
 // the Utinni snapshot editor. All 7 are extern "C" __cdecl shims DEFINED IN
 // clientGame WorldSnapshot.cpp -- the ms_reader file-local-singleton TU (the
-// sysmsg/lookAtTarget shim pattern at TU scale); the utinni_ws* export names
+// sysmsg/lookAtTarget shim pattern at TU scale); the engine_ws* export names
 // are the rev-3 frozen identities. Shared contracts (pinned): enumeration is
 // live, AUTHORED-ONLY -- tombstones (ANSWERS 5.1b) AND buildout-provenance
 // rows (ANSWERS 5.1a, the retained ms_buildoutObjects filter) are never
 // enumerated and answer miss on id-keyed reads; node reads force-finish the
 // CONSULT-60 incremental parse (finishLoadNow discipline); indices are
 // transient (consumer snapshots ids, never holds an index across a possible
-// load/unload); wsGetNodeInfo fills the FROZEN 80-byte UtinniWsNodeInfo
+// load/unload); wsGetNodeInfo fills the FROZEN 80-byte EngineWsNodeInfo
 // (engine_hookpoints.h) under the size-first protocol; wsGetGeneration bumps
 // on load/unload ONLY and is a PURE counter read (no parse force).
 ENGINE_HOOKPOINT(worldSnapshot, wsForgetNode)           // int (int64 id) -- drop the node, KEEP the live Object (1/0). Persist no longer makes the placed object vanish
@@ -351,7 +351,7 @@ ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeCount)        // int (void) -- top-leve
 ENGINE_HOOKPOINT(worldSnapshot, wsGetTopNodeIdAt)      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range
 ENGINE_HOOKPOINT(worldSnapshot, wsGetChildCount)       // int (__int64 id) -- enumerable direct-child count; 0 = miss/tombstone/leaf
 ENGINE_HOOKPOINT(worldSnapshot, wsGetChildIdAt)        // __int64 (__int64 id, int index) -- id of the index-th enumerable child; 0 = miss/out-of-range
-ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeInfo)         // int (__int64 id, UtinniWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
+ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeInfo)         // int (__int64 id, EngineWsNodeInfo* out) -- POD-out, size-first; 1 ok, 0 miss/tombstone
 ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeTemplateName) // int (__int64 id, char* buf, int cap) -- copy-out; returns needed length INCLUDING the NUL; 0 = miss
 ENGINE_HOOKPOINT(worldSnapshot, wsGetGeneration)       // int (void) -- bumps on load/unload ONLY (consumer cache/undo invalidation)
 
@@ -392,7 +392,7 @@ ENGINE_HOOKPOINT(cuiPreferences, getAllowTargetAnything) // static bool (void) -
 // 4C: gizmo camera matrices -- copy-out shims (primitives-only ABI RULE; replaces
 // the consumer's raw struct-offset camera reads that crash on the NGE layout).
 ENGINE_HOOKPOINT(camera, getProjectionMatrix)           // int (float* out16) -- GlMatrix4x4 verbatim (row-major 4x4); 1 ok / 0 no camera
-ENGINE_HOOKPOINT(camera, getTransformO2W)               // int (float* out12) -- row-major 3x4, position column 3 (the UtinniWsNodeInfo convention); 1 ok / 0 no camera
+ENGINE_HOOKPOINT(camera, getTransformO2W)               // int (float* out12) -- row-major 3x4, position column 3 (the EngineWsNodeInfo convention); 1 ok / 0 no camera
 
 // -- Live World Editor ray-pick + pre-approved radial clear (v19->v20,
 // 2026-07-19 change request, SWG-Toolkit live-editor session): engine-side

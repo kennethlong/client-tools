@@ -69,7 +69,7 @@ public:
 	static void addEventObjects    (std::string const & eventName);
 
 	// Goal B Wave 3 (2026-07-18): promoted private -> public for the editor's
-	// utinni_wsUnloadSnapshot shim (same TU as the singleton state, but shims
+	// engine_wsUnloadSnapshot shim (same TU as the singleton state, but shims
 	// are extern "C" free functions with no member access). No layout change.
 	static void unload ();
 

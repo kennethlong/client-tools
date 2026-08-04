@@ -132,13 +132,13 @@
 // MessageDispatch::Receiver Listener, un-advertisable -- receiveSystemMessage next to the static is NOT it). 120 names.
 // Bumped 14 -> 15 in sysmsg-SEND rev-2 (2026-07-03): 1 NAME REPLACE -- systemMessageManager::sendMessage
 // REMOVED, systemMessageManager::sendMessageUtf8 ADDED -> extern "C" void __cdecl
-// utinni_sendFakeSystemMessage(const char* utf8Msg, bool chatBoxOnly), a provider-side utf8 shim that widens
+// engine_sendFakeSystemMessage(const char* utf8Msg, bool chatBoxOnly), a provider-side utf8 shim that widens
 // and calls sendFakeSystemMessage. The v14 row CRASHED live smoke (WRITE-AV): "byte-exact ABI match" was true
 // of the signature only -- the const Unicode::String& PARAMETER crossed the boundary as a C++ object, and the
 // consumer's swg::WString models the 2002 SWGEmu 3-pointer layout while ours is a v145 SSO basic_string ->
 // the engine read _Mysize past the consumer's 12-byte object. ABI RULE adopted by both repos: only primitives
 // and pointers cross the advertised boundary on CALLED endpoints; class-type params (strings above all) need
-// an extern "C" shim (the utinni_replayClientEffect precedent). Name-REPLACE, not re-point, so version-skewed
+// an extern "C" shim (the engine_replayClientEffect precedent). Name-REPLACE, not re-point, so version-skewed
 // pairings miss by name and degrade instead of mis-calling. Companion rev-2 AUDIT flagged the other CALLED
 // rows with class-type params/returns as ABI-UNSAFE TO CALL until shimmed (row comments in
 // engine_advertise.cpp): cuiChatWindow::writeToAllTabs + writeToCurrentTab and consoleHelper::sendInput
@@ -146,7 +146,7 @@
 // objectTemplate::get{AppearanceFilename,PortalLayoutFilename,ClientDataFile} (return our std::string by
 // const&). DETOURED rows are unaffected (they read args our own code constructed). Still 120 names.
 // Bumped 15 -> 16 in the lookAtTarget-accessor request (2026-07-09): 1 NAME ADD --
-// game::getPlayerLookAtTargetId -> extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void)
+// game::getPlayerLookAtTargetId -> extern "C" __int64 __cdecl engine_getPlayerLookAtTargetId(void)
 // (defined in CreatureObject.cpp), the READ twin of creatureObject::setTarget: returns the PLAYER's
 // lookAt/selection-target NetworkId VALUE (full 64 bits, cluster-id bits included; 0 = no player /
 // no target -- NetworkId::cms_invalid is NetworkId(0)). Strictly the lookAt target (m_lookAtTarget),
@@ -160,7 +160,7 @@
 // 2026-07-15): 7 NAME ADDs -- worldSnapshot::{wsGetNodeCount, wsGetTopNodeIdAt,
 // wsGetChildCount, wsGetChildIdAt, wsGetNodeInfo, wsGetNodeTemplateName,
 // wsGetGeneration}, all extern "C" __cdecl shims DEFINED in clientGame
-// WorldSnapshot.cpp (the ms_reader file-local-singleton TU; the utinni_ws*
+// WorldSnapshot.cpp (the ms_reader file-local-singleton TU; the engine_ws*
 // symbol names are the rev-3 frozen export names). Id-keyed read/browse of the
 // CURRENT scene's live snapshot for the Utinni snapshot editor: enumeration is
 // live, AUTHORED-ONLY (tombstones + buildout-provenance rows are never
@@ -168,7 +168,7 @@
 // reads force-finish the CONSULT-60 incremental parse (the finishLoadNow
 // mutator discipline); wsGetGeneration is a PURE counter read (no parse force
 // -- pollable during loading without re-synchronizing the load). Introduces
-// the shared POD UtinniWsNodeInfo (below, rev-3 FROZEN: 80 bytes, size-first
+// the shared POD EngineWsNodeInfo (below, rev-3 FROZEN: 80 bytes, size-first
 // protocol, childCount included). 128 names.
 // Bumped 17 -> 18 in Goal B Wave 2 (snapshot-editor LIVE-ONLY mutation wave,
 // frozen 2026-07-18; Wave-1 live smoke PASSED): 5 NAME ADDs --
@@ -437,11 +437,11 @@ struct EngineHookPoints
 };
 
 // ----------------------------------------------------------------------
-// UtinniWsNodeInfo -- the worldSnapshot::wsGetNodeInfo POD-out struct
+// EngineWsNodeInfo -- the worldSnapshot::wsGetNodeInfo POD-out struct
 // (Goal B Wave 1, v17; FROZEN by the 2026-07-15 rev-3 request §2 -- any
 // layout change is a NEW version wave, never an in-place edit).
 //
-// Size-first protocol: the CALLER sets `size = sizeof(UtinniWsNodeInfo)`
+// Size-first protocol: the CALLER sets `size = sizeof(EngineWsNodeInfo)`
 // (its compiled-against size) BEFORE the call; the provider writes
 // min(callerSize, providerSize) bytes and never assumes growth, so the
 // struct may gain trailing fields in later versions without breaking a
@@ -449,7 +449,7 @@ struct EngineHookPoints
 // Provider real == float and Transform == row-major 3x4 with position in
 // column 3 are verified provider-side (ANSWERS 5.4).
 // ----------------------------------------------------------------------
-struct UtinniWsNodeInfo
+struct EngineWsNodeInfo
 {
 	unsigned int size;            // offset  0 -- caller fills FIRST (size-first protocol)
 	unsigned int flags;           // offset  4 -- bit0 = deleted (reads 0 in practice: tombstones

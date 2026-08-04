@@ -6967,7 +6967,7 @@ void * engine_creatureSetTargetRealEntry()
 // engine_advertise.cpp) because the exe TU cannot include CreatureObject.h
 // (see the accessor note above). Game-thread-only, on-demand (not per-frame).
 // ----------------------------------------------------------------------
-extern "C" __int64 __cdecl utinni_getPlayerLookAtTargetId(void)
+extern "C" __int64 __cdecl engine_getPlayerLookAtTargetId(void)
 {
 	CreatureObject const * const player = Game::getPlayerCreature();
 	return player ? player->getLookAtTarget().getValue() : 0;
