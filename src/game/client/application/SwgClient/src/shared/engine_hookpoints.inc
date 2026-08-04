@@ -343,6 +343,9 @@ ENGINE_HOOKPOINT(game, getPlayerLookAtTargetId)
 // load/unload); wsGetNodeInfo fills the FROZEN 80-byte UtinniWsNodeInfo
 // (engine_hookpoints.h) under the size-first protocol; wsGetGeneration bumps
 // on load/unload ONLY and is a PURE counter read (no parse force).
+ENGINE_HOOKPOINT(worldSnapshot, wsForgetNode)           // int (int64 id) -- drop the node, KEEP the live Object (1/0). Persist no longer makes the placed object vanish
+ENGINE_HOOKPOINT(clientInteriorLayoutManager, refreshInteriorLayout)  // int (int64 buildingId) -- re-apply a changed .ilf to ONE building, no scene reload (1/0/-1)
+ENGINE_HOOKPOINT(cellProperty, getCellName)             // int (void* cellProperty, char* buf, int cap) -- copy-out; needed length INCL NUL. world cell returns "world"
 ENGINE_HOOKPOINT(worldSnapshot, wsIsParsePending)       // int (void) -- 1 = parse in flight; PURE/non-forcing (no finishLoadNow prologue)
 ENGINE_HOOKPOINT(worldSnapshot, wsGetNodeCount)        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
 ENGINE_HOOKPOINT(worldSnapshot, wsGetTopNodeIdAt)      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range

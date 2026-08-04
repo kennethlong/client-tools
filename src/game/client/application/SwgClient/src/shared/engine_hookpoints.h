@@ -378,7 +378,41 @@
 // more -- the shim owns cell resolution, and an external reparent will fight
 // the message-variant choice. Still 157 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 31
+// ----------------------------------------------------------------------
+// v32 (2026-08-04): +3 rows, the consolidated placement request. 160 names.
+//
+//   worldSnapshot::wsForgetNode -- drop a node from the snapshot WITHOUT
+//     despawning the live Object. The consumer's placement gesture mints a
+//     preview node, and on Persist the row must leave the .ws (a copy there is a
+//     second, world-space instance of the same decoration -- they MEASURED two
+//     such 84-byte children of building 1082874, and the engine cannot dedupe
+//     them because .ilf-created objects never get a NetworkId so
+//     CEC_objectAlreadyExists can never fire). But wsRemoveNode is TEARDOWN, so
+//     using it made the object the modder just placed VANISH at the moment they
+//     saved it. This is the missing half. No occupancy guard: nothing is deleted.
+//     Forgetting does NOT free the id -- wsAllocateIdRange's collision test
+//     consults NetworkIdManager and the Object is still registered.
+//
+//   clientInteriorLayoutManager::refreshInteriorLayout -- re-apply a changed .ilf
+//     to ONE building, no scene reload. This RETIRES the kept-root staleness
+//     residual the unload guard introduced: nothing is torn down, so nothing is
+//     kept, so nothing goes stale. Three steps, and missing any one is a silent
+//     no-op: delete ONLY the client-only interior objects (NOT every client-cached
+//     object in the cells -- that would sweep the consumer's unpersisted
+//     placements, which have no on-disk copy); reload the TEMPLATE's cached
+//     InteriorLayoutReaderWriter (the layout is cached on
+//     ClientBuildingObjectTemplate, not the object, so a latch/cursor reset alone
+//     rebuilds the PRE-EDIT file) after TreeFile::forgetMissingFile; then clear
+//     each cell's applied-latch AND resume cursor. Re-creation is left to the
+//     existing budgeted update(), so a large cantina spreads across frames.
+//
+//   cellProperty::getCellName -- COPY-OUT of the inline getCellName(). The
+//     consumer's .ilf stores the cell name as a literal string and they were
+//     writing an operator-typed one, so a wrong-cell row looked healthy on disk.
+//     Copy-out rather than pointer-return because m_cellName points into the
+//     TEMPLATE (CellProperty.cpp:456). World cell returns "world", not null.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 32
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

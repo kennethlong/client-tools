@@ -19,6 +19,8 @@
 
 struct UtinniWsNodeInfo;
 
+extern "C" int     __cdecl utinni_wsForgetNode(__int64 networkIdInt);   // v32: drop a node from the snapshot WITHOUT despawning the live Object (1 forgotten / 0 not found). The half wsRemoveNode cannot give -- that one is teardown
+extern "C" int     __cdecl utinni_refreshInteriorLayout(__int64 buildingNetworkId);   // v32: re-apply a changed .ilf to ONE building, no scene reload. DEFINED in ClientInteriorLayoutManager.cpp (1 ok / 0 miss / -1 layout reload failed)
 extern "C" int     __cdecl utinni_wsIsParsePending(void);   // v28: PURE, NON-forcing parse-completion read (1 = rebuilding). The only ws* row with no finishLoadNow() prologue -- lets a consumer WAIT instead of FORCE a ~3.1s synchronous parse
 extern "C" int     __cdecl utinni_wsGetNodeCount(void);
 extern "C" __int64 __cdecl utinni_wsGetTopNodeIdAt(int index);

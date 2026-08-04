@@ -1941,6 +1941,58 @@ extern "C" int __cdecl utinni_wsIsParsePending (void)
 
 //-------------------------------------------------------------------
 
+// v32: FORGET a node -- drop it from the snapshot WITHOUT despawning the live Object.
+//
+// The consumer's placement gesture mints a temporary preview node via wsAddObject so the
+// modder can see and gizmo the thing, then on Persist writes the real row into the .ilf.
+// The preview must leave the .ws (a copy there would be a second, world-space instance of
+// the same decoration -- they measured exactly that: two 84-byte runtime children of
+// building 1082874 carrying world coords where the .ilf rows are cell-relative, and the
+// engine CANNOT dedupe them because .ilf-created objects never get a NetworkId, so
+// createObject's CEC_objectAlreadyExists guard can never fire).
+//
+// But wsRemoveNode is a TEARDOWN primitive -- its subtree sweep removeFromWorld()s and
+// deletes -- so using it made the object the modder just placed VANISH at the moment they
+// saved it. This is the missing half: the DATA leaves the snapshot, the OBJECT stays put
+// for the rest of the session, and the reload path picks it up from the .ilf where it now
+// lives.
+//
+// WorldSnapshot::removeObject already IS this operation (drop the sphere handle so nothing
+// re-spawns, then removeNode -> setDeleted + map erase, so every later saveFiltered
+// tombstone-skips the row). Nothing touches the Object. This shim only adds the typed
+// found/not-found result the raw void static cannot give.
+//
+// NO occupancy guard, deliberately: wsRemoveNode needs one because a Container dtor
+// cascade-deletes cell contents, and nothing is deleted here.
+//
+// ALLOCATOR: forgetting does NOT free the id for re-mint. wsAllocateIdRange's collision
+// test consults NetworkIdManager (:~2198), not just ms_reader, and the forgotten node's
+// Object is still alive and still registered -- so the id stays taken. The consumer asked;
+// this is the answer, and it holds regardless of whether they ever re-add at an explicit id.
+//
+// 1 = a live node was found and forgotten · 0 = the id did not resolve (or is a tombstone).
+extern "C" int __cdecl utinni_wsForgetNode (__int64 networkIdInt)
+{
+	//-- CONSULT-60: a mid-parse miss would let the node parse in later WITH its sphere
+	//   handle, i.e. the forget would silently not stick.
+	if (ms_parsePending)
+		finishLoadNow ();
+
+	const WorldSnapshotReaderWriter::Node * const node = ms_reader.find (networkIdInt);
+	if (!node || node->isDeleted ())
+	{
+		REPORT_LOG (true, ("[editor.ws] wsForgetNode MISS id=%I64d (no live node)\n", networkIdInt));
+		return 0;
+	}
+
+	WorldSnapshot::removeObject (networkIdInt);
+
+	REPORT_LOG (true, ("[editor.ws] wsForgetNode OK id=%I64d (row dropped; live Object untouched)\n", networkIdInt));
+	return 1;
+}
+
+//-------------------------------------------------------------------
+
 extern "C" int __cdecl utinni_wsGetNodeCount (void)
 {
 	if (ms_parsePending)

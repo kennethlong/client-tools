@@ -755,6 +755,51 @@ extern "C" int __cdecl utinni_isChildObject(void * object)
 	return static_cast<const Object *>(object)->isChildObject() ? 1 : 0;
 }
 
+// ----------------------------------------------------------------------
+// cellProperty::getCellName -- the cell NAME behind a CellProperty* (v32).
+//
+// The consumer's .ilf writer stores the cell name as a LITERAL asciiz string in every
+// decoration row, and until now they wrote an OPERATOR-TYPED name rather than one derived
+// from the placement point -- so a wrong-cell row looked perfectly healthy on disk. Their
+// primary target has 262 rows across 11 distinct cells, so "which cell" is a real 11-way
+// choice, not a formality.
+//
+// Nothing is conceptually missing from the engine: CellProperty::getCellName()
+// [CellProperty.h:120, inline at :249-252] already returns exactly the right string. It is
+// INLINE, so there is no out-of-line symbol to advertise -- purely an ABI-visibility gap,
+// the same shape as object::isChildObject (v29).
+//
+// COPY-OUT rather than returning the pointer, deliberately, and it is the shape the
+// consumer offered. m_cellName is a `const char *` assigned from cellTemplate.getName()
+// [CellProperty.cpp:456], so it points into the TEMPLATE and its lifetime is the template's,
+// not the cell's. Handing that across the ABI would make the consumer reason about a
+// lifetime they cannot see; copying sidesteps it entirely. wsGetSavePath convention:
+// returns the needed length INCLUDING the NUL, so a caller can size a buffer from a
+// too-small first call. 0 = null input / no name.
+//
+// The WORLD cell returns "world", not null (set at CellProperty.cpp:225) -- the consumer
+// asked; treat it as "not an interior cell, do not write an .ilf row".
+//
+// Borrowed pointer (theirs, from clientWorld::findCellAtWorldPosition), game-thread-only.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl utinni_getCellName(void * cellProperty, char * buf, int cap)
+{
+	if (!cellProperty)
+		return 0;
+
+	const CellProperty * const cell = static_cast<const CellProperty *>(cellProperty);
+	const char * const name = cell->getCellName();
+	if (!name)
+		return 0;
+
+	int const needed = static_cast<int>(strlen(name)) + 1;
+
+	if (buf && cap >= needed)
+		memcpy(buf, name, static_cast<size_t>(needed));
+
+	return needed;
+}
+
 // Shared ray core for the two pick shims below (v22 refactor -- identical ray,
 // two return shapes). Returns false on no-camera/degenerate-ray/miss.
 static bool engine_screenRayCollide(int screenX, int screenY, int objectsOnly, CollisionInfo & info)
@@ -1135,6 +1180,9 @@ static EngineHookPoint s_engineHookPoints[] =
 	// read (no parse force) bumping on load/unload ONLY; wsGetNodeInfo fills the FROZEN
 	// 80-byte UtinniWsNodeInfo (engine_hookpoints.h) under the size-first protocol.
 	// CALLED endpoints, game-thread-only, primitives/pointers-only boundary (ABI RULE).
+	{ "worldSnapshot::wsForgetNode",          (void *)&utinni_wsForgetNode },           // v32 NEW: int (__int64 id) -- drop a node from the snapshot WITHOUT despawning the live Object. 1 forgotten / 0 not found. wsRemoveNode is TEARDOWN (subtree removeFromWorld + delete), which made the object the modder just placed VANISH at Persist; this is the missing half -- the DATA leaves the .ws (removeObject: sphere handle dropped, removeNode tombstones so every later saveFiltered skips it) and the OBJECT stays put. No occupancy guard needed (nothing is deleted). Forgetting does NOT free the id: wsAllocateIdRange tests NetworkIdManager, and the Object is still registered
+	{ "clientInteriorLayoutManager::refreshInteriorLayout", (void *)&utinni_refreshInteriorLayout }, // v32 NEW: int (__int64 buildingId) -- re-apply a changed .ilf to ONE building, NO scene reload. 1 ok / 0 no such object|not a POB|not a building template / -1 layout reload failed. Deletes ONLY the client-only interior-layout objects (NOT every client-cached object in the cells -- that would sweep the consumer's unpersisted wsAddObject placements), reloads the TEMPLATE's cached InteriorLayoutReaderWriter (the layout is cached on ClientBuildingObjectTemplate, so a latch/cursor reset alone would rebuild the PRE-EDIT .ilf) with TreeFile::forgetMissingFile first, then re-arms each cell so the budgeted update() re-creates under maxInteriorCreatesPerFrame
+	{ "cellProperty::getCellName",            (void *)&utinni_getCellName },            // v32 NEW: int (void* cellProperty, char* buf, int cap) -- COPY-OUT of CellProperty::getCellName [inline, CellProperty.h:249 -> shim]. Returns needed length INCL NUL (wsGetSavePath convention); 0 = null input/no name. Copy-out not pointer-return because m_cellName points into the TEMPLATE (CellProperty.cpp:456), whose lifetime the consumer cannot see. World cell returns "world", not null (CellProperty.cpp:225). The .ilf row stores the cell name as a literal string, so the CRC twin is not a substitute
 	{ "worldSnapshot::wsIsParsePending",      (void *)&utinni_wsIsParsePending },      // v28 NEW: int (void) -- 1 = phased parse in flight (world still rebuilding), 0 = idle/complete. PURE, NON-forcing: the ONLY ws* row without a finishLoadNow() prologue, so a consumer can WAIT rather than call a forcing row for its side effect (which pays the whole remaining ~3.1s synchronous parse). NOT getLoadingPercent -- that returns 0 while parsing and then reports preload percent, so 0 is ambiguous
 	{ "worldSnapshot::wsGetNodeCount",        (void *)&utinni_wsGetNodeCount },        // int (void) -- top-level authored non-tombstone count; 0 = empty/no snapshot
 	{ "worldSnapshot::wsGetTopNodeIdAt",      (void *)&utinni_wsGetTopNodeIdAt },      // __int64 (int index) -- id of the index-th enumerable top-level node; 0 = out-of-range

@@ -1498,6 +1498,7 @@ void PlayerCreatureController::setCurrentSpeed (float const currentSpeed)
 // Defined here because the exe TU cannot include CreatureObject.h (see
 // engine_creatureObject_forward.h). Game-thread-only.
 // ----------------------------------------------------------------------
+#if !defined(_WIN64)   // the advertise surface is 32-bit only (engine_advertise.cpp:94) -- no x64 export surface, so this shim would be a dead symbol there
 extern "C" int __cdecl utinni_warpPlayer(float x_w, float y_w, float z_w)
 {
 	CreatureObject * const player = Game::getPlayerCreature();
@@ -1556,6 +1557,7 @@ extern "C" int __cdecl utinni_warpPlayer(float x_w, float y_w, float z_w)
 
 	return 1;
 }
+#endif // !defined(_WIN64)
 
 // ----------------------------------------------------------------------
 
