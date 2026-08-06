@@ -1,10 +1,14 @@
 // ======================================================================
 //
 // engine_hookpoints.inc -- canonical X-macro name list for the
-// engine entry-point advertisement contract. SHARED VERBATIM with
-// D:/Code/Utinni (re-copied at each catalog wave so the two repos cannot
-// drift). This file is the single source of truth for the set of advertised
-// endpoint NAMES.
+// engine entry-point advertisement contract. This file is the single source of
+// truth for the set of advertised endpoint NAMES.
+//
+// NOT VENDORED BY THE CONSUMER (corrected 2026-08-04 -- this file used to claim it
+// was "shared verbatim with D:/Code/Utinni, re-copied at each catalog wave").
+// Utinni was sunset 2026-07-19; SWG-Toolkit binds by CATALOG NAME and keeps no copy
+// of this file. So the names below ARE the contract surface: a catalog string change
+// silently no-ops that row on their side. See engine_hookpoints.h for the full note.
 //
 // Format: ENGINE_HOOKPOINT(group, name) -- the contract name is "group::name".
 // The includer #defines ENGINE_HOOKPOINT before #include-ing this file and
@@ -29,8 +33,7 @@
 // source-confirmed, signature-checked row in engine_advertise.cpp (the table
 // BODY stays hand-written: rows are heterogeneous -- static fn / bit_cast PMF /
 // accessor). The runtime engine_verifyNoNullNoDup() name-set-equality check
-// bridges this list to that body (EPA-04). Re-copied verbatim into D:/Code/Utinni
-// at wave close. MISMATCH corrections (RESEARCH "Spec best-guesses that are WRONG")
+// bridges this list to that body (EPA-04). MISMATCH corrections (RESEARCH "Spec best-guesses that are WRONG")
 // are baked into the table rows, NOT here -- this list carries CONTRACT names.
 //
 // OMITTED / DEFERRED-to-37-03 MVP names (recorded in 37-02-SUMMARY, not advertised):
@@ -158,8 +161,7 @@ ENGINE_HOOKPOINT(commandParser, addSubCommand)
 // Symbols that the plan named but that do NOT exist in this tree (or are
 // virtual / inline / multiple-inheritance-inflated) are OMITTED here and
 // documented in the .cpp + 37-03-SUMMARY (graceful degradation, EPA-04:
-// "a wrong & is worse than a missing row"). Re-copied verbatim into
-// D:/Code/Utinni at wave close.
+// "a wrong & is worse than a missing row").
 // ======================================================================
 
 // -- extent (sharedCollision; BaseExtent.h) ---------------------------------
@@ -233,7 +235,7 @@ ENGINE_HOOKPOINT(graphics,      g_frameNumber)
 // nonexistent methods, the un-addressable ctor, the wildcard sorter row, the raw
 // render globals) are OMITTED/SKIPPED with reasons in engine_advertise.cpp + the
 // HANDBACK -- a skipped virtual is consumer-vtable-resolved, NOT a missing required
-// row (handoff §2.C). Re-copied verbatim into D:/Code/Utinni at wave close.
+// row (handoff §2.C).
 // ======================================================================
 
 // -- skeletalAppearance (clientSkeletalAnimation; SkeletalAppearance2.h) ------

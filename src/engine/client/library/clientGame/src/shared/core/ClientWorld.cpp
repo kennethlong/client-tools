@@ -31,6 +31,8 @@
 #include "sharedDebug/DebugFlags.h"
 #include "sharedDebug/InstallTimer.h"
 #include "sharedDebug/Profiler.h"
+#include "sharedDebug/Report.h"
+#include "sharedFoundation/ConfigFile.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedFoundation/PointerDeleter.h"
 #include "sharedFoundation/Production.h"
@@ -1649,32 +1651,72 @@ bool ClientWorld::internalCollide(uint16 const flags, CellProperty const * const
 Object const * ClientWorld::findClosestCellObjectFromWorldPosition(Vector const & position_w)
 {
 	Object const * cellObject = &(CellProperty::getWorldCellProperty()->getOwner());
-	
+
 	ObjectVector objects;
 	ms_tangibleSphereTree.findInRange(position_w, 1.0f, objects);
 
-	for (ObjectVector::const_iterator itObj = objects.begin(); itObj != objects.end(); ++itObj) 
+	// ------------------------------------------------------------------------
+	// [ClientGame/ClientWorld] logCellAtPosition (default 0 = OFF). Standing
+	// DISCRIMINATOR probe for "this returned the WORLD cell when it should have
+	// returned a real one" (SWG-Toolkit, 2026-08-03: the world cell after
+	// game::loadScene, the real cell after a manual reload).
+	//
+	// There are exactly TWO ways to fall out of this function with the world
+	// cell, and they have completely different causes -- so the probe names
+	// which one happened instead of leaving it to inference:
+	//   candidates=0            -> the POB is not in ms_tangibleSphereTree at
+	//                              all (never created, or removed from the
+	//                              world and never re-added). A POPULATION bug.
+	//   candidates>0 portals=0  -> objects nearby but none is a POB.
+	//   idValid=0               -> the POB and the containing cell were BOTH
+	//                              found, and the cell was rejected only because
+	//                              its owner has no NetworkId. Client-created
+	//                              cells get one solely from the ClientObject
+	//                              ctor's `getSinglePlayer() || !getScene()`
+	//                              branch (ClientObject.cpp:296), so this is the
+	//                              reading to expect if that gate ever changes.
+	// ------------------------------------------------------------------------
+	static int const s_logCellAtPosition = ConfigFile::getKeyInt("ClientGame/ClientWorld", "logCellAtPosition", 0);
+	int portalsSeen = 0;
+	int cellsRejectedForId = 0;
+
+	for (ObjectVector::const_iterator itObj = objects.begin(); itObj != objects.end(); ++itObj)
 	{
 		Object const * const object = *itObj;
 		if (object)
 		{
 			PortalProperty const * const portal = object->getPortalProperty();
-			if (portal) 
+			if (portal)
 			{
+				++portalsSeen;
+
 				Vector const position_l = object->rotateTranslate_w2o(position_w);
-				
+
 				CellProperty const * const cell = const_cast<PortalProperty *>(portal)->findContainingCell(position_l);
 				NetworkId const & containingCellId = cell->getOwner().getNetworkId();
 
 				if (containingCellId.isValid())
 				{
 					cellObject = &(cell->getOwner());
+
+					if (s_logCellAtPosition)
+						REPORT_LOG(true, ("[cellAtPos] HIT pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d cell=%s building=%lld\n",
+							position_w.x, position_w.y, position_w.z, static_cast<int>(objects.size()), portalsSeen,
+							cell->getCellName() ? cell->getCellName() : "(null)",
+							static_cast<long long>(object->getNetworkId().getValue())));
+
 					break;
 				}
+
+				++cellsRejectedForId;
 			}
 		}
 	}
-	
+
+	if (s_logCellAtPosition && cellObject == &(CellProperty::getWorldCellProperty()->getOwner()))
+		REPORT_LOG(true, ("[cellAtPos] WORLD pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d idValid=0 rejectedForId=%d\n",
+			position_w.x, position_w.y, position_w.z, static_cast<int>(objects.size()), portalsSeen, cellsRejectedForId));
+
 	return cellObject;
 }
 

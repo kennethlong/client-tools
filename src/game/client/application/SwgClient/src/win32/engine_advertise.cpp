@@ -329,6 +329,37 @@ static void __cdecl engine_gameLoadScene(const char * terrainFilename, const cha
 	// (skips the network clientReady send, GroundScene.cpp:2103) and isFinishedLoading() is relaxed to
 	// accept single-player in lieu of a ghost. The flag is otherwise false for SWGEmu connected play.
 	Game::setSinglePlayer(true);
+
+	// DESTROY THE OUTGOING SCENE FIRST (2026-08-04). Game::_setScene(Scene*) only
+	// reassigns ms_scene -- it never closes or deletes the scene it replaces, so the
+	// teardown is the CALLER's job. All THREE by-name scene installers in this tree do
+	// it, and this shim was the only one that did not: GameNetwork::startScene
+	// (GameNetwork.cpp:483-492, commented "First destroy the old scene if need be"),
+	// SwgCuiCommandParserScene::performSceneChange (:271-283) and SwgCuiLocations
+	// (:171-177). Omitting it is not merely a leak: ~GroundScene is what calls
+	// ClientWorld::remove() (GroundScene.cpp:1132), so without it the incoming
+	// GroundScene ctor's ClientWorld::install() (:691) runs a SECOND time over a live
+	// world. Both install guards are DEBUG_FATAL (ClientWorld.cpp:854, World.cpp:162)
+	// and so compile out in Release, where World::install() then replaces every WOL_*
+	// object list with a fresh empty one (World.cpp:165-168) -- leaking the old lists
+	// and orphaning every object still in them.
+	//
+	// NOT copied from performSceneChange: its `getAttachedTo() != 0` refusal. v29
+	// established that predicate is ALSO true for any player merely standing in a cell
+	// (cell parentage and mount attachment share m_attachedToObject), so mirroring it
+	// would turn loadScene into a silent no-op exactly where the editor is used --
+	// indoors. GameNetwork::startScene has no such guard either. A consumer that wants
+	// to refuse while mounted should gate its own call site on object::isChildObject
+	// (v29), which is the real discriminator.
+	{
+		GroundScene * const outgoing = dynamic_cast<GroundScene *>(Game::getScene());
+		if (outgoing)
+		{
+			outgoing->close();
+			delete outgoing;                                            // ~GroundScene self-clears ms_scene (GroundScene.cpp:1081-1084) and calls ClientWorld::remove()
+		}
+	}
+
 	Game::setScene(true, terrainFilename, playerFilename, nullptr);   // immediately=true (load now), customizedPlayer=nullptr (engine loads avatar from playerFilename)
 }
 

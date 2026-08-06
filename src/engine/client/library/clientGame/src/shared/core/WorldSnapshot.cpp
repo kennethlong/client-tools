@@ -647,6 +647,26 @@ void WorldSnapshot::load (char const *sceneName)
 	NOT_NULL(sceneName);
 
 	//-- clear the current snapshot
+	//
+	//   DO NOT "FIX" THIS BY MOVING THE ALREADY-LOADED TEST ABOVE IT (2026-08-04 --
+	//   I tried, and it is strictly worse). This prologue running BEFORE the early
+	//   return is the deliberate SAME-SCENE RE-STREAM path: emptying ms_loadedList
+	//   makes update() treat every in-range node as needing creation again, so
+	//   re-entering a scene rebuilds its objects from the ALREADY-PARSED ms_reader
+	//   without paying for the .ws parse a second time. Note ms_sceneName is sticky
+	//   across ~GroundScene (only engine_wsUnloadSnapshot clears it, :2947), so
+	//   returning early here without clearing the loaded set would leave a
+	//   re-entered scene EMPTY.
+	//
+	//   The invariant it depends on: the CALLER must already have destroyed the
+	//   outgoing scene's objects (~GroundScene -> ClientWorld::remove ->
+	//   World::remove). If they are still alive, this becomes the failure SWG-Toolkit
+	//   reported as "game::loadScene leaves the snapshot incompletely populated until
+	//   a manual reload" -- loaded set emptied, so every node is re-queued for
+	//   creation, but every one of those creates then fails CEC_objectAlreadyExists
+	//   against the surviving NetworkId, and nothing repopulates. That was a defect in
+	//   the game::loadScene SHIM (it skipped the close+delete that all three engine
+	//   scene installers do), not here. See engine_advertise.cpp engine_gameLoadScene.
 	ms_loadedList.clear ();
 	ms_reader.removeFromWorld ();
 	ms_lastCellProperty = 0;

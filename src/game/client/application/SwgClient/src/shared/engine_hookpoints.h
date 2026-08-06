@@ -12,8 +12,18 @@
 // construction and survives every rebuild. The client stays consumer-agnostic;
 // if the consumer is not injected, nothing reads this table and it is inert.
 //
-// This header is SHARED VERBATIM with D:/Code/Utinni (copied at each catalog
-// wave so the two repos cannot drift -- see ENGINE_HOOKPOINTS_VERSION note).
+// NOT VENDORED BY THE CONSUMER (corrected 2026-08-04). This header used to claim
+// it was "shared verbatim with D:/Code/Utinni, copied at each catalog wave".
+// That is wrong twice over: Utinni was SUNSET 2026-07-19, and SWG-Toolkit -- the
+// sole consumer since -- does not vendor the .h/.inc at all. It resolves rows by
+// CATALOG NAME ("group::name") from the table and keeps no copy of these files;
+// its only artifact from here is ENGINE_HOOKPOINTS_VERSION. Consequences worth
+// knowing before editing:
+//   * renaming an exported C symbol is INVISIBLE to the consumer, hence free;
+//   * changing a CATALOG STRING breaks that row SILENTLY on their side -- an
+//     unresolved row is null-guarded by design and degrades to a no-op, so they
+//     get neither a link error nor a crash. Keep catalog strings stable, or hand
+//     over the old->new list (their standing request, 2026-08-04).
 // It therefore carries ONLY the structs + version + the X-macro name list
 // (.inc). It MUST NOT carry the provider-side exported GetEngineHookPoints()
 // declaration -- a consumer repo must never import a dll-exported symbol. The
@@ -39,9 +49,9 @@
 // rows re-pointed from a call-through forwarder to the real engine entry). The
 // version is advisory -- the contract is name-keyed, so a consumer resolves
 // endpoints by name regardless -- but the bump is the explicit "what's behind a
-// name changed" signal. Lockstep is still enforced byte-exactly: the .h + .inc are
-// re-copied verbatim into D:/Code/Utinni/UtinniCore/swg/ at each wave so the
-// consumer always sees the matching set.
+// name changed" signal -- and since 2026-07-19 it is the ONLY signal: there is no
+// byte-level lockstep to enforce, because the consumer does not vendor the .h/.inc
+// (see the header note above). The version is what tells them a re-sync is due.
 //
 // Bumped 1 -> 2 in 38-03: covered ALL the Phase-38 catalog GROWTH (38-01
 // groundScene::* x8, 38-02 client/config x4, 38-03 cuiChatWindow::* x4) -- 94 names.
@@ -411,8 +421,20 @@
 //     writing an operator-typed one, so a wrong-cell row looked healthy on disk.
 //     Copy-out rather than pointer-return because m_cellName points into the
 //     TEMPLATE (CellProperty.cpp:456). World cell returns "world", not null.
+//
+// Bumped 32 -> 33 in the 2026-08-04 scene-teardown fix: NO name change (still 160),
+// BEHAVIOUR correction behind game::loadScene -- the same address-correctness policy
+// that took v30 -> v31 for warpClient. The shim now destroys the outgoing GroundScene
+// before installing the new one, which every other by-name scene installer in the
+// engine already did (GameNetwork.cpp:483-492, SwgCuiCommandParserScene.cpp:271-283,
+// SwgCuiLocations.cpp:171-177). CONSUMER-VISIBLE CONSEQUENCE, which is why this bumps:
+// any Object*/CellProperty* cached from the previous scene is now genuinely DELETED
+// across a loadScene call. Previously the outgoing scene leaked, so such pointers
+// stayed readable and stale rather than dangling -- code that got away with holding
+// them will now fault, and should re-resolve after every loadScene. Calling your own
+// close+delete first is still safe: the shim no-ops when getScene() is already null.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 32
+#define ENGINE_HOOKPOINTS_VERSION 33
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed
