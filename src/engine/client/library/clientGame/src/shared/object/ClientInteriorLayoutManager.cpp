@@ -23,6 +23,8 @@
 #include "sharedObject/PortalProperty.h"
 #include "sharedUtility/InteriorLayoutReaderWriter.h"
 
+#include <typeinfo>   // createInteriorLayoutObject names the wrong class it refused
+
 // ======================================================================
 
 namespace ClientInteriorLayoutManagerNamespace
@@ -38,6 +40,8 @@ namespace ClientInteriorLayoutManagerNamespace
 	int ms_maxInteriorCreatesPerFrame;
 
 	void remove();
+
+	ClientObject *createInteriorLayoutObject(CrcString const &objectTemplateName, char const *buildingTemplateName, char const *layoutFileName);
 }
 
 using namespace ClientInteriorLayoutManagerNamespace;
@@ -65,6 +69,71 @@ void ClientInteriorLayoutManager::install(bool const disableLazyInteriorLayoutCr
 void ClientInteriorLayoutManagerNamespace::remove()
 {
 	DebugFlags::unregisterFlag(ms_logApplyInteriorLayoutCreates);
+}
+
+// ----------------------------------------------------------------------
+/**
+ * Create one interior-layout object, REFUSING anything that is not a ClientObject.
+ *
+ * 2026-08-06. Both create sites in this file used to read
+ *
+ *     ClientObject * const o = safe_cast<ClientObject *>(ObjectTemplateList::createObject(name));
+ *     if (o) { ...use it... } else DEBUG_WARNING(true, ("...Object will be skipped."));
+ *
+ * which is unsound in Release on BOTH halves:
+ *
+ *   * safe_cast is a bare static_cast in Release (SafeCast.h:16-18 -- it only dynamic_casts and
+ *     asserts in Debug), and ObjectTemplateList::createObject returns whatever the template's own
+ *     createObject() built. Any template class that does not override it gets the BASE
+ *     implementation, `new Object(this, NetworkId::cms_invalid)` (ObjectTemplate.cpp:155-158) --
+ *     a plain Object, not a ClientObject. So a row naming a template of the wrong CLASS yields a
+ *     non-null, wrongly-typed pointer that sails through the null check, and the next virtual call
+ *     -- endBaselines(), addToWorld() -- dispatches through a vtable slot read from whatever the
+ *     Object layout happens to hold at that offset.
+ *   * the only diagnostic was DEBUG_WARNING, which is NOP in Release (Fatal.h:50-52). The one
+ *     build where this crashes is the one build that says nothing about it.
+ *
+ * Not hypothetical: .ilf rows are authored data, and SWG-Toolkit hit exactly this class of
+ * mismatch from the placement side on 2026-08-04 (a substring filter admitted
+ * object/draft_schematic/furniture/* -- crafting schematics handed over as world props; the AV
+ * was an indirect call through a pointer read out of string data). A bad row that reaches an .ilf
+ * is strictly worse than a bad placement: it crashes on EVERY subsequent load of that building,
+ * for anyone who has the file.
+ *
+ * asClientObject() is the Release-correct discriminator -- virtual, 0 in the base
+ * (Object.cpp:2628-2631) -- and is already what update() below uses on the portal owner. On either
+ * failure we WARN (compiled in, unlike DEBUG_WARNING; routes to the report log via
+ * Fatal.cpp InternalWarning) and return 0, so the caller skips the row -- which is the behaviour
+ * the original diagnostic already promised.
+ *
+ * The wrongly-classed Object is OURS to dispose of: nothing else has a reference to it yet. delete
+ * is safe here because ~Object handles the never-added case (`if (m_inWorld)` / `if
+ * (m_attachedToObject)`, Object.cpp:846-868) and both callers run from the alter phase
+ * (GroundScene::update via IOET_Update), outside the setDisallowObjectDelete window that wraps
+ * IoWinManager::draw (Game.cpp:1690-1704).
+ *
+ * Neither half of this is novel: SwgCuiQuestJournal already takes createObject's Object * and
+ * narrows it with asClientObject() (:1118-1123), and disposes of the result with a plain delete
+ * (:388, :1105). This function just puts that idiom where the .ilf path always needed it.
+ */
+ClientObject *ClientInteriorLayoutManagerNamespace::createInteriorLayoutObject(CrcString const &objectTemplateName, char const *const buildingTemplateName, char const *const layoutFileName)
+{
+	Object * const object = ObjectTemplateList::createObject(objectTemplateName);
+	if (!object)
+	{
+		WARNING(true, ("Object template %s specified building layout %s which specified invalid interior object template name %s.  Object will be skipped.", buildingTemplateName, layoutFileName, objectTemplateName.getString()));
+		return 0;
+	}
+
+	ClientObject * const clientObject = object->asClientObject();
+	if (!clientObject)
+	{
+		WARNING(true, ("Object template %s specified building layout %s which specified interior object template name %s of the WRONG CLASS: it created a [%s], which is not a ClientObject.  Object will be skipped.", buildingTemplateName, layoutFileName, objectTemplateName.getString(), typeid(*object).name()));
+		delete object;
+		return 0;
+	}
+
+	return clientObject;
 }
 
 // ----------------------------------------------------------------------
@@ -139,8 +208,9 @@ void ClientInteriorLayoutManager::update()
 			CrcString const & objectTemplateName = interiorLayout->getObjectTemplateName(cellName, objectIndex);
 			Transform const & transform_o2p = interiorLayout->getTransform_o2p(cellName, objectIndex);
 
-			//-- Create the object
-			ClientObject * const interiorObject = safe_cast<ClientObject *>(ObjectTemplateList::createObject(objectTemplateName));
+			//-- Create the object (class-checked; refuses + reports a wrong-class template rather
+			//   than static_cast-ing it into a crash -- see createInteriorLayoutObject)
+			ClientObject * const interiorObject = createInteriorLayoutObject(objectTemplateName, tangibleObject->getObjectTemplateName(), interiorLayout->getFileName().getString());
 			if (interiorObject)
 			{
 				DEBUG_REPORT_LOG(ms_logApplyInteriorLayoutCreates, ("ilf created [%s]\n", objectTemplateName.getString()));
@@ -157,8 +227,6 @@ void ClientInteriorLayoutManager::update()
 				interiorObject->endBaselines();
 				interiorObject->addToWorld();
 			}
-			else
-				DEBUG_WARNING(true, ("Object template %s specified building layout %s which specified invalid interior object template name %s.  Object will be skipped.", tangibleObject->getObjectTemplateName(), interiorLayout->getFileName().getString(), objectTemplateName.getString()));
 
 			if (throttled)
 				--remainingBudget;
@@ -210,8 +278,8 @@ void ClientInteriorLayoutManager::applyInteriorLayout(TangibleObject * const tan
 				CrcString const & objectTemplateName = interiorLayout->getObjectTemplateName(cellName, j);
 				Transform const & transform_o2p = interiorLayout->getTransform_o2p(cellName, j);
 
-				//-- Create the object
-				ClientObject * const object = safe_cast<ClientObject *>(ObjectTemplateList::createObject(objectTemplateName));
+				//-- Create the object (class-checked -- see createInteriorLayoutObject)
+				ClientObject * const object = createInteriorLayoutObject(objectTemplateName, tangibleObject->getObjectTemplateName(), fileName);
 				if (object)
 				{
 					DEBUG_REPORT_LOG(ms_logApplyInteriorLayoutCreates, ("ilf created [%s]\n", objectTemplateName.getString()));
@@ -228,8 +296,6 @@ void ClientInteriorLayoutManager::applyInteriorLayout(TangibleObject * const tan
 					object->endBaselines();
 					object->addToWorld();
 				}
-				else
-					DEBUG_WARNING(true, ("Object template %s specified building layout %s which specified invalid interior object template name %s.  Object will be skipped.", tangibleObject->getObjectTemplateName(), fileName, objectTemplateName.getString()));
 			}
 		}
 		else
