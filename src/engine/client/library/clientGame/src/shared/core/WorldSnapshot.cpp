@@ -136,6 +136,14 @@ namespace WorldSnapshotNamespace
 	// accumulation, not the worst single create.
 	int ms_createTimeBudgetMs = 6;
 
+	//-- 2026-08-07: KILL SWITCH for the restored delete drain
+	//   ([ClientGame/WorldSnapshot] streamOutSnapshotObjects, default true). The drain
+	//   below has never actually deleted anything in this codebase -- its guard read a
+	//   distance key nothing recomputed (see the note in update()) -- so restoring it
+	//   turns on a streaming path that has never run here. Set false to get the
+	//   never-stream-out behaviour back without a rebuild.
+	bool ms_streamOutSnapshotObjects = true;
+
 	//-- CONSULT-60: phased load state. WorldSnapshot::load() used to parse the
 	//   whole .ws + all buildout tables synchronously inside the GroundScene
 	//   constructor (watchdog-convicted 3.1s frame, 2026-07-04). The heavy work
@@ -225,7 +233,24 @@ namespace WorldSnapshotNamespace
 			WARNING(true, ("WorldSnapshot unable to load template [%s]", objectTemplateName));
 			return 0;
 		}
-		return safe_cast<const SharedObjectTemplate*> (ot);	
+
+		//-- 2026-08-07: ObjectTemplateList::fetch resolves ANY template class, and
+		//   safe_cast is a bare static_cast in Release (SafeCast.h:16-18) -- so a node
+		//   naming a class outside the SharedObjectTemplate hierarchy yielded a non-null
+		//   WRONGLY-TYPED pointer that instantiateObject then dereferenced
+		//   (getPortalLayoutFilename, then createObject). Narrow with the VIRTUAL
+		//   asSharedObjectTemplate (0 in the base, ObjectTemplate.cpp:103-113) and fail
+		//   closed. Same defect and same fix as the .ilf create path (528aa999b); the
+		//   caller strips the node from the sphere tree, so this cannot storm.
+		SharedObjectTemplate const * const sharedObjectTemplate = ot->asSharedObjectTemplate ();
+		if (!sharedObjectTemplate)
+		{
+			WARNING(true, ("WorldSnapshot WRONG CLASS template [%s] -- not a SharedObjectTemplate; node skipped", objectTemplateName));
+			ot->releaseReference ();
+			return 0;
+		}
+
+		return sharedObjectTemplate;
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -262,7 +287,23 @@ namespace WorldSnapshotNamespace
 		}
 
 		//-- instantiate the object
-		ClientObject *const object = safe_cast<ClientObject*> (objectTemplate->createObject());
+		//-- 2026-08-07: a template class that does not override createObject() gets the
+		//   BASE new Object(this, cms_invalid) (ObjectTemplate.cpp:155-158) -- a plain
+		//   Object, not a ClientObject -- which the Release safe_cast would not catch.
+		//   Narrow with the virtual asClientObject (0 in the base, Object.cpp:2628-2631)
+		//   and delete the wrongly-classed object rather than hand it to addToWorld.
+		//   delete is safe: it was never added to the world (~Object handles that,
+		//   Object.cpp:846-868) and every caller runs outside the setDisallowObjectDelete
+		//   window, which closes at Game.cpp:1704 before Graphics::present -- i.e. also
+		//   outside it for the toolkit's Present-hook entry into engine_wsAddObject.
+		Object *const created = objectTemplate->createObject();
+		ClientObject *const object = created ? created->asClientObject() : 0;
+		if (created && !object)
+		{
+			WARNING(true, ("WorldSnapshot WRONG CLASS object from template [%s] -- not a ClientObject; node skipped", objectTemplate->getName()));
+			delete created;
+		}
+
 		objectTemplate->releaseReference();
 		objectTemplate=0;
 
@@ -449,6 +490,7 @@ void WorldSnapshot::install ()
 	ms_maximumNumberOfCreatesPerFrame = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "maximumNumberOfCreatesPerFrame", ms_maximumNumberOfCreatesPerFrame);
 	ms_maximumNumberOfDeletesPerFrame = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "maximumNumberOfDeletesPerFrame", ms_maximumNumberOfDeletesPerFrame);
 	ms_createTimeBudgetMs = ConfigFile::getKeyInt("ClientGame/WorldSnapshot", "createTimeBudgetMs", ms_createTimeBudgetMs);
+	ms_streamOutSnapshotObjects = ConfigFile::getKeyBool("ClientGame/WorldSnapshot", "streamOutSnapshotObjects", ms_streamOutSnapshotObjects);
 	ms_wsSelfTestSaveOnLoad = ConfigFile::getKeyBool("ClientGame/WorldSnapshot", "wsSelfTestSaveOnLoad", ms_wsSelfTestSaveOnLoad);
 
 	ExitChain::add (remove, "WorldSnapshot::remove");
@@ -1396,6 +1438,24 @@ void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const
 				}
 			}
 		}
+
+		//-- 2026-08-07: the merge diff above replaced the two-binary_search form kept in
+		//   the #else below, and DROPPED its computeDistanceSquaredTo calls. Nothing else
+		//   ever writes m_distanceSquaredTo (initialised to 0.f,
+		//   WorldSnapshotReaderWriter.cpp:110), so every node reported distance 0 forever:
+		//   the delete guard further down read 0.f < sqr(radius) + 128.f -- ALWAYS true --
+		//   so the drain deleted NOTHING and snapshot objects were never streamed out
+		//   (memory grew monotonically with everywhere the player had been), and both sort
+		//   keys were constant, making the "nearest first" ordering a no-op. Compute
+		//   exactly the set the #else computes: the nodes that go into the two lists.
+		{
+			size_t i;
+			for (i = 0; i < ms_pendingCreateList.size (); ++i)
+				ms_pendingCreateList [i]->computeDistanceSquaredTo (position_w);
+
+			for (i = 0; i < ms_pendingDeleteList.size (); ++i)
+				ms_pendingDeleteList [i]->computeDistanceSquaredTo (position_w);
+		}
 #else
 		//-- anything in the query list that is not in the loaded list must be created
 		ms_pendingCreateList.clear ();
@@ -1566,8 +1626,19 @@ void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const
 		}
 
 		//-- delete all pending deletes
+		if (ms_streamOutSnapshotObjects)
 		{
 			std::sort (ms_pendingDeleteList.begin (), ms_pendingDeleteList.end (), compareNodesForDelete);
+
+			//-- 2026-08-07: standing probe for the restored drain. This path had never
+			//   executed, so it has no field history at all -- report what it actually
+			//   does, in the build everyone runs, rather than discover it from a symptom.
+			//   Reading rule: deleted should track how far the player has moved; refused
+			//   is server-superseded POBs and is expected to be small and steady. A
+			//   [editor.ws] createObject FAILED reason=CEC_objectAlreadyExists appearing
+			//   AFTER a line here is the "stream-out broke re-entry" signature.
+			int deleted = 0;
+			int refused = 0;
 
 			size_t const n = std::min(ms_pendingDeleteList.size(), static_cast<size_t>(ms_maximumNumberOfDeletesPerFrame));
 			for (size_t i = 0; i < n; ++i)
@@ -1581,32 +1652,56 @@ void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const
 				if (node->getDistanceSquaredTo() < sqr(node->getRadius()) + 128.f)
 					continue;
 
-				node->removeFromWorld ();
-
 				//-- find the object
 				Object* const object = NetworkIdManager::getObjectById (NetworkId (static_cast<NetworkId::NetworkIdType> (node->getNetworkIdInt ())));
+
+				//-- 2026-08-07: resolve and REFUSE before any teardown. Until the distance
+				//   key was restored (see the note above) this loop always hit the guard
+				//   above, so its ordering had never executed: it used to call
+				//   removeFromWorld() and drop the node from ms_loadedList even when the
+				//   delete was then refused, leaving the object ALIVE still holding its
+				//   NetworkId. The next approach re-creates, hits CEC_objectAlreadyExists,
+				//   and strips the node from the sphere tree PERMANENTLY -- the exact
+				//   class-1 disappearance f9ce87a21 fixed. A refused node now stays loaded
+				//   and in the world, and is simply retried on a later update.
+				//   asClientObject() rather than safe_cast for the same reason as the
+				//   create path above: safe_cast is a bare static_cast in Release.
+				ClientObject* const clientObject = object ? object->asClientObject () : 0;
+				if (object && (!clientObject || !ContainerInterface::isClientCachedOnly (*clientObject)))
+				{
+					++refused;
+					continue;
+				}
+
+				node->removeFromWorld ();
 
 				//-- destroy the object
 				if (object)
 				{
-					//-- prevent objects that have non-client cached objects within them from being deleted
-					if (ContainerInterface::isClientCachedOnly (*safe_cast<ClientObject*> (object)))
-					{
-						if (object->isInWorld ())
-							object->removeFromWorld ();
-						else
-							DEBUG_WARNING (true, ("WorldSnapshot::update - deleting client cached object %i which is not in the world\n", node->getNetworkIdInt ()));
+					if (object->isInWorld ())
+						object->removeFromWorld ();
+					else
+						DEBUG_WARNING (true, ("WorldSnapshot::update - deleting client cached object %i which is not in the world\n", node->getNetworkIdInt ()));
 
-						delete object;
-					}
+					delete object;
 				}
 				else
 					DEBUG_WARNING (true, ("WorldSnapshot::update - attempted to delete client cached object %i which does not exist\n", node->getNetworkIdInt ()));
 
 				//-- the object is now deleted
 				NodeList::iterator iter = std::find (ms_loadedList.begin (), ms_loadedList.end (), node);
-				IGNORE_RETURN (ms_loadedList.erase (iter));
+				if (iter != ms_loadedList.end ())
+					IGNORE_RETURN (ms_loadedList.erase (iter));
+
+				++deleted;
 			}
+
+			//-- only on an actual state change: a refused node is retried every update
+			//   (server-superseded POBs never become deletable), so logging those too
+			//   would be steady per-frame noise. Their count rides along here, and
+			//   pending= exposes the case where refusals are starving the budget.
+			if (deleted)
+				WS_EDITOR_LOG (("[ws.drain] stream-out: deleted=%d refused=%d pending=%d loaded=%d\n", deleted, refused, static_cast<int> (ms_pendingDeleteList.size ()), static_cast<int> (ms_loadedList.size ())));
 		}
 #if PRODUCTION == 0
 		if (ms_vtuneWorldSnapshotCreates)
@@ -1809,7 +1904,16 @@ void WorldSnapshot::detailLevelChanged ()
 		uint i;
 		for (i = 0; i < saveList.size (); ++i)
 		{
-			const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
+			//-- 2026-08-07: was ms_reader.getNode(i) -- a READER index walked over the
+			//   saveList RANGE, i.e. two different index spaces. It re-added the first
+			//   saveList.size() reader nodes regardless of whether they had handles, so
+			//   an indexed node beyond that range lost its handle permanently (the
+			//   class-1 "stripped" disappearance again), while unindexed nodes inside the
+			//   range -- including removeNode tombstones, which keep a zeroed network id
+			//   and stay enumerable -- were armed as id-0 phantoms. saveList exists for
+			//   exactly this and was otherwise write-only. Latent: the only caller is the
+			//   SwgCuiCommandParserScene dev console command.
+			const WorldSnapshotReaderWriter::Node* const node = saveList [i];
 			node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
 		}
 
@@ -2147,7 +2251,26 @@ extern "C" int __cdecl engine_wsForgetNode (__int64 networkIdInt)
 
 	WorldSnapshot::removeObject (networkIdInt);
 
-	REPORT_LOG (true, ("[editor.ws] wsForgetNode OK id=%I64d (row dropped; live Object untouched)\n", networkIdInt));
+	//-- 2026-08-07 (queued item 6.2): forgetting a node deliberately does NOT un-intern
+	//   its template name, so a placement whose template was NOVEL to this snapshot
+	//   leaves the .ws larger by exactly strlen(templatePath)+1 (measured:
+	//   shared_endor_roba.iff, 44 chars -> 1,400,272 -> 1,400,317) with no node written.
+	//   DECIDED, not overlooked:
+	//     - Nodes reference the OTNL BY INDEX (m_objectTemplateNameIndex), and the table
+	//       is a flat vector<char*> (WorldSnapshotReaderWriter.h:206). Removing an entry
+	//       shifts every later index, so un-interning means reindexing every node in the
+	//       snapshot and rebuilding the crc map -- the exact index-space hazard that the
+	//       detailLevelChanged blind walk in this same file turned out to be.
+	//     - The intern is shared and nothing refcounts it, so a safe removal needs a full
+	//       scan to prove no other node uses the name.
+	//     - The cost is bounded and one-shot: only a template novel to this snapshot pays,
+	//       and re-placing it later is free (the crc map hits).
+	//   The reclaim belongs at WRITE time instead -- the OTNL garbage-collect in
+	//   saveFiltered already recorded as optional polish in the 2026-07-31 .ws size-drift
+	//   close-out. That touches no live index and also subsumes the 325 buildout names.
+	//   It changes serialized bytes, so it is a COORDINATED change: the toolkit holds
+	//   recorded byte baselines and a byte-identical invariant.
+	REPORT_LOG (true, ("[editor.ws] wsForgetNode OK id=%I64d (row dropped; live Object untouched; template name stays interned -- see comment)\n", networkIdInt));
 	return 1;
 }
 
@@ -2515,7 +2638,21 @@ extern "C" __int64 __cdecl engine_wsAddObject (const char* sharedTemplateFilenam
 			return 0;
 		}
 
-		const SharedObjectTemplate* const sharedTemplate = safe_cast<const SharedObjectTemplate*> (fetched);
+		//-- 2026-08-07 (queued item 6.1): fetch resolves ANY template class and safe_cast
+		//   is a bare static_cast in Release -- a consumer template path naming e.g.
+		//   object/draft_schematic/* reached getPortalLayoutFilename through a wrongly
+		//   typed pointer and died on an indirect call read out of string data
+		//   (0xC0000005 DEP at 0x736E6172 = ASCII "rans"). The ten instrumented return-0
+		//   branches around this one never covered it. Narrow FIRST so a bad path is an
+		//   ordinary REFUSED line, and refuse before the id mint so nothing is mutated.
+		const SharedObjectTemplate* const sharedTemplate = fetched->asSharedObjectTemplate ();
+		if (!sharedTemplate)
+		{
+			WS_EDITOR_LOG (("[editor.ws] wsAddObject REFUSED (template-wrong-class): %s (resolved, but not a SharedObjectTemplate)\n", sharedTemplateFilename));
+			fetched->releaseReference ();
+			return 0;
+		}
+
 		const std::string& pobName = sharedTemplate->getPortalLayoutFilename ();
 		if (!pobName.empty ())
 		{
