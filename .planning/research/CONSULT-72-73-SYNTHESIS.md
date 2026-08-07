@@ -101,8 +101,19 @@ comment calls the sequence *"the correct one-click reload"* — the workaround w
 nobody saw the bug under it, us included (we built that shim).
 
 Decisively, **all three expose the rebuild as an explicit user action**, never implicit on scene
-load. That killed the forced-re-parse option: `unload()` calls `ms_reader.clear()`, destroying
-unsaved editor edits. Prior art argued *against* the option it superficially endorsed.
+load. Prior art argued *against* the option it superficially endorsed.
+
+The forced-re-parse option was rejected on: the ~3.1 s parse per editor load, the CONSULT-71
+kept-root residual it re-triggers every time, and the id-allocator hazard from a cleared reader.
+
+> **CORRECTED 2026-08-07 (maintainer).** I also argued it would "silently destroy a modder's unsaved
+> work", and told the consumer their reload button was a data-loss footgun. **Overstated — withdrawn.**
+> The toolkit persists to disk immediately on the persist action, so there is no accumulating list of
+> unpersisted objects. The code fact was right (`unload()` clears `ms_reader`; mutations live there
+> until save); the workflow conclusion drawn from it was not checked against how the consumer's
+> persist actually behaves. **A fifth instance of the round's own recurring error — reasoning from
+> what a mechanism *can* do rather than what it *does* — and the one I made while writing up the
+> lesson about exactly that.** The fix choice is unchanged; the other three reasons carry it.
 
 ## 8. Standing items
 
