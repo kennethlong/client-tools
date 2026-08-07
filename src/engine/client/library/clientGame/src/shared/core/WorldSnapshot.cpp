@@ -193,6 +193,27 @@ namespace WorldSnapshotNamespace
 	void loadOneBuildoutArea (const BuildoutArea& buildoutArea);
 	void finishLoadNow ();
 
+	//-- refusal-reason diagnostics (consumer request 2026-07-18): every fail-closed
+	//   branch of the mutation shims logs ONE line naming the branch + the offending
+	//   value. On-demand editor actions -- no spam risk; PERMANENT by design
+	//   ("silently did nothing" is the failure mode the whole consult exists to
+	//   prevent; Wave 3's save shims inherit the same discipline).
+	//
+	//   Lives HERE, not with the editor shims (moved 2026-08-07): those sit inside the
+	//   `#if !defined(_WIN64)` advertise block, but WorldSnapshot::update -- which now
+	//   names the reason on a create failure too -- is built on BOTH platforms. Defining
+	//   it down there left x64 with a declaration and no definition (LNK2019).
+	const char* const cs_wsCreateErrorCodeNames[] = { "objectAlreadyExists", "orphanedAtOrigin", "mismatchedPobCrc", "tooCloseToOrigin" };
+
+	inline const char* wsCreateErrorCodeName (const CreateErrorCode result)
+	{
+		const int index = static_cast<int> (result);
+		if (index >= 0 && index < static_cast<int> (sizeof (cs_wsCreateErrorCodeNames) / sizeof (cs_wsCreateErrorCodeNames [0])))
+			return cs_wsCreateErrorCodeNames [index];
+
+		return "unknown";
+	}
+
 	//------------------------------------------------------------------------------------------------------------------
 
 	const SharedObjectTemplate *fetchObjectTemplate(const WorldSnapshotReaderWriter& reader, const WorldSnapshotReaderWriter::Node* const node)
@@ -390,6 +411,12 @@ namespace WorldSnapshotNamespace
 }
 
 using namespace WorldSnapshotNamespace;
+
+//-- Editor/diagnostic log line. REPORT_LOG, not DEBUG_REPORT_LOG: every one of these
+//   exists precisely because the failure it reports is only ever seen in a Release
+//   build. Moved up from the editor-shim block (2026-08-07) so the engine-side probes
+//   in update() and suppressObject can use the same sink and prefix as the shims.
+#define WS_EDITOR_LOG(printfArgs) REPORT_LOG (true, printfArgs)
 
 #if !defined(_WIN64)
 //-- Goal B Wave 3: file-scope forward declaration for the loadStep self-test
@@ -676,6 +703,95 @@ void WorldSnapshot::load (char const *sceneName)
 	if (_stricmp (sceneName, ms_sceneName.c_str ()) == 0)
 	{
 		DEBUG_REPORT_LOG (true, ("WorldSnapshot::load - %s is currently loaded\n", sceneName));
+
+		// ====================================================================
+		// CONSULT-73 (2026-08-07): RE-ARM the proximity index before returning.
+		//
+		// The prologue above restores ms_loadedList so update() will re-create
+		// everything -- but ONLY for nodes that are still in ms_sphereTree. Two
+		// separate mechanisms leave a node OUT of that index with no way back,
+		// because the early return we are standing in skips the re-parse that
+		// would rebuild it (only engine_wsUnloadSnapshot clears ms_sceneName):
+		//
+		//   1. STRIPPED. suppressObject (:1614) drops the handle when the server
+		//      streams a POB the snapshot already spawned -- correct for that
+		//      session, the server copy supersedes ours. A failed create
+		//      (:1373-1375, e.g. CEC_objectAlreadyExists) and the event paths
+		//      (:1770, :1821) strip it too.
+		//   2. NEVER INDEXED. The PP_sphereTree gate (:1034-1040) skips buildout
+		//      POB roots entirely when NOT single-player, because the server was
+		//      going to stream them.
+		//
+		// Both are right while connected and both are WRONG the moment we
+		// re-enter the same scene offline as an editor scene: no server will
+		// stream any of it, so those buildings simply never exist. Measured
+		// 2026-08-07: log in, then load an editor scene, and Mos Eisley is a
+		// near-empty hole (tangible sphere tree held 1 object -- the player);
+		// on a fresh process that never logged in, the same load is perfect.
+		// Class 2 is what empties the CITY, class 1 is what removes individual
+		// authored buildings -- a fix covering only class 1 would leave the
+		// city broken, so this re-evaluates the gate rather than undoing strips.
+		//
+		// Re-evaluating the gate under the CURRENT mode reproduces exactly what
+		// a fresh-process parse of this scene would have indexed: in an editor
+		// scene Game::getSinglePlayer() is true (set by engine_gameLoadScene
+		// before setScene), the first disjunct short-circuits, and every live
+		// root is armed. While connected it is a near no-op -- suppressed nodes
+		// that legitimately failed the gate stay suppressed.
+		//
+		// !isDeleted() IS LOAD-BEARING, not hygiene: removeNode tombstones a
+		// node IN PLACE (WorldSnapshotReaderWriter.cpp:134-139 zeroes the handle
+		// AND the network id, sets m_deleted) and leaves it in the node list, so
+		// it still enumerates here. Arming those would inject id-0 phantoms into
+		// the spawn set.
+		//
+		// Skipped entirely while a parse is in flight: no strip can have
+		// happened yet (every strip path forces finishLoadNow first) and
+		// PP_sphereTree does NOT test handle==0 before addObject (:1039), so
+		// arming ahead of it would double-insert and leak the first entry.
+		// ====================================================================
+		if (!ms_parsePending)
+		{
+			//-- match unload()'s reset (:632) so a re-entered scene re-defers event
+			//   objects from scratch instead of accumulating duplicate map entries
+			ms_eventObjectMap.clear ();
+
+			int reArmedStripped = 0;
+			int reArmedBuildout = 0;
+
+			int const numberOfNodes = ms_reader.getNumberOfNodes ();
+			for (int i = 0; i < numberOfNodes; ++i)
+			{
+				const WorldSnapshotReaderWriter::Node* const node = ms_reader.getNode (i);
+				if (!node || node->isDeleted () || node->getSpatialSubdivisionHandle ())
+					continue;
+
+				//-- the PP_sphereTree gate (:1034-1040), re-evaluated under the CURRENT mode
+				bool const isBuildoutExcluded =
+					isInSet (ms_buildoutObjects, node->getNetworkIdInt ())
+					&& !(node->getPortalLayoutCrc () == 0 && node->getContainedByNetworkIdInt () == 0);
+
+				if (Game::getSinglePlayer () || !isBuildoutExcluded)
+				{
+					node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+
+					if (isBuildoutExcluded)
+						++reArmedBuildout;   // class 2: gate never indexed it (connected parse)
+					else
+						++reArmedStripped;   // class 1: it was indexed once and stripped
+				}
+			}
+
+			//-- NOT behind a probe key. This is rare (once per same-scene re-entry) and it is
+			//   the discriminator for the failure both reviewers feared most: "fix lands, bug
+			//   persists" when a surviving NetworkId makes every re-armed create fail and get
+			//   re-stripped at :1373-1375. Silence here after an editor load means the re-arm
+			//   never ran; big numbers followed by an empty world means the creates are failing.
+			if (reArmedStripped > 0 || reArmedBuildout > 0)
+				REPORT_LOG (true, ("[ws.load] same-scene re-arm: %d stripped + %d buildout node(s) re-indexed (singlePlayer=%d, scene=%s)\n",
+					reArmedStripped, reArmedBuildout, Game::getSinglePlayer () ? 1 : 0, sceneName));
+		}
+
 		return;
 	}
 
@@ -1374,6 +1490,21 @@ void WorldSnapshot::update(CellProperty const * const cellProperty, Vector const
 					ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
 					node->setSpatialSubdivisionHandle (0);
 
+					//-- 2026-08-07 (CONSULT-73): this strip is PERMANENT for the process -- the
+					//   node leaves the proximity index and cannot be created again until a
+					//   re-parse or the same-scene re-arm in load(). Every diagnostic below it
+					//   is a DEBUG_WARNING, i.e. nothing at all in the build anyone runs, so a
+					//   node could vanish from the world for a stated reason that reached no
+					//   human. This is also the predicted failure mode of the re-arm itself:
+					//   if a NetworkId survives the outgoing-scene teardown, every re-armed
+					//   node fails CEC_objectAlreadyExists here and is stripped straight back
+					//   out -- an empty world that looks identical to the bug being unfixed.
+					//   Bounded: a node can only fail once per arming (the strip stops retries).
+					WS_EDITOR_LOG (("[editor.ws] createObject FAILED: id=%I64d [%s] reason=%s -- node dropped from sphere tree (permanent until re-parse/re-arm)\n",
+						node->getNetworkIdInt (),
+						ms_reader.getObjectTemplateName (node->getObjectTemplateNameIndex ()),
+						wsCreateErrorCodeName (result)));
+
 					switch (result)
 					{
 					case CEC_objectAlreadyExists:
@@ -1615,6 +1746,15 @@ void WorldSnapshot::suppressObject (const int64 networkIdInt)
 	{
 		ms_sphereTree.removeObject (node->getSpatialSubdivisionHandle ());
 		node->setSpatialSubdivisionHandle (0);
+
+		//-- 2026-08-07: this used to strip in TOTAL SILENCE, in every build. It is a
+		//   permanent, process-lifetime edit to the proximity index -- the node can
+		//   never be created again until a re-parse or the CONSULT-73 re-arm -- and
+		//   that invisibility cost a full day of investigation: the effect (buildings
+		//   absent from an editor scene entered after a login) was measurable while
+		//   the cause left no trace anywhere, in any log, in a shipping build.
+		//   REPORT_LOG, not DEBUG_*: Release is the only build this is ever seen in.
+		WS_EDITOR_LOG (("[editor.ws] suppressObject: id=%I64d handle dropped (server copy supersedes; node kept)\n", networkIdInt));
 	}
 }
 
@@ -2306,26 +2446,9 @@ namespace WorldSnapshotNamespace
 
 //-------------------------------------------------------------------
 
-//-- refusal-reason diagnostics (consumer request 2026-07-18): every fail-closed
-//   branch of the mutation shims logs ONE line naming the branch + the offending
-//   value. On-demand editor actions -- no spam risk; PERMANENT by design
-//   ("silently did nothing" is the failure mode the whole consult exists to
-//   prevent; Wave 3's save shims inherit the same discipline).
-namespace WorldSnapshotNamespace
-{
-	const char* const cs_wsCreateErrorCodeNames[] = { "objectAlreadyExists", "orphanedAtOrigin", "mismatchedPobCrc", "tooCloseToOrigin" };
-
-	const char* wsCreateErrorCodeName (const CreateErrorCode result)
-	{
-		const int index = static_cast<int> (result);
-		if (index >= 0 && index < static_cast<int> (sizeof (cs_wsCreateErrorCodeNames) / sizeof (cs_wsCreateErrorCodeNames [0])))
-			return cs_wsCreateErrorCodeNames [index];
-
-		return "unknown";
-	}
-}
-
-#define WS_EDITOR_LOG(printfArgs) REPORT_LOG (true, printfArgs)
+//-- (wsCreateErrorCodeName + its name table moved to the WorldSnapshotNamespace block at the
+//   top of this file on 2026-08-07 -- it is now used by WorldSnapshot::update, which builds on
+//   x64 too, and this location is inside the Win32-only advertise guard.)
 
 extern "C" __int64 __cdecl engine_wsAddObject (const char* sharedTemplateFilename, const float* transform12, __int64 containedById)
 {
