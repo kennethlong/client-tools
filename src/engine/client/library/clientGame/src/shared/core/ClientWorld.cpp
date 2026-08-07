@@ -1675,6 +1675,31 @@ Object const * ClientWorld::findClosestCellObjectFromWorldPosition(Vector const 
 	//                              ctor's `getSinglePlayer() || !getScene()`
 	//                              branch (ClientObject.cpp:296), so this is the
 	//                              reading to expect if that gate ever changes.
+	//
+	// 2026-08-07: added tree=T/N/F, the OCCUPANCY of all three tangible sphere
+	// trees (tangible / tangibleNotTargetable / tangibleFlora). candidates=0
+	// alone says only "this query found nothing" -- it does not distinguish
+	// three very different worlds, and the toolkit's editor-scene defect
+	// (candidates=0 at a position physically inside a building, offline only,
+	// never server-connected) sits on exactly that ambiguity:
+	//   tree=0/0/0              -> nothing is in ANY tangible tree. Whole-world
+	//                              population failure; the building is not the
+	//                              interesting part of the story.
+	//   tree=0/N>0/...          -> the trees are populated but the TANGIBLE one
+	//                              is empty. Objects are being routed to the
+	//                              wrong notification (this function only ever
+	//                              queries ms_tangibleSphereTree), which reads
+	//                              as candidates=0 while everything looks fine.
+	//   tree=T>0/...            -> the tangible tree is healthy and THIS BUILDING
+	//                              specifically is absent from it. A per-object
+	//                              add failure -- note the add gate is
+	//                              `getSpatialSubdivisionHandle() == 0` (:382),
+	//                              so an object holding a stale handle can never
+	//                              be re-added. removeFromWorld nulls it (:400);
+	//                              clearSphereTree (:238-251) does NOT, and runs
+	//                              in Release even though its warning does not.
+	// Printed on BOTH outcomes so a HIT gives the healthy baseline to compare
+	// the WORLD reading against.
 	// ------------------------------------------------------------------------
 	static int const s_logCellAtPosition = ConfigFile::getKeyInt("ClientGame/ClientWorld", "logCellAtPosition", 0);
 	int portalsSeen = 0;
@@ -1700,8 +1725,9 @@ Object const * ClientWorld::findClosestCellObjectFromWorldPosition(Vector const 
 					cellObject = &(cell->getOwner());
 
 					if (s_logCellAtPosition)
-						REPORT_LOG(true, ("[cellAtPos] HIT pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d cell=%s building=%lld\n",
+						REPORT_LOG(true, ("[cellAtPos] HIT pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d tree=%d/%d/%d cell=%s building=%lld\n",
 							position_w.x, position_w.y, position_w.z, static_cast<int>(objects.size()), portalsSeen,
+							ms_tangibleSphereTree.getObjectCount(), ms_tangibleNotTargetableSphereTree.getObjectCount(), ms_tangibleFloraSphereTree.getObjectCount(),
 							cell->getCellName() ? cell->getCellName() : "(null)",
 							static_cast<long long>(object->getNetworkId().getValue())));
 
@@ -1714,8 +1740,10 @@ Object const * ClientWorld::findClosestCellObjectFromWorldPosition(Vector const 
 	}
 
 	if (s_logCellAtPosition && cellObject == &(CellProperty::getWorldCellProperty()->getOwner()))
-		REPORT_LOG(true, ("[cellAtPos] WORLD pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d idValid=0 rejectedForId=%d\n",
-			position_w.x, position_w.y, position_w.z, static_cast<int>(objects.size()), portalsSeen, cellsRejectedForId));
+		REPORT_LOG(true, ("[cellAtPos] WORLD pos=<%1.2f,%1.2f,%1.2f> candidates=%d portals=%d tree=%d/%d/%d idValid=0 rejectedForId=%d\n",
+			position_w.x, position_w.y, position_w.z, static_cast<int>(objects.size()), portalsSeen,
+			ms_tangibleSphereTree.getObjectCount(), ms_tangibleNotTargetableSphereTree.getObjectCount(), ms_tangibleFloraSphereTree.getObjectCount(),
+			cellsRejectedForId));
 
 	return cellObject;
 }
