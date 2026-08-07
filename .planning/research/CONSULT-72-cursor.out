@@ -1,0 +1,163 @@
+﻿# CONSULT-72 (Cursor angle) — Offline vs connected predicate enumeration
+
+Scope: object creation → `endBaselines` / `addToWorld` → `ClientWorld::*Notification::addToWorld` → `ms_tangibleSphereTree.addObject`. Only predicates whose **evaluated value differs** between (a) offline `setSinglePlayer(true)` + `Game::setScene(true,…)` and (b) live-server scene entry are listed. Same-value gates are omitted.
+
+Legend: **(a)** = offline single-player scene; **(b)** = server-connected scene.
+
+---
+
+## 0. Global mode flag (upstream of everything)
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `engine_advertise.cpp:331` | `Game::setSinglePlayer(true)` before load | executed | not executed | Sets `Game::ms_singlePlayer` true for entire offline session |
+| `SwgCuiLoginScreen.cpp:434` | `Game::setSinglePlayer(false)` on login proceed | not reached (offline shim bypasses login) | executed | Clears single-player before avatar/cluster flow |
+| `Game.h:322-324` / `Game.cpp:403` | `Game::getSinglePlayer()` → `ms_singlePlayer` | **true** | **false** | Every downstream `getSinglePlayer()` branch below |
+
+---
+
+## 1. Scene entry / GroundScene construction
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `Game.cpp:1776-1777` | `SinglePlayerSceneCreator` ctor path | taken | not taken | (a) → `GroundScene(terrain, playerFilename, customizedPlayer)` at `Game.cpp:222` |
+| `Game.cpp:1793-1794` | `MultiPlayerSceneCreator` ctor path | not taken | taken | (b) → `GroundScene(terrain, playerOID, templateName, startPosition, …)` at `Game.cpp:270-277` |
+| `Game.cpp:223` | `SinglePlayerSceneCreator::getPlayerNetworkId()` returns `NetworkId()` | empty id | N/A | Player gets no pre-assigned server id in (a) |
+| `Game.cpp:281` | `MultiPlayerSceneCreator::getPlayerNetworkId()` returns `m_playerNetworkId` | N/A | server-assigned id | Player id fixed before scene exists in (b) |
+| `GroundScene.cpp:900` | `m_disableWorldSnapshot(ConfigClientGame::getDisableWorldSnapshot())` | config default | N/A (different ctor) | Source of snapshot disable flag differs |
+| `GroundScene.cpp:1009` | `m_disableWorldSnapshot(disableSnapshot)` | N/A | server `CmdStartScene` flag (`GameNetwork.cpp:636`) | Server can disable snapshot entirely in (b) |
+| `GroundScene.cpp:905` | `m_receivedSceneReady(true)` // single-player ctor | **true** | N/A | Loading UI treats server as ready immediately |
+| `GroundScene.cpp:1014` | `m_receivedSceneReady(false)` // multiplayer ctor | N/A | **false** until `CmdSceneReady` | `updateCuiLoading` playerReady gate blocked until server message (`GroundScene.cpp:1890`) |
+| `GroundScene.cpp:933` | `if (!player)` (load avatar from file) | may run | N/A (multi always creates from template) | Avatar creation path |
+| `GroundScene.cpp:949` | `player->setPosition_p(ConfigClientGame::getSinglePlayerStartLocation())` | executed | not executed (uses server start pos at `GroundScene.cpp:1052`) | Player initial cell/query position for first `WorldSnapshot::update` |
+| `GroundScene.cpp:966-969` | `player->endBaselines(); if (!player->isInWorld()) player->addToWorld()` | executed in single-player ctor | **not executed** in multi ctor | (a) player enters world before first frame; (b) player world-add deferred to server `SceneEndBaselines` → `handleEndBaselines` |
+| `GroundScene.cpp:977` | `safe_cast<PlayerCreatureController *>(controller)->setAuthoritative(true)` | executed | not executed | Player object `isAuthoritative()` true in (a), false until server says otherwise in (b) |
+| `GroundScene.cpp:1050-1054` | `player->setNetworkId(playerOID)` | not executed | executed | Player NetworkId source |
+| `GroundScene.cpp:283-284` | `MultiPlayerSceneCreator::beginDeferredCreation()` → `GameNetwork::beginDeferringConnectionServerMessages()` when cutscene defers | N/A | may run if cutscene active (`Game.cpp:1837-1838`) | (b) can buffer incoming `SceneCreateObject` during deferred scene creation |
+| `GameNetwork.cpp:901-904` | `if (s_instance->m_connectionServer)` inside defer begin/end | false | true (when connected) | Deferral is no-op offline |
+
+---
+
+## 2. WorldSnapshot load / parse / proximity index (`ms_sphereTree`)
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `WorldSnapshot.cpp:224` | `if (!Game::getSinglePlayer() \|\| !ConfigClientGame::getWorldSnapshotIgnorePobChanges())` before POB CRC check | **false** short-circuit if `getWorldSnapshotIgnorePobChanges()` true → CRC skipped | **true** (first clause) → CRC enforced unless config overrides | Failed CRC → `instantiateObject` returns 0 / `CEC_mismatchedPobCrc` (`WorldSnapshot.cpp:236-237`); object never created |
+| `WorldSnapshot.cpp:1034-1037` | `if ( isSinglePlayer \|\| isInSet(ms_buildoutObjects, node->getNetworkIdInt()) == false \|\| ( node->getPortalLayoutCrc() == 0 && node->getContainedByNetworkIdInt() == 0 ) )` before `ms_sphereTree.addObject(node)` | **true** for all nodes (`isSinglePlayer` true) | **false** for buildout POB nodes in `ms_buildoutObjects` (inserted at `WorldSnapshot.cpp:948`) unless top-level non-portal exception | (b) buildout buildings are **excluded** from snapshot proximity tree; (a) they are **included**. Determines which nodes `WorldSnapshot::update` can create via `ms_sphereTree.findInRange` (`WorldSnapshot.cpp:1217`) |
+| `WorldSnapshot.cpp:1195-1196` | `if (ms_parsePending) return;` in `update()` | same mechanism; timing may differ | same | No snapshot creates until parse completes — affects when buildings first become eligible |
+| `WorldSnapshot.cpp:257-261` | `if (NetworkIdManager::getObjectById(...) != 0)` in `createObject` | false on first create | false on first create; **true** if snapshot object already replaced by server copy | Returns `CEC_objectAlreadyExists`, object not created, sphere handle stripped (`WorldSnapshot.cpp:1373-1375`) |
+| `WorldSnapshot.cpp:285` | `object->setClientCached()` | always executed for snapshot creates | same for snapshot creates | Marks object `isClientCached()==true` (`ClientObject.cpp:1416-1418`) |
+| `WorldSnapshot.cpp:606-614` | `bool const serverOwnedRoot = (clientObject != 0) && !ContainerInterface::isClientCachedOnly(*clientObject); if (serverOwnedRoot) … else delete object` in `unload()` | **false** for snapshot-only roots (all client-cached) | **true** for server-streamed roots still live during in-place reload | (b) can skip deleting live server objects on snapshot unload; (a) always deletes client-cached roots |
+| `ContainerInterface.cpp:553-554` | `if (!clientObject->isClientCached()) return false;` inside `isClientCachedOnly` | snapshot tree: all cached → true | server NPC in cell → false | Drives unload guard above and delete drain below |
+| `WorldSnapshot.cpp:1462-1469` | `if (ContainerInterface::isClientCachedOnly(*safe_cast<ClientObject*>(object))` in update delete drain | true → delete allowed | false (server-owned subtree) → **no delete** | (b) prevents snapshot-driven deletion of server-populated buildings |
+
+---
+
+## 3. ClientObject construction / NetworkId
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `ClientObject.cpp:296-300` | `if (Game::getSinglePlayer() \|\| !Game::getScene()) { setNetworkId(getNextFakeNetworkId()); … }` | **true** (single-player clause) at ctor time | **false** during in-scene server create (`getScene()` non-null, single-player false) | (a) transient fake id assigned then overwritten by snapshot id at `WorldSnapshot.cpp:287`; (b) id stays invalid until `setNetworkId` at `GroundScene.cpp:2597` |
+| `ClientObject.cpp:363-364` | `if (!ms_viewer) addNotification(notification)` | not established to differ between (a) and (b) | same | If true, skips `TangibleNotification` entirely — would block sphere-tree registration. Same binary/config → treat as same value unless proven otherwise |
+| `ClientObject.h:82` | Default notification = `ClientWorld::getTangibleNotification()` | same for `BuildingObject`/`TangibleObject` chain | same | POB buildings target `ms_tangibleSphereTree` unless template class overrides (e.g. `StaticObject.cpp:24` → `TangibleNotTargetableNotification`) |
+
+---
+
+## 4. Controller / authoritative / world-add side paths
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `ClientController.cpp:277` | `NetworkController::setAuthoritative(true)` in `ClientController` ctor | true for snapshot-created objects (`WorldSnapshot.cpp:288` → `createDefaultController`) | N/A at this site | Snapshot buildings are authoritative |
+| `GroundScene.cpp:2599-2600` | `if (controller) controller->setAuthoritative(false)` after `SceneCreateObject` | N/A (no server create messages) | **executed** | Server-streamed buildings are non-authoritative |
+| `ClientObject.cpp:1039` | `if (!isAuthoritative() && isInitialized())` in `handleContainerChangeWithWorld` | **false** for snapshot objects (authoritative) → entire block skipped | **true** for server objects after init | (b) container deltas can call `addToWorld()`/`removeFromWorld()` here (`ClientObject.cpp:1069-1073`); (a) snapshot objects rely on explicit `addObjectToWorld` |
+| `ClientObject.cpp:986` | `if (m_clientCached \|\| !isLocal)` in `depersistContainedBy` | true for snapshot objects | false for authoritative server deltas with `isLocal==true` | Different container sync path on containment changes |
+| `WorldSnapshot.cpp:337-338` / `WorldSnapshot.cpp:1369` | snapshot path: `endBaselines()` then `addObjectToWorld` → `object->addToWorld()` | always for snapshot creates | same when snapshot creates (non-buildout) | Immediate world+sphere registration |
+| `GroundScene.cpp:2861-2868` | `SceneEndBaselines` message → `handleEndBaselines(target)` | **never** (no server) | **executed** per object | Primary world-add trigger for server-streamed objects |
+| `GroundScene.cpp:3858-3863` | `if (!target->isInWorld() && (!containedBy \|\| (containedBy->isInWorld() && container->isContentItemExposedWith(*target)))) target->addToWorld()` | N/A offline unless manually invoked | gates server `addToWorld` | Server building not added until container exposed |
+
+---
+
+## 5. Server-only object creation / replacement (absent in (a))
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `GameNetwork.cpp:633-639` | `if (m_acceptSceneCommand)` in `receiveCmdStartScene` | never receives message | true after login flow | (b) only path for `MultiPlayerSceneCreator` |
+| `GroundScene.cpp:2528-2544` | `if (clientObject->isClientCached())` on duplicate `SceneCreateObject` | false (no message) | true when server replaces snapshot copy | Deletes client-cached object, calls `WorldSnapshot::suppressObject` — building recreated as server object |
+| `GroundScene.cpp:2656-2658` | `if (clientObject->isClientCached())` on `SceneDestroyObject` | N/A | true → destroy ignored | Server cannot remove snapshot placeholder |
+| `GroundScene.cpp:2590-2602` | `if (!existingObject)` → create + `beginBaselines()` (no immediate `addToWorld`) | N/A | executed for server objects | Creation without immediate sphere registration; waits for `SceneEndBaselines` |
+
+---
+
+## 6. `ClientWorld` spatial registration (`ms_tangibleSphereTree`)
+
+These gates are **identical code** in both modes; values differ only if upstream state differs.
+
+| File:line | Predicate (as written) | (a) typical POB | (b) typical POB | Behaviour change |
+|---|---|---|---|---|
+| `ClientWorld.cpp:382` | `if ((!object.isChildObject()) && (object.getSpatialSubdivisionHandle() == 0))` in `TangibleNotification::addToWorld` | must both be true to register | same | If false, **no** `ms_tangibleSphereTree.addObject` — yields `candidates=0` at `ClientWorld.cpp:1656` |
+| `Object.cpp:1072-1076` | `if (m_inWorld) return;` in `Object::addToWorld` | false first call | false first call | Early return prevents notification dispatch |
+| `Object.cpp:1091` | `m_notificationList->addToWorld(*this)` | dispatches all notifications | same | Only path into `TangibleNotification::addToWorld` |
+
+No `getSinglePlayer()` predicate exists in `ClientWorld.cpp` registration itself.
+
+---
+
+## 7. Loading / update pump (feeds snapshot create rate)
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `GroundScene.cpp:1853` | `bool const hasPlayerObject = (Game::getPlayerObject() != NULL) \|\| Game::getSinglePlayer()` in `isFinishedLoading` | **true** via second clause (no `PlayerObject` ghost) | depends on `Game::getPlayerObject()` | (a) loading screen can finish without server `PlayerObject` |
+| `GroundScene.cpp:1948-1962` | `if (Game::getSinglePlayer() && m_currentView == CI_debugPortal)` vs else branch for `WorldSnapshot::update(…)` | debug-portal branch available | always player-cell branch | Different cell/position passed to snapshot query (only when debug-portal view in (a)) |
+| `GroundScene.cpp:2094-2098` | `if ((!Game::isClient() \|\| …) && !m_sentSceneChannel)` → `WorldSnapshot::update` + `GameNetwork::setSceneChannel()` | `setSceneChannel` no-op (`GameNetwork.cpp:429` — no connection) | sends `CmdSceneReady` + prefs to server | (b) triggers server object streaming after loading |
+| `GroundScene.cpp:2154-2157` | `if (!Game::getSinglePlayer()) GameNetwork::send(NewbieTutorialResponse("clientReady"))` | skipped | executed | Post-load server handshake only in (b) |
+
+---
+
+## 8. TangibleObject ctor (object creation, not spatial tree)
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `TangibleObject.cpp:323-324` | `if (Game::getSinglePlayer()) m_maxHitPoints = 1000` | executed | not executed | HP default only offline; no direct sphere-tree effect |
+
+---
+
+## 9. Interior layout (client-only children — evidence #5)
+
+| File:line | Predicate (as written) | (a) | (b) | Behaviour change |
+|---|---|---|---|---|
+| `ClientInteriorLayoutManager.cpp:248-249` | `if (!ms_disableLazyInteriorLayoutCreation \|\| ms_disableInteriorLayouts) return` | same config | same | No mode split |
+| `ClientInteriorLayoutManager.cpp:227-228` | `interiorObject->endBaselines(); interiorObject->addToWorld()` | runs when building `addToWorld` fires (`BuildingObject.cpp:55-64`) | same | **No `getSinglePlayer()` gate** — explains evidence #5 (decorations present) independent of POB sphere-tree membership |
+
+Interior layout objects use template-default notifications (`createInteriorLayoutObject` at `ClientInteriorLayoutManager.cpp:121`); not established to differ by mode.
+
+---
+
+## 10. NetworkId validity at cell-resolution time (downstream of creation, not creation itself)
+
+| File:line | Predicate (as written) | (a) snapshot POB | (b) server/streamed POB | Behaviour change |
+|---|---|---|---|---|
+| `ClientWorld.cpp:1723` | `if (containingCellId.isValid())` in `findClosestCellObjectFromWorldPosition` | valid if cell owner got id from snapshot `setNetworkId` (`WorldSnapshot.cpp:287`) | valid from server baselines | Probe `rejectedForId` path; evidence says `rejectedForId=0` so **not the active failure mode** |
+| `ClientObject.cpp:296-298` | fake NetworkId for cell objects created before scene | cells created as snapshot children get real ids from node, not fake-id path | server cells from baselines | Cell `NetworkId` validity depends on create path, not single-player flag at probe time |
+
+---
+
+## Structural path summary (not a predicate, but mode-defining)
+
+| Stage | (a) offline | (b) connected |
+|---|---|---|
+| Building source | `WorldSnapshot::update` → `createObject` → `addObjectToWorld` only | Buildout POBs: `SceneCreateObject` + `SceneEndBaselines` → `handleEndBaselines` → `addToWorld`; non-buildout may still use snapshot |
+| Proximity index | All `.ws` nodes in `ms_sphereTree` (`isSinglePlayer` true) | Buildout POBs excluded from `ms_sphereTree` (`WorldSnapshot.cpp:1034-1037`) |
+| Authoritative at add | `true` (ClientController default) | `false` (explicit at `GroundScene.cpp:2600`) |
+| Player world-add | Immediate in ctor (`GroundScene.cpp:966-969`) | Deferred to server end-baselines |
+
+---
+
+## Opinion (clearly separated)
+
+**Most likely asymmetry relevant to `candidates=0` with evidence #5–#6 (building exists, interior decor exists, snapshot reload fixes):**
+
+The predicate at `WorldSnapshot.cpp:1034-1037` is the only mode-splitting gate that directly controls whether a buildout POB enters the snapshot **proximity** index in (b) but not (a). That alone does not explain offline failure (it makes offline *more* inclusive).
+
+Given evidence #5 (interior layout ran → `BuildingObject::addToWorld` at `BuildingObject.cpp:55-57` executed) but evidence #1 (`candidates=0` → POB absent from `ms_tangibleSphereTree`), the failure is almost certainly **after** object creation, at the `TangibleNotification::addToWorld` gate (`ClientWorld.cpp:382`) or a stale `getSpatialSubdivisionHandle()` (noted at `ClientWorld.cpp:1696-1699`). **No predicate in that gate reads `getSinglePlayer()`** — so the offline/connected split must be explained by **different upstream state** reaching the same gate (timing/order, double `ClientWorld::install`, stale handle, or wrong notification list), not by a single-player branch in the registration code itself.
+
+The snapshot reload repair (evidence #3) is consistent with `WorldSnapshot::load` same-scene re-stream (`WorldSnapshot.cpp:648-679`) forcing a second `addObjectToWorld` pass after `ms_loadedList.clear()`, which would re-hit `TangibleNotification::addToWorld` if the handle was 0 — **mechanism not fully established from static analysis alone**; needs paired probe of `getSpatialSubdivisionHandle()` and `isChildObject()` at first vs post-reload `addToWorld` for the cantina id.

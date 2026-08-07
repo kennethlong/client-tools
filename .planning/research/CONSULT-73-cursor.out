@@ -1,0 +1,155 @@
+﻿# CONSULT-73 — design choice analysis
+
+## 1. Is the worry in (b) real? Can zero-handle classes be distinguished?
+
+**Yes, the worry is real for naive (b). No, handle == 0 alone is not distinguishable. Gate re-evaluation dissolves the objection only when scoped to the editor path.**
+
+### What the gate actually does
+
+`PP_sphereTree` iterates **root nodes only** (`ms_reader.getNumberOfNodes()` / `getNode(i)`), not the full subtree map (`WorldSnapshot.cpp:1023-1040`). A node is inserted into `ms_sphereTree` iff:
+
+```1034:1040:src/engine/client/library/clientGame/src/shared/core/WorldSnapshot.cpp
+					const bool isSinglePlayer = Game::getSinglePlayer();
+					if ( isSinglePlayer
+						|| isInSet( ms_buildoutObjects, node->getNetworkIdInt() ) == false
+						|| ( node->getPortalLayoutCrc() == 0 && node->getContainedByNetworkIdInt() == 0 ) )
+					{
+						node->setSpatialSubdivisionHandle (ms_sphereTree.addObject (node));
+					}
+```
+
+In connected (non–single-player) mode, the deliberately excluded class is: **root node, id ∈ `ms_buildoutObjects`, and NOT `(portalLayoutCrc == 0 && containedBy == 0)`** — i.e. buildout POB roots with a portal CRC (`WorldSnapshot.cpp:1034-1037`, set populated at `WorldSnapshot.cpp:948`).
+
+Children (`containedBy != 0`) are never sphere-tree indexed here; they spawn via parent recursion / cell-fill (`WorldSnapshot.cpp:330`, `WorldSnapshot.cpp:1420-1431`, `WorldSnapshot.cpp:2457-2458`).
+
+### Can stripped vs never-added be distinguished at re-arm time?
+
+| Signal | Stripped (added → removed) | Never-added (gate failed) |
+|--------|---------------------------|---------------------------|
+| `getSpatialSubdivisionHandle()` | `0` | `0` |
+| Separate suppression flag on `Node` | **Not established** — only field is `m_spatialSubdivisionHandle` (`WorldSnapshotReaderWriter.cpp:313-323`) | same |
+| `suppressObject` side effect | strips handle only (`WorldSnapshot.cpp:1614-1617`); no other node state | N/A |
+
+**Handle == 0 is ambiguous.** There is no per-node tombstone bit separate from the handle.
+
+### Gate re-evaluation
+
+The gate **is** re-evaluable: it depends only on `Game::getSinglePlayer()`, `ms_buildoutObjects` (retained across same-scene early-return — `WorldSnapshot.cpp:1055-1061`, not cleared in the prologue at `670-673`), and per-node fields (`WorldSnapshot.cpp:1034-1037`).
+
+Behavior by mode:
+
+- **Connected re-eval (still `getSinglePlayer() == false`):** a stripped node that passed at initial parse **passes again**; a never-added buildout POB root **still fails**. That partially separates the classes, but in the wrong direction for connected play — it would resurrect server-suppressed buildings (`GroundScene.cpp:2539-2543`, `WorldSnapshot.cpp:1606-1617`).
+- **Editor re-eval (`getSinglePlayer() == true`, set before `setScene` at `engine_advertise.cpp:331`):** first disjunct is always true (`WorldSnapshot.cpp:1034-1035`), so **every non-deleted root** qualifies — which is exactly what a fresh-process editor parse would have done. The “never-added vs stripped” distinction becomes irrelevant; both should be armed.
+
+### Correct re-arm predicate
+
+Run **only on the editor transition** (same-scene early-return path), **after** the prologue at `670-673`, **not** during connected same-scene re-stream:
+
+```
+for each root node i in [0, ms_reader.getNumberOfNodes()):
+  node = ms_reader.getNode(i)
+  skip if node->isDeleted()                          // tombstones: WorldSnapshotReaderWriter.cpp:203-205
+  skip if node->getSpatialSubdivisionHandle() != 0   // already indexed
+  skip if !Game::getSinglePlayer()                 // scope guard — do NOT re-arm while connected
+  if ( isSinglePlayer
+    || !isInSet(ms_buildoutObjects, node->getNetworkIdInt())
+    || (node->getPortalLayoutCrc() == 0 && node->getContainedByNetworkIdInt() == 0) )
+    node->setSpatialSubdivisionHandle(ms_sphereTree.addObject(node))
+```
+
+When `getSinglePlayer()` is already true (editor), the inner `if` is tautological — the operative guards are: **root-only iteration, not deleted, handle == 0, single-player scope**.
+
+**Blind `handle == 0 → addObject` without the gate and without the single-player scope is unsafe** — it would index buildout POB roots that the connected parse deliberately excluded (`WorldSnapshot.cpp:1034-1040`).
+
+---
+
+## 2. What breaks under (b)?
+
+### Duplicate creation / `CEC_objectAlreadyExists`
+
+`createObject` refuses if the NetworkId is already live (`WorldSnapshot.cpp:257-260`). On failed create, `update()` strips the handle permanently (`WorldSnapshot.cpp:1373-1375`, case at `1379-1380`).
+
+The same-scene prologue **depends** on the caller having destroyed outgoing world objects first (`WorldSnapshot.cpp:661-669`). `engine_gameLoadScene` now does `close()` + `delete` on the outgoing `GroundScene` before `setScene` (`engine_advertise.cpp:354-360` → `~GroundScene` → `ClientWorld::remove()` at `GroundScene.cpp:1132`). If any NetworkId survives that teardown, re-armed nodes hit `CEC_objectAlreadyExists` and get stripped again — **same failure mode as the documented shim defect** (`WorldSnapshot.cpp:666-667`).
+
+The CONSULT-71 server-owned-root skip applies to `unload()`’s delete loop (`WorldSnapshot.cpp:606-614`), not to this path. **Not established** whether connected-then-editor leaves server-owned ids registered after `ClientWorld::remove()`; if it does, (b) silently re-tombstones those nodes.
+
+### `ms_loadedList` bookkeeping
+
+Prologue clears `ms_loadedList` and calls `ms_reader.removeFromWorld()` before the early return (`WorldSnapshot.cpp:670-671`). Re-arming handles after that is consistent: `update()` diffs `ms_queryList` (from sphere tree) against empty `ms_loadedList` and queues creates (`WorldSnapshot.cpp:1217`, `1228-1246`, `1363-1370`). `addObjectToWorld` repopulates `ms_loadedList` (`WorldSnapshot.cpp:371-377`).
+
+### `ms_parsePending` window
+
+`update()` bails until parse completes (`WorldSnapshot.cpp:1195-1196`). Same-scene early-return after a connected session implies parse finished long ago. If re-arm ran while `ms_parsePending`, `PP_sphereTree` could still run later and double-add — **not established** as reachable on the reported repro path. `suppressObject`/`removeObject` call `finishLoadNow()` when parse is pending (`WorldSnapshot.cpp:1610-1611`); the same discipline before re-arm would be prudent.
+
+### Re-arming during a live connected scene
+
+**Unsafe.** `suppressObject` exists precisely to prevent re-create for the session (`WorldSnapshot.cpp:1594-1604`, `GroundScene.cpp:2539-2543`). Re-arming under `getSinglePlayer() == false` would undo server supersession for any node that originally passed the gate. Re-arm must be tied to the editor entry (`engine_advertise.cpp:331`), not a general `WorldSnapshot` API.
+
+### Other (b) footguns
+
+- **`detailLevelChanged` is not a model for (b):** it only re-adds nodes that previously had handles (`WorldSnapshot.cpp:1657-1673`) — it cannot repair gate-excluded or stripped nodes.
+- **Child nodes:** walking the full id map instead of root indices would add nodes that were never sphere-tree indexed — wrong (`WorldSnapshot.cpp:1023-1040` vs `2457-2458`).
+
+---
+
+## 3. What breaks under (a)?
+
+### Beyond ~3.1 s
+
+**Unsaved in-memory `ms_reader` edits are destroyed.** `unload()` calls `ms_reader.clear()` (`WorldSnapshot.cpp:639-640`). Editor mutations (`engine_wsAddObject` at `WorldSnapshot.cpp:2450+`, `engine_wsSetNodeTemplateName` at `WorldSnapshot.cpp:2978+`, `engine_wsRemoveNode` at `WorldSnapshot.cpp:2584+`) live in `ms_reader` until `engine_wsSaveSnapshot` persists them. A forced re-parse reloads from disk and drops those nodes.
+
+Also cleared/rebuilt on full unload+load:
+
+- `ms_buildoutObjects` (`WorldSnapshot.cpp:467`, then repopulated during parse)
+- `ms_wsEditGeneration` bumped (`WorldSnapshot.cpp:449-450`) — editor cache/undo invalidation by design
+- Preloaded templates (`WorldSnapshot.cpp:470-476`)
+
+### Re-entrancy / ordering vs shim teardown
+
+Safe ordering for (a): **destroy outgoing scene first**, then force non–early-return (GodClient pattern: `load("")` then `load(sceneId)` — `BuildoutAreaListView.cpp:100-102`, or `engine_wsUnloadSnapshot` — `engine_advertise.cpp:2946-2953` / `WorldSnapshot.cpp:2946-2953`).
+
+Calling `unload()`/`wsUnloadSnapshot` **before** outgoing-scene teardown would run `unload()`’s live-object delete loop against a populated world (`WorldSnapshot.cpp:479-614`) — the CONSULT-71 failure mode (`WorldSnapshot.cpp:567-577`).
+
+Calling `ms_sceneName.clear()` alone without routing through `unload()` + reparse would **not** rebuild `ms_sphereTree` — insufficient.
+
+### Same-scene re-stream conflation
+
+Option (a) implemented as unconditional `ms_sceneName` clear on every `load()` would break the deliberate same-scene re-stream path documented at `WorldSnapshot.cpp:651-659` (re-create from parsed `ms_reader` without re-paying parse cost). (a) must be **scoped to `engine_gameLoadScene` only**, not all `WorldSnapshot::load` callers (`GroundScene.cpp:1388`).
+
+---
+
+## 4. Third options
+
+| Option | Idea | Assessment |
+|--------|------|------------|
+| **(b′) Scoped gate re-arm** | In same-scene early-return branch, if `getSinglePlayer()`, re-apply `PP_sphereTree` gate to `handle == 0` roots | **Best tradeoff.** Near-free, preserves `ms_reader` edits, matches fresh-editor parse semantics. |
+| **(c) Suppression registry** | `suppressObject` records ids; editor clears registry and re-arms only those | Fixes stripped nodes but **not** gate-never-added buildout roots unless combined with gate re-eval anyway (`WorldSnapshot.cpp:1034-1037`). Strictly more complex than (b′) for no gain. |
+| **(a′) Editor-only forced re-parse** | GodClient `load("")`/`load(scene)` or `wsUnloadSnapshot` before `setScene` in shim only | Correct but pays ~3.1 s and nukes unsaved edits (`WorldSnapshot.cpp:640`). |
+| **Scene-scoped suppression** | Stop using handle strip as tombstone; track suppression per scene/generation | Correct architecturally, but touches `suppressObject`, failed-create strip (`1373-1375`), and every caller — large diff for this bug. |
+| **`detailLevelChanged`-style full rebuild** | Re-run sphere tree for all nodes | Still skips gate-failed nodes today (`1657-1663`); would need gate rewrite — same as (b′) but touches more code. |
+
+Nothing obviously better than **(b′)** was found that is both boring and minimal.
+
+---
+
+## 5. Recommendation
+
+**Recommend (b′): scoped gate re-arm on the same-scene early-return path when `Game::getSinglePlayer()` is true** — ideally in the `WorldSnapshot.cpp:676-679` branch, immediately after the prologue at `670-673`, before `return`.
+
+Rationale:
+
+- Fixes the confirmed defect (stripped handles survive into editor) without ~3.1 s re-parse (`WorldSnapshot.cpp:676-680`).
+- Preserves unsaved in-memory editor state in `ms_reader` (unlike (a) / `ms_reader.clear()` at `640`).
+- Does not disturb connected same-scene re-stream (`getSinglePlayer() == false` → no re-arm; suppressed nodes stay suppressed — `GroundScene.cpp:2539-2543`).
+- Matches fresh-process editor semantics (`engine_advertise.cpp:331` + gate with `isSinglePlayer` true at `1034-1035`).
+- SwgGodClient’s forced re-parse (`BuildoutAreaListView.cpp:100-102`) is precedent for correctness, not a mandate to pay parse cost on every editor load.
+
+### Failure mode I would most fear from (b′)
+
+**Incomplete world teardown:** a re-armed node’s NetworkId still registered after `engine_gameLoadScene`’s outgoing-scene delete (`engine_advertise.cpp:354-360`). Create fails → handle stripped again at `1373-1375` → buildings still absent, with only a `DEBUG_WARNING` (`1379-1380`) and the same silent emptiness the experiment already saw (`WorldSnapshot.cpp:666-667`). This is the highest-probability “fix lands but bug persists” path.
+
+Mitigation to verify (not implement here): after re-arm, spot-check that cantina ids are in `ms_sphereTree` **and** that `NetworkIdManager::getObjectById` misses for those ids before the first `update()` drain.
+
+---
+
+**Not established:** whether any production path other than `engine_gameLoadScene` sets `getSinglePlayer(true)` and then hits same-scene `WorldSnapshot::load` early-return (`Game.cpp` / `Game.h:322-329` only show the accessor; `setSinglePlayer` call sites beyond `engine_advertise.cpp:331` were not exhaustively verified in this pass). If such a path exists, (b′)’s scope guard would need narrowing (e.g. an explicit “editor snapshot reset” flag set only by the shim).
