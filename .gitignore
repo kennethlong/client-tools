@@ -91,6 +91,16 @@ src/build/win32/.vs/*
 # dir-exclusion would prevent git from descending into the negated child).
 stage/*
 !stage/override/
+# EXCEPTION TO THE EXCEPTION (2026-08-07): the SWG-Toolkit's LIVE editor
+# working data under stage/override/ -- the .ws snapshot, derived building
+# templates (object/building/toolkit/edit_*.iff) and .ilf interior layouts it
+# edits at runtime. The toolkit owns these (their byte baselines are recorded
+# consumer-side); committing them here would let a later checkout/merge/sync
+# from the live upstream silently overwrite in-progress editing state. The
+# shader/texture override payload elsewhere in stage/override/ stays tracked.
+stage/override/interiorlayout/
+stage/override/object/
+stage/override/snapshot/
 
 # x64 runtime staging dir -- the 64-bit analogue of stage/ (exe, gl0x dlls, .cso
 # shader cache, crash dumps, Miles redist, generated cfgs, profiling). Build
