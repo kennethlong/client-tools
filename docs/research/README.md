@@ -8,6 +8,12 @@ verdicts.
 The HTML versions of these documents (with mermaid diagrams) live one level up
 in `docs/*.html`.
 
+> **Looking for what THIS fork changed in the client?** See
+> [`../FORK-CHANGES.md`](../FORK-CHANGES.md) — the full catalogue of this repo's changes vs
+> upstream SWG-Source (toolchain, x64, the D3D11 renderer, performance, crash fixes, audio,
+> diagnostics, the editor contract, and the data/override layer). The root `README.md` is
+> deliberately left as upstream's file, unmodified, so periodic syncs merge clean.
+
 ## Index
 
 | File | Question answered |
@@ -54,6 +60,7 @@ These deep-dives complement the higher-level guides:
 
 | If you want… | Read… |
 | --- | --- |
+| What this fork changes vs upstream SWG-Source | [`../FORK-CHANGES.md`](../FORK-CHANGES.md) |
 | Repo layout and what's in each top-level directory | [`../../CLAUDE.md`](../../CLAUDE.md) |
 | Cluster/process architecture overview | `docs/architecture.html` |
 | Per-server roles | `docs/servers.html` |
