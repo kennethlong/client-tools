@@ -70,6 +70,7 @@ ENGINE_HOOKPOINT(config,        getModalChat)
 ENGINE_HOOKPOINT(client,        clientMain)
 ENGINE_HOOKPOINT(client,        wndProc)
 ENGINE_HOOKPOINT(client,        writeMiniDump)
+ENGINE_HOOKPOINT(client,        advertisedArchBits)   // v34: int (void) -- provider pointer width (32/64); the consumer's fail-closed arch assert
 
 // -- game (clientGame, all static; Game.h) ----------------------------------
 ENGINE_HOOKPOINT(game,          install)
@@ -184,6 +185,7 @@ ENGINE_HOOKPOINT(object,        getPosition_w)
 ENGINE_HOOKPOINT(object,        setPosition_w)
 ENGINE_HOOKPOINT(object,        getAppearance)
 ENGINE_HOOKPOINT(object,        setAppearance)
+ENGINE_HOOKPOINT(object,        setScale)             // v34: void (const Vector&) non-virtual [Object.h:228] -- closes the consumer's D-09 gap
 ENGINE_HOOKPOINT(object,        move_p)
 
 // -- objectTemplate (sharedObject/sharedGame) -------------------------------

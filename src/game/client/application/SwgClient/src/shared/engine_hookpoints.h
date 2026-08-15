@@ -434,7 +434,30 @@
 // them will now fault, and should re-resolve after every loadScene. Calling your own
 // close+delete first is still safe: the shim no-ops when getScene() is already null.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 33
+// ----------------------------------------------------------------------
+// Bumped 33 -> 34 in the DUAL-ARCH wave (2026-08-15, answering the consumer's
+// x64 CHANGE-REQUEST). The headline is not a name change: the WHOLE surface now
+// builds and exports on x64 as well (identical 162-name set on both arches;
+// binding stays by GetProcAddress NAME -- the x64 ordinal happens to land at 82
+// like Win32, but nothing may rely on ordinals). Two NAME ADDs:
+//   client::advertisedArchBits -- extern "C" int __cdecl (void), returns the
+//     provider pointer width in bits (32/64), compile-time per-arch. Ask #5:
+//     the consumer's export-absent fallback seeds x86 SWGEmu RVA literals and
+//     there is NO legacy x64 client, so their x64 agent fails closed on a
+//     missing export -- and asserts the arch from the table itself when present.
+//   object::setScale -- &Object::setScale via pmfToVoid (non-virtual,
+//     out-of-line [Object.h:228 / Object.cpp:2205]; Vector is a 3-float POD by
+//     const&, the setPosition_w boundary shape). Ask #4 / their D-09 gap: their
+//     rva_table deliberately seeds nullptr for it pending this row.
+// x64 ABI facts consumers need (full detail in the 2026-08-15 dual-arch
+// PROVIDER-HANDBACK): __thiscall consumer typedefs work UNCHANGED on x64 (the
+// keyword is inert; this in RCX); the Win32 __fastcall dummy-EDX thunks take NO
+// dummy on x64 (the same __thiscall typedef matches both, by construction);
+// version/count stay 32-bit; entries sits at offset 8 in EngineHookPoints on
+// BOTH arches; EngineHookPoint rows are 2 pointers (8 bytes Win32 / 16 x64);
+// EngineWsNodeInfo keeps the identical frozen 80-byte layout. 162 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 34
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

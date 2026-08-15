@@ -969,6 +969,22 @@ extern "C" int __cdecl engine_getSceneId(char * buf, int cap)
 }
 
 // ----------------------------------------------------------------------
+// client::advertisedArchBits -- the consumer's fail-closed arch assert (v34,
+// the 2026-08-15 dual-arch wave; consumer CHANGE-REQUEST ask #5). Returns the
+// provider's pointer width in bits (32 / 64), a compile-time per-arch constant.
+// WHY: the consumer's export-absent fallback path seeds x86 SWGEmu RVA
+// literals; on x64 there is no legacy client, so an x64 agent must FAIL CLOSED
+// when the surface is missing -- and when it IS present, this row lets the
+// agent assert "this table is the x64 contract" from the table itself instead
+// of inferring it from the PE header. CALLED, thread-safe anywhere (pure
+// constant), pre-CRT-safe like the rest of the fill.
+// ----------------------------------------------------------------------
+extern "C" int __cdecl engine_getAdvertisedArchBits(void)
+{
+	return static_cast<int>(sizeof(void *) * 8);
+}
+
+// ----------------------------------------------------------------------
 // The advertised table. CANONICAL FORM (pinned 2026-06-21): NO null-pair
 // sentinel terminator row; count = sizeof/sizeof (NO -1). 37-02/03 MUST NOT
 // reintroduce a sentinel. Per-row symbol kind is noted in the comment.
@@ -989,6 +1005,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "client::clientMain",           (void *)&ClientMain },                       // int ClientMain(HINSTANCE,HINSTANCE,LPSTR,int) __cdecl [ClientMain.h:13]
 	{ "client::wndProc",              (void *)&engine_osWindowProc },              // 38-02: external __stdcall/CALLBACK shim in Os.cpp over the PRIVATE Os::WindowProc [Os.h:138] (friend-granted member access); CALLBACK preserved
 	{ "client::writeMiniDump",        (void *)&engine_writeMiniDump },             // 38-02: external shim in DebugHelp.cpp over DebugHelp::writeMiniDump [DebugHelp.h:36] (win32-private header not on the exe include path)
+	{ "client::advertisedArchBits",   (void *)&engine_getAdvertisedArchBits },     // v34 NEW: int (void) -- provider pointer width in bits (32/64), compile-time per-arch. The consumer's fail-closed arch assert (their x64 agent must never fall back to x86 RVA literals); shim above
 	// OMIT (38-02, D-04 / Pitfall 5): client::writeCrashLog + client::setupStartDataInstall are NONEXISTENT in this tree (grep = 0 source hits). The crash .txt is written INLINE by SetupSharedFoundation's exception handler [SetupSharedFoundation.cpp:92 sprintf] -- no named writeCrashLog function; setupStartDataInstall is a SWGEmu Pre-CU concept with no from-source twin. NOT advertised (never guessed); FLAGGED for the EPA-08 handback.
 
 	// -- game (clientGame, all static; Game.h) ---------------------------------
@@ -1104,6 +1121,7 @@ static EngineHookPoint s_engineHookPoints[] =
 	{ "object::setPosition_w", 0 },         // void setPosition_w(const Vector&) [Object.h:247]
 	{ "object::getAppearance", 0 }, // OVERLOADED (const/non-const) [Object.h:170-171]
 	{ "object::setAppearance", 0 },         // void setAppearance(Appearance*) [Object.h:174]
+	{ "object::setScale", 0 },              // v34 NEW (consumer D-09 gap): void setScale(const Vector&) NON-virtual non-inline [Object.h:228 / Object.cpp:2205]. Vector is a 3-float POD by const& -- same boundary shape as setPosition_w/move_p
 	{ "object::move_p", 0 },                // void move_p(const Vector&) NON-virtual non-inline [Object.h:251]
 
 	// -- objectTemplate (sharedObject base static + sharedGame SharedObjectTemplate) --
@@ -1453,6 +1471,7 @@ static void ensureDynamicRowsFilled()
 		{ "object::setPosition_w",                   pmfToVoid(&Object::setPosition_w) },
 		{ "object::getAppearance",                   pmfToVoid(static_cast<Appearance * (Object::*)()>(&Object::getAppearance)) },
 		{ "object::setAppearance",                   pmfToVoid(&Object::setAppearance) },
+		{ "object::setScale",                        pmfToVoid(&Object::setScale) },   // v34 (D-09)
 		{ "object::move_p",                          pmfToVoid(&Object::move_p) },
 		{ "objectTemplate::getAppearanceFilename",   pmfToVoid(&SharedObjectTemplate::getAppearanceFilename) },
 		{ "objectTemplate::getPortalLayoutFilename", pmfToVoid(&SharedObjectTemplate::getPortalLayoutFilename) },
