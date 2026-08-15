@@ -1459,6 +1459,33 @@ namespace StallWatchdogNamespace
 
 	DWORD WINAPI stallWatchdogThreadProc(LPVOID)
 	{
+		//-- PRE-WARM the symbol handler before any stall can happen. Symbolization
+		//   runs inline on THIS thread, and the first lookup pays SymInitialize plus
+		//   a SYMOPT_DEFERRED_LOADS PDB load (SwgClient_r.pdb is ~336 MB) -- ~600 ms.
+		//   Paid lazily inside the first stall, that cost starves the 20 ms sample
+		//   cadence and the LONGEST stall of every session ends up with exactly ONE
+		//   sample, while later stalls of the same size get 20+. Measured 2026-08-15:
+		//   713 ms/1 sample and 721 ms/1 sample for the first stall of two sessions.
+		//   Here it costs nothing -- no stall is in flight and the main thread is
+		//   never suspended for symbolization.
+		if (s_maxStackSamples > 0)
+		{
+			LARGE_INTEGER warmStart;
+			QueryPerformanceCounter(&warmStart);
+			if (installStackSampler())
+			{
+				// force the deferred PDB load with one throwaway resolve of a known
+				// in-image address (this function's own code)
+				char warmText[352];
+				formatStackFrame(reinterpret_cast<uintptr_t>(&stallWatchdogThreadProc), warmText, sizeof(warmText));
+				LARGE_INTEGER warmEnd;
+				QueryPerformanceCounter(&warmEnd);
+				stallLog("stack sampler pre-warmed in %.0f ms (%s)",
+					1000.0 * static_cast<double>(warmEnd.QuadPart - warmStart.QuadPart) / static_cast<double>(s_qpcFrequency),
+					warmText);
+			}
+		}
+
 		LONG   sampledIndex = 0;   // frame that already got sample 1
 		int    samplesTaken = 0;
 		LONG64 stalledStart = 0;   // heartbeat of the frame being sampled
