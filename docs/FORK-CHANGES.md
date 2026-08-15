@@ -233,10 +233,12 @@ without a consumer attached.
 The client-side code changes above are self-contained, but `gl11` needs a small authored data
 payload, layered through the stock `searchPath` mechanism rather than baked into a `.tre`:
 
-- **94 tracked files** under `stage/override/`: 11 pixel + 9 vertex programs (HLSL re-authors of
-  the original assembly assets, with `PSRC`-swapped `.psh` for texren/emissive/nebula/ui_radar),
-  72 textures (the nebula skybox family and detail maps), `planet_tatooine.pln`, and a merged
-  `datatables/interior/interior.iff` carrying the interior-fog fix.
+- **94 tracked files** under `stage/override/`: 8 pixel + 9 vertex programs (HLSL re-authors of
+  selected assembly assets, with `PSRC`-swapped `.psh` for texren/emissive/nebula/ui_radar) plus
+  3 generator scripts, 72 textures (the nebula skybox family and detail maps),
+  `planet_tatooine.pln`, and a merged `datatables/interior/interior.iff` carrying the
+  interior-fog fix. Note this is a hand-picked subset: the renderer additionally relies on a
+  runtime fallback path for the remaining D3D9 assembly shader programs.
 - **`tools/tre-compare/`** — a standalone, zero-engine-imports byte-diff tool that can regenerate
   the "what changed vs stock and why" manifest for that payload, and lets anyone verify the data
   claims independently.

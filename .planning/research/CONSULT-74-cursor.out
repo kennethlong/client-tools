@@ -1,0 +1,159 @@
+﻿Sources: Repo A = `D:\Code\swg-client-v2` (HEAD); Repo B = `D:\Code\Galaxies-Reborn\client-tools` @ `origin/x64-dx11-vanilla` (file:line verified against the squash tree where paths match). Base = `949451032`.
+
+---
+
+## 1. Pointer-width / 64-bit correctness
+
+### 1a. Pointer-to-int / width storage
+
+| Hazard | Repo A (file:line) | Repo B (file:line) | Same site? |
+|--------|-------------------|-------------------|------------|
+| Path-search mark slot (pointer in int) | `PathNode.h:107` `intptr_t m_marks[4]`; `PathSearch.cpp:188-199` `intptr_t mark` + `reinterpret_cast<intptr_t>` | `PathNode.h:99` `int m_marks[4]`; `PathSearch.cpp` still `int` mark path | **YES — A widened, B did not** |
+| Win32 `this` in window userdata | `StatusWindow.cpp:151` `SetWindowLongPtr`/`GWLP_USERDATA`/`LONG_PTR` | `StatusWindow.cpp:151` (same API, slimmer comments) | Convergent |
+| Hash/sort key from shader template ptr | `StaticShader.cpp:298` `std::hash<uintptr_t>{}(...)` | `StaticShader.cpp:289` `reinterpret_cast<int>(&getStaticShaderTemplate())` | **YES — A hashes, B truncates high bits** |
+| Call-stack storage | `DebugHelp.h` + `CallStack.*`: `uintptr_t*` (Phase 31/33); `DebugHelp.cpp:511+` `RtlCaptureContext`, full `Rip` | `DebugHelp.cpp:484` `uint64 *callStack`; commit `70cbe9566` widens buffers | Convergent goal; **A adds OOM minidump reserve (`DebugHelp.cpp:424-427`) B removed** |
+| IOCP completion key | `TcpClient.cpp:523` `ULONG_PTR completionKey` | Same file touched; B line set equivalent | Convergent |
+| Freed-poison sentinel | `ByteStream.cpp:350` `reinterpret_cast<uintptr_t>` vs `0xefef…ULL` | Not present (base `unsigned int` compare) | **A only** |
+| Trait-routed bind cast | `VoidBindSecond.h:33` `if constexpr (is_pointer_v && is_integral_v)` | Same file touched; B keeps simpler form | A stricter |
+| MemoryManager address logging | Phase 31 sweep (`MemoryManager.cpp` etc.) | `MemoryManager.cpp` touched in x64 port | Partial overlap |
+
+### 1b. `unsigned long` / `size_t` / format-string hazards
+
+| Hazard | Repo A | Repo B | Same site? |
+|--------|--------|--------|------------|
+| `Archive.h` `std::map` count | `Archive.h:195-201` `uint32_t numKeys`; put `Archive.h:389-398` + `assert` | `Archive.h:226-232` `int numKeys`; put `Archive.h:432` `static_cast<int>` | **YES — A `uint32_t`, B `int`; both 4-byte wire** |
+| `AutoDeltaMap` baseline count member | `AutoDeltaMap.h:99` `uint32_t baselineCommandCount`; put `362-363` | `AutoDeltaMap.h` `size_t baselineCommandCount`; put casts `static_cast<uint32_t>` | **YES — A pins member type, B pins at put/get only** |
+| Packed-map command counts (**wire**) | `UnicodeAutoDeltaPackedMap.cpp:25-26,60-64` **`size_t`**; `NetworkIdAutoDeltaPackedMap.cpp:25,54-58`; `AutoDeltaNetworkIdPackedMap.h:37,67-71` **`size_t`** | `UnicodeAutoDeltaPackedMap.cpp:25-26,60-64` **`int32_t`**; same pattern in `AutoDeltaNetworkIdPackedMap.h` / `NetworkIdAutoDeltaPackedMap.cpp` (commit `e0d46921e`) | **YES — critical divergence (§2)** |
+| `Archive` 8-byte overload visibility | `uint64` get/put only in `NetworkIdArchive.cpp:21-45` + decl `NetworkIdArchive.h:25-28` | `Archive.h:59-70` inline `unsigned long long` get/put (covers `size_t`/`uint64` on LLP64) | **YES — B centralizes; side effect enabled packed-map bug until `e0d46921e` fix** |
+| `%d` on `size_t` | Phase 31 escape-valve: 8 sites → `%p` (e.g. `CuiCombatManager.cpp:1891` `size_t pos`) | Not systematically catalogued | A broader sweep |
+| Log pointer as `%08x` | Phase 31 `%p` migration across engine | Residual in places | A ahead |
+
+### 1c. Alignment / padding / struct layout
+
+| Site | Repo A | Repo B |
+|------|--------|--------|
+| TGA on-disk layout | `TargaFormat.cpp:100-102` `static_assert(sizeof…)` + `offsetof` | Not added |
+| Asset customization IFF structs | `AssetCustomizationManager.cpp:111-116` five `static_assert` + `offsetof(CrcLookupEntry,assetId)==4` | Not added |
+| AutoDelta wire counts | Pinned `uint32_t` (above) | Pinned via casts; member still `size_t` in B |
+
+### 1d. Hashes keyed on pointers
+
+| Site | A | B |
+|------|---|---|
+| Static shader sort key | `StaticShader.cpp:298` `hash<uintptr_t>` | `StaticShader.cpp:289` pointer→`int` |
+
+### 1e. Inline asm removal
+
+| Site | Repo A | Repo B |
+|------|--------|--------|
+| FPU control | `FloatingPointUnit.cpp` — `_controlfp_s` + `#if !defined(_M_X64)` precision write (Phase 31) | `FloatingPointUnit.cpp:119-138` **`__asm fnstcw/fldcw` retained under `#if defined(_M_IX86)` only** |
+| SSE math | `SseMath.cpp` — all `__asm` → `_mm_*` | `SseMath.cpp` — ported (comments reference former `__asm`) |
+| Matrix multiply | `Transform.cpp` — naked SSE **removed** | `Transform.cpp:281-286` **`__declspec(naked)` + `__asm` SURVIVES** |
+| Byte swap | `ByteOrder.cpp` `_byteswap_*` | Ported (comment only) |
+| Debug stack walk | `DebugHelp.cpp:511+` `#if _M_X64` `RtlCaptureContext`; **32-bit keeps `__asm`** | `DebugHelp.cpp:499-506` **`RtlCaptureContext` for all bitness** (drops x86 `__asm` block) |
+| Skinning | `SoftwareBlendSkeletalShaderPrimitive.cpp` `_mm_*` | Ported |
+| Memory hooks / regex / render services | `MemoryManagerHook.cpp`, `RegexServices.cpp`, `RenderWorldServices.cpp` — normal functions | Same files touched |
+| Tool-only asm | `ShaderBuilder/*.cpp:97+` `__asm int 3` (both trees, not boot path) | Same |
+| Headless hooks | N/A | `Headless/MemoryManagerHook.cpp:26+` still naked asm in package (marked “x64 port” comment) |
+
+**Boot-path asm gap (B):** `Transform.cpp:281+` is still x64-illegal if `TRY_FOR_SSE` is enabled in x64 builds.
+
+---
+
+## 2. Network / archive serialization
+
+### Problem the split solves (both trees — convergent)
+
+| Mechanism | Evidence |
+|-----------|----------|
+| **Compile/link hygiene** — move heavy `Archive::get/put` specializations out of public headers into `.cpp` | New: `AuctionQueryArchive.cpp`, `ClientCentralMessagesArchive.cpp`, `AIDebuggingMessagesArchiveTypes.h`, etc. (identical file set in both diffs vs `949451032`) |
+| **Type isolation** — message structs separated from archive logic | e.g. `AuctionQueryTypes.h:18-34` struct fields explicitly `int32`/`int64` |
+| **Duplicate `uint64` symbols** — B documents moving overloads into `Archive.h` | `NetworkIdArchive.cpp:19-24` (B): “removed to avoid duplicate-symbol clash”; A keeps impl in `NetworkIdArchive.cpp:21-45` |
+| **`PackedArchive.{h,cpp}`** | Both trees: thin `PackedTransform` adapter only (`PackedArchive.cpp:20-30`) — **not** the network-message split |
+
+Base `949451032` had **no** `include/public/.../AuctionQueryArchive.h`; both forks introduced the same split pattern independently.
+
+### Wire-format comparison
+
+| Layer | On-wire contract | Repo A | Repo B | Protocol risk |
+|-------|------------------|--------|--------|---------------|
+| Generic `AutoDeltaMap` pack/unpack | 4-byte counts | `AutoDeltaMap.h:362-363,537-538` `uint32_t` | `AutoDeltaMap.h` `static_cast<uint32_t>` on put; unpack `uint32_t commandCount` | **Low — aligned** |
+| `Archive.h` `std::map` | 4-byte count | `uint32_t` | `int` (4-byte overload) | **Low** |
+| **`AutoDeltaPackedMap` specializations** (Unicode / NetworkId string maps) | **4-byte** counts on 32-bit server | **`size_t` → on x64 binds `uint64` 8-byte get/put** (`UnicodeAutoDeltaPackedMap.cpp:60-64`, `NetworkIdAutoDeltaPackedMap.cpp:54-58`) | **`int32_t` explicit** (`UnicodeAutoDeltaPackedMap.cpp:25-26,60-64`) per `e0d46921e` | **HIGH for A on x64** — pack/unpack misaligns stream by 4 bytes per map delta |
+| `NetworkId` / `int64` payloads | 8-byte | Both: 8-byte via `NetworkIdArchive` | Same | **Low** |
+| B-only defensive reads | — | — | `Archive.h` `std::string`/`ByteStream` get throws `ReadException` if `size > remaining` | No wire change; hardens malformed packets |
+
+**Repo A gap to close:** apply B’s `e0d46921e` pattern to `UnicodeAutoDeltaPackedMap.cpp`, `NetworkIdAutoDeltaPackedMap.cpp`, `AutoDeltaNetworkIdPackedMap.h` (and verify no other `size_t` count getters bind the 8-byte overload on x64).
+
+---
+
+## 3. Third-party / legacy SDK (build vs runtime)
+
+| Dependency | Repo A — BUILD | Repo A — RUNTIME import | Repo B — BUILD | Repo B — RUNTIME |
+|------------|---------------|------------------------|---------------|------------------|
+| **Legacy DirectX SDK (June 2010)** | **Removed** from shipping path; x64 uses Windows SDK `d3d9.lib`/`d3dcompiler.lib` (`Direct3d9.vcxproj:299-321`) | Staged binaries: **no `d3dx9_*.dll`** (evidence pack §2) | **Required**: `deps/build-prerequisites/README.md:32-33` `DXSDK_DIR`; `d3dx9.lib` on gl05 x64 (`Direct3d9.vcxproj` x64 link blocks) | Docs require **`d3dx9_43.dll`** in System32 (`docs/x64-gameplay-client.md`) |
+| **D3DCompile** | `d3dcompiler.lib` + postbuild `d3dcompiler_47.dll` (`Direct3d9.vcxproj:177,337`) | `d3dcompiler_47.dll` next to exe | `d3dcompiler.lib` on gl11 | Same pattern |
+| **dpvs** | Win32: DLL staged; **x64: static `dpvs.lib`** in client link | Win32 DLL / x64 static | **`deps/x64/lib/dpvs.lib`** + link in SwgClient x64 (`Build-X64Client.ps1:59`) | Linked statically x64 |
+| **Miles** | Win32: vendored **7.2a**; x64: **9.3v** `mss64.dll` (`SwgClient.vcxproj:377-386`) | Real audio | **JUCE 8 default**; `mss64-stub/` for link-only profile per evidence §3 | JUCE/WASAPI runtime; stubs if Miles profile |
+| **JUCE** | None | — | Vendored `src/external/3rd/library/JUCE-8.0.14` | WASAPI backend |
+| **SDL3** | None | — | `deps/x64/lib/SDL3.lib`, headers (`Build-X64Client.ps1:52-55`) | `SDL3.dll` staged |
+| **Qt** | Win32 upstream paths only; **editors not x64** | — | **God client**: `deps/qt3-win64-src` + `Build-X64Qt3.ps1` (PE verify) | God client validated (`docs/god-client.md`) |
+| **libMozilla** | Removed from x64 SwgClient link (`SwgClient.vcxproj:323` comment) | Not imported x64 | **`libMozilla.lib` still in x64 SwgClient link** (grep line ~205) | Stub or legacy browser path |
+| **Vivox** | Dropped x64 | — | `deps/x64/lib/vivoxSharedWrapper.lib` | Wrapper linked |
+| **libxml2 / pcre / zlib / jpeg** | x64: `libxml2-x64.lib`, `pcre-x64.lib`, `jpeg62-x64.lib` | Ship with client / system | Vendored under `deps/x64/lib/` | `deps/x64/bin/*.dll` for some |
+| **Bink** | Late-bound; dropped from x64 link | Optional | Still in dependency lists (Win32 heritage) | Optional |
+
+---
+
+## 4. Build system
+
+| Axis | Repo A | Repo B |
+|------|--------|--------|
+| **Central MSBuild** | Per-project; **`src/build/win32/x64-platform.props:45-54`** (`stdcpp20`, `/we4311` `/we4312`) | **`Directory.Build.props:7-17`** (default `Platform=x64`, `deps\x64`); **`Directory.Build.targets:3-14`** (OutDir, `gl05_`/`gl11_`/`gl00_` naming) |
+| **Toolset / std** | **`v145` + `stdcpp20`** on SwgClient (`SwgClient.vcxproj:33,49,142,348`) | **`v145` + `stdcpp20`** (`Build-X64Client.ps1:5-6`, vcxprojs) |
+| **Canonical build** | Manual MSBuild 5-target: `Direct3d11;Direct3d9;Direct3d9_ffp;Direct3d9_vsps;SwgClient` (AGENTS.md) | **`scripts/Build-X64Client.ps1:72-76`** `/t:SwgClient` + PE **`0x8664` check** (`98-117`) |
+| **Prerequisite gate** | Documented in AGENTS.md / `.claude/settings.json` | **`Test-X64BuildPrerequisites.ps1`**, **`Setup-X64BuildPrerequisites.ps1`**, pinned manifest |
+| **Staging** | PostBuild → **`stage/`** (Win32), **`stage-x64/`** (x64) per vcxproj (`SwgClient.vcxproj:374-386`) | Script `-StagePath`; outputs under **`src/build/win32/x64/$(Configuration)/`** (`Directory.Build.targets:3-4`) |
+| **`.clang-format`** | None | Not on `x64-dx11-vanilla` tip (evidence §3 lists it in squash; absent on branch) |
+| **Projects that actually build (validated)** | **SwgClient + 4 renderers (gl05/06/07/11)** x64; **Qt editors Win32-only, MSB8066 on `.ui`** (`AnimationEditor.vcxproj:781+` CustomBuild, no x64 platform in A) | **SwgClient + gl05/06/07/11/00 + DllExport** (`Build-X64Client.ps1:98-105`); **God client x64 validated** (`docs/god-client.md`); **AnimationEditor x64 vcxproj exists but still invokes Win32 `qt\3.3.4\bin\moc` for `\|x64` configs** — **not wired to `deps/qt3-win64-src`** |
+| **Editor tools verdict** | Pre-broken upstream (MSB8066) | **God client: yes**; **AnimationEditor/TerrainEditor/etc.: project metadata added, toolchain still Win32 Qt paths — not genuinely build-ready** |
+
+---
+
+## 5. Top 10 transfers
+
+### Repo A ← Repo B
+
+| # | Take | Anchor |
+|---|------|--------|
+| 1 | **`int32_t` packed-map wire counts** (fixes x64 stream misalignment) | B `e0d46921e` → `UnicodeAutoDeltaPackedMap.cpp:25-26,60-64`; `AutoDeltaNetworkIdPackedMap.h` |
+| 2 | **`Archive.h` malformed-length guards** on `std::string`/`ByteStream` get | B `Archive.h` (~lines 115-120, 139-148 in diff vs base) |
+| 3 | **PE machine-type verification** in build scripts | B `scripts/Build-X64Client.ps1:15-38,98-117` |
+| 4 | **Reproducible prerequisite manifest** (VS + SDK + DX pins) | B `deps/build-prerequisites/README.md:1-40`, `manifest.json` |
+| 5 | **`Directory.Build.targets` output naming** (`gl05_r`, isolated x64 OutDir) | B `Directory.Build.targets:3-14` |
+| 6 | **Central `uint64` archive overloads in `Archive.h`** (with 4-byte count discipline) | B `Archive.h:59-70` + `NetworkIdArchive.cpp:19-24` rationale |
+| 7 | **SDL3 multi-controller input** | B `clientDirectInput/.../SdlJoystickInput.cpp` (branch `x64-dx9-vanilla-inputreborn`) |
+| 8 | **Headless `gl00` renderer** (`rasterMajor=0`) | B `Directory.Build.targets:14`, Headless project |
+| 9 | **God-client x64 Qt3 pipeline** (for tools, not gameplay) | B `scripts/Build-X64Qt3.ps1`, `docs/god-client.md` |
+| 10 | **`DebugHelp::getCallStack` always via `RtlCaptureContext`** (drop x86 asm block) | B `DebugHelp.cpp:499-506` |
+
+### Repo B ← Repo A
+
+| # | Take | Anchor |
+|---|------|--------|
+| 1 | **Remove legacy DXSDK from shipping path** (Windows SDK + `d3dcompiler_47` only) | A `Direct3d9.vcxproj:299-321`; evidence §2 |
+| 2 | **Complete boot-path asm expungement** (`Transform.cpp` naked SSE) | A `Transform.cpp` (no `__asm`); B still `Transform.cpp:281-286` |
+| 3 | **`intptr_t` PathSearch marks** (avoid x64 UAF) | A `PathNode.h:107`, `PathSearch.cpp:188-199` |
+| 4 | **`std::hash<uintptr_t>` shader sort keys** | A `StaticShader.cpp:291-298` |
+| 5 | **`uint32_t` member pinning in `AutoDeltaMap`** + overflow asserts | A `AutoDeltaMap.h:99,361-362,537-538` |
+| 6 | **`/we4311` `/we4312` guardrail** on x64 compiles | A `x64-platform.props:52` |
+| 7 | **On-disk layout `static_assert`s** | A `TargaFormat.cpp:100-102`, `AssetCustomizationManager.cpp:111-116` |
+| 8 | **Real Miles 9.3v x64 audio** (vs JUCE/stub) | A `SwgClient.vcxproj:377-386`, Phase 35 evidence |
+| 9 | **OOM-safe minidump address reserve** | A `DebugHelp.cpp:424-427` (s_miniDumpReserve) |
+| 10 | **D3DX-free x64 staging + `stage-x64/` convention** | A `SwgClient.vcxproj:323-386`; AGENTS.md 5-target flow |
+
+---
+
+### Highest-risk merge note
+
+The **packed-map `size_t` vs `int32_t` count** issue is the clearest **client/server protocol divergence** in Repo A today: on LLP64, `size_t` ≡ `uint64` and A’s `NetworkIdArchive.cpp:21-24` 8-byte overload makes those counts **8 bytes on the wire**, while the 32-bit server and B’s client use **4 bytes** (B commit message at `e0d46921e` states this explicitly). Merge should treat B’s fix as authoritative for those three files unless A has a matching server-side change (none in this repo).
