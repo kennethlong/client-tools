@@ -16,6 +16,7 @@
 #include "clientGame/ClientObject.h"
 #include "clientGame/ConfigClientGame.h"
 #include "clientGame/ContainerInterface.h"
+#include "sharedFoundation/ConfigFile.h"
 #include "clientGame/CreatureObject.h"
 #include "clientGame/CreatureInfo.h"
 #include "clientGame/Game.h"
@@ -269,7 +270,8 @@ void ClientControllerNamespace::handleCombatActionMessage (const MessageQueueCom
 ClientController::ClientController (Object* newOwner) :
 	NetworkController (newOwner),
 	m_initialized(false),
-	m_sequenceNumber (0)
+	m_sequenceNumber (0),
+	m_lastTransformSendStamp (0)
 {
 	// objects' controllers created by the client are authoritative by default
 	// objects created as a result of a server CREATE_OBJECT message should
@@ -312,6 +314,40 @@ void ClientController::sendTransform (const Transform& transform_p, const bool r
 	Object* const attachedTo = getOwner ()->getAttachedTo ();
 
 	uint32 syncStamp = GameNetwork::getServerSyncStampLong();
+
+	// Hold the send cadence to a fixed rate rather than letting it follow the frame rate.
+	//
+	// The server validates each transform against the last one it verified:
+	//
+	//     maxDistSqr = sqr(maxSpeed * timeDiffMs / 1000.0f)
+	//
+	// so the distance it will accept shrinks as the interval between sends shrinks. A modern
+	// client runs at 180-240 fps where a 2003 one ran at 30-60, and a send per frame means
+	// intervals of 4-5 ms instead of 16-33. At that point ordinary float jitter exceeds the
+	// allowed distance, the server calls handleInvalidMove and corrects the player, and the
+	// correction arrives back as a warp. The symptom is the player's own movement and animation
+	// stalling while NPCs keep moving and the frame rate never drops, because NPCs come through
+	// RemoteCreatureController and never take the warp path.
+	//
+	// Throttle HERE, at the one thing the server actually measures -- not the simulation step
+	// (Sais's first attempt throttled IoWinManager::processEvents, which also dispatches input,
+	// and broke clicking NPCs).
+	//
+	// Reliable sends are never dropped: teleport acknowledgements and similar must arrive.
+	{
+		static float const rate = ConfigFile::getKeyFloat("ClientGame", "transformSendRate", 60.0f);
+
+		if (!reliable && rate > 0.f && m_lastTransformSendStamp != 0)
+		{
+			uint32 const minimumIntervalMs = static_cast<uint32>(1000.0f / rate);
+
+			// Unsigned arithmetic, so a stamp rollover wraps to a small delta rather than a huge one.
+			if (static_cast<uint32>(syncStamp - m_lastTransformSendStamp) < minimumIntervalMs)
+				return;
+		}
+
+		m_lastTransformSendStamp = syncStamp;
+	}
 	uint32 flags     = GameControllerMessageFlags::SEND | GameControllerMessageFlags::DEST_AUTH_SERVER;
 	if(reliable)
 		flags = flags | GameControllerMessageFlags::RELIABLE;
