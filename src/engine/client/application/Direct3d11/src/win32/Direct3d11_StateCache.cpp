@@ -2329,12 +2329,20 @@ void Direct3d11_StateCache::setFfpCombiner(Direct3d11_FfpCombinerDesc const *des
 void Direct3d11_StateCache::setColorWriteEnable(uint8 writeMask)
 {
 	// Plan 11-09.15 Iter-44A: per-pass color-write mask. Mirrors D3D9
-	// RSB-equivalent push of D3DRS_COLORWRITEENABLE. Engine m_writeEnable
-	// bits are bitwise-identical to D3D11 D3D11_COLOR_WRITE_ENABLE_* so we
-	// pass through unchanged. Mask is per-RT in D3D11; we write RT[0] only
-	// (single-RT engine model).
+	// RSB-equivalent push of D3DRS_COLORWRITEENABLE. Callers pass the ENGINE
+	// bit layout: ARGB msb-first (alpha 8, red 4, green 2, blue 1 -- see
+	// Direct3d9_ShaderImplementationData.cpp:266-273). D3D11 is red 1,
+	// green 2, blue 4, alpha 8: green and alpha coincide, red and blue SWAP.
+	// (An earlier comment here claimed the layouts were bitwise-identical;
+	// that only held because the default 0xF -- and any mask treating red and
+	// blue alike -- is symmetric.) Mask is per-RT in D3D11; we write RT[0]
+	// only (single-RT engine model).
 	D3D11_BLEND_DESC &desc = Direct3d11_StateCacheNamespace::ms_bsDesc;
-	UINT8 const newMask = static_cast<UINT8>(writeMask & 0x0F);
+	UINT8 newMask = static_cast<UINT8>(writeMask & 0x0A);  // alpha(8) + green(2) coincide
+	if (writeMask & 0x04)
+		newMask |= D3D11_COLOR_WRITE_ENABLE_RED;   // engine red (4) -> D3D11 red (1)
+	if (writeMask & 0x01)
+		newMask |= D3D11_COLOR_WRITE_ENABLE_BLUE;  // engine blue (1) -> D3D11 blue (4)
 	if (desc.RenderTarget[0].RenderTargetWriteMask != newMask)
 	{
 		desc.RenderTarget[0].RenderTargetWriteMask = newMask;

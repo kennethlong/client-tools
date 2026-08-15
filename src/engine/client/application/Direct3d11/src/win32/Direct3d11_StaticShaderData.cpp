@@ -1740,9 +1740,9 @@ bool Direct3d11_StaticShaderData::apply(int passNumber) const
 
 					// Plan 11-09.15 Iter-44A: per-pass COLOR-WRITE mask.
 					// Mirrors D3D9's RSB-equivalent push of COLORWRITEENABLE.
-					// Engine bits are D3D9 D3DCOLORWRITEENABLE_* which are
-					// bitwise-identical to D3D11_COLOR_WRITE_ENABLE_* so the
-					// value passes through unchanged.
+					// Passes the ENGINE bit layout (ARGB msb-first); the
+					// engine->D3D11 red/blue bit swap happens inside
+					// setColorWriteEnable, the one chokepoint.
 					Direct3d11_StateCache::setColorWriteEnable(engPass->m_writeEnable);
 
 					// 2026-06-26: D3D9-parity alpha-FADE blend (RenderDoc Capture41-confirmed).
