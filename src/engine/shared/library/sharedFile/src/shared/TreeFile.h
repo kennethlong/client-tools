@@ -64,6 +64,10 @@ public:
 	static void install(uint32 skuBits);
 	static void remove();
 
+	//-- A/B telemetry: per-loose-node probe counters. ExitChain-registered at
+	//   priority 100 so it outruns the SharedLog teardown (see the definition).
+	static void reportProbeCounters();
+
 	static bool isLoggingFiles();
 
 #ifdef _DEBUG
