@@ -509,6 +509,11 @@ using namespace Direct3d9Namespace;
 
 extern "C" __declspec(dllexport) Gl_api const * GetApi();
 
+// The engine calls this before it trusts a single Gl_api slot. Reported out of
+// band rather than as a struct field so the size check itself cannot shift with
+// the layout it is checking. Graphics::install FATALs on a mismatch.
+extern "C" __declspec(dllexport) unsigned int GetGlApiStructSize();
+
 // ======================================================================
 
 Gl_api const * GetApi()
@@ -516,6 +521,13 @@ Gl_api const * GetApi()
 	ms_glApi.verify  = verify;
 	ms_glApi.install = Direct3d9::install;
 	return &ms_glApi;
+}
+
+// ----------------------------------------------------------------------
+
+unsigned int GetGlApiStructSize()
+{
+	return static_cast<unsigned int>(sizeof(Gl_api));
 }
 
 // ----------------------------------------------------------------------
