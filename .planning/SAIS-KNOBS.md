@@ -54,6 +54,9 @@ retires the entire stack.** No knobs to be mirrored there.
   (stock-faithful; his client died on any bad data shader).
 - c16 `c2983980e` — ten late-NGE Options widgets made optional (his client FATALed on the
   Options screen against the shipped v3.0 data).
+- c22 `5f68728be` — WorldSnapshot create path narrows template/object classes with the
+  class-check virtuals (Release `safe_cast` is a bare `static_cast`; a wrong-class `.ws` row
+  was a wild vtable dispatch, now a WARN + skipped node).
 
 If Sais wants any of these five back as-was, they need a revert conversation, not a cfg key —
 each replaced a crash or a wrong-output path, not a preference.

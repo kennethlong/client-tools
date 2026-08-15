@@ -1,8 +1,13 @@
-# Sais single-PR queue (branch strict-data-defaults, PR #1 DRAFT)
+# Sais single-PR queue (branch strict-data-defaults, PR #1 CLOSED/parked — body CURRENT)
 
 **Restore-knobs ledger: [SAIS-KNOBS.md](SAIS-KNOBS.md)** — every hard-coded behavior of his
-the branch removed/gated + the exact cfg key or file copy that puts it back. Fold into the
-PR #1 body before reopening.
+the branch removed/gated + the exact cfg key or file copy that puts it back.
+**PR #1 body REFRESHED 2026-08-15 (post-c21): covers all 21 commits, knobs ledger folded in
+as a restore table, flag-to-Sais items included (corpus-gap nebula symptom + silent-skip
+WARNING suggestion, ILM landmine audit proposal, D3D9-is-ours disposition). ⚠ DO NOT REOPEN
+at milestone points — Kenny 2026-08-15: the whole deliverable presents as ONE GIANT PR; the
+branch keeps growing quietly and Kenny explicitly calls the reopen. Keep the closed PR's
+body current as commits land.**
 
 Delivery model: ONE PR, clean atomic commits, Sais reviews before merge (memory:
 feedback_sais_one_pr_clean_commits). Repo: Galaxies-Reborn/swg-source-x64-dx11 (we have admin).
@@ -190,6 +195,64 @@ any cherry-picked commit (our fix commits carry planning docs; `git rm -r --cach
       buffer zeros+white, COLOR elements at offset 16 (mirror of his c17); all four gl11
       configs built + staged both platforms. Retires the queued our-side follow-up.
 
+## Session 2026-08-15 evening (one-giant-PR mandate confirmed; branch now 22)
+- [x] Kenny 2026-08-15: NO milestone reopens — ONE GIANT PR at the end; branch grows quietly,
+      body kept current, Kenny calls the reopen.
+- [x] c22 5f68728be WorldSnapshot wrong-class narrowing (the parked candidate follow-up from
+      c13 scope): asSharedObjectTemplate at fetchObjectTemplate + asClientObject on the
+      created object in instantiateObject (Release safe_cast = bare static_cast; base
+      createObject returns plain Object). Adapted from our b47718cbc 6.1 hunks; the
+      engine_ws* shim hunks not ported (toolkit advertise surface absent from his tree);
+      result out-param left unset on refusal = his tree's existing fetch-failure pattern
+      (caller switch has tolerant default). Built x64 Release DX11 clean (0 unresolved,
+      exit 0), exe + gl11_r.dll hand-restaged to stage-B-x64 (hashes match build output),
+      pushed. PR body updated to 22 commits with the narrowing bullet.
+
+## PR #2 (PLANNED, Kenny 2026-08-15): the toolkit advertise surface
+Kenny: "We will be adding the whole toolkit advertising code as a second PR." Separate from
+the fix-queue giant PR #1; not started. Scoping facts banked now:
+- Surface inventory (our tree): `engine_advertise.cpp` + `engine_hookpoints.h/.inc`
+  (contract v33 / 160 names; SWG-Toolkit is the SOLE consumer) + 6 `engine_*_forward.h`
+  headers, all under `SwgClient/src/win32|shared`; plus shims embedded in clientGame:
+  WorldSnapshot.cpp (19 engine_ shims), CreatureObject.cpp, ClientInteriorLayoutManager.cpp,
+  PlayerCreatureController.cpp, GroundScene.cpp, ClientEffectManager.cpp, Game.h, Os.cpp,
+  ClientMain.cpp/.h, SwgClient.vcxproj (ord-82 export).
+- ✅ Design question RESOLVED (Kenny 2026-08-15: "we will do the x64 port") and the ENGINE-SIDE
+  PORT IS **COMMITTED**: `372e7aa42` (port, 21 files) + `e292a3478` (tools/hookpoints-probe
+  boot-free contract gate) + `971805d5c` (v34 wave: +advertisedArchBits +setScale answering the
+  toolkit's x64 CHANGE-REQUEST; contract now v34/162 both arches; handback mirrored to their
+  repo). Local commits, push pending. Detail:
+  * All `#if !defined(_WIN64)` guards removed across the surface (engine_advertise.cpp,
+    GroundScene.cpp/.h friends, Os.cpp/.h friend, DebugHelp.cpp, SwgCuiChatWindow.cpp/.h,
+    ClientEffectManager.cpp, CreatureObject.cpp, PlayerCreatureController.cpp,
+    ClientInteriorLayoutManager.cpp, WorldSnapshot.cpp x3, ClientMain.cpp verify gate,
+    vcxproj Platform=Win32 ClCompile condition).
+  * THE real ABI item: the Win32 `__fastcall(pThis, dummy EDX, ...)` __thiscall emulation is
+    WRONG on x64 (single convention; dummy shifts args one register right). New `ENGINE_THIS`
+    macro seam (engine_advertise.cpp + engine_groundScene_forward.h + GroundScene.cpp
+    mirrored block; GroundScene.h friends carry explicit per-platform signatures). Consumer
+    `__thiscall` typedefs work unchanged on x64 (keyword inert).
+  * pmfToVoid/pmfRealEntry port as-is: x64 SI-PMF is pointer-sized; MI-PMF keeps pfn@0 +
+    int adjustor@8, MiPmf reads both; delta==0 held for every real-entry row (probe below).
+  * EngineWsNodeInfo frozen 80-byte layout is IDENTICAL on x64 (static_asserts kept as proof).
+  * Gates: x64 + Win32 Release 5-target both 0 unresolved/0 errors. dumpbin: x64 exports
+    GetEngineHookPoints (ord 82, same as Win32 by shared export-set ordering; binding is
+    by NAME); Win32 ord-82 @ 0x00701420 UNCHANGED (zero drift).
+  * LIVE consumer-shaped probe BOTH exes (LoadLibraryEx DONT_RESOLVE + GetProcAddress + call
+    — the pre-CRT path the static-init race fix engineered): version=33 count=160 nulls=0
+    dups=0 on x64 AND Win32. Contract untouched v33/160, no consumer re-sync owed.
+  * Boot smoke pending Kenny (agent-shell boots invalid); Debug boot additionally runs
+    engine_verifyNoNullNoDup.
+  * Remaining PR #2 scope: port the surface files into HIS tree (incl. the c22-skipped
+    engine_ws hunks) + SWG-Toolkit x64 consumer work (their injector + DetourXS-on-x64 for
+    the DETOURED rows — their side, coordinate).
+- c22 note resolved by this plan: the two engine_ws* hunks from our b47718cbc (wsAddObject
+  wrong-class REFUSE-before-id-mint + wsForgetNode intern-decision comment) ride along with
+  the surface port — do not forget them when PR #2 assembles.
+- Toolkit coordination: contract bump/re-sync rules apply (mirror handoffs to
+  D:/Code/SWG-Toolkit/.planning/handoff/); any divergence between his tree's shim behavior
+  and ours becomes a consumer-visible contract question.
+
 ## Post-merge TRE cleanup (scope sharpened by the 2026-08-15 nebula arc — feeds the parked "ilm sweep" backlog item)
 - ILM preference-kill audit: full same-path content-diff of each ILM_*.tre vs the base/patch
   chain (tools/tre-compare is purpose-built). Known landmine classes: 240-byte texture stubs
@@ -210,8 +273,8 @@ any cherry-picked commit (our fix commits carry planning docs; `git rm -r --cach
 - c_ambient parameterize (ambientBoost, color-only PIN ALPHA): lives in his CORPUS (client-tools), not here
 - Char-select wearables retry (async race, no retry on char-select path): his tree, separate investigation
 - Screenshot key dead: needs live debug with his symbols
-- WorldSnapshot wrong-class narrowing (fetch/instantiate guards from b47718cbc): lower exposure
-  in his tree (no editor injecting rows); candidate follow-up, kept out of c13 for scope
+- ~~WorldSnapshot wrong-class narrowing~~ — LANDED as c22 5f68728be (2026-08-15, see session
+  entry above)
 
 ## Our repo (swg-client-v2) parallel state
 - PUSHED 2026-08-15 (e34760a0a..bdb21dd77) after both gates green (x64 + Win32 serial 5-target,
