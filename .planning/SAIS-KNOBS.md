@@ -31,11 +31,10 @@ Notes:
 `Direct3d9_LightManager.cpp` still carries the FULL ungated stack: the 0.3 ambient floor
 (:562-568) AND the 0.65/0.30 hemisphere synthesis (:789), and the ShaderSource patch
 family (c_ambient add, 0.85 diffuse floor) originates in his DX9 include-serve path.
-These went LIVE the moment c2 (Gl_dll.def) made his x64 D3D9 DLLs load. Disposition:
-**leave untouched — merge agreement #1 ("D3D9 is ours") replaces his D3D9 line with our
-stock-faithful gl05/06/07 wholesale, retiring all of it.** Revisit ONLY if the D3D9 swap
-slips to a later wave and his D3D9 must stay usable in the interim — then mirror the
-c20/c21 knobs there. Sequencing item for the Sais conversation.
+These went LIVE the moment c2 (Gl_dll.def) made his x64 D3D9 DLLs load. Disposition
+**CONFIRMED by Kenny 2026-08-15: leave untouched — his D3D9 line is being replaced
+wholesale by our stock-faithful gl05/06/07 (merge agreement #1, "D3D9 is ours"), which
+retires the entire stack.** No knobs to be mirrored there.
 
 ## Corpus/data side (loose files, not in the squash repo — restore by file copy)
 
