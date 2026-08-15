@@ -15,9 +15,14 @@
 // inert. Each row carries NO calling convention -- Utinni's typedef supplies
 // it and must match MSVC's emitted convention.
 //
-// 32-bit only (spec 0 / 5): x64 is Utinni's deferred half. This TU introduces
-// NO x64 export surface -- the whole body is guarded by #if !defined(_WIN64)
-// (belt-and-suspenders with the vcxproj ClCompile Condition Platform=Win32).
+// Both platforms (x64 port 2026-08-15; was 32-bit only). x64 has ONE calling
+// convention, so every __cdecl/__stdcall/__fastcall annotation below is inert
+// there and a free function f(C* pThis, args...) matches a member call
+// natively -- the Win32 __fastcall dummy-EDX __thiscall emulation must NOT
+// carry a dummy on x64 (it would shift every real arg one register right).
+// The ENGINE_THIS macro below owns that difference; everything else in the
+// surface is convention-agnostic by construction (primitives/pointers-only
+// boundary, name-keyed GetProcAddress binding, fixed-width contract structs).
 //
 // See .planning/handoff/2026-06-20-utinni-engine-entrypoint-advertisement-spec.md.
 // ======================================================================
@@ -88,10 +93,25 @@
 #include "sharedObject/PortalProperty.h"                 // v25 getContainingBuildingId: portal -> getOwner() = the building (Property.h:57 via Container)
 class Skeleton;                                     // for the getDisplayLodSkeleton PMF return type (incomplete is fine)
 
-// 32-bit-only scope: compile this TU to nothing on x64. The vcxproj already
-// conditions the ClCompile item to Platform=Win32; this guard is the source-
-// side belt-and-suspenders so an x64 config can never export GetEngineHookPoints.
-#if !defined(_WIN64)
+// ----------------------------------------------------------------------
+// __thiscall-emulation ABI seam (x64 port 2026-08-15). Win32: MSVC v145
+// forbids __thiscall on a free function (C3865), so a thunk emulates it as
+// __fastcall(pThis /*ECX*/, dummy /*EDX*/, args...) -- byte-identical ABIs.
+// x64: there is ONE convention (this/arg1 in RCX, then RDX/R8/R9); __fastcall
+// is accepted-and-ignored, a free function f(C* pThis, args...) already
+// matches a member call exactly, and the Win32 dummy would shift every real
+// argument one register right. Consumer typedefs written as __thiscall work
+// unchanged on both (the keyword is likewise ignored on x64).
+// Mirrored (guarded #ifndef) in the clientGame TUs that define forwarders
+// (GroundScene.cpp) -- exe-local headers are not on clientGame's include path.
+// ----------------------------------------------------------------------
+#ifndef ENGINE_THIS
+#if defined(_WIN64)
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis
+#else
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis, int /*edx*/
+#endif
+#endif
 
 // ----------------------------------------------------------------------
 // PMF -> void* helper. Non-static, non-virtual member function pointers are
@@ -193,13 +213,13 @@ static int __cdecl engine_loadOverrideConfig()
 // OMIT/DEFER block below and 37-03-SUMMARY (same MI-inflation rationale that
 // deferred them in 37-02; they also require a live UIPage& arg).
 // ----------------------------------------------------------------------
-static CommandParser * __fastcall engine_commandParserCtor1(CommandParser * pThis, int /*edx*/,
+static CommandParser * __fastcall engine_commandParserCtor1(ENGINE_THIS(CommandParser *),
 	const char * command, size_t argCount, const char * args, const char * helpInfo, CommandParser * delegate)
 {
 	return ::new (static_cast<void *>(pThis)) CommandParser(command, argCount, args, helpInfo, delegate);
 }
 
-static CommandParser * __fastcall engine_commandParserCtor2(CommandParser * pThis, int /*edx*/,
+static CommandParser * __fastcall engine_commandParserCtor2(ENGINE_THIS(CommandParser *),
 	const CommandParser::CmdInfo & commandData, CommandParser * delegate)
 {
 	return ::new (static_cast<void *>(pThis)) CommandParser(commandData, delegate);
@@ -227,7 +247,7 @@ static CommandParser * __fastcall engine_commandParserCtor2(CommandParser * pThi
 // only) so `this` needs no most-derived adjustment.
 // UTINNI-SIDE TYPEDEF TO MATCH: bool(__thiscall*)(CuiConsoleHelper*, const Unicode::String&).
 // ----------------------------------------------------------------------
-static bool __fastcall engine_consoleHelperSendInput(CuiConsoleHelper * pThis, int /*edx*/,
+static bool __fastcall engine_consoleHelperSendInput(ENGINE_THIS(CuiConsoleHelper *),
 	const Unicode::String & istr)
 {
 	return pThis->processInput(istr, CuiConsoleHelper::getRecurseStackForCommandBeingParsed());
@@ -248,18 +268,18 @@ static bool __fastcall engine_consoleHelperSendInput(CuiConsoleHelper * pThis, i
 // declared in engine_groundScene_forward.h -- a free thunk in this TU cannot
 // name a private member, C2248).
 // ----------------------------------------------------------------------
-static void __fastcall engine_groundSceneReloadTerrain(GroundScene * pThis, int /*edx*/)
+static void __fastcall engine_groundSceneReloadTerrain(ENGINE_THIS(GroundScene *))
 {
 	pThis->reloadTerrain();                                          // public [GroundScene.h:215]
 }
 
-static void __fastcall engine_groundSceneChangeCamera(GroundScene * pThis, int /*edx*/,
+static void __fastcall engine_groundSceneChangeCamera(ENGINE_THIS(GroundScene *),
 	int newView, float value)
 {
 	pThis->setView(newView, value);                                 // public [GroundScene.h:207] (contract name changeCamera -> ours setView)
 }
 
-static GameCamera * __fastcall engine_groundSceneGetCurrentCamera(GroundScene * pThis, int /*edx*/)
+static GameCamera * __fastcall engine_groundSceneGetCurrentCamera(ENGINE_THIS(GroundScene *))
 {
 	return pThis->getCurrentCamera();                               // public, non-const this -> non-const overload, no cast [GroundScene.h:212]
 }
@@ -269,7 +289,7 @@ static GameCamera * __fastcall engine_groundSceneGetCurrentCamera(GroundScene * 
 // most-derived pointer; ::new(pThis) constructs the full object via the
 // (const char*, const char*, CreatureObject*) overload [GroundScene.h:199] -- NOT
 // the (const char*, const NetworkId&, ...) overload at :200.
-static GroundScene * __fastcall engine_groundSceneCtor(GroundScene * pThis, int /*edx*/,
+static GroundScene * __fastcall engine_groundSceneCtor(ENGINE_THIS(GroundScene *),
 	const char * terrainFilename, const char * playerFilename, CreatureObject * customizedPlayer)
 {
 	return ::new (static_cast<void *>(pThis)) GroundScene(terrainFilename, playerFilename, customizedPlayer);
@@ -389,13 +409,13 @@ static void __cdecl engine_gameLoadScene(const char * terrainFilename, const cha
 // appendToAllTabs/appendTextToCurrentTab/performEnterKey) -- the NAME MISMATCH is baked
 // into each row comment, the contract names stay.
 // ----------------------------------------------------------------------
-static void __fastcall engine_chatWindowAppendToAllTabs(SwgCuiChatWindow * pThis, int /*edx*/,
+static void __fastcall engine_chatWindowAppendToAllTabs(ENGINE_THIS(SwgCuiChatWindow *),
 	const Unicode::String & str)
 {
 	pThis->appendToAllTabs(str);                                    // public [SwgCuiChatWindow.h:172] (contract writeToAllTabs -> ours appendToAllTabs)
 }
 
-static void __fastcall engine_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow * pThis, int /*edx*/,
+static void __fastcall engine_chatWindowAppendTextToCurrentTab(ENGINE_THIS(SwgCuiChatWindow *),
 	const Unicode::String & str)
 {
 	pThis->appendTextToCurrentTab(str);                             // public [SwgCuiChatWindow.h:174] (contract writeToCurrentTab -> ours appendTextToCurrentTab)
@@ -414,7 +434,7 @@ static void __fastcall engine_chatWindowAppendTextToCurrentTab(SwgCuiChatWindow 
 // (no adjustment). PUBLIC method -> named directly (no friend). Consumer typedef:
 //   Object*(__thiscall*)(SwgCuiHud*)
 // ----------------------------------------------------------------------
-static Object * __fastcall engine_hudGetLastSelectedObject(SwgCuiHud * pThis, int /*edx*/)
+static Object * __fastcall engine_hudGetLastSelectedObject(ENGINE_THIS(SwgCuiHud *))
 {
 	return pThis->getLastSelectedObject();                          // public const [SwgCuiHud.h:95]
 }
@@ -436,7 +456,7 @@ static Object * __fastcall engine_hudGetLastSelectedObject(SwgCuiHud * pThis, in
 // getCurrentView() is PUBLIC [GroundScene.h:207] so no friend is needed; CI_debugPortal is the
 // PUBLIC CameraIds enumerator [GroundScene.h:84-95] == 5 == consumer cm_Free. Consumer typedef:
 //   bool(__thiscall*)(GroundScene*)
-static bool __fastcall engine_groundSceneIsFreeCameraActive(GroundScene * pThis, int /*edx*/)
+static bool __fastcall engine_groundSceneIsFreeCameraActive(ENGINE_THIS(GroundScene *))
 {
 	return pThis->getCurrentView() == GroundScene::CI_debugPortal;  // cm_Free (5) == CI_debugPortal
 }
@@ -449,7 +469,7 @@ static bool __fastcall engine_groundSceneIsFreeCameraActive(GroundScene * pThis,
 // While free-cam is active this aliases groundScene::getDebugPortalCameraMessageQueue. Cameras are
 // single-inheritance, so the GameCamera* (from the already-advertised getCurrentCamera) needs no
 // adjustment. Consumer typedef: MessageQueue*(__thiscall*)(GameCamera*)
-static MessageQueue * __fastcall engine_gameCameraGetMessageQueue(GameCamera * pThis, int /*edx*/)
+static MessageQueue * __fastcall engine_gameCameraGetMessageQueue(ENGINE_THIS(GameCamera *))
 {
 	Controller * const c = pThis->getController();                  // non-const this -> non-const overload [Object.h:190]
 	return c ? c->getMessageQueue() : 0;                            // [Controller.h:67]
@@ -458,7 +478,7 @@ static MessageQueue * __fastcall engine_gameCameraGetMessageQueue(GameCamera * p
 // object::isActive -- Object::isActive() is NON-VIRTUAL but INLINE [Object.h:158 decl / :1328 def],
 // so &Object::isActive has NO ODR-emitted address (the g_mainLoopCounter inline-accessor Pitfall).
 // A CALLED external-linkage shim supplies the address. Consumer typedef: bool(__thiscall*)(const Object*)
-static bool __fastcall engine_objectIsActive(const Object * pThis, int /*edx*/)
+static bool __fastcall engine_objectIsActive(ENGINE_THIS(const Object *))
 {
 	return pThis->isActive();                                       // public inline [Object.h:1328]
 }
@@ -1561,5 +1581,3 @@ const EngineHookPoints * GetEngineHookPoints()
 	ensureDynamicRowsFilled();   // complete the 29 call-rows on THIS (the reader's) thread, before returning the table -- the static-init race fix (2026-06-25)
 	return &s_table;
 }
-
-#endif // !defined(_WIN64)

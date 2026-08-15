@@ -25,8 +25,7 @@
 // EXE-LOCAL: included ONLY by engine_advertise.cpp. MUST NOT be pulled by any gl0X
 // plugin TU -- the friend decl + accessor definition add NO SwgCuiChatWindow struct
 // ABI change, but keeping this header exe-local avoids any shared-header ABI cascade
-// (AGENTS.md). 32-bit-only: the accessor definition is #if !defined(_WIN64) in
-// SwgCuiChatWindow.cpp, matching the whole Win32-only advertise body.
+// (AGENTS.md). Both platforms (x64 port 2026-08-15; was 32-bit only).
 // ======================================================================
 
 #ifndef INCLUDED_engine_chatWindow_forward_H

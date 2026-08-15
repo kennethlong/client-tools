@@ -29,8 +29,8 @@
 // this declaration header exe-local avoids any shared-header ABI cascade
 // (AGENTS.md).
 //
-// 32-bit-only: the shim definitions are #if !defined(_WIN64) in Os.cpp /
-// DebugHelp.cpp, matching the whole Win32-only advertise body. <windows.h>
+// Both platforms (x64 port 2026-08-15; was 32-bit only): shim definitions in
+// Os.cpp / DebugHelp.cpp. <windows.h>
 // supplies HWND / UINT / WPARAM / LPARAM / LRESULT / CALLBACK and the
 // PEXCEPTION_POINTERS type used in the writeMiniDump signature.
 // ======================================================================

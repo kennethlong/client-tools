@@ -27,7 +27,7 @@
 //
 // EXE-LOCAL: included ONLY by engine_advertise.cpp. setLookAtTarget is PUBLIC, so the
 // accessor needs no friend grant and CreatureObject.h is UNCHANGED (no shared-header
-// ABI cascade). 32-bit-only: the definition is #if !defined(_WIN64) in
+// ABI cascade). Both platforms (x64 port 2026-08-15): the definition is in
 // CreatureObject.cpp, matching the whole advertise body.
 // ======================================================================
 

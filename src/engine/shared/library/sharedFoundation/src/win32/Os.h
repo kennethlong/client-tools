@@ -142,11 +142,9 @@ private:
 	// Same-TU is NOT enough for private access in C++ (only members/friends
 	// qualify -- a free function in Os.cpp hits C2248); a friend declaration is
 	// the ABI-neutral fix (adds no data member / no vtable entry, so the Os
-	// layout is byte-identical and no gl0X plugin cascade). Win32-only, matching
-	// the shim's #if !defined(_WIN64) guard.
-#if !defined(_WIN64)
+	// layout is byte-identical and no gl0X plugin cascade). Both platforms since
+	// the 2026-08-15 x64 port (CALLBACK/__stdcall is inert on x64).
 	friend LRESULT CALLBACK engine_osWindowProc(HWND, UINT, WPARAM, LPARAM);
-#endif
 
 private:
 

@@ -33,8 +33,14 @@
 // ABI cascade (AGENTS.md). Forward-declares its argument types -- no heavy
 // engine headers are included here.
 //
-// 32-bit-only: the forwarder definitions are #if !defined(_WIN64) in
-// GroundScene.cpp, matching the whole Win32-only advertise body.
+// Both platforms (x64 port 2026-08-15; was 32-bit only). The ENGINE_THIS seam
+// below owns the one ABI difference: Win32 emulates __thiscall with a
+// __fastcall dummy-EDX free function; x64 has ONE convention where
+// f(C* pThis, args...) matches a member call natively and the dummy would
+// shift every real argument one register right. Definitions in GroundScene.cpp
+// carry an identical #ifndef-guarded macro block (this exe-local header is not
+// on clientGame's include path); a signature drift between the two shows up as
+// an unresolved external at the SwgClient link (grep gate).
 // ======================================================================
 
 #ifndef INCLUDED_engine_groundScene_forward_H
@@ -47,13 +53,22 @@ class CreatureObject;
 class MessageQueue;   // free-cam wave (v13): return type of engine_groundSceneGetDebugPortalCameraMessageQueue
 struct IoEvent;   // IoEvent is a struct in-tree (sharedIoWin) -- match the tag to silence C4099
 
+// __thiscall-emulation ABI seam (see the engine_advertise.cpp block for the full note)
+#ifndef ENGINE_THIS
+#if defined(_WIN64)
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis
+#else
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis, int /*edx*/
+#endif
+#endif
+
 // ----------------------------------------------------------------------
 // extern declarations of the four __fastcall groundScene private-method
 // forwarders defined in GroundScene.cpp.
 // ----------------------------------------------------------------------
-void __fastcall engine_groundSceneInit(GroundScene * pThis, int /*edx*/,
+void __fastcall engine_groundSceneInit(ENGINE_THIS(GroundScene *),
 	const char * terrainFilename, CreatureObject * player, float timeInSeconds);
-void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/);
+void __fastcall engine_groundSceneHandleInputMapUpdate(ENGINE_THIS(GroundScene *));
 // (38-05) the update / handleInputMapEvent CALL-THROUGH forwarder decls were REMOVED
 // -- those two rows are DETOURED and now advertise the REAL engine entry via the
 // real-entry accessors below.
@@ -79,7 +94,7 @@ void * engine_groundSceneHandleInputMapEventRealEntry();
 // int /*EDX*/) == __thiscall (GroundScene is MI -> dummy EDX). Utinni-side typedef:
 //   MessageQueue*(__thiscall*)(GroundScene*)
 // ----------------------------------------------------------------------
-MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/);
+MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(ENGINE_THIS(GroundScene *));
 
 // ======================================================================
 

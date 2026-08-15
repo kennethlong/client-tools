@@ -1369,9 +1369,8 @@ void ClientEffectManager::createClientTrackingProjectileLocationToObject(const s
 //     case-insensitive. .cef-level re-play is out of scope (re-play via the public
 //     playClientEffect path if needed) -- flagged in the handback.
 //
-// 32-bit-only: mirrors the whole engine_advertise.cpp Win32-only export body.
+// Both platforms (x64 port 2026-08-15; was 32-bit only).
 // ======================================================================
-#if !defined(_WIN64)
 void engine_retriggerClientEffect(char const * const logicalName)
 {
 	if (!logicalName || !*logicalName)
@@ -1500,4 +1499,3 @@ bool engine_replayClientEffect(char const * clientEffectName)
 	REPORT_LOG(true, ("[effect.replay] END name=\"%s\" played=%s\n", clientEffectName, (played ? "yes" : "no")));
 	return played;
 }
-#endif

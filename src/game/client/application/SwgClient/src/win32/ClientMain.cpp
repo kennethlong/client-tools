@@ -289,11 +289,11 @@ int ClientMain(
 		installConfigFileOverride();
 
 		// Utinni hookpoint coverage self-check (37-01, EPA-04). Debug-boot only
-		// (PRODUCTION == 0); the provider TU is Win32-only so the call is also
-		// !_WIN64-gated. NOTE: the codebase macro is PRODUCTION (Production.h),
+		// (PRODUCTION == 0); both platforms since the 2026-08-15 x64 port of the
+		// advertise surface. NOTE: the codebase macro is PRODUCTION (Production.h),
 		// not the plan's literal _PRODUCTION (which is never defined here and
 		// would wrongly run in production) -- [Rule 1] corrected to PRODUCTION == 0.
-#if PRODUCTION == 0 && !defined(_WIN64)
+#if PRODUCTION == 0
 		IGNORE_RETURN(engine_verifyNoNullNoDup());
 #endif
 

@@ -6930,9 +6930,10 @@ void CreatureObject::appearanceWearablesOnChanged ()
 // reaches with `this` in ECX (the address Utinni detours). delta!=0 -> return nullptr so the
 // exe-side engine_verifyNoNullNoDup() fails loudly (never advertise a wrong/silent-dead entry).
 // Declared in the exe-local engine_creatureObject_forward.h. PUBLIC method -> no friend grant,
-// CreatureObject.h unchanged (no shared-header ABI cascade). 32-bit-only: matches the advertise body.
+// CreatureObject.h unchanged (no shared-header ABI cascade). Both platforms (x64 port
+// 2026-08-15): x64 MI-PMF keeps pfn at offset 0 / int adjustor at offset 8, so MiPmf reads
+// both correctly under either pointer size.
 // ======================================================================
-#if !defined(_WIN64)
 
 #include <cstring>   // memcpy -- MI-PMF real-entry code-component extraction
 
@@ -6972,5 +6973,3 @@ extern "C" __int64 __cdecl engine_getPlayerLookAtTargetId(void)
 	CreatureObject const * const player = Game::getPlayerCreature();
 	return player ? player->getLookAtTarget().getValue() : 0;
 }
-
-#endif // !defined(_WIN64)

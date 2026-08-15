@@ -1606,16 +1606,15 @@ bool Os::launchBrowser(std::string const & website)
 // __fastcall/__thiscall member-call emulation used for MI methods). Utinni-side
 // typedef: LRESULT(__stdcall*)(HWND,UINT,WPARAM,LPARAM).
 //
-// Win32-only: matches the whole !_WIN64 advertise body. The forwarder is declared
-// in the exe-local engine_clientShims_forward.h (SwgClient/src/win32) -- NOT in a
-// shared header, so no gl0X plugin pulls it (no ABI cascade; AGENTS.md).
+// Both platforms (x64 port 2026-08-15; CALLBACK/__stdcall is inert on x64). The
+// forwarder is declared in the exe-local engine_clientShims_forward.h
+// (SwgClient/src/win32) -- NOT in a shared header, so no gl0X plugin pulls it
+// (no ABI cascade; AGENTS.md).
 // ======================================================================
-#if !defined(_WIN64)
 LRESULT CALLBACK engine_osWindowProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
 	return Os::WindowProc(h, m, w, l);   // member access to the private static; __stdcall preserved
 }
-#endif
 
 
 // ======================================================================

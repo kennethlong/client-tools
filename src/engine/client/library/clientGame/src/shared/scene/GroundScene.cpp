@@ -3930,21 +3930,31 @@ void GroundScene::turnOffOverheadMap()
 // Declared extern in the exe-local engine_groundScene_forward.h (NOT pulled by
 // any gl0X plugin TU -- no shared-header ABI cascade); advertised in the table.
 //
-// 32-bit-only scope: the whole advertise body is Win32-only, so these compile to
-// nothing on x64 (no x64 export surface; mirrors engine_advertise.cpp's guard).
+// Both platforms (x64 port 2026-08-15; was 32-bit only). ENGINE_THIS mirrors the
+// engine_advertise.cpp / engine_groundScene_forward.h seam: Win32 __thiscall
+// emulation carries the __fastcall dummy EDX; x64's single convention must not
+// (the dummy would shift every real argument one register right). Identical
+// #ifndef-guarded block because the exe-local forward header is not on
+// clientGame's include path; a drift is an unresolved external at link.
 //----------------------------------------------------------------------
-
-#if !defined(_WIN64)
 
 #include <cstring>   // memcpy -- 38-05 real-entry MI-PMF code-component extraction
 
-void __fastcall engine_groundSceneInit(GroundScene * pThis, int /*edx*/,
+#ifndef ENGINE_THIS
+#if defined(_WIN64)
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis
+#else
+	#define ENGINE_THIS(ClassPtrType) ClassPtrType pThis, int /*edx*/
+#endif
+#endif
+
+void __fastcall engine_groundSceneInit(ENGINE_THIS(GroundScene *),
 	const char * terrainFilename, CreatureObject * player, float timeInSeconds)
 {
 	pThis->init(terrainFilename, player, timeInSeconds);   // private [GroundScene.h:173]; legal in this TU
 }
 
-void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int /*edx*/)
+void __fastcall engine_groundSceneHandleInputMapUpdate(ENGINE_THIS(GroundScene *))
 {
 	pThis->handleInputMapUpdate();                         // private [GroundScene.h:170]
 }
@@ -3958,7 +3968,7 @@ void __fastcall engine_groundSceneHandleInputMapUpdate(GroundScene * pThis, int 
 // SAME pointer gameCamera::getMessageQueue returns while free-cam is active. Null-safe (the
 // input maps are only constructed in init(), GroundScene.cpp:775). __fastcall == __thiscall
 // (MI class -> dummy EDX). Declared extern in engine_groundScene_forward.h.
-MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(GroundScene * pThis, int /*edx*/)
+MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(ENGINE_THIS(GroundScene *))
 {
 	return pThis->m_debugPortalCameraInputMap ? pThis->m_debugPortalCameraInputMap->getMessageQueue() : 0;
 }
@@ -3994,7 +4004,9 @@ MessageQueue * __fastcall engine_groundSceneGetDebugPortalCameraMessageQueue(Gro
 // pmfRealEntry() helper in engine_advertise.cpp; inlined here because the PRIVATE
 // PMF can only be taken in this TU.)
 //
-// 32-bit-only: matches the whole advertise body (#if !defined(_WIN64)).
+// Both platforms (x64 port 2026-08-15): the x64 MI non-virtual PMF layout keeps
+// pfn at offset 0 and the int adjustor at offset 8 -- MiPmf{void*,int} reads
+// both correctly under either pointer size, and the static_assert still gates.
 //----------------------------------------------------------------------
 
 void * engine_groundSceneUpdateRealEntry()
@@ -4018,7 +4030,5 @@ void * engine_groundSceneHandleInputMapEventRealEntry()
 	DEBUG_FATAL(m.delta != 0, ("engine: non-zero PMF delta for GroundScene::handleInputMapEvent real-entry row -- not directly detour-able"));
 	return (m.delta != 0) ? 0 : m.pfn;
 }
-
-#endif // !defined(_WIN64)
 
 //----------------------------------------------------------------------

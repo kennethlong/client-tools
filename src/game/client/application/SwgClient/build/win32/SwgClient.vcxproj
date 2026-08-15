@@ -462,7 +462,7 @@ if not exist "..\..\..\..\..\..\..\stage-x64\miles\mss64ds3d.flt" xcopy /E /I /Y
     <ClCompile Include="..\..\src\win32\WinMain.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Optimized|Win32'">MaxSpeed</Optimization>
     </ClCompile>
-    <ClCompile Include="..\..\src\win32\engine_advertise.cpp" Condition="'$(Platform)'=='Win32'" />
+    <ClCompile Include="..\..\src\win32\engine_advertise.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\shared\FirstSwgClient.h" />

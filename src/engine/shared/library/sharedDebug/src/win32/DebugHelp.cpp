@@ -738,16 +738,14 @@ bool DebugHelp::writeMiniDump(char const *miniDumpFileName, PEXCEPTION_POINTERS 
 // affect the function address; both args are passed straight through. Utinni-side
 // typedef: bool(*)(char const*, PEXCEPTION_POINTERS).
 //
-// Win32-only: matches the whole !_WIN64 advertise body. Declared in the exe-local
+// Both platforms (x64 port 2026-08-15). Declared in the exe-local
 // engine_clientShims_forward.h (SwgClient/src/win32) -- not a shared header, so no
 // gl0X plugin pulls it (no ABI cascade; AGENTS.md).
 // ======================================================================
-#if !defined(_WIN64)
 bool engine_writeMiniDump(char const * fileName, PEXCEPTION_POINTERS ep)
 {
 	return DebugHelp::writeMiniDump(fileName, ep);
 }
-#endif
 
 
 // ======================================================================

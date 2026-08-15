@@ -207,10 +207,10 @@ namespace WorldSnapshotNamespace
 	//   ("silently did nothing" is the failure mode the whole consult exists to
 	//   prevent; Wave 3's save shims inherit the same discipline).
 	//
-	//   Lives HERE, not with the editor shims (moved 2026-08-07): those sit inside the
-	//   `#if !defined(_WIN64)` advertise block, but WorldSnapshot::update -- which now
-	//   names the reason on a create failure too -- is built on BOTH platforms. Defining
-	//   it down there left x64 with a declaration and no definition (LNK2019).
+	//   Lives HERE, not with the editor shims (moved 2026-08-07, when those still sat
+	//   inside a Win32-only advertise guard and defining it down there left x64 with a
+	//   declaration and no definition, LNK2019). The guard is gone since the 2026-08-15
+	//   x64 port, but update() uses this too, so up here stays the right home.
 	const char* const cs_wsCreateErrorCodeNames[] = { "objectAlreadyExists", "orphanedAtOrigin", "mismatchedPobCrc", "tooCloseToOrigin" };
 
 	inline const char* wsCreateErrorCodeName (const CreateErrorCode result)
@@ -459,12 +459,10 @@ using namespace WorldSnapshotNamespace;
 //   in update() and suppressObject can use the same sink and prefix as the shims.
 #define WS_EDITOR_LOG(printfArgs) REPORT_LOG (true, printfArgs)
 
-#if !defined(_WIN64)
 //-- Goal B Wave 3: file-scope forward declaration for the loadStep self-test
 //   hook (the shim is defined at the end of this TU; a linkage specification
 //   is not allowed inside a function body)
 extern "C" int __cdecl engine_wsSaveSnapshot (void);
-#endif
 
 //===================================================================
 // STATIC PUBLIC WorldSnapshotReaderWriter
@@ -1224,7 +1222,6 @@ void WorldSnapshot::loadStep ()
 				ms_parsePending = false;
 				preloadSomeAssets ();
 
-#if !defined(_WIN64)
 				//-- Wave-3 gate aid (default off): one REAL save at parse
 				//   completion, typed result logged (engine_wsSaveSnapshot is
 				//   declared at file scope above -- C2598 forbids a linkage
@@ -1234,7 +1231,6 @@ void WorldSnapshot::loadStep ()
 					const int selfTestResult = engine_wsSaveSnapshot ();
 					REPORT_LOG (true, ("[editor.ws] SELF-TEST save-on-load: result=%d\n", selfTestResult));
 				}
-#endif
 			}
 			return;
 		}
@@ -2110,11 +2106,12 @@ void WorldSnapshot::addEventObjects(const std::string & eventName)
 //  - game-thread-only (consumer marshals); graceful degradation (a missing
 //    row leaves the affordance dark, never a crash).
 //
-// 32-bit only: the hookpoint table is Win32-only (engine_advertise.cpp), so
-// the shims compile away on x64 -- x64 behavior untouched by construction.
+// Both platforms (x64 port 2026-08-15; was 32-bit only). Every shim below is
+// extern "C" with a primitives/pointers-only boundary and __int64 ids, so the
+// port is guard removal: the frozen-ABI static_asserts just underneath prove
+// EngineWsNodeInfo keeps the identical 80-byte layout under either pointer
+// size (max member alignment is 8 on both).
 //===================================================================
-
-#if !defined(_WIN64)
 
 #include <cstddef>  // offsetof (frozen-ABI asserts)
 #include <cstring>  // memcpy/memset (POD-out fill)
@@ -3271,7 +3268,5 @@ extern "C" int __cdecl engine_wsSetNodeTemplateName (__int64 networkIdInt, const
 	WS_EDITOR_LOG (("[editor.ws] wsSetNodeTemplateName OK: id=%I64d %s -> %s\n", networkIdInt, oldName ? oldName : "(?)", name));
 	return 1;
 }
-
-#endif // !defined(_WIN64)
 
 //===================================================================

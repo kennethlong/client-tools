@@ -9,7 +9,7 @@
 // live scene instances restart. ClientEffectManager owns the live instances
 // (the private static m_particleSystems) but has no public enumerate-and-restart
 // surface, so the provider exposes engine_retriggerClientEffect(), a friend of
-// ClientEffectManager defined (32-bit only) in ClientEffectManager.cpp. It is
+// ClientEffectManager defined in ClientEffectManager.cpp. It is
 // advertised to Utinni as "particlePreview::retrigger" -- a plain free function,
 // so its address is a compile-time constant (a constant table row, NOT a
 // dynamic ensureDynamicRowsFilled() row).
@@ -19,8 +19,7 @@
 // (never per frame); allocation-free on any per-frame path.
 //
 // EXE-LOCAL: included ONLY by engine_advertise.cpp. The friend grant lives in
-// ClientEffectManager.h (ABI-neutral). 32-bit-only: the definition is
-// #if !defined(_WIN64) in ClientEffectManager.cpp, matching the whole advertise body.
+// ClientEffectManager.h (ABI-neutral). Both platforms (x64 port 2026-08-15).
 // ======================================================================
 
 #ifndef INCLUDED_engine_clientEffect_forward_H
@@ -35,7 +34,7 @@ void engine_retriggerClientEffect(char const * logicalName);
 // just-saved edit) for live .cef authoring preview -- restart() only covers
 // sustained, currently-playing instances; transient .cef effects are gone before
 // save. Uses only public APIs (Game::getPlayer / ClientEffectManager::playClientEffect
-// / ClientEffectTemplateList::fetch), so NOT a friend. Defined (32-bit only) in
+// / ClientEffectTemplateList::fetch), so NOT a friend. Defined in
 // ClientEffectManager.cpp; advertised as "particlePreview::replayClientEffect".
 // Returns playClientEffect's result; false (no crash) if there is no player/scene.
 bool engine_replayClientEffect(char const * clientEffectName);
