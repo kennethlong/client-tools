@@ -224,7 +224,15 @@ void TreeFile::remove(void)
 		// remove all the search nodes
 		const SearchNodes::iterator iEnd = ms_searchNodes.end();
 		for (SearchNodes::iterator i = ms_searchNodes.begin(); i != iEnd; ++i)
+		{
+			//-- 2026-08-15: Release-visible A/B line per loose node (manifest vs
+			//   negative-cache vs real syscall probes) before the node dies --
+			//   the compare-the-numbers telemetry for the file-manifest fix.
+			const SearchPath *searchPath = dynamic_cast<const SearchPath*>(*i);
+			if (searchPath != NULL)
+				searchPath->reportProbeCounters();
 			delete *i;
+		}
 		ms_searchNodes.clear();
 
 		ms_searchCache = 0;

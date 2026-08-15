@@ -89,6 +89,14 @@ public:
 	// class privates).
 	void forgetMissing(const char *fileName) const;
 
+	// 2026-08-15: Release-visible A/B probe (Kenny's compare-the-numbers ask).
+	// One REPORT_LOG line per loose node at TreeFile::remove: how many REAL
+	// filesystem probes ran vs how many the manifest / negative cache answered
+	// from memory. A/B recipe = same binary, one session with
+	// [SharedFile] searchPathFileManifest=false (pre-fix behavior) vs default
+	// on, same route -- realProbes is the number the fix exists to shrink.
+	void reportProbeCounters() const;
+
 private:
 
 	SearchPath();
@@ -98,6 +106,7 @@ private:
 	void makeAbsolutePath(const char *fileName, char *buffer) const;
 	bool cachedMissing(const char *fileName) const;
 	void noteMissing(const char *fileName) const;
+	bool mayContain(const char *fileName) const;
 
 private:
 
@@ -118,6 +127,29 @@ private:
 	mutable std::unordered_set<std::string> m_missingFiles;
 	mutable Mutex m_missingFilesMutex;
 	mutable int   m_missingFilesHits;
+
+	// 2026-08-15 (cold-singles perf arc): loose-directory FILE MANIFEST — the
+	// first-touch completion of the negative cache above. The miss cache only
+	// helps names probed BEFORE; a zone preload or a novel in-world asset still
+	// paid one real CreateFileA/GetFileAttributes MISS per loose path per NEW
+	// name (watchdog-sampled 643ms space-preload exists() storm + the loose-probe
+	// prefix of every cold-single texture open, 2026-08-15). On first probe the
+	// node enumerates its directory tree ONCE (lowercase/forward-slash relative
+	// names — the fixUpFileName convention) and every later probe answers
+	// absent-from-manifest with ZERO syscalls, first-touch included. Misses that
+	// slip past a stale manifest still land in m_missingFiles (self-healing for
+	// mid-session deletions); forgetMissing() INSERTS into a built manifest so
+	// the editor's freshly written loose files (TreeFile::forgetMissingFile —
+	// the Wave-3 wsSaveSnapshot flow) become visible without a restart. A loose
+	// file added mid-session by anything else stays invisible for this node
+	// (same restart-or-disable caveat as the miss cache; kill switch
+	// [SharedFile] searchPathFileManifest=false). Guarded by
+	// m_missingFilesMutex (one leaf lock per node; the build runs under it once,
+	// blocking a concurrent prober for the walk's few ms at first touch only).
+	mutable std::unordered_set<std::string> m_manifest;
+	mutable bool m_manifestBuilt;
+	mutable int  m_manifestSkips;
+	mutable int  m_realProbes;   // real syscall-backed probes (exists/getFileSize/open reaching the disk)
 };
 
 // ======================================================================
