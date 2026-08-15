@@ -51,11 +51,109 @@ any cherry-picked commit (our fix commits carry planning docs; `git rm -r --cach
   conviction by code-probe log + stock-contract reasoning, not capture. frameRateLimit temp
   key REMOVED from stage-B cfg (done).
 
+## Live round 2026-08-14 (second field session)
+- [x] c2 gl05 x64 load — **LIVE-VERIFIED by Kenny**: rasterMajor=5 on stage-B booted all the
+      way to Tatooine, zero FATALs. Bonus: the mahjong getTable probes logged the redesigned
+      c1 WARN+NULL behavior on the D3D9 path. Caveat noted: his gl05 D3DX chokes on ps_1_x
+      shaders + our D3D11-oriented stage-B-override .psh files (2d_blur/2d_bloom
+      materialSpecularPower) — his gl05 is not a clean visual reference with the override on.
+- [x] c16 c2983980e (amended from 33058cbf1) SwgCuiOptUi ten late-NGE widgets optional —
+      **field-found**: clicking Options in space FATALed (STRICT_DATA_FATAL
+      CuiMediator.cpp:1517 on checkShowToolbarCommandCooldownTimer, /HudSpace.OptMain).
+      ⚠ ATTRIBUTION (Kenny corrected): the loaded data = the v3.0 TRE set SAIS gave us —
+      the set his client is distributed with (both clients point at it: "D:/Code/SWGSource
+      Client v3.0"). So this is a SHIPPING-DATA crash — any of his users clicking Options
+      dies. strictData=false would AV instead (lenient NULL, unchecked deref on the next
+      line). Ported our battle-tested 5fce7bb83 shape:
+      optional flag + pointer reset + null-checked registration, 10 sites. OptUi was the ONE
+      file in his tree with zero optional flags (every overlapping file's counts match).
+      Built x64 DX11 clean (0 errors/unresolved), exe hand-restaged to stage-B, pushed.
+- [x] c16 **LIVE-VERIFIED by Kenny 2026-08-14**: Options opened in space without crashing
+      (same click that FATALed pre-fix).
+- [x] nebula recheck — RESOLVED 2026-08-15 via capture-pair diff (Capture210 both stage dirs,
+      settings matched all four toggles), and the defect is OURS, not his corpus:
+      **gl11 space stars render as 1-pixel points** (Direct3d11.cpp:326-345 no-ops ALL
+      point-sprite/point-size state, self-documented deferred Plan 11-11 debt, names
+      StarAppearance::draw) while HIS port GS-expands sized point sprites (SwgPointSprite GS,
+      5,461 sprites vs our 3,990 raw points). Measured: 1,218 bright star px (his) vs 150
+      (ours) — 8x; a dense star cluster reads as a "white nebula" in his, near-invisible in
+      ours. HIS client matches DX9 reference here. Killed along the way: textures identical
+      both sides (512x512 stock); NO bloom composite ran in either capture (his final draw =
+      passthrough blit). His corpus e_nebula stays exonerated.
+      ⚠ DATA LANDMINE documented: ILM_visuals.tre carries a 240-BYTE STUB of
+      texture/nebula2_front.dds (Legends preference-kill, same class as interior fog) — his
+      cfg mounts raw ILM_visuals so our stage-B-override loose nebula2 set (byte-identical to
+      data_sku1_03 stock) is LOAD-BEARING on his client; ours is immune (ilm_extract, no raw
+      ILM tres). If his stock corpus ships ILM_visuals, flag the stub set to Sais.
+      → OUR-SIDE FIX QUEUED: gl11 point-sprite emulation (GS expansion; his impl = reference;
+      B→A adoption candidate).
+
 ## Wrap-up — DONE 2026-08-14 night
 - [x] Branch pushed (tip now a656d9191 post-rebase); PR #1 retitled + full body (corpus gap, bloom-was-stock,
       runtime verify list for Sais: gl05 x64 loads / startup focus / drain log line).
 - [x] PR #1 CLOSED 2026-08-14 per Kenny — no review pressure on Sais; branch keeps growing
       quietly. REOPEN (gh pr reopen 1) or open fresh when Kenny says the set is ready.
+
+## Live round 2026-08-15 (third field session — star fix + nebula-cluster conviction)
+- [x] gl05 reference side-by-side (both clients rasterMajor=5): **stock has the DENSE stars**
+      — his gl11 is faithful, our gl11 was the deviation. Our client's gl05 boot also banked
+      the Gl_api guard first exercise (silent pass) and the JTL packed-map test PASSED
+      (component names sane in the ship UI).
+- [x] OUR star fix LANDED + LIVE-VERIFIED: Direct3d11_PointSprite (new .h/.cpp in our gl11) —
+      GS point-sprite expansion adapted from HIS Direct3d11_PointSprite design (rebuilt for
+      our per-shader signatures + applyPreDrawState chokepoint; GS in/out = the stars VS
+      signature {SV_Position, COLOR0, FOG}); kill switch [Direct3d11] pointSprites=false.
+      Kenny: "stars look right now". UNCOMMITTED as of the verify.
+- [x] "Ours clearer/brighter in spots" RESOLVED (Capture211 pair): the bright cloud above the
+      reticle = a **ClientNebula quad cluster** (shader/pt_nebulae_gas_4_2.sht →
+      effect/e_nebula_emisadd.eft + texture/pt_nebulae_gas_4_2.dds). Data equal (table in
+      patch_11_00 + ILM + TOC), per-machine options exonerated BY BYTE-PARSE
+      (globalNebulaRange 16384 both; density ours 60 / his 120 — his HIGHER), engine files
+      byte-identical (ClientNebula, NebulaManagerClient modulo our lightning null-guard).
+      **HIS client draws ZERO nebula clusters against stock data**: the effect's stock
+      programs are pre-SM4; his framework compiles the VS (a_vertexlit.vsh, 51 log hits) but
+      NEVER attempts pixel_program/e_nebula_emisadd.psh (zero log lines; framework logs every
+      compile) → silent implementation rejection → all pt_nebulae draws dropped, every space
+      zone. OURS renders via our stage/override ported e_nebula_emisadd.psh (602 B; differs
+      from the corpus copy in stage-B-override) + Phase-19 fallback lanes. His own
+      _client_dx11 dataset presumably papers over this with his converted corpus — which is
+      NOT in the squash repo (the PR-body corpus gap, now with its first concrete symptom).
+      → FLAG TO SAIS with this repro; his-side fix = ship/deploy the corpus conversions or
+      add a fallback lane; the silent-skip (no log on implementation rejection) is itself
+      worth a WARNING in his framework.
+
+## Nebula-cluster arc CLOSED 2026-08-15 (his branch now 19 commits, pushed)
+- [x] c17 33ffc4d51 phantom input elements (InputLayoutCache+Draw): reflect-and-retry failed
+      layouts, phantom stream slot 15, COLOR reads WHITE / others zeros (D3D9 per-usage
+      defaults) — THE fix that restored his in-zone nebulas; LIVE-VERIFIED (clouds render,
+      "space looks correct")
+- [x] c18 495913c0f data-shader failures warn-and-skip (ShaderCompiler dev FATAL +
+      ShaderReflection mid-row blanket FATAL) — stock-faithful; crash-repro'd both ways live
+- [x] c19 c80a23e03 D3D11_VERTEX_SHADER_CONSTANTS marker in his served include — enables
+      portable shader sources (first consumer: our tfcl family, X4019 alias fix)
+- [x] temp probes ([neb.probe] in NebulaManagerClient/ClientNebula) REVERTED before commit
+- stage-B-override is now a FULL sync of our 4 shader override dirs + the 3 ILM-landmine
+  loose fixes (stock nebula table + 2 gas textures); backup of pre-sync state at
+  stage-B-override-pre-oursync2-bak
+- OUR side landed same day: gl11 GS point sprites (Direct3d11_PointSprite, adapted from HIS
+  design; [Direct3d11] pointSprites kill switch) + portable tfcl guards
+- QUEUED our-side follow-up: mirror COLOR-reads-white into OUR phantom zero buffer
+  (Plan 11-09.8 getPhantomZeroBuffer is all-zeros — same latent invisible-draw hazard)
+
+## Post-merge TRE cleanup (scope sharpened by the 2026-08-15 nebula arc — feeds the parked "ilm sweep" backlog item)
+- ILM preference-kill audit: full same-path content-diff of each ILM_*.tre vs the base/patch
+  chain (tools/tre-compare is purpose-built). Known landmine classes: 240-byte texture stubs
+  (nebula2_* skybox set, pt_nebulae_gas_* cloud sprites), density-ZEROED datatables
+  (space/nebula/space_tatooine.iff confirmed; every zone's ILM copy suspect), interior-fog
+  preference (known since the JTL arc). Per-entry decision: keep / restore stock / knob.
+- Retire the stopgaps: stage-B-override loose fixes (nebula table + 2 textures) and our
+  ilm_extract curation are point fixes a cleaned data layer supersedes.
+- His distribution mount decision: drop raw ILM mounts (our model) or ship the cleaned layer.
+- Data-hygiene catalog (low): stock authoring warts, e.g. e_planet_tatooine.vsh's broken
+  DECLARE_textureCoordinateSets backslash — sets 1/2 are DEAD stray globals, shader derives
+  all 3 UV sets from set 0 and renders correctly on both pipelines; his reflection WARNING
+  is the tombstone. ⚠ Do NOT "fix" the backslashes: that creates real VS inputs the planet
+  VB doesn't supply.
 
 ## Parked / not in this PR
 - dPVS portal fixes (6): downstream of his cellLoaded parenting flip (conflict #3) — needs the conversation
