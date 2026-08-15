@@ -34,10 +34,20 @@
 // slopes went BLACK on D3D11. composeSlot0Shadow already feeds c60-63
 // (zeroed when sunless). Non-sun terms below mirror functions.inc exactly.
 
+#ifdef D3D11_VERTEX_SHADER_CONSTANTS
+// This backend's constants include already declares the hemispheric block at
+// c60..c63 (Galaxies-Reborn D3D11 serves its own include, which defines the
+// marker above); alias its names -- redeclaring the registers is X4019 there.
+#define extLight_backColor           vsExtendedParallelSpecular0BackColor
+#define extLight_tangentColor        vsExtendedParallelSpecular0TangentColor
+#define extLight_tangentMinusBack    vsExtendedParallelSpecular0TangentColorMinusBackColor
+#define extLight_tangentMinusDiffuse vsExtendedParallelSpecular0TangentColorMinusDiffuseColor
+#else
 float4 extLight_backColor           : register(c60);
 float4 extLight_tangentColor        : register(c61);
 float4 extLight_tangentMinusBack    : register(c62);
 float4 extLight_tangentMinusDiffuse : register(c63);
+#endif
 
 float4 calculateDiffuseLightingHemi(float4 vertexPosition_o, float3 vertexNormal_o)
 {

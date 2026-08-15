@@ -28,10 +28,19 @@
 // (asm diffuse.inc); retail calculateDiffuseLighting's plain max(N.L,0)
 // blackened away-facing slopes on D3D11.
 
+#ifdef D3D11_VERTEX_SHADER_CONSTANTS
+// See tfcl.vsh: alias the backend-declared hemispheric block instead of
+// redeclaring c60..c63 (X4019 on backends that serve their own include).
+#define extLight_backColor           vsExtendedParallelSpecular0BackColor
+#define extLight_tangentColor        vsExtendedParallelSpecular0TangentColor
+#define extLight_tangentMinusBack    vsExtendedParallelSpecular0TangentColorMinusBackColor
+#define extLight_tangentMinusDiffuse vsExtendedParallelSpecular0TangentColorMinusDiffuseColor
+#else
 float4 extLight_backColor           : register(c60);
 float4 extLight_tangentColor        : register(c61);
 float4 extLight_tangentMinusBack    : register(c62);
 float4 extLight_tangentMinusDiffuse : register(c63);
+#endif
 
 float4 calculateDiffuseLightingHemi(float4 vertexPosition_o, float3 vertexNormal_o)
 {
