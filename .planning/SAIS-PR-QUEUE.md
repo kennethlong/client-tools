@@ -1,5 +1,9 @@
 # Sais single-PR queue (branch strict-data-defaults, PR #1 DRAFT)
 
+**Restore-knobs ledger: [SAIS-KNOBS.md](SAIS-KNOBS.md)** — every hard-coded behavior of his
+the branch removed/gated + the exact cfg key or file copy that puts it back. Fold into the
+PR #1 body before reopening.
+
 Delivery model: ONE PR, clean atomic commits, Sais reviews before merge (memory:
 feedback_sais_one_pr_clean_commits). Repo: Galaxies-Reborn/swg-source-x64-dx11 (we have admin).
 Cross-repo picks: remote `kenny` = D:/Code/swg-client-v2 in his clone. STRIP `.planning/` from
@@ -139,6 +143,52 @@ any cherry-picked commit (our fix commits carry planning docs; `git rm -r --cach
   design; [Direct3d11] pointSprites kill switch) + portable tfcl guards
 - QUEUED our-side follow-up: mirror COLOR-reads-white into OUR phantom zero buffer
   (Plan 11-09.8 getPhantomZeroBuffer is all-zeros — same latent invisible-draw hazard)
+
+## Field round 2026-08-15 afternoon (cantina recheck — branch now 21 commits, pushed; c20/c21 SHAs post message-reword force-push)
+- [x] c20 52ba6fc36 the two inherited lighting patches become opt-in config — Kenny's live
+      report "people in the cantina look a little bright" traced to Direct3d11_ShaderSource
+      transform 3: engine-side `max(lightData.ambient.ambientColor + diffuseSpecular.diffuse,
+      0.85)` floor patched into every stock //hlsl program at compile (targets the dot3/skinned
+      character family — his header's own words: outdoor characters rendered dark on DX9-x64's
+      starved data; on good data it holds characters at 85% minimum light). Transform 2
+      (c_ambient mov→add, currently inert on stage-B because the loose corpus copy wins string
+      resolution) gated too. New knobs: `[Direct3d11] ambientBoost` (bool, default false; the
+      re-enabled add is now COLOR-only with alpha PINNED per the 1.85-alpha hazard note) +
+      `diffuseFloorPercent` (int, default 0 = stock; 85 = his old look). Both WARN when set.
+      Cache-safe by construction (compile key hashes post-patch text). Built x64 DX11 clean,
+      gl11_r.dll hand-restaged to stage-B-x64 (exe unchanged — plugin-only). ⚠ VERIFY PENDING:
+      Kenny relaunch stage-B → cantina people should match ours; `diffuseFloorPercent=85`
+      restores his old look for A/B. ⚠ FLAG TO SAIS: on HIS datasets (if they still starve
+      vertex streams) default-off may resurface dark characters — the knob is the escape hatch;
+      candidate corpus-conversation item.
+- [x] c21 bf4aef663 synthesized hemisphere becomes opt-in — Kenny's post-c20 recheck ("much
+      better... still a touch brighter, like a light shadow layer is missing") CONVICTED BY
+      CAPTURE PAIR (Capture220, ours stage/ vs his stage-B-x64): world geometry at parity
+      (floor 0.95x, wall 1.02x — c20 pixel-verified) but characters ~1.9x (robe region 52 vs
+      100/255). Same robe fragment (depth 0.939 both, prim-matched), same interpolated vertex
+      lighting v1=0.24 both → the delta is in PS dot3 constants. Mechanism: his
+      setExtendedLightData synthesizes tangent=0.65/back=0.30 of key-light diffuse for lights
+      authored WITHOUT hemispheres (inherited DX9-x64 fix #4) → +65% key light on every
+      character unconditionally, shade side never falls — exactly "shadows look missing".
+      Stock ref 0.19, his 0.41. Gate: `[Direct3d11] synthesizeHemisphericLight` (bool, default
+      false), WARN when set; LightManager.h inherited-fixes list updated (kept #1/#3/#5,
+      removed #2, knobbed #4). Built x64 DX11 clean, gl11_r.dll restaged to stage-B.
+      c21 VERIFIED by Kenny 2026-08-15 ("looks really close, close enough for now") —
+      formal side-by-side render test deferred to POST-MERGE (Kenny's call). NOTE:
+      message-reword force-push (apostrophe fix) changed c20/c21 SHAs; content identical.
+- [x] Cantina FOG question dispositioned (Kenny asked "still rendering fog after TRE syncing"):
+      fog rendering IS the correct, deliberate outcome — retail's smokey haze; the ILM/Legends
+      landmine turned it OFF (interior.iff 'Fog Enabled' 1→0, ~124 interiors); our merged table
+      (8cd8c2d82) in stage-B-override at priority 12 restores it and was live-verified 08-14.
+      Do not re-report as residual. If NO-fog is ever preferred, that's a preference decision
+      for the post-merge TRE cleanup manifest (keep/restore/knob), not a defect.
+- [x] tangentColor "flat add" suspicion (parked 08-14, 4 diffuse*.inc sites) REFUTED by
+      derivation: `r7 = tangentColor + r7` is the BASE TERM of the stock hemispheric ramp
+      (dot=1→diffuse, 0→tangent, −1→back; constants from Direct3d9_LightManager
+      setExtendedLightData). Not a compensation — do NOT strip it.
+- [x] OUR side: phantom COLOR-reads-white mirror landed (9283264c9, local) — 32-byte phantom
+      buffer zeros+white, COLOR elements at offset 16 (mirror of his c17); all four gl11
+      configs built + staged both platforms. Retires the queued our-side follow-up.
 
 ## Post-merge TRE cleanup (scope sharpened by the 2026-08-15 nebula arc — feeds the parked "ilm sweep" backlog item)
 - ILM preference-kill audit: full same-path content-diff of each ILM_*.tre vs the base/patch
