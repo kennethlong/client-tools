@@ -1333,12 +1333,13 @@ namespace Direct3d11_StateCacheNamespace
 			ctx->IASetVertexBuffers(0, 1, vbs, strides, offsets);
 		}
 
-		// Plan 11-09.8: phantom zero buffer at slot 15. Backs reflection-
+		// Plan 11-09.8: phantom buffer at slot 15. Backs reflection-
 		// driven phantom-element InputSlot=15 entries that
 		// VertexBufferDescriptorMap::augmentWithPhantomElements appended
 		// for VS-declared inputs the VBFormat doesn't cover (vs_4_0
 		// signature strictness). Stride=0 means every vertex reads the
-		// same zero value. Cheaper to bind unconditionally than to gate
+		// same value: zeros, or the white row for COLOR (D3D9 per-usage
+		// defaults). Cheaper to bind unconditionally than to gate
 		// per-VS (CODEX 11-09.8 consult Q4); D3D11 is fine with unused-
 		// but-bound slots.
 		{

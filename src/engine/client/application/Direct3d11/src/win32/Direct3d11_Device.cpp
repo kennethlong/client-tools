@@ -77,11 +77,13 @@ namespace Direct3d11_DeviceNamespace
 	ComPtr<ID3D11Texture2D>        ms_depthStencilTex;
 	ComPtr<ID3D11DepthStencilView> ms_depthStencilDSV;
 
-	// Plan 11-09.8: 16-byte zero-filled BIND_VERTEX_BUFFER created in
-	// Direct3d11_Device::create after the device is alive. Bound at
-	// InputSlot=15 by Direct3d11_StateCache::applyPreDrawState with
-	// stride=0 / offset=0 -- backs reflection-driven phantom layout
-	// elements for VS-declared semantics absent from the VBFormat.
+	// Plan 11-09.8: 32-byte BIND_VERTEX_BUFFER (zeros at 0..15, white
+	// float4 at 16..31) created in Direct3d11_Device::create after the
+	// device is alive. Bound at InputSlot=15 by
+	// Direct3d11_StateCache::applyPreDrawState with stride=0 / offset=0
+	// -- backs reflection-driven phantom layout elements for VS-declared
+	// semantics absent from the VBFormat (COLOR reads the white row,
+	// matching D3D9's per-usage defaults).
 	ComPtr<ID3D11Buffer>           ms_phantomZeroBuffer;
 
 	// Plan 11-08 Iter-1: D3D11 debug-layer InfoQueue. Non-null only when
@@ -613,26 +615,31 @@ bool Direct3d11_Device::create(HWND hwnd, int width, int height, bool windowed, 
 	ms_installed = true;
 
 	// ------------------------------------------------------------------
-	// Plan 11-09.8: phantom zero buffer. 16-byte zero-filled
-	// BIND_VERTEX_BUFFER (immutable). Bound at InputSlot=15 by
-	// applyPreDrawState; backs reflected-but-VBFormat-absent VS inputs.
+	// Plan 11-09.8: phantom buffer. 32-byte BIND_VERTEX_BUFFER (immutable):
+	// zeros at bytes 0..15, float4(1,1,1,1) at bytes 16..31. Bound at
+	// InputSlot=15 by applyPreDrawState; backs reflected-but-VBFormat-absent
+	// VS inputs. D3D9's defaults for an unsupplied input differed by usage:
+	// COLOR read back opaque white, everything else zeros -- and shipped data
+	// leans on the white (space nebula quads multiply their texture by an
+	// unsupplied COLOR0; zeros would draw them fully transparent). Phantom
+	// COLOR elements point at the white row (VertexBufferDescriptorMap).
 	{
 		D3D11_BUFFER_DESC pzDesc = {};
-		pzDesc.ByteWidth          = 16;
+		pzDesc.ByteWidth          = 32;
 		pzDesc.Usage              = D3D11_USAGE_IMMUTABLE;
 		pzDesc.BindFlags          = D3D11_BIND_VERTEX_BUFFER;
 		pzDesc.CPUAccessFlags     = 0;
 		pzDesc.MiscFlags          = 0;
 		pzDesc.StructureByteStride = 0;
 
-		uint8_t zeros[16] = {};
+		float const contents[8] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 		D3D11_SUBRESOURCE_DATA pzInit = {};
-		pzInit.pSysMem = zeros;
+		pzInit.pSysMem = contents;
 
 		HRESULT const pzHr = ms_device->CreateBuffer(&pzDesc, &pzInit, ms_phantomZeroBuffer.GetAddressOf());
 		FATAL_DX_HR("Direct3d11_Device: phantom zero buffer CreateBuffer failed: %s", pzHr);
 		DEBUG_REPORT_LOG_PRINT(true,
-			("Direct3d11: phantom zero buffer (slot 15, 16B immutable, stride=0) ready\n"));
+			("Direct3d11: phantom buffer (slot 15, 32B immutable zeros+white, stride=0) ready\n"));
 	}
 
 	// ------------------------------------------------------------------

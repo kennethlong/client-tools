@@ -285,9 +285,11 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
 //
 // Per CODEX 11-09.8 consult Q4: phantom elements live at InputSlot=15
 // (engine uses low slots for real streams; D3D11 exposes 16 IA slots).
-// The phantom buffer (Direct3d11_Device::getPhantomZeroBuffer) is a 16-byte
-// zero-filled VB bound with stride=0 -- every vertex reads zero, so the
-// VS sees zero for any phantom-backed input.
+// The phantom buffer (Direct3d11_Device::getPhantomZeroBuffer) is a 32-byte
+// VB bound with stride=0: zeros at bytes 0..15, float4(1,1,1,1) at 16..31.
+// Non-COLOR phantom inputs read zeros; COLOR inputs read opaque white --
+// D3D9's per-usage defaults for an unsupplied input (shipped data leans on
+// the white; see augmentWithPhantomElements).
 //
 // CODEX Q3: filter system-value inputs (already done by VertexShaderData
 // when populating reflectedInputs; defensive double-check here).
@@ -295,6 +297,7 @@ int Direct3d11_VertexBufferDescriptorMap::buildInputElementDescForStream(
 namespace
 {
 	enum { kPhantomInputSlot = 15 };
+	enum { kPhantomWhiteOffset = 16 };   // float4(1,1,1,1) lives at bytes 16..31 of the phantom buffer
 
 	// Map reflected (ComponentType, ComponentMask) to a DXGI_FORMAT.
 	// CODEX Q4: phantom elements read zero from a stride-0 buffer; format
@@ -392,7 +395,13 @@ int Direct3d11_VertexBufferDescriptorMap::augmentWithPhantomElements(
 		d.SemanticIndex        = ri.SemanticIndex;
 		d.Format               = reflectedToDxgi(ri.ComponentType, ri.ComponentMask);
 		d.InputSlot            = kPhantomInputSlot;
-		d.AlignedByteOffset    = 0;
+		// D3D9's defaults for an unsupplied input differed by usage: COLOR read
+		// back opaque white, everything else zeros -- and shipped data leans on
+		// the white (space nebula quads multiply their texture by an unsupplied
+		// COLOR0; zeros would draw them fully transparent). The phantom buffer
+		// carries zeros at offset 0 and float4(1,1,1,1) at offset 16; route by
+		// semantic.
+		d.AlignedByteOffset    = (_stricmp(ri.SemanticName, "COLOR") == 0) ? kPhantomWhiteOffset : 0;
 		d.InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
 		d.InstanceDataStepRate = 0;
 	}
