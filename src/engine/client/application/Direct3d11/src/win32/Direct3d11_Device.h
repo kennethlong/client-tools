@@ -136,6 +136,19 @@ public:
 	// Recreates back-buffer RTV + DSV at the new HWND client-rect size.
 	static void displayModeChanged();
 
+	// Consumer overlay callbacks (2026-08-15, toolkit x64 round-2; Gl_api
+	// setFrameCallback / setResizeCallback slots, wired in Direct3d11.cpp).
+	// Frame: invoked in present() AFTER applyBcgPass (the provider's last
+	// back-buffer write) and BEFORE the swap-chain Present, on the render
+	// thread -- the overlay draws over the finished frame with no vtable
+	// patch. Resize: invoked from resizeBackBuffer() with phase 0 BEFORE
+	// ResizeBuffers (consumer must release its back-buffer views -- an
+	// outstanding reference fails ResizeBuffers) and phase 1 after
+	// createBackBufferViews (rebuild against the new back buffer); both
+	// phases carry the new client size. Single-slot; null clears.
+	static void setFrameCallback(void (*fn)());
+	static void setResizeCallback(void (*fn)(int phase, int width, int height));
+
 	// Resize the swap-chain back-buffer (+ RTV/DSV) to an explicit client-rect
 	// size. Self-guards on uninstalled / zero / unchanged size. Shared by
 	// displayModeChanged() and the Gl_api resize slot (Direct3d11.cpp

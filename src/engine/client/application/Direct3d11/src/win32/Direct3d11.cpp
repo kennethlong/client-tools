@@ -1149,6 +1149,12 @@ bool Direct3d11::install(Gl_install * gl_install)
 	ms_glApi.present       = Direct3d11_Device::present;
 	ms_glApi.update        = update_impl;
 
+	// Consumer overlay callbacks (2026-08-15, toolkit x64 round-2): frame fires
+	// in present() post-BCG/pre-Present; resize fires phase 0/1 around the
+	// back-buffer resize. See Direct3d11_Device.h for the full contract.
+	ms_glApi.setFrameCallback  = Direct3d11_Device::setFrameCallback;
+	ms_glApi.setResizeCallback = Direct3d11_Device::setResizeCallback;
+
 	STUB(lockBackBuffer);
 	STUB(unlockBackBuffer);
 

@@ -457,7 +457,36 @@
 // BOTH arches; EngineHookPoint rows are 2 pointers (8 bytes Win32 / 16 x64);
 // EngineWsNodeInfo keeps the identical frozen 80-byte layout. 162 names.
 // ----------------------------------------------------------------------
-#define ENGINE_HOOKPOINTS_VERSION 34
+// ----------------------------------------------------------------------
+// Bumped 34 -> 35 in the NO-DETOUR OVERLAY wave (2026-08-15, answering the
+// consumer's x64 round-2 CHANGE-REQUEST: DetourXS proved x86-only by
+// construction, so every consumer vtable/prologue patch is an x64 casualty).
+// Three NAME ADDs -- callback REGISTRATION rows that replace the consumer's
+// three detours with provider-invoked callbacks, stable on both arches:
+//   graphics::registerFrameCallback -- void (void (__cdecl*)(void)). Fires on
+//     the render thread inside the D3D11 present path, AFTER the provider's
+//     last back-buffer write (the BCG/gamma pass), BEFORE the swap-chain
+//     Present -- byte-for-byte where the consumer's IDXGISwapChain::Present
+//     vtable patch used to draw. Retires that patch on BOTH arches.
+//   graphics::registerResizeCallback -- void (void (__cdecl*)(int phase,
+//     int width, int height)). Fires around the D3D11 back-buffer resize:
+//     phase 0 BEFORE ResizeBuffers (the consumer MUST release every
+//     back-buffer-referencing view -- an outstanding reference fails
+//     ResizeBuffers), phase 1 after the new views exist (rebuild). Replaces
+//     the ResizeBuffers vtable patch.
+//   game::registerTickCallback -- void (void (__cdecl*)(void)). Fires once at
+//     the TOP of Game::runGameLoopOnce, game thread, OUTSIDE any render call
+//     chain (previous frame fully presented) -- the deferred-command drain
+//     point. Replaces the consumer's detour on the advertised game::mainLoop
+//     row (which stays advertised unchanged).
+// Shared slot rules: single-slot (one consumer; last-write-wins), null
+// clears, register from a LIVE session (after graphics install -- an early
+// call WARNs and drops). The graphics pair rides new Gl_api tail slots
+// (setFrameCallback/setResizeCallback): D3D11 invokes; the D3D9 plugins
+// accept-and-ignore with a Release-visible line (the overlay is D3D11-only).
+// 165 names.
+// ----------------------------------------------------------------------
+#define ENGINE_HOOKPOINTS_VERSION 35
 
 // ----------------------------------------------------------------------
 // One row per advertised endpoint: a stable contract name + the borrowed

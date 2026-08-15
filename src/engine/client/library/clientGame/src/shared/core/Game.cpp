@@ -1056,6 +1056,26 @@ int Game::getShutdownPhase(void)
 	return ExitChain::getShutdownPhase();
 }
 
+//-------------------------------------------------------------------
+// Consumer tick callback (toolkit x64 round-2, advertised as
+// game::registerTickCallback). Single-slot plain function pointer --
+// one consumer, last-write-wins, null clears; invoked at the top of
+// runGameLoopOnce (see the call site for the outside-render guarantee).
+// Written from the consumer's thread at registration, read on the game
+// thread: a raw aligned pointer store, and the call site snapshots it,
+// so a concurrent clear can never fault mid-invocation.
+
+namespace GameTickCallbackNamespace
+{
+	void (*s_externalTickCallback)() = 0;
+}
+using GameTickCallbackNamespace::s_externalTickCallback;
+
+void Game::setExternalTickCallback(void (*fn)())
+{
+	s_externalTickCallback = fn;
+	REPORT_LOG(true, ("Game: consumer tick callback %s\n", fn ? "REGISTERED" : "cleared"));
+}
 
 //-------------------------------------------------------------------
 
@@ -1544,6 +1564,18 @@ namespace StallWatchdogNamespace
 void Game::runGameLoopOnce(bool presentToWindow, HWND hwnd, int width, int height)
 {
 	StallWatchdogNamespace::stallWatchdogFrameTick();
+
+	// Consumer tick callback (toolkit x64 round-2, game::registerTickCallback):
+	// top of the frame, before Os::update -- the previous frame is fully
+	// presented and no render state is on the stack, so this is the safe drain
+	// point for consumer-deferred work (e.g. a scene swap) that must never run
+	// inside the render-path frame callback. Snapshot so a concurrent clear
+	// cannot fault mid-call.
+	{
+		void (*const tickCallback)() = s_externalTickCallback;
+		if (tickCallback)
+			tickCallback();
+	}
 
 	bool result;
 	float elapsedTime = 0.0f;

@@ -1153,6 +1153,35 @@ void Direct3d11_Device::setBrightnessContrastGamma(float brightness, float contr
 }
 
 // ----------------------------------------------------------------------
+// Consumer overlay callbacks (2026-08-15, toolkit x64 round-2). Plain
+// single-slot function pointers -- one consumer (the injected overlay),
+// last-write-wins, null clears. Written from the consumer's thread at
+// registration time, read on the render thread: a raw pointer store is a
+// single aligned write and both present() and resizeBackBuffer() snapshot
+// it into a local before calling, so a concurrent clear can never fault
+// mid-invocation (the consumer must still not unload its module while a
+// frame is in flight -- its lifetime discipline, same as every borrowed
+// pointer in the advertise contract).
+
+namespace
+{
+	void (*s_consumerFrameCallback)()                                 = 0;
+	void (*s_consumerResizeCallback)(int phase, int width, int height) = 0;
+}
+
+void Direct3d11_Device::setFrameCallback(void (*fn)())
+{
+	s_consumerFrameCallback = fn;
+	REPORT_LOG(true, ("Direct3d11_Device: consumer frame callback %s\n", fn ? "REGISTERED" : "cleared"));
+}
+
+void Direct3d11_Device::setResizeCallback(void (*fn)(int phase, int width, int height))
+{
+	s_consumerResizeCallback = fn;
+	REPORT_LOG(true, ("Direct3d11_Device: consumer resize callback %s\n", fn ? "REGISTERED" : "cleared"));
+}
+
+// ----------------------------------------------------------------------
 // present -- flip-model present. Per D-13 / SPEC §Boundaries:
 // DEVICE_REMOVED is a process-restart class event (no recovery attempt).
 
@@ -1165,6 +1194,18 @@ bool Direct3d11_Device::present()
 	// frame (no-op when identity). Runs BEFORE drainInfoQueue so any
 	// validation messages the pass fires drain on the same frame.
 	applyBcgPass();
+
+	// Consumer overlay frame callback (toolkit x64 round-2): AFTER the BCG
+	// pass -- the provider's final back-buffer write -- and BEFORE Present,
+	// so the overlay draws over the finished, gamma-corrected frame exactly
+	// where its old DXGI-vtable Present hook sat. Before drainInfoQueue so
+	// any validation the consumer's draws fire drains on the same frame.
+	// Snapshot the slot so a concurrent clear cannot fault mid-call.
+	{
+		void (*const frameCallback)() = s_consumerFrameCallback;
+		if (frameCallback)
+			frameCallback();
+	}
 
 	// Plan 11-08 Iter-1: drain D3D11 debug-layer validation messages
 	// accumulated by this frame's draw calls BEFORE Present so they reach
@@ -1296,6 +1337,15 @@ void Direct3d11_Device::resizeBackBuffer(int newWidth, int newHeight)
 		("Direct3d11_Device::resizeBackBuffer %dx%d -> %dx%d\n",
 		 ms_width, ms_height, newWidth, newHeight));
 
+	// Consumer overlay resize callback, phase 0 (toolkit x64 round-2): the
+	// consumer MUST drop every view referencing the back buffer NOW --
+	// ResizeBuffers fails with outstanding references. Snapshot once so both
+	// phases go to the same registration even if the consumer swaps it
+	// mid-resize.
+	void (*const resizeCallback)(int, int, int) = s_consumerResizeCallback;
+	if (resizeCallback)
+		resizeCallback(0, newWidth, newHeight);
+
 	// Release back-buffer references (required by ResizeBuffers).
 	ms_depthStencilDSV.Reset();
 	ms_depthStencilTex.Reset();
@@ -1314,6 +1364,11 @@ void Direct3d11_Device::resizeBackBuffer(int newWidth, int newHeight)
 	ms_height = newHeight;
 
 	createBackBufferViews(newWidth, newHeight);
+
+	// Consumer overlay resize callback, phase 1: the new back buffer + views
+	// exist -- rebuild consumer render-target views against it.
+	if (resizeCallback)
+		resizeCallback(1, newWidth, newHeight);
 }
 
 // ======================================================================

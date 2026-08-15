@@ -88,6 +88,7 @@ ENGINE_HOOKPOINT(game,          isHudSceneTypeSpace)
 ENGINE_HOOKPOINT(game,          g_runningFlags)
 ENGINE_HOOKPOINT(game,          g_mainLoopCounter)
 ENGINE_HOOKPOINT(game,          getShutdownPhase)
+ENGINE_HOOKPOINT(game,          registerTickCallback)   // v35: fn fires at the TOP of runGameLoopOnce, game thread, outside any render chain -- the consumer deferred-command drain point (replaces their game::mainLoop detour)
 
 // -- graphics (clientGraphics facade, all static; Graphics.h) ---------------
 ENGINE_HOOKPOINT(graphics,      install)
@@ -105,6 +106,8 @@ ENGINE_HOOKPOINT(graphics,      setSystemMouseCursorPosition)
 ENGINE_HOOKPOINT(graphics,      setStaticShader)
 ENGINE_HOOKPOINT(graphics,      g_renderTargetWidth)
 ENGINE_HOOKPOINT(graphics,      g_renderTargetHeight)
+ENGINE_HOOKPOINT(graphics,      registerFrameCallback)   // v35: fn fires render-thread in the D3D11 present path, post-BCG pre-Present -- the no-detour overlay draw point (replaces the consumer DXGI vtable patch)
+ENGINE_HOOKPOINT(graphics,      registerResizeCallback)  // v35: fn(phase, w, h) -- phase 0 BEFORE ResizeBuffers (release back-buffer views), phase 1 after the new views exist (rebuild)
 
 // -- scene::groundScene (clientGame; GroundScene.h) -- 38-01, EPA-05 ---------
 // GroundScene is MULTIPLE-INHERITANCE (NetworkScene : public Scene, public
