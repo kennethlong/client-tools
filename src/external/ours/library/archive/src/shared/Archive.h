@@ -97,6 +97,11 @@ inline void get(ReadIterator & source, std::string & target)
 		size = len;
 	else
 		get(source, size);
+	// Sanity-bail: claimed size exceeds remaining buffer. Without this,
+	// std::string(c, size) memcpy's past valid memory and AVs on a
+	// truncated or malformed message.
+	if (size > source.getSize())
+		throw ReadException("std::string get: size exceeds remaining buffer");
 	const char * c = reinterpret_cast<const char * const>(source.getBuffer());
 	target = std::string(c, size);
 	source.advance(size);
@@ -115,6 +120,12 @@ inline void get(ReadIterator & source, ByteStream & target)
 {
 	unsigned int s;
 	get(source, s);
+	// Sanity-bail: claimed size exceeds remaining (unread) bytes -- almost
+	// certainly malformed input. Throwing ReadException unwinds the
+	// AutoByteStream::unpack chain so the message is handled as a read
+	// error instead of allocating garbage and corrupting the heap.
+	if (s > source.getSize())
+		throw ReadException("ByteStream get: size exceeds remaining buffer");
 	target.put(source.getBuffer(), s);
 	source.advance(s);
 }
