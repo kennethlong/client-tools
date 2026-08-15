@@ -30,6 +30,7 @@ namespace ConfigDirect3d11Namespace
 	bool         ms_censusLog;
 	bool         ms_constantBufferRing;
 	bool         ms_shaderCachePreload;
+	bool         ms_pointSprites;
 }
 using namespace ConfigDirect3d11Namespace;
 
@@ -88,6 +89,11 @@ void ConfigDirect3d11::install()
 	// ON: a background thread slurps the cache dir at install; tryLoad becomes
 	// a memory lookup. false = kill switch back to per-hit disk reads.
 	KEY_BOOL(shaderCachePreload, true);
+
+	// Point-sprite GS emulation (Direct3d11_PointSprite): D3D9-parity sized
+	// stars (2026-08-15 gl05-vs-gl11 A/B conviction). Default ON; false =
+	// kill switch back to 1-pixel hardware points (the pre-fix look).
+	KEY_BOOL(pointSprites, true);
 }
 
 // ----------------------------------------------------------------------
@@ -105,5 +111,6 @@ bool         ConfigDirect3d11::getPreventDriverInternalThreading()    { return m
 bool         ConfigDirect3d11::getCensusLog()                         { return ms_censusLog; }
 bool         ConfigDirect3d11::getConstantBufferRing()                { return ms_constantBufferRing; }
 bool         ConfigDirect3d11::getShaderCachePreload()                { return ms_shaderCachePreload; }
+bool         ConfigDirect3d11::getPointSprites()                      { return ms_pointSprites; }
 
 // ======================================================================

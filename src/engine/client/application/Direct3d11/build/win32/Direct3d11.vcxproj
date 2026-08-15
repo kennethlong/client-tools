@@ -394,6 +394,7 @@ copy /Y "%SystemRoot%\Sysnative\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage-
     <ClCompile Include="..\..\src\win32\Direct3d11_HlslRewrite.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_LegacyPSConstants.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_LightManager.cpp" />
+    <ClCompile Include="..\..\src\win32\Direct3d11_PointSprite.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_Metrics.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.cpp" />
     <ClCompile Include="..\..\src\win32\Direct3d11_RenderTarget.cpp" />
@@ -430,6 +431,7 @@ copy /Y "%SystemRoot%\Sysnative\d3dcompiler_47.dll" "..\..\..\..\..\..\..\stage-
     <ClInclude Include="..\..\src\win32\Direct3d11_HlslRewrite.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_LegacyPSConstants.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_LightManager.h" />
+    <ClInclude Include="..\..\src\win32\Direct3d11_PointSprite.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_Metrics.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_PixelShaderProgramData.h" />
     <ClInclude Include="..\..\src\win32\Direct3d11_RenderTarget.h" />

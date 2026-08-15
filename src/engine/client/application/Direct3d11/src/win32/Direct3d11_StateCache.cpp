@@ -35,6 +35,7 @@
 #include "Direct3d11_DynamicIndexBufferData.h"
 #include "Direct3d11_DynamicVertexBufferData.h"
 #include "Direct3d11_PixelShaderProgramData.h"
+#include "Direct3d11_PointSprite.h"
 #include "Direct3d11_StaticIndexBufferData.h"
 #include "Direct3d11_StaticShaderData.h"
 #include "Direct3d11_StaticVertexBufferData.h"
@@ -1547,6 +1548,11 @@ namespace Direct3d11_StateCacheNamespace
 			if (dss) ctx->OMSetDepthStencilState(dss, 0);
 			ms_dssDirty = false;
 		}
+
+		// Point sprites: bind the GS expander for point-list draws, unbind
+		// it for everything else -- a geometry shader left bound would
+		// expand the next triangle list's vertices into quads.
+		Direct3d11_PointSprite::apply(topology == D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
 
 		++ms_drawCallCount;
 

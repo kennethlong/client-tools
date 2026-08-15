@@ -32,6 +32,7 @@ public:
 	static bool         getCensusLog();                      // default: false; true = per-frame gl11-census.csv (CONSULT-58)
 	static bool         getConstantBufferRing();             // default: true; false = legacy per-slot cbuffer path (CONSULT-67 kill switch)
 	static bool         getShaderCachePreload();             // default: true; false = per-hit disk reads (CONSULT-68 kill switch)
+	static bool         getPointSprites();                   // default: true; false = 1-pixel points (point-sprite GS kill switch)
 };
 
 // ======================================================================
