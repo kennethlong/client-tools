@@ -109,6 +109,10 @@ public:
 	static void install();
 	static void remove();
 
+	// Worklist of .vsh that rendered through the generic //asm fallback (visible, not
+	// correct). Written to shader-asm-fallback.txt at shutdown.
+	static void writeAssemblyFallbackInventory();
+
 public:
 
 	explicit Direct3d11_VertexShaderData(ShaderImplementationPassVertexShader const &vertexShader);

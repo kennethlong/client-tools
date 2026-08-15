@@ -261,11 +261,17 @@ namespace Direct3d11_VertexShaderDataNamespace
 	// route (DEBUG_REPORT_LOG + InfoQueue) so it shows alongside [P19SKIP] in
 	// the RenderDoc/info log. Census these names -> author //hlsl for the
 	// shared set (the long-term correctness fix).
+	// Inventory of every .vsh that fell back to the generic world-transform VS.
+	// The fallback is a VISIBILITY bridge, not parity (no lighting/baked vertex
+	// colour, TEXCOORD0 only, static-world transform only), so each name here is a
+	// shader that still needs an //hlsl authoring pass. Written out at shutdown as
+	// a worklist -- see writeAssemblyFallbackInventory().
+	std::set<std::string> s_assemblyFallbackNames;
+
 	void logAssemblyFallbackOnce(char const *displayName)
 	{
-		static std::set<std::string> s_logged;
 		std::string const key = displayName ? displayName : "(null)";
-		if (!s_logged.insert(key).second)
+		if (!s_assemblyFallbackNames.insert(key).second)
 			return;
 		DEBUG_REPORT_LOG_PRINT(true,
 			("[P19VSFALLBACK] generic world-transform VS bound for //asm '%s'\n", key.c_str()));
@@ -294,8 +300,51 @@ void Direct3d11_VertexShaderData::install()
 
 void Direct3d11_VertexShaderData::remove()
 {
+	writeAssemblyFallbackInventory();
+
 	delete ms_memoryBlockManager;
 	ms_memoryBlockManager = nullptr;
+}
+
+// ----------------------------------------------------------------------
+/**
+ * Write the //asm-fallback shader worklist to shader-asm-fallback.txt.
+ *
+ * Every .vsh listed here rendered through the generic world-transform fallback
+ * rather than its own program, so it is visible but NOT correct: no lighting or
+ * baked vertex colour, TEXCOORD0 only (lightmaps and detail UVs dropped), and a
+ * static-world transform only (transformed/RHW geometry such as gradient_sky is
+ * double-transformed). Authoring an //hlsl version of each is the documented fix.
+ *
+ * Written with fopen rather than REPORT_LOG deliberately: this runs during
+ * teardown, where the log sink may already be gone.
+ */
+
+void Direct3d11_VertexShaderData::writeAssemblyFallbackInventory()
+{
+	if (s_assemblyFallbackNames.empty())
+		return;
+
+	FILE *const out = fopen("shader-asm-fallback.txt", "wb");
+	if (!out)
+	{
+		REPORT_LOG(true, ("[shader.fallback] %d //asm shader(s) used the fallback; could not write shader-asm-fallback.txt\n",
+			static_cast<int>(s_assemblyFallbackNames.size())));
+		return;
+	}
+
+	IGNORE_RETURN(fprintf(out, "# //asm vertex shaders that fell back to the generic world-transform VS.\n"));
+	IGNORE_RETURN(fprintf(out, "# Visible but NOT correct: no lighting/baked vertex colour, TEXCOORD0 only,\n"));
+	IGNORE_RETURN(fprintf(out, "# static-world transform only. Each needs an //hlsl authoring pass.\n"));
+	IGNORE_RETURN(fprintf(out, "# count %d\n", static_cast<int>(s_assemblyFallbackNames.size())));
+
+	for (std::set<std::string>::const_iterator i = s_assemblyFallbackNames.begin(); i != s_assemblyFallbackNames.end(); ++i)
+		IGNORE_RETURN(fprintf(out, "%s\n", i->c_str()));
+
+	fclose(out);
+
+	REPORT_LOG(true, ("[shader.fallback] %d //asm shader(s) used the generic fallback VS -- worklist written to shader-asm-fallback.txt\n",
+		static_cast<int>(s_assemblyFallbackNames.size())));
 }
 
 // ----------------------------------------------------------------------
