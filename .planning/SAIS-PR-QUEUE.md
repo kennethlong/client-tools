@@ -268,8 +268,108 @@ the fix-queue giant PR #1; not started. Scoping facts banked now:
   is the tombstone. ⚠ Do NOT "fix" the backslashes: that creates real VS inputs the planet
   VB doesn't supply.
 
+## ⚠ STOCK-DATASET ACCEPTANCE (2026-08-15, Kenny) — the reviewer's environment
+
+Reviewers will evaluate the PR against the **stock SWGSource Client v3.0 dataset**
+(`D:/Code/SWGSource Client v3.0/` — "they grab it from their shelf"). That install is a
+complete, runnable, PRISTINE 32-bit stock client: `SwgClient_r.exe` + gl05/06/07 (no gl11),
+stock `dpvs.dll`, stock Miles, `options.cfg rasterMajor=5`, and `login.cfg` already pointed at
+192.168.1.200:44453 with `allowMultipleInstances=true`. It is ALSO the dataset both our
+clients read game data from, so it is the true common baseline. Do not edit its cfgs
+(header: "This is a tracked file. Please dont edit it.").
+
+**Acceptance bar: the branch must work against that dataset with NO curated data layer** —
+no `stage/ilm_extract`, no `stage/override`, no `stage-B-override`.
+
+### BLOCKER FOUND — his DX11 needs an offline shader corpus that is NOT in the deliverable repo
+
+- `Direct3d11_ShaderCompiler.cpp:450` + `refuseIfNotHlsl()`: his DX11 **hard-refuses D3D9
+  shader assembly** — "assembly program cannot be built at all; the asset pipeline translates
+  the reachable ones" / "It needs translating to HLSL." Stock SWG shaders ARE D3D9 assembly.
+- His repo ships **ZERO** `.psh/.vsh/.hlsl/.fx` files. The translated corpus lives in
+  `D:/Code/Galaxies-Reborn/stage-B-override` (**131 pixel + 113 vertex = 244 programs**,
+  mounted at priority 12) and the asm2hlsl generator lives on `client-tools@x64-dx11-vanilla`
+  — neither is in `swg-source-x64-dx11`.
+- ⇒ A reviewer building his branch against the shelf dataset gets a DX11 client that refuses
+  a large fraction of shaders. **DX11 is not self-sufficient in the PR as it stands.**
+- CONTRAST — ours degrades instead of refusing: gl11 has a generic `//asm` fallback VS +
+  skip-draw paths (`Direct3d11_VertexShaderData.cpp:159`, `Direct3d11_StateCache.cpp:1379`,
+  `Direct3d11_VertexDeclarationMap.cpp:150`), and `stage/override` is only **11 pixel + 9
+  vertex** reauthored `//hlsl` programs (106 files total).
+- **FLAG TO SAIS + decide:** ship the corpus as bytes, ship the generator (recipe-not-bytes,
+  matching the upstream-offering stance on ilm_extract), or adopt our asm-fallback so stock
+  data renders unaided. Untested either way — needs a stock-cfg run of his client.
+- NEXT CONCRETE STEP: build a stock-parity cfg for stage-B (mirror the v3.0
+  `client.cfg`/`live.cfg` layering: `swgsource_3.0.tre` + the 4 TOCs + `disable_wayfar_dearic_snow.tre`,
+  ILM commented OUT, no override corpus) and see what his DX11 actually does.
+
+## Perf + smoothness port A -> B (2026-08-15, Kenny: "take any relevant improvements from A into B")
+
+Scope: perf AND movement smoothness into the ONE giant PR; advertise surface stays PR #2.
+
+LANDED on `strict-data-defaults` (pushed, branch now 27):
+- `3937fe234` sharedCollision floor-seam shallow-graze gate — the **floor half only** of our
+  door-snap fix (`cs_seamGrazeEpsilon` 0.05m). Kenny verified: sideways snap FIXED.
+- `352a68488` sharedFile async-loader callback drain wall-time budget
+- `c23498847` clientGame interior-layout creates spread across frames
+- `261522e5f` clientGame world-snapshot create/delete drain wall-time budget
+- `620ce5d2b` clientGame stall watchdog + audio-safe stack sampler (incl. the symbol pre-warm)
+
+⛔ CAMERA — **NOTHING from A goes in** (Kenny reversed twice; final position):
+- His snap-back-when-it-cannot-ray-trace is CORRECT/desired. Our smooth compensation is
+  exactly what lets our camera drift outside walls. So: no pull-in rate limit
+  (`cs_cameraPullInSpeed`), no convergence follow-up, no interior zoom cap.
+- Interior zoom cap was ported then REVERTED (Kenny: "the original game didnt have that
+  camera cap, and it feels bad in game play mode"). Also DISABLED in A via
+  `stage-x64/client.cfg freeChaseCameraInteriorMaximumZoom=0`.
+- The cap was only ever a MITIGATION for the interior portal cull -> the real fix is dPVS.
+- OPEN: his camera oscillates in/out against wall-mounted terminals in the cantina foyer.
+  Kenny: check STOCK client first — if stock oscillates too it is 20-year-old retail
+  behaviour and we do not spend time on it.
+
+STILL TO PORT (frame-spreading family, all confirmed absent from B):
+- phased WorldSnapshot load (CONSULT-60 `1d5d522f1`) — kills the ~3s parse; hard hand-port
+  (his WorldSnapshot.cpp 1467 lines vs our 3272)
+- budgeted terrain preload (CONSULT-59 part A, `b46a83871`) — kills the 3-4.5s GroundScene-ctor freeze
+- searchPath negative cache + file manifest + TreeFileFactory buffering + Texture one-read
+- dPVS portal fixes (Kenny saw exterior through a foyer portal -> NEEDED; still blocked on
+  the `cellLoaded` parenting-flip conflict #3 — investigate before touching)
+
+CHEAP WIN, not a port: his shader cache is his OWN design and is PRESENT — manifest-driven
+(`compiled_shader/manifest.txt`). stage-B just has no baked manifest, hence 2542ms of
+D3DCompile / a 271ms frame. Run once with `[Direct3d11] bakeCompiledShaders=true`, exit
+cleanly, set back to false.
+
+CFG: his stage cfg's "TUNING KEYS WITHHELD" note claimed all three were "stock keys available
+to both trees" — only `minFrameRate` was. Corrected; `asynchronousLoaderCallbackTimeBudgetMs=6`
+and `maxInteriorCreatesPerFrame=10` now live, plus `stallWatchdogMs=100`/`MaxDumps=0`.
+
+## ISSUE STACK — login-position regression (REPORTED 2026-08-15 ~21:30, UNINVESTIGATED)
+
+Kenny: exited A from the Mos Eisley cantina, logged back in, and spawned at the
+starport/station instead — "newish behaviour." His hypothesis: a client (possibly B) is not
+sending something the server needs to persist last location.
+
+⚠ TWO CONFOUNDS to rule out FIRST before blaming any client change:
+1. **Multi-client last-writer-wins.** A and B play the SAME character on the same server, and
+   both were logged in repeatedly tonight (B went to space ~19:48; A was in the cantina ~20:47
+   and ~21:06). The persisted position is whatever the LAST clean disconnect wrote — an
+   interleaved B session can legitimately overwrite A's cantina position.
+2. **The after-space mechanic.** Returning from a space session historically places the
+   character at the launch starport. B's space trip may have armed exactly that.
+
+Evidence available when investigated: A's SwgClient_report.log logout sequences ([shutdown]
+phase lines timestamp every clean exit), B's report log ditto, and the server's own logs.
+Nothing in today's A changes touches networking (probe emission, sampler pre-warm, VOLSET
+seed, shader inventory, log sharing); B's changes are audio/perf — the only network-adjacent
+port is the WorldSnapshot create/delete budget (engine-internal, no wire traffic).
+
 ## Parked / not in this PR
-- dPVS portal fixes (6): downstream of his cellLoaded parenting flip (conflict #3) — needs the conversation
+- dPVS portal fixes (6): downstream of his cellLoaded parenting flip (conflict #3) — needs the conversation.
+  **FIELD-EVIDENCED 2026-08-15 22:01** — Kenny captured the classic foyer see-through in B
+  (screenshot `C:/Users/kenne/Downloads/Screenshot 2026-08-15 220121.png`, Mos Eisley 3457,5,-4844:
+  raw sky/terrain through the portal frame). Second sighting that evening (first was live, no capture).
+  The conflict INVESTIGATION is now the entry ticket for a needed port, not a nice-to-have.
 - c_ambient parameterize (ambientBoost, color-only PIN ALPHA): lives in his CORPUS (client-tools), not here
 - Char-select wearables retry (async race, no retry on char-select path): his tree, separate investigation
 - Screenshot key dead: needs live debug with his symbols

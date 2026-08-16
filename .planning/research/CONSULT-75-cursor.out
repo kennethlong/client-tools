@@ -1,0 +1,340 @@
+﻿# CONSULT-75 — Shim-side state enumeration (`JuceMiles.cpp`)
+
+Structs are defined at ```73:123:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp```. Default `SampleState`: `status = SMP_DONE` (114), `totalFrames = 0` (82), empty `pcm` (80), `completed = false` (113), `cursorFrame = 0.0` (84), `ownerStream = nullptr` (112).
+
+---
+
+## 1. READS — what each read decides
+
+### `SampleState::status`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 537 | `mixSample` | **Gate:** skip entire mix if `!= SMP_PLAYING` |
+| 584–587 | `mixSample` | Only reached when status is `SMP_PLAYING`; checks `cursorFrame >= totalFrames` → EOS |
+| 1085 | `AIL_stop_sample` | Only stop if currently `SMP_PLAYING` |
+| 1104 | `AIL_sample_status` | Return value to caller |
+| 1112 | `AIL_active_sample_count` | Count samples where `== SMP_PLAYING` |
+| 1221 | `AIL_set_sample_ms_position` | If `SMP_PLAYING`, re-call `startSample`; else only move cursor |
+| 1244 | `AIL_set_sample_position` | Same branch as ms_position |
+| 1362 | `AIL_pause_stream` | Unpause only if `== SMP_STOPPED` |
+
+### `SampleState::pcm`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 537 | `mixSample` | **Gate:** skip if `getNumSamples() == 0` |
+| 575–576 | `mixSample` | Fetch interleaved source pointers for interpolation |
+| 737 | `createVoice` | **Gate:** fail if `getNumSamples() == 0` |
+| 758 | `startSample` | **Gate:** refuse start if `getNumSamples() == 0` |
+
+### `SampleState::totalFrames`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 372 | `mapEncodedOffsetToFrame` | Return 0 if `totalFrames == 0` |
+| 383, 388, 393 | `mapEncodedOffsetToFrame` | Clamp/map byte offsets into frame range |
+| 398 | `mapFrameToEncodedOffset` | Return 0 if `totalFrames == 0` |
+| 411 | `mapFrameToEncodedOffset` | Proportional byte offset from frame |
+| 537 | `mixSample` | **Gate:** skip if `== 0` |
+| 577–580 | `mixSample` | Compute `loopStart` / `loopEnd` (uses `totalFrames - 1`) |
+| 584 | `mixSample` | EOS test: `cursorFrame >= totalFrames` |
+| 591 | `mixSample` | Clamp `frame1` to `totalFrames - 1` |
+| 753 | `getCurrentFrame` | Clamp cursor to `totalFrames` |
+| 758 | `startSample` | **Gate:** refuse if `== 0` |
+| 763 | `startSample` | Clamp `seekFrame` to `totalFrames - 1` |
+| 766 | `startSample` | Default loop end to `totalFrames` if open-ended |
+| 1220 | `AIL_set_sample_ms_position` | Upper bound for seek (`totalFrames - 1` or 0) |
+| 1232 | `AIL_sample_ms_position` | Compute total duration ms |
+| 737 | `createVoice` | (indirect via pcm gate — pcm empty iff decode never ran) |
+
+### `SampleState::completed`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 1535 | `AIL_serve` | `exchange(false)`: if was true, queue EOS dispatch |
+
+### `SampleState::cursorFrame`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 584 | `mixSample` | EOS: `>= totalFrames` → `finishSample` |
+| 590–592 | `mixSample` | Linear-interpolation source index + fraction |
+| 648 | `mixSample` | Loop wrap test vs `loopEnd` |
+| 654–655 | `mixSample` | Loop overflow reposition |
+| 753 | `getCurrentFrame` | Position query (clamped) |
+
+### `SampleState::ownerStream`
+
+| Lines | Function | Decision |
+|-------|----------|----------|
+| 1542 | `AIL_serve` | If non-null, route EOS to stream callback instead of sample EOS callback |
+| 1544–1546 | `AIL_serve` | Look up `StreamState`, invoke `stream->callback(ownerStream)` |
+
+### `StreamState` fields
+
+| Field | Lines | Function | Decision |
+|-------|-------|----------|----------|
+| `sample` | 1344 | `AIL_stream_sample_handle` | Return backing `HSAMPLE` |
+| `sample` | 1357 | `AIL_pause_stream` | Resolve sample for status mutation |
+| `callback` | 1545–1546 | `AIL_serve` | Invoke stream EOS callback if registered |
+| `filename` | — | *(never read after write)* | Written 1328; no read sites in this file |
+
+---
+
+## 2. WRITES — who sets what
+
+### `SampleState::status`
+
+| Lines | Function | Value | Context |
+|-------|----------|-------|---------|
+| 114 | struct init | `SMP_DONE` | Default for new sample |
+| 308 | `decodeAudio` | `SMP_DONE` | **After successful full decode** |
+| 524 | `finishSample` | `SMP_DONE` | Playback reached end |
+| 747 | `destroyVoice` | `SMP_DONE` | Teardown / pre-reload |
+| 771 | `startSample` | `SMP_PLAYING` | Successful start |
+| 1086 | `AIL_stop_sample` | `SMP_STOPPED` | Explicit stop |
+| 1095 | `AIL_end_sample` | `SMP_DONE` | Force end |
+| 1361 | `AIL_pause_stream` | `SMP_STOPPED` | Pause |
+| 1363 | `AIL_pause_stream` | `SMP_PLAYING` | Unpause (**no pcm guard**) |
+
+### `SampleState::pcm`
+
+| Lines | Function | Effect |
+|-------|----------|--------|
+| 297 | `decodeAudio` | `setSize(channels, totalFrames)` — full buffer alloc |
+| 298 | `decodeAudio` | `reader->read(...)` — fills buffer |
+| 300 | `decodeAudio` | `setSize(0, 0)` on read failure |
+
+*(No other writes; no partial/streaming fill path exists.)*
+
+### `SampleState::totalFrames`
+
+| Lines | Function | Value |
+|-------|----------|-------|
+| 82 | struct init | `0` |
+| 285 | `decodeAudio` | `reader->lengthInSamples` |
+
+### `SampleState::completed`
+
+| Lines | Function | Value | Context |
+|-------|----------|-------|---------|
+| 113 | struct init | `false` | |
+| 307 | `decodeAudio` | `false` | Post-decode reset |
+| 525 | `finishSample` | `true` | Triggers `AIL_serve` EOS path |
+| 748 | `destroyVoice` | `false` | |
+| 770 | `startSample` | `false` | |
+| 1096 | `AIL_end_sample` | `false` | |
+
+### `SampleState::cursorFrame`
+
+| Lines | Function | Effect |
+|-------|----------|--------|
+| 84 | struct init | `0.0` |
+| 306 | `decodeAudio` | `= 0.0` |
+| 647 | `mixSample` | `+= step` each output frame |
+| 655 | `mixSample` | Loop wrap reposition |
+| 764 | `startSample` | `= seekFrame` |
+| 1224 | `AIL_set_sample_ms_position` | `= seekFrame` (when not playing) |
+| 1247 | `AIL_set_sample_position` | `= seekFrame` (when not playing) |
+
+### `SampleState::ownerStream`
+
+| Lines | Function | Value |
+|-------|----------|-------|
+| 112 | struct init | `nullptr` |
+| 1330 | `AIL_open_stream` | `= token` (stream handle) |
+
+### `StreamState` fields
+
+| Lines | Function | Field | Effect |
+|-------|----------|-------|--------|
+| 1327 | `AIL_open_stream` | `sample` | `= sampleHandle` |
+| 1328 | `AIL_open_stream` | `filename` | copy path string |
+| 1385–1386 | `AIL_register_stream_callback` | `callback` | register/replace EOS callback |
+
+---
+
+## 3. `AIL_*` entry points callable on a stream between `AIL_open_stream` and audible playback
+
+Engine stream start sequence (from evidence + `Audio.cpp` 3034–3085): after open, it calls loop setup, optional callback registration, volume/rate setup, then `AIL_start_stream`.
+
+| Entry point | Lines | Precondition assumed | Uses pcm/totalFrames/status? |
+|-------------|-------|---------------------|------------------------------|
+| `AIL_stream_sample_handle` | 1340–1344 | Stream exists in `s_streams` | No |
+| `AIL_set_stream_loop_count` → `AIL_set_sample_loop_count` | 1366–1368 → 1174–1179 | Sample handle valid | Writes `loopCount` only |
+| `AIL_set_stream_loop_block` → `AIL_set_sample_loop_block` | 1370–1372 → 1189–1197 | Sample handle valid | Writes offsets; **reads** `totalFrames` indirectly via later `startSample`/`mixSample` |
+| `AIL_register_stream_callback` | 1379–1387 | Stream exists | Writes `StreamState::callback` |
+| `AIL_set_sample_volume_levels` (via stream handle) | 1132–1140 | Sample exists | Volume only |
+| `AIL_set_sample_reverb_levels` | 1153–1161 | Sample exists | Reverb only |
+| `AIL_set_sample_playback_rate` | 1117–1122 | Sample exists | Rate only |
+| `AIL_set_stream_ms_position` → `AIL_set_sample_ms_position` | 1390–1392 → 1211–1224 | `sourceSampleRate > 0` | **Reads** `totalFrames`, `status`; seeks |
+| `AIL_stream_ms_position` → `AIL_sample_ms_position` | 1394–1396 → 1227–1234 | Optional | **Reads** `totalFrames`, `cursorFrame` |
+| `AIL_stream_status` → `AIL_sample_status` | 1374–1376 → 1100–1104 | Sample exists | **Reads** `status` |
+| `AIL_start_stream` → `AIL_start_sample` → `startSample` | 1347–1351 → 1073–1078 → 756–772 | Driver open, **pcm decoded** | **Hard gate** on pcm + totalFrames |
+| `AIL_pause_stream` | 1354–1363 | Sample exists | Mutates `status` without pcm check |
+| `AIL_close_stream` | 1334–1337 → 785–793 | — | `destroyVoice` + erase |
+
+Sync open path additionally runs inside `AIL_open_stream` (1310–1331):
+
+```1310:1331:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+	HSTREAM AILCALL AIL_open_stream(HDIGDRIVER driver, char const *filename, S32)
+	{
+		// ...
+		if (!sampleHandle || !AIL_set_named_sample_file(...))
+		{
+			// release + return nullptr
+		}
+		// create StreamState, set ownerStream
+	}
+```
+
+`AIL_set_named_sample_file` (1046–1057): `destroyVoice` → assign `encodedData` → **`decodeAudio` (full sync decode)** → `createVoice` (pcm gate). Returns 0 if either fails → **`AIL_open_stream` returns nullptr`**.
+
+---
+
+## 4. Invariant violations if `pcm`/`totalFrames` still empty at each entry point
+
+| Entry point | Violated invariant | Shim behavior |
+|-------------|-------------------|---------------|
+| `AIL_set_named_sample_file` (during open) | pcm populated, `totalFrames > 0` | `decodeAudio` fails or `createVoice` fails (737–740) → returns **0** → open returns **nullptr** |
+| `AIL_set_stream_loop_block` | Loop offsets mappable to frames | Offsets stored; `mapEncodedOffsetToFrame` returns **0** when `totalFrames==0` (372–373) — loops degenerate |
+| `AIL_set_sample_ms_position` | `sourceSampleRate > 0` | Early return at 1215 if rate still 0 (not set until decode) |
+| `AIL_sample_ms_position` | `totalFrames > 0`, `sourceSampleRate > 0` | Reports **0 ms** total/current (1232–1234) |
+| `AIL_start_stream` / `startSample` | **`pcm.getNumSamples() > 0 && totalFrames > 0`** | **Returns false**, sets error string (758–761); **`status` stays whatever it was** (typically `SMP_DONE`); **`AIL_start_sample` ignores return value** (1077–1078) |
+| `AIL_stream_status` | status reflects playback | Returns **`SMP_DONE`** (post-decode idle state, or default) |
+| `AIL_pause_stream` (unpause) | Should only resume decoded voice | Sets **`SMP_PLAYING` without pcm check** (1362–1363) — still silent in mixer |
+| `mixSample` (audio thread) | `SMP_PLAYING && totalFrames > 0 && pcm non-empty` | **Silent skip** (537) — no mix, cursor does not advance |
+| `AIL_serve` / stream callback | Playback actually finished | Only fires if `completed==true` (1535), set by `finishSample` (525) — requires mixer to run to EOS |
+
+**Critical post-decode status invariant:** `decodeAudio` always sets `status = SMP_DONE` (308), even after filling pcm. Audible output requires a subsequent successful `startSample` → `SMP_PLAYING` (771).
+
+---
+
+## 5. Candidate mechanisms (ranked) — silent music with 200–450 ms late PCM
+
+### 1. **`startSample` hard gate + no retry path** (best fit for Attempt A *and* B completion miss)
+
+```756:772:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+	bool startSample(SampleState &sample)
+	{
+		if (sample.pcm.getNumSamples() == 0 || sample.totalFrames == 0 || !findDriver(sample.driver))
+		{
+			setError("Cannot start a sample before audio data and a JUCE device are assigned");
+			return false;
+		}
+		// ...
+		sample.status = SMP_PLAYING;
+		return true;
+	}
+```
+
+- Attempt A: engine calls `AIL_start_stream` while pcm still empty → start **refused**, `status` stays **`SMP_DONE`**.
+- `AIL_start_sample` does not propagate failure (1073–1078).
+- **`mixSample` never mixes** (537: needs `SMP_PLAYING`).
+- No shim API re-invokes `startSample` when decode finishes unless the async patch explicitly does — and the engine **never** calls `AIL_start_stream` again (it sets `m_sampleStarted = true` after the first queue).
+
+**Evidence:** Attempt A left `status = SMP_DONE` while pending — exactly the state `mixSample` rejects.
+
+---
+
+### 2. **`mixSample` triple gate — permanent silence until `SMP_PLAYING` + full pcm**
+
+```537:538:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+		if (sample.status != SMP_PLAYING || sample.totalFrames == 0 || sample.pcm.getNumSamples() == 0)
+			return;
+```
+
+- Attempt B: early `SMP_PLAYING` with empty pcm → **zero audio**, cursor frozen (gate returns before 647).
+- If completion sets pcm but **`status` is not returned to `SMP_PLAYING`**, silence persists even with full buffer.
+
+**Evidence:** Fact 6 in evidence pack; lines 537–538.
+
+---
+
+### 3. **`decodeAudio` clobbers `status` to `SMP_DONE` after async fill** (best fit for Attempt B still silent)
+
+```305:308:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+		sample.seekFrame = 0;
+		sample.cursorFrame = 0.0;
+		sample.completed.store(false, std::memory_order_release);
+		sample.status = SMP_DONE;
+```
+
+- If Attempt B sets `SMP_PLAYING` early, then completion runs `decodeAudio`, status is reset to **`SMP_DONE`**.
+- Audible output requires completion handler to call `startSample` **after** this line.
+- Any token mismatch, handle lookup failure, or skipped `startSample` → **full pcm + `SMP_DONE` = silent forever** in `mixSample`.
+
+**Evidence:** Attempt B explicitly added completion `startSample`; its continued failure implicates this ordering or the completion path not reaching line 771.
+
+---
+
+### 4. **Sync-open success contract: `createVoice` pcm gate**
+
+```735:742:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+	bool createVoice(SampleState &sample)
+	{
+		if (!findDriver(sample.driver) || sample.pcm.getNumSamples() == 0)
+		{
+			setError("JUCE audio driver or decoded sample is unavailable");
+			return false;
+		}
+		return true;
+	}
+```
+
+- If async `AIL_open_stream` still goes through `AIL_set_named_sample_file` before decode finishes → returns 0 → **stream never created** (1318–1321).
+- Evidence says open succeeds, so the patch must bypass this — but any regression that calls `createVoice` before pcm lands recreates total failure at open.
+
+---
+
+### 5. **`AIL_pause_stream` unpause sets `SMP_PLAYING` without pcm** (lower fit for music)
+
+```1360:1363:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+		if (onoff)
+			sample->status = SMP_STOPPED;
+		else if (sample->status == SMP_STOPPED)
+			sample->status = SMP_PLAYING;
+```
+
+- Can produce `SMP_PLAYING` + empty pcm → silent in mixer. Engine music path doesn't call this (commented out in `Audio.cpp`), so low rank.
+
+---
+
+### 6. **Audio callback `try_to_lock` silence** (poor fit for “music only dead”)
+
+```679:681:D:/Code/Galaxies-Reborn/swg-source-x64-dx11/src/engine/client/library/clientAudio/src/win32/JuceMiles.cpp
+		std::unique_lock<std::recursive_mutex> lock(s_mutex, std::try_to_lock);
+		if (!lock.owns_lock() || numOutputChannels <= 0 || numSamples <= 0)
+			return;
+```
+
+- Would silence **all** mixed samples for that block, not selectively kill MP3 streams while WAV one-shots work.
+- Sync decode holding `s_mutex` for 450 ms causes hitches, not permanent music loss.
+
+---
+
+### 7. **Spurious stream EOS via `completed`/`AIL_serve`** (poor fit while pcm empty)
+
+- `finishSample` (524–525) only runs from `mixSample` after passing the gate at 537 — unreachable with empty pcm.
+- Cannot fire stream callback (1542–1546) until mixer reaches EOS.
+
+---
+
+## Synthesis — the decisive shim mechanism
+
+The shim treats **“ready to play”** as a single atomic condition: **`pcm.getNumSamples() > 0 && totalFrames > 0 && status == SMP_PLAYING`**. The only transition into that state is **`startSample` success** (771). Everything else either refuses (`758–761`), skips mixing (`537`), or resets to idle (`308`, `747`).
+
+For a stream whose PCM arrives 200–450 ms after `AIL_open_stream` returns:
+
+| Phase | Attempt A (`SMP_DONE` pending) | Attempt B (`SMP_PLAYING` pending) |
+|-------|-------------------------------|-----------------------------------|
+| Engine calls `AIL_start_stream` | `startSample` **fails** → stays `SMP_DONE` | `startSample` **succeeds** early → `SMP_PLAYING` |
+| `mixSample` | Skipped (`status != PLAYING`) | Skipped (`pcm empty`) |
+| Decode completes | pcm filled, `decodeAudio` → **`SMP_DONE`** (308) | pcm filled, **`SMP_DONE` clobber** (308) |
+| Without completion `startSample` | **Silent forever** | **Silent forever** (`SMP_DONE` + pcm) |
+| WAV non-stream path | Sync decode in `AIL_set_named_sample_file` before return; gate passed before any start | Unaffected |
+
+**Primary mechanism:** the **`startSample` pcm/totalFrames gate (758–761)** combined with **`mixSample`'s identical gate (537)** and **`decodeAudio`'s unconditional `status = SMP_DONE` (308)**. There is no Miles-compatible “decode pending” state; idle decoded streams and failed starts both present as **`SMP_DONE`**, and the mixer only renders **`SMP_PLAYING` with populated pcm**.
+
+WAV ambients keep working because they use the non-stream path with synchronous decode completing **before** `AIL_open_stream`/`AIL_set_named_sample_file` returns, so the gate is already satisfied when the engine first calls `AIL_start_sample`.
