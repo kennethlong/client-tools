@@ -3790,7 +3790,20 @@ void Audio::setSampleVolume(SampleId const &sampleId, float const volume)
 					iterLast->second = finalVolume;
 				}
 				else
+				{
+					// Log the SEED too: a stream whose volume is set once and never
+					// changed produced ZERO lines, which is exactly the case that
+					// mattered for the too-soft cantina band (2026-08-15).
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					fprintf(s_audioDiagFile, "%02d:%02d:%02d.%03d VOLSET seed %.3f in=%.3f master=%.3f cat=%.3f global=%.3f bg=%.3f %s\n",
+						st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
+						finalVolume, volume, s_masterVolume, categoryVolume,
+						s_globalAudioFadeVolume, s_backgroundMusicFadeVolume,
+						path);
+					fflush(s_audioDiagFile);
 					s_lastVolSet[key] = finalVolume;
+				}
 			}
 		}
 
