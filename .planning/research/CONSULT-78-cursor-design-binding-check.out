@@ -1,0 +1,230 @@
+﻿# TRE-BUILDER-DESIGN binding check (SWG-Toolkit @ read-only)
+
+Evidence is from the toolkit tree as it exists today; commit pins in the design (`c356e8b`, `1ecb559`) were not re-verified as git objects.
+
+---
+
+## Findings
+
+### 1. Cited symbols, files, and patterns
+
+**1.1 `policyRuleset.ts` / `policyEvaluator.ts` pattern — CONFIRMED (with merge-key mismatch)**  
+Both exist under `packages/renderer/src/services/`. Bundled defaults live in `@swg/contracts` (`packages/contracts/src/policy.ts` + `policy/legends.json`). Override file is `<studioDir>/policyRuleset.json`. Unknown profile → empty ban list (`policyRuleset.ts:103-108`).
+
+**WRONG:** Design §4 says merge **by rule id**. Code merges **by `classId`**:
+
+```82:85:packages/renderer/src/services/policyRuleset.ts
+/** Merge override rules onto the bundled ruleset BY `classId` — override wins, bundled survives. */
+function mergeByClassId(bundled: PolicyRuleSet, override: PolicyRuleSetOverrideFile): PolicyRuleSet {
+  const merged = new Map(bundled.rules.map((r) => [r.classId, r] as const));
+  for (const rule of override.rules) merged.set(rule.classId, rule);
+```
+
+**WRONG:** Design §4 severity `error` / `warn` / `info`. Policy uses `tier: 'ban' | 'advisory'` and packaging verdict kinds (`packages/contracts/src/policy.ts:45-52`), not that triad.
+
+---
+
+**1.2 `packPatch.ts` Path-B `require('@swg/native-core')` — CONFIRMED**  
+
+```31:36:packages/renderer/src/services/packPatch.ts
+// Path B: require the native addon directly (nodeIntegration:true in the renderer).
+// Mirrors the pattern in useLiveService.ts lines 29-35.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nativeCore = require('@swg/native-core') as {
+  buildTre: (entries: Array<{ path: string; data?: Uint8Array; tombstone?: boolean }>, version?: string) => ArrayBuffer;
+};
+```
+
+Native tests load the addon the same way (`packages/native-core/test/packPatch.test.ts:34-35`).
+
+---
+
+**1.3 `parseIff` + `result.defects[]` tolerate-and-report — CONFIRMED**  
+Native API exposes `defects: IffFormatDefect[]`, always an array (`packages/native-core/index.d.ts:427-451`). C++ populates tolerated defects (`packages/native-core/src/iff_binding.cpp:215-233`).
+
+**RISK:** Renderer VFS path **drops** defects today — only `roots`, `trailingBytes`, `roundTrip` go into `iffStore` (`TreVfsBrowser.tsx:386-390`). `IffParseResult` in `iffStore.ts:22-26` has no `defects` field. UI wiring in §9 assumes data that is not propagated.
+
+---
+
+**1.4 `buildTre` / `repackTre` post-version fix — CONFIRMED**  
+Both exported from native (`packages/native-core/index.d.ts:566+`, `addon.cpp:192-193`). Tests use `'5000'` as the retail default (`tre-version-endianness.test.ts:59-74`). `buildTre(..., '0005')` throws (`packPatch.test.ts:95`). `repackTre` preserves source version (`tre-version-endianness.test.ts:108-123`).
+
+---
+
+**1.5 `TreMount::resolveChain` / `vfsEntriesColumnar` — CONFIRMED**  
+Implemented in C++ (`TreMount.cpp:224+`, `451+`), bound as `resolveChain` and columnar mount APIs (`tre_binding.cpp`, `index.d.ts:217+`).
+
+---
+
+**1.6 `tocReader.ts` — CONFIRMED (read-only)**  
+Full reader at `packages/renderer/src/services/tocReader.ts`. 24-byte entry layout documented as `<BBHIIIII>` (`:287-295`), CRC-sorted on-disk order preserved (`:283-284`, `:351-352`).
+
+---
+
+**1.7 `looseOverrideDeploy.ts`, `cfgActivator.ts`, `clientSearchOrder.ts` — CONFIRMED**  
+All exist under `packages/renderer/src/services/` with the roles the design describes (loose deploy, cfg patch activation, cfg-chain mount order).
+
+---
+
+**1.8 `changesetService.ts`, `stageSnapshot.ts` — CONFIRMED**  
+Version graph / seal / deploy record (`changesetService.ts`). Live `.ws` → staging bridge (`stageSnapshot.ts`). `stageSnapshot` imports `useStagingStore` (`:25`) — not headless-pure.
+
+---
+
+**1.9 `fixtureRegistry.ts` + enforcing sweep — WRONG (as stated)**  
+Registry and `assertSweep()` exist (`packages/harness/fixtureRegistry.ts:106-131`). **`assertSweep()` is never called** anywhere in the repo (only defined). `registry-coverage.test.ts` reimplements violation checks inline on synthetic `registerFormat('test-*', …)` entries (`:20-67`) but does **not** sweep the live registry after real format tests register fixtures.
+
+Design §8 claim “existing sweep enforces it” / “registry sweep green” is **not true in CI today**.
+
+---
+
+**1.10 `TreVfsBrowser`, `InspectorStack`, `MountedArchivesList` — PARTIALLY WRONG**
+
+| Element | Exists? | Design accuracy |
+|---|---|---|
+| `TreVfsBrowser` | Yes (`panels/tre/TreVfsBrowser.tsx`) | OK |
+| `MountedArchivesList` | Yes (`panels/tre/MountedArchivesList.tsx`) | OK |
+| `InspectorStack` | Yes (`panels/inspector/InspectorStack.tsx`) | **Wrong surface for VFS lint** — viewport appearance inspector (meshes/materials), hosted by `InspectorPanel.tsx`, not the Assets/VFS IFF path |
+
+VFS IFF inspection is **`DataPanel` → `IffStructureTree`** fed by `iffStore` from `TreVfsBrowser` (`DataPanel.tsx:8-10`, `TreVfsBrowser.tsx:365-391`).
+
+---
+
+**1.11 `.toc` writer “none in either repo” — CONFIRMED for production; RISK on test-only**  
+No `writeToc` / production writer module (repo-wide grep empty). Native has **read/inject** via `parseTocIntoMount` (`tre_binding.cpp:1056+`).
+
+**RISK:** Harness already builds synthetic `.toc` bytes inline: `buildSyntheticToc()` in `packages/harness/test/tre-toc-extract-integration.test.ts:122-164` — ad hoc test helper, not a reusable writer or CLI.
+
+---
+
+**1.12 `.toc` record layout claim — CONFIRMED**  
+Design: `uint8, uint8, uint16, 5×uint32`, 24 bytes, CRC-sorted — matches `tocReader.ts:287-295` and integration test `:150-161`.
+
+**WRONG (terminology):** Design §6 “`TAG_0001` version”. Toolkit reads on-disk version as **`"1000"`** / `0x30303031` (`tocReader.ts:49-50`, `parseTocHeader :176-179`; same in `tre-toc-extract-integration.test.ts:139`).
+
+---
+
+**1.13 `fixUpFileName` via native export — RISK**  
+Exists in C++ (`TreMount.cpp:82+`, `TreBuilder.cpp:81+`) but **not exported** to JS (`index.d.ts` has no `fixUpFileName`). Design’s “small native-core export or TS port” is accurate as a gap, not an existing integration point.
+
+---
+
+### 2. Package layout: `@swg/compose` under plain Node
+
+**2.1 `@swg/native-core` in plain Node — CONFIRMED**  
+`index.js` resolves via `node-gyp-build` → `prebuilds/<platform>-<arch>/@swg+native-core.node`, with `build/Release/` fallback (`packages/native-core/index.js:41-65`). Vitest/native tests prove plain-Node load.
+
+**2.2 `@swg/contracts` without build — WRONG for bare `require`/`import` via package.json**  
+`main` / `types` point at **`dist/`** (`packages/contracts/package.json:5-6`). No `dist/` in tree. Root Vitest aliases `@swg/contracts` → **`packages/contracts/src/index.ts`** (`vitest.config.ts:35`). `tsconfig.base.json` paths do the same (`:17-18`).
+
+A headless CLI must either: run through root Vitest/tsconfig paths, **build contracts first** (`pnpm --filter @swg/contracts build`), or add its own alias — not “drop in and `node bin/tresmith`” without setup.
+
+**2.3 pnpm workspace + hoisted linker — CONFIRMED**  
+`pnpm-workspace.yaml`: `packages/*`, `nodeLinker: hoisted`. New package gets hoisted deps like existing workspace members.
+
+**2.4 CLI `bin` precedent — CONFIRMED (absence)**  
+No `"bin"` field in any workspace `package.json`. First CLI would set precedent.
+
+**2.5 Minimal config to match conventions — CONFIRMED pattern (two templates)**
+
+| Pattern | Example | Needs |
+|---|---|---|
+| TS lib + tsc | `@swg/backend` | `package.json` (workspace deps, `build`/`test`), `tsconfig.json` extending `tsconfig.base.json` |
+| TS tests, no dist | `@swg/harness` | `package.json` (`type: "module"`, `test: vitest run`), relies on **root** `vitest.config.ts` |
+| Native consumer | `@swg/native-core` tests | `require('@swg/native-core')`, package-local or root vitest |
+
+A compose package would minimally need: `package.json` with `workspace:*` on `@swg/native-core` + `@swg/contracts`, `"test": "vitest run"`, and either backend-style `tsconfig` + `build` **or** harness-style inclusion in root vitest `packages/*/test/**`. Optional package-local `vitest.config.ts` like `packages/native-core/vitest.config.ts`.
+
+**RISK:** `@swg/renderer` does **not** declare `@swg/native-core` in its own `package.json`; it relies on root hoisting (`package.json:35-38`). A new package should declare deps explicitly.
+
+---
+
+### 3. “Pure” renderer service candidates — imports
+
+| File | Pure? | Imports |
+|---|---|---|
+| `crc32.ts` | **Yes** | None (self-contained table) |
+| `pathSafety.ts` | **Yes** | `path` only |
+| `tocReader.ts` | **No** | `fs`, `./crc32`, Node `zlib` (`:17-22`) |
+| `clientSearchOrder.ts` | **No** | `path`, `fs` (require), `./clientLayout` (`:31-37`); `clientLayout` also uses `fs` (`clientLayout.ts:33-34`) |
+
+Design’s “consider moving if pure” is only fully true for **`crc32.ts`** and **`pathSafety.ts`**.
+
+---
+
+### 4. UI wiring table (§9)
+
+| Row | Verdict | Evidence |
+|---|---|---|
+| Lint findings → VFS + Inspect stack | **WRONG target + no current UI** | No per-entry defect badges; no archive lint summary. Wrong inspector: use **`DataPanel`/`IffStructureTree`**, not `InspectorStack`. `defects` stripped before store (`TreVfsBrowser.tsx:386-390`). |
+| Shadow/override/tombstone provenance | **CONFIRMED + mostly already wired** | `VfsTree.tsx`: `isOverride`, `shadowCount`, `isTombstone`, `⧉`/`⊘` (`:698-732`); **winner archive filename already shown** per row (`:734-750`, `title={entry.winnerArchivePath}`). `ShadowChainDetail` in tree detail (`VfsTree.tsx:541`). “Add winner to tooltip where absent” understates existing winner pip. |
+| Version/format facts → `MountedArchivesList` | **CONFIRMED** | Version chip `v4000`/`v5000`/`v6000` (`treMount.ts:44-48`, `MountedArchivesList.tsx:118-133`). |
+| Enumerate-only chip “per-payload post-04.3” | **WRONG** | Detection is per-entry (`readVfsEntryBytes.ts:87` → `markArchiveEncrypted`), but chip is **per-archive** on `MountedArchivesList` (`:141-157`, `treStore.ts:271-278`). |
+| Compose/deploy via stage flow | **CONFIRMED feasible** | `DeployDialog.tsx` calls `packPatch(flattenedEntries, outputPath)` (`:518`). Extension point exists; today emits **single `.tre`**, not TOC set. |
+| Recipe/layer UI CLI-only | **CONFIRMED** | No compose/recipe UI in tree; aligns with “no half-rendered controls”. |
+
+**InspectorStack card extensibility — WRONG assumption**  
+Hard-coded appearance accordions (`InspectorStack.tsx:19-28`, mesh/materials/skeleton). Not a generic card stack for new lint/archive cards. VFS lint belongs in **`IffStructureTree`** / **`DataPanel`** or **`VfsTree`** row chrome.
+
+---
+
+### 5. Fixture / harness claims
+
+**5.1 Registry sweep fails CI on zero fixtures / missing `loaderSource` — WRONG**  
+Mechanism documented and implemented as `assertSweep()`, but **not wired into any test run** (see §1.9).
+
+**5.2 `fixtures-real` + `skipIf` lane for running-client gate — RISK (mixed patterns, no client gate yet)**  
+Patterns that exist:
+
+- **Fail-loud:** `ilf-roundtrip.test.ts:217-218`, `ws-roundtrip.test.ts:314` — `expect(fixture).not.toBeNull()`
+- **skipIf:** `tre-v6000-swgsource-byteexact.test.ts:83`, `stf-roundtrip.test.ts:302` (console SKIP), `objectTemplateResolver.test.ts:283` — `describe.skipIf(!hasReal)`
+
+No implemented **running-client / FATAL-vs-boot** harness in code — only described in `.planning/handoff/2026-08-17-PROVIDER-REPLY-probe-artifacts-and-4000-census.md`. Design can copy patterns but cannot cite an existing running-client gate.
+
+---
+
+### 6. `.toc` writer section
+
+**6.1 Record layout — CONFIRMED** against `tocReader.ts` and `tre-toc-extract-integration.test.ts`.
+
+**6.2 “No write code the design missed” — RISK**  
+No production writer. Test-only `buildSyntheticToc()` should be cited as B0 seed, not omitted.
+
+---
+
+### 7. Overlaps the design should have cited (neutral)
+
+- **`.planning/todos/pending/tre-linter-and-toc-set-builder.md`** — same scope; still says `buildTre` default was blocking (stale vs post-`1ecb559` state).
+- **`DataPanel` / `IffStructureTree` / `iffStore`** — correct VFS lint UI seam, not `InspectorStack`.
+- **`packages/harness/test/tre-builder-roundtrip.test.ts`** — build-twice determinism guard already in CI.
+- **`packages/harness/test/tre-toc-extract-integration.test.ts`** — synthetic `.toc` + mount/extract chain.
+- **`packagingArtifacts.ts` + `renderPolicyReport`** — existing human-readable report write pattern parallel to `manifest.ts` / compose reports.
+- **`readVfsEntryBytes.ts`, `treMount.ts`, `treAutoMount.ts`** — mount/extract layer compose verify/UI will reuse.
+- **`nativeTre.ts`** — renderer’s typed native facade vs raw `require`.
+- **`policyEvaluator.ts`** — closer pure “evaluate + render report” analogue than full ruleset merge for lint v1.
+
+---
+
+## Minimal corrections to the design text
+
+1. **§4 / lint registry:** Say merge by **`classId`** (or rename rules to carry a lint `ruleId` — not present today). Do not copy “rule id” wording from policy without noting the mismatch. Map severity to **`ban`/`advisory`** or define new lint severities explicitly in contracts.
+
+2. **§8 / fixtures:** Change “existing sweep enforces” → “wire `assertSweep()` into CI” (or extend `registry-coverage.test.ts` to call it on `getRegistry()` after registrations). Today it does not run.
+
+3. **§9 row 1:** Replace `InspectorStack` with **`DataPanel` / `IffStructureTree`** (and/or `VfsTree` row badges). Note prerequisite: propagate `parseIff().defects` through `iffStore` / `IffParseResult`.
+
+4. **§9 row 2:** Winner archive is **already shown** in `VfsTree` (`winnerArchiveFilename`); revise “add to tooltip” to “extend detail panel / summary,” not greenfield chip work.
+
+5. **§9 row 3:** Enumerate-only chip is **per-archive** (triggered by any per-entry extract failure), not per-payload chip on each row.
+
+6. **§6:** Version token is on-disk **`"1000"`** (`0x30303031`), not `TAG_0001`, unless you explicitly equate engine macro names.
+
+7. **§2 / CLI:** Document **`@swg/contracts` build step** (or tsconfig/vitest alias) for plain Node; no `"bin"` precedent exists yet.
+
+8. **§3 pure moves:** Only **`crc32.ts`** and **`pathSafety.ts`** are move-ready; `tocReader.ts` and `clientSearchOrder.ts` need `fs` (+ layout) abstraction or stay wrapped.
+
+9. **§6 / B0:** Reference harness **`buildSyntheticToc()`** as existing test-only `.toc` builder seed.
+
+10. **§5 running-client lane:** Cite **fail-loud vs skipIf** split in harness; acknowledge **no running-client gate is implemented** yet in toolkit code.
+
+11. **Stale todo cross-link:** Update or supersede `tre-linter-and-toc-set-builder.md` blocker text now that `buildTre('5000')` is the corrected default.

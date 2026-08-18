@@ -1,0 +1,169 @@
+﻿# TRE version taxonomy — end-to-end inventory
+
+Magic at bytes 0..3 is always `EERT` (`0x45 0x45 0x52 0x54`) on read and write (`TreArchive.cpp:145-149`, `TreBuilder.cpp:152-153`).
+
+---
+
+## 1. Per-arm taxonomy table
+
+| Arm | (a) READ bytes @4..7 → arm | (b) WRITE bytes @0..7 | Stride | `isCrcFirst(v)` | `isEnumerateOnly(v)` | Codec (read payload) | Codec (write payload) | Codec (TOC/name read/write) | Build/repack | Other version-keyed behavior |
+|-----|------------------------------|-------------------------|--------|-----------------|----------------------|----------------------|----------------------|----------------------------|--------------|------------------------------|
+| **V0004** | ASCII `0004` (`0x30×3 + 0x34`) via `parseVersionString` @ `TreVersion.h:58` | `EERT` + `0004` @ `TreBuilder.cpp:152-166` | 24 @ `TreVersion.h:82` | `true` (unused in parser) @ `TreVersion.h:106-108` | `false` @ `TreVersion.h:123-125` | `codecForCompressor(entry.compressor)` → 0=`StoredCodec`, else `ZlibCodec` @ `TreCodec.cpp:35-46`, `TreArchive.cpp:363-365` | `codecForTreVersion(version)` → always `ZlibCodec` (version ignored) @ `TreCodec.cpp:48-52`, `TreBuilder.cpp:257` | `codecForBlockCompressor(tocCompressor/blockCompressor)` @ `TreArchive.cpp:194-196`, `217-220`, `TreBuilder.cpp:323`, `349` | Allowed | UI label `v0004` @ `TreMount.cpp:28` |
+| **V0005** | ASCII `0005` @ `TreVersion.h:59` | `EERT` + `0005` @ `TreBuilder.cpp:160`, **binding default** @ `tre_binding.cpp:818`, `944` | 24 @ `TreVersion.h:83` | `true` (unused) | `false` | Same as V0004 | Same as V0004 | Same as V0004 | Allowed; **default** when version arg omitted or unparseable @ `tre_binding.cpp:818-822`, `944-948` | Dominant test/build default (`tre-builder-roundtrip.test.ts:126-130`) |
+| **V0006** | ASCII `0006` @ `TreVersion.h:60` | `EERT` + `0006` @ `TreBuilder.cpp:161` | 24 @ `TreVersion.h:84` | `true` (unused) | `false` @ `TreVersion.h:114-115` | Same as V0004 | Same as V0004 | Same as V0004 | Allowed | Docs/contracts: readable, not encrypted @ `contracts/src/tre.ts:51-52` |
+| **V5000** | ASCII `5000` @ `TreVersion.h:61` | `EERT` + `5000` @ `TreBuilder.cpp:162` | 24 @ `TreVersion.h:85` | `true` (unused) | `false` | Same as V0004 | Same as V0004 | Same as V0004 | Allowed; **deploy path** @ `packPatch.ts:116` | Retail stock tag for many clients (e.g. `bottom.tre`) @ `TreVersion.h:15-16`, `docs/01-core-engine/iff-and-tre.md:308-309` |
+| **V6000** | ASCII `6000` @ `TreVersion.h:62` | `EERT` + `6000` @ `TreBuilder.cpp:163` (only if build were allowed) | **32** (+8 zero pad @ TOC `[24..31]`) @ `TreVersion.h:86`, `TreBuilder.cpp:313`, `TreArchive.cpp:261` | `true` (unused) | **`true`** @ `TreVersion.h:123-125` | Same codec seam; **no decryption** — encrypted payloads fail inflate / length gate @ `TreArchive.cpp:418-437` | **`TreBuilder::build/repack` throws** before codec @ `TreBuilder.cpp:187-191`, `392-395` | Same as V0004 for blocks that parse | **Refused** (write/repack) | `getMountArchives().enumerateOnly = true` @ `TreMount.cpp:345`; extract via internal TOC **not** version-blocked @ `TreArchive.cpp:319-329`; empty-TOC containers use `extractAt` + master `.toc` @ `tre_binding.cpp:1371-1374` |
+
+### Parse sites (READ @4..7)
+
+| Site | Behavior |
+|------|----------|
+| `parseVersionString(const char[4])` | Only site that maps bytes → enum; `memcmp` on `"0004"`…`"6000"`; else throws @ `TreVersion.h:57-66` |
+| `TreArchive::parse` | Reads 36-byte header; calls `parseVersionString(hdr+4)` @ `TreArchive.cpp:154` |
+| N-API `BuildTre` / `RepackTre` | Optional JS string → `parseVersionString(vstr.c_str())`; **invalid string silently keeps `V0005`** (`catch (...) {}`) @ `tre_binding.cpp:818-822`, `944-948` |
+
+### Write sites (header @0..7)
+
+| Site | Behavior |
+|------|----------|
+| `TreBuilder::writeHeader` | Writes `EERT` + 4-char version switch @ `TreBuilder.cpp:152-166`; re-written at end @ `TreBuilder.cpp:376-377` |
+| `scripts/generate-tre-fixtures.js` `buildHeader` | Same pattern @ `generate-tre-fixtures.js:76-87` |
+
+### `isCrcFirst` — defined but not wired
+
+- Declared: always returns `true` @ `TreVersion.h:106-108`.
+- **No C++ call sites** under `packages/native-core` (parser is unconditionally crc-first @ `TreArchive.cpp:224-248`).
+- **Neutral disagreement:** `packages/harness/fixtures-real/README.md:21` claims `isCrcFirst(V0005)` returns `false`; code returns `true`.
+
+---
+
+## 2. `buildTre` / `repackTre` callers and version argument
+
+| Caller | Location | Version passed |
+|--------|----------|----------------|
+| N-API default | `tre_binding.cpp:818`, `944` | **`V0005`** if arg omitted |
+| N-API invalid string | `tre_binding.cpp:821`, `947` | Silent fallback **`V0005`** |
+| `packPatch` (production deploy) | `packPatch.ts:116` | **`'5000'`** explicit |
+| `tre-codec.test.ts` | `:106-107`, `:147`, `:177`, `:181`, `:212` | `'0005'`; repack no version → default; `'6000'` expect throw |
+| `packPatch.test.ts` | `:47`, `:68`, `:82`, `:118-119` | `'5000'` / `'0005'` |
+| `patch-shadow.test.ts` | `:57`, `:63`, `:89`, `:95` | **`'5000'`** |
+| `tre-builder-roundtrip.test.ts` | `:70`, `:98`, etc. | **Omitted → `V0005`** |
+| `tre-retail-repack.test.ts` | `:118`, `:123`, `:166`, `:180`, `:218`, `:222`, `:237` | Omitted except `'6000'` throw test; **real repack does not pass source version** |
+| C++ `TreBuilder::build` | `TreBuilder.cpp:181-183` | From caller enum |
+| C++ `TreBuilder::repack` | `TreBuilder.cpp:390`, `462` | From caller enum; **does not copy source `TreArchive::version()`** |
+
+**Note:** `repackTre(path)` on a retail `EERT5000` archive without 3rd arg emits **`EERT0005`** in the output header (binding default).
+
+---
+
+## 3. Version strings in UI / persisted state
+
+| Surface | Source | Format user sees | Retail example |
+|---------|--------|------------------|----------------|
+| Native `getMountArchives` | `TreMount.cpp:26-34`, `344` | `"v0004"`…`"v6000"` | From on-disk tag |
+| `treMount.ts` → `MountedArchive.version` | `treMount.ts:44-49`, `171`, `308` | Same union; unknown → **`v0005` fallback** | |
+| `MountedArchivesList` version chip | `MountedArchivesList.tsx:118-132` | Renders `archive.version` | Stock `bottom.tre`: **`v5000`**; Restoration: **`v6000`** |
+| `ProjectBindingBar` TRE chip | `ProjectBindingBar.tsx:106-107` | First mounted archive, **`v` stripped** (`5000`, `6000`, …) | |
+| `treStore.MountedArchive` | `treStore.ts:30-31` | Persisted in Zustand for session | |
+| `MountArchiveAsync` result | `tre_binding.cpp:638`, `656-664` | `"vNNNN"` on async single mount | |
+| Deploy output | `packPatch.ts` | File on disk **`EERT5000`**; UI shows mounted archives’ native tags, not patch file until mounted | |
+| Project / workspace JSON | No TRE version field found in binding metadata | N/A | |
+
+**Enumerate-only chip (separate from version chip):** starts `false` @ `treMount.ts:174`, `311`; set by `markArchiveEncrypted` on `extractMountAt` failure @ `treStore.ts:273-278`; label `≈ enumerate-only (encrypted)` @ `MountedArchivesList.tsx:141-156`.
+
+**Neutral disagreement:** native `getMountArchives` exposes `enumerateOnly: isEnumerateOnly(ver)` @ `TreMount.cpp:345`, but renderer **overwrites to `false` at mount** @ `treMount.ts:174`.
+
+---
+
+## 4. Test inventory (version-related)
+
+| Test file | What it pins | Fixture bytes @0..7 (or generation) | External / non-self validation? |
+|-----------|--------------|-------------------------------------|----------------------------------|
+| `packPatch.test.ts` | v5000 magic, v0005 vs v5000, determinism | Built in-test: `EERT5000` / `EERT0005` @ `:49-59`, `:84-94` | Self-parser only |
+| `tre-builder-roundtrip.test.ts` | Default build → `EERT0005`, determinism, v6000 build throw | Default build @ `:126-130`; `'6000'` @ `:309` | Self-parser + readEntry |
+| `tre-codec.test.ts` | Codec seam, `'0005'` builds, v6000 refuse | Built in-test | Self-parser; source-file grep tests |
+| `tre-retail-repack.test.ts` | Raw-slice identity; v6000 repack refuse | Synthetic: default `EERT0005`; real lane if `fixtures-real/*.tre` | **Real .tre repack:** payload compare (20 entries), not full file byte-diff @ `:231-278` |
+| `tre-fieldorder-arbiter.test.ts` | Version tags, crc-first, stride 24/32 | Real: read `@4..8` ascii; committed `v0005-3record.tre` **`EERT0005`** @ `:302-303` | **Real retail archives** when `fixtures-real/` populated |
+| `tre-roundtrip.test.ts` | v0005/v0006/v6000 fixtures, unsupported version | Committed fixtures from `generate-tre-fixtures.js` | Self-parser |
+| `tre-async-zerocopy.test.ts` | v0005 runtime archives; v6000-encrypted read | Runtime `buildV0005Archive` → `EERT0005` @ `:104`; fixture file | Self-parser |
+| `v6000-per-payload.test.ts` | No blanket enumerate throw on empty TOC | Real `patch_sku3_24_client_00.tre` **`EERT6000`** @ `:40`, `:23` | **Real SWGSource client file** (skipIf missing) |
+| `tre-v6000-swgsource-byteexact.test.ts` | Node zlib vs committed `.v6000.zlib.bin` | Sidecar bins, not full TRE header | **Node zlib oracle**, not TreBuilder |
+| `tre-extract-at-descriptor.test.ts` | `extractMountAt` on real v6000 container | Descriptor JSON + real container | **Real client + committed oracle bytes** |
+| `tre-toc-mount.test.ts` | TOC mount for empty-TOC v6000 | Real client path when present | Real client |
+| `patch-shadow.test.ts` | Override with `'5000'` builds | Built `EERT5000` | Self mount |
+| `tre-override.test.ts` | Override logic | Runtime minimal **`EERT0005`** @ `:59-61` | Self-parser |
+
+### Committed fixture header bytes (`scripts/generate-tre-fixtures.js`)
+
+| File | @0..3 | @4..7 | Stride | Notes |
+|------|-------|-------|--------|-------|
+| `v0005-3record.tre` | `EERT` | `0005` | 24 | @ `:116` |
+| `v0006-2record.tre` | `EERT` | `0006` | 24 | @ `:140` |
+| `v6000-2record.tre` | `EERT` | `6000` | 32 | @ `:181`; stored payloads, compressor 0 |
+| `malformed-magic.tre` | `TREE` | `0005` | — | @ `:189-190` |
+| `truncated.tre` | `EERT` | `0005` | — | @ `:196` |
+| `unsupported-version.tre` | `EERT` | `9999` | — | @ `:203-204` |
+| `malformed-bad-adler.tre` | `EERT` | `0005` | 24 | @ `:233` |
+| `crc-collision.tre` | `EERT` | `0005` | 24 | @ `:258` |
+| `v6000-encrypted.tre` | (committed; **not** in generator `@:263-272`) | `6000` (per tests) | 32 | Used by roundtrip/async/codec tests |
+
+**TreBuilder vs external reader:** No test byte-compares a **fresh `buildTre` output** to a **retail** archive. Closest external checks: field-order arbiter on real reads, retail repack **decompressed payload** equality, v6000 sidecar zlib oracles.
+
+---
+
+## 5. Docs / comments claiming version semantics
+
+| Claim | Location |
+|-------|----------|
+| TOC crc-first all versions; stride 24 except v6000→32 | `TreVersion.h:5-20`, `80-88` |
+| v6000 enumerate-only; v0006 readable | `TreVersion.h:38-42`, `111-125` |
+| v5000 "some legacy format" | `TreVersion.h:41` |
+| Magic `EERT`, version forward ASCII | `TreArchive.cpp:13-22`, `TreBuilder.cpp:149-156` |
+| v6000 8-byte TOC pad | `TreArchive.cpp:231`, `TreBuilder.cpp:313` |
+| v6000 builder refuse (D-05) | `TreBuilder.cpp:185-191`, `TreBuilder.h:36` |
+| extract no longer blanket-refuses v6000 | `TreArchive.cpp:319-329` |
+| **Stale:** extract refused for `isEnumerateOnly()` | `TreArchive.h:10-11` vs implementation |
+| **Stale:** readMountEntry throws v6000 | `tre_binding.cpp:519` vs `:549-561` |
+| `codecForTreVersion` ignores version today | `TreCodec.cpp:48-52`, `TreCodec.h:20-25` |
+| Deploy must use `'5000'` | `index.d.ts:559`, `packPatch.ts:113-115` |
+| v0006 readable / v6000 encrypted enumerate-only | `contracts/src/tre.ts:51-52`, `124-125` |
+| Core3 parses only 0005/0006; packPatch 5000 compatible | `core3ServerPush.ts:35-36`, `docs/05-server-integration/core3-parity.md:835-868` |
+| Verified layout vs `bottom.tre` "5000", `SwgRestoration_00.tre` "6000" | `docs/01-core-engine/iff-and-tre.md:307-349` |
+| v6000 encrypted enumerate-only in census | `docs/02-formats/asset-format-census-and-editing-guide.md:90-115`, `965-975` |
+| **`isCrcFirst(V0005)` returns false** (contradicts code) | `packages/harness/fixtures-real/README.md:21` |
+| Fixture README stride/isEnumerateOnly | `packages/harness/fixtures/tre/README.md:18-35` |
+| MOUNT-05: chip not version-tag-based | `MountedArchivesList.tsx:6-8`, `treMount.ts:165-174` |
+| Dual v6000: SWG-Source plain-zlib vs Restoration encrypted | `tre-v6000-swgsource-byteexact.test.ts:27-30` |
+
+---
+
+## 6. Blast radius of any `TreVersion` taxonomy change
+
+| Layer | Files / symbols touched |
+|-------|-------------------------|
+| **Enum + dispatch** | `TreVersion.h` (`enum`, `parseVersionString`, `recordStride`, `isCrcFirst`, `isEnumerateOnly`) |
+| **Read path** | `TreArchive.cpp` (stride, security cap @168, TOC unpack loop @236-262); no `isCrcFirst` branch today |
+| **Write path** | `TreBuilder.cpp` (`writeHeader` switch, stride, pad, build/repack guard) |
+| **Mount metadata** | `TreMount.cpp` `versionToString`, `archiveInfos().enumerateOnly` |
+| **N-API** | `tre_binding.cpp` (`BuildTre`, `RepackTre`, `MountArchiveAsyncWorker::versionToString`, `getMountArchives`) |
+| **Codec seam** | `TreCodec.cpp/h` (`codecForTreVersion` — currently version-blind) |
+| **TS contracts** | `packages/contracts/src/tre.ts` `TreVersion` union; `index.d.ts` buildTre version param docs |
+| **Renderer** | `treMount.ts` `parseVersion`; `treStore.ts`; `MountedArchivesList`, `VfsTree`, `ProjectBindingBar` |
+| **Deploy** | `packPatch.ts` hardcoded `'5000'` |
+| **Fixtures** | `scripts/generate-tre-fixtures.js`, all `packages/harness/fixtures/tre/*`, optional `fixtures-real/` |
+| **Tests** | All files in §4; e2e/workflow mocks using `'v0005'` |
+| **Docs / planning** | `docs/01-core-engine/iff-and-tre.md`, `core3-parity.md`, `.planning/**` TRE-version notes |
+
+Adding/removing/renaming an arm requires synchronized updates to: `parseVersionString`, `writeHeader` switch, `versionToString` (×2), TS unions, UI allowlist @ `treMount.ts:46`, arbiter allowlist @ `tre-fieldorder-arbiter.test.ts:144`, and any test magic-byte assertions.
+
+---
+
+## 7. Neutral cross-site disagreements (inventory only)
+
+| Topic | Site A | Site B |
+|-------|--------|--------|
+| v6000 extract refusal | `TreArchive.h:10-11`, `tre_binding.cpp:519` | `TreArchive.cpp:319-329` (no version throw) |
+| enumerate-only UI signal | `TreMount.cpp:345`, `contracts/tre.ts:124-125`, `treStore.ts:36-37` | `treMount.ts:174`, `MountedArchivesList.tsx:135-139` (per-entry extract failure) |
+| `isCrcFirst(V0005)` | `fixtures-real/README.md:21` (`false`) | `TreVersion.h:106-108` (`true`; unused) |
+| Historical size-first layout | `.planning/phases/01-01-SUMMARY.md:137` (Utinni size-first) | Current code/docs: crc-first all versions |
+| Core3 / `'5000'` ↔ `'0005'` equivalence | `core3ServerPush.ts:35-36` | On-disk tag is literally `5000`, not `0005` (`packPatch.test.ts:55-59`) |

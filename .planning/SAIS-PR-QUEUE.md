@@ -1,8 +1,28 @@
-# Sais single-PR queue (branch strict-data-defaults, PR #1 CLOSED/parked — body CURRENT)
+# Sais single-PR queue (branch strict-data-defaults — **THE PR IS OPEN as GitHub #2**, 2026-08-16)
+
+**⚠ NUMBERING CHANGE (2026-08-16 late): Kenny called the reopen. GitHub refused to reopen
+PR #1 (head branch was force-pushed after closing — the c20/c21 message reword — permanent
+refusal), so the deliverable PR is now GitHub #2**: same branch, same current body, 54
+commits, OPEN; old #1 carries a superseded-by comment. **The planned "PR #2" (toolkit
+advertise surface) therefore lands as GitHub #3** — planning docs keep the name "PR #2
+(advertise)"; map accordingly. COVERT MODE ENDED — the branch is live for Sais's review.
 
 **Restore-knobs ledger: [SAIS-KNOBS.md](SAIS-KNOBS.md)** — every hard-coded behavior of his
 the branch removed/gated + the exact cfg key or file copy that puts it back.
-**PR #1 body REFRESHED 2026-08-15 (post-c21): covers all 21 commits, knobs ledger folded in
+**PR #1 body REFRESHED 2026-08-16 LATE (post-c54, "54 commits") — now LEADS with the
+stock-acceptance claim ("It runs the stock dataset, as shipped" — the joint-upstream bar),
+adds the "Stock-data self-sufficiency" section (c53 embedded corpus + c54 c_ambient
+root-cause with the compensation-removed framing), annotates the ambientBoost ledger row as
+currently INOPERATIVE (include patch greps asm text; embedded texts inline includes —
+reimplementation-as-macro question flagged), and rewrites the no-corpus Known Gap as
+resolved (remaining: loose-corpus-in-client-assets decision + silent-skip WARNING).**
+Previous refresh (post-c42): added four
+sections — load smoothness/perf ports (9c), audio dropout arc measured-and-closed (8c),
+Win11 screenshots F12+WIC (2c), the six dPVS portal fixes (1c) — plus a direct
+cellLoaded-flip conversation ask in Known Gaps (rationale contradicted in his own tree;
+double-ownership hazard; offer to find his original symptom's real cause together) and the
+dpvs x64 tidyings note. Verified section carries the field numbers. PR stays CLOSED.**
+Previous refresh 2026-08-15 (post-c21): covers all 21 commits, knobs ledger folded in
 as a restore table, flag-to-Sais items included (corpus-gap nebula symptom + silent-skip
 WARNING suggestion, ILM landmine audit proposal, D3D9-is-ours disposition). ⚠ DO NOT REOPEN
 at milestone points — Kenny 2026-08-15: the whole deliverable presents as ONE GIANT PR; the
@@ -208,7 +228,26 @@ any cherry-picked commit (our fix commits carry planning docs; `git rm -r --cach
       exit 0), exe + gl11_r.dll hand-restaged to stage-B-x64 (hashes match build output),
       pushed. PR body updated to 22 commits with the narrowing bullet.
 
-## PR #2 (PLANNED, Kenny 2026-08-15): the toolkit advertise surface
+## PR #2 (advertise) — ✅ SHIPPED 2026-08-16 late as **GitHub PR #3**, stacked on #2
+
+Branch `toolkit-advertise` (off strict-data-defaults tip), OPEN, 2 commits:
+- `da91bbaa1` Gl_api v35 tail slots (frame/resize overlay callbacks; HIS gl11 implements
+  natively in Direct3d11_SwapChain present()/resize(); D3D9 ignore rows restored; Graphics
+  guard-and-WARN forwards; **sizeof(Gl_api) changed → matched 6-binary set only**).
+- `67b109785` the advertise surface: engine_* files + 24 shim-bearing files hunk-ported +
+  support chains (ExitChain shutdown-phase, Game tick callback, WorldSnapshot shim family +
+  WSRW saveFiltered/intern, TreeFile::enumerateFiles, interior-refresh chain, Os WM_SIZE) +
+  vcxproj (+sharedCommandParser/sharedCollision include dirs) + tools/hookpoints-probe.
+- Gates: full x64 Release All build CLEAN (0 unresolved); **probe PASS version=35 count=165
+  nulls=0 uniqueNames=165**. Matched set deployed to stage-B-x64. **Boot smoke PASSED (Kenny 2026-08-16 night): DX11 AND D3D9 to ground, no issues** — PR #3 checklist closed.
+- Port discipline: WorldSnapshot merged insert-only (his POB-CRC-proceed KEPT); out-of-scope
+  candidates for later fix-queue commits: Os.cpp x64 keyCode-extraction bug (REAL Release
+  input bug) + menu/ShellExecute pointer-width, ClientMain timeBeginPeriod(1) + bootTrace,
+  DebugHelp minidump-reserve, CreatureObject naked-NPC wearables retry, ClientWorld
+  logCellAtPosition probe.
+- Toolkit coordination still owed: their injector x64 + DetourXS-on-x64 (their side).
+
+## PR #2 original plan (historical): the toolkit advertise surface
 Kenny: "We will be adding the whole toolkit advertising code as a second PR." Separate from
 the fix-queue giant PR #1; not started. Scoping facts banked now:
 - Surface inventory (our tree): `engine_advertise.cpp` + `engine_hookpoints.h/.inc`
@@ -249,6 +288,15 @@ the fix-queue giant PR #1; not started. Scoping facts banked now:
 - c22 note resolved by this plan: the two engine_ws* hunks from our b47718cbc (wsAddObject
   wrong-class REFUSE-before-id-mint + wsForgetNode intern-decision comment) ride along with
   the surface port — do not forget them when PR #2 assembles.
+- ⚠ ALSO RIDES WITH PR #2 (added 2026-08-16, D3D9 wholesale wave `079eb8a22`): the two v35
+  Gl_api TAIL SLOTS (`setFrameCallback`/`setResizeCallback`, the no-detour overlay rows).
+  The D3D9 port deliberately STRIPPED the accept-and-ignore rows from Direct3d9.cpp because
+  his Gl_dll.def lacks the slots (kept the wave renderer-scoped; sizeof(Gl_api) load gate
+  preserved). PR #2 restores them as a MATCHED SET: his src/win32/Gl_dll.def tail rows +
+  Graphics.cpp/h plumbing + gl11 present-path/resize invocation + re-adding the D3D9
+  ignore rows (copy from our Direct3d9.cpp ~978-990 + the two ms_glApi assignments).
+  sizeof(Gl_api) changes ⇒ FULL plugin-rebuild cascade in his tree (all plugins + exe,
+  one staged set — never mix with pre-PR#2 DLLs).
 - Toolkit coordination: contract bump/re-sync rules apply (mirror handoffs to
   D:/Code/SWG-Toolkit/.planning/handoff/); any divergence between his tree's shim behavior
   and ours becomes a consumer-visible contract question.
@@ -303,6 +351,43 @@ no `stage/ilm_extract`, no `stage/override`, no `stage-B-override`.
   `client.cfg`/`live.cfg` layering: `swgsource_3.0.tre` + the 4 TOCs + `disable_wayfar_dearic_snow.tre`,
   ILM commented OUT, no override corpus) and see what his DX11 actually does.
 
+### ✅ RESOLVED 2026-08-16 late — c53 `5232bb632`: the corpus is now IN the DLL
+
+- The stock-cfg A/B run happened (byte-identical stock cfgs in stage-x64 + stage-B-x64; live
+  cfgs backed up as `client-live.cfg.bak-stockrun` — **restore both after the arc**). B black
+  login confirmed the blocker exactly as predicted.
+- Ground truth by scan (not sampling): stock mount = **806 programs, 224 asm; corpus covers
+  221/224** (misses = membrane + water_pass2_20/25, ps.1.x with ps20 HLSL siblings that win
+  validation — Theed water verified). Stock `.vsh` = plain text, `.psh` = IFF/PSRC.
+- Resolution = third option, upgraded: `Direct3d11_EmbeddedShaderCorpus` (generated, ~1.6MB)
+  embeds all 221 translations with corpus includes INLINED (stock TREs carry ASM files at the
+  SAME `vertex_program/modules/*.inc` paths; TreeFile-first include order poisoned un-inlined
+  substitutes with X3000 'm4x4'). Pixel hook after `refuseIfNotHlsl`; vertex hook in
+  `parseHeader` (re-parses embedded header — tag block drives TEXCOORDs). Mounted corpus
+  still wins by contract, so his client-assets distribution path is untouched.
+- **Stock DX11 x64 Release VERIFIED: login, char select, cantina interior walls/floor, NPCs,
+  Theed water.** Remaining: gl05 stock pass (predicted green — D3DAssemble export handles
+  //asm; stock pixel PEXE is real D3D9 bytecode), then restore live cfgs. PR #1 body owes
+  c52+c53 sections at reopen.
+
+### ✅ c54 `8a9021322` — the "tacky bright" interior wash was the CORPUS, not ILM
+
+- Kenny field-caught DX11-bright vs DX9-moody on the SAME stock data, both clients →
+  renderer-class. RenderDoc Capture240 (cantina ceiling pixel → draw 4345) one-trace
+  conviction: baked vColor0 correct (0.28 grey), corpus c_ambient.inc translation adds scene
+  ambient (1,1,1) → saturate → raw albedo. Stock asm c_ambient = bare `mov r7, vColor0` —
+  the bake IS the cell lighting. CONSULT-74 had already corrected this in stage-B-override;
+  the embedded table was generated from the uncorrected `_client_dx11` drop. c54 regenerates
+  with stock semantics. Verified: cantina matches DX9; Theed water + space/nebulas good.
+- **FLAG TO SAIS (two items, fold into PR body/conversation):** (1) the distributed corpus
+  still ships the boosted c_ambient.inc → a mounted-corpus client washes every interior the
+  same way (likely the origin of "that's just ILM lighting"); (2) the [Direct3d11]
+  ambientBoost include patch greps the ASM text `mov r7, vColor0`, which can never match the
+  corpus's HLSL module — the opt-in gate is dead against the current corpus.
+- **A-SIDE FOLLOW-UP (our repo):** our gl11 shows the same wash on stock (the "black walls
+  full ambient" fix is the same compensation class) — adopt bake-is-lighting, RenderDoc
+  re-verify, then re-baseline the ILM "brightening" claims (see ILM audit section).
+
 ## Perf + smoothness port A -> B (2026-08-15, Kenny: "take any relevant improvements from A into B")
 
 Scope: perf AND movement smoothness into the ONE giant PR; advertise surface stays PR #2.
@@ -327,18 +412,49 @@ LANDED on `strict-data-defaults` (pushed, branch now 27):
   Kenny: check STOCK client first — if stock oscillates too it is 20-year-old retail
   behaviour and we do not spend time on it.
 
-STILL TO PORT (frame-spreading family, all confirmed absent from B):
-- phased WorldSnapshot load (CONSULT-60 `1d5d522f1`) — kills the ~3s parse; hard hand-port
-  (his WorldSnapshot.cpp 1467 lines vs our 3272)
-- budgeted terrain preload (CONSULT-59 part A, `b46a83871`) — kills the 3-4.5s GroundScene-ctor freeze
-- searchPath negative cache + file manifest + TreeFileFactory buffering + Texture one-read
-- dPVS portal fixes (Kenny saw exterior through a foyer portal -> NEEDED; still blocked on
-  the `cellLoaded` parenting-flip conflict #3 — investigate before touching)
+STILL TO PORT (frame-spreading family):
+- ~~phased WorldSnapshot load~~ **PORTED `c004ba687` + VERIFIED same day (Kenny: "buttery
+  smooth" — the same phrase as our July verify; log clean, drain coexisting, zero create
+  failures)**
+  — the feared hand-port turned out clean: his load() was our pre-CONSULT-60 baseline
+  nearly line-for-line (his file is smaller only because it lacks our editor surface).
+  Full mechanism ported: incremental ReaderWriter, prologue+loadStep state machine
+  (wsNodes → buildout-per-area → sphereTree 4096/batch), 11 exactness valves, unload
+  cancel, parse-aware donePreloading/getLoadingPercent, updateLoading pump, preload
+  callback slice 1s→50ms (CONSULT-61). `[ClientGame] worldSnapshotParseBudgetMs` (40;
+  ≤0 = old sync path = kill switch). Verify: zone-in smooth, no music hitch, world
+  complete on entry.
+- ~~budgeted terrain preload~~ (ported 0da2d4b7c) · ~~TreeFileFactory buffering + Texture
+  one-read~~ (ported 78c9697fe/4856bcf4f)
+- ~~searchPath negative cache + file manifest~~ **PORTED `7e9c653d8` 2026-08-16 (⚠ awaiting
+  verify — passive: [treefile.probe] lines at clean exit show realProbes; A/B recipe in the
+  commit)**. Full mechanism: negCache + manifest + forgetMissingFile broadcast + probe
+  counters + prio-100 ExitChain report. Both keys default true; kill switches
+  `[SharedFile] searchPathNegativeCache/searchPathFileManifest=false`. B's TRE-0006 TOC
+  support preserved (hunk-port, not copies, except the exactly-matching Config pair).
+  Gotcha re-learned: Copy-Item preserves SOURCE mtime → MSBuild skipped recompiling the
+  copied Config .cpp → LNK2019; touch copied files before building.
+  **THE PERF PORT QUEUE IS NOW EMPTY.**
+- ~~dPVS portal fixes~~ (ported eb1b26024, soak watch)
 
-CHEAP WIN, not a port: his shader cache is his OWN design and is PRESENT — manifest-driven
-(`compiled_shader/manifest.txt`). stage-B just has no baked manifest, hence 2542ms of
-D3DCompile / a 271ms frame. Run once with `[Direct3d11] bakeCompiledShaders=true`, exit
-cleanly, set back to false.
+~~CHEAP WIN: shader manifest bake~~ **DONE 2026-08-15 (198 blobs, cache live every session:
+"cache enabled — 198 baked, 17 includes verified", ~185 hits/session). Residual found
+2026-08-16: 4-7 misses EVERY session (gradient_sky.vsh/.psh, cloudlayer.vsh/.psh,
+sometimes a_scroll_rgb1_a2/a_splitalpha — ~30-48ms + one ~28ms hitch frame) — the original
+bake session never compiled the sky/cloud set, and his baker REPLACES the manifest with
+that session's compiles (a re-bake could silently shrink coverage). FIXED `1dbd380f4`:
+bake now SEEDS from the existing manifest (same validation as a using run: version, flags,
+include hashes vs live; fail-any = bake from scratch) → writeManifest emits the UNION,
+includes merged (served ∪ carried-validated). `dxbcbake` (referenced in his comments) does
+NOT exist anywhere — in-game bake is the only mechanism.
+**INCREMENTAL RE-BAKE VERIFIED 2026-08-16: seed line fired ("baker seeded with 198
+program(s) and 17 include hash(es)"), exit wrote "baked 204" — the 6 additions are EXACTLY
+the six known offenders (keys match the miss lines byte-for-byte). Cfg flipped back to
+`bakeCompiledShaders=false`; manifest backup kept at `compiled_shader/manifest-198-20260815.bak`.
+Follow-up `214c98165`: seed parse keeps multi-word program names (the %s parse truncated
+"Direct3d11 point sprite expander" → remainder-of-line parse; current manifest line
+hand-repaired). Passive verify: next sessions' metrics line should read ~190 hits /
+0 misses.**
 
 CFG: his stage cfg's "TUNING KEYS WITHHELD" note claimed all three were "stock keys available
 to both trees" — only `minFrameRate` was. Corrected; `asynchronousLoaderCallbackTimeBudgetMs=6`
@@ -369,12 +485,127 @@ port is the WorldSnapshot create/delete budget (engine-internal, no wire traffic
   **FIELD-EVIDENCED 2026-08-15 22:01** — Kenny captured the classic foyer see-through in B
   (screenshot `C:/Users/kenne/Downloads/Screenshot 2026-08-15 220121.png`, Mos Eisley 3457,5,-4844:
   raw sky/terrain through the portal frame). Second sighting that evening (first was live, no capture).
-  The conflict INVESTIGATION is now the entry ticket for a needed port, not a nice-to-have.
+  **THIRD sighting 2026-08-16 ~10:19, same classic foyer location** (during the audio round-3
+  verify run). Reproduces reliably in normal play — the conflict INVESTIGATION is now overdue,
+  not just the entry ticket for a nice-to-have.
+  **CAPTURE-CONVICTED 2026-08-16 10:30 — SAME ISSUE CLASS AS OUR A-SIDE dPVS BUG.**
+  Kenny captured the glitch in the act (`stage-B-x64/Capture230.rdc` + paired F12 screenshot
+  `screenshots/screenShot0000.jpg`, same instant). Pixel history on a void pixel through the
+  arch (900,250 @ event 652): clear → two skybox layers at depth 1.0 → NOTHING — no interior
+  fragment ever submitted, not even a failed one ⇒ the adjacent cell was culled at the
+  VISIBILITY layer (dPVS), not depth/state-rejected. Void is exactly portal-frame-shaped;
+  frame has only 152 draws. Scene RT export: `renderdoc-mcp-export/rt_652_0.png`. The 6-fix
+  port is now evidence-justified; sole remaining gate = the cellLoaded parenting-flip
+  conflict investigation.
+  **PORT LANDED `eb1b26024` 2026-08-16 (pushed; ⚠ awaiting Kenny foyer verify).** Conflict
+  investigation resolved the gate: his flip (`attachToObject_p(..., true)` in
+  PortalProperty::cellLoaded, rationale in his comment) is refuted by his OWN tree — his
+  Container::addToWorld contents-walk is intact (his Container.cpp delta vs ours =
+  formatting only; Object.cpp IDENTICAL), so `false` suffices there exactly as in stock/A.
+  Port scope: 5 wholesale file copies (dpvsDatabase / dpvsImpMeshModel /
+  dpvsVisibilityQuery_Test / _Traverse — probe counters+exports ride along, self-contained,
+  inert — + DoorObject) + FreeChaseCamera hand-merge of the two camera-cell fixes (re-tag
+  only, no feel change — does NOT violate the camera mandate; both CellProperty APIs
+  verified present in B). **Deliberately NOT reverted: the cellLoaded flip** — culling-layer
+  fixes are independent of ownership semantics; one variable at a time keeps the foyer
+  verify attributable. Flip revert = separate future commit (the PR hill: double-ownership
+  hazard). RenderWorld probe suite NOT ported (B's RenderWorld has his own APIs; port only
+  if the repro survives). FOUND ALONG THE WAY, not acted on: B lacks our dpvs x64 cleanups
+  (ImpObject Entry 64-byte alignment pad, UPTR guard casts, `register` keyword) — cache/warning
+  class, note for the eventual merge. Verify: foyer at 3456,5,-4844, pre-fix ~1-in-7 logins.
+  **VERIFY 2026-08-16: 3 clean relogs at the classic spot (Kenny) → SOAK WATCH** (pre-fix
+  ~1-in-7; keep watching during other testing; a recurrence gets an F12 shot + capture
+  against the fixed build → pixel history names the survivor).
+  **cellLoaded flip REVERTED `86606befe` 2026-08-16** — Kenny: "Sais told us to fix it all,
+  no conversation needed." Landed after the dPVS verify (attribution clean). Pre-revert
+  verification: his handleEndBaselines + Container::addToWorld contents-walk = same
+  machinery ours runs `false` through daily; his endBaselines on-demand load + POB-CRC
+  proceed KEPT. **VERIFIED 2026-08-16: Kenny city login + cantina interior normal; log
+  shows ZERO cell/portal warnings. Same run = shader-cache passive verify PASSED (204
+  baked, 191 hits / 0 misses — first zero-compile session) + 4th clean dPVS soak login.**
+  PR body updated to 45 commits (flip section added; Known-Gaps ask retired, replaced with
+  an if-you-remember-the-original-symptom note).
+  **Audio round-4 passive verify SAME RUNS: 0-2 masked dropouts/session (was 22), 55
+  recovered waits incl. 2257µs/1100µs recoveries — the yield phase catching exactly the
+  preempted-holder class round 3 dropped. Ear clean. Drip arc holds under real play.**
 - c_ambient parameterize (ambientBoost, color-only PIN ALPHA): lives in his CORPUS (client-tools), not here
 - Char-select wearables retry (async race, no retry on char-select path): his tree, separate investigation
-- Screenshot key dead: needs live debug with his symbols
+- ~~Screenshot key dead: needs live debug with his symbols~~ **RESOLVED 2026-08-16 by A→B
+  diff, no live debug needed** (`4a17bc275`): Windows 11 Snipping Tool's low-level hook eats
+  PrintScreen before DirectInput's foreground non-exclusive acquire sees it — the DIK_SYSRQ
+  bind can never fire on stock Win11; his render path (Direct3d11_ImageWriter →
+  `./screenshots/screenShot%04d.jpg`) was always fine. Ported our F12 backup trigger
+  (A has carried it since Phase 11). Kenny: press **F12** in B; files land in
+  `stage-B-x64/screenshots/`. **F12 VERIFIED on first outing 2026-08-16 10:30** (paired with
+  Capture230) — but the jpg came out stretched 4/3 + period-4 vertical striping + scrambled
+  colour. **SECOND writer bug found and FIXED `4f74ae47c`**: WIC `SetPixelFormat` NEGOTIATES
+  (JPEG has no 32bpp → comes back 24bppBGR) and `WritePixels` converts NOTHING — his code fed
+  32bpp rows to a 24bpp interpretation (proof: measured luminance cycle 146/157/201/173,
+  exact period 4 = the 12-byte alignment cycle). Fix = IWICBitmap + IWICFormatConverter +
+  WriteSource; TGA path (his debug harness) never used WIC, which is why he never saw it.
+  gl11_r.dll restaged (C035C9…). ⚠ PS 5.1 gotcha re-learned: commit messages containing
+  double quotes must go via `git commit -F <file>` — inline here-strings mangle at embedded
+  `"` in native-arg passing.
 - ~~WorldSnapshot wrong-class narrowing~~ — LANDED as c22 5f68728be (2026-08-15, see session
   entry above)
+
+## JUCE audio — drip fix LANDED 2026-08-16 (`604b66bf1`, pushed; awaiting Kenny ear + metric verify)
+
+The designed lock-miss cure (adoption blocker #1 in memory `project_juce_audio_adoption_arc`),
+both halves in one commit on `strict-data-defaults`:
+- **Hot setters lock-free**: volume/reverb/rate/3D pos+vel+distances/obstruction/occlusion/
+  status-poll/master levels/rolloff/listener vectors take NO lock — fields moved to relaxed
+  atomics the callback snapshots per block. Sound invariant (documented at `s_mutex` in
+  JuceMiles.cpp): every AIL_ entry runs on the game thread = the handle maps' sole mutator,
+  so unlocked game-thread FINDs can't race the still-locked insert/erase; `AIL_start_sample`
+  still locks, and its unlock publishes all prior relaxed stores (no start-order glitch).
+- **Repeat-last-block masking**: a residual try_to_lock miss replays the previous mixed block
+  (cursor didn't advance → content-continuous, ~10ms doubled audio instead of a gap), fading
+  ×0.6 per consecutive miss. Miles semantics: stale data, never no data.
+- Metric intact: `[audio.dropout]` counts every miss (line now says "masked by last-block
+  replay"); **lockMisses ≈ 0 + ear sign-off stays the A-clean adoption bar**.
+- Build: his `Build-Client.ps1 Release x64 DX11` clean, 0 unresolved externals.
+  stage-B-x64 HAND-RESTAGED (exe hash E96880…, gl11 C2539C… both match build output);
+  pre-fix log rotated to `audio-decode-predripfix.log` so the verify run starts clean.
+- ~~VERIFY (Kenny)~~ **ROUND-1 VERIFIED 2026-08-16 morning: EAR CLEAN (Kenny: no pops) but
+  miss rate UNCHANGED** — 48/26,070 (0.184%) vs baseline 65/37,161 (0.175%). The masking did
+  the audible work; the setters were never the drip. Physics: miss probability tracks TOTAL
+  lock-held time (any overlap = instant try_to_lock failure), so sub-µs setters were
+  negligible all along — the ms-class holds are the drip. Log convicts them precisely:
+  7-miss burst EXACTLY inside figrin_dan's 316ms fill (2MB copy-in per chunk under lock);
+  isolated misses at every stream open (TreeFile read + parse + 1s decode under lock);
+  serve's fprintf+fflush under lock.
+- **ROUND 2 LANDED `8bcbc9087` (pushed; ⚠ awaiting metric re-verify)**: fill worker decodes
+  whole track privately then O(1) buffer-swap under lock (1s first block covers the swap ~9×);
+  AIL_open_stream fully unlocked (fresh sample stays SMP_DONE until start → mixSample's
+  status check guards it; map mutations still lock); AIL_serve reports before the lock and
+  fires EOS callbacks after release (Miles ran them lock-free too). Build clean, restaged
+  (exe B188A4…), round-1 log rotated to `audio-decode-dripfix-round1.log`.
+- ~~VERIFY round 2~~ **ROUND-2 VERIFIED 2026-08-16: ear smooth again; BURSTS GONE but the
+  steady drip held at 0.162%** (22/13,602, evenly spread, no longer correlated with opens or
+  fills — the remaining colliders are short-hold traffic). Two-driver theory checked and
+  dead (engine opens ONE digital driver).
+- **ROUND 3 LANDED `314efe78f` (pushed; ⚠ awaiting verify)**: the callback now spins
+  (_mm_pause) up to 1ms for the lock before declaring a dropout — against short holds,
+  try-once-and-drop was the wrong policy (lock frees in µs, budget is ~10ms/block). A
+  recovered block plays NORMALLY (counted as a wait → new `[audio.lockwait]` line with
+  maxWaitUs); a miss surviving the full 1ms now MEANS a genuinely long holder exists.
+  Doubles as the discriminating instrument: waits-with-small-maxWait = drip closed by
+  construction; persistent misses = keep hunting. Build clean, restaged (exe C2B521…),
+  round-2 log rotated to `audio-decode-dripfix-round2.log`.
+- ~~VERIFY round 3~~ **ROUND-3 VERIFIED 2026-08-16: ear smooth; dropouts 22→4/16,753 (0.024%,
+  all masked); 30 waits recovered ≤84µs — photo-finish theory CONFIRMED.** The 4 survivors
+  outlived a 1ms spin = PREEMPTED holder (needs our timeslice; spinning against it is
+  anti-productive).
+- **ROUND 4 LANDED `2d48b38ae` (pushed; passive verify)**: wait becomes two-phase —
+  _mm_pause first 100µs (running holder), `yield` after (preempted holder), budget 3ms of
+  the ~10ms block. Expected: dropouts ≈ 0 flat. No dedicated run needed — glance at
+  `audio-decode.log` after any future session. **The drip arc is functionally CLOSED**
+  (audible dropouts = 0 by masking even in the worst case); remaining JUCE adoption items
+  are the hardening list + voice cap, and long-term the lock-free command queue.
+- Still open on the arc: hardening list (decoded-sample reuse, float-PCM residency,
+  cross-thread createReaderFor), voice cap/priority stealing; long-term = lock-free command
+  queue ("adoption done properly").
 
 ## Our repo (swg-client-v2) parallel state
 - PUSHED 2026-08-15 (e34760a0a..bdb21dd77) after both gates green (x64 + Win32 serial 5-target,
@@ -384,3 +615,14 @@ port is the WorldSnapshot create/delete budget (engine-internal, no wire traffic
 - NEEDS: 5-target build gate BOTH platforms (Archive.h + Gl_dll.def are wide; def can change
   Gl_api layout → all plugins rebuild together), then push
 - cfg restored from .swgsource-bak (done, session start)
+
+## ILM audit addition (2026-08-16, Debug-boot find): corrupt IFF size fields
+- **ALL 102 `.skt` files in `ILM_visuals.tre` are structurally corrupt**: the Legends
+  skeleton-LOD strip tool (SLOD → bare LOD-0 SKTM) wrote FORM sizes larger than the payload
+  (all_b.skt declares 2954, carries 2938). Debug `IFF_DEBUG_FATAL` catches it at char select;
+  Release silently seeks past EOF. Fixed locally: 102 intact stock copies (sku0 chain, full
+  SLOD with LODs) written to `stage-B-override/appearance/skeleton/`.
+- Audit consequence: the post-merge ILM sweep must IFF-VALIDATE every ILM file (recursive
+  size-fit), not just same-path content-diff — the corrupt-header class may extend beyond .skt.
+- His-cfg note: `_client_dx11` mounts ILM_visuals; Debug runs there need the same overrides
+  (or the ILM unmount decision).

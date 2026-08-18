@@ -1,0 +1,365 @@
+﻿Evidence pack treated as given. Byte maps below are from `tre_reader.py`, `tre_decrypt.py`, and `swg_iff/reader.py` / `swg_iff/writer.py` (IFF validator/writer cited where the evidence pack references IFF repair semantics but no repair implementation exists in the TRE modules).
+
+---
+
+## 1. TRE archive (`.tre`)
+
+### 1.1 Constants / version sets
+
+| Symbol | Value | Source |
+|---|---|---|
+| `TAG_TREE_LE` | `0x54524545` (`b"TREE"`) | ```19:19:swg_pipeline/tre_reader.py``` |
+| `STANDARD_HEADER_SIZE` | 36 | ```28:28:swg_pipeline/tre_reader.py``` |
+| `STANDARD_HEADER_FMT` | `"<4s4s7I"` | ```29:29:swg_pipeline/tre_reader.py``` |
+| `TOC_ENTRY_FMT` | `"<Iiiiii"` | ```31:31:swg_pipeline/tre_reader.py``` |
+| `TOC_ENTRY_SIZE_RETAIL` | 24 | ```32:32:swg_pipeline/tre_reader.py``` |
+| `TOC_ENTRY_SIZE_EXTENDED` | 32 | ```33:33:swg_pipeline/tre_reader.py``` |
+| `SUPPORTED_TRE_VERSIONS` | `0004`, `0005`, `6000`, `0006`, `5000` | ```40:40:swg_pipeline/tre_reader.py``` |
+| `RETAIL_TRE_VERSIONS` | `0004`, `0005` | ```41:41:swg_pipeline/tre_reader.py``` |
+| `EXTENDED_TRE_VERSIONS` | `6000`, `0006`, `5000` | ```42:42:swg_pipeline/tre_reader.py``` |
+
+### 1.2 Header table (36 bytes, all LE)
+
+| Off | Size | Type | Endian | Field | Meaning | Valid / notes per version |
+|---|---|---|---|---|---|---|
+| 0 | 4 | `4s` | LE | `token` | Archive magic | Must equal `TAG_TREE_LE` (`TREE`) ```164:165:swg_pipeline/tre_reader.py``` |
+| 4 | 4 | `4s` | LE | `version` | Version tag (Latin-1 string) | Must ∈ `SUPPORTED_TRE_VERSIONS` ```167:171:swg_pipeline/tre_reader.py``` |
+| 8 | 4 | `uint32` | LE | `number_of_files` | TOC entry count | Drives loop `range(header.number_of_files)` ```212:212:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `uint32` | LE | `toc_offset` | Byte offset of TOC block | Slice start ```200:200:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `uint32` | LE | `toc_compressor` | TOC compression flag | `0` = raw; `!= 0` → zlib ```201:201:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `uint32` | LE | `size_of_toc` | Stored TOC block size (bytes) | On-disk span before name block ```200:200:swg_pipeline/tre_reader.py``` |
+| 24 | 4 | `uint32` | LE | `block_compressor` | Name-block compression flag | `0` = raw; `!= 0` → zlib ```210:210:swg_pipeline/tre_reader.py``` |
+| 28 | 4 | `uint32` | LE | `size_of_name_block` | Stored name block size (bytes) | On-disk span ```209:209:swg_pipeline/tre_reader.py``` |
+| 32 | 4 | `uint32` | LE | `uncomp_size_of_name_block` | Uncompressed name block size | Parsed into header; **not** enforced on read for `.tre` ```185:185:swg_pipeline/tre_reader.py``` |
+
+Unpack: ```172:174:swg_pipeline/tre_reader.py``` · Minimum file size check: ```161:162:swg_pipeline/tre_reader.py```
+
+### 1.3 On-disk layout (after header)
+
+| Region | Start | Length | Compression | Source |
+|---|---|---|---|---|
+| TOC block | `toc_offset` | `size_of_toc` | `_decompress_block(..., toc_compressor != 0)` | ```200:201:swg_pipeline/tre_reader.py``` |
+| Name block | `toc_offset + size_of_toc` | `size_of_name_block` | `_decompress_block(..., block_compressor != 0)` | ```208:210:swg_pipeline/tre_reader.py``` |
+| Payload blobs | per-entry `offset` | `compressed_length` if compressed else `length` | per-entry `compressor` | ```245:260:swg_pipeline/tre_reader.py``` |
+
+### 1.4 TOC entry table
+
+**Stride (spacing between entries):**
+
+| Version group | Stride (bytes) | Source |
+|---|---|---|
+| `0004`, `0005`, `5000` | 24 | ```138:140:swg_pipeline/tre_reader.py``` |
+| `6000`, `0006` | 32 | ```141:142:swg_pipeline/tre_reader.py``` |
+
+**Decoded fields (`TOC_ENTRY_FMT = "<Iiiiii"`, 24 bytes read at `base = i * stride`):**
+
+| Off (within entry) | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 4 | `uint32` | LE | `crc` | Entry CRC | ```214:214:swg_pipeline/tre_reader.py``` |
+| 4 | 4 | `int32` | LE | `length` | Uncompressed payload length | ```214:214:swg_pipeline/tre_reader.py``` |
+| 8 | 4 | `int32` | LE | `offset` | Payload start offset in archive | ```214:214:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `int32` | LE | `compressor` | Payload compression flag | ```214:214:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `int32` | LE | `compressed_length` | Stored (compressed) byte count | ```214:214:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `int32` | LE | `fnoff` | Offset into **decompressed** name block | ```214:218:swg_pipeline/tre_reader.py``` |
+| 24 | 8 | — | — | *(padding)* | Unread when stride = 32 | Stride ```141:142``` vs fmt ```31:31``` |
+
+Post-decompress TOC size check: `len(toc_data) >= number_of_files * stride` ```202:207:swg_pipeline/tre_reader.py```
+
+### 1.5 Name-block layout
+
+| Property | Rule | Source |
+|---|---|---|
+| Content | Concatenated relative paths, each NUL-terminated | ```215:218:swg_pipeline/tre_reader.py``` |
+| Lookup | `names[fnoff : names.find(b"\0", fnoff)]` | ```215:218:swg_pipeline/tre_reader.py``` |
+| Decoding | Latin-1 | ```218:218:swg_pipeline/tre_reader.py``` |
+| Error | `TreFormatError` if no NUL at/after `fnoff` | ```216:217:swg_pipeline/tre_reader.py``` |
+
+### 1.6 Compression flag semantics
+
+| Location | Flag field | `== 0` | `!= 0` | Algorithm | Source |
+|---|---|---|---|---|---|
+| Header | `toc_compressor` | TOC stored raw | zlib-decompress TOC | `zlib.decompress` via `_decompress_block` | ```189:192:swg_pipeline/tre_reader.py``` |
+| Header | `block_compressor` | Name block stored raw | zlib-decompress name block | same | ```189:192:swg_pipeline/tre_reader.py``` |
+| TOC entry | `compressor` | Read `length` bytes raw | Read `compressed_length` bytes, decompress | `zlib.decompress`; fallback → `tre_decrypt` | ```245:259:swg_pipeline/tre_reader.py``` |
+
+`_decompress_block`: ```189:192:swg_pipeline/tre_reader.py```
+
+### 1.7 Payload decrypt (`tre_decrypt.py`)
+
+| Condition | Behavior | Algorithm | Key handling | Source |
+|---|---|---|---|---|
+| `compressor == 0` | Return `raw` unchanged | stored | none | ```19:20:swg_pipeline/tre_decrypt.py``` |
+| `compressor != 0`, zlib OK | Return decompressed bytes | zlib | none | ```21:22:swg_pipeline/tre_decrypt.py``` |
+| `compressor != 0`, zlib fails | `ok=False`, method `"encrypted_or_unknown"` | **none implemented** | **none**; note directs to `TreeFileExtractor.exe` | ```23:31:swg_pipeline/tre_decrypt.py``` |
+| Versions named as Restoration | `RESTORATION_VERSIONS = {6000, 0006, 5000}` | Obfuscation may apply at rest | External tool required | ```35:35:swg_pipeline/tre_decrypt.py``` · doc ```6:7:swg_pipeline/tre_reader.py``` |
+
+Call site (only on zlib failure): ```251:258:swg_pipeline/tre_reader.py```
+
+---
+
+## 2. Master index — COT2000 / toc2000
+
+`parse_toc2000` is an alias of `parse_cot2000` ```461:463:swg_pipeline/tre_reader.py```  
+Detection: file starts with `COT2000_MAGIC` ```150:151:swg_pipeline/tre_reader.py```
+
+### 2.1 Constants
+
+| Symbol | Value | Source |
+|---|---|---|
+| `COT2000_MAGIC` | `b" COT2000"` (leading space) | ```23:23:swg_pipeline/tre_reader.py``` |
+| `COT2000_TRE_NAME_OFFSET` | 36 | ```24:24:swg_pipeline/tre_reader.py``` |
+| `COT2000_GLOBAL_ENTRY_FMT` | `"<BBHIIIII"` | ```25:25:swg_pipeline/tre_reader.py``` |
+| `COT2000_GLOBAL_ENTRY_SIZE` | 32 | ```26:26:swg_pipeline/tre_reader.py``` |
+
+### 2.2 Header table
+
+| Off | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 8 | bytes | — | magic | Must be `COT2000_MAGIC` ```267:268:swg_pipeline/tre_reader.py``` |
+| 8 | 4 | `uint32` | LE | `_reserved` | Read, discarded | ```269:270:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `uint32` | LE | `number_of_files` | Global entry count | ```269:270:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `uint32` | LE | `size_of_toc_block` | TOC bytes | ```269:270:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `uint32` | LE | `size_of_name_block` | Asset path name block bytes | ```269:270:swg_pipeline/tre_reader.py``` |
+| 24 | 4 | `uint32` | LE | `_dup_names` | Read, discarded | ```269:270:swg_pipeline/tre_reader.py``` |
+| 28 | 4 | `uint32` | LE | `number_of_tree_files` | Count of `.tre` names following | ```269:270:swg_pipeline/tre_reader.py``` |
+| 32 | 4 | `uint32` | LE | `size_of_tree_file_name_block` | Stored in header; tree names parsed sequentially at offset 36 | ```269:270:swg_pipeline/tre_reader.py``` |
+
+Unpack: `"<7I"` at offset 8 ```269:270:swg_pipeline/tre_reader.py```
+
+### 2.3 Tree-file-name block (starts at offset 36)
+
+| Property | Rule | Source |
+|---|---|---|
+| Start | `COT2000_TRE_NAME_OFFSET` (36) | ```272:272:swg_pipeline/tre_reader.py``` |
+| Count | `number_of_tree_files` NUL-terminated strings | ```274:279:swg_pipeline/tre_reader.py``` |
+| Encoding | ASCII (`errors="replace"`) | ```278:278:swg_pipeline/tre_reader.py``` |
+| Advance | `pos = end + 1` after each NUL | ```279:279:swg_pipeline/tre_reader.py``` |
+
+Computed offsets after tree names:
+
+| Block | Offset | Length |
+|---|---|---|
+| TOC block | `toc_block_offset = pos` (after tree names) | `size_of_toc_block` ```280:281:swg_pipeline/tre_reader.py``` |
+| Asset name block | `name_block_offset = toc_block_offset + size_of_toc_block` | `size_of_name_block` ```281:281:swg_pipeline/tre_reader.py``` |
+
+**Compression:** none in reader (raw bytes) ```298:298:swg_pipeline/tre_reader.py```
+
+### 2.4 COT2000 global TOC entry (stride 32, decode 24 bytes)
+
+| Off | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 1 | `uint8` | LE | `compressor` | Per-file compression flag | ```303:305:swg_pipeline/tre_reader.py``` |
+| 1 | 1 | `uint8` | LE | `_` | Read, discarded | ```303:305:swg_pipeline/tre_reader.py``` |
+| 2 | 2 | `uint16` | LE | `tree_index` | Index into `tre_files` tuple | ```303:305:swg_pipeline/tre_reader.py``` |
+| 4 | 4 | `uint32` | LE | `crc` | CRC | ```303:305:swg_pipeline/tre_reader.py``` |
+| 8 | 4 | `uint32` | LE | `fn_len` | Path length **excluding** NUL | ```303:305:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `uint32` | LE | `file_off` | Offset inside named `.tre` | ```303:305:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `uint32` | LE | `length` | Uncompressed length | ```303:305:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `uint32` | LE | `compressed_length` | Compressed length | ```303:305:swg_pipeline/tre_reader.py``` |
+| 24 | 8 | — | — | padding | Unread (stride 32 − fmt 24) | ```302:302:swg_pipeline/tre_reader.py``` |
+
+Entry address: `toc_base + i * COT2000_GLOBAL_ENTRY_SIZE` ```302:302:swg_pipeline/tre_reader.py```
+
+### 2.5 COT2000 asset name block
+
+| Property | Rule | Source |
+|---|---|---|
+| Layout | Sequential NUL-terminated paths (not offset-indexed) | ```307:327:swg_pipeline/tre_reader.py``` |
+| Walk | Start `fn_offset=0`; path = `names[fn_offset:find NUL]`; advance `fn_offset += fn_len + 1` | ```309:327:swg_pipeline/tre_reader.py``` |
+| Encoding | Latin-1 | ```313:313:swg_pipeline/tre_reader.py``` |
+| Integrity | `fn_offset` must equal `size_of_name_block` after all entries | ```328:331:swg_pipeline/tre_reader.py``` |
+| `tree_index` bounds | Out-of-range → `tre_file="?"` | ```314:314:swg_pipeline/tre_reader.py``` |
+
+---
+
+## 3. searchTOC (retail master index)
+
+Detection: bytes `[0:4] == TAG_TOC_LE` and `[4:8] == TAG_0001_LE` ```152:153:swg_pipeline/tre_reader.py```  
+Constants: ```35:38:swg_pipeline/tre_reader.py```
+
+| Symbol | Value |
+|---|---|
+| `TAG_TOC_LE` | `0x544F4320` (`TOC `) |
+| `TAG_0001_LE` | `0x30303031` (`0001`) |
+| `SEARCH_TOC_HEADER_SIZE` | 36 |
+| `SEARCH_TOC_HEADER_FMT` | `"<4s4sBBBB6I"` |
+| `SEARCH_TOC_ENTRY_FMT` | `"<BBHIIIII"` |
+| `SEARCH_TOC_ENTRY_SIZE` | 24 |
+
+### 3.1 Header table (36 bytes, LE)
+
+| Off | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 4 | `4s` | LE | `token` | Must be `TAG_TOC_LE` | ```343:344:swg_pipeline/tre_reader.py``` |
+| 4 | 4 | `4s` | LE | `version` | Must be `TAG_0001_LE` | ```343:344:swg_pipeline/tre_reader.py``` |
+| 8 | 1 | `uint8` | LE | `toc_compressor` | TOC block compression | ```340:341:swg_pipeline/tre_reader.py``` |
+| 9 | 1 | `uint8` | LE | `name_block_compressor` | Asset name block compression | ```340:341:swg_pipeline/tre_reader.py``` |
+| 10 | 1 | `uint8` | LE | `_u1` | Read, discarded | ```340:341:swg_pipeline/tre_reader.py``` |
+| 11 | 1 | `uint8` | LE | `_u2` | Read, discarded | ```340:341:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `uint32` | LE | `number_of_files` | Entry count | ```340:341:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `uint32` | LE | `size_of_toc` | Stored TOC span | ```340:341:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `uint32` | LE | `size_of_name_block` | Stored asset-name span | ```340:341:swg_pipeline/tre_reader.py``` |
+| 24 | 4 | `uint32` | LE | `uncomp_size_of_name_block` | Uncompressed asset-name size; validated on read | ```392:393:swg_pipeline/tre_reader.py``` |
+| 28 | 4 | `uint32` | LE | `number_of_tree_files` | Tree-name count | ```340:341:swg_pipeline/tre_reader.py``` |
+| 32 | 4 | `uint32` | LE | `size_of_tree_file_name_block` | Stored in header | ```340:341:swg_pipeline/tre_reader.py``` |
+
+Minimum size: ```338:339:swg_pipeline/tre_reader.py```
+
+### 3.2 Tree-file-name block (immediately after 36-byte header)
+
+| Property | Rule | Source |
+|---|---|---|
+| Start | `pos = SEARCH_TOC_HEADER_SIZE` (36) | ```345:345:swg_pipeline/tre_reader.py``` |
+| Count | `number_of_tree_files` strings | ```347:352:swg_pipeline/tre_reader.py``` |
+| Termination | NUL-terminated | ```348:352:swg_pipeline/tre_reader.py``` |
+| Encoding | Latin-1 (`errors="replace"`) | ```351:351:swg_pipeline/tre_reader.py``` |
+| `toc_offset` | `pos` after last tree name + 1 | ```364:364:swg_pipeline/tre_reader.py``` |
+
+### 3.3 On-disk block order after tree names
+
+| Block | Start | Length | Compression | Source |
+|---|---|---|---|---|
+| TOC table | `toc_offset` | `size_of_toc` | `toc_compressor != 0` → zlib | ```372:374:swg_pipeline/tre_reader.py``` |
+| Asset name block | `toc_offset + size_of_toc` | `size_of_name_block` | `name_block_compressor != 0` → zlib | ```390:391:swg_pipeline/tre_reader.py``` |
+
+Decompressed TOC size check: `len(toc_data) >= number_of_files * 24` ```375:377:swg_pipeline/tre_reader.py```  
+Decompressed name check: `len(names) >= uncomp_size_of_name_block` ```392:393:swg_pipeline/tre_reader.py```
+
+### 3.4 searchTOC entry table (`SEARCH_TOC_ENTRY_FMT = "<BBHIIIII"`, 24 bytes)
+
+| Off | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 1 | `uint8` | LE | `compressor` | Payload compression in target `.tre` | ```381:383:swg_pipeline/tre_reader.py``` |
+| 1 | 1 | `uint8` | LE | `_unused` | Read, discarded | ```381:383:swg_pipeline/tre_reader.py``` |
+| 2 | 2 | `uint16` | LE | `tree_index` | Index into header `tre_files` | ```381:383:swg_pipeline/tre_reader.py``` |
+| 4 | 4 | `uint32` | LE | `crc` | CRC | ```381:383:swg_pipeline/tre_reader.py``` |
+| 8 | 4 | `uint32` | LE | `fn_field` | Path byte length **excluding** NUL (not a direct name-block offset) | ```381:389:swg_pipeline/tre_reader.py``` |
+| 12 | 4 | `uint32` | LE | `file_off` | Offset in target `.tre` | ```381:383:swg_pipeline/tre_reader.py``` |
+| 16 | 4 | `uint32` | LE | `length` | Uncompressed length | ```381:383:swg_pipeline/tre_reader.py``` |
+| 20 | 4 | `uint32` | LE | `compressed_length` | Compressed length | ```381:383:swg_pipeline/tre_reader.py``` |
+
+**`fn_field` → name-block offset conversion (two-pass):**
+
+| Pass | Rule | Source |
+|---|---|---|
+| 1 | Collect raw rows from decompressed TOC | ```378:384:swg_pipeline/tre_reader.py``` |
+| 2 | Running sum: `fn_offset += fn_field + 1`; store converted offset as `fnoff` | ```385:389:swg_pipeline/tre_reader.py``` |
+| 3 | Resolve path: `names[fnoff : find NUL]` Latin-1 | ```395:399:swg_pipeline/tre_reader.py``` |
+
+Synthetic roundtrip example (header + entry packing): ```54:75:tests/test_tre_versions.py```
+
+---
+
+## 4. IFF container
+
+Sources: `swg_iff/reader.py`, `swg_iff/writer.py`, evidence pack lines 17–20 / 30–31.
+
+### 4.1 Block header grammar (all blocks)
+
+| Off | Size | Type | Endian | Field | Meaning |
+|---|---|---|---|---|---|
+| 0 | 4 | `uint32` | **BE** | `tag` | Block tag | ```104:105:swg_iff/reader.py``` |
+| 4 | 4 | `uint32` | **BE** | `length` | Payload length **after** this 8-byte header | ```104:105:swg_iff/reader.py``` |
+
+`HEADER_SIZE = 8` ```55:55:swg_iff/reader.py```  
+On-disk block span: `[offset .. offset + 8 + length)` ```178:179:swg_iff/reader.py```
+
+### 4.2 FORM block
+
+| Component | Size | Endian | Content | Source |
+|---|---|---|---|---|
+| Header tag | 4 | BE | `TAG_FORM` (`FORM`) | ```106:106:swg_iff/reader.py``` |
+| Header length | 4 | BE | `4 + len(children)` — **includes** 4-byte form type | ```131:131:swg_iff/reader.py``` · ```39:41:swg_iff/writer.py``` |
+| Form type | 4 | BE | e.g. `MESH`, `0005` | ```112:113:swg_iff/reader.py``` |
+| Children | `length − 4` | — | Nested blocks | ```131:134:swg_iff/reader.py``` |
+
+Writer serialization: ```39:41:swg_iff/writer.py```  
+Minimum FORM length: 4 (must contain form type) ```110:111:swg_iff/reader.py```
+
+### 4.3 Chunk block
+
+| Component | Size | Endian | Content | Source |
+|---|---|---|---|---|
+| Header tag | 4 | BE | Chunk fourCC | ```104:105:swg_iff/reader.py``` |
+| Header length | 4 | BE | Payload only (no type word) | ```104:105:swg_iff/reader.py``` |
+| Payload | `length` | — | Opaque bytes | ```157:158:swg_iff/reader.py``` |
+
+Writer: ```34:36:swg_iff/writer.py```
+
+### 4.4 Nesting / navigation invariants (reader)
+
+| Invariant | Rule | Source |
+|---|---|---|
+| Parent consumption | `used += 8 + block.length` on enter/skip | ```133:133:swg_iff/reader.py``` · ```156:156:swg_iff/reader.py``` |
+| FORM child extent | `payload_len = block.length - 4`; child frame `[data_offset .. data_offset + payload_len)` | ```131:134:swg_iff/reader.py``` |
+| End-of-form | `frame.used >= frame.length` | ```84:84:swg_iff/reader.py``` |
+| Chunk read bound | Reads cannot exceed chunk `frame.length` | ```189:193:swg_iff/reader.py``` |
+
+### 4.5 Chunk payload scalar endianness (inside chunk)
+
+| Scalar reads | Endian | Source |
+|---|---|---|
+| `read_int16/32`, `read_uint16/32`, `read_float`, vectors | **LE** | ```51:52:swg_iff/reader.py``` · ```209:222:swg_iff/reader.py``` |
+| Writer chunk scalars | **LE** | ```14:31:swg_iff/writer.py``` |
+| `read_string` | NUL-terminated bytes, no endian | ```227:235:swg_iff/reader.py``` |
+| Writer strings | ASCII + `0x00` | ```88:89:swg_iff/writer.py``` |
+
+### 4.6 `validate_iff` size-consistency invariants
+
+Port of `IffNamespace::isValid` ```250:251:swg_iff/reader.py```
+
+| Check | Condition | Source |
+|---|---|---|
+| Header fits parent | `pos + 8 <= end` | ```255:256:swg_iff/reader.py``` |
+| Length non-negative | `block_length >= 0` | ```259:259:swg_iff/reader.py``` |
+| Block fits parent | `pos + 8 + block_length <= end` | ```259:259:swg_iff/reader.py``` |
+| Sibling advance | `pos = payload + block_length` (= `pos + 8 + block_length`) | ```266:266:swg_iff/reader.py``` |
+| FORM recursion | If `tag == TAG_FORM`: walk `[payload+4 .. payload+4+(block_length−4))` when `sub > 0` | ```262:265:swg_iff/reader.py``` |
+| Root walk | `walk(0, len(data))` | ```269:269:swg_iff/reader.py``` |
+
+**Failure mode for oversized FORM (evidence pack, not implemented in cited TRE files):**
+
+| Item | Detail | Source |
+|---|---|---|
+| Corruption class | FORM `length` declared **larger** than bytes available within parent extent | evidence L17–18 |
+| Symptom | Validator fails `pos + 8 + block_length > end` ```259:259:swg_iff/reader.py``` | |
+| Repair rule (evidence) | Bottom-up **clamp-to-parent-extent** then **recursive validate** pass | evidence L19–20 |
+| Clamp formula (derived from validator + evidence) | At block at `pos` with parent end `end`: if `pos + 8 + block_length > end`, set `block_length := end - pos - 8`; rewrite BE length at `pos+4`; if FORM, recurse into clamped child span | evidence L19–20 · validator ```259:265:swg_iff/reader.py``` |
+| Provenance | Repaired 102 files (ILM `.skt` strip-tool case); zero failures reported | evidence L19–20 · `SAIS-PR-QUEUE.md` L593–598 |
+
+No `repair_iff` / clamp implementation exists in `tre_reader.py`, `tre_decrypt.py`, or `swg_iff/reader.py` (grep: no matches in repo).
+
+---
+
+## 5. Gotchas for a writer
+
+| # | Area | Gotcha | Detail | Source |
+|---|---|---|---|---|
+| 1 | TRE header | All multi-byte integers LE | `"<4s4s7I"`, TOC/name flags as `uint32` | ```29:29``` · ```172:173:swg_pipeline/tre_reader.py``` |
+| 2 | TRE version tag | 4-byte Latin-1 ASCII tag, not numeric | e.g. `b"0005"` | ```166:166:swg_pipeline/tre_reader.py``` |
+| 3 | TOC stride vs decode | `6000`/`0006`: 32-byte stride, only 24 bytes defined | 8-byte pad per entry unless fmt extended | ```141:142``` · ```31:33:swg_pipeline/tre_reader.py``` |
+| 4 | `5000` stride | In `EXTENDED_TRE_VERSIONS` but stride **24** (same as retail) | ```139:140:swg_pipeline/tre_reader.py``` |
+| 5 | Compression flags | Non-zero = compressed; algorithm assumed zlib | No other codec in reader | ```189:192:swg_pipeline/tre_reader.py``` |
+| 6 | Payload size selection | If `compressor`: read `compressed_length`; else read `length` | Off-by-one between stored vs logical size | ```245:245:swg_pipeline/tre_reader.py``` |
+| 7 | Restoration payloads | `6000`/`0006`/`5000` may not zlib-decompress | Writer must match retail zlib **or** obfuscation expected by `TreeFileExtractor` | ```6:7:swg_pipeline/tre_reader.py``` · ```23:31:swg_pipeline/tre_decrypt.py``` |
+| 8 | Name block (TRE) | Paths indexed by **`fnoff` into decompressed block**, not sequential walk | Unlike COT2000/searchTOC | ```214:218:swg_pipeline/tre_reader.py``` |
+| 9 | Name block (TRE) | NUL-terminated; `fnoff` must point to valid NUL | ```215:217:swg_pipeline/tre_reader.py``` |
+| 10 | Path lookup | Compare with `\`→`/`, **lower-case** | ```241:243:swg_pipeline/tre_reader.py``` |
+| 11 | Path encoding | TRE/searchTOC names: Latin-1; COT2000 tree names: ASCII | ```218:218``` · ```278:278``` · ```351:351``` · ```313:313:swg_pipeline/tre_reader.py``` |
+| 12 | COT2000 magic | Leading space: `b" COT2000"` | ```23:23:swg_pipeline/tre_reader.py``` |
+| 13 | COT2000 name walk | `fn_len` excludes NUL; advance `+1` for NUL | Must sum to `size_of_name_block` | ```327:331:swg_pipeline/tre_reader.py``` |
+| 14 | searchTOC tree names | Immediately follow 36-byte header (not at fixed 36 if header ever grows—currently 36) | ```345:364:swg_pipeline/tre_reader.py``` |
+| 15 | searchTOC `fn_field` | Stored as **path length**, converted to cumulative offset before name lookup | Do not write direct offsets into TOC unless reader changed | ```387:389:swg_pipeline/tre_reader.py``` |
+| 16 | searchTOC name size | Decompressed names must be ≥ `uncomp_size_of_name_block` | ```392:393:swg_pipeline/tre_reader.py``` |
+| 17 | searchTOC compressors | **uint8** flags, not uint32 | ```340:341:swg_pipeline/tre_reader.py``` |
+| 18 | TOC/name stored vs uncompressed | Header carries both stored size and (where present) uncompressed size; writer must keep pairs consistent when zlib used | ```66:69``` · ```115:115``` · ```360:360:swg_pipeline/tre_reader.py``` |
+| 19 | IFF block tags/lengths | **Big-endian** | ```104:105:swg_iff/reader.py``` |
+| 20 | IFF FORM length | **Inclusive** of 4-byte form-type word | Child bytes = `length − 4` | ```131:131:swg_iff/reader.py``` · ```39:41:swg_iff/writer.py``` |
+| 21 | IFF chunk length | **Exclusive** of header; payload only | ```34:36:swg_iff/writer.py``` |
+| 22 | IFF sibling packing | Blocks contiguous; next at `prev_offset + 8 + prev_length` | ```266:266:swg_iff/reader.py``` |
+| 23 | IFF chunk scalars | LE inside payload (distinct from BE headers) | ```51:52:swg_iff/reader.py``` |
+| 24 | IFF validation | Every block must satisfy `pos + 8 + length <= parent_end` | Oversized FORM is common corruption class | ```259:259:swg_iff/reader.py``` · evidence L17–20 |
+| 25 | IFF repair (compose) | Clamp oversized `length` to parent remainder before ship | evidence L19–20 |
+| 26 | Master index detect | COT2000 checked before SearchTOC; SearchTOC needs `TOC ` + `0001` | ```150:153:swg_pipeline/tre_reader.py``` |
+| 27 | `tree_index` | Out-of-range index silently maps to `"?"` on read—not a write-time error | ```314:314``` · ```400:400:swg_pipeline/tre_reader.py``` |
+| 28 | TOC entry `offset`/`length` types | Signed `int32` in struct | Negative values not rejected by reader | ```31:31``` · ```214:214:swg_pipeline/tre_reader.py``` |

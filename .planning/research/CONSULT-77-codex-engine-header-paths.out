@@ -1,0 +1,136 @@
+﻿**Scope searched:** `src/` read-only. I found TRE/TOC archive-header handling only in `sharedFile` runtime code and `TreeFileBuilder`’s TRE writer. `TreeFileExtractor` reaches the same runtime constructor via `TreeFile::addSearchTree`; I found no `.toc` writer in `src/`.
+
+**Tag Encoding**
+
+`Tag` is `uint32` at `sharedFoundation/src/shared/Tag.h:89`, built by `TAG`/`TAG3` macros at `Tag.h:93-97`. Relevant digits are defined as ASCII hex nibbles: `0=0x30` at `Tag.h:20`, `1=0x31` at `Tag.h:21`, `4=0x34` at `Tag.h:24`, `5=0x35` at `Tag.h:25`, `C=0x43` at `Tag.h:33`, `E=0x45` at `Tag.h:35`, `O=0x4F` at `Tag.h:45`, `R=0x52` at `Tag.h:48`, `T=0x54` at `Tag.h:50`, space `0x20` at `Tag.h:18`.
+
+On little-endian x86/x64, raw `Tag` bytes are reversed from the numeric constant:
+
+- `TAG_TREE = TAG(T,R,E,E)` at `TreeFile_SearchNode.cpp:39`: numeric `0x54524545`, bytes `45 45 52 54` (`EERT`).
+- `TAG_TOC = TAG3(T,O,C)` at `TreeFile_SearchNode.cpp:40`: numeric `0x544F4320`, bytes `20 43 4F 54` (` COT`).
+- `TAG_0001` at `Tag.h:260`: numeric `0x30303031`, bytes `31 30 30 30` (`1000`).
+- `TAG_0004` at `Tag.h:263`: numeric `0x30303034`, bytes `34 30 30 30` (`4000`).
+- `TAG_0005` at `Tag.h:264`: numeric `0x30303035`, bytes `35 30 30 30` (`5000`).
+
+**`.tre` Read Paths**
+
+Header struct: `TreeFile::SearchTree::Header` at `TreeFile_SearchNode.h:239-250`.
+
+Fields:
+
+```cpp
+Tag token;
+Tag version;
+uint32 numberOfFiles;
+uint32 tocOffset;
+uint32 tocCompressor;
+uint32 sizeOfTOC;
+uint32 blockCompressor;
+uint32 sizeOfNameBlock;
+uint32 uncompSizeOfNameBlock;
+```
+
+Types: `Tag` is `uint32` (`Tag.h:89`); `uint32` is `unsigned long` on Win32 (`FoundationTypesWin32.h:21-23`).
+
+Runtime constructor path:
+
+- `TreeFile::addSearchTree()` constructs `new SearchTree(priority, fileName)` when the file exists at `TreeFile.cpp:457-460`.
+- Config startup reaches this from `searchTree...` config keys at `TreeFile.cpp:145-152`.
+- `TreeFileExtractor` also reaches it via `TreeFile::addSearchTree(treeFileName, 0)` at `TreeFileExtractor.cpp:146-148`.
+
+Header population: raw struct read, no per-field parsing or byte swapping: `Header header; m_treeFile->read(0, &header, sizeof(header), ...)` at `TreeFile_SearchNode.cpp:436-438`.
+
+Validation:
+
+- Token: `DEBUG_FATAL(header.token != TAG_TREE, ...)` at `TreeFile_SearchNode.cpp:439`.
+- Versions accepted: `TAG_0004` and `TAG_0005` in the switch at `TreeFile_SearchNode.cpp:445-449`.
+- Outside set: default deletes `m_treeFile` at `TreeFile_SearchNode.cpp:506-508`, then `FATAL(...)` in production/non-production branches at `TreeFile_SearchNode.cpp:510-514`.
+
+`SearchTree::validate()` path:
+
+- Declared at `TreeFile_SearchNode.h:196`, implemented at `TreeFile_SearchNode.cpp:388`.
+- Header population is also a raw struct read: `file->read(0, &header, sizeof(header), ...)` at `TreeFile_SearchNode.cpp:395-397`; no byte swapping is present.
+- Token comparison: `header.token != TAG_TREE` returns false at `TreeFile_SearchNode.cpp:406-408`.
+- Accepted version set is only `TAG_0004`: `header.version < TAG_0004 || header.version > TAG_0004` at `TreeFile_SearchNode.cpp:410-412`.
+- Outside set: returns false at `TreeFile_SearchNode.cpp:411-412`.
+- Reachability in `src/`: `rg` found only the implementation, declaration, and wrapper `TreeFile::validateSearchTree()` at `TreeFile.cpp:499-501`; no caller of `validateSearchTree()` in `src/`. Runtime config uses `addSearchTree()` instead (`TreeFile.cpp:145-152`).
+
+**`.toc` Read Paths**
+
+Header struct: `TreeFile::SearchTOC::Header` at `TreeFile_SearchNode.h:331-345`.
+
+Fields:
+
+```cpp
+Tag token;
+Tag version;
+uint8 tocCompressor;
+uint8 fileNameBlockCompressor;
+uint8 unusedOne;
+uint8 unusedTwo;
+uint32 numberOfFiles;
+uint32 sizeOfTOC;
+uint32 sizeOfNameBlock;
+uint32 uncompSizeOfNameBlock;
+uint32 numberOfTreeFiles;
+uint32 sizeOfTreeFileNameBlock;
+```
+
+Types: `uint8/uint16/uint32` are defined at `FoundationTypesWin32.h:21-23`.
+
+Runtime constructor path:
+
+- Config startup reaches this from `searchTOC...` config keys at `TreeFile.cpp:155-162`.
+- `TreeFile::addSearchTOC()` constructs `new SearchTOC(priority, fileName)` when the file exists at `TreeFile.cpp:478-481`.
+
+Header population: raw struct read, no per-field parsing or byte swapping: `Header header; m_TOCFile->read(0, &header, sizeof(header), ...)` at `TreeFile_SearchNode.cpp:774-776`.
+
+Validation:
+
+- Token: `DEBUG_FATAL(header.token != TAG_TOC, ...)` at `TreeFile_SearchNode.cpp:777`.
+- Versions accepted: only `TAG_0001`, switch case at `TreeFile_SearchNode.cpp:787-790`.
+- Outside set: default deletes `m_TOCFile` at `TreeFile_SearchNode.cpp:909-911`, then `FATAL(...)` in production/non-production branches at `TreeFile_SearchNode.cpp:913-917`.
+
+`SearchTOC::validate()` exists:
+
+- Header raw-read: `file->read(0, &header, sizeof(header), ...)` at `TreeFile_SearchNode.cpp:731-733`.
+- Token: `header.token != TAG_TOC` returns false at `TreeFile_SearchNode.cpp:742-744`.
+- Version: `header.version != TAG_0001` returns false at `TreeFile_SearchNode.cpp:746-748`.
+- I found no caller in `src/`; `rg` found only its implementation/declaration.
+
+Container `.tre` reads through `.toc`:
+
+- The `.toc` reads tree-file names from the `.toc` body at `TreeFile_SearchNode.cpp:812-815`.
+- It opens referenced containers with `FileStreamer::exists()` and `FileStreamer::open(treePathBuffer, true)` at `TreeFile_SearchNode.cpp:822-831`.
+- There is no container header/version validation in that loop; it only `FATAL`s if the file cannot be opened at `TreeFile_SearchNode.cpp:835`.
+- Payload reads use TOC offsets directly: uncompressed returns `new FileStreamerFile(..., *m_treeFiles[entry.treeFileIndex], entry.offset, entry.length)` at `TreeFile_SearchNode.cpp:1107-1108`; compressed reads `m_treeFiles[entry.treeFileIndex]->read(entry.offset, ...)` at `TreeFile_SearchNode.cpp:1110-1113`.
+
+**Write Paths**
+
+Only `TreeFileBuilder` writes an archive header.
+
+Header struct used: `TreeFile::SearchTree::Header` from `TreeFile_SearchNode.h:239-250`.
+
+Writer:
+
+- `TAG_TREE` is defined locally as `TAG(T,R,E,E)` at `TreeFileBuilder.cpp:32`.
+- `TreeFileBuilder::write()` assigns `header.token = TAG_TREE`, `header.version = TAG_0005`, `header.numberOfFiles = numberOfFiles` at `TreeFileBuilder.cpp:775-779`.
+- It writes the header with `write(&header, sizeof(header))` at `TreeFileBuilder.cpp:780`.
+- `write()` is a raw `WriteFile(treeFileHandle, data, length, ...)` wrapper at `TreeFileBuilder.cpp:548-553`.
+- It seeks back and rewrites the completed header at `TreeFileBuilder.cpp:805-813`.
+
+Bytes emitted at offsets `0..7`: token `TAG_TREE` + version `TAG_0005`, so `45 45 52 54 35 30 30 30` (`EERT5000`). The same bytes are emitted on the initial header write (`TreeFileBuilder.cpp:777-780`) and final rewrite (`TreeFileBuilder.cpp:805-813`).
+
+Builder version constants: `TreeFileBuilderHelper::getVersion()` also returns only `TAG_0005` at `TreeFileBuilder.cpp:143-145`. I found no builder option or branch that emits `TAG_0004` or any `.toc` header.
+
+**TOC Record Size / 32-byte Variant**
+
+`TreeFile::SearchTree::TableOfContentsEntry` is 24 bytes from its six 4-byte fields at `TreeFile_SearchNode.h:254-262`: `uint32 crc`, then five `int`s. `TreeFile::SearchTOC::TableOfContentsEntry` is also 24 bytes: `uint8`, `uint8`, `uint16`, then five `uint32`s at `TreeFile_SearchNode.h:349-360`.
+
+Evidence that this engine parses 24-byte records only:
+
+- `.tre` read allocates `new TableOfContentsEntry[m_numberOfFiles]` and computes `isizeof(TableOfContentsEntry) * m_numberOfFiles` at `TreeFile_SearchNode.cpp:451-455`, then reads/decompresses exactly that size at `TreeFile_SearchNode.cpp:469` or `TreeFile_SearchNode.cpp:476`.
+- `.toc` read does the same at `TreeFile_SearchNode.cpp:792` and `TreeFile_SearchNode.cpp:844-865`.
+- Builder writes `.tre` TOC records using `sizeof(entry) * numberOfFiles`, copies each `sizeof(entry)`, and uses the same struct at `TreeFileBuilder.cpp:601-628`.
+
+I found no code path in `src/` that parses a 32-byte TOC record variant.
