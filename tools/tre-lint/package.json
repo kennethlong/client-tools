@@ -1,0 +1,8 @@
+{
+  "name": "tre-lint",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone SWG TRE/TOC set linter — zero deps, runs directly under Node >=22.12 (type stripping). Seed/baseline tool for SWG-Toolkit @swg/compose B1.",
+  "bin": { "tre-lint": "./src/cli.ts" }
+}

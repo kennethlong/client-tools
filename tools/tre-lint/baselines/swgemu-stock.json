@@ -1,0 +1,680 @@
+{
+ "tool": "tre-lint",
+ "version": "0.1.0",
+ "deep": false,
+ "filter": null,
+ "targets": [
+  "D:\\SWGEmu-Client\\SWGEmu"
+ ],
+ "archives": [
+  {
+   "file": "bottom.tre",
+   "kind": "tre",
+   "sizeBytes": 16205884,
+   "version": "0005",
+   "entryCount": 808,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_animation_00.tre",
+   "kind": "tre",
+   "sizeBytes": 58966791,
+   "version": "0005",
+   "entryCount": 5987,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_music_00.tre",
+   "kind": "tre",
+   "sizeBytes": 77322894,
+   "version": "0005",
+   "entryCount": 144,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_other_00.tre",
+   "kind": "tre",
+   "sizeBytes": 46546173,
+   "version": "0005",
+   "entryCount": 43062,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104636589,
+   "version": "0005",
+   "entryCount": 494,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104848649,
+   "version": "0005",
+   "entryCount": 294,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_02.tre",
+   "kind": "tre",
+   "sizeBytes": 104806646,
+   "version": "0005",
+   "entryCount": 1569,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104479178,
+   "version": "0005",
+   "entryCount": 624,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_04.tre",
+   "kind": "tre",
+   "sizeBytes": 33887496,
+   "version": "0005",
+   "entryCount": 439,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_skeletal_mesh_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104259690,
+   "version": "0005",
+   "entryCount": 5739,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_skeletal_mesh_01.tre",
+   "kind": "tre",
+   "sizeBytes": 42575909,
+   "version": "0005",
+   "entryCount": 2332,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104853089,
+   "version": "0005",
+   "entryCount": 4385,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104861757,
+   "version": "0005",
+   "entryCount": 605,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_02.tre",
+   "kind": "tre",
+   "sizeBytes": 105217918,
+   "version": "0005",
+   "entryCount": 3207,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104461486,
+   "version": "0005",
+   "entryCount": 759,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_04.tre",
+   "kind": "tre",
+   "sizeBytes": 104915626,
+   "version": "0005",
+   "entryCount": 799,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_05.tre",
+   "kind": "tre",
+   "sizeBytes": 7576262,
+   "version": "0005",
+   "entryCount": 201,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_06.tre",
+   "kind": "tre",
+   "sizeBytes": 22566812,
+   "version": "0005",
+   "entryCount": 437,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_07.tre",
+   "kind": "tre",
+   "sizeBytes": 2333549,
+   "version": "0005",
+   "entryCount": 204,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_static_mesh_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104681322,
+   "version": "0005",
+   "entryCount": 7853,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_static_mesh_01.tre",
+   "kind": "tre",
+   "sizeBytes": 94719985,
+   "version": "0005",
+   "entryCount": 3864,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104816351,
+   "version": "0005",
+   "entryCount": 1608,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104831553,
+   "version": "0005",
+   "entryCount": 1516,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_02.tre",
+   "kind": "tre",
+   "sizeBytes": 104923301,
+   "version": "0005",
+   "entryCount": 1822,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104659874,
+   "version": "0005",
+   "entryCount": 1131,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_04.tre",
+   "kind": "tre",
+   "sizeBytes": 104887073,
+   "version": "0005",
+   "entryCount": 2123,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_05.tre",
+   "kind": "tre",
+   "sizeBytes": 104820008,
+   "version": "0005",
+   "entryCount": 1551,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_06.tre",
+   "kind": "tre",
+   "sizeBytes": 104773001,
+   "version": "0005",
+   "entryCount": 1566,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_07.tre",
+   "kind": "tre",
+   "sizeBytes": 66226334,
+   "version": "0005",
+   "entryCount": 943,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "default_patch.tre",
+   "kind": "tre",
+   "sizeBytes": 60331,
+   "version": "0005",
+   "entryCount": 3,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "hotfix_13_1_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3058578,
+   "version": "0005",
+   "entryCount": 230,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "hotfix_sku1_12_1_00.tre",
+   "kind": "tre",
+   "sizeBytes": 21315,
+   "version": "0005",
+   "entryCount": 4,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_00.tre",
+   "kind": "tre",
+   "sizeBytes": 18779819,
+   "version": "0005",
+   "entryCount": 8830,
+   "tombstones": 14,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_00.tre",
+     "message": "14 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_01.tre",
+   "kind": "tre",
+   "sizeBytes": 17757229,
+   "version": "0005",
+   "entryCount": 5918,
+   "tombstones": 73,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_01.tre",
+     "message": "73 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_02.tre",
+   "kind": "tre",
+   "sizeBytes": 3396766,
+   "version": "0005",
+   "entryCount": 1298,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_03.tre",
+   "kind": "tre",
+   "sizeBytes": 20870097,
+   "version": "0005",
+   "entryCount": 1967,
+   "tombstones": 119,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_03.tre",
+     "message": "119 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_04.tre",
+   "kind": "tre",
+   "sizeBytes": 27137114,
+   "version": "0005",
+   "entryCount": 2477,
+   "tombstones": 19,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_04.tre",
+     "message": "19 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_05.tre",
+   "kind": "tre",
+   "sizeBytes": 25827774,
+   "version": "0005",
+   "entryCount": 2193,
+   "tombstones": 25,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_05.tre",
+     "message": "25 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_06.tre",
+   "kind": "tre",
+   "sizeBytes": 40724726,
+   "version": "0005",
+   "entryCount": 2774,
+   "tombstones": 59,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_06.tre",
+     "message": "59 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_07.tre",
+   "kind": "tre",
+   "sizeBytes": 40567157,
+   "version": "0005",
+   "entryCount": 2044,
+   "tombstones": 8,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_07.tre",
+     "message": "8 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_08.tre",
+   "kind": "tre",
+   "sizeBytes": 36984057,
+   "version": "0005",
+   "entryCount": 1596,
+   "tombstones": 2,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_08.tre",
+     "message": "2 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_09.tre",
+   "kind": "tre",
+   "sizeBytes": 57214055,
+   "version": "0005",
+   "entryCount": 2196,
+   "tombstones": 18,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_09.tre",
+     "message": "18 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_10.tre",
+   "kind": "tre",
+   "sizeBytes": 33429694,
+   "version": "0005",
+   "entryCount": 1343,
+   "tombstones": 32,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_10.tre",
+     "message": "32 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_00.tre",
+   "kind": "tre",
+   "sizeBytes": 103221850,
+   "version": "0005",
+   "entryCount": 12198,
+   "tombstones": 159,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_00.tre",
+     "message": "159 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_01.tre",
+   "kind": "tre",
+   "sizeBytes": 28868084,
+   "version": "0005",
+   "entryCount": 688,
+   "tombstones": 5,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_01.tre",
+     "message": "5 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_02.tre",
+   "kind": "tre",
+   "sizeBytes": 28713778,
+   "version": "0005",
+   "entryCount": 3345,
+   "tombstones": 196,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_02.tre",
+     "message": "196 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_03.tre",
+   "kind": "tre",
+   "sizeBytes": 7517816,
+   "version": "0005",
+   "entryCount": 1446,
+   "tombstones": 20,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_03.tre",
+     "message": "20 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_12_00.tre",
+   "kind": "tre",
+   "sizeBytes": 32863489,
+   "version": "0005",
+   "entryCount": 7493,
+   "tombstones": 16,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_12_00.tre",
+     "message": "16 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_13_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6032263,
+   "version": "0005",
+   "entryCount": 1181,
+   "tombstones": 15,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_13_00.tre",
+     "message": "15 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_14_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36469339,
+   "version": "0005",
+   "entryCount": 1491,
+   "tombstones": 2,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_14_00.tre",
+     "message": "2 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_12_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6257317,
+   "version": "0005",
+   "entryCount": 432,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_13_00.tre",
+   "kind": "tre",
+   "sizeBytes": 21315,
+   "version": "0005",
+   "entryCount": 4,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_14_00.tre",
+   "kind": "tre",
+   "sizeBytes": 944,
+   "version": "0005",
+   "entryCount": 11,
+   "tombstones": 11,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_sku1_14_00.tre",
+     "message": "11 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  }
+ ],
+ "setFindings": [
+  {
+   "ruleId": "set-shadowed-paths",
+   "severity": "info",
+   "archive": "SWGEmu",
+   "message": "20597 paths exist in more than one archive (first-match-wins shadowing); top: datatables/command/command_table.iff×18, datatables/skill/skills.iff×18, misc/object_template_crc_string_table.iff×18, datatables/appearance/appearance_table.iff×17, string/en/obj_attr_n.stf×17"
+  }
+ ],
+ "summary": {
+  "error": 0,
+  "warn": 0,
+  "info": 19
+ }
+}

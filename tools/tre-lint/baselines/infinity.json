@@ -1,0 +1,427 @@
+{
+ "tool": "tre-lint",
+ "version": "0.1.0",
+ "deep": false,
+ "filter": null,
+ "targets": [
+  "D:\\SWG Infinity\\SWG Infinity\\Live"
+ ],
+ "archives": [
+  {
+   "file": "bottom.tre",
+   "kind": "tre",
+   "sizeBytes": 16205884,
+   "version": "0005",
+   "entryCount": 808,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "infinity_custom_01.tre",
+   "kind": "tre",
+   "sizeBytes": 855230977,
+   "version": "0005",
+   "entryCount": 33464,
+   "tombstones": 3,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-dup-crc",
+     "severity": "warn",
+     "archive": "infinity_custom_01.tre",
+     "path": "object/tangible/deed/vehicle_deed/shared_speederbike_deed.iff",
+     "message": "CRC collision: 0xf2ead531 for both \"appearance/animation/boss_nass_cbt_rifle_prone_ready_to_rifle_standing_ready.ans\" and \"object/tangible/deed/vehicle_deed/shared_speederbike_deed.iff\" — engine tie-breaks by name compare; writers must keep both"
+    },
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "infinity_custom_01.tre",
+     "message": "3 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "infinity_custom_02.tre",
+   "kind": "tre",
+   "sizeBytes": 77341895,
+   "version": "0005",
+   "entryCount": 1933,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "infinity_xmas.tre",
+   "kind": "tre",
+   "sizeBytes": 5960809,
+   "version": "0005",
+   "entryCount": 1319,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_001_appearance_01.tre",
+   "kind": "tre",
+   "sizeBytes": 129133286,
+   "version": "0005",
+   "entryCount": 17748,
+   "tombstones": 132,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_001_appearance_01.tre",
+     "message": "132 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_002_appearance_02.tre",
+   "kind": "tre",
+   "sizeBytes": 3343625,
+   "version": "0005",
+   "entryCount": 8900,
+   "tombstones": 15,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_002_appearance_02.tre",
+     "message": "15 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_003_appearance_03.tre",
+   "kind": "tre",
+   "sizeBytes": 243163263,
+   "version": "0005",
+   "entryCount": 17166,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_003_appearance_03.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_004_appearance_04.tre",
+   "kind": "tre",
+   "sizeBytes": 447614618,
+   "version": "0005",
+   "entryCount": 17817,
+   "tombstones": 65,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_004_appearance_04.tre",
+     "message": "65 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_005_texture_01.tre",
+   "kind": "tre",
+   "sizeBytes": 437756721,
+   "version": "0005",
+   "entryCount": 6482,
+   "tombstones": 41,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_005_texture_01.tre",
+     "message": "41 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_006_texture_02.tre",
+   "kind": "tre",
+   "sizeBytes": 464727568,
+   "version": "0005",
+   "entryCount": 6764,
+   "tombstones": 98,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_006_texture_02.tre",
+     "message": "98 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_007_texture_03.tre",
+   "kind": "tre",
+   "sizeBytes": 253034043,
+   "version": "0005",
+   "entryCount": 3706,
+   "tombstones": 5,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_007_texture_03.tre",
+     "message": "5 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_008_texture_04.tre",
+   "kind": "tre",
+   "sizeBytes": 395834904,
+   "version": "0005",
+   "entryCount": 4842,
+   "tombstones": 60,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_008_texture_04.tre",
+     "message": "60 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_009_shader_01.tre",
+   "kind": "tre",
+   "sizeBytes": 4844099,
+   "version": "0005",
+   "entryCount": 17767,
+   "tombstones": 89,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_009_shader_01.tre",
+     "message": "89 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_010_object_01.tre",
+   "kind": "tre",
+   "sizeBytes": 13595153,
+   "version": "0005",
+   "entryCount": 19198,
+   "tombstones": 90,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_010_object_01.tre",
+     "message": "90 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_011_files_01.tre",
+   "kind": "tre",
+   "sizeBytes": 804741063,
+   "version": "0005",
+   "entryCount": 12503,
+   "tombstones": 17,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_011_files_01.tre",
+     "message": "17 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_012_configurable_01.tre",
+   "kind": "tre",
+   "sizeBytes": 3936147,
+   "version": "0005",
+   "entryCount": 6149,
+   "tombstones": 21,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_012_configurable_01.tre",
+     "message": "21 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_013_configurable_02.tre",
+   "kind": "tre",
+   "sizeBytes": 29281665,
+   "version": "0005",
+   "entryCount": 7980,
+   "tombstones": 156,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_013_configurable_02.tre",
+     "message": "156 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_014.tre",
+   "kind": "tre",
+   "sizeBytes": 282442081,
+   "version": "0005",
+   "entryCount": 4435,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_015.tre",
+   "kind": "tre",
+   "sizeBytes": 341320580,
+   "version": "0005",
+   "entryCount": 3759,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_016.tre",
+   "kind": "tre",
+   "sizeBytes": 332790542,
+   "version": "0005",
+   "entryCount": 22733,
+   "tombstones": 6,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_016.tre",
+     "message": "6 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_017.tre",
+   "kind": "tre",
+   "sizeBytes": 664075057,
+   "version": "0005",
+   "entryCount": 7197,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_017.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_018.tre",
+   "kind": "tre",
+   "sizeBytes": 2443836,
+   "version": "0005",
+   "entryCount": 5314,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_019.tre",
+   "kind": "tre",
+   "sizeBytes": 6377563,
+   "version": "0005",
+   "entryCount": 4990,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_021.tre",
+   "kind": "tre",
+   "sizeBytes": 1060269,
+   "version": "0005",
+   "entryCount": 1062,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_patch_022.tre",
+   "kind": "tre",
+   "sizeBytes": 22424507,
+   "version": "0005",
+   "entryCount": 9105,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_patch_022.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "mtg_patch_023.tre",
+   "kind": "tre",
+   "sizeBytes": 5721601,
+   "version": "0005",
+   "entryCount": 181,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "mtg_planets.tre",
+   "kind": "tre",
+   "sizeBytes": 135424016,
+   "version": "0005",
+   "entryCount": 3328,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "mtg_planets.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  }
+ ],
+ "setFindings": [
+  {
+   "ruleId": "set-shadowed-paths",
+   "severity": "info",
+   "archive": "Live",
+   "message": "17057 paths exist in more than one archive (first-match-wins shadowing); top: misc/object_template_crc_string_table.iff×7, string/en/faction/faction_names.stf×6, string/en/pet_deed.stf×6, string/en/terminal_detail.stf×6, string/en/terminal_name.stf×6"
+  }
+ ],
+ "summary": {
+  "error": 0,
+  "warn": 1,
+  "info": 19
+ }
+}

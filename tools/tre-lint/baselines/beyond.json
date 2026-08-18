@@ -1,0 +1,4107 @@
+{
+ "tool": "tre-lint",
+ "version": "0.1.0",
+ "deep": false,
+ "filter": null,
+ "targets": [
+  "D:\\SWG Beyond\\Win64"
+ ],
+ "archives": [
+  {
+   "file": "beyond_client_base.tre",
+   "kind": "tre",
+   "sizeBytes": 4072735,
+   "version": "0005",
+   "entryCount": 91,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "beyond_patch_01.tre",
+   "kind": "tre",
+   "sizeBytes": 201378256,
+   "version": "0006",
+   "entryCount": 9122,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "beyond_patch_01.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-toc-inflate",
+     "severity": "error",
+     "archive": "beyond_patch_01.tre",
+     "message": "TOC block declares compressor 2 but does not inflate as zlib — obfuscated or corrupt (known in the wild: SWG Beyond 6000 dialect)"
+    }
+   ]
+  },
+  {
+   "file": "beyond_shared_base.tre",
+   "kind": "tre",
+   "sizeBytes": 797480,
+   "version": "0005",
+   "entryCount": 263,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "bottom.tre",
+   "kind": "tre",
+   "sizeBytes": 16205884,
+   "version": "0005",
+   "entryCount": 808,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_animation_00.tre",
+   "kind": "tre",
+   "sizeBytes": 58966791,
+   "version": "0005",
+   "entryCount": 5987,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_music_00.tre",
+   "kind": "tre",
+   "sizeBytes": 77322894,
+   "version": "0005",
+   "entryCount": 144,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_other_00.tre",
+   "kind": "tre",
+   "sizeBytes": 46546173,
+   "version": "0005",
+   "entryCount": 43062,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104636589,
+   "version": "0005",
+   "entryCount": 494,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104848649,
+   "version": "0005",
+   "entryCount": 294,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_02.tre",
+   "kind": "tre",
+   "sizeBytes": 104806646,
+   "version": "0005",
+   "entryCount": 1569,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104479178,
+   "version": "0005",
+   "entryCount": 624,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sample_04.tre",
+   "kind": "tre",
+   "sizeBytes": 33887496,
+   "version": "0005",
+   "entryCount": 439,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_skeletal_mesh_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104259690,
+   "version": "0005",
+   "entryCount": 5739,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_skeletal_mesh_01.tre",
+   "kind": "tre",
+   "sizeBytes": 42575909,
+   "version": "0005",
+   "entryCount": 2332,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104853089,
+   "version": "0005",
+   "entryCount": 4385,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104861757,
+   "version": "0005",
+   "entryCount": 605,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_02.tre",
+   "kind": "tre",
+   "sizeBytes": 105217918,
+   "version": "0005",
+   "entryCount": 3207,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104461486,
+   "version": "0005",
+   "entryCount": 759,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_04.tre",
+   "kind": "tre",
+   "sizeBytes": 104915626,
+   "version": "0005",
+   "entryCount": 799,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_05.tre",
+   "kind": "tre",
+   "sizeBytes": 7576262,
+   "version": "0005",
+   "entryCount": 201,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_06.tre",
+   "kind": "tre",
+   "sizeBytes": 22566812,
+   "version": "0005",
+   "entryCount": 437,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_sku1_07.tre",
+   "kind": "tre",
+   "sizeBytes": 2333549,
+   "version": "0005",
+   "entryCount": 204,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_static_mesh_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104681322,
+   "version": "0005",
+   "entryCount": 7853,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_static_mesh_01.tre",
+   "kind": "tre",
+   "sizeBytes": 94719985,
+   "version": "0005",
+   "entryCount": 3864,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104816351,
+   "version": "0005",
+   "entryCount": 1608,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104831553,
+   "version": "0005",
+   "entryCount": 1516,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_02.tre",
+   "kind": "tre",
+   "sizeBytes": 104923301,
+   "version": "0005",
+   "entryCount": 1822,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_03.tre",
+   "kind": "tre",
+   "sizeBytes": 104659874,
+   "version": "0005",
+   "entryCount": 1131,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_04.tre",
+   "kind": "tre",
+   "sizeBytes": 104887073,
+   "version": "0005",
+   "entryCount": 2123,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_05.tre",
+   "kind": "tre",
+   "sizeBytes": 104820008,
+   "version": "0005",
+   "entryCount": 1551,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_06.tre",
+   "kind": "tre",
+   "sizeBytes": 104773001,
+   "version": "0005",
+   "entryCount": 1566,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "data_texture_07.tre",
+   "kind": "tre",
+   "sizeBytes": 66226334,
+   "version": "0005",
+   "entryCount": 943,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "default_patch.tre",
+   "kind": "tre",
+   "sizeBytes": 60331,
+   "version": "0005",
+   "entryCount": 3,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "disable_wayfar_dearic_snow.tre",
+   "kind": "tre",
+   "sizeBytes": 2697174,
+   "version": "0005",
+   "entryCount": 2,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "hotfix_56_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 17768462,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "hotfix_56_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "hotfix_56_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "hotfix_56_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2881496,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "hotfix_56_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "hotfix_56_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "hotfix_59_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1381386,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "hotfix_59_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "hotfix_59_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "hotfix_59_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4326904,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "hotfix_59_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "hotfix_59_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "hotfix_sku1_59_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1116547,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "hotfix_sku1_59_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "hotfix_sku1_59_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_00.tre",
+   "kind": "tre",
+   "sizeBytes": 18779819,
+   "version": "0005",
+   "entryCount": 8830,
+   "tombstones": 14,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_00.tre",
+     "message": "14 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_01.tre",
+   "kind": "tre",
+   "sizeBytes": 17757229,
+   "version": "0005",
+   "entryCount": 5918,
+   "tombstones": 73,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_01.tre",
+     "message": "73 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_02.tre",
+   "kind": "tre",
+   "sizeBytes": 3396766,
+   "version": "0005",
+   "entryCount": 1298,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_03.tre",
+   "kind": "tre",
+   "sizeBytes": 20870097,
+   "version": "0005",
+   "entryCount": 1967,
+   "tombstones": 119,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_03.tre",
+     "message": "119 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_04.tre",
+   "kind": "tre",
+   "sizeBytes": 27137114,
+   "version": "0005",
+   "entryCount": 2477,
+   "tombstones": 19,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_04.tre",
+     "message": "19 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_05.tre",
+   "kind": "tre",
+   "sizeBytes": 25827774,
+   "version": "0005",
+   "entryCount": 2193,
+   "tombstones": 25,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_05.tre",
+     "message": "25 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_06.tre",
+   "kind": "tre",
+   "sizeBytes": 40724726,
+   "version": "0005",
+   "entryCount": 2774,
+   "tombstones": 59,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_06.tre",
+     "message": "59 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_07.tre",
+   "kind": "tre",
+   "sizeBytes": 40567157,
+   "version": "0005",
+   "entryCount": 2044,
+   "tombstones": 8,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_07.tre",
+     "message": "8 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_08.tre",
+   "kind": "tre",
+   "sizeBytes": 36984057,
+   "version": "0005",
+   "entryCount": 1596,
+   "tombstones": 2,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_08.tre",
+     "message": "2 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_09.tre",
+   "kind": "tre",
+   "sizeBytes": 57214055,
+   "version": "0005",
+   "entryCount": 2196,
+   "tombstones": 18,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_09.tre",
+     "message": "18 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_10.tre",
+   "kind": "tre",
+   "sizeBytes": 33429694,
+   "version": "0005",
+   "entryCount": 1343,
+   "tombstones": 32,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_10.tre",
+     "message": "32 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_00.tre",
+   "kind": "tre",
+   "sizeBytes": 103221850,
+   "version": "0005",
+   "entryCount": 12198,
+   "tombstones": 159,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_00.tre",
+     "message": "159 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_01.tre",
+   "kind": "tre",
+   "sizeBytes": 28868084,
+   "version": "0005",
+   "entryCount": 688,
+   "tombstones": 5,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_01.tre",
+     "message": "5 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_02.tre",
+   "kind": "tre",
+   "sizeBytes": 28713778,
+   "version": "0005",
+   "entryCount": 3345,
+   "tombstones": 196,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_02.tre",
+     "message": "196 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_11_03.tre",
+   "kind": "tre",
+   "sizeBytes": 7517816,
+   "version": "0005",
+   "entryCount": 1446,
+   "tombstones": 20,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_11_03.tre",
+     "message": "20 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_12_00.tre",
+   "kind": "tre",
+   "sizeBytes": 32863489,
+   "version": "0005",
+   "entryCount": 7493,
+   "tombstones": 16,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_12_00.tre",
+     "message": "16 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_13_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6032263,
+   "version": "0005",
+   "entryCount": 1181,
+   "tombstones": 15,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_13_00.tre",
+     "message": "15 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_14_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36469339,
+   "version": "0005",
+   "entryCount": 1491,
+   "tombstones": 2,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_14_00.tre",
+     "message": "2 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_15_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104355270,
+   "version": "0005",
+   "entryCount": 5204,
+   "tombstones": 10,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_15_00.tre",
+     "message": "10 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_15_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104881663,
+   "version": "0005",
+   "entryCount": 3486,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_15_02.tre",
+   "kind": "tre",
+   "sizeBytes": 76498147,
+   "version": "0005",
+   "entryCount": 2851,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_15_02.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_16_00.tre",
+   "kind": "tre",
+   "sizeBytes": 26584666,
+   "version": "0005",
+   "entryCount": 2824,
+   "tombstones": 46,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_16_00.tre",
+     "message": "46 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_17_00.tre",
+   "kind": "tre",
+   "sizeBytes": 56385141,
+   "version": "0005",
+   "entryCount": 3146,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_17_00.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_18_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1135529,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_18_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_18_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_18_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1770486,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_18_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_18_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_19_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 10985558,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_19_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_19_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_19_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2156419,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_19_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_19_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_20_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 22326935,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_20_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_20_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_20_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2283894,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_20_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_20_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_23_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 18082800,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_23_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_23_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_23_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 15445899,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_23_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_23_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_24_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104857042,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_24_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_24_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_24_client_01.tre",
+   "kind": "tre",
+   "sizeBytes": 87593041,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_24_client_01.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_24_client_01.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_24_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 15582880,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_24_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_24_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_25_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8918562,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_25_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_25_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_25_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 5713512,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_25_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_25_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_26_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104785564,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_26_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_26_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_26_client_01.tre",
+   "kind": "tre",
+   "sizeBytes": 37424377,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_26_client_01.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_26_client_01.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_26_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6975420,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_26_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_26_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_27_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 100752161,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_27_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_27_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_27_client_01.tre",
+   "kind": "tre",
+   "sizeBytes": 103031176,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_27_client_01.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_27_client_01.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_27_client_02.tre",
+   "kind": "tre",
+   "sizeBytes": 44477448,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_27_client_02.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_27_client_02.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_27_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8387319,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_27_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_27_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_28_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 11343429,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_28_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_28_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_28_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4640503,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_28_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_28_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_29_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 11434564,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_29_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_29_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_29_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3505735,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_29_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_29_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_30_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 44402226,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_30_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_30_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_30_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4685346,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_30_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_30_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_31_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 51557904,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_31_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_31_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_31_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 7610352,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_31_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_31_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_32_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 28101523,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_32_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_32_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_32_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 10199816,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_32_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_32_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_33_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 35393665,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_33_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_33_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_33_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 5232221,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_33_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_33_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_34_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 19781801,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_34_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_34_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_34_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4379777,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_34_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_34_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_35_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 46959358,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_35_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_35_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_35_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1870846,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_35_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_35_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_36_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 51250589,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_36_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_36_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_36_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6382378,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_36_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_36_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_37_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 57783672,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_37_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_37_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_37_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8483974,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_37_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_37_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_38_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 30291936,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_38_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_38_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_38_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1109617,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_38_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_38_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_39_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 16166126,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_39_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_39_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_39_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2703260,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_39_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_39_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_40_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 26334771,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_40_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_40_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_40_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 5725838,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_40_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_40_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_41_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 48573112,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_41_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_41_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_41_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4151298,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_41_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_41_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_42_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 76212316,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_42_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_42_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_42_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2264953,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_42_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_42_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_43_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 87939658,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_43_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_43_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_43_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2690617,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_43_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_43_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_44_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 65578564,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_44_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_44_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_44_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6653731,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_44_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_44_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_45_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36904478,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_45_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_45_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_45_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6185535,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_45_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_45_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_46_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 56756989,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_46_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_46_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_46_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2428940,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_46_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_46_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_47_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 38869369,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_47_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_47_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_47_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3654729,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_47_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_47_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_48_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104711319,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_48_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_48_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_48_client_01.tre",
+   "kind": "tre",
+   "sizeBytes": 104791987,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_48_client_01.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_48_client_01.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_48_client_02.tre",
+   "kind": "tre",
+   "sizeBytes": 12245097,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_48_client_02.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_48_client_02.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_48_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1744197,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_48_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_48_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_49_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 24412493,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_49_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_49_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_49_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3046000,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_49_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_49_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_50_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 65695909,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_50_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_50_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_50_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4092395,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_50_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_50_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_51_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36219712,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_51_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_51_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_51_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4603494,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_51_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_51_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_52_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 44097205,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_52_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_52_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_52_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4877235,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_52_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_52_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_53_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 46551154,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_53_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_53_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_53_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3422695,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_53_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_53_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_54_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 24619838,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_54_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_54_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_54_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2765126,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_54_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_54_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_55_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 88263162,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_55_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_55_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_55_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 3417375,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_55_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_55_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_56_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 78228631,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_56_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_56_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_56_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8027466,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_56_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_56_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_57_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 12831519,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_57_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_57_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_57_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6883740,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_57_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_57_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_58_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6076008,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_58_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_58_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_58_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2508646,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_58_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_58_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_70_client_01.tre",
+   "kind": "tre",
+   "sizeBytes": 2097,
+   "version": "0005",
+   "entryCount": 1,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_70_client_02.tre",
+   "kind": "tre",
+   "sizeBytes": 20226926,
+   "version": "0005",
+   "entryCount": 7,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_70_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 507495,
+   "version": "0005",
+   "entryCount": 13,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_12_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6257317,
+   "version": "0005",
+   "entryCount": 432,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_13_00.tre",
+   "kind": "tre",
+   "sizeBytes": 21315,
+   "version": "0005",
+   "entryCount": 4,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_14_00.tre",
+   "kind": "tre",
+   "sizeBytes": 944,
+   "version": "0005",
+   "entryCount": 11,
+   "tombstones": 11,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "patch_sku1_14_00.tre",
+     "message": "11 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_15_00.tre",
+   "kind": "tre",
+   "sizeBytes": 76279094,
+   "version": "0005",
+   "entryCount": 1792,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_16_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1556636,
+   "version": "0005",
+   "entryCount": 40,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_17_00.tre",
+   "kind": "tre",
+   "sizeBytes": 9039,
+   "version": "0005",
+   "entryCount": 7,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku1_18_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 541,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_18_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_18_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_19_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2709431,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_19_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_19_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_19_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 4068,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_19_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_19_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_23_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 126621,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_23_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_23_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_24_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 47663807,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_24_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_24_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_24_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 169285,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_24_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_24_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_26_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2995122,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_26_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_26_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_28_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6436786,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_28_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_28_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_28_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 52753,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_28_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_28_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_29_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1715227,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_29_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_29_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_31_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 7515592,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_31_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_31_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_32_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 467,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_32_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_32_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_33_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 531594,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_33_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_33_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_34_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 254827,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_34_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_34_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_37_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 16096956,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_37_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_37_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_37_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 371332,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_37_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_37_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_39_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 25960582,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_39_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_39_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_39_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 385801,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_39_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_39_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_40_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 5502310,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_40_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_40_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_40_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36626,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_40_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_40_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_41_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 410308,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_41_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_41_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_42_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1443826,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_42_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_42_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_44_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 175153,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_44_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_44_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_45_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 725601,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_45_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_45_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_53_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 63152,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_53_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_53_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_54_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 509534,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_54_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_54_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_55_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1661949,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_55_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_55_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_57_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 761,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_57_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_57_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku1_58_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 6565586,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku1_58_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku1_58_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_15_00.tre",
+   "kind": "tre",
+   "sizeBytes": 104549627,
+   "version": "0005",
+   "entryCount": 2718,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku2_15_01.tre",
+   "kind": "tre",
+   "sizeBytes": 5923977,
+   "version": "0005",
+   "entryCount": 74,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku2_16_00.tre",
+   "kind": "tre",
+   "sizeBytes": 9780580,
+   "version": "0005",
+   "entryCount": 261,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku2_17_00.tre",
+   "kind": "tre",
+   "sizeBytes": 14599395,
+   "version": "0005",
+   "entryCount": 220,
+   "tombstones": 0,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "patch_sku2_23_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 608309,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_23_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_23_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_24_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 7707799,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_24_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_24_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_24_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 28330,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_24_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_24_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_26_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 744054,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_26_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_26_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_33_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1539568,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_33_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_33_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_33_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 37675,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_33_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_33_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_34_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 441077,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_34_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_34_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_34_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 2384,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_34_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_34_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_44_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1166534,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_44_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_44_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_44_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 1585,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_44_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_44_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku2_56_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 161346,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku2_56_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku2_56_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_24_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 61793805,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_24_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_24_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_24_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 841719,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_24_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_24_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_25_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 10595540,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_25_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_25_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_25_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 178943,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_25_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_25_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_27_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8417813,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_27_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_27_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_27_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 36626,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_27_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_27_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_33_client_00.tre",
+   "kind": "tre",
+   "sizeBytes": 8818711,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_33_client_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_33_client_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "patch_sku3_33_shared_00.tre",
+   "kind": "tre",
+   "sizeBytes": 202764,
+   "version": "0006",
+   "entryCount": 0,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-v0006-not-searchtree-mountable",
+     "severity": "info",
+     "archive": "patch_sku3_33_shared_00.tre",
+     "message": "version '0006' — the STOCK client cannot mount this on a searchTree_ line (no case arm; FATAL). Legal only as a .toc member or under extended engines"
+    },
+    {
+     "ruleId": "tre-blob-container",
+     "severity": "info",
+     "archive": "patch_sku3_33_shared_00.tre",
+     "message": "numberOfFiles=0 — a .toc-membered blob container (readable by offset, NEVER enumerable); not a defect"
+    }
+   ]
+  },
+  {
+   "file": "sku0_client.toc",
+   "kind": "toc",
+   "sizeBytes": 13888528,
+   "version": "0001",
+   "entryCount": 193475,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "toc-zero-length-entries",
+     "severity": "warn",
+     "archive": "sku0_client.toc",
+     "message": "8 zero-length entries — a .toc CANNOT tombstone (SearchTOC::exists hardcodes deleted=false); these entries delete NOTHING and shadowed lower-priority files still win"
+    }
+   ]
+  },
+  {
+   "file": "sku1_client.toc",
+   "kind": "toc",
+   "sizeBytes": 947044,
+   "version": "0001",
+   "entryCount": 13994,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "sku2_client.toc",
+   "kind": "toc",
+   "sizeBytes": 210833,
+   "version": "0001",
+   "entryCount": 2869,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": []
+  },
+  {
+   "file": "sku3_client.toc",
+   "kind": "toc",
+   "sizeBytes": 87143,
+   "version": "0001",
+   "entryCount": 1158,
+   "tombstones": null,
+   "v0006Model": null,
+   "findings": []
+  }
+ ],
+ "setFindings": [
+  {
+   "ruleId": "set-shadowed-paths",
+   "severity": "info",
+   "archive": "Win64",
+   "message": "24101 paths exist in more than one archive (first-match-wins shadowing); top: datatables/skill/skills.iff×23, datatables/appearance/appearance_table.iff×22, datatables/command/command_table.iff×21, misc/object_template_crc_string_table.iff×21, datatables/crafting/schematic_group.iff×20"
+  },
+  {
+   "ruleId": "set-toc-member-coherent",
+   "severity": "info",
+   "archive": "sku0_client.toc",
+   "message": "114707 .toc entries cross-checked against self-indexed members: all coherent"
+  },
+  {
+   "ruleId": "set-toc-member-coherent",
+   "severity": "info",
+   "archive": "sku1_client.toc",
+   "message": "11705 .toc entries cross-checked against self-indexed members: all coherent"
+  },
+  {
+   "ruleId": "set-toc-member-coherent",
+   "severity": "info",
+   "archive": "sku2_client.toc",
+   "message": "2689 .toc entries cross-checked against self-indexed members: all coherent"
+  }
+ ],
+ "summary": {
+  "error": 1,
+  "warn": 1,
+  "info": 301
+ }
+}

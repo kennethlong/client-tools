@@ -1,0 +1,748 @@
+{
+ "tool": "tre-lint",
+ "version": "0.1.0",
+ "deep": true,
+ "filter": ".skt",
+ "targets": [
+  "D:\\Code\\SWGSource Client v3.0\\ILM_visuals.tre"
+ ],
+ "archives": [
+  {
+   "file": "ILM_visuals.tre",
+   "kind": "tre",
+   "sizeBytes": 1783504764,
+   "version": "0005",
+   "entryCount": 9849,
+   "tombstones": 1,
+   "v0006Model": null,
+   "findings": [
+    {
+     "ruleId": "tre-tombstones",
+     "severity": "info",
+     "archive": "ILM_visuals.tre",
+     "message": "1 zero-length entries — REAL runtime tombstones when mounted via searchTree (they do NOT delete via a .toc)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/tulgah.skt",
+     "message": "/FORM: declares 4825 bytes but only 4809 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/mouse_droid.skt",
+     "message": "/FORM: declares 562 bytes but only 546 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/drall.skt",
+     "message": "/FORM: declares 3386 bytes but only 3370 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ithorian.skt",
+     "message": "/FORM: declares 3119 bytes but only 3103 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/sarlacc.skt",
+     "message": "/FORM: declares 3209 bytes but only 3193 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/camel.skt",
+     "message": "/FORM: declares 4776 bytes but only 4760 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/wed_treadwell.skt",
+     "message": "/FORM: declares 1926 bytes but only 1910 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/horse.skt",
+     "message": "/FORM: declares 3396 bytes but only 3380 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ig88.skt",
+     "message": "/FORM: declares 2129 bytes but only 2113 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/selonian.skt",
+     "message": "/FORM: declares 4034 bytes but only 4018 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/dewback.skt",
+     "message": "/FORM: declares 3701 bytes but only 3685 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ith_face.skt",
+     "message": "/FORM: declares 1374 bytes but only 1358 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ithorian_m.skt",
+     "message": "/FORM: declares 2959 bytes but only 2943 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bth_f_face.skt",
+     "message": "/FORM: declares 1229 bytes but only 1213 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/orb.skt",
+     "message": "/FORM: declares 413 bytes but only 397 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/sy_snootles.skt",
+     "message": "/FORM: declares 3280 bytes but only 3264 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/muftak.skt",
+     "message": "/FORM: declares 3329 bytes but only 3313 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pitdroid.skt",
+     "message": "/FORM: declares 2180 bytes but only 2164 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_pharple_neck.skt",
+     "message": "/FORM: declares 787 bytes but only 771 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/le_repair.skt",
+     "message": "/FORM: declares 2450 bytes but only 2434 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ewok.skt",
+     "message": "/FORM: declares 4077 bytes but only 4061 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/hutt.skt",
+     "message": "/FORM: declares 3704 bytes but only 3688 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/geonosian.skt",
+     "message": "/FORM: declares 3321 bytes but only 3305 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/kaadu.skt",
+     "message": "/FORM: declares 2603 bytes but only 2587 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/insect_mantis.skt",
+     "message": "/FORM: declares 2522 bytes but only 2506 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_pharple.skt",
+     "message": "/FORM: declares 2123 bytes but only 2107 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_baz_nitch.skt",
+     "message": "/FORM: declares 2550 bytes but only 2534 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey.skt",
+     "message": "/FORM: declares 1366 bytes but only 1350 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_nuna.skt",
+     "message": "/FORM: declares 2866 bytes but only 2850 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/tt8l_y7.skt",
+     "message": "/FORM: declares 1034 bytes but only 1018 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/lizard_basic.skt",
+     "message": "/FORM: declares 4407 bytes but only 4391 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pt_ambient_flying_lava_fish.skt",
+     "message": "/FORM: declares 950 bytes but only 934 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/griffon.skt",
+     "message": "/FORM: declares 5442 bytes but only 5426 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/spider.skt",
+     "message": "/FORM: declares 3887 bytes but only 3871 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/gorax.skt",
+     "message": "/FORM: declares 4073 bytes but only 4057 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/rat.skt",
+     "message": "/FORM: declares 2920 bytes but only 2904 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pig.skt",
+     "message": "/FORM: declares 2886 bytes but only 2870 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/lin_demolition.skt",
+     "message": "/FORM: declares 1012 bytes but only 996 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/astromech.skt",
+     "message": "/FORM: declares 3323 bytes but only 3307 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/acklay.skt",
+     "message": "/FORM: declares 3423 bytes but only 3407 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/giraffe.skt",
+     "message": "/FORM: declares 4607 bytes but only 4591 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bat.skt",
+     "message": "/FORM: declares 2050 bytes but only 2034 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/extent.skt",
+     "message": "/FORM: declares 177 bytes but only 161 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/super_battle_droid.skt",
+     "message": "/FORM: declares 2571 bytes but only 2555 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_giant.skt",
+     "message": "/FORM: declares 2946 bytes but only 2930 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/rancor.skt",
+     "message": "/FORM: declares 3583 bytes but only 3567 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/gung_m_face.skt",
+     "message": "/FORM: declares 178 bytes but only 162 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/jawa.skt",
+     "message": "/FORM: declares 2993 bytes but only 2977 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/salacious_crumb.skt",
+     "message": "/FORM: declares 4079 bytes but only 4063 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/rabbit.skt",
+     "message": "/FORM: declares 2882 bytes but only 2866 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/max_rebo.skt",
+     "message": "/FORM: declares 2431 bytes but only 2415 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bth_f_hands.skt",
+     "message": "/FORM: declares 100 bytes but only 84 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/all_b.skt",
+     "message": "/FORM: declares 2954 bytes but only 2938 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/gamorrean_m.skt",
+     "message": "/FORM: declares 3118 bytes but only 3102 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/cat_predatory.skt",
+     "message": "/FORM: declares 3112 bytes but only 3096 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/goat.skt",
+     "message": "/FORM: declares 3116 bytes but only 3100 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ito_panel.skt",
+     "message": "/FORM: declares 260 bytes but only 244 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/toydarian.skt",
+     "message": "/FORM: declares 4190 bytes but only 4174 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/cat_domestic.skt",
+     "message": "/FORM: declares 2790 bytes but only 2774 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bomarr_monk_spider.skt",
+     "message": "/FORM: declares 2716 bytes but only 2700 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/blastromech.skt",
+     "message": "/FORM: declares 3243 bytes but only 3227 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/dug.skt",
+     "message": "/FORM: declares 5686 bytes but only 5670 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/canine.skt",
+     "message": "/FORM: declares 2436 bytes but only 2420 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/gungan.skt",
+     "message": "/FORM: declares 3044 bytes but only 3028 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/eg6.skt",
+     "message": "/FORM: declares 1455 bytes but only 1439 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_finch.skt",
+     "message": "/FORM: declares 1609 bytes but only 1593 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_baz_nitch_root_neck.skt",
+     "message": "/FORM: declares 1214 bytes but only 1198 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bantha.skt",
+     "message": "/FORM: declares 4257 bytes but only 4241 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bth_m_face.skt",
+     "message": "/FORM: declares 1229 bytes but only 1213 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/simian_monkey.skt",
+     "message": "/FORM: declares 3329 bytes but only 3313 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pt_ambient_flying_fish.skt",
+     "message": "/FORM: declares 950 bytes but only 934 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/atst.skt",
+     "message": "/FORM: declares 2032 bytes but only 2016 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/droid_2.skt",
+     "message": "/FORM: declares 2362 bytes but only 2346 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/insect_moth.skt",
+     "message": "/FORM: declares 1608 bytes but only 1592 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pt_ambient_flying_narwhal.skt",
+     "message": "/FORM: declares 950 bytes but only 934 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/dz70.skt",
+     "message": "/FORM: declares 1713 bytes but only 1697 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/frog.skt",
+     "message": "/FORM: declares 2354 bytes but only 2338 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/tt8l.skt",
+     "message": "/FORM: declares 1325 bytes but only 1309 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bear.skt",
+     "message": "/FORM: declares 2503 bytes but only 2487 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/gammorean_m.skt",
+     "message": "/FORM: declares 2804 bytes but only 2788 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/tauntaun.skt",
+     "message": "/FORM: declares 2824 bytes but only 2808 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/fambaa.skt",
+     "message": "/FORM: declares 4044 bytes but only 4028 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/pt_ambient_snail.skt",
+     "message": "/FORM: declares 779 bytes but only 763 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/whiphid.skt",
+     "message": "/FORM: declares 2881 bytes but only 2865 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/bird_turkey_nuna_neck.skt",
+     "message": "/FORM: declares 1530 bytes but only 1514 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/insect_basic.skt",
+     "message": "/FORM: declares 3668 bytes but only 3652 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ephant_mon.skt",
+     "message": "/FORM: declares 3088 bytes but only 3072 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/cll8.skt",
+     "message": "/FORM: declares 1785 bytes but only 1769 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/mynock.skt",
+     "message": "/FORM: declares 2045 bytes but only 2029 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ig106.skt",
+     "message": "/FORM: declares 2581 bytes but only 2565 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/droopy_mccool.skt",
+     "message": "/FORM: declares 2884 bytes but only 2868 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/dark_trooper_3.skt",
+     "message": "/FORM: declares 3119 bytes but only 3103 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/elephant.skt",
+     "message": "/FORM: declares 3410 bytes but only 3394 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/protocol_droid.skt",
+     "message": "/FORM: declares 3082 bytes but only 3066 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/robo_bartender.skt",
+     "message": "/FORM: declares 478 bytes but only 462 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/droideka.skt",
+     "message": "/FORM: declares 2978 bytes but only 2962 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/snake_basic.skt",
+     "message": "/FORM: declares 1674 bytes but only 1658 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/simian_ape.skt",
+     "message": "/FORM: declares 3658 bytes but only 3642 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/ito.skt",
+     "message": "/FORM: declares 935 bytes but only 919 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/probe_droid.skt",
+     "message": "/FORM: declares 3257 bytes but only 3241 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/battle_droid.skt",
+     "message": "/FORM: declares 2496 bytes but only 2480 remain in the parent (over by 16)"
+    },
+    {
+     "ruleId": "iff-over-declared",
+     "severity": "error",
+     "archive": "ILM_visuals.tre",
+     "path": "appearance/skeleton/lizard_giant.skt",
+     "message": "/FORM: declares 5143 bytes but only 5127 remain in the parent (over by 16)"
+    }
+   ]
+  }
+ ],
+ "setFindings": [],
+ "summary": {
+  "error": 102,
+  "warn": 0,
+  "info": 1
+ }
+}
